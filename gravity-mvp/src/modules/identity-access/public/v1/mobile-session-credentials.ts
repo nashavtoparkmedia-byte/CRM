@@ -44,14 +44,12 @@ export interface MobileAccessCredentialConfig {
     username: string
     password: string
     /** Which provisioned credential answered. Reported, never logged with values. */
-    source: 'mobile_access' | 'project_admin'
+    source: 'mobile_access'
 }
 
 export interface MobileSessionEnvironment {
     MOBILE_ACCESS_USER?: string
     MOBILE_ACCESS_PASS?: string
-    ADMIN_USER?: string
-    ADMIN_PASS?: string
     MOBILE_SESSION_REVOCATION_EPOCH?: string
 }
 
@@ -95,23 +93,22 @@ function readCredential(username: unknown, password: unknown): { username: strin
 /**
  * Resolve the credential the mobile lane authenticates against.
  *
- * A dedicated MOBILE_ACCESS_* pair is preferred so a phone never has to carry
- * the project administrator password. Until one is provisioned the lane falls
- * back to the already-provisioned project-admin credential, so the gate is
- * real from the first deploy rather than disabled until an operations task
- * lands. Both paths require a genuine secret; there is no unprovisioned path
- * that authenticates anybody.
+ * MOBILE_ACCESS_USER and MOBILE_ACCESS_PASS, and nothing else. There is
+ * deliberately no fallback to the project administrator credential: a phone
+ * must never carry the password that unlocks integration credentials, and a
+ * lane that quietly borrows another lane's secret is one rotation away from
+ * surprising whoever rotates it.
+ *
+ * Unprovisioned means closed. A missing, short, or placeholder value returns
+ * null, which disables mobile login entirely rather than opening it. That is
+ * the intended behaviour even though it means the lane does nothing until an
+ * operator provisions it.
  */
 export function getMobileAccessCredentialConfig(
     env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
 ): MobileAccessCredentialConfig | null {
     const dedicated = readCredential(env.MOBILE_ACCESS_USER, env.MOBILE_ACCESS_PASS)
-    if (dedicated) return { ...dedicated, source: 'mobile_access' }
-
-    const projectAdmin = readCredential(env.ADMIN_USER, env.ADMIN_PASS)
-    if (projectAdmin) return { ...projectAdmin, source: 'project_admin' }
-
-    return null
+    return dedicated === null ? null : { ...dedicated, source: 'mobile_access' }
 }
 
 export function isMobileAccessConfigured(
@@ -156,10 +153,10 @@ export function verifyMobileAccessCredentials(
 /**
  * Derive this lane's signing key from the proven credential.
  *
- * The label makes the key domain-separated: a token minted here cannot verify
- * against `integration-admin-credentials.ts`, and rotating the underlying
- * password revokes both lanes at once, which is the behaviour an operator
- * expects from "change the password".
+ * The label domain-separates the key, so a token minted here cannot verify
+ * against `integration-admin-credentials.ts` even if the two lanes were ever
+ * given the same secret. Rotating MOBILE_ACCESS_PASS revokes every outstanding
+ * mobile session and touches nothing else.
  */
 function sessionKey(config: MobileAccessCredentialConfig): Buffer {
     return createHmac('sha256', config.password)

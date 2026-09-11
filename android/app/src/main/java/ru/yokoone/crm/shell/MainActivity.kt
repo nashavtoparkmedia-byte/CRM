@@ -155,6 +155,13 @@ class MainActivity : AppCompatActivity() {
             allowContentAccess = false
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+            // Declare the lane. The CRM fails every shell request closed unless
+            // it carries a live mobile session, and withholds SIP credentials
+            // from this client entirely. The marker only ever selects a
+            // stricter path, so it needs no integrity: stripping it makes this
+            // an ordinary browser, which gains nothing it did not have.
+            userAgentString = "$userAgentString ${CrmOrigin.SHELL_UA_TOKEN}${CrmOrigin.SHELL_UA_VERSION}"
         }
 
         webView.webViewClient = ShellWebViewClient()
@@ -200,6 +207,21 @@ class MainActivity : AppCompatActivity() {
             errorResponse: WebResourceResponse,
         ) {
             super.onReceivedHttpError(view, request, errorResponse)
+
+            // The CRM answers 401 to this lane when the mobile session has
+            // expired or been revoked. That reaches us on a background request
+            // — a poll, the stream, a send — while the page carries on showing
+            // stale content. Reload so the request boundary can hand us the
+            // login screen, rather than leaving an operator typing into a
+            // conversation that will never send.
+            if (errorResponse.statusCode == 401 && CrmOrigin.isInAppUrl(request.url?.toString())) {
+                val current = view.url.orEmpty()
+                if (!current.contains(CrmOrigin.LOGIN_PATH)) {
+                    view.post { load(CrmOrigin.startUrl()) }
+                }
+                return
+            }
+
             if (request.isForMainFrame && errorResponse.statusCode >= 500) {
                 showError(getString(R.string.error_server, errorResponse.statusCode))
             }

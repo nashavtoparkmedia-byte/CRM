@@ -21,8 +21,22 @@ import android.net.Uri
  */
 object CrmOrigin {
 
-    /** Canonical origin. The bridge trusts this and only this. */
+    /** Canonical origin. Everything the shell may load derives from this. */
     const val ORIGIN: String = BuildConfig.CRM_ORIGIN
+
+    /**
+     * Marker the shell appends to its User-Agent so the CRM can recognise the
+     * lane and apply the stricter rules to it: fail closed without a mobile
+     * session, and never disclose SIP credentials.
+     *
+     * Kept identical to MOBILE_SHELL_UA_TOKEN in the CRM
+     * (gravity-mvp/src/proxy.ts and the identity-access mobile session module).
+     */
+    const val SHELL_UA_TOKEN: String = "YokoShell/"
+    const val SHELL_UA_VERSION: String = "1"
+
+    /** The CRM's mobile login screen. Used to avoid reload loops on 401. */
+    const val LOGIN_PATH: String = "/login/mobile"
 
     /**
      * Hosts rendered inside the shell. `www` is the same deployment behind the
@@ -49,11 +63,22 @@ object CrmOrigin {
     /** Where a cold start with no deep link lands: the Messenger, not the CRM home. */
     fun startUrl(): String = ORIGIN + BuildConfig.MESSENGER_PATH
 
+    /**
+     * Scheme of the pinned origin.
+     *
+     * Release pins an https origin, and `release_origin_is_https` asserts it.
+     * The testing variant may pin a cleartext origin because a disposable
+     * backend has no certificate a phone will trust; deriving the scheme from
+     * the pin rather than hard-coding it keeps one code path for both.
+     */
+    private val ORIGIN_SCHEME: String = Uri.parse(ORIGIN).scheme?.lowercase() ?: "https"
+
     fun isInAppUrl(url: String?): Boolean {
         val uri = runCatching { Uri.parse(url ?: return false) }.getOrNull() ?: return false
         if (!uri.isAbsolute) return false
-        if (!uri.scheme.equals("https", ignoreCase = true)) return false
+        if (!uri.scheme.equals(ORIGIN_SCHEME, ignoreCase = true)) return false
         val host = uri.host?.lowercase() ?: return false
+        if (uri.port != Uri.parse(ORIGIN).port) return false
         return host in IN_APP_HOSTS
     }
 

@@ -18,11 +18,6 @@ const dedicatedEnv = {
     MOBILE_ACCESS_PASS: 'correct horse battery staple',
 }
 
-const projectAdminEnv = {
-    ADMIN_USER: 'project-operator',
-    ADMIN_PASS: 'another perfectly fine passphrase',
-}
-
 const OPERATOR = 'u1'
 const DEVICE = 'a1b2c3d4e5f6a7b8'
 const NOW = Date.UTC(2026, 8, 11, 9, 0, 0)
@@ -40,20 +35,21 @@ describe('mobile access credential resolution', () => {
             'placeholder-mobile-password',
         ]) {
             expect(getMobileAccessCredentialConfig({ MOBILE_ACCESS_USER: 'a', MOBILE_ACCESS_PASS: password })).toBeNull()
-            expect(getMobileAccessCredentialConfig({ ADMIN_USER: 'a', ADMIN_PASS: password })).toBeNull()
         }
         expect(issueMobileSession(OPERATOR, DEVICE, {})).toBeNull()
     })
 
-    test('prefers a dedicated mobile credential over the project administrator one', () => {
-        const both = { ...dedicatedEnv, ...projectAdminEnv }
-        expect(getMobileAccessCredentialConfig(both)?.source).toBe('mobile_access')
-        expect(getMobileAccessCredentialConfig(projectAdminEnv)?.source).toBe('project_admin')
-        // The fallback is what makes the gate real before an operations task
-        // provisions a dedicated credential.
-        expect(verifyMobileAccessCredentials('project-operator', 'another perfectly fine passphrase', projectAdminEnv)).toBe(true)
-        // …and the dedicated credential takes over once it exists.
-        expect(verifyMobileAccessCredentials('project-operator', 'another perfectly fine passphrase', both)).toBe(false)
+    test('the project administrator credential is NOT accepted', () => {
+        // A phone must never carry the password that unlocks integration
+        // credentials. Unprovisioned means closed, not borrowed.
+        const projectAdminOnly = {
+            ADMIN_USER: 'project-operator',
+            ADMIN_PASS: 'another perfectly fine passphrase',
+        } as Record<string, string>
+        expect(getMobileAccessCredentialConfig(projectAdminOnly)).toBeNull()
+        expect(verifyMobileAccessCredentials('project-operator', 'another perfectly fine passphrase', projectAdminOnly)).toBe(false)
+        expect(issueMobileSession(OPERATOR, DEVICE, projectAdminOnly)).toBeNull()
+        expect(getMobileAccessCredentialConfig(dedicatedEnv)?.source).toBe('mobile_access')
     })
 
     test('requires both halves of the credential', () => {
@@ -123,12 +119,16 @@ describe('mobile session token', () => {
     })
 
     test('mobile and integration-admin tokens never verify in the other lane', () => {
-        const sharedEnv = { ADMIN_USER: 'project-operator', ADMIN_PASS: 'another perfectly fine passphrase' }
-        const mobileToken = issueMobileSession(OPERATOR, DEVICE, sharedEnv, NOW) as string
-        const adminToken = issueIntegrationAdminSession(sharedEnv, NOW) as string
+        // Even if an operator gave both lanes the same secret, the derived
+        // signing keys are domain-separated.
+        const samePassphrase = 'another perfectly fine passphrase'
+        const mobileEnv = { MOBILE_ACCESS_USER: 'shared-name', MOBILE_ACCESS_PASS: samePassphrase }
+        const adminEnv = { ADMIN_USER: 'shared-name', ADMIN_PASS: samePassphrase }
+        const mobileToken = issueMobileSession(OPERATOR, DEVICE, mobileEnv, NOW) as string
+        const adminToken = issueIntegrationAdminSession(adminEnv, NOW) as string
 
-        expect(verifyIntegrationAdminSession(mobileToken, sharedEnv, NOW)).toBe(false)
-        expect(verifyMobileSession(adminToken, sharedEnv, NOW)).toBeNull()
+        expect(verifyIntegrationAdminSession(mobileToken, adminEnv, NOW)).toBe(false)
+        expect(verifyMobileSession(adminToken, mobileEnv, NOW)).toBeNull()
     })
 
     test('refuses to mint a session for an unsafe operator or device identifier', () => {

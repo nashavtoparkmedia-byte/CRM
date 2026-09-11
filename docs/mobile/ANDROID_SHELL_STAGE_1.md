@@ -4,9 +4,10 @@ Baseline: `main` at `b49af1cf34c02cbdf1889d9b7c5dc1683854c753`.
 
 ## What this stage delivers
 
-An installable Android shell around the existing CRM Messenger, a mobile
-session lane that requires a proven credential, and a server-side gate that a
-notification tap goes through. It delivers no push transport and no telephony.
+An installable Android shell around the existing CRM Messenger, a mobile lane
+that fails closed without a provisioned credential, and a server-side gate that
+a notification tap goes through. It delivers no push transport and no
+telephony, and it does not establish who an operator personally is.
 
 ## CRM_BACKEND_BLOCKER: MOBILE_AUTH_BOUNDARY
 
@@ -18,7 +19,7 @@ code says and what the deployment answers.
 | `login()` is documented as not an authentication primitive: "there is no password / token / proof of identity" | `gravity-mvp/src/lib/users/user-service.ts` |
 | Anonymous callers may assume any identity, including Администратор | `canLogin` matrix, `gravity-mvp/src/lib/users/auth-helpers.js` |
 | The identity cookie is unsigned, not `httpOnly`, not `secure`, and is read from page JavaScript in five components | `login()` sets only `maxAge`; `document.cookie` reads in ChatList, ChatWorkspace, ChatHeader, ContactProfileDrawer, sip-client-context |
-| There is no route guard. The Next 16 proxy blocks exactly one path | `gravity-mvp/src/proxy.ts` matcher is `/api/debug-db/:path*` |
+| Before this branch there was no route guard: the Next 16 proxy matched exactly one path | `gravity-mvp/src/proxy.ts` at `b49af1cf`, matcher `/api/debug-db/:path*` |
 | `GET https://yokoone.ru/messages` returns the full Messenger, HTTP 200, with no cookies | measured 2026-09-11 |
 | `POST /api/messages` sends a message to a real customer with no caller check | `gravity-mvp/src/app/api/messages/route.ts` |
 | The per-chat SSE stream has no caller check | `gravity-mvp/src/app/api/messages/stream/[chatId]/route.ts` |
@@ -40,9 +41,32 @@ a mobile one, and it must be owned by `identity_access`:
 4. A decision on what an operator may see. There is no per-user ACL on `Chat`
    today, so "someone else's conversation" is not yet expressible.
 
-**What this stage did instead.** The mobile lane got its own real session, so
-the app does not add a new unauthenticated surface and a lost phone does not
-hand over the CRM. It does not and cannot close the browser lane.
+**What this stage did instead.** The shell lane fails closed at the request
+boundary. `gravity-mvp/src/proxy.ts` refuses every request carrying the shell's
+User-Agent marker unless it presents a live mobile session, so the shell reaches
+no page, no API route, no server action and no stream without one. That covers
+the three concrete gaps a route-level gate left open: a saved `/messages?id=…`
+restored on next launch, the twenty-six messenger API paths with no caller check
+of their own, and a session that expires mid-use while the app keeps sending.
+
+It does not and cannot close the browser lane, which remains fully open.
+
+## UNRESOLVED: the mobile lane does not prove who the operator is
+
+The shell authenticates possession of ONE shared credential and then shows a
+list of operator names to pick from. Two people with the same password are
+indistinguishable, and nothing stops either of them picking the other's name.
+
+So the session proves **access**, not **identity**. Everything downstream of
+that inherits the weakness: the `op` claim in the token, the `crm_user_id` value
+derived from it, chat assignment, and any future per-recipient push routing.
+
+This is not closed and must not be reported as closed. Closing it needs
+per-person credentials, which is the same CRM-wide identity project as the
+blocker above — `CrmUser` has no password column and the runtime operator ids
+are a separate namespace in a JSON file. Until then, treat the mobile lane as a
+device-level lock with an operator label attached, and do not use the `op` claim
+for anything an auditor would need to attribute to a named person.
 
 ## The mobile session
 
@@ -54,16 +78,19 @@ independently-reasoned design.
 - HMAC-SHA256 over `{v, aud, sub, op, did, rev, iat, exp}`, constant-time verify.
 - The signing key is derived with a lane-specific label, so a token from this
   lane cannot verify as an integration-admin token or the reverse.
-- **Proven identity**: possession of a provisioned credential. A dedicated
-  `MOBILE_ACCESS_USER`/`MOBILE_ACCESS_PASS` pair is preferred; until it is
-  provisioned the lane falls back to the already-provisioned project-admin
-  credential, so the gate is real from the first deploy. Weak, short and
-  placeholder values are refused and disable the lane rather than opening it.
-- **Expiry**: 12 hours, checked on every request.
-- **Logout**: `clearMobileSessionV1` clears the session and the derived value.
+- **What it proves**: possession of `MOBILE_ACCESS_USER` and
+  `MOBILE_ACCESS_PASS`. Access, not personal identity — see the unresolved
+  section above. There is no fallback to the project-admin credential: a phone
+  must never carry the password that unlocks integration credentials, and an
+  unprovisioned or placeholder value disables mobile login rather than opening
+  it.
+- **Expiry**: 12 hours, checked at the request boundary on every request.
+- **Logout**: `clearMobileSessionV1` clears the session and the derived value;
+  the next request from the shell gets the login screen.
 - **Server-side revocation**, two levers, neither needing a table or a deploy:
-  raise `MOBILE_SESSION_REVOCATION_EPOCH` to invalidate every device at once,
-  or rotate the credential, which invalidates both lanes.
+  raise `MOBILE_SESSION_REVOCATION_EPOCH` to invalidate every device at once, or
+  rotate `MOBILE_ACCESS_PASS`. Both take effect on the shell's next request,
+  with the cookie still sitting on the device.
 
 `op` is the runtime operator id from `users.json`. It is **not** a Prisma
 `CrmUser.id` and nothing may use it as one. It is carried inside the signed
@@ -98,11 +125,24 @@ The root layout mounts `SipProvider` on every page, and `SIP_WS_URL` is set in
 production, so an unmodified shell would register a second SIP endpoint for the
 same extension and compete with the operator's browser for incoming calls.
 
-`GET /api/calls/sip-credentials` now returns `{enabled: false, reason:
-"mobile_shell_stage_1"}` when the request carries a mobile session, so the
-provider reports "disabled" and never creates a user agent. The shell
-additionally denies every `WebChromeClient.onPermissionRequest`, so it cannot
-obtain a microphone even if that server decision were reverted.
+`GET /api/calls/sip-credentials` returns `{enabled: false, reason:
+"mobile_shell_stage_1"}` whenever the request comes from the shell, so the
+provider reports "disabled" and never creates a user agent.
+
+**Keyed on the client, not the session, and that distinction is the fix.** The
+credential is otherwise granted on the strength of `crm_user_id`, which outlives
+the mobile session in every direction:
+
+| Window | Why the session check would have failed |
+|---|---|
+| Before login | The desktop `/login` picker writes `crm_user_id` with no credential at all |
+| After 12 hours | The token expires on the server clock, the cookie on the device clock; a slow device keeps the cookie alive |
+| After a revocation-epoch bump | The token dies instantly, `crm_user_id` is untouched |
+| After a credential rotation | Same, and this is the case where a revoked device would have been handed a SIP password |
+
+Denying on the client closes all four. The shell additionally denies every
+`WebChromeClient.onPermissionRequest`, so it cannot obtain a microphone even if
+the server decision were reverted.
 
 ## Device registration contract for the next stage (not implemented)
 
@@ -135,9 +175,45 @@ gated stage. The shape it should take:
   `WebViewCompat.addWebMessageListener` with an allowed-origin rule of the
   pinned origin — never `addJavascriptInterface`, which injects into every
   frame regardless of origin.
-- **Fan-out hook**: `emitMessageReceived` in `gravity-mvp/src/lib/messageEvents.ts`
-  is the one entry point every inbound channel goes through. It is the correct
-  place for a push fan-out and was not modified in this stage.
+- **Fan-out hook — corrected.** An earlier draft of this document called
+  `emitMessageReceived` (`gravity-mvp/src/lib/messageEvents.ts`) the one entry
+  point every inbound channel goes through. **That was wrong**, and a push stage
+  built on it would silently miss channels.
+
+  It is reached by five call sites covering the Telegram user account, the
+  current MAX webhook and the WhatsApp live path. At least four inbound paths
+  create `Message` rows without it:
+
+  | Path | Where |
+  |---|---|
+  | Telegram Bot channel, group and private | `src/app/api/webhook/telegram/route.ts` |
+  | Avito lead intake | `src/lib/leads/intake.ts` into the receive-message adapter |
+  | Legacy MAX webhook, still the scraper default | `src/app/api/webhook/max/route.ts` |
+  | Inbound call-timeline rows | `src/lib/freeswitch/EslClient.ts` via the call-timeline adapter |
+
+  History importers for WhatsApp and Telegram also create inbound rows without
+  emitting, while the MAX webhook's emit is guarded only on direction and so
+  does fire on history replay.
+
+  Before any push work, someone must decide the hook point deliberately.
+  Persistence is the narrower truth than this function.
+
+Four things the push stage must settle, none of which exist today:
+
+1. **Channel coverage.** Enumerate every inbound write path and prove the hook
+   sees all of them, or accept named gaps in writing.
+2. **Reliable delivery.** `emitMessageReceived` is fire-and-forget on an
+   in-process bus; a restart drops whatever was in flight. The transactional
+   outbox is declared for a single calling flow in
+   `architecture/events/v1/outbox-manifest.json`, so a messaging flow needs its
+   own declaration rather than a third writer on the existing one.
+3. **Deduplication.** History replay, the MAX catch-up path and provider retries
+   all re-deliver. A push identity key is needed so one message cannot notify a
+   phone twice.
+4. **Recipient permission.** `Chat.assignedToUserId` is the only routing signal
+   and it is frequently null. There is no per-user ACL on `Chat`, so "who may be
+   told about this conversation" is not expressible yet, and the operator
+   identity that would answer it is the unresolved item above.
 
 ## Known functional cost
 
@@ -161,13 +237,28 @@ conversation. Remote push is not implemented, so no push result can be claimed.
 
 ## Acceptance on a phone
 
-Before the first run someone with server access must know the mobile
-credential. Until `MOBILE_ACCESS_USER` and `MOBILE_ACCESS_PASS` are
-provisioned, the lane accepts the existing `ADMIN_USER` and `ADMIN_PASS`.
+**Installing an APK adds no server routes.** `/login/mobile` and
+`/messages/open` exist only in a backend running this branch, and the request
+boundary that closes the shell lane is part of it too. Production does not have
+them, and production has no `MOBILE_ACCESS_*` provisioned, so the
+production-origin build cannot log in. Acceptance runs against a disposable
+backend:
+
+```
+bash android/tools/run-acceptance-backend.sh
+```
+
+It starts its own PostgreSQL container, applies this branch's schema, seeds
+three synthetic conversations, and prints the LAN origin plus the exact command
+to build the matching APK. `--stop` removes the database. It never touches
+production and leaves `SIP_WS_URL` unset, so no telephony can start.
+
+Build and install the matching artifact it names, then:
 
 1. Install the APK. Android will warn about an unknown source; allow it.
-2. Open the app. It should show the mobile login screen, not the Messenger.
-   Getting the Messenger without logging in would mean the gate is not active.
+2. Open the app. It must show the mobile login screen, not the Messenger.
+   Reaching the Messenger without logging in would mean the request boundary is
+   not active.
 3. Enter a wrong password. It must say the login or password is wrong and stay
    on the screen.
 4. Enter the real credential, pick your name from the list, sign in. The
@@ -178,6 +269,9 @@ provisioned, the lane accepts the existing `ADMIN_USER` and `ADMIN_PASS`.
    Back button must close the conversation rather than the app.
 7. Press Back from the conversation list. The app closes. Reopen it: it must
    return you where you were without asking to log in again.
+7a. Ask whoever runs the backend to raise `MOBILE_SESSION_REVOCATION_EPOCH` and
+   restart it. Your next action in the app must land on the login screen, with
+   nothing sendable in between.
 8. Pull down the notification shade. There is a permanent "YOKO CRM · проверка
    перехода" entry with a button. With a conversation open, press that button.
 9. Put the app in the background, then tap the notification that appeared. The

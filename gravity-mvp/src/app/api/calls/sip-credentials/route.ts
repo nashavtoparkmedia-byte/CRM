@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
-import { hasMobileSessionV1 } from '@/modules/identity-access/public/v1/mobile-session-auth'
+import { isMobileShellClientV1 } from '@/modules/identity-access/public/v1/mobile-session-auth'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 
 /**
@@ -19,10 +19,17 @@ export async function GET() {
     // layout mounts the softphone on every one of them. Handing it credentials
     // would register a second SIP endpoint for the same extension, so an
     // incoming call would ring — or worse, be answered — on whichever client
-    // FreeSWITCH picked. Telephony is a later stage; until it is designed, the
-    // mobile lane is told the softphone is off rather than being left to fail
-    // in a way that looks like a working background phone.
-    if (await hasMobileSessionV1()) {
+    // FreeSWITCH picked. Telephony is a later stage.
+    //
+    // This is keyed on the shell, NOT on its session, and that distinction is
+    // the whole point. The credential below is granted on the strength of the
+    // unsigned `crm_user_id` cookie, which outlives the mobile session in every
+    // direction: it is still there before login, it expires on the device clock
+    // rather than the server's, and neither a revocation-epoch bump nor a
+    // credential rotation touches it. Denying on the session would therefore
+    // hand a SIP password to a device at the exact moment its access was
+    // revoked. Denying on the client closes all four windows.
+    if (await isMobileShellClientV1()) {
         return NextResponse.json({ enabled: false, reason: 'mobile_shell_stage_1' })
     }
 

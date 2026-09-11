@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 712,
+    "total_entries": 713,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 80,
-    "active_operational": 505,
+    "active_operational": 506,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -64,6 +64,15 @@
       "production_capability": "NONE",
       "rationale": "Developer build entry point for the Android shell. It downloads the Gradle distribution pinned in android/gradle/wrapper/gradle-wrapper.properties, refuses to proceed on a SHA-256 mismatch, and then execs Gradle against the android project only. It reads no credential, touches no database, provider, or deployment surface, and produces no production artifact; the CRM build does not invoke it.",
       "classification_artifact": "android/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "android/tools/run-acceptance-backend.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Disposable acceptance harness for the Android shell. It creates its own throwaway PostgreSQL container, applies the branch schema to it, seeds synthetic conversations, and runs the development server bound to the LAN. It reads no production credential, targets no production service, and deliberately leaves SIP_WS_URL unset so no telephony can start.",
+      "classification_artifact": "docs/mobile/ANDROID_SHELL_STAGE_1.md",
       "functional_owner": "platform_engineering"
     },
     {

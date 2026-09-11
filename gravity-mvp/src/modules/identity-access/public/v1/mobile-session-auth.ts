@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import {
     MOBILE_SESSION_COOKIE,
     MOBILE_SESSION_TTL_SECONDS,
@@ -11,6 +11,16 @@ import {
     type MobileSessionPrincipalV1,
 } from './mobile-session-credentials'
 import { listUserIdentitiesV1 } from './user-directory'
+
+/**
+ * User-Agent fragment the Android shell appends to identify its lane.
+ *
+ * Declared in both this module and `gravity-mvp/src/proxy.ts`, which cannot
+ * import from here: the proxy is compiled for the request boundary and must
+ * stay free of server-action modules. The two are kept in step by
+ * `mobile-shell-lane-source.test.ts`, which fails if they drift.
+ */
+export const MOBILE_SHELL_UA_TOKEN = 'YokoShell/'
 
 /**
  * Cookie-facing half of the mobile session.
@@ -43,6 +53,26 @@ export type MobileLoginFailure =
 
 export function isMobileLaneConfigured(): boolean {
     return getMobileAccessCredentialConfig() !== null
+}
+
+/**
+ * True when the request comes from the Android shell, session or not.
+ *
+ * This deliberately does NOT consult the session. Every window in which the
+ * session is absent — before login, after the twelve-hour expiry, after a
+ * revocation-epoch bump, after the credential is rotated — is a window in which
+ * the shell is still running and still mounting the browser softphone. Keying
+ * the telephony denial on the session would open exactly those windows, and the
+ * worst of them hands out a SIP password to a device whose access was just
+ * revoked.
+ *
+ * The marker is client-supplied and needs no integrity: it only ever selects a
+ * stricter path. Removing it makes the caller an ordinary browser, which is
+ * what it already was.
+ */
+export async function isMobileShellClientV1(): Promise<boolean> {
+    const userAgent = (await headers()).get('user-agent') ?? ''
+    return userAgent.includes(MOBILE_SHELL_UA_TOKEN)
 }
 
 export async function getMobileSessionPrincipalV1(): Promise<MobileSessionPrincipalV1 | null> {

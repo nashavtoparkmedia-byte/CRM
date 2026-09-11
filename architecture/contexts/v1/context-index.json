@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
+      "sha256": "dec22f0b04fc86a457e579266296398194081490e9743a7bec5cfabb1c1a06b8"
     },
     {
       "context": "telegram_channel",

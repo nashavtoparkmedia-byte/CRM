@@ -116,7 +116,8 @@
     "gravity-mvp/src/app/layout.tsx",
     "gravity-mvp/src/components",
     "gravity-mvp/src/instrumentation.ts",
-    "gravity-mvp/src/modules/platform-shell"
+    "gravity-mvp/src/modules/platform-shell",
+    "gravity-mvp/src/proxy.ts"
   ],
   "owner": {
     "accountability": "Platform Shell bounded-context owner",

@@ -35,6 +35,7 @@ android {
         // constant: there is no runtime setting, no intent extra and no
         // notification field that can move the shell to another origin.
         buildConfigField("String", "CRM_ORIGIN", "\"https://yokoone.ru\"")
+        buildConfigField("boolean", "IS_TEST_BUILD", "false")
         // Server-side gate. The shell never builds a /messages URL itself;
         // it hands the target to this path and the CRM decides where to go.
         buildConfigField("String", "OPEN_CHAT_PATH", "\"/messages/open\"")
@@ -53,6 +54,36 @@ android {
     }
 
     buildTypes {
+        /**
+         * Acceptance build against a disposable backend.
+         *
+         * Installing an APK adds no server routes: the mobile login and the
+         * notification gate only exist on a backend running this branch. Until
+         * a deploy carries them, acceptance needs a test backend, and this
+         * variant is how the shell points at one.
+         *
+         * It installs alongside the production-origin build rather than over
+         * it, so a tester can hold both and never confuse which backend they
+         * are looking at. Origin comes from -PyokoTestOrigin at build time and
+         * is still a compile-time constant in the artifact.
+         */
+        create("acceptance") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".acceptance"
+            versionNameSuffix = "-acceptance"
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+
+            val testOrigin = (project.findProperty("yokoTestOrigin") as String?)
+                ?: "http://10.0.2.2:3002"
+            buildConfigField("String", "CRM_ORIGIN", "\"$testOrigin\"")
+            buildConfigField("boolean", "IS_TEST_BUILD", "true")
+
+            if (keystoreProperties != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+
         release {
             isMinifyEnabled = false
             isDebuggable = false

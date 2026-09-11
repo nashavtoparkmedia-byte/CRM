@@ -63,8 +63,6 @@ describe('mobile login', () => {
         expect(isMobileLaneConfigured()).toBe(true)
         delete process.env.MOBILE_ACCESS_USER
         delete process.env.MOBILE_ACCESS_PASS
-        delete process.env.ADMIN_USER
-        delete process.env.ADMIN_PASS
         expect(isMobileLaneConfigured()).toBe(false)
     })
 

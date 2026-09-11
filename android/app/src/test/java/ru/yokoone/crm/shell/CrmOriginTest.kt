@@ -46,6 +46,25 @@ class CrmOriginTest {
     }
 
     @Test
+    fun `the shipped release origin is https`() {
+        // The testing variant may pin a cleartext origin against a disposable
+        // backend. The build that talks to production must not.
+        assertTrue(CrmOrigin.ORIGIN.startsWith("https://"))
+        assertFalse(BuildConfig.IS_TEST_BUILD)
+    }
+
+    @Test
+    fun `a different port on the pinned host is a different origin`() {
+        assertFalse(CrmOrigin.isInAppUrl("https://yokoone.ru:8443/messages"))
+    }
+
+    @Test
+    fun `the shell declares its lane marker`() {
+        // The CRM keys its stricter mobile rules on this exact string.
+        assertEquals("YokoShell/", CrmOrigin.SHELL_UA_TOKEN)
+    }
+
+    @Test
     fun `hostile schemes are never handed to another app`() {
         assertFalse(CrmOrigin.isLaunchableExternally("javascript:alert(1)"))
         assertFalse(CrmOrigin.isLaunchableExternally("file:///data/data/ru.yokoone.crm.shell/"))
