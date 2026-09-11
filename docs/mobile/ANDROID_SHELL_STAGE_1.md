@@ -138,3 +138,35 @@ Everything on a physical device: real keyboard and inset behaviour, WebView
 cookie survival across an actual process kill, notification delivery in
 background and on a locked screen, and reading and replying in a real
 conversation. Remote push is not implemented, so no push result can be claimed.
+
+## Acceptance on a phone
+
+Before the first run someone with server access must know the mobile
+credential. Until `MOBILE_ACCESS_USER` and `MOBILE_ACCESS_PASS` are
+provisioned, the lane accepts the existing `ADMIN_USER` and `ADMIN_PASS`.
+
+1. Install the APK. Android will warn about an unknown source; allow it.
+2. Open the app. It should show the mobile login screen, not the Messenger.
+   Getting the Messenger without logging in would mean the gate is not active.
+3. Enter a wrong password. It must say the login or password is wrong and stay
+   on the screen.
+4. Enter the real credential, pick your name from the list, sign in. The
+   Messenger opens on the conversation list.
+5. Open a conversation, read it, send a reply. Check the reply arrives in the
+   customer's messenger.
+6. Check the keyboard: the composer must stay visible above it, and the system
+   Back button must close the conversation rather than the app.
+7. Press Back from the conversation list. The app closes. Reopen it: it must
+   return you where you were without asking to log in again.
+8. Pull down the notification shade. There is a permanent "YOKO CRM · проверка
+   перехода" entry with a button. With a conversation open, press that button.
+9. Put the app in the background, then tap the notification that appeared. The
+   app must open that exact conversation, with the right channel tab selected.
+10. Repeat steps 8 and 9 with a second conversation. Two separate
+    notifications must exist and each must open its own conversation.
+11. Swipe the app away from recents, then tap a notification. It must still
+    open the right conversation.
+12. Confirm no call ever rings in the app, and that incoming calls keep
+    arriving on the desktop CRM as before.
+
+Report anything that behaves differently from the step text.
