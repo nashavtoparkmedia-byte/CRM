@@ -20,12 +20,16 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-function isolatedSchema(databaseUrl, predecessorRecovery) {
+function isolatedSchema(databaseUrl, predecessorRecovery, pendingCount = 1) {
   const parsed = new URL(databaseUrl)
   const base = parsed.searchParams.get('schema')
   const schema = predecessorRecovery ? `${base}_predecessor` : base
   assert(schema && /^yoko_migration_authority_replay_[a-z0-9_]+$/.test(schema), 'DATABASE_URL must select an isolated yoko_migration_authority_replay_* schema')
-  const longestSchema = predecessorRecovery ? `${schema}_fresh` : schema
+  // The longest derived name is the per-pending-migration rollback schema, not
+  // the recovery reference schema, so budget for the highest ordinal.
+  const longestSchema = predecessorRecovery
+    ? `${schema}_fresh`
+    : `${schema}_rollback_${Math.max(0, pendingCount - 1)}`
   assert(Buffer.byteLength(longestSchema) <= 63, `isolated replay schema name exceeds PostgreSQL's 63-byte identifier limit: ${longestSchema}`)
   parsed.searchParams.set('schema', schema)
   return { databaseUrl: parsed.toString(), schema }
@@ -280,7 +284,8 @@ async function main() {
   const predecessorRecovery = process.argv.includes('--predecessor-recovery')
   assert(process.argv.includes('--allow-isolated-replay'), 'pass --allow-isolated-replay to execute against an isolated empty schema')
   assert(requestedDatabaseUrl, 'DATABASE_URL is required for isolated replay')
-  const { databaseUrl, schema } = isolatedSchema(requestedDatabaseUrl, predecessorRecovery)
+  const pendingCount = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8')).migrations.length
+  const { databaseUrl, schema } = isolatedSchema(requestedDatabaseUrl, predecessorRecovery, pendingCount)
   assertSchemaAbsent(databaseUrl, schema)
   if (predecessorRecovery) assertSchemaAbsent(databaseUrl, `${schema}_fresh`)
   const authority = await validateProductionMigrationAuthority(root)

@@ -39,8 +39,15 @@ try {
     // context index, and each pending row names its own isolated-PostgreSQL
     // proof test, so both are part of the authority's input surface.
     'architecture/contexts/v1/context-index.json',
+    // Owner authorization binds to the authorized contexts' manifest bytes.
+    ...pendingSource.authorized_owner_contexts.map((owner) => `architecture/contexts/v1/manifests/${owner}.json`),
     ...pendingSource.migrations.map((row) => row.migration_test),
   ]) {
+    // Artifact-supplied paths become mkdir and copy targets here, before the
+    // validator runs, so containment is checked rather than trusted.
+    assert(!path.isAbsolute(relative) && !relative.split('/').includes('..')
+      && path.resolve(root, relative).startsWith(`${path.resolve(root)}${path.sep}`),
+    `fixture path escapes the repository: ${relative}`)
     await mkdir(path.dirname(path.join(fixture, relative)), { recursive: true })
     await cp(path.join(root, relative), path.join(fixture, relative))
   }
