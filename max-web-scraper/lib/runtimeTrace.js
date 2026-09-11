@@ -4,6 +4,7 @@ const crypto = require('crypto')
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
 let eventSeq = 0
+const BODY_FIELD = /^(text|textPreview|caption|body|content|snippet|preview|title|message|comment|description)$/i
 
 function shortHash(value) {
   return crypto.createHash('sha1').update(String(value || '')).digest('hex').slice(0, 12)
@@ -36,7 +37,9 @@ function sanitizeTraceValue(key, value, depth = 0, seen = new WeakSet()) {
   if (typeof value === 'string') {
     if (/^data:.*;base64,/i.test(value)) return '[redacted]'
     if (/^[A-Za-z0-9+/=_-]{160,}$/.test(value)) return '[redacted]'
-    if (name === 'text' || name === 'textPreview') return sanitizeTraceText(value)
+    // Any field that can carry a message body must be summarized, not emitted. The
+    // catch-all below truncates at 160 characters, which is not redaction.
+    if (BODY_FIELD.test(name)) return sanitizeTraceText(value)
     return value.length > 160 ? `${value.slice(0, 160)}...[${value.length}]` : value
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value

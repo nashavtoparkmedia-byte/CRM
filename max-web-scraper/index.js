@@ -1186,6 +1186,15 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
   }
 }
 
+function maskPhoneForLog(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits ? `***${digits.slice(-4)}` : '[redacted]'
+}
+
+function normalizeUiSendText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
+}
+
 async function fillEditableText(locator, value) {
   const text = String(value || '')
   await locator.click({ timeout: 1_000 })
@@ -3939,6 +3948,11 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
           }
           if (composeEl) {
+            // `page` is shared. Automatic DOM recovery navigates it to other chats, and
+            // the route signal below would then read a conversation that has nothing to
+            // do with this send. Claim the page for the whole compose-and-bind window.
+            uiSendInProgress = true
+            try {
             // Dismiss "Add to contacts" banner if present (it may overlay compose area)
             const bannerDismiss = page.locator('button[aria-label*="Hide" i][aria-label*="contacts" i]').first()
             if (await bannerDismiss.isVisible({ timeout: 500 }).catch(() => false)) {
@@ -3947,8 +3961,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
             await composeEl.click()
             await page.waitForTimeout(200)
-            // Use keyboard.type() instead of fill() to trigger MAX's key-event listeners
-            await page.keyboard.type(messageToSend, { delay: 20 })
+            // A newline inside keyboard.type() is delivered as Enter, which submits the
+            // first line and leaves the rest behind. Use the same multiline-safe fill the
+            // text UI send path uses so the whole message reaches the compose box intact.
+            await fillEditableText(composeEl, messageToSend)
             await page.waitForTimeout(400)
             const composeTextBeforeSubmit = await composeEl.textContent().catch(() => '')
             console.log(`[ResolvePhone] Compose text after typing: "${(composeTextBeforeSubmit || '').slice(0, 50)}"`)
@@ -3999,6 +4015,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // navigating to the new dialog, and MAX echoing back our own message.
             // Chat-list, common-chats and generic frames can describe any conversation,
             // so they must never define the target of this send.
+            const expectedSubmittedText = normalizeUiSendText(messageToSend)
             let boundChatId = null
             let boundChatIdSource = null
             for (let i = 0; i < 50 && !boundChatId; i++) {
@@ -4020,6 +4037,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                 const sender = fp?.message?.sender
                 if (!fp?.chatId || sender == null) continue
                 if (!transport?._myUserId || String(sender) !== String(transport._myUserId)) continue
+                // Our own echo proves only that this account sent something. A second
+                // outbound in flight would otherwise bind its chat to this operation, so
+                // the echoed body must be the text this request just submitted.
+                if (normalizeUiSendText(fp.message.text) !== expectedSubmittedText) continue
                 const cId = String(fp.chatId)
                 if (!/^\d{10,15}$/.test(cId)) continue
                 boundChatId = cId
@@ -4043,6 +4064,9 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
               uiSendAttempted: true,
               submitObserved: true,
               messageSent: true,
+            }
+            } finally {
+              uiSendInProgress = false
             }
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
@@ -5915,7 +5939,7 @@ app.post('/send-message', async (req, res) => {
         if (liveResult.submitObserved !== true) {
           // The text never left the compose box. Reporting success here would record a
           // message the contact will never receive, so fail the operation instead.
-          console.error(`[Send] UI send for ${digits} did not take effect; reporting failure`)
+          console.error(`[Send] UI send for ${maskPhoneForLog(digits)} did not take effect; reporting failure`)
           return res.status(502).json({
             success: false,
             error: 'MAX UI send did not take effect: the message was not submitted',
@@ -5926,12 +5950,12 @@ app.post('/send-message', async (req, res) => {
           })
         }
         if (liveId) {
-          console.log(`[Send] UI-resolved: ${digits} → chatId ${liveId} via ${liveResult.chatIdSource}`)
+          console.log(`[Send] UI-resolved: ${maskPhoneForLog(digits)} → chatId ${liveId} via ${liveResult.chatIdSource}`)
           extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
           if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
           savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
         } else {
-          console.warn(`[Send] UI send attempted for ${digits} without a send-bound chat id`)
+          console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
         }
         return res.json({
           success: true,

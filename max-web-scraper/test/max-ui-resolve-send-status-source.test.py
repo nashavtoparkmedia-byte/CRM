@@ -36,7 +36,12 @@ def test_unbound_frames_never_define_the_send_target():
     assert 'UI send confirmed by op:64' not in source
     # The no-send phone lookup may still resolve a chat id from any frame, but it
     # must never report a send it did not perform.
-    assert 'messageSent: true' not in source.split('// Fall through to 6b write-button logic below', 1)[1]
+    # The weak-guessing form production runs returns {chatId, messageSent:true} from
+    # ten unbound sites. Exactly one site may report a send, and it is the proven one.
+    assert source.count('messageSent: true') == 1
+    proven = source.index('messageSent: true')
+    assert source.rindex('submitObserved: true', 0, proven) > source.index('if (!uiOutcome.submitObserved) {')
+    assert 'messageSent: true }' not in source
 
 
 def _branch_body(text, header):
@@ -116,3 +121,51 @@ def test_unproven_submit_is_reported_as_failure_not_as_success():
     # Still terminal: it returns rather than falling through to a protocol send.
     protocol_send = source.index('const sendResult = normalizeTextSendResult', guard)
     assert source.index('res.status(502)', guard) < protocol_send
+
+
+def test_self_echo_must_carry_this_requests_text():
+    # Our own echo proves only that this account sent something. Without matching the
+    # submitted body, a second outbound in flight binds its chat to this operation and
+    # a wrong phone->chat mapping is persisted.
+    assert 'if (normalizeUiSendText(fp.message.text) !== expectedSubmittedText) continue' in source
+    assert 'const expectedSubmittedText = normalizeUiSendText(messageToSend)' in source
+    assert 'function normalizeUiSendText(value) {' in source
+
+    poll_start = source.index('Waiting for a send signal bound to this action')
+    poll_end = source.index('await returnHome(); cleanup()', poll_start)
+    poll = source[poll_start:poll_end]
+    sender_check = poll.index('String(sender) !== String(transport._myUserId)')
+    text_check = poll.index('!== expectedSubmittedText')
+    bind = poll.index("boundChatIdSource = 'op128_self_echo'")
+    assert sender_check < bind and text_check < bind, 'both guards must precede the binding'
+
+
+def test_shared_page_is_claimed_for_the_whole_compose_and_bind_window():
+    # `page` is process-wide and automatic DOM recovery navigates it to other chats,
+    # which would make the route signal read an unrelated conversation.
+    compose = source.index('if (composeEl) {')
+    claim = source.index('uiSendInProgress = true', compose)
+    poll = source.index('Waiting for a send signal bound to this action', compose)
+    release = source.index('uiSendInProgress = false', compose)
+    assert claim < poll < release, 'the guard must span typing and binding'
+    assert '} finally {' in source[poll:release + 80]
+
+
+def test_multiline_message_is_not_submitted_one_line_at_a_time():
+    # keyboard.type() delivers an embedded newline as Enter, submitting the first line
+    # and leaving the rest behind, which also defeats the submit proof.
+    compose = source.index('if (composeEl) {')
+    end = source.index('Waiting for a send signal bound to this action', compose)
+    block = source[compose:end]
+    assert 'await fillEditableText(composeEl, messageToSend)' in block
+    assert 'page.keyboard.type(messageToSend' not in block
+
+
+def test_new_send_log_lines_do_not_emit_the_raw_phone():
+    assert 'function maskPhoneForLog(value)' in source
+    for line in (
+        '[Send] UI send for ${maskPhoneForLog(digits)} did not take effect',
+        '[Send] UI-resolved: ${maskPhoneForLog(digits)}',
+        '[Send] UI send attempted for ${maskPhoneForLog(digits)}',
+    ):
+        assert line in source, line

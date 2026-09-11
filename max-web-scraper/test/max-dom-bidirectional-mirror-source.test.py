@@ -10,7 +10,13 @@ def test_missing_protocol_anchor_requests_dom_recovery():
     # protocol anchor is available, so recovery is requested unconditionally rather
     # than re-deriving the anchor that is known to be absent.
     assert "scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')" in INDEX
-    assert "const chatId = latestRecentOp128ChatId()" in INDEX
+    # Anchor the assertion to the empty-op71 handler itself, not to any other caller
+    # of latestRecentOp128ChatId, and prove the old anchor gate is gone rather than
+    # merely absent from an unrelated region.
+    call = INDEX.index("scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')")
+    handler = INDEX.rindex("const chatId = latestRecentOp128ChatId()", 0, call)
+    assert INDEX[handler:call].count("\n") <= 3, INDEX[handler:call]
+    assert "scheduleAutomaticDomMirrorRecovery(String(chatId), 'missing_protocol_anchor')" not in INDEX
 
 
 def test_automatic_recovery_reads_only_fresh_dom_messages():
