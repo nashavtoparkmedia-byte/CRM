@@ -26,7 +26,7 @@ const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
-const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
+const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────

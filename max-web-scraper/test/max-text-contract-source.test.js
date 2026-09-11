@@ -305,7 +305,7 @@ test('MAX UI text fallback does not depend on browser clipboard permission', () 
 
 test('MAX reply text uses MAX Web store with a real provider target and is not downgraded to plain UI text', () => {
   const scraper = read('max-web-scraper/index.js')
-  const bridge = read('max-web-scraper/reply/MaxWebReplyBridge.js')
+  const bridge = read('max-web-scraper/lib/MaxWebReplyBridge.js')
   const start = scraper.indexOf('async function sendText')
   assert.notEqual(start, -1, 'missing sendText')
   const end = scraper.indexOf('async function fillEditableText', start)

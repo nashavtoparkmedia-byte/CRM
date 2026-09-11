@@ -11,7 +11,7 @@ const {
   selectInboundReplyCandidate,
   selectReplyTargetCandidate,
   uiRouteIdFromProviderChatId,
-} = require('../reply/MaxWebReplyBridge')
+} = require('../lib/MaxWebReplyBridge')
 
 test('MAX provider id conversion is exact and reversible', () => {
   const providerId = 'd3019f4dcf27c35ecf'
@@ -190,7 +190,7 @@ test('wrong direction, stale history and placeholder ids are never selected', ()
 })
 
 test('MAX Web reply loads provider history before reading target candidates', () => {
-  const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
+  const source = fs.readFileSync(require.resolve('../lib/MaxWebReplyBridge'), 'utf8')
   const historyLoad = source.indexOf('await core.module.ro({ chat, from: historyFrom })')
   const chatRouteLookup = source.indexOf('Array.from(core.module.Wa.chats.values || [])')
   const providerStoreRead = source.indexOf('core.module.Wa.messages.get(chatKey).values')
@@ -207,7 +207,7 @@ test('MAX Web reply loads provider history before reading target candidates', ()
 })
 
 test('MAX Web reply returns strict provider confirmation from the message store', () => {
-  const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
+  const source = fs.readFileSync(require.resolve('../lib/MaxWebReplyBridge'), 'utf8')
   const beforeSnapshot = source.indexOf('const beforeProviderIds = new Set(')
   const sendAction = source.indexOf('await core.module.$i({ chat, message: pending })')
   const confirmation = source.indexOf('providerMessageDecimal: confirmedProviderId')
@@ -222,7 +222,7 @@ test('MAX Web reply returns strict provider confirmation from the message store'
 })
 
 test('MAX Web reply preserves BigInt chat keys after strict route correlation', () => {
-  const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
+  const source = fs.readFileSync(require.resolve('../lib/MaxWebReplyBridge'), 'utf8')
 
   assert.match(source, /await core\.module\.Wa\.chats\.getLazy\(requestedChatKey\)/)
   assert.match(source, /const requestedChatKey = BigInt\(String\(args\.chatId\)\)/)
@@ -232,7 +232,7 @@ test('MAX Web reply preserves BigInt chat keys after strict route correlation', 
 })
 
 test('real provider reply target still route-correlates the MAX Web chat before send', () => {
-  const bridgeSource = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
+  const bridgeSource = fs.readFileSync(require.resolve('../lib/MaxWebReplyBridge'), 'utf8')
   const scraperSource = fs.readFileSync(require.resolve('../index'), 'utf8')
   const sendStart = bridgeSource.indexOf('async sendReply(')
   const sendEnd = bridgeSource.indexOf('\n  }\n}', sendStart)
