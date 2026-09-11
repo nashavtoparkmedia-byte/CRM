@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Seal deterministic Runtime v15 inputs, package, and Owner bootstrap."""
+"""Seal deterministic coordinated Runtime inputs, package, and Owner bootstrap."""
 from __future__ import annotations
 
 import argparse
@@ -25,8 +25,9 @@ STAGE_A_COMMIT = "64f3f529e5e31368c55a40a91157db7e740e5ed1"
 STAGE_A_TREE = "a5448a31ffdb84ead24e9cbf6a8252c755c55293"
 ARTIFACT_DIGEST = "721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea"
 ARTIFACT_STORE = f"/var/lib/yoko-privileged-runtime/coordinated-artifacts/{ARTIFACT_DIGEST}"
-V14_SHA = "af08fcf17f64bcd028692d4d9289bc38f91d9df46b8c40c9f7e8df595d1337c4"
-V14_SEAL_SHA = "8a7e28a3ad49ab6fb3be27e9bfa42d75aff6755b41a1d40119ce806026adb5ad"
+ROLLBACK_VERSION = "2.0.0-15"
+ROLLBACK_SHA = "4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246"
+ROLLBACK_SEAL_SHA = "2e94dac14c018b977c3c084addfe27dddcc00704472ac7801a855fc3569526ef"
 EPOCH = 1788307200
 ARTIFACT_FILES = {
     "authoritative-ci-execution.json": {"sha256": "b3538bb506a173dbb67d9d306bb33889bb653dd64528e3bed620f140d4d2aa48", "bytes": 5454},
@@ -189,7 +190,7 @@ def validate_independent_review(path: Path, commit: str, tree: str) -> tuple[dic
     if (
         document.get("schema") != REVIEW_SCHEMA
         or document.get("profile_id") != PROFILE_ID
-        or document.get("package_version") != "2.0.0-15"
+        or document.get("package_version") != "2.0.0-16"
     ):
         raise ValueError("independent review document contract mismatch")
     if document.get("candidate_commit") != commit or document.get("candidate_tree") != tree:
@@ -290,19 +291,23 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         "predecessor_release_critical_identity_sha256", "gravity_container_id", "gravity_image_id",
         "gravity_compose_config_hash", "max_container_id", "max_image_id", "max_compose_config_hash",
         "max_volume_source_sha256", "postgres_container_id", "postgres_image_id",
-        "database_identity_sha256", "migration_rows", "migration_rows_sha256",
+        "database_identity_sha256", "applied_migration_count", "migration_rows_sha256",
         "unrelated_semantic_fingerprint_sha256",
     }
     if not isinstance(sealing, dict) or set(sealing) != required:
         raise ValueError("production sealing projection mismatch")
     fixed = {
-        "runtime_package_version": "2.0.0-14",
-        "runtime_profile_id": "crm-41f69fe8fe3f-gravity-source-v1",
+        "runtime_package_version": ROLLBACK_VERSION,
+        "runtime_profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
         "gravity_image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
         "max_image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
         "max_volume_source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3",
         "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
         "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+        # The predecessor runtime reports this digest rather than the rows behind it, so the sealer
+        # can no longer re-derive it. Pinning the known predecessor value keeps an independent check
+        # here, instead of trusting whatever a hand-edited snapshot document happens to carry.
+        "migration_rows_sha256": "8eea7d25be2cc6b5fcee97bace2abf2ed1e15d183ea9f58d3c6f191d644fd9b6",
     }
     if any(sealing.get(key) != value for key, value in fixed.items()):
         raise ValueError("production predecessor drifted")
@@ -312,10 +317,15 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
     ):
         if not isinstance(sealing.get(key), str) or len(sealing[key]) != 64:
             raise ValueError("snapshot digest invalid")
-    if not isinstance(sealing["audit_record_count"], int) or sealing["audit_record_count"] < 1 or len(sealing["migration_rows"]) != 62:
+    if (
+        not isinstance(sealing["audit_record_count"], int)
+        or isinstance(sealing["audit_record_count"], bool)
+        or sealing["audit_record_count"] < 1
+        or not isinstance(sealing["applied_migration_count"], int)
+        or isinstance(sealing["applied_migration_count"], bool)
+        or sealing["applied_migration_count"] != 62
+    ):
         raise ValueError("snapshot bounded count invalid")
-    if hashlib.sha256(canonical(sealing["migration_rows"])).hexdigest() != sealing["migration_rows_sha256"]:
-        raise ValueError("migration projection digest mismatch")
     return snapshot, sha(path, 16 * 1024 * 1024)
 
 
@@ -435,8 +445,8 @@ def main() -> None:
     parser.add_argument("--stage-a-builder-source", required=True, type=Path)
     parser.add_argument("--handoff-root", required=True, type=Path)
     parser.add_argument("--production-snapshot", required=True, type=Path)
-    parser.add_argument("--v14-package", required=True, type=Path)
-    parser.add_argument("--v14-seal", required=True, type=Path)
+    parser.add_argument("--rollback-package", required=True, type=Path)
+    parser.add_argument("--rollback-seal", required=True, type=Path)
     parser.add_argument("--independent-review", required=True, type=Path)
     args = parser.parse_args()
     repository = args.builder_repo.resolve(strict=True)
@@ -447,12 +457,12 @@ def main() -> None:
     assert_clean_identity(args.application_source, APPLICATION_COMMIT, APPLICATION_TREE, "accepted application")
     assert_clean_identity(args.stage_a_builder_source, STAGE_A_COMMIT, STAGE_A_TREE, "Stage A builder")
     snapshot, snapshot_sha = validate_snapshot(args.production_snapshot)
-    if sha(args.v14_package) != V14_SHA:
-        raise ValueError("Runtime v14 rollback package mismatch")
-    if deb_metadata(args.v14_package) != ["yoko-privileged-runtime", "2.0.0-14", "all"]:
-        raise ValueError("Runtime v14 rollback metadata mismatch")
-    if sha(args.v14_seal, 16 * 1024 * 1024) != V14_SEAL_SHA:
-        raise ValueError("Runtime v14 rollback seal mismatch")
+    if sha(args.rollback_package) != ROLLBACK_SHA:
+        raise ValueError("direct control-plane rollback package mismatch")
+    if deb_metadata(args.rollback_package) != ["yoko-privileged-runtime", ROLLBACK_VERSION, "all"]:
+        raise ValueError("direct control-plane rollback metadata mismatch")
+    if sha(args.rollback_seal, 16 * 1024 * 1024) != ROLLBACK_SEAL_SHA:
+        raise ValueError("direct control-plane rollback seal mismatch")
     artifact_result, files = validate_artifact(args.handoff_root, args.application_source, args.stage_a_builder_source, repository)
 
     generated = ROOT / "generated"
@@ -497,7 +507,7 @@ def main() -> None:
     sealed_inputs = {
         "schema": "yoko.crm.coordinated-runtime-sealed-inputs.v1",
         "profile_id": PROFILE_ID,
-        "package_version": "2.0.0-15",
+        "package_version": "2.0.0-16",
         "runtime_builder": {
             "commit": builder_commit,
             "tree": builder_tree,
@@ -518,11 +528,11 @@ def main() -> None:
         "artifact_admission": {"receipt_path": receipt_path, "receipt_sha256": receipt_sha, "files": files},
         "production_snapshot": {"sha256": snapshot_sha, "completed_at": snapshot["completed_at"], "sealing": snapshot["sealing"]},
         "direct_control_plane_rollback": {
-            "package_version": "2.0.0-14",
-            "package_sha256": V14_SHA,
-            "package_bytes": args.v14_package.stat().st_size,
-            "root_store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{V14_SHA}/yoko-privileged-runtime_2.0.0-14_all.deb",
-            "seal_sha256": V14_SEAL_SHA,
+            "package_version": ROLLBACK_VERSION,
+            "package_sha256": ROLLBACK_SHA,
+            "package_bytes": args.rollback_package.stat().st_size,
+            "root_store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/yoko-privileged-runtime_{ROLLBACK_VERSION}_all.deb",
+            "seal_sha256": ROLLBACK_SEAL_SHA,
         },
         "trusted_boundary": trusted,
         "generated": {
@@ -536,12 +546,12 @@ def main() -> None:
     write_json(generated / "sealed-inputs.v1.json", sealed_inputs)
 
     command([str(ROOT / "packaging/build-package.sh")], stdout=subprocess.DEVNULL)
-    package = dist / "yoko-privileged-runtime_2.0.0-15_all.deb"
+    package = dist / "yoko-privileged-runtime_2.0.0-16_all.deb"
     package_sha = sha(package)
     release_seal = {
         "schema": "yoko.crm.coordinated-runtime-release-seal.v1",
         "profile_id": PROFILE_ID,
-        "package_version": "2.0.0-15",
+        "package_version": "2.0.0-16",
         "runtime_builder": {"commit": builder_commit, "tree": builder_tree, "subtree_inventory_sha256": sealed_inputs["runtime_builder"]["subtree_inventory_sha256"]},
         "accepted_application": sealed_inputs["accepted_application"],
         "stage_a": sealed_inputs["stage_a"],
@@ -563,6 +573,7 @@ def main() -> None:
     installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
     replacements = {
         "@NEW_DEB_SHA256@": package_sha,
+        "@ROLLBACK_SEAL_SHA256@": ROLLBACK_SEAL_SHA,
         "@AUDIT_RECORD_COUNT@": str(snapshot["sealing"]["audit_record_count"]),
         "@AUDIT_LAST_DIGEST@": snapshot["sealing"]["audit_last_digest"],
         "@RELEASE_SEAL_SHA256@": release_seal_sha,
@@ -578,7 +589,7 @@ def main() -> None:
     copy_exact(package, payload / package.name, 0o400)
     copy_exact(dist / "SEALED_RELEASE.json", payload / "SEALED_RELEASE.json", 0o400)
     copy_exact(generated / "artifact-admission.v1.json", payload / "artifact-admission.v1.json", 0o400)
-    copy_exact(args.v14_seal, payload / "runtime-v14-SEALED_RELEASE.json", 0o400)
+    copy_exact(args.rollback_seal, payload / "runtime-rollback-SEALED_RELEASE.json", 0o400)
     copy_exact(ROOT / "human-manifest.md", review_directory / "human-manifest.md", 0o400)
     copy_exact(args.independent_review.resolve(strict=True), review_directory / "independent-review.v1.json", 0o400)
     # Packed under a deterministic per-role name, never the reviewer's own filename, so the Owner
@@ -593,15 +604,15 @@ def main() -> None:
     payload_manifest = {
         "schema": "yoko.crm.coordinated-owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
-        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-15", "architecture": "all"},
+        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-16", "architecture": "all"},
         "direct_rollback": {
-            "name": "yoko-privileged-runtime", "version": "2.0.0-14", "sha256": V14_SHA,
-            "store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{V14_SHA}/yoko-privileged-runtime_2.0.0-14_all.deb",
+            "name": "yoko-privileged-runtime", "version": ROLLBACK_VERSION, "sha256": ROLLBACK_SHA,
+            "store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/yoko-privileged-runtime_{ROLLBACK_VERSION}_all.deb",
         },
         "files": payload_files,
     }
     write_json(payload / "payload-manifest.json", payload_manifest, 0o400)
-    bundle_name = "yoko-crm-coordinated-runtime-2.0.0-15.tar"
+    bundle_name = "yoko-crm-coordinated-runtime-2.0.0-16.tar"
     with tempfile.TemporaryDirectory(prefix=".bundle-build.", dir=ROOT) as raw_work:
         work = Path(raw_work)
         build_tar(generated / "bundle", work / "a.tar")
@@ -617,7 +628,7 @@ def main() -> None:
         "release_seal_sha256": release_seal_sha,
         "package_sha256": package_sha,
         "bootstrap": {"path": bundle_name, "sha256": sha(bootstrap), "bytes": bootstrap.stat().st_size},
-        "direct_rollback_package_sha256": V14_SHA,
+        "direct_rollback_package_sha256": ROLLBACK_SHA,
         "independent_review": {"status": review["status"], "document_sha256": review["document"]["sha256"],
                                "candidate_commit": review["candidate_commit"],
                                "residual_low_findings": review["residual_low_findings"],

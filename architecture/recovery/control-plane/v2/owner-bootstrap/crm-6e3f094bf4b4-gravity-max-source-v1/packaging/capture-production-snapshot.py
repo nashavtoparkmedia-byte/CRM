@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Capture one fresh secret-safe v14 production predecessor snapshot."""
+"""Capture one fresh secret-safe production predecessor snapshot from the installed runtime."""
 from __future__ import annotations
 
 import datetime as dt
@@ -11,7 +11,7 @@ from typing import Any
 
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
-EXPECTED_PROFILE = "crm-41f69fe8fe3f-gravity-source-v1"
+EXPECTED_PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
@@ -80,29 +80,6 @@ def run(primitive: str, resource: str | None) -> dict[str, Any]:
     return value
 
 
-def project_migration_rows(database: dict[str, Any]) -> list[dict[str, Any]]:
-    rows = database.get("canonical_live_rows")
-    if not isinstance(rows, list) or len(rows) != 62:
-        raise ValueError("unexpected migration row count")
-    output = []
-    for row in rows:
-        if not isinstance(row, dict) or row.get("status") != "FINISHED_ACTIVE":
-            raise ValueError("migration row is not active")
-        output.append({
-            "ordinal": row.get("observed_chronological_ordinal"),
-            "id": row.get("migration_id"),
-            "checksum": row.get("checksum"),
-            "migration_name": row.get("migration_name"),
-            "finished_at": row.get("finished_at"),
-            "rolled_back_at": row.get("rolled_back_at"),
-            "started_at": row.get("started_at"),
-            "applied_steps_count": row.get("applied_steps_count"),
-        })
-    if [row["ordinal"] for row in output] != list(range(1, 63)):
-        raise ValueError("migration chronology is invalid")
-    return output
-
-
 def main() -> None:
     if len(sys.argv) != 1:
         raise SystemExit("capture accepts no arguments")
@@ -120,7 +97,7 @@ def main() -> None:
     postgres = records["docker-inspect:crm.container.postgres"]["evidence"]
     database = records["database-status"]["evidence"]
     provenance = records["docker-provenance"]["evidence"]
-    if version.get("package_version") != "2.0.0-14" or version.get("activation_profile") != EXPECTED_PROFILE:
+    if version.get("package_version") != "2.0.0-15" or version.get("activation_profile") != EXPECTED_PROFILE:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
@@ -145,7 +122,7 @@ def main() -> None:
         database.get("profile_id") != EXPECTED_PROFILE
         or database.get("read_only") is not True
         or database.get("secret_values_emitted") is not False
-        or database.get("migration_state") != "APPROVED_OUTBOX_APPLIED"
+        or database.get("state") != "EXACT"
         or database.get("applied_migration_count") != 62
         or database.get("database_identity_sha256") != "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
     ):
@@ -156,7 +133,11 @@ def main() -> None:
     if not isinstance(semantic_records, list):
         raise ValueError("production semantic provenance missing")
     unrelated = [row for row in semantic_records if isinstance(row, dict) and row.get("name") not in {"crm-gravity-mvp", "crm-max-scraper"}]
-    migration_rows = project_migration_rows(database)
+    # The coordinated predecessor runtime reports the canonical migration projection as a digest
+    # it computed itself and does not expose the raw rows, so the snapshot carries that digest and
+    # the applied count. The digest still commits to the exact ledger; it is produced one layer
+    # earlier, by the privileged runtime, instead of being re-derived here from rows the same
+    # runtime would have supplied anyway.
     snapshot = {
         "schema": "yoko.crm.coordinated-runtime-production-snapshot.v1",
         "started_at": started,
@@ -180,8 +161,8 @@ def main() -> None:
             "postgres_container_id": postgres["container_id"],
             "postgres_image_id": postgres["image_id"],
             "database_identity_sha256": database["database_identity_sha256"],
-            "migration_rows": migration_rows,
-            "migration_rows_sha256": digest(migration_rows),
+            "applied_migration_count": database["applied_migration_count"],
+            "migration_rows_sha256": database["migration_rows_sha256"],
             "unrelated_semantic_fingerprint_sha256": digest(unrelated),
         },
     }

@@ -58,9 +58,9 @@ class CaptureContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsafe generated review output path"):
                 seal.reopen_generated_review_for_cleanup(generated)
 
-    def test_v14_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/runtime-v14-seal-f9f05a7c/builder/architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/dist/yoko-privileged-runtime_2.0.0-14_all.deb")
-        self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", "2.0.0-14", "all"])
+    def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
+        path = Path("/opt/codex-work/runtime-v15-seal-2e94dac1/yoko-privileged-runtime_2.0.0-15_all.deb")
+        self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
 
     def test_capture_plan_is_finite_and_read_only(self) -> None:
         self.assertEqual(capture.COMMANDS, (
@@ -91,29 +91,12 @@ class CaptureContractTests(unittest.TestCase):
         with mock.patch.object(capture.subprocess, "run", return_value=completed), self.assertRaises(ValueError):
             capture.run("version", None)
 
-    def test_migration_projection_is_exact_ordered_and_secret_free(self) -> None:
-        rows = []
-        for ordinal in range(1, 63):
-            rows.append({
-                "status": "FINISHED_ACTIVE", "observed_chronological_ordinal": ordinal,
-                "migration_id": f"id-{ordinal}", "checksum": hashlib.sha256(str(ordinal).encode()).hexdigest(),
-                "migration_name": f"{ordinal:04d}_fixture", "finished_at": "2026-01-01T00:00:00.000000Z",
-                "rolled_back_at": None, "started_at": "2026-01-01T00:00:00.000000Z", "applied_steps_count": 1,
-                "logs_present": False, "logs_bytes": None, "logs_sha256": None,
-            })
-        projected = capture.project_migration_rows({"canonical_live_rows": rows})
-        self.assertEqual([row["ordinal"] for row in projected], list(range(1, 63)))
-        self.assertNotIn("logs_present", projected[0])
-        rows[1]["status"] = "FAILED"
-        with self.assertRaises(ValueError):
-            capture.project_migration_rows({"canonical_live_rows": rows})
 
     def test_sealer_accepts_only_fresh_exact_predecessor_snapshot(self) -> None:
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
-        rows = [{"ordinal": ordinal} for ordinal in range(1, 63)]
         sealing = {
-            "runtime_package_version": "2.0.0-14",
-            "runtime_profile_id": "crm-41f69fe8fe3f-gravity-source-v1",
+            "runtime_package_version": "2.0.0-15",
+            "runtime_profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
             "audit_record_count": 47,
             "audit_last_digest": "a" * 64,
             "predecessor_release_critical_identity_sha256": "b" * 64,
@@ -127,8 +110,8 @@ class CaptureContractTests(unittest.TestCase):
             "postgres_container_id": "p",
             "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
-            "migration_rows": rows,
-            "migration_rows_sha256": hashlib.sha256(seal.canonical(rows)).hexdigest(),
+            "applied_migration_count": 62,
+            "migration_rows_sha256": "8eea7d25be2cc6b5fcee97bace2abf2ed1e15d183ea9f58d3c6f191d644fd9b6",
             "unrelated_semantic_fingerprint_sha256": "e" * 64,
         }
         value = {

@@ -4,7 +4,7 @@ set -eu
 PROJECT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 DIST="$PROJECT_ROOT/dist"
 GENERATED="$PROJECT_ROOT/generated"
-PACKAGE='yoko-privileged-runtime_2.0.0-15_all.deb'
+PACKAGE='yoko-privileged-runtime_2.0.0-16_all.deb'
 PROFILE_ID='crm-6e3f094bf4b4-gravity-max-source-v1'
 EPOCH=1788307200
 
@@ -63,7 +63,7 @@ for raw in sys.argv[2:]:
     path=pathlib.Path(raw)
     installed='/usr/' + str(path).split('/usr/',1)[1]
     files[installed]={"sha256":hashlib.sha256(path.read_bytes()).hexdigest(),"mode":"0444"}
-value={"schema":"yoko.crm.activation-profile-install-manifest.v1","runtime_abi":"2.0.0","package_version":"2.0.0-15","profile_id":destination.parent.name,"files":files}
+value={"schema":"yoko.crm.activation-profile-install-manifest.v1","runtime_abi":"2.0.0","package_version":"2.0.0-16","profile_id":destination.parent.name,"files":files}
 destination.write_text(json.dumps(value,sort_keys=True,separators=(',',':'))+'\n',encoding='ascii')
 PY
     /usr/bin/chmod 0444 "$profile/manifest.v1.json"

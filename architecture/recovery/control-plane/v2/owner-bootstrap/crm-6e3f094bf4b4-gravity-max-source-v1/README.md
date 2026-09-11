@@ -1,4 +1,4 @@
-# Runtime 2.0.0-15 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-16 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
@@ -17,8 +17,9 @@ zero-argument `database-status`, `release-preflight`, `release-activate`, and
 `rollback` operations plus the existing read-only `predecessor-observe`.
 
 The trusted Runtime core, predecessor observer, base policy, and sudoers file
-are byte-identical to the current Runtime v10 authority. Runtime v14 remains
-the exact direct control-plane rollback and is not modified by this builder.
+are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-15,
+the installed predecessor, is the exact direct control-plane rollback and is not
+modified by this builder.
 
 ## Pair state model
 
@@ -52,14 +53,14 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
-The installer also requires the already-installed v14 DEB at its exact
+The installer also requires the already-installed 2.0.0-15 DEB at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`af08fcf17f64bcd028692d4d9289bc38f91d9df46b8c40c9f7e8df595d1337c4`.
+`4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246`.
 Any successor installation failure restores that exact package automatically.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
 start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and
 the authenticated Stage A handoff. Independent configured reviewers must bind
-the final commit/tree, package, seal, bootstrap, Stage A artifact, and v14
-rollback before installation.
+the final commit/tree, package, seal, bootstrap, Stage A artifact, and the
+2.0.0-15 rollback before installation.

@@ -96,7 +96,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile["profile_id"] != PROFILE_ID
         or profile["host"] != "jvxthcorvm"
         or profile["runtime_abi"] != "2.0.0"
-        or profile["package_version"] != "2.0.0-15"
+        or profile["package_version"] != "2.0.0-16"
         or profile["accepted_application"] != {
             "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
             "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
@@ -335,7 +335,7 @@ def _validate_target_image(core: Any, record: dict[str, Any], reference: str, co
     config = image.get("Config") if isinstance(image, dict) else None
     labels = config.get("Labels") if isinstance(config, dict) else None
     if (
-        image.get("Id") != record.get("image_id")
+        image.get("Id") != _sealed_image_identity(core, image, record, component)
         or image.get("Os") != "linux"
         or image.get("Architecture") != "amd64"
         or not isinstance(labels, dict)
@@ -566,16 +566,89 @@ def _pair(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> tuple[d
     )
 
 
+# Manifest-level descriptor media types. Docker's containerd image store reports the digest of
+# the manifest or index it stored as the image id and echoes that same digest back in Descriptor;
+# the classic graph driver reports the config blob digest and emits no Descriptor at all. This set
+# only recognises the shape of that descriptor. It never widens which identity is accepted.
+MANIFEST_MEDIA_TYPES = frozenset({
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+})
+
+
+def _sealed_image_identity(core: Any, image: dict[str, Any], record: dict[str, Any], component: str) -> str:
+    """Return the single sealed identity this engine's image store is expected to report.
+
+    One image artifact has two exact content addresses: the digest of its config blob, which the
+    classic graph driver reports as the image id, and the digest of the OCI manifest or index that
+    holds it, which Docker's containerd image store reports instead. The manifest commits to the
+    config, which commits to the layers, so both name the same bytes and neither is a mutable tag
+    or a registry lookup. This profile seals both for each component, so the engine's own
+    descriptor decides which one applies rather than the caller.
+
+    Exactly one identity is ever returned. The containerd form is chosen only when the engine
+    itself corroborates it, by echoing a manifest-level descriptor whose digest is the image id it
+    just reported. Anything else falls back to the config digest, which is the stricter original
+    behaviour, so an absent, malformed or self-contradictory descriptor cannot widen what passes.
+    A component whose profile does not seal both identities is refused outright.
+    """
+    classic = record.get("image_id")
+    containerd = record.get("containerd_image_id")
+    if (
+        not isinstance(classic, str)
+        or not isinstance(containerd, str)
+        or IMAGE_ID.fullmatch(classic) is None
+        or IMAGE_ID.fullmatch(containerd) is None
+        or classic == containerd
+    ):
+        raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_UNSEALED", 74)
+    descriptor = image.get("Descriptor")
+    observed = image.get("Id")
+    if (
+        isinstance(descriptor, dict)
+        and descriptor.get("mediaType") in MANIFEST_MEDIA_TYPES
+        and isinstance(descriptor.get("digest"), str)
+        and IMAGE_ID.fullmatch(descriptor["digest"]) is not None
+        and descriptor["digest"] == observed
+    ):
+        return containerd
+    return classic
+
+
+def _sealed_identities(record: dict[str, Any]) -> frozenset[str]:
+    """Every exact identity this profile seals for one image, as the engine may report it.
+
+    A running container names its image through `docker container inspect`, which offers no
+    descriptor to say which address space the id came from, so classification has to accept any
+    identity the profile already sealed for that component. Both forms are exact content addresses
+    of the same bytes, so either one names the image unambiguously; the set is per component, so a
+    Gravity identity can still never classify as MAX. A record that seals nothing usable yields an
+    empty set, which classifies as unknown rather than matching a missing value.
+    """
+    return frozenset(
+        value
+        for key in ("image_id", "containerd_image_id")
+        for value in (record.get(key),)
+        if isinstance(value, str) and value
+    )
+
+
 def _classify(profile: dict[str, Any], gravity: dict[str, Any], maximum: dict[str, Any]) -> tuple[str, tuple[str, str]]:
-    def component(actual: Any, predecessor: Any, target: Any) -> str:
-        if actual == predecessor:
+    def component(actual: Any, predecessor: dict[str, Any], target: dict[str, Any]) -> str:
+        predecessor_identities = _sealed_identities(predecessor)
+        target_identities = _sealed_identities(target)
+        if not isinstance(actual, str) or predecessor_identities & target_identities:
+            return "unknown"
+        if actual in predecessor_identities:
             return "predecessor"
-        if actual == target:
+        if actual in target_identities:
             return "target"
         return "unknown"
     vector = (
-        component(gravity.get("image_id"), profile["predecessor"]["gravity"]["image_id"], profile["target"]["gravity"]["image_id"]),
-        component(maximum.get("image_id"), profile["predecessor"]["max_scraper"]["image_id"], profile["target"]["max_scraper"]["image_id"]),
+        component(gravity.get("image_id"), profile["predecessor"]["gravity"], profile["target"]["gravity"]),
+        component(maximum.get("image_id"), profile["predecessor"]["max_scraper"], profile["target"]["max_scraper"]),
     )
     if vector == ("predecessor", "predecessor"):
         return "PREDECESSOR_PAIR", vector

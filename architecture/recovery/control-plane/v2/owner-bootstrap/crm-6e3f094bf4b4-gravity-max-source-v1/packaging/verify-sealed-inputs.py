@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Fail-closed verifier for generated Runtime v15 package inputs."""
+"""Fail-closed verifier for generated coordinated Runtime package inputs."""
 from __future__ import annotations
 
 import argparse
@@ -158,14 +158,14 @@ def main() -> None:
     profile = load(GENERATED / "profile.v1.json")
     if (
         profile.get("profile_id") != "crm-6e3f094bf4b4-gravity-max-source-v1"
-        or profile.get("package_version") != "2.0.0-15"
+        or profile.get("package_version") != "2.0.0-16"
         or profile.get("artifact_admission", {}).get("receipt_sha256") != expected_generated["artifact-admission.v1.json"]
         or profile.get("database", {}).get("mutation_authorized") is not False
         or any(profile.get("negative_properties", {}).values())
     ):
         raise ValueError("generated profile contract mismatch")
     if args.phase in {"package-output", "release"}:
-        package = DIST / "yoko-privileged-runtime_2.0.0-15_all.deb"
+        package = DIST / "yoko-privileged-runtime_2.0.0-16_all.deb"
         fields = []
         for field in ("Package", "Version", "Architecture"):
             completed = subprocess.run(
@@ -175,7 +175,7 @@ def main() -> None:
             if completed.returncode != 0:
                 raise ValueError("package metadata query failed")
             fields.append(completed.stdout.strip())
-        if fields != ["yoko-privileged-runtime", "2.0.0-15", "all"]:
+        if fields != ["yoko-privileged-runtime", "2.0.0-16", "all"]:
             raise ValueError("package metadata mismatch")
     residual = None
     if args.phase == "release":

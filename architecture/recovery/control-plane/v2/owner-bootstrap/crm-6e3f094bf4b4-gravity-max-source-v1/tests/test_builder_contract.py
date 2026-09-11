@@ -229,7 +229,7 @@ class IndependentReviewBindingTests(unittest.TestCase):
         value = {
             "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
             "profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
-            "package_version": "2.0.0-15",
+            "package_version": "2.0.0-16",
             "candidate_commit": self.COMMIT,
             "candidate_tree": self.TREE,
             "reviews": [
@@ -542,6 +542,51 @@ class IndependentReviewBindingTests(unittest.TestCase):
         source = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
         self.assertIn('parser.add_argument("--independent-review", required=True', source)
         self.assertNotIn('"independent_review": "PENDING"', source)
+
+    def test_installer_only_names_files_the_sealer_actually_packs(self) -> None:
+        """F1/F6: every $EXPECTED_DIR file the installer touches must exist in the payload.
+
+        The rollback seal was renamed in the sealer and the installer allowlist but not in the
+        installer's own digest check, which would have aborted every install path.
+        """
+        import re
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="utf-8")
+        allowlist = set(re.findall(r'^\s*"([^"]+)":0o[0-7]+,', re.search(
+            r"expected=\{(.*?)\n\}", installer, re.S).group(1), re.M))
+        referenced = set(re.findall(r'\$EXPECTED_DIR/([A-Za-z0-9._-]+)', installer))
+        self.assertTrue(referenced, "installer references no payload files")
+        unpacked = {name for name in referenced if name not in allowlist and name != "$NEW_DEB"}
+        self.assertEqual(unpacked, set(), f"installer names files absent from its own allowlist: {sorted(unpacked)}")
+        for name in sorted(allowlist):
+            if "/" in name or name == "payload-manifest.json":
+                continue
+            self.assertIn(name, sealer, f"sealer never writes payload member {name}")
+
+    def test_every_installer_version_reference_agrees_with_the_package_being_installed(self) -> None:
+        """B-1: the unpack-directory regex escapes its dots, so a literal grep for the version misses it.
+
+        Collect every version literal in the installer, however it is written, and require each to be
+        either the successor being installed or the predecessor being rolled back to — nothing else.
+        """
+        import re
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        new_version = re.search(r"NEW_DEB='yoko-privileged-runtime_([0-9.-]+)_all\.deb'", installer).group(1)
+        old_version = re.search(r"OLD_DEB='yoko-privileged-runtime_([0-9.-]+)_all\.deb'", installer).group(1)
+        self.assertNotEqual(new_version, old_version)
+        found = {literal.replace("\\", "") for literal in re.findall(r"2(?:\\?\.)0(?:\\?\.)0-\d+", installer)}
+        self.assertTrue(found, "installer names no version at all")
+        self.assertEqual(found - {new_version, old_version}, set(),
+                         f"installer names versions that are neither successor nor rollback: {sorted(found)}")
+        unpack = re.search(r"yoko-coordinated-runtime-(2(?:\\?\.)0(?:\\?\.)0-\d+)", installer).group(1).replace("\\", "")
+        self.assertEqual(unpack, new_version, "unpack directory names a different release than the package")
+
+    def test_installer_rollback_seal_digest_is_rendered_not_hardcoded(self) -> None:
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="utf-8")
+        self.assertIn("@ROLLBACK_SEAL_SHA256@", installer)
+        self.assertIn('"@ROLLBACK_SEAL_SHA256@": ROLLBACK_SEAL_SHA', sealer)
+        self.assertNotIn("8a7e28a3ad49ab6fb3be27e9bfa42d75aff6755b41a1d40119ce806026adb5ad", installer)
 
 
 if __name__ == "__main__":
