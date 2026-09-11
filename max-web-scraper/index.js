@@ -16,6 +16,7 @@ const {
   TransportInterceptor,
   OP,
   selectPendingLiveDomCandidates,
+  evaluatePhoneResolutionUiSend,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
@@ -3949,8 +3950,9 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // Use keyboard.type() instead of fill() to trigger MAX's key-event listeners
             await page.keyboard.type(messageToSend, { delay: 20 })
             await page.waitForTimeout(400)
-            const composeText = await composeEl.textContent().catch(() => '')
-            console.log(`[ResolvePhone] Compose text after typing: "${(composeText || '').slice(0, 50)}"`)
+            const composeTextBeforeSubmit = await composeEl.textContent().catch(() => '')
+            console.log(`[ResolvePhone] Compose text after typing: "${(composeTextBeforeSubmit || '').slice(0, 50)}"`)
+            const sendFrameStartIndex = capturedFrames.length
             // Try pressing Enter first (most messaging apps send on Enter)
             await page.keyboard.press('Enter')
             console.log(`[ResolvePhone] Pressed Enter to send`)
@@ -3963,8 +3965,33 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
               if ((afterEnterText || '').trim()) {
                 await sendBtn.click()
                 console.log(`[ResolvePhone] Clicked Send message button (Enter didn't send)`)
+                await page.waitForTimeout(600)
               } else {
                 console.log(`[ResolvePhone] Enter sent the message (compose area empty)`)
+              }
+            }
+            // Pressing Enter is not proof that MAX accepted the text. The compose box
+            // still holding it means nothing was submitted, so the operation must not
+            // report a send it did not perform.
+            const composeTextAfterSubmit = await composeEl.textContent().catch(() => '')
+            const uiOutcome = evaluatePhoneResolutionUiSend({
+              beforeText: composeTextBeforeSubmit,
+              afterText: composeTextAfterSubmit,
+              expectedText: messageToSend,
+              postActionFrames: capturedFrames.slice(sendFrameStartIndex),
+            })
+            if (!uiOutcome.submitObserved) {
+              console.warn(
+                `[ResolvePhone] compose did not clear the exact typed text ` +
+                `(${uiOutcome.confirmationSource}, frames=${uiOutcome.observedFrameCount}); treating as not sent`,
+              )
+              await returnHome(); cleanup()
+              return {
+                chatId: null,
+                chatIdSource: null,
+                uiSendAttempted: true,
+                submitObserved: false,
+                messageSent: false,
               }
             }
             console.log(`[ResolvePhone] Waiting for a send signal bound to this action...`)
@@ -4011,6 +4038,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
               chatId: boundChatId,
               chatIdSource: boundChatIdSource,
               uiSendAttempted: true,
+              submitObserved: true,
               messageSent: true,
             }
           } else {
@@ -5881,6 +5909,19 @@ app.post('/send-message', async (req, res) => {
       if (uiSendAttempted) {
         // A UI send attempt is terminal for this HTTP operation: never issue a second
         // protocol send, whether or not a send-bound signal supplied the chat id.
+        if (liveResult.submitObserved !== true) {
+          // The text never left the compose box. Reporting success here would record a
+          // message the contact will never receive, so fail the operation instead.
+          console.error(`[Send] UI send for ${digits} did not take effect; reporting failure`)
+          return res.status(502).json({
+            success: false,
+            error: 'MAX UI send did not take effect: the message was not submitted',
+            phone: digits,
+            chatId: null,
+            deliveryConfirmed: false,
+            deliveryStatus: 'failed',
+          })
+        }
         if (liveId) {
           console.log(`[Send] UI-resolved: ${digits} → chatId ${liveId} via ${liveResult.chatIdSource}`)
           extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)

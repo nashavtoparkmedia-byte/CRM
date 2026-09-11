@@ -30,17 +30,38 @@ def test_unbound_frames_never_define_the_send_target():
     assert 'messageSent: true' not in source.split('// Fall through to 6b write-button logic below', 1)[1]
 
 
+def _branch_body(text, header):
+    """Return the body of the block introduced by `header`, by brace matching."""
+    open_at = text.index('{', text.index(header))
+    depth = 0
+    for i in range(open_at, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return text[open_at + 1:i]
+    raise AssertionError('unbalanced braces after ' + header)
+
+
 def test_attempted_ui_send_is_terminal_even_without_a_bound_chat_id():
     assert 'uiSendAttempted: true' in source
     assert "const uiSendAttempted = Boolean(liveResult && typeof liveResult === 'object' && liveResult.uiSendAttempted === true)" in source
+
+    branch = _branch_body(source, 'if (uiSendAttempted) {')
+
+    # Every exit from the branch is a return, so an attempted UI send can never fall
+    # through into a second send of the same message, with or without a chat id.
+    assert 'res.status(502)' in branch
+    assert 'success: true,' in branch
+    assert branch.count('return res.') == 2, branch.count('return res.')
+    assert 'normalizeTextSendResult' not in branch
+
+    # Both responses precede the protocol send path in the enclosing handler.
     attempted = source.index('if (uiSendAttempted) {')
-    returned = source.index('return res.json({', attempted)
     protocol_send = source.index('const sendResult = normalizeTextSendResult', attempted)
-    assert returned < protocol_send, 'an attempted UI send must return before the protocol send path'
-    # The early return is unconditional inside the branch, so a missing chat id
-    # can never fall through into a second send of the same message.
-    branch = source[attempted:returned]
-    assert 'return' not in branch
+    assert source.index('return res.status(502)', attempted) < protocol_send
+    assert source.index('return res.json({', attempted) < protocol_send
 
 
 def test_ui_send_reports_send_requested_and_marks_unbound_results():
@@ -54,3 +75,35 @@ def test_bound_chat_id_is_persisted_for_later_sends():
     branch = source[attempted:source.index('return res.json({', attempted)]
     assert 'savePhoneChatId(digits, liveId)' in branch
     assert 'contactStore._map.set(liveId' in branch
+
+
+def test_a_send_is_claimed_only_when_the_typed_text_left_the_compose_box():
+    # Pressing Enter is not proof MAX accepted the text. Without a cleared compose
+    # box the message was never submitted, so no send may be reported.
+    assert 'const uiOutcome = evaluatePhoneResolutionUiSend({' in source
+    assert 'beforeText: composeTextBeforeSubmit,' in source
+    assert 'afterText: composeTextAfterSubmit,' in source
+    assert 'expectedText: messageToSend,' in source
+    assert 'if (!uiOutcome.submitObserved) {' in source
+    assert 'submitObserved: false,' in source
+    assert 'messageSent: false,' in source
+
+    # The unproven-submit branch returns before the bound-signal poll can run.
+    unproven = source.index('if (!uiOutcome.submitObserved) {')
+    returned = source.index('return {', unproven)
+    poll = source.index('Waiting for a send signal bound to this action')
+    assert returned < poll, 'an unproven submit must return before binding a chat id'
+
+
+def test_unproven_submit_is_reported_as_failure_not_as_success():
+    attempted = source.index('if (uiSendAttempted) {')
+    guard = source.index('if (liveResult.submitObserved !== true) {', attempted)
+    ok_return = source.index("success: true,", attempted)
+    assert guard < ok_return, 'the unproven-submit guard must precede any success response'
+    branch = source[guard:source.index('}', source.index('res.status(502)', guard))]
+    assert 'success: false,' in branch
+    assert "deliveryStatus: 'failed'," in branch
+    assert 'error:' in branch
+    # Still terminal: it returns rather than falling through to a protocol send.
+    protocol_send = source.index('const sendResult = normalizeTextSendResult', guard)
+    assert source.index('res.status(502)', guard) < protocol_send
