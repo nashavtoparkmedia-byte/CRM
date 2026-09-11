@@ -1,0 +1,91 @@
+{
+  "schema": "yoko.crm.reconstruction-source-migrations.v1",
+  "version": 1,
+  "status": "FRESH_INSTALL_ONLY_RESOLVE_APPLIED_ELSEWHERE",
+  "purpose": "A reconstruction migration replays already-applied, already-governed history into the active Prisma migration directory so a database rebuilt from gravity-mvp/prisma/migrations alone matches gravity-mvp/prisma/schema.prisma. It is not a pending-source migration: pending-source means production execution is expected, whereas a reconstruction migration must never execute against a catalog that already carries the objects it reconstructs.",
+  "base_authority": {
+    "path": "architecture/migrations/v1/production-migration-authority.json",
+    "current_target": "20260809140000_add_domain_outbox",
+    "current_schema_sha256": "287d39d324cd0a2b616eb7127cd520ea8ee5ce9d517620aafc5b07240cdf0b48"
+  },
+  "source_schema": {
+    "path": "gravity-mvp/prisma/schema.prisma",
+    "sha256": "1d5dfa10628625e031c721eccaf4f470f19dba5c849be61a8900ceec926801d6",
+    "size": 143439,
+    "expected_fresh_install_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AND_CANONICAL_CATALOG_PARITY"
+  },
+  "environment_contract": {
+    "fresh_empty_database": "EXECUTE",
+    "catalog_already_carrying_reconstructed_objects": "REFUSE_RESOLVE_APPLIED_ONLY",
+    "partially_populated_or_unclassified": "REFUSE",
+    "enforcement": "IN_MIGRATION_PRECONDITION_RAISES_DUPLICATE_TABLE"
+  },
+  "production_reconciliation": {
+    "procedure": [
+      "prisma migrate resolve --applied <migration>",
+      "prisma migrate deploy"
+    ],
+    "direct_execution": "FORBIDDEN_REFUSED_BY_MIGRATION_PRECONDITION",
+    "recovery_if_directly_executed": [
+      "prisma migrate resolve --rolled-back <migration>",
+      "prisma migrate resolve --applied <migration>"
+    ],
+    "production_database_touched": false
+  },
+  "migrations": [
+    {
+      "name": "20260911000000_fresh_install_parity_multi_park_and_max_mirror",
+      "path": "gravity-mvp/prisma/migrations/20260911000000_fresh_install_parity_multi_park_and_max_mirror/migration.sql",
+      "sha256": "f8203836cac674516e7aef47d99d6d1f8830995585783d79297d3f2dba817923",
+      "size": 126780,
+      "owner_contexts": [
+        "contacts",
+        "fleet_operations",
+        "max_channel",
+        "telegram_channel"
+      ],
+      "classification": "EXPAND_ONLY",
+      "production_execution": "FORBIDDEN_RESOLVE_APPLIED_ONLY",
+      "fresh_install_execution": "REQUIRED",
+      "authorized_cascade_foreign_keys": [
+        "ContactDriverProfileAudit_contactId_fkey",
+        "ParkConnection_apiConnectionId_fkey",
+        "ParkConnection_parkId_fkey"
+      ],
+      "reconstructs": [
+        "20260712000000_multi_park_driver_profiles",
+        "20260713000000_stable_park_identity",
+        "20260713010000_driver_profile_person_resolution",
+        "20260717000000_add_driver_telegram_submitted_phone",
+        "20260726162043_add_max_raw_transport_journal",
+        "20260726190658_add_max_route_registry",
+        "20260726205437_add_max_inbound_normalization",
+        "20260726215715_add_max_per_chat_outbound_actor",
+        "20260726225737_add_max_dispatch_ledger",
+        "20260727053744_add_max_provider_confirmation_matcher",
+        "20260727141925_add_max_shadow_semantic_comparison",
+        "20260727154647_add_max_capture_ingress",
+        "20260728213000_add_max_account_session_owner",
+        "20260728214000_add_max_outbound_shadow_plan"
+      ],
+      "excluded_from_reconstruction": [
+        {
+          "name": "20260806181500_repair_max_sergey_mirror_timeline",
+          "reason": "PURE_DATA_REPAIR_NO_SCHEMA_OBJECTS"
+        }
+      ]
+    }
+  ],
+  "proof": {
+    "database_scope": "ISOLATED_REAL_POSTGRESQL_ONLY",
+    "fresh_install_replay": "tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay",
+    "negatives": "tools/architecture/test-production-migration-authority.mjs",
+    "production_database_touched": false
+  },
+  "rollback_strategy": {
+    "deployment_order": "MIGRATION_BEFORE_CODE",
+    "code_rollback": "ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES",
+    "schema_rollback": "NO_DESTRUCTIVE_DOWN_MIGRATION",
+    "failed_apply_recovery": "TRANSACTION_ROLLS_BACK_DDL_THEN_PRISMA_MIGRATE_RESOLVE_ROLLED_BACK_BEFORE_RETRY"
+  }
+}

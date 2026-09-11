@@ -31,6 +31,8 @@ try {
     'architecture/migrations/v1/production-migration-authority.json',
     'architecture/migrations/v1/predecessor-runtime-migration-inventory.json',
     'architecture/migrations/v1/pending-source-migrations.json',
+    'architecture/migrations/v1/reconstruction-source-migrations.json',
+    'architecture/contexts/v1/context-index.json',
   ]) {
     await mkdir(path.dirname(path.join(fixture, relative)), { recursive: true })
     await cp(path.join(root, relative), path.join(fixture, relative))

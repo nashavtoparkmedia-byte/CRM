@@ -15,6 +15,8 @@ import {
 const root = process.cwd()
 const authorityPath = 'architecture/migrations/v1/production-migration-authority.json'
 const pendingSourcePath = 'architecture/migrations/v1/pending-source-migrations.json'
+const reconstructionSourcePath = 'architecture/migrations/v1/reconstruction-source-migrations.json'
+const contextIndexPath = 'architecture/contexts/v1/context-index.json'
 const authority = JSON.parse(await readFile(path.join(root, authorityPath), 'utf8'))
 
 const [runtimeDockerfile, deployScript] = await Promise.all([
@@ -90,6 +92,9 @@ try {
   await mkdir(path.join(fixture, 'architecture/migrations/v1'), { recursive: true })
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath), { recursive: true })
   await cp(path.join(root, pendingSourcePath), path.join(fixture, pendingSourcePath))
+  await cp(path.join(root, reconstructionSourcePath), path.join(fixture, reconstructionSourcePath))
+  await mkdir(path.join(fixture, 'architecture/contexts/v1'), { recursive: true })
+  await cp(path.join(root, contextIndexPath), path.join(fixture, contextIndexPath))
   await cp(path.join(root, 'architecture/migrations/v1/provenance'), path.join(fixture, 'architecture/migrations/v1/provenance'), { recursive: true })
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
   await cp(
@@ -390,6 +395,172 @@ try {
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath))
   await cp(path.join(root, 'architecture/migrations/v1/archive/pre-outbox', coordinatedRow.name, 'migration.sql'), coordinatedPath)
 
+  // --- reconstruction source category ------------------------------------------------
+  // A reconstruction migration replays already-applied governed history so a fresh
+  // install matches schema.prisma. Every way of misusing the category must fail closed.
+  const reconstructionPath = path.join(fixture, reconstructionSourcePath)
+  const shippedReconstruction = JSON.parse(await readFile(path.join(root, reconstructionSourcePath), 'utf8'))
+  const reconstructionRow = shippedReconstruction.migrations[0]
+  const reconstructionSqlPath = path.join(fixture, reconstructionRow.path)
+  const reconstructionSql = await readFile(path.join(root, reconstructionRow.path), 'utf8')
+  const restoreReconstruction = async () => {
+    await cp(path.join(root, reconstructionSourcePath), reconstructionPath)
+    await writeFile(reconstructionSqlPath, reconstructionSql)
+  }
+  const withReconstruction = async (mutate) => {
+    const registry = JSON.parse(await readFile(path.join(root, reconstructionSourcePath), 'utf8'))
+    mutate(registry)
+    await writeFile(reconstructionPath, `${JSON.stringify(registry, null, 2)}\n`)
+  }
+  const withReconstructionSql = async (sql) => {
+    await writeFile(reconstructionSqlPath, sql)
+    await withReconstruction((registry) => {
+      registry.migrations[0].sha256 = createHash('sha256').update(sql).digest('hex')
+      registry.migrations[0].size = Buffer.byteLength(sql)
+    })
+  }
+
+  // An unclassified active migration is still unauthorized.
+  await withReconstruction((registry) => { registry.migrations = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction source inventory is empty/)
+  await restoreReconstruction()
+
+  // An unknown owning context fails closed; the context index is the authority.
+  for (const unknown of [['not_a_context'], ['Max_Channel'], [' max_channel '], ['']]) {
+    await withReconstruction((registry) => { registry.migrations[0].owner_contexts = unknown })
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction owning context mismatch/)
+    await restoreReconstruction()
+  }
+  await withReconstruction((registry) => { registry.migrations[0].owner_contexts = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction owning context mismatch/)
+  await restoreReconstruction()
+
+  // An unknown authority category value fails closed.
+  await withReconstruction((registry) => { registry.status = 'PENDING_SOURCE' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction source authority identity mismatch/)
+  await restoreReconstruction()
+
+  // Declaring production execution permissible fails closed.
+  for (const [field, value, pattern] of [
+    ['production_execution', 'ALLOWED', /reconstruction source migration record mismatch/],
+    ['fresh_install_execution', 'OPTIONAL', /reconstruction source migration record mismatch/],
+    ['classification', 'CONTRACT', /reconstruction source migration record mismatch/],
+  ]) {
+    await withReconstruction((registry) => { registry.migrations[0][field] = value })
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), pattern)
+    await restoreReconstruction()
+  }
+  await withReconstruction((registry) => { registry.production_reconciliation.direct_execution = 'ALLOWED' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction production reconciliation mismatch/)
+  await restoreReconstruction()
+  await withReconstruction((registry) => { registry.environment_contract.catalog_already_carrying_reconstructed_objects = 'EXECUTE' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction environment contract mismatch/)
+  await restoreReconstruction()
+
+  // The same migration cannot be claimed by two categories at once.
+  await withReconstruction((registry) => { registry.migrations[0].name = '20260831120000_add_ai_call_campaign_product' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction source migration record mismatch|reconstruction source migration is claimed as pending source/)
+  await restoreReconstruction()
+
+  // Reconstructed history must be governed archive history.
+  await withReconstruction((registry) => { registry.migrations[0].reconstructs = ['20260911999999_invented'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstructed history is not governed archive history/)
+  await restoreReconstruction()
+
+  // The pure data-repair migration must stay excluded, never reconstructed.
+  await withReconstruction((registry) => {
+    registry.migrations[0].reconstructs = [...registry.migrations[0].reconstructs, '20260806181500_repair_max_sergey_mirror_timeline'].sort()
+    registry.migrations[0].excluded_from_reconstruction = []
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstructed archive migration declares no schema objects: 20260806181500_repair_max_sergey_mirror_timeline/)
+  await restoreReconstruction()
+
+  // ... and an exclusion cannot falsely claim a schema-bearing migration is data repair.
+  await withReconstruction((registry) => {
+    registry.migrations[0].reconstructs = registry.migrations[0].reconstructs.filter((name) => name !== '20260726162043_add_max_raw_transport_journal')
+    registry.migrations[0].excluded_from_reconstruction = [
+      ...registry.migrations[0].excluded_from_reconstruction,
+      { name: '20260726162043_add_max_raw_transport_journal', reason: 'PURE_DATA_REPAIR_NO_SCHEMA_OBJECTS' },
+    ]
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /exclusion claims pure data repair but declares schema objects: 20260726162043_add_max_raw_transport_journal/)
+  await restoreReconstruction()
+
+  // Drift between the registry and the migration bytes fails closed.
+  await writeFile(reconstructionSqlPath, `${reconstructionSql}\n-- drift\n`)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction source migration checksum mismatch/)
+  await restoreReconstruction()
+
+  // The fail-closed precondition is checked as structure, not as three substrings.
+  const guardBlock = reconstructionSql.match(/DO\s*(\$[A-Za-z_]*\$)([\s\S]*?)\1\s*;/u)
+  assert(guardBlock, 'the reconstruction migration must open with a dollar-quoted DO block')
+
+  // Deleting the guard and leaving comments that name the right words is not a guard.
+  await withReconstructionSql(reconstructionSql.replace(
+    guardBlock[0],
+    () => "\n-- RAISE EXCEPTION ERRCODE = 'duplicate_table'\n-- prisma migrate resolve --applied 20260911000000_fresh_install_parity_multi_park_and_max_mirror\n",
+  ))
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /has no DO-block precondition/)
+  await restoreReconstruction()
+
+  // Losing the error code, or the procedure the operator is told to run, fails closed.
+  await withReconstructionSql(reconstructionSql.replaceAll("ERRCODE = 'duplicate_table',", "ERRCODE = 'internal_error',"))
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /does not raise duplicate_table naming the resolve procedure/)
+  await restoreReconstruction()
+
+  // A guard that does not cover every object the migration creates fails closed, because a
+  // partial apply is exactly the hazard the guard exists to prevent.
+  await withReconstructionSql(reconstructionSql.replace(guardBlock[0], () => guardBlock[0].replace("'MaxRouteConflict', ", '')))
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /does not guard every created table: .*MaxRouteConflict/)
+  await restoreReconstruction()
+
+  await withReconstructionSql(reconstructionSql.replace(guardBlock[0], () => guardBlock[0].replace("('Driver', 'parkId'), ", '')))
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /does not guard every added column: .*Driver\.parkId/)
+  await restoreReconstruction()
+
+  // DDL ahead of the guard would run before the environment was classified.
+  await withReconstructionSql(`CREATE TABLE "Park" ("id" TEXT NOT NULL);\n${reconstructionSql}`)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /runs DDL before its precondition/)
+  await restoreReconstruction()
+
+  // Any DML fails closed: no archived data-repair statement may be reintroduced.
+  for (const dml of [
+    'UPDATE "Message" SET "sentAt" = now();',
+    'DELETE FROM "Message" WHERE "externalId" = \'x\';',
+    'INSERT INTO "Park" ("id") VALUES (\'x\');',
+    'TRUNCATE "Park";',
+    'DROP TABLE "Park";',
+    'ALTER TABLE "Park" DROP COLUMN "parkCode";',
+    'GRANT ALL ON "Park" TO PUBLIC;',
+    // buried inside a PL/pgSQL block rather than at the top level
+    'DO $$ BEGIN DELETE FROM "Message" WHERE "externalId" = \'x\'; END $$;',
+    'DO $$ BEGIN IF true THEN UPDATE "Message" SET "sentAt" = now(); END IF; END $$;',
+  ]) {
+    await withReconstructionSql(`${reconstructionSql}\n${dml}\n`)
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction source migration is not expand-only/)
+    await restoreReconstruction()
+  }
+
+  // The cascade exception is bounded: a fourth cascade foreign key fails closed.
+  await withReconstructionSql(`${reconstructionSql}\nALTER TABLE "Park" ADD CONSTRAINT "Park_extra_fkey" FOREIGN KEY ("id") REFERENCES "Park"("id") ON DELETE CASCADE ON UPDATE CASCADE;\n`)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /introduces unauthorized cascade semantics/)
+  await restoreReconstruction()
+
+  // Removing an authorized cascade also fails closed: production semantics are exact.
+  await withReconstructionSql(reconstructionSql.replace(
+    'ALTER TABLE "ParkConnection" ADD CONSTRAINT "ParkConnection_parkId_fkey" FOREIGN KEY ("parkId") REFERENCES "Park"("id") ON DELETE CASCADE ON UPDATE CASCADE;',
+    'ALTER TABLE "ParkConnection" ADD CONSTRAINT "ParkConnection_parkId_fkey" FOREIGN KEY ("parkId") REFERENCES "Park"("id") ON DELETE RESTRICT ON UPDATE CASCADE;',
+  ))
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /introduces unauthorized cascade semantics/)
+  await restoreReconstruction()
+
+  // The declared cascade allowlist cannot drift from the enforced one.
+  await withReconstruction((registry) => { registry.migrations[0].authorized_cascade_foreign_keys = ['ParkConnection_parkId_fkey'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /reconstruction cascade declaration mismatch/)
+  await restoreReconstruction()
+
+  // Existing interpretations are unchanged: the applied and pending categories still
+  // reject the same things they rejected before the reconstruction category existed.
   const duplicate = '20260728213000_add_max_account_session_owner'
   const duplicateActive = path.join(fixture, 'gravity-mvp/prisma/migrations', duplicate, 'migration.sql')
   await mkdir(path.dirname(duplicateActive), { recursive: true })

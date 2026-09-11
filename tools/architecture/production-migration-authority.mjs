@@ -20,7 +20,110 @@ import {
 
 export const AUTHORITY_PATH = 'architecture/migrations/v1/production-migration-authority.json'
 export const PENDING_SOURCE_PATH = 'architecture/migrations/v1/pending-source-migrations.json'
+export const RECONSTRUCTION_SOURCE_PATH = 'architecture/migrations/v1/reconstruction-source-migrations.json'
 export const ARCHIVE_ROOT = 'architecture/migrations/v1/archive/pre-outbox'
+const CONTEXT_INDEX_PATH = 'architecture/contexts/v1/context-index.json'
+
+// A reconstruction migration replays already-applied, already-governed history into the
+// active Prisma directory so a fresh install matches schema.prisma. It is deliberately a
+// separate category from a pending-source migration: pending-source expects production
+// execution, a reconstruction migration forbids it and is reconciled with
+// `prisma migrate resolve --applied` instead. The three cascade foreign keys below are a
+// bounded Owner exception covering referential actions that already exist in
+// schema.prisma, in the canonical replay and in production; no other cascade semantics
+// may be introduced by a reconstruction migration.
+const RECONSTRUCTION_AUTHORIZED_CASCADE_FOREIGN_KEYS = [
+  'ContactDriverProfileAudit_contactId_fkey',
+  'ParkConnection_apiConnectionId_fkey',
+  'ParkConnection_parkId_fkey',
+]
+// A reconstruction migration reproduces schema, never data. Comments and string literals
+// are stripped first so a RAISE message mentioning "deleted" does not register, and the
+// statement boundary set includes PL/pgSQL block keywords so a DML statement buried in a
+// DO block is caught as readily as one at the top level. Referential and trigger-event
+// uses (ON DELETE, BEFORE DELETE OR UPDATE) never follow one of these boundaries.
+const RECONSTRUCTION_FORBIDDEN_STATEMENT = /(?:^|;|\(|\bAS\b|\bBEGIN\b|\bTHEN\b|\bELSE\b|\bLOOP\b|\bDO\b|\bEXECUTE\b)\s*(?:INSERT|UPDATE|DELETE|TRUNCATE|DROP|COPY|MERGE|GRANT|REVOKE)\b/imu
+// Contract-shaped DDL is as forbidden as DML: a reconstruction migration only ever adds.
+// The table reference tolerates ONLY, schema qualification, digits and optional quoting.
+const RECONSTRUCTION_FORBIDDEN_CLAUSE = /\bALTER\s+TABLE\s+(?:ONLY\s+)?(?:"?[A-Za-z0-9_]+"?\.)?"?[A-Za-z0-9_]+"?\s+(?:DROP|RENAME|ALTER(?:\s+COLUMN)?)\b/imu
+const RECONSTRUCTION_FORBIDDEN_SELECT_INTO = /\bCREATE\s+(?:TEMP\w*\s+|UNLOGGED\s+)?TABLE\b[^;]*\bAS\b|\bSELECT\b[^;]*\bINTO\b\s+"?[A-Za-z0-9_]/imu
+const ARCHIVE_SCHEMA_STATEMENT = /^\s*(?:CREATE|ALTER\s+TABLE|ALTER\s+TYPE)\s/imu
+
+// Both spellings of a cascade foreign key: a named ALTER TABLE ... ADD CONSTRAINT, and an
+// inline REFERENCES clause inside CREATE TABLE, which carries no constraint name at all.
+const CASCADE_NAMED_FOREIGN_KEY = /ADD\s+CONSTRAINT\s+"?([A-Za-z0-9_]+)"?[^;]*?ON\s+DELETE\s+CASCADE/giu
+const CASCADE_ANY_FOREIGN_KEY = /ON\s+DELETE\s+CASCADE/giu
+const UNNAMED_FOREIGN_KEY = /ADD\s+FOREIGN\s+KEY\b/iu
+
+const RECONSTRUCTION_EXCLUSION_REASONS = new Set(['PURE_DATA_REPAIR_NO_SCHEMA_OBJECTS'])
+
+// A single left-to-right scan is the only reliable way to read this file: regexes over the
+// whole text mis-pair quotes across a dollar-quoted body, and a `--` inside a literal is
+// not a comment. Returns three views:
+//
+//   commentFree  comments removed, literals and routine bodies left in place
+//   topLevel     statements outside any routine body, literals blanked
+//   routineBody  statements inside routine bodies, literals blanked
+//
+// The split matters because `SELECT ... INTO` assigns a variable inside a routine and
+// copies a table at the top level.
+export function scanSql(sql) {
+  const commentFree = []
+  const topLevel = []
+  const routineBody = []
+  let index = 0
+  let dollarTag = null
+  while (index < sql.length) {
+    const rest = sql.slice(index)
+    if (dollarTag === null) {
+      const opening = rest.match(/^\$[A-Za-z_]*\$/u)
+      if (opening) {
+        dollarTag = opening[0]
+        commentFree.push(dollarTag)
+        topLevel.push('\n;\n')
+        index += dollarTag.length
+        continue
+      }
+      if (rest.startsWith('--')) {
+        const end = sql.indexOf('\n', index)
+        index = end === -1 ? sql.length : end
+        continue
+      }
+      if (rest.startsWith('/*')) {
+        const end = sql.indexOf('*/', index + 2)
+        index = end === -1 ? sql.length : end + 2
+        continue
+      }
+    } else if (rest.startsWith(dollarTag)) {
+      commentFree.push(dollarTag)
+      routineBody.push('\n;\n')
+      index += dollarTag.length
+      dollarTag = null
+      continue
+    }
+    if (rest.startsWith("'")) {
+      const literal = rest.match(/^'(?:[^']|'')*'/u)
+      const text = literal ? literal[0] : rest
+      commentFree.push(text)
+      ;(dollarTag === null ? topLevel : routineBody).push("''")
+      index += text.length
+      continue
+    }
+    commentFree.push(sql[index])
+    ;(dollarTag === null ? topLevel : routineBody).push(sql[index])
+    index += 1
+  }
+  return {
+    commentFree: commentFree.join(''),
+    topLevel: topLevel.join(''),
+    routineBody: routineBody.join(''),
+  }
+}
+
+export function stripSqlCommentsAndLiterals(sql) {
+  const { topLevel, routineBody } = scanSql(sql)
+  return `${topLevel}\n;\n${routineBody}`
+}
 const SHA256 = /^[0-9a-f]{64}$/
 
 const digest = (value) => createHash('sha256').update(value).digest('hex')
@@ -227,10 +330,185 @@ async function migrationFiles(root, relative) {
   return records.sort((left, right) => left.name.localeCompare(right.name))
 }
 
+export async function readReconstructionSourceMigrations(root) {
+  return JSON.parse(await readFile(path.join(root, RECONSTRUCTION_SOURCE_PATH), 'utf8'))
+}
+
+// The fail-closed precondition is the whole environment contract, so it is checked as
+// structure rather than as three substrings: the guard must be a real DO block, it must
+// come before any DDL, and the objects it guards must be exactly the objects the migration
+// goes on to create. Matching on the raw file would let a comment naming the right words
+// stand in for the guard, so everything here reads the comment-and-literal-stripped form
+// except the operator-facing hint text, which only exists inside a literal.
+function assertReconstructionPrecondition(row, sql) {
+  // Read the guard from the comment-free view, so a comment naming the right words cannot
+  // stand in for the block, and literals stay intact so the guarded names remain visible.
+  const { commentFree } = scanSql(sql)
+  const guard = commentFree.match(/(?:^|;)\s*DO\s*(\$[A-Za-z_]*\$)([\s\S]*?)\1\s*;/u)
+  assert(guard, `reconstruction source migration has no DO-block precondition: ${row.name}`)
+  const body = guard[2]
+  const firstDdl = commentFree.search(/(?:^|;)\s*(?:CREATE|ALTER)\s/imu)
+  assert(firstDdl === -1 || commentFree.indexOf(guard[0]) < firstDdl,
+    `reconstruction source migration runs DDL before its precondition: ${row.name}`)
+  assert(/RAISE\s+EXCEPTION/iu.test(body)
+    && /ERRCODE\s*=\s*'duplicate_table'/u.test(body)
+    && body.includes(`prisma migrate resolve --applied ${row.name}`),
+  `reconstruction precondition does not raise duplicate_table naming the resolve procedure: ${row.name}`)
+
+  // The guard must cover every object the migration creates, or a future edit could add a
+  // table the precondition never looks for and reintroduce the partial-apply hazard.
+  const createdTables = [...sql.matchAll(/^CREATE TABLE "([A-Za-z0-9_]+)"/gmu)].map((match) => match[1])
+  const addedColumns = []
+  let alteredTable = null
+  for (const line of sql.split('\n')) {
+    const altered = line.match(/^ALTER TABLE "([A-Za-z0-9_]+)" ADD COLUMN\s+"([A-Za-z0-9_]+)"/u)
+    if (altered) { alteredTable = altered[1]; addedColumns.push([altered[1], altered[2]]); continue }
+    const continued = line.match(/^ADD COLUMN\s+"([A-Za-z0-9_]+)"/u)
+    if (continued && alteredTable) addedColumns.push([alteredTable, continued[1]])
+    if (line.trimEnd().endsWith(';')) alteredTable = null
+  }
+  assert(createdTables.length > 0 && addedColumns.length > 0, `reconstruction source migration creates nothing: ${row.name}`)
+  const guardedTables = new Set([...body.matchAll(/'([A-Za-z0-9_]+)'/gu)].map((match) => match[1]))
+  const guardedColumns = new Set([...body.matchAll(/\(\s*'([A-Za-z0-9_]+)'\s*,\s*'([A-Za-z0-9_]+)'\s*\)/gu)]
+    .map((match) => `${match[1]}.${match[2]}`))
+  const missingTables = createdTables.filter((table) => !guardedTables.has(table))
+  const missingColumns = addedColumns.filter(([table, column]) => !guardedColumns.has(`${table}.${column}`))
+  assert(missingTables.length === 0, `reconstruction precondition does not guard every created table: ${row.name}: ${missingTables.join(', ')}`)
+  assert(missingColumns.length === 0, `reconstruction precondition does not guard every added column: ${row.name}: ${missingColumns.map((pair) => pair.join('.')).join(', ')}`)
+}
+
+// Validates the reconstruction category. Anything unrecognised fails closed: an unknown
+// owning context, an unknown status, a migration that is also claimed as applied or
+// pending, a cascade foreign key outside the bounded exception, or any DML.
+async function assertReconstructionSourceMigrations(root, authority, pending, contextIndex) {
+  const reconstruction = await readReconstructionSourceMigrations(root)
+  const owningContexts = new Set(contextIndex.contexts.map((row) => row.context))
+  assert(owningContexts.size > 0, 'context index declares no owning contexts')
+  assert(reconstruction.schema === 'yoko.crm.reconstruction-source-migrations.v1'
+    && reconstruction.version === 1
+    && reconstruction.status === 'FRESH_INSTALL_ONLY_RESOLVE_APPLIED_ELSEWHERE', 'reconstruction source authority identity mismatch')
+  assert(exactObject(reconstruction.base_authority, {
+    path: AUTHORITY_PATH,
+    current_target: authority.current_target.name,
+    current_schema_sha256: authority.current_schema.sha256,
+  }), 'reconstruction source base authority mismatch')
+  assert(exactObject(reconstruction.environment_contract, {
+    fresh_empty_database: 'EXECUTE',
+    catalog_already_carrying_reconstructed_objects: 'REFUSE_RESOLVE_APPLIED_ONLY',
+    partially_populated_or_unclassified: 'REFUSE',
+    enforcement: 'IN_MIGRATION_PRECONDITION_RAISES_DUPLICATE_TABLE',
+  }), 'reconstruction environment contract mismatch')
+  assert(exactObject(reconstruction.production_reconciliation, {
+    procedure: ['prisma migrate resolve --applied <migration>', 'prisma migrate deploy'],
+    direct_execution: 'FORBIDDEN_REFUSED_BY_MIGRATION_PRECONDITION',
+    recovery_if_directly_executed: [
+      'prisma migrate resolve --rolled-back <migration>',
+      'prisma migrate resolve --applied <migration>',
+    ],
+    production_database_touched: false,
+  }), 'reconstruction production reconciliation mismatch')
+  assert(exactObject(reconstruction.proof, {
+    database_scope: 'ISOLATED_REAL_POSTGRESQL_ONLY',
+    fresh_install_replay: 'tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay',
+    negatives: 'tools/architecture/test-production-migration-authority.mjs',
+    production_database_touched: false,
+  }), 'reconstruction proof boundary mismatch')
+  assert(exactObject(reconstruction.rollback_strategy, {
+    deployment_order: 'MIGRATION_BEFORE_CODE',
+    code_rollback: 'ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES',
+    schema_rollback: 'NO_DESTRUCTIVE_DOWN_MIGRATION',
+    failed_apply_recovery: 'TRANSACTION_ROLLS_BACK_DDL_THEN_PRISMA_MIGRATE_RESOLVE_ROLLED_BACK_BEFORE_RETRY',
+  }), 'reconstruction rollback strategy mismatch')
+
+  assert(reconstruction.source_schema.path === authority.current_schema.path, 'reconstruction source schema path mismatch')
+  const sourceSchemaBytes = await readFile(path.join(root, reconstruction.source_schema.path))
+  assert(reconstruction.source_schema.path === authority.current_schema.path
+    && SHA256.test(reconstruction.source_schema.sha256)
+    && reconstruction.source_schema.size === sourceSchemaBytes.length
+    && digest(sourceSchemaBytes) === reconstruction.source_schema.sha256
+    && reconstruction.source_schema.expected_fresh_install_parity === 'ZERO_PRISMA_DATAMODEL_DIFF_AND_CANONICAL_CATALOG_PARITY', 'reconstruction source schema checksum/size mismatch')
+
+  assert(Array.isArray(reconstruction.migrations) && reconstruction.migrations.length > 0, 'reconstruction source inventory is empty')
+  assert(new Set(reconstruction.migrations.map((row) => row.name)).size === reconstruction.migrations.length, 'duplicate reconstruction source migration name')
+  assert(reconstruction.migrations.every((row, index) => index === 0 || reconstruction.migrations[index - 1].name.localeCompare(row.name) < 0), 'reconstruction source inventory is not sorted')
+
+  const appliedNames = new Set(authority.migrations.map((row) => row.name))
+  const pendingNames = new Set(pending.migrations.map((row) => row.name))
+  const archiveNames = new Set(authority.migrations.filter((row) => row.storage === 'archive').map((row) => row.name))
+
+  for (const row of reconstruction.migrations) {
+    assert(/^[0-9][0-9a-z_]*$/.test(row.name)
+      && row.path === `gravity-mvp/prisma/migrations/${row.name}/migration.sql`
+      && SHA256.test(row.sha256)
+      && Number.isInteger(row.size) && row.size > 0
+      && row.classification === 'EXPAND_ONLY'
+      && row.production_execution === 'FORBIDDEN_RESOLVE_APPLIED_ONLY'
+      && row.fresh_install_execution === 'REQUIRED', `reconstruction source migration record mismatch: ${row.name}`)
+    assert(Array.isArray(row.owner_contexts)
+      && row.owner_contexts.length > 0
+      && row.owner_contexts.every((context) => typeof context === 'string' && owningContexts.has(context))
+      && new Set(row.owner_contexts).size === row.owner_contexts.length
+      && row.owner_contexts.every((context, index) => index === 0 || row.owner_contexts[index - 1].localeCompare(context) < 0), `reconstruction owning context mismatch: ${row.name}`)
+    assert(!appliedNames.has(row.name), `reconstruction source migration is claimed as applied: ${row.name}`)
+    assert(!pendingNames.has(row.name), `reconstruction source migration is claimed as pending source: ${row.name}`)
+
+    assert(Array.isArray(row.reconstructs) && row.reconstructs.length > 0
+      && new Set(row.reconstructs).size === row.reconstructs.length
+      && row.reconstructs.every((name, index) => index === 0 || row.reconstructs[index - 1].localeCompare(name) < 0)
+      && row.reconstructs.every((name) => archiveNames.has(name)), `reconstructed history is not governed archive history: ${row.name}`)
+    assert(Array.isArray(row.excluded_from_reconstruction)
+      && row.excluded_from_reconstruction.every((entry) => archiveNames.has(entry.name)
+        && RECONSTRUCTION_EXCLUSION_REASONS.has(entry.reason)
+        && !row.reconstructs.includes(entry.name)), `reconstruction exclusion is not governed archive history: ${row.name}`)
+
+    // A reconstruction migration reproduces schema, never data. An archived migration
+    // that creates no schema objects is production data repair and may only appear as an
+    // exclusion, so its statements - and any personal data they carry - are never
+    // reintroduced into the active Prisma directory.
+    for (const reconstructed of row.reconstructs) {
+      const archived = await readFile(path.join(root, ARCHIVE_ROOT, reconstructed, 'migration.sql'), 'utf8')
+      assert(ARCHIVE_SCHEMA_STATEMENT.test(archived), `reconstructed archive migration declares no schema objects: ${reconstructed}`)
+    }
+    for (const entry of row.excluded_from_reconstruction) {
+      if (entry.reason !== 'PURE_DATA_REPAIR_NO_SCHEMA_OBJECTS') continue
+      const archived = await readFile(path.join(root, ARCHIVE_ROOT, entry.name, 'migration.sql'), 'utf8')
+      assert(!ARCHIVE_SCHEMA_STATEMENT.test(archived), `exclusion claims pure data repair but declares schema objects: ${entry.name}`)
+    }
+
+    const sourceBytes = await readFile(path.join(root, row.path))
+    assert(digest(sourceBytes) === row.sha256 && sourceBytes.length === row.size, `reconstruction source migration checksum mismatch: ${row.name}`)
+    const sql = sourceBytes.toString('utf8')
+
+    const { topLevel, routineBody } = scanSql(sql)
+    const scannable = `${topLevel}\n;\n${routineBody}`
+    // `SELECT ... INTO` is a variable assignment inside a PL/pgSQL body and a table copy at
+    // the top level, so only the top level is scanned for it. Everything else is forbidden
+    // in both places.
+    assert(!RECONSTRUCTION_FORBIDDEN_STATEMENT.test(scannable)
+      && !RECONSTRUCTION_FORBIDDEN_CLAUSE.test(scannable)
+      && !RECONSTRUCTION_FORBIDDEN_SELECT_INTO.test(topLevel),
+    `reconstruction source migration is not expand-only: ${row.name}`)
+
+    assertReconstructionPrecondition(row, sql)
+
+    // Both cascade spellings are counted, so an inline REFERENCES clause cannot smuggle a
+    // fourth cascade past a scan that only reads ADD CONSTRAINT.
+    const namedCascades = [...scannable.matchAll(CASCADE_NAMED_FOREIGN_KEY)].map((match) => match[1]).sort()
+    const allCascades = scannable.match(CASCADE_ANY_FOREIGN_KEY) ?? []
+    assert(exactObject(namedCascades, RECONSTRUCTION_AUTHORIZED_CASCADE_FOREIGN_KEYS), `reconstruction source migration introduces unauthorized cascade semantics: ${row.name}: ${JSON.stringify(namedCascades)}`)
+    assert(allCascades.length === RECONSTRUCTION_AUTHORIZED_CASCADE_FOREIGN_KEYS.length, `reconstruction source migration declares ${allCascades.length} cascade foreign keys but only ${RECONSTRUCTION_AUTHORIZED_CASCADE_FOREIGN_KEYS.length} are authorized: ${row.name}`)
+    assert(!UNNAMED_FOREIGN_KEY.test(scannable), `reconstruction source migration adds an unnamed foreign key, which cannot be held to the cascade allowlist: ${row.name}`)
+    assert(exactObject([...(row.authorized_cascade_foreign_keys ?? [])].sort(), RECONSTRUCTION_AUTHORIZED_CASCADE_FOREIGN_KEYS), `reconstruction cascade declaration mismatch: ${row.name}`)
+  }
+
+  return reconstruction
+}
+
 export async function validateProductionMigrationAuthority(root) {
   const authority = JSON.parse(await readFile(path.join(root, AUTHORITY_PATH), 'utf8'))
   const pending = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8'))
   const predecessorInventory = JSON.parse(await readFile(path.join(root, PREDECESSOR_INVENTORY_PATH), 'utf8'))
+  const contextIndex = JSON.parse(await readFile(path.join(root, CONTEXT_INDEX_PATH), 'utf8'))
   assert(authority.schema === 'yoko.crm.production-migration-authority.v1' && authority.version === 1, 'migration authority identity mismatch')
   assert(exactObject(authority.provenance_evidence, PROVENANCE_EVIDENCE_AUTHORITY), 'production migration provenance evidence authority mismatch')
   assert(authority.predecessor_runtime?.artifact === '/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json', 'predecessor runtime provenance mismatch')
@@ -370,12 +648,16 @@ export async function validateProductionMigrationAuthority(root) {
   await verifyProductionMigrationProvenanceEvidence(root, authority)
   const predecessorEvidence = assertAuthorityPredecessorInventory(authority, predecessorInventory)
   assert(predecessorEvidence.rows === 62, 'predecessor authority denominator mismatch')
+  // Validated after provenance so a tampered archive surfaces as a provenance failure
+  // rather than as a reconstruction failure.
+  const reconstruction = await assertReconstructionSourceMigrations(root, authority, pending, contextIndex)
 
   const expected = new Map(authority.migrations.map((row) => [row.name, row]))
   const expectedPending = new Map(pending.migrations.map((row) => [row.name, row]))
+  const expectedReconstruction = new Map(reconstruction.migrations.map((row) => [row.name, row]))
   const active = await migrationFiles(root, 'gravity-mvp/prisma/migrations')
   const archive = await migrationFiles(root, ARCHIVE_ROOT)
-  assert(active.every((row) => expected.has(row.name) || expectedPending.has(row.name)), 'active Prisma migration is not authorized')
+  assert(active.every((row) => expected.has(row.name) || expectedPending.has(row.name) || expectedReconstruction.has(row.name)), 'active Prisma migration is not authorized')
   assert(archive.every((row) => expected.has(row.name)), 'archived migration is not authorized')
   const activeByName = new Map(active.map((row) => [row.name, row]))
   const archiveByName = new Map(archive.map((row) => [row.name, row]))
@@ -408,7 +690,24 @@ export async function validateProductionMigrationAuthority(root) {
     assert(!archiveByName.has(row.name), `pending source migration shadowed by archive: ${row.name}`)
   }
   assert(authority.migrations.filter((row) => row.storage === 'archive').length === archive.length, 'archive inventory classification mismatch')
-  assert(authority.migrations.filter((row) => row.storage === 'active').length + pending.migrations.length === active.filter((row) => !archiveByName.has(row.name)).length, 'active inventory classification mismatch')
+  for (const row of reconstruction.migrations) {
+    const observed = activeByName.get(row.name)
+    assert(observed, `reconstruction source migration missing: ${row.name}`)
+    assert(observed.sha256 === row.sha256 && observed.size === row.size, `reconstruction source migration checksum mismatch: ${row.name}`)
+    assert(!archiveByName.has(row.name), `reconstruction source migration shadowed by archive: ${row.name}`)
+  }
+  assert(authority.migrations.filter((row) => row.storage === 'active').length + pending.migrations.length + reconstruction.migrations.length === active.filter((row) => !archiveByName.has(row.name)).length, 'active inventory classification mismatch')
+
+  // Closure over the archive. Every archived migration must be accounted for by name:
+  // reconstructed, explicitly excluded, or already carried by a same-named active
+  // migration. Omission is exactly how the gap this category exists to close came about,
+  // so silence is not allowed to mean "fine".
+  const reconstructedNames = new Set(reconstruction.migrations.flatMap((row) => row.reconstructs))
+  const excludedNames = new Set(reconstruction.migrations.flatMap((row) => row.excluded_from_reconstruction.map((entry) => entry.name)))
+  const unaccounted = [...archiveByName.keys()]
+    .filter((name) => !reconstructedNames.has(name) && !excludedNames.has(name) && !activeByName.has(name))
+    .sort()
+  assert(unaccounted.length === 0, `archived migration is neither reconstructed, excluded nor active: ${unaccounted.join(', ')}`)
   assert(authority.migrations.every((row) => row.storage === 'active' || row.storage === 'archive'), 'invalid migration storage classification')
   return {
     active: active.filter((row) => expected.has(row.name) && !archiveByName.has(row.name)).length,
