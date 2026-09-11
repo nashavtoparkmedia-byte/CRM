@@ -94,7 +94,7 @@ def test_bound_chat_id_is_persisted_for_later_sends():
 def test_a_send_is_claimed_only_when_the_typed_text_left_the_compose_box():
     # Pressing Enter is not proof MAX accepted the text. Without a cleared compose
     # box the message was never submitted, so no send may be reported.
-    assert 'const uiOutcome = evaluatePhoneResolutionUiSend({' in source
+    assert 'evaluatePhoneResolutionUiSend({' in source
     assert 'beforeText: composeTextBeforeSubmit,' in source
     assert 'afterText: composeTextAfterSubmit,' in source
     assert 'expectedText: messageToSend,' in source
@@ -169,3 +169,31 @@ def test_new_send_log_lines_do_not_emit_the_raw_phone():
         '[Send] UI send attempted for ${maskPhoneForLog(digits)}',
     ):
         assert line in source, line
+
+
+def test_unreadable_compose_is_never_scored_as_a_cleared_box():
+    # A detached element reads as empty; empty must not be mistaken for submitted.
+    assert "await composeEl.textContent().catch(() => null)" in source
+    assert "composeTextAfterSubmit === null" in source
+    assert "confirmationSource: 'compose_unreadable'" in source
+
+
+def test_send_button_is_clicked_only_when_the_exact_text_remains():
+    # A partially cleared box means MAX is mid-accept; clicking again duplicates.
+    assert "normalizeUiSendText(afterEnterText) === normalizeUiSendText(messageToSend)" in source
+    assert "afterEnterText !== null" in source
+
+
+def test_binding_failure_after_a_proven_submit_does_not_unwind_to_not_found():
+    # Once submitted the message is out; a binding failure must degrade, not 404.
+    assert 'catch (bindError)' in source
+    guard = source.index('catch (bindError)')
+    terminal = source.index('messageSent: true', guard)
+    assert 'boundChatId = null' in source[guard:terminal]
+
+
+def test_direct_ui_text_send_proves_the_exact_text_cleared():
+    # An empty compose box is also what a failed fill leaves behind, so emptiness
+    # alone must not mint deliveryProof{actionConfirmed:true}.
+    assert 'const sent = isUiTextSubmitObserved(beforeText, afterText, text)' in source
+    assert "const sent = !String(afterText || '').trim()" not in source

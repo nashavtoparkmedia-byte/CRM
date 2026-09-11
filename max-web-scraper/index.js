@@ -17,6 +17,7 @@ const {
   OP,
   selectPendingLiveDomCandidates,
   evaluatePhoneResolutionUiSend,
+  isUiTextSubmitObserved,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
@@ -1290,7 +1291,9 @@ async function sendTextViaUi(chatId, text, protocolChatId = null) {
       afterText = await composeEl.textContent().catch(() => '')
     }
 
-    const sent = !String(afterText || '').trim()
+    // An empty box is not proof of a send: a failed fill leaves it empty too, and
+    // that would mint a delivery proof for a message MAX never received.
+    const sent = isUiTextSubmitObserved(beforeText, afterText, text)
     if (!sent) {
       await page.screenshot({ path: '/tmp/max_send_ui_not_sent.png', fullPage: false }).catch(() => {})
     }
@@ -3976,9 +3979,12 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             const sendBtn = page.locator('button[aria-label*="Send message" i]').first()
             const sendBtnVisible = await sendBtn.isVisible({ timeout: 500 }).catch(() => false)
             if (sendBtnVisible) {
-              // If compose area still has text (Enter didn't send), click the send button
-              const afterEnterText = await composeEl.textContent().catch(() => '')
-              if ((afterEnterText || '').trim()) {
+              // Click send only when the box still holds exactly what was filled. A
+              // partially cleared box means MAX is mid-accept, and clicking again would
+              // deliver a second copy of the same message.
+              const afterEnterText = await composeEl.textContent().catch(() => null)
+              if (afterEnterText !== null
+                && normalizeUiSendText(afterEnterText) === normalizeUiSendText(messageToSend)) {
                 await sendBtn.click()
                 console.log(`[ResolvePhone] Clicked Send message button (Enter didn't send)`)
                 await page.waitForTimeout(600)
@@ -3989,13 +3995,17 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // Pressing Enter is not proof that MAX accepted the text. The compose box
             // still holding it means nothing was submitted, so the operation must not
             // report a send it did not perform.
-            const composeTextAfterSubmit = await composeEl.textContent().catch(() => '')
-            const uiOutcome = evaluatePhoneResolutionUiSend({
-              beforeText: composeTextBeforeSubmit,
-              afterText: composeTextAfterSubmit,
-              expectedText: messageToSend,
-              postActionFrames: capturedFrames.slice(sendFrameStartIndex),
-            })
+            // A detached or unreadable compose element reads as empty, which would score
+            // as a cleared box. Only a successful read can prove the text left.
+            const composeTextAfterSubmit = await composeEl.textContent().catch(() => null)
+            const uiOutcome = composeTextAfterSubmit === null
+              ? { submitObserved: false, confirmationSource: 'compose_unreadable', observedFrameCount: 0 }
+              : evaluatePhoneResolutionUiSend({
+                  beforeText: composeTextBeforeSubmit,
+                  afterText: composeTextAfterSubmit,
+                  expectedText: messageToSend,
+                  postActionFrames: capturedFrames.slice(sendFrameStartIndex),
+                })
             if (!uiOutcome.submitObserved) {
               console.warn(
                 `[ResolvePhone] compose did not clear the exact typed text ` +
@@ -4018,6 +4028,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             const expectedSubmittedText = normalizeUiSendText(messageToSend)
             let boundChatId = null
             let boundChatIdSource = null
+            try {
             for (let i = 0; i < 50 && !boundChatId; i++) {
               await page.waitForTimeout(200)
               const urlCid = page.url().match(/web\.max\.ru\/(\d{12,15})(?:[/?#]|$)/)?.[1]
@@ -4054,6 +4065,12 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
               const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 72, 128, 177, 180, 198].includes(f.opcode))
               console.log(`[ResolvePhone] no send-bound chat id; observed opcodes:`,
                 diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(' | '))
+            }
+            } catch (bindError) {
+              // The message is already submitted; only the chat-id binding failed.
+              console.warn(`[ResolvePhone] chat-id binding failed after a proven submit: ${bindError?.message || bindError}`)
+              boundChatId = null
+              boundChatIdSource = null
             }
             await returnHome(); cleanup()
             // The send was attempted either way, so this is terminal for the HTTP
