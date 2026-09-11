@@ -1,0 +1,135 @@
+{
+  "schema": "yoko.privileged-runtime.policy.v2",
+  "runtime_version": "2.0.0",
+  "host": "jvxthcorvm",
+  "caller": {
+    "user": "codexbot",
+    "uid": 998,
+    "gid": 998
+  },
+  "limits": {
+    "command_timeout_seconds": 20,
+    "max_json_bytes": 1048576,
+    "max_tree_entries": 20000,
+    "max_tree_bytes": 268435456,
+    "minimum_free_bytes": 8589934592
+  },
+  "safe_labels": [
+    "com.docker.compose.project",
+    "com.docker.compose.service",
+    "com.docker.compose.version",
+    "com.docker.compose.config-hash",
+    "com.docker.compose.image",
+    "org.opencontainers.image.revision",
+    "org.opencontainers.image.source",
+    "org.opencontainers.image.version",
+    "org.opencontainers.image.created"
+  ],
+  "resources": {
+    "crm.repo.production": {
+      "kind": "directory",
+      "path": "/opt/crm",
+      "operations": ["fs-stat", "fs-tree", "git-index", "snapshot-manifest"],
+      "secret_names": [".env", ".env.local", "id_rsa", "id_ed25519"],
+      "excluded_directories": [".git", "node_modules", ".next", "dist", "build", "uploads", "browser-profiles", "cache"]
+    },
+    "crm.config.nginx": {
+      "kind": "directory",
+      "path": "/opt/crm/deploy/nginx",
+      "operations": ["fs-stat", "fs-read", "fs-tree", "snapshot-manifest"],
+      "secret_names": [".env", ".env.local", "id_rsa", "id_ed25519"],
+      "excluded_directories": ["cache"],
+      "readable_files": ["nginx.conf", "conf.d/crm.conf"]
+    },
+    "crm.config.freeswitch": {
+      "kind": "directory",
+      "path": "/opt/crm/telephony/conf",
+      "operations": ["fs-stat", "fs-tree", "snapshot-manifest"],
+      "secret_names": [".env", ".env.local", "event_socket.conf.xml", "id_rsa", "id_ed25519"],
+      "excluded_directories": ["cache"]
+    },
+    "crm.evidence.arch000r": {
+      "kind": "directory",
+      "path": "/opt/codex-work/crm-arch-000-evidence",
+      "operations": ["fs-stat"],
+      "secret_names": [],
+      "excluded_directories": []
+    },
+    "crm.container.gravity_mvp": {
+      "kind": "container",
+      "name": "crm-gravity-mvp",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.max_scraper": {
+      "kind": "container",
+      "name": "crm-max-scraper",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.max_personal_gateway": {
+      "kind": "container",
+      "name": "crm-max-personal-gateway",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.telegram_bot": {
+      "kind": "container",
+      "name": "crm-tg-bot",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.telegram_frontend": {
+      "kind": "container",
+      "name": "crm-tg-bot-frontend",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.yfs_api": {
+      "kind": "container",
+      "name": "crm-yfs-api",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.yfs_worker": {
+      "kind": "container",
+      "name": "crm-yfs-worker",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.audio_bridge": {
+      "kind": "container",
+      "name": "crm-audio-bridge",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.freeswitch": {
+      "kind": "container",
+      "name": "crm-freeswitch",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.nginx": {
+      "kind": "container",
+      "name": "crm-nginx",
+      "operations": ["docker-inspect", "service-status", "service-health"]
+    },
+    "crm.container.postgres": {
+      "kind": "container",
+      "name": "crm-postgres",
+      "operations": ["docker-inspect"]
+    },
+    "crm.container.redis": {
+      "kind": "container",
+      "name": "crm-redis",
+      "operations": ["docker-inspect"]
+    },
+    "crm.container.minio": {
+      "kind": "container",
+      "name": "crm-minio",
+      "operations": ["docker-inspect"]
+    },
+    "seo.container.site": {
+      "kind": "container",
+      "name": "seo-site",
+      "operations": ["docker-inspect"]
+    }
+  },
+  "disabled_profiles": {
+    "release-activation": "No root-owned release-profile registry is installed in bootstrap v2.",
+    "config-activation": "No root-owned candidate/config transaction profile is installed in bootstrap v2.",
+    "database-migration": "No root-owned approved migration artifact profile is installed in bootstrap v2.",
+    "rollback": "Rollback needs an installed immutable release/profile registry and is unavailable until such a profile exists."
+  }
+}

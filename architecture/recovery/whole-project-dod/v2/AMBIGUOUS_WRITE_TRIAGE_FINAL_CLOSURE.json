@@ -5,6 +5,38 @@
     "baseline_sha256": "48b638fb9c4ab3e4eb727cebf8e94923ebb874531fde225449e700a8615de8f6"
   },
   "policy": "No unresolved record is converted to PASS or non-write without source or analyzer evidence.",
+  "stage_c_recovery_repair_rebinding": {
+    "status": "EXECUTOR_EXACT_REBIND_COMPLETE_REQUIRES_STAGE_C_INDEPENDENT_ACCEPTANCE",
+    "reviewed_at": "2026-09-03T01:10:00Z",
+    "reviewed_by": "STAGE_C_FINDING_REPAIR_EXECUTOR_20260903",
+    "authorization": "AUTONOMOUS_PRODUCTION_ACCEPTANCE_GOAL_STAGE_C_FINDING_REPAIR",
+    "source": {
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "predecessor_source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8"
+    },
+    "fresh_analysis": {
+      "path": "(transient whole-repository write scan; bound by sha256)",
+      "sha256": "93d4672b46b5e0dac4d0021049ea4fb8238abf51f8343e2f01632ba7084b0261",
+      "analysis_sha256": "bc3bfd73fc851644acccc074573d1a3fb442e5f54df6f3e66f8f7b6afd204946",
+      "ambiguous_denominator": 44
+    },
+    "source_context_equivalence": {
+      "database_status_function_sha256": "8b3c379294a661f35799ed777a6b9d1ccd4e213368689c379d882a67ec639cb3",
+      "predecessor_and_candidate_function_bytes_identical": true,
+      "changed_function": "_release_activate",
+      "database_access_changed": false,
+      "write_semantics_changed": false,
+      "authorization_boundary_changed": false
+    },
+    "rebound_site_signatures": [
+      "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+      "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+      "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90"
+    ],
+    "independent_acceptance_conferred": false,
+    "required_future_review": "BOUNDED_STAGE_C_ARCHITECTURE_AND_RUNTIME_REVIEW"
+  },
   "taxonomy": [
     "CONFIRMED_WRITE_OWNER_RESOLVED",
     "CONFIRMED_WRITE_OWNER_UNRESOLVED",
@@ -16,23 +48,189 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 41,
+    "RAW_BASELINE_AMBIGUOUS": 44,
     "CONFIRMED_WRITE_OWNER_RESOLVED": 7,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
     "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 0,
     "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
-    "CONFIRMED_NON_WRITE": 34,
+    "CONFIRMED_NON_WRITE": 37,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
-    "RESOLVED_NON_WRITE": 34,
+    "RESOLVED_NON_WRITE": 37,
     "OWNER_VALID_WRITE": 3,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 41,
+    "RECONCILIATION_TOTAL": 44,
     "RECONCILIATION_EXACT": true
   },
   "records": [
+    {
+      "record_id": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+      "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 451,
+      "column": 12,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "pg_control_system"
+      ],
+      "selected_columns": [
+        "system_identifier",
+        "text"
+      ],
+      "called_functions": [
+        "current_database",
+        "current_setting",
+        "pg_control_system"
+      ],
+      "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+      "sql_provenance_sha256": "3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Exact source and analyzer projections prove one fixed SELECT of PostgreSQL server identity through independently enumerated read-only functions; no mutation statement or dynamic input is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+      "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 480,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "json_agg",
+        "json_build_object",
+        "to_char"
+      ],
+      "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
+      "sql_provenance_sha256": "38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Exact source and analyzer projections prove the first ordinal identity of one fixed SELECT from public._prisma_migrations; every called function is independently allowlisted read-only and no mutation operation is analyzed.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+      "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 480,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "_prisma_migrations"
+      ],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "json_agg",
+        "json_build_object",
+        "to_char"
+      ],
+      "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
+      "sql_provenance_sha256": "099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Exact source and analyzer projections prove the table-resolved ordinal identity of one fixed SELECT from public._prisma_migrations; every called function is independently allowlisted read-only and no mutation operation is analyzed.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
     {
       "record_id": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
       "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
@@ -2296,12 +2494,139 @@
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 41,
+    "ambiguous_denominator": 44,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "d933630fae2905a16fb7ea1144414fe8737982ea3d44e8343932cacec7f3caf2",
+    "sorted_site_signatures_sha256": "4e5477bf4ed4c9a375624ba2d98549db255be276e61130ee2f6260191040b3b6",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "non_write_proofs": [
+    {
+      "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 451,
+        "column": 12,
+        "method": "mixed-script-sql",
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "pg_control_system"
+        ],
+        "selected_columns": [
+          "system_identifier",
+          "text"
+        ],
+        "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "reviewed_read_only_functions": [
+          "current_database",
+          "current_setting",
+          "pg_control_system"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:451:12",
+        "analysis_site_signature:ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+        "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d"
+      ]
+    },
+    {
+      "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 480,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "json_agg",
+          "json_build_object",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:480:14",
+        "analysis_site_signature:0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+        "sql_sha256:8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
+        "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0"
+      ]
+    },
+    {
+      "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 480,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "_prisma_migrations"
+        ],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "json_agg",
+          "json_build_object",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:480:14",
+        "analysis_site_signature:0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+        "sql_sha256:372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
+        "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651"
+      ]
+    },
     {
       "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
