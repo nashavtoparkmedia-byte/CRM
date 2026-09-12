@@ -1374,20 +1374,6 @@ type ExactTelegramOutboundProof = {
  * active transport exists, so there is no second account to cross into and no
  * choice to make. Zero or several fail closed.
  */
-/**
- * Media and reaction ids embed the provider account, and that key shape is the
- * duplicate-detection key for already-persisted messages. Changing it would
- * break dedup, so these two paths still need a concrete account and fail closed
- * without one. This is a KEY-SHAPE requirement, not authorization: it never
- * decides whose conversation or whose contact this is.
- */
-function requireProviderAccountForKeyV1(value: string | undefined): string {
-    if (concreteOpaqueId(value) !== value || !value) {
-        throw new Error('TELEGRAM_PROVIDER_MESSAGE_KEY_ACCOUNT_REQUIRED')
-    }
-    return value
-}
-
 async function resolveLegacyTelegramCarrierV1(): Promise<string> {
     const active = await (prisma as any).telegramConnection.findMany({
         where: { isActive: true }, take: 2, select: { id: true },
@@ -1437,13 +1423,20 @@ async function resolveExactTelegramOutboundPeer(
 
     const client = await getTelegramClient(connection)
     const prepared = await prepareOutboundConversationV1(chat, connection.id)
+    // The account comes from the LIVE session, not from a stored stamp: getMe on
+    // the very socket this send will leave through. It is a transport fact
+    // available at send time, it is never persisted as identity provenance, and
+    // it carries no authority over whose conversation or contact this is.
     const liveProviderAccountId = await attestTelegramProviderAccount(client, connection.id)
+    // A legacy conversation carries no transport, and the carrier was resolved
+    // above only because exactly one active transport exists. A conversation that
+    // IS bound must still match the transport this send leaves through.
+    const transportAgrees = prepared.connectionId === null
+        || prepared.connectionId === connection.id
     if (
         prepared.channel !== 'telegram'
         || prepared.chatId !== proof.chatId
-        || prepared.connectionId !== connection.id
-        || prepared.providerAccountId !== proof.providerAccountId
-        || prepared.providerAccountId !== liveProviderAccountId
+        || !transportAgrees
         || prepared.identityTarget !== target
         || prepared.target !== target
     ) {
@@ -1454,7 +1447,7 @@ async function resolveExactTelegramOutboundPeer(
     if (entity?.id?.toString() !== target) {
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
-    return { client, connection, entity }
+    return { client, connection, entity, providerAccountId: liveProviderAccountId }
 }
 
 export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string }) {
@@ -1518,11 +1511,17 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
             if (!chat) throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
             const prepared = await prepareOutboundConversationV1(chat, connection.id)
             const liveProviderAccountId = await attestTelegramProviderAccount(client, connection.id)
+            // A legacy conversation carries no transport, and the carrier was
+            // resolved above only because exactly one active transport exists.
+            // A conversation that IS bound must still match the socket this send
+            // leaves through. Provider-account provenance is deferred and is not
+            // compared: the account below comes from the live session instead.
+            const transportAgrees = prepared.connectionId === null
+                || prepared.connectionId === connection.id
             if (
                 prepared.channel !== 'telegram'
                 || prepared.chatId !== chat.id
-                || prepared.connectionId !== connection.id
-                || prepared.providerAccountId !== liveProviderAccountId
+                || !transportAgrees
                 || prepared.identityTarget !== phoneNumber
                 || prepared.target !== phoneNumber
             ) {
@@ -1652,7 +1651,7 @@ export async function sendTelegramMedia(
     console.log(`[TG-MEDIA] START: phone=${phoneNumber} filename=${filename} mime=${mimeType} connId=${connectionId}`)
 
     try {
-        const { client, connection, entity } = await resolveExactTelegramOutboundPeer(
+        const { client, connection, entity, providerAccountId: liveAccountId } = await resolveExactTelegramOutboundPeer(
             phoneNumber,
             connectionId,
             proof,
@@ -1697,7 +1696,7 @@ export async function sendTelegramMedia(
         return {
             success: true,
             externalId: rawExternalId
-                ? telegramMessageExternalId(requireProviderAccountForKeyV1(proof.providerAccountId), proof.identityTarget, rawExternalId)
+                ? telegramMessageExternalId(liveAccountId, proof.identityTarget, rawExternalId)
                 : undefined,
         }
     } catch (err: any) {
@@ -1714,20 +1713,23 @@ export async function sendTelegramReaction(input: {
     connectionId?: string
     proof: ExactTelegramOutboundProof
 }): Promise<void> {
+    // Resolve the peer first: the provider message id is keyed by the account of
+    // the session the reaction leaves through, and that account is a live
+    // transport fact rather than stored provenance.
+    const { client, entity, providerAccountId: liveAccountId } = await resolveExactTelegramOutboundPeer(
+        input.target,
+        input.connectionId,
+        input.proof,
+    )
     const rawMessageId = exactTelegramProviderMessageId(
         input.messageId,
-        requireProviderAccountForKeyV1(input.proof.providerAccountId),
+        liveAccountId,
         input.target,
     )
     const messageId = rawMessageId ? Number.parseInt(rawMessageId, 10) : Number.NaN
     if (!Number.isSafeInteger(messageId) || messageId <= 0 || String(messageId) !== rawMessageId) {
         throw new Error('TELEGRAM_MESSAGE_ID_INVALID')
     }
-    const { client, entity } = await resolveExactTelegramOutboundPeer(
-        input.target,
-        input.connectionId,
-        input.proof,
-    )
     await client.invoke(new Api.messages.SendReaction({
         peer: entity,
         msgId: messageId,

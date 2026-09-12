@@ -613,16 +613,19 @@ describe('GramJS private conversation identity admission', () => {
         expect(mocks.prepareOutbound).toHaveBeenCalledWith(chat, connectionId)
     })
 
-    test('non-text delivery rejects a mismatched account proof before provider mutation', async () => {
+    test('non-text delivery rejects a conversation bound to another transport', async () => {
         const connectionId = `telegram-nontext-reject-${connectionSequence}`
         const peerId = '42'
         mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
         mocks.chatFindUnique.mockResolvedValue({ id: 'chat-nontext-reject' })
+        // The conversation is bound to a DIFFERENT transport than the one this
+        // send would leave through. Account provenance is deferred and no longer
+        // compared; a concrete transport disagreement still fails closed.
         mocks.prepareOutbound.mockResolvedValue({
             chatId: 'chat-nontext-reject',
             channel: 'telegram',
-            providerAccountId: '7060',
-            connectionId,
+            providerAccountId: null,
+            connectionId: `${connectionId}-other`,
             identityTarget: peerId,
             target: peerId,
         })
@@ -635,7 +638,7 @@ describe('GramJS private conversation identity admission', () => {
             'application/octet-stream',
             undefined,
             connectionId,
-            { chatId: 'chat-nontext-reject', providerAccountId: '7061', identityTarget: peerId },
+            { chatId: 'chat-nontext-reject', identityTarget: peerId },
         )).rejects.toThrow('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
         expect(mocks.getEntity).not.toHaveBeenCalled()
         expect(mocks.sendFile).not.toHaveBeenCalled()
@@ -748,22 +751,88 @@ describe('GramJS private conversation identity admission', () => {
     // no transport binding and can never gain one. It answers only which socket
     // carries the send. It resolves ONLY when exactly one active transport
     // exists, so there is no second account to cross into and no choice to make.
-    describe('legacy unbound Telegram carrier', () => {
-        const legacyPrepared = {
-            chatId: "chat-legacy", channel: "telegram", contactId: "contact-1",
-            contactIdentityId: "identity-1", providerAccountId: null, connectionId: null,
-            identityTarget: "42", target: "42", isMaxPersonal: false,
+    // The legacy rollout invariant. A conversation that carries no transport
+    // binding, with exactly one active carrier, must remain usable on every
+    // outbound path. Routing is compatibility only and persists nothing.
+    describe('legacy unbound Telegram conversation with one active carrier', () => {
+        const PEER = '4242'
+        const LIVE_ACCOUNT = '9100'
+        const CARRIER = 'tg-sole-carrier'
+        const REACTION_TARGET = `telegram:${LIVE_ACCOUNT}:${PEER}:301`
+
+        function legacySetup() {
+            const chat = {
+                ...exactChat({
+                    externalChatId: `telegram:${PEER}`,
+                    metadata: { chatKind: 'private', peerId: PEER },
+                }),
+                id: 'chat-legacy',
+                contactId: 'contact-legacy',
+                contactIdentityId: 'identity-legacy',
+            }
+            // The account is a LIVE getMe result from the socket the send leaves
+            // through, never a stored stamp.
+            mocks.providerAccountId = LIVE_ACCOUNT
+            mocks.telegramConnectionFindMany.mockResolvedValue([{ id: CARRIER }])
+            mocks.telegramConnectionFindUnique.mockResolvedValue(connection(CARRIER))
+            mocks.chatFindUnique.mockResolvedValue(chat)
+            mocks.getEntity.mockResolvedValue({ id: BigInt(PEER) })
+            mocks.prepareOutbound.mockResolvedValue({
+                chatId: chat.id,
+                channel: 'telegram',
+                contactId: chat.contactId,
+                contactIdentityId: chat.contactIdentityId,
+                providerAccountId: null,
+                connectionId: null,
+                identityTarget: PEER,
+                target: PEER,
+                isMaxPersonal: false,
+            })
+            return chat
         }
 
+        test('text, media and reaction all send through the sole carrier', async () => {
+            const chat = legacySetup()
+
+            await sendTelegramMessage(PEER, 'legacy text', undefined, { chatId: chat.id })
+
+            await expect(sendTelegramMedia(
+                PEER, 'ZmFrZQ==', 'proof.bin', 'application/octet-stream', undefined, undefined,
+                { chatId: chat.id, identityTarget: PEER },
+            )).resolves.toMatchObject({ success: true })
+
+            await sendTelegramReaction({
+                target: PEER,
+                messageId: REACTION_TARGET,
+                emoji: '👍',
+                remove: false,
+                connectionId: undefined,
+                proof: { chatId: chat.id, identityTarget: PEER },
+            })
+            expect(mocks.invoke).toHaveBeenCalled()
+        })
+
         test.each([
-            ['no active carrier', [], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
-            ['several active carriers', [{ id: 'a' }, { id: 'b' }], 'CONTACT_CONVERSATION_TRANSPORT_AMBIGUOUS'],
-        ])('fails closed with %s', async (_label, carriers, expected) => {
-            mocks.prepareOutbound.mockResolvedValue(legacyPrepared)
+            ['no active carrier', []],
+            ['several active carriers', [{ id: 'a' }, { id: 'b' }]],
+        ])('every path fails closed with %s', async (_label, carriers) => {
+            const chat = legacySetup()
             mocks.telegramConnectionFindMany.mockResolvedValue(carriers)
 
-            await expect(sendTelegramMessage("42", "legacy", undefined, { chatId: "chat-legacy" }))
-                .rejects.toThrow(expected)
+            await expect(sendTelegramMessage(PEER, 'legacy', undefined, { chatId: chat.id }))
+                .rejects.toThrow()
+            await expect(sendTelegramMedia(
+                PEER, 'ZmFrZQ==', 'proof.bin', 'application/octet-stream', undefined, undefined,
+                { chatId: chat.id, identityTarget: PEER },
+            )).rejects.toThrow()
+            await expect(sendTelegramReaction({
+                target: PEER,
+                messageId: REACTION_TARGET,
+                emoji: '👍',
+                remove: false,
+                connectionId: undefined,
+                proof: { chatId: chat.id, identityTarget: PEER },
+            })).rejects.toThrow()
         })
     })
 })
