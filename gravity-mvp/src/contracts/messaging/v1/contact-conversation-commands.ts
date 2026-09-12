@@ -9,7 +9,8 @@ export interface ContactConversationV1 {
   status: string
   contactId: string | null
   contactIdentityId: string | null
-  providerAccountId: string
+  /** Non-authoritative provider-account metadata; null when the conversation carries none. */
+  providerAccountId: string | null
   transportConnectionId: string | null
 }
 

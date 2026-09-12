@@ -31,8 +31,11 @@ export async function sendMaxTransportTextV1(input: MaxTransportTextInputV1): Pr
         throw new Error('Target (chatId or phone) and message are required')
     }
     const providerAccountId = exactProviderAccountId(input.providerAccountId)
+    // The scraper selects a live personal session by account id and echoes it
+    // back for verification, so delivery genuinely cannot proceed without one.
+    // This is a TRANSPORT capability requirement, not conversation admission.
     if (!providerAccountId) {
-        throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+        throw new Error('MAX_TRANSPORT_ACCOUNT_REQUIRED')
     }
     if (!input.isPersonal) {
         // No live bot transport exists yet. A configured database connection is

@@ -615,7 +615,8 @@ export class MessageService {
                     break
                 
                 case 'max':
-                    if (!maxBinding) throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+                    // Narrowing only: the binding is built for this channel above.
+                    if (!maxBinding) throw new Error('MAX_DELIVERY_BINDING_UNAVAILABLE')
                     const isPersonal = maxBinding.isPersonal
                     const maxMetadata = (targetChat.metadata || {}) as any
                     console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${routedConnectionId}, target=${rawExternalChatId}`)
@@ -916,9 +917,15 @@ export class MessageService {
                     break
                 }
                 case 'max': {
-                    if (!retryMaxBinding) throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+                    // Narrowing only: the binding is built for this channel above.
+                    if (!retryMaxBinding) throw new Error('MAX_DELIVERY_BINDING_UNAVAILABLE')
                     const maxMetadata = (chat.metadata || {}) as any
-                    let retryQuotedMsgId: string | undefined
+                    // Keep the original quoted id when the referenced message
+                    // cannot be found, so a retry still carries the reply
+                    // relationship instead of silently dropping it, and keep the
+                    // conversation scoping so a quoted id belonging to another
+                    // conversation can never be resolved into this one.
+                    let retryQuotedMsgId = meta.quotedMsgId
                     let retryQuotedText: string | undefined
                     let retryQuotedSentAt: string | undefined
                     let retryQuotedDirection: string | undefined

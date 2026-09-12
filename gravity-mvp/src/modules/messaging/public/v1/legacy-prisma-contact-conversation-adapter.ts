@@ -57,8 +57,10 @@ function toConversation(
   conversation: StoredContactConversationV1,
   input: ExactIdentityBindingV1,
 ): ContactConversationV1 {
-  const providerAccountId = storedProviderAccountId(conversation) ?? input.providerAccountId
-  if (!providerAccountId) throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+  // Provider-account provenance is deferred: it is carried as descriptive
+  // metadata and never admits or rejects a conversation.
+  // See docs/design/provider-account-identity-v1.md.
+  const providerAccountId = storedProviderAccountId(conversation) ?? input.providerAccountId ?? null
   return {
     id: conversation.id,
     channel: conversation.channel,
