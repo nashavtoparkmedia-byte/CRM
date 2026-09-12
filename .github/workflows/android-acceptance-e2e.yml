@@ -1,0 +1,200 @@
+name: Android acceptance E2E
+
+# Runs the Android shell against a disposable CRM on a GitHub-hosted Linux
+# runner with a hardware-accelerated emulator. Nothing here touches the
+# production VPS, production data, or any provider credential.
+#
+# This is NOT the authoritative architecture workflow and must never become a
+# substitute for it. It proves one thing the authoritative suite cannot: that
+# the shell behaves correctly on a real Android system.
+#
+# The successful-login test is expected to FAIL while the client-side exception
+# under investigation in PR #87 is unfixed. That is deliberate. A suite that
+# goes green while the product is broken would be worse than having none.
+
+on:
+  push:
+    branches:
+      - 'codex/android-acceptance-e2e-**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: acceptance
+          POSTGRES_PASSWORD: acceptance
+          POSTGRES_DB: acceptance
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Loopback on the runner. The emulator reaches it through 10.0.2.2, which
+      # is the host alias inside Android's user-mode network stack.
+      DATABASE_URL: postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public
+      MOBILE_ACCESS_USER: acceptance
+      MOBILE_ACCESS_PASS: yoko acceptance passphrase
+      EMULATOR_ORIGIN: http://10.0.2.2:3002
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.20.2
+
+      - name: Install CRM dependencies
+        run: npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
+
+      - name: Generate the Prisma client
+        run: npm run --prefix gravity-mvp gen
+
+      - name: Apply committed migrations to the disposable database
+        run: npx --prefix gravity-mvp prisma migrate deploy --schema gravity-mvp/prisma/schema.prisma
+
+      - name: Seed synthetic conversations
+        run: |
+          PGPASSWORD=acceptance psql -h 127.0.0.1 -p 55432 -U acceptance -d acceptance \
+            -v ON_ERROR_STOP=1 -f android/tools/acceptance-seed.sql
+
+      - name: Build the CRM
+        env:
+          NODE_ENV: production
+        run: npm run --prefix gravity-mvp build
+
+      - name: Start the CRM with no provider credentials
+        run: |
+          # env -i so nothing from the runner environment can reach the app.
+          # No Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN value exists
+          # here, so every outbound transport is inert by construction.
+          cd gravity-mvp
+          nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production \
+            DATABASE_URL="$DATABASE_URL" \
+            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
+            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3002/login/mobile && exit 0
+            sleep 2
+          done
+          echo "CRM did not become reachable"; cat "$RUNNER_TEMP/crm.log"; exit 1
+
+      - name: Confirm the shell lane fails closed before any test runs
+        run: |
+          set -e
+          UA='Mozilla/5.0 (Linux; Android 14) YokoShell/1'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" http://127.0.0.1:3002/api/messages)
+          [ "$code" = "401" ] || { echo "shell API expected 401, got $code"; exit 1; }
+          echo "shell lane closed as expected"
+
+      - name: Build the acceptance APK and the test APK
+        run: |
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:assembleAcceptance :app:assembleAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" \
+            -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      - name: Allow KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -w /dev/kvm && echo "KVM available"
+
+      - name: Start an emulator
+        run: |
+          set -e
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-34" "emulator" \
+            "system-images;android-34;google_apis;x86_64" > /dev/null
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            -n ci -k "system-images;android-34;google_apis;x86_64" --force
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          # Booted means the package manager is up, not just the kernel.
+          until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do
+            sleep 3
+          done
+          "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82 || true
+          echo "emulator booted"
+
+      - name: Run the acceptance tests
+        id: tests
+        run: |
+          cd android
+          "$ANDROID_HOME/platform-tools/adb" logcat -c
+          bash tools/bootstrap-gradle.sh --no-daemon :app:connectedAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      - name: Collect logcat, screenshots and the shell's own diagnostics
+        if: always()
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/artifacts"; mkdir -p "$OUT"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          "$ADB" logcat -d -v time > "$OUT/logcat-full.log"
+          "$ADB" logcat -d -v time -s YokoShellDiag:E > "$OUT/logcat-shell-diagnostics.log"
+          "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
+            > "$OUT/shell-diagnostics-file.log" 2>/dev/null
+          "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance/files/screenshots \
+            "$OUT/screenshots" 2>/dev/null
+          cp "$RUNNER_TEMP/crm.log" "$OUT/crm-server.log" 2>/dev/null
+          cp "$RUNNER_TEMP/emulator.log" "$OUT/emulator.log" 2>/dev/null
+          cp -r app/build/reports/androidTests "$OUT/test-report" 2>/dev/null
+          cp -r app/build/outputs/androidTest-results "$OUT/junit" 2>/dev/null
+          sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
+          echo "collected:"; ls -R "$OUT" | head -40
+        working-directory: android
+
+      - name: Fail on any uncaught JavaScript error or Android crash
+        if: always()
+        run: |
+          OUT="$RUNNER_TEMP/artifacts"
+          status=0
+          if grep -q "YOKO_PAGE_ERROR" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
+            echo "::error::uncaught JavaScript error in the shell"
+            grep "YOKO_PAGE_ERROR" "$OUT/logcat-shell-diagnostics.log" | head -20
+            status=1
+          fi
+          if grep -q "FATAL EXCEPTION" "$OUT/logcat-full.log" 2>/dev/null; then
+            # Only ours. Other packages on the image are not this suite's problem.
+            if grep -A 3 "FATAL EXCEPTION" "$OUT/logcat-full.log" | grep -q "ru.yokoone.crm.shell"; then
+              echo "::error::Android crash in the shell"
+              grep -A 12 "FATAL EXCEPTION" "$OUT/logcat-full.log" | head -30
+              status=1
+            fi
+          fi
+          if ! grep -q "YOKO_NATIVE_OK" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
+            echo "::error::the shell's own diagnostics never reported; the run proves nothing"
+            status=1
+          fi
+          exit $status
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-acceptance-artifacts
+          path: ${{ runner.temp }}/artifacts
+          if-no-files-found: warn
+          retention-days: 14

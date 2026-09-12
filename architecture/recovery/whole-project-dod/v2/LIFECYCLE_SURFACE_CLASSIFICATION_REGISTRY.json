@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 713,
+    "total_entries": 714,
     "test": 36,
     "dead_historical": 92,
     "migration_only": 80,
-    "active_operational": 505,
+    "active_operational": 506,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -37,6 +37,15 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active read-only architecture contract workflow; the reviewed source declares contents: read and no database, provider, production, or secret input. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": ".github/workflows/android-acceptance-e2e.yml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Android shell end-to-end acceptance on a GitHub-hosted runner. It brings up a disposable PostgreSQL service, applies committed migrations to it, seeds synthetic conversations, and runs the CRM under env -i with an explicit allowlist that contains no provider, bot, telephony or production credential. It declares contents: read, touches no production host, registry or deployment path, and is not part of the authoritative control catalogue. Lifecycle classification grants no database, credential, provider or deployment authority.",
+      "classification_artifact": "docs/mobile/ANDROID_ACCEPTANCE_E2E.md",
       "functional_owner": "platform_engineering"
     },
     {
