@@ -1,5 +1,7 @@
 'use strict'
 
+const { maxRuntimeTrace } = require('../lib/runtimeTrace')
+
 class MessageParser {
   /**
    * Нормализует сырое сообщение из TransportInterceptor в формат для CRM webhook
@@ -9,7 +11,7 @@ class MessageParser {
    * @param {number|null} [chatId] - явный chatId (опционально, перекрывает msg.chatId)
    */
   static toCrmPayload(msg, chatId) {
-    return {
+    const payload = {
       externalId:        msg.id || null,
       chatId:            chatId || msg.chatId || null,
       senderId:          msg.from || null,
@@ -21,6 +23,15 @@ class MessageParser {
       isOutgoing:        msg.isOutgoing || false,
       replyToExternalId: msg.replyToMessageId || null,
     }
+    maxRuntimeTrace('parser.to_crm_payload', {
+      providerMessageId: payload.externalId,
+      chatId: payload.chatId,
+      text: payload.text,
+      messageType: payload.messageType,
+      isOutgoing: payload.isOutgoing,
+      attachmentCount: Array.isArray(payload.attachments) ? payload.attachments.length : 0,
+    })
+    return payload
   }
 
   /**

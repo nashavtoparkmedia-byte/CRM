@@ -45,6 +45,30 @@ server {
 
     client_max_body_size 16m;
 
+    # Telegram delivers updates to https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook.
+    # The bot authenticates them itself via the x-telegram-bot-api-secret-token
+    # header (botRuntime.validateWebhookSecret -> safeEqual, which rejects empty and
+    # mismatched values), so this lane carries no authorisation of its own. It is
+    # scoped to /api/telegram/ deliberately: /api/admin/* must keep going through the
+    # session-validated Next route (pages/api/admin/[...path].js), which is what
+    # src/security/authSecurity.test.js enforces by forbidding a blanket rewrite.
+    #
+    # Resolved at request time through Docker's embedded DNS rather than via an
+    # `upstream` block, because an upstream host is resolved once at startup: if
+    # tg-bot were down when nginx started, nginx would refuse to start and take
+    # every vhost on this host down with it. A variable proxy_pass degrades to a
+    # 502 on this one location instead.
+    location ^~ /api/telegram/ {
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $tg_bot_api http://tg-bot:3001;
+        proxy_pass $tg_bot_api$request_uri;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     location / {
         proxy_pass http://bot_admin_upstream;
         proxy_http_version 1.1;
