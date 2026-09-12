@@ -6,9 +6,9 @@ coordinated application pair:
 - application commit `7d3b7f175ddebc7db3a9a3fbced24957f1be7c16`;
 - coordinated profile `crm-7d3b7f175dde-gravity-max-source-v1`;
 - Stage A builder `7867840d7da7ee371039e414a9f25c566a8eca36`;
-- hosted artifact run `33542881677`, artifact `9814812256`;
-- Gravity image `sha256:707a0e82514468338192d01600cf5cc46c15be6ca0a37e0498a48156b0fb5a3e`;
-- MAX scraper image `sha256:653d3c3714ed62777b3307a1da96c21ddc5218ce103a8b0fcf0a0bad88c86307`.
+- hosted artifact run `34687594677`, artifact `10296346283`;
+- Gravity image `sha256:f6732139285613d808fced423b8dff91a0ffcab6497012a995e7270b6d686e0a`;
+- MAX scraper image `sha256:8ccce836055fae5e9dfe0ef5bc9f0bc7f33b949331d84bef1b749b1c5df4a325`.
 
 It does not rebuild application images and does not authorize an arbitrary
 revision, image, service, path, Docker command, shell, database migration, or

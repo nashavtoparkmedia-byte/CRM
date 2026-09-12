@@ -11,7 +11,10 @@ from typing import Any
 
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
-EXPECTED_PROFILE = "crm-7d3b7f175dde-gravity-max-source-v1"
+# The snapshot describes the runtime that is installed right now, which is still
+# 2.0.0-15 under its own profile. This must not follow the successor's id or the
+# capture would refuse the very predecessor it exists to record.
+EXPECTED_PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),

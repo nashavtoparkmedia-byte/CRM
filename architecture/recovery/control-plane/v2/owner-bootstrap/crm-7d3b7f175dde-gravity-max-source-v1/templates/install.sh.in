@@ -5,7 +5,7 @@ umask 077
 PROFILE_ID='crm-7d3b7f175dde-gravity-max-source-v1'
 EXPECTED_HOST='jvxthcorvm'
 EXPECTED_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
-HANDOFF='/opt/codex-work/yoko-stage-a-handoff.u0l9So/release-output'
+HANDOFF='/opt/codex-work/yoko-stage-a-handoff-7d3b7f17/release-output'
 ARTIFACT_PARENT='/var/lib/yoko-privileged-runtime/coordinated-artifacts'
 ARTIFACT_STORE="$ARTIFACT_PARENT/06e7b2c5e979c4b49c72989af9f904dcc42ff50dd70652d8833f8cba8c84e679"
 BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'

@@ -65,7 +65,7 @@ class BuilderContractTests(unittest.TestCase):
         installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
         self.assertIn("test \"$#\" -eq 0", installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("HANDOFF='/opt/codex-work/yoko-stage-a-handoff.u0l9So/release-output'", installer)
+        self.assertIn("HANDOFF='/opt/codex-work/yoko-stage-a-handoff-7d3b7f17/release-output'", installer)
         self.assertIn(".incoming-'+final.name", installer)
         self.assertIn("if [ -e \"$BOOTSTRAP_GUARD\" ]; then", installer)
         self.assertIn('/usr/bin/flock -x "$bootstrap_lock_fd"', installer)

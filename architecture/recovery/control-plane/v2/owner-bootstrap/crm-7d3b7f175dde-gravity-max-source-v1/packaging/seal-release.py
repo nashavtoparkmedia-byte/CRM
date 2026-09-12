@@ -343,7 +343,11 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
             raise ValueError(f"Stage A artifact file mismatch: {name}")
         if name.endswith(".json") and sha(artifact / name, 2 * 1024 * 1024) != expected["sha256"]:
             raise ValueError(f"Stage A metadata digest mismatch: {name}")
-    verifier = repository / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/verify-coordinated-artifact.py"
+    # The content verifier belongs to the Stage A authority that built this artifact, so it is
+    # taken from the Stage A builder checkout rather than the runtime builder repository. That
+    # checkout has already been pinned to STAGE_A_COMMIT/STAGE_A_TREE above, so the verifier's
+    # own bytes are bound to a verified identity; the runtime repository need not carry a copy.
+    verifier = stage_a_builder / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/verify-coordinated-artifact.py"
     completed = command([
         "/usr/bin/python3", "-I", "-B", str(verifier),
         "--artifact-directory", str(artifact),
@@ -373,11 +377,11 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         or transport.get("application_commit") != APPLICATION_COMMIT
         or transport.get("builder_commit") != STAGE_A_COMMIT
         or transport.get("coordinated_profile") != PROFILE_ID
-        or transport.get("workflow_run") != {"head_branch": "codex/prepare-max-coordinated-release-20260901", "head_sha": STAGE_A_COMMIT, "id": 33542881677}
+        or transport.get("workflow_run") != {"head_branch": "codex/coordinated-gravity-max-7d3b7f17", "head_sha": STAGE_A_COMMIT, "id": 34687594677}
         or transport.get("source_artifact") != {
-            "bytes": 4803272912,
+            "bytes": 4804087130,
             "digest": "sha256:" + ARTIFACT_DIGEST,
-            "id": 9814812256,
+            "id": 10296346283,
             "name": "coordinated-gravity-max-7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36",
         }
     ):
@@ -483,7 +487,7 @@ def main() -> None:
         "schema": "yoko.crm.coordinated-artifact-admission.v1",
         "profile_id": PROFILE_ID,
         "application_commit": APPLICATION_COMMIT,
-        "stage_a_artifact_id": 9814812256,
+        "stage_a_artifact_id": 10296346283,
         "stage_a_artifact_digest": "sha256:" + ARTIFACT_DIGEST,
         "content_verifier": artifact_result,
         "files": files,
@@ -522,10 +526,10 @@ def main() -> None:
         "stage_a": {
             "builder_commit": STAGE_A_COMMIT,
             "builder_tree": STAGE_A_TREE,
-            "run_id": 33542881677,
-            "artifact_id": 9814812256,
+            "run_id": 34687594677,
+            "artifact_id": 10296346283,
             "artifact_digest": "sha256:" + ARTIFACT_DIGEST,
-            "artifact_bytes": 4803272912,
+            "artifact_bytes": 4804087130,
             "content_verifier": artifact_result,
         },
         "artifact_admission": {"receipt_path": receipt_path, "receipt_sha256": receipt_sha, "files": files},
