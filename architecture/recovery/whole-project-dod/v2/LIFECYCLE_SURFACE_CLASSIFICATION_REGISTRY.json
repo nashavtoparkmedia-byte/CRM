@@ -1105,6 +1105,51 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/build/chunk-hosted-artifact.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite Stage A authenticated-artifact chunker. It accepts only the exact hosted ZIP stream and fixed identity inputs, writes the bounded transport set, and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/build/emit-coordinated-release.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite Stage A artifact emitter. It reads two locally built archives and exact source/builder evidence, writes only the bounded six-member staging directory, and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/build/max-runtime-probe.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A image probe executed with network disabled, a read-only filesystem, all capabilities dropped, and no-new-privileges. It inspects only packaged runtime identities and grants no live MAX, credential, database, or production capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/build/max-scraper.Dockerfile",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Strict release-owned Docker build recipe for the fixed accepted MAX subtree. Its base and tini package materials are digest-bound, it excludes test/debug source, and it grants no registry, deployment, credential, production, or live-provider authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/build/verify-hosted-transport-registry.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A hosted transport identity verifier. It validates the exact GitHub artifact registry against the fixed builder and run identities and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/coordinated_release_contract.py",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
