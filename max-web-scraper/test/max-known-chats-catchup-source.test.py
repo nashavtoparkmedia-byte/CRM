@@ -23,8 +23,13 @@ def test_successful_outbound_adds_chat_to_restart_catchup():
 
 
 def test_dom_recovery_adds_chat_to_restart_catchup():
-    assert 'rememberKnownChatId(chatId)\n  const result = await forwardToWebhook({' in source
-
+    # The chat must be recorded for restart catch-up before the webhook forward,
+    # with nothing awaited in between that could drop the registration.
+    forwarded = source.index('const result = await forwardToWebhook({')
+    remembered = source.rindex('rememberKnownChatId(chatId)', 0, forwarded)
+    between = source[remembered + len('rememberKnownChatId(chatId)'):forwarded]
+    assert between.count('\n') <= 2, between
+    assert 'await' not in between
 
 
 def test_restart_catchup_reads_known_chats_from_persistent_user_data():
