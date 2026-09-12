@@ -52,6 +52,17 @@ import {
 export const MOBILE_SHELL_UA_TOKEN = 'YokoShell/'
 
 /**
+ * A note for anyone tempted to strip the CRM chrome off the sign-in screen by
+ * varying the root layout: it does not work. Next does not re-render a root
+ * layout on client-side navigation, so a layout that omits SipProvider for the
+ * login route leaves the provider missing after the router moves to the
+ * messenger, and every component calling useSip throws
+ * "useSip must be used inside SipProvider" into the production error boundary.
+ * Measured, not assumed. The chrome on the sign-in screen is cosmetic; the
+ * provider tree has to stay constant.
+ */
+
+/**
  * Paths the shell may reach without a session.
  *
  * Only the mobile login screen and what a browser needs to render it. The
