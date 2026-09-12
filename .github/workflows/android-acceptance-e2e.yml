@@ -112,13 +112,26 @@ jobs:
             -PyokoTestOrigin="$EMULATOR_ORIGIN" \
             -PyokoGitCommit="${GITHUB_SHA::8}"
 
-      - name: Allow KVM for the emulator
+      # Hardware acceleration is not guaranteed on a standard hosted runner.
+      # Run #1 got a writable /dev/kvm; run #2 did not, and this step's bare
+      # `test -w` made that the run's silent cause of death. The probe now
+      # records what it found and hands the answer to the next step instead of
+      # deciding the run's fate by its own exit status.
+      - name: Probe for KVM
+        id: kvm
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -w /dev/kvm && echo "KVM available"
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules || true
+          sudo udevadm trigger --name-match=kvm || true
+          if [ -w /dev/kvm ]; then
+            echo "accel=on" >> "$GITHUB_OUTPUT"
+            echo "KVM is available; the emulator will be hardware accelerated"
+          else
+            echo "accel=off" >> "$GITHUB_OUTPUT"
+            echo "::warning::no writable /dev/kvm on this runner; falling back to software emulation"
+            ls -l /dev/kvm 2>&1 || true
+          fi
 
       # Run #1 was cancelled inside this step: both waits below were unbounded,
       # the emulator never reported a completed boot, and the job's own 60-minute
@@ -137,7 +150,7 @@ jobs:
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             -n ci -k "system-images;android-34;google_apis;x86_64" --force
           nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
-            -no-snapshot -gpu swiftshader_indirect -accel on \
+            -no-snapshot -gpu swiftshader_indirect -accel ${{ steps.kvm.outputs.accel }} \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
           emulator_pid=$!
 

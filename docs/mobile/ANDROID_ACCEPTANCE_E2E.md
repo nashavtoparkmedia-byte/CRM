@@ -59,6 +59,20 @@ Every wait in that step is now bounded and every failure path prints the
 emulator log and the device list before exiting. A boot problem now costs
 minutes and leaves something to read.
 
+Run #2, with those bounds in place, died one step earlier and for a different
+reason: `test -w /dev/kvm` returned false, so the KVM step's own exit status
+killed the run. Hardware acceleration is **not guaranteed** on a standard
+GitHub-hosted runner — run #1 got a writable `/dev/kvm`, run #2 did not. That
+probe no longer decides the run's fate; it records what it found, warns, and
+hands the acceleration mode to the emulator step.
+
+This is the open risk in the approach: without KVM the emulator falls back to
+software emulation on a two-core runner, which may not finish booting inside
+any sensible budget. If that turns out to be the steady state, the realistic
+options are a larger runner, a third-party emulator action, or accepting that
+this suite runs only when a runner happens to offer KVM. None of them should
+be chosen without seeing a software-emulation run actually time out first.
+
 ## What fails the run
 
 - Any uncaught JavaScript error, detected from the shell's `YOKO_PAGE_ERROR`
