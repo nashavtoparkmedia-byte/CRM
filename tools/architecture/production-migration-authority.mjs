@@ -227,6 +227,145 @@ async function migrationFiles(root, relative) {
   return records.sort((left, right) => left.name.localeCompare(right.name))
 }
 
+const SQL_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_]{0,62}$/
+const CONTEXT_INDEX_PATH = 'architecture/contexts/v1/context-index.json'
+
+// Code-unit ordering, matching the default `.sort()` used for the error
+// messages below and by the artifact's authors. `localeCompare` disagrees with
+// it for the mixed-case, underscore-bearing identifiers that SQL object names
+// are made of, which would reject a correctly sorted declaration.
+const sortedUniqueStrings = (values) => Array.isArray(values)
+  && values.every((value) => typeof value === 'string')
+  && new Set(values).size === values.length
+  && values.every((value, index) => index === 0 || values[index - 1] < value)
+
+/**
+ * SQL object names the migration actually produces.
+ *
+ * Comments are stripped first, so a commented-out statement cannot conjure a
+ * phantom object, and the statement forms this repository already uses are all
+ * recognised — `CREATE TABLE IF NOT EXISTS` appears in three migrations here,
+ * and a narrower pattern would silently force those tables to go undeclared.
+ */
+function sqlObjectsCreatedBy(sql) {
+  const stripped = sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+  const tables = new Set([...stripped.matchAll(
+    /\bCREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[A-Za-z][A-Za-z0-9_]*"?\s*\.\s*)?"?([A-Za-z][A-Za-z0-9_]*)"?/giu,
+  )].map((match) => match[1]))
+  const columns = new Set([...stripped.matchAll(
+    /\bALTER\s+TABLE\s+(?:ONLY\s+)?(?:IF\s+EXISTS\s+)?(?:"?[A-Za-z][A-Za-z0-9_]*"?\s*\.\s*)?"?([A-Za-z][A-Za-z0-9_]*)"?([\s\S]*?);/giu,
+  )].flatMap((match) => [...match[2].matchAll(
+    /\bADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"?([A-Za-z][A-Za-z0-9_]*)"?/giu,
+  )].map((column) => `${match[1]}.${column[1]}`)))
+  const indexes = new Set([...stripped.matchAll(
+    /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?"?([A-Za-z][A-Za-z0-9_]*)"?/giu,
+  )].map((match) => match[1]))
+  return { tables, columns, indexes }
+}
+
+/**
+ * A pending migration's owner is declared, not hardcoded. The declaration is
+ * only accepted when every named context is a real bounded context in the
+ * accepted context index, so an invented or misspelled owner still fails
+ * closed rather than silently authorizing itself.
+ */
+async function assertAuthorizedPendingOwnerContexts(root, pending) {
+  const declared = pending.authorized_owner_contexts
+  assert(Array.isArray(declared) && declared.length > 0, 'pending source migration owner authorization is empty')
+  assert(sortedUniqueStrings(declared), 'pending source migration owner authorization is not sorted and unique')
+  const index = JSON.parse(await readFile(path.join(root, CONTEXT_INDEX_PATH), 'utf8'))
+  // Every other input to this validator is checksum-pinned; the context index
+  // is shared machinery, so assert its identity and that each entry really is a
+  // manifest-backed context rather than a bare name someone appended.
+  assert(index.schema === 'yoko.crm.context-index.v1' && index.version === 1, 'context index identity mismatch for owner authorization')
+  assert(Array.isArray(index.contexts) && index.contexts.length > 0, 'context index is unreadable for owner authorization')
+  assert(index.contexts.every((entry) => typeof entry.context === 'string'
+    && /^[a-z][a-z0-9_]*$/.test(entry.context)
+    && entry.path === `architecture/contexts/v1/manifests/${entry.context}.json`
+    && SHA256.test(entry.sha256)), 'context index entry is not a manifest-backed context')
+  const known = new Map(index.contexts.map((entry) => [entry.context, entry]))
+  const unknown = declared.filter((context) => !known.has(context))
+  assert(unknown.length === 0, `pending source migration owner authorization names unknown context(s): ${unknown.sort().join(', ')}`)
+  // An entry in the index is a name; a manifest whose bytes hash to the pinned
+  // digest is the context. Authorization binds to the latter, so appending a
+  // well-formed but invented entry does not create an owner.
+  for (const context of declared) {
+    const entry = known.get(context)
+    const manifestBytes = await readFile(path.join(root, entry.path)).catch(() => null)
+    assert(manifestBytes !== null, `pending source migration owner context has no manifest: ${context}`)
+    assert(digest(manifestBytes) === entry.sha256, `pending source migration owner context manifest checksum mismatch: ${context}`)
+  }
+  return new Set(declared)
+}
+
+/**
+ * Each pending migration carries its own isolated-PostgreSQL proof and a
+ * machine-readable declaration of the objects it creates. The declaration is
+ * what lets the canonical replay verify a rollback without hardcoding one
+ * migration's table names, and it is checked against the migration SQL so a
+ * stale or understated declaration cannot pass.
+ */
+async function assertPendingMigrationProofEvidence(root, migrations) {
+  for (const row of migrations) {
+    // The path is also used by the negative-test harnesses to build copy
+    // targets, so it must be repository-relative and traversal-free before
+    // anything resolves it.
+    assert(typeof row.migration_test === 'string'
+      && row.migration_test.startsWith('gravity-mvp/src/')
+      && row.migration_test.endsWith('.postgres.test.ts')
+      && !path.isAbsolute(row.migration_test)
+      && !row.migration_test.split('/').includes('..')
+      && !row.migration_test.includes('\\')
+      && row.migration_test === path.posix.normalize(row.migration_test),
+    `pending source migration proof test path invalid: ${row.name}`)
+    await access(path.join(root, row.migration_test))
+      .catch(() => { throw new Error(`pending source migration proof test is missing: ${row.name}`) })
+
+    const creates = row.creates
+    assert(creates && typeof creates === 'object' && !Array.isArray(creates), `pending source migration creates declaration missing: ${row.name}`)
+    assert(exactObject(Object.keys(creates).sort(), ['columns', 'forbidden_indexes', 'tables']), `pending source migration creates declaration shape mismatch: ${row.name}`)
+    assert(Array.isArray(creates.tables) && creates.tables.length > 0
+      && sortedUniqueStrings(creates.tables)
+      && creates.tables.every((table) => SQL_IDENTIFIER.test(table)), `pending source migration created tables invalid: ${row.name}`)
+    assert(Array.isArray(creates.forbidden_indexes)
+      && sortedUniqueStrings(creates.forbidden_indexes)
+      && creates.forbidden_indexes.every((name) => SQL_IDENTIFIER.test(name)), `pending source migration forbidden indexes invalid: ${row.name}`)
+    assert(Array.isArray(creates.columns)
+      && creates.columns.every((entry) => entry && typeof entry === 'object' && !Array.isArray(entry)
+        && exactObject(Object.keys(entry).sort(), ['column', 'table'])
+        && SQL_IDENTIFIER.test(entry.table) && SQL_IDENTIFIER.test(entry.column)), `pending source migration created columns invalid: ${row.name}`)
+    const columnKeys = creates.columns.map((entry) => `${entry.table}.${entry.column}`)
+    assert(sortedUniqueStrings(columnKeys), `pending source migration created columns are not sorted and unique: ${row.name}`)
+
+    // Cross-check the declaration against the migration's own SQL in both
+    // directions. Tables, added columns and created indexes each get this
+    // treatment: an understated declaration would make the canonical replay's
+    // rollback proof blind to exactly the objects it exists to check, and the
+    // post-rollback column assertion has no other backstop.
+    const sql = await readFile(path.join(root, row.path), 'utf8')
+    const created = sqlObjectsCreatedBy(sql)
+
+    const declaredTables = new Set(creates.tables)
+    const undeclaredTables = [...created.tables].filter((table) => !declaredTables.has(table))
+    assert(undeclaredTables.length === 0, `pending source migration creates undeclared table(s): ${row.name}: ${undeclaredTables.sort().join(', ')}`)
+    const overdeclaredTables = [...declaredTables].filter((table) => !created.tables.has(table))
+    assert(overdeclaredTables.length === 0, `pending source migration declares table(s) it does not create: ${row.name}: ${overdeclaredTables.sort().join(', ')}`)
+
+    const declaredColumns = new Set(columnKeys)
+    const undeclaredColumns = [...created.columns].filter((column) => !declaredColumns.has(column))
+    assert(undeclaredColumns.length === 0, `pending source migration adds undeclared column(s): ${row.name}: ${undeclaredColumns.sort().join(', ')}`)
+    const overdeclaredColumns = [...declaredColumns].filter((column) => !created.columns.has(column))
+    assert(overdeclaredColumns.length === 0, `pending source migration declares column(s) it does not add: ${row.name}: ${overdeclaredColumns.sort().join(', ')}`)
+
+    // A forbidden index is one the migration must never produce, so declaring
+    // an index it actually creates is a contradiction rather than evidence.
+    const contradictoryIndexes = creates.forbidden_indexes.filter((name) => created.indexes.has(name))
+    assert(contradictoryIndexes.length === 0, `pending source migration declares forbidden index(es) it creates: ${row.name}: ${contradictoryIndexes.sort().join(', ')}`)
+  }
+}
+
 export async function validateProductionMigrationAuthority(root) {
   const authority = JSON.parse(await readFile(path.join(root, AUTHORITY_PATH), 'utf8'))
   const pending = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8'))
@@ -315,9 +454,10 @@ export async function validateProductionMigrationAuthority(root) {
     },
   }), 'current production schema authority mismatch')
   await verifySchemaDerivation(root, authority.current_schema)
-  assert(pending.schema === 'yoko.crm.pending-source-migrations.v1'
-    && pending.version === 1
+  assert(pending.schema === 'yoko.crm.pending-source-migrations.v2'
+    && pending.version === 2
     && pending.status === 'SOURCE_ONLY_NOT_APPLIED', 'pending source migration authority identity mismatch')
+  const authorizedOwnerContexts = await assertAuthorizedPendingOwnerContexts(root, pending)
   assert(exactObject(pending.base_authority, {
     path: AUTHORITY_PATH,
     current_target: authority.current_target.name,
@@ -328,9 +468,11 @@ export async function validateProductionMigrationAuthority(root) {
     && row.path === `gravity-mvp/prisma/migrations/${row.name}/migration.sql`
     && SHA256.test(row.sha256)
     && Number.isInteger(row.size) && row.size > 0
-    && row.owner_context === 'calling'
+    && typeof row.owner_context === 'string'
+    && authorizedOwnerContexts.has(row.owner_context)
     && row.classification === 'EXPAND_ONLY'
     && row.production_application === false), 'pending source migration record mismatch')
+  await assertPendingMigrationProofEvidence(root, pending.migrations)
   assert(new Set(pending.migrations.map((row) => row.name)).size === pending.migrations.length, 'duplicate pending source migration name')
   assert(pending.migrations.every((row, index) => index === 0 || pending.migrations[index - 1].name.localeCompare(row.name) < 0), 'pending source migration inventory is not sorted')
   assert(pending.migrations.every((row) => !authority.migrations.some((applied) => applied.name === row.name)), 'pending source migration is claimed as applied')
@@ -342,7 +484,6 @@ export async function validateProductionMigrationAuthority(root) {
     && pending.source_schema.expected_isolated_replay_parity === 'ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE', 'pending source schema checksum/size mismatch')
   assert(exactObject(pending.proof, {
     database_scope: 'ISOLATED_REAL_POSTGRESQL_ONLY',
-    migration_test: 'gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts',
     authority_replay: 'tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay',
     production_database_touched: false,
   }), 'pending source migration proof boundary mismatch')
