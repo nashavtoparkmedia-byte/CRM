@@ -221,6 +221,34 @@
           "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
         },
         {
+          "path": "gravity-mvp/src/app/api/messages/delete/route.ts",
+          "previous_source_sha256": "6bad1afe9bfdfe275368e88b5a302af31971d0a346998dfd0e626f7ab34fad29",
+          "current_source_sha256": "d6b593694e283829700057db9dd5a9e50eb27327e59935b7620d49437cbef935",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/reaction/route.ts",
+          "previous_source_sha256": "4e1ad1c573a7a26c3156acf7e88e41d7fcfffee473a7560e1f126ea924a15c4f",
+          "current_source_sha256": "a88e9e7ae2759309370653139bbcd46d92c3c71b58a9af2a62164215b6366cb2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-image/route.ts",
+          "previous_source_sha256": "fa3dd6a2fe0e3199bd09f3c66ed6e911ad0ec68910c518ab14318f362dde7cd3",
+          "current_source_sha256": "0d0c2ae49b1e876bd25c4456645c7b83f77edcf49fdfde3aa97c8d3dd0ed7c9c",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-media/route.ts",
+          "previous_source_sha256": "bbff06c722bf495241f3c192d502a2c13e60398e6f21b34e6cd49742a0eac3f2",
+          "current_source_sha256": "fd793a7d5d44316863df3475cb95495b90258f6016302ac2a9cf54d0a5641562",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
           "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
           "previous_source_sha256": "405c8edb00dbf461fb0cff7e1f8899da43fc9c912b34d07174e4bdb3bd94fdb2",
           "current_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
@@ -240,6 +268,13 @@
           "current_source_sha256": "a02aefcfb78dde022fba2485d33dddaa0dd57670540e14259bce930f0c479332",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
           "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "96a19db6a7d8c9d3266c951370fd405ccc1e5ba069e44547b9ec262d6809d832",
+          "current_source_sha256": "9b8174b6dad9a8fde1289c7f85ffb8c5ac757a41ca616e1c98a8601e69498a4a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
         },
         {
           "path": "gravity-mvp/src/lib/ReachabilityService.ts",
