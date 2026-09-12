@@ -1,6 +1,6 @@
 {
-  "schema": "yoko.crm.pending-source-migrations.v1",
-  "version": 1,
+  "schema": "yoko.crm.pending-source-migrations.v2",
+  "version": 2,
   "status": "SOURCE_ONLY_NOT_APPLIED",
   "base_authority": {
     "path": "architecture/migrations/v1/production-migration-authority.json",
@@ -13,6 +13,9 @@
     "size": 143439,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
+  "authorized_owner_contexts": [
+    "calling"
+  ],
   "migrations": [
     {
       "name": "20260831120000_add_ai_call_campaign_product",
@@ -21,12 +24,31 @@
       "size": 11063,
       "owner_context": "calling",
       "classification": "EXPAND_ONLY",
-      "production_application": false
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "AiCallAdmissionControl",
+          "AiCallAdmissionLease",
+          "AiCallCampaign",
+          "AiCallCampaignAttempt",
+          "AiCallCampaignAuditEvent",
+          "AiCallCampaignMember"
+        ],
+        "columns": [
+          {
+            "table": "Call",
+            "column": "isSimulation"
+          }
+        ],
+        "forbidden_indexes": [
+          "Call_isSimulation_startedAt_idx"
+        ]
+      }
     }
   ],
   "proof": {
     "database_scope": "ISOLATED_REAL_POSTGRESQL_ONLY",
-    "migration_test": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts",
     "authority_replay": "tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay",
     "production_database_touched": false
   },

@@ -15,7 +15,22 @@ import {
 const root = process.cwd()
 const authorityPath = 'architecture/migrations/v1/production-migration-authority.json'
 const pendingSourcePath = 'architecture/migrations/v1/pending-source-migrations.json'
+const contextIndexPath = 'architecture/contexts/v1/context-index.json'
 const authority = JSON.parse(await readFile(path.join(root, authorityPath), 'utf8'))
+const pendingSource = JSON.parse(await readFile(path.join(root, pendingSourcePath), 'utf8'))
+
+/**
+ * This harness builds copy and mkdir targets out of artifact-supplied paths
+ * before the validator ever runs, so containment is checked here rather than
+ * trusted.
+ */
+function assertRepositoryRelative(relativePath) {
+  assert(typeof relativePath === 'string' && relativePath.length > 0, 'fixture path must be a non-empty string')
+  assert(!path.isAbsolute(relativePath) && !relativePath.split('/').includes('..'),
+    `fixture path escapes the repository: ${relativePath}`)
+  const resolved = path.resolve(root, relativePath)
+  assert(resolved.startsWith(`${path.resolve(root)}${path.sep}`), `fixture path escapes the repository: ${relativePath}`)
+}
 
 const [runtimeDockerfile, deployScript] = await Promise.all([
   readFile(path.join(root, 'gravity-mvp/Dockerfile'), 'utf8'),
@@ -90,6 +105,23 @@ try {
   await mkdir(path.join(fixture, 'architecture/migrations/v1'), { recursive: true })
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath), { recursive: true })
   await cp(path.join(root, pendingSourcePath), path.join(fixture, pendingSourcePath))
+  // Owner authorization is checked against the accepted context index, and each
+  // pending migration must point at a proof test that actually exists, so both
+  // have to be present in the fixture.
+  await mkdir(path.join(fixture, 'architecture/contexts/v1'), { recursive: true })
+  await cp(path.join(root, contextIndexPath), path.join(fixture, contextIndexPath))
+  // Owner authorization binds to the authorized contexts' manifest bytes.
+  await mkdir(path.join(fixture, 'architecture/contexts/v1/manifests'), { recursive: true })
+  for (const owner of pendingSource.authorized_owner_contexts) {
+    const manifest = `architecture/contexts/v1/manifests/${owner}.json`
+    assertRepositoryRelative(manifest)
+    await cp(path.join(root, manifest), path.join(fixture, manifest))
+  }
+  for (const row of pendingSource.migrations) {
+    assertRepositoryRelative(row.migration_test)
+    await mkdir(path.join(fixture, path.dirname(row.migration_test)), { recursive: true })
+    await cp(path.join(root, row.migration_test), path.join(fixture, row.migration_test))
+  }
   await cp(path.join(root, 'architecture/migrations/v1/provenance'), path.join(fixture, 'architecture/migrations/v1/provenance'), { recursive: true })
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
   await cp(
@@ -370,6 +402,179 @@ try {
   await writeFile(pendingPath, `${JSON.stringify(pending, null, 2)}\n`)
   await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration rollback strategy mismatch/)
   await cp(path.join(root, pendingSourcePath), pendingPath)
+
+  // --- pending-migration owner authorization -------------------------------
+  // A migration owned by a context nobody authorized still fails, so replacing
+  // the historical hardcoded owner did not open the door to any owner.
+  const writePending = async (mutate) => {
+    const draft = JSON.parse(await readFile(path.join(root, pendingSourcePath), 'utf8'))
+    mutate(draft)
+    await writeFile(pendingPath, `${JSON.stringify(draft, null, 2)}\n`)
+  }
+  const restorePending = () => cp(path.join(root, pendingSourcePath), pendingPath)
+
+  await writePending((draft) => { draft.migrations[0].owner_context = 'fleet_operations' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration record mismatch/)
+
+  // An owner that is not a real bounded context cannot authorize itself.
+  await writePending((draft) => {
+    draft.authorized_owner_contexts = ['calling', 'not_a_real_context']
+    draft.migrations[0].owner_context = 'not_a_real_context'
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization names unknown context/)
+
+  await writePending((draft) => { draft.authorized_owner_contexts = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization is empty/)
+
+  await writePending((draft) => { draft.authorized_owner_contexts = ['fleet_operations', 'calling'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization is not sorted and unique/)
+
+  // The old single-owner artifact shape is no longer accepted.
+  await writePending((draft) => { draft.schema = 'yoko.crm.pending-source-migrations.v1'; draft.version = 1 })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration authority identity mismatch/)
+
+  // --- per-migration proof and created-object evidence ---------------------
+  await writePending((draft) => { delete draft.migrations[0].migration_test })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /proof test path invalid/)
+
+  await writePending((draft) => {
+    draft.migrations[0].migration_test = 'gravity-mvp/src/modules/calling/internal/ai-calls/never-written.postgres.test.ts'
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /proof test is missing/)
+
+  await writePending((draft) => { delete draft.migrations[0].creates })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates declaration missing/)
+
+  await writePending((draft) => { delete draft.migrations[0].creates.forbidden_indexes })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates declaration shape mismatch/)
+
+  await writePending((draft) => { draft.migrations[0].creates.tables = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created tables invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.tables.reverse() })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created tables invalid/)
+
+  // Understating what the migration creates is rejected: the replay proof would
+  // otherwise verify rollback of only the declared subset.
+  await writePending((draft) => { draft.migrations[0].creates.tables = draft.migrations[0].creates.tables.slice(1) })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates undeclared table/)
+
+  // Overstating is rejected too, so the proof cannot demand objects that never appear.
+  await writePending((draft) => {
+    draft.migrations[0].creates.tables = [...draft.migrations[0].creates.tables, 'ZzTableThatIsNeverCreated'].sort()
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /declares table\(s\) it does not create/)
+
+  await writePending((draft) => { draft.migrations[0].creates.columns = [{ table: 'Call', column: 'is Simulation' }] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.columns = [{ table: 'Call', column: 'isSimulation', extra: 1 }] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns invalid/)
+
+  await writePending((draft) => {
+    draft.migrations[0].creates.columns = [
+      { table: 'Call', column: 'isSimulation' },
+      { table: 'Call', column: 'isSimulation' },
+    ]
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns are not sorted and unique/)
+
+  // A proof-test path that escapes the repository is refused before anything
+  // resolves it: this harness turns that path into a copy target.
+  for (const escape of [
+    'gravity-mvp/src/../../../shared-drop.postgres.test.ts',
+    '/etc/shared-drop.postgres.test.ts',
+    'gravity-mvp/src/./nested/../escape.postgres.test.ts',
+  ]) {
+    await writePending((draft) => { draft.migrations[0].migration_test = escape })
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), /proof test path invalid/)
+  }
+
+  // Understating the created objects would make the replay's rollback proof
+  // blind to exactly what it exists to check. The post-rollback column
+  // assertion has no other backstop, so both directions are covered.
+  await writePending((draft) => { draft.migrations[0].creates.columns = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /adds undeclared column/)
+
+  // Keep the genuine column so the over-declaration is what is being proved.
+  await writePending((draft) => {
+    draft.migrations[0].creates.columns = [
+      ...draft.migrations[0].creates.columns,
+      { table: 'Call', column: 'neverAdded' },
+    ].sort((left, right) => (`${left.table}.${left.column}` < `${right.table}.${right.column}` ? -1 : 1))
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /declares column\(s\) it does not add/)
+
+  await writePending((draft) => { draft.migrations[0].creates.tables = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created tables invalid/)
+
+  // forbidden_indexes had no value-level negative at all, which left the only
+  // guard on values reaching the replay's SQL builder untested.
+  await writePending((draft) => { draft.migrations[0].creates.forbidden_indexes = ['bad-name'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /forbidden indexes invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.forbidden_indexes = ['b_idx', 'a_idx'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /forbidden indexes invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.forbidden_indexes = ['a_idx', 'a_idx'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /forbidden indexes invalid/)
+
+  // Declaring an index the migration actually creates is a contradiction.
+  {
+    const migrationSql = await readFile(
+      path.join(root, pendingSource.migrations[0].path),
+      'utf8',
+    )
+    const createdIndex = /\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+"?([A-Za-z][A-Za-z0-9_]*)"?/iu.exec(migrationSql)
+    assert(createdIndex, 'fixture migration must create at least one index')
+    await writePending((draft) => { draft.migrations[0].creates.forbidden_indexes = [createdIndex[1]] })
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), /declares forbidden index\(es\) it creates/)
+  }
+
+  // A context index that is not the accepted artifact cannot authorize an owner.
+  const fixtureIndexPath = path.join(fixture, contextIndexPath)
+  for (const mutate of [
+    (index) => { index.schema = 'yoko.crm.context-index.v2' },
+    (index) => { index.contexts.push({ context: 'invented_context', path: 'architecture/contexts/v1/manifests/invented_context.json', sha256: 'f'.repeat(64) }) },
+    (index) => { index.contexts[0].path = 'architecture/contexts/v1/manifests/somewhere-else.json' },
+  ]) {
+    const index = JSON.parse(await readFile(path.join(root, contextIndexPath), 'utf8'))
+    mutate(index)
+    await writeFile(fixtureIndexPath, `${JSON.stringify(index, null, 2)}\n`)
+    if (index.schema !== 'yoko.crm.context-index.v1') {
+      await assert.rejects(() => validateProductionMigrationAuthority(fixture), /context index identity mismatch/)
+    } else if (index.contexts.some((entry) => !entry.path.endsWith(`${entry.context}.json`))) {
+      await assert.rejects(() => validateProductionMigrationAuthority(fixture), /not a manifest-backed context/)
+    } else {
+      // A well-formed but invented index entry still cannot authorize an owner,
+      // because authorization binds to a manifest whose bytes hash to the
+      // pinned digest.
+      await writePending((draft) => {
+        draft.authorized_owner_contexts = ['calling', 'invented_context']
+        draft.migrations[0].owner_context = 'invented_context'
+      })
+      await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner context has no manifest/)
+      await restorePending()
+    }
+  }
+  await cp(path.join(root, contextIndexPath), fixtureIndexPath)
+
+  // A manifest whose bytes no longer hash to the pinned digest cannot authorize
+  // its context, so rewriting a manifest does not silently widen ownership.
+  {
+    const owner = pendingSource.authorized_owner_contexts[0]
+    const ownerManifest = path.join(fixture, `architecture/contexts/v1/manifests/${owner}.json`)
+    const ownerBytes = await readFile(ownerManifest)
+    await writeFile(ownerManifest, Buffer.concat([ownerBytes, Buffer.from('\n')]))
+    await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner context manifest checksum mismatch/)
+    await writeFile(ownerManifest, ownerBytes)
+  }
+
+  // The shared proof block no longer carries a single migration's test path.
+  await writePending((draft) => { draft.proof.migration_test = 'gravity-mvp/src/anything.postgres.test.ts' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration proof boundary mismatch/)
+
+  await restorePending()
 
   // Rewriting an archived migration and every self-authored checksum is still
   // rejected by the independently captured raw predecessor runtime bytes.

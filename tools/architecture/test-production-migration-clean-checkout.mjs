@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { access, chmod, cp, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { access, chmod, cp, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { validateProductionMigrationAuthority } from './production-migration-authority.mjs'
@@ -26,12 +26,28 @@ try {
     await cp(path.join(root, relative), path.join(fixture, relative), { recursive: true })
   }
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
+  const pendingSource = JSON.parse(await readFile(
+    path.join(root, 'architecture/migrations/v1/pending-source-migrations.json'),
+    'utf8',
+  ))
   for (const relative of [
     'gravity-mvp/prisma/schema.prisma',
     'architecture/migrations/v1/production-migration-authority.json',
     'architecture/migrations/v1/predecessor-runtime-migration-inventory.json',
     'architecture/migrations/v1/pending-source-migrations.json',
+    // Pending-migration owner authorization resolves against the accepted
+    // context index, and each pending row names its own isolated-PostgreSQL
+    // proof test, so both are part of the authority's input surface.
+    'architecture/contexts/v1/context-index.json',
+    // Owner authorization binds to the authorized contexts' manifest bytes.
+    ...pendingSource.authorized_owner_contexts.map((owner) => `architecture/contexts/v1/manifests/${owner}.json`),
+    ...pendingSource.migrations.map((row) => row.migration_test),
   ]) {
+    // Artifact-supplied paths become mkdir and copy targets here, before the
+    // validator runs, so containment is checked rather than trusted.
+    assert(!path.isAbsolute(relative) && !relative.split('/').includes('..')
+      && path.resolve(root, relative).startsWith(`${path.resolve(root)}${path.sep}`),
+    `fixture path escapes the repository: ${relative}`)
     await mkdir(path.dirname(path.join(fixture, relative)), { recursive: true })
     await cp(path.join(root, relative), path.join(fixture, relative))
   }
