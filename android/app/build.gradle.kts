@@ -36,6 +36,7 @@ android {
         // notification field that can move the shell to another origin.
         buildConfigField("String", "CRM_ORIGIN", "\"https://yokoone.ru\"")
         buildConfigField("boolean", "IS_TEST_BUILD", "false")
+        buildConfigField("boolean", "CAPTURE_CONSOLE", "false")
         // Server-side gate. The shell never builds a /messages URL itself;
         // it hands the target to this path and the CRM decides where to go.
         buildConfigField("String", "OPEN_CHAT_PATH", "\"/messages/open\"")
@@ -78,6 +79,10 @@ android {
                 ?: "http://10.0.2.2:3002"
             buildConfigField("String", "CRM_ORIGIN", "\"$testOrigin\"")
             buildConfigField("boolean", "IS_TEST_BUILD", "true")
+            // Mirror page-level JavaScript errors into logcat so a failure that
+            // only happens in the device WebView can actually be read. Test
+            // builds only; the production variant below leaves this false.
+            buildConfigField("boolean", "CAPTURE_CONSOLE", "true")
 
             if (keystoreProperties != null) {
                 signingConfig = signingConfigs.getByName("release")
@@ -87,6 +92,7 @@ android {
         release {
             isMinifyEnabled = false
             isDebuggable = false
+            buildConfigField("boolean", "CAPTURE_CONSOLE", "false")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystoreProperties != null) {
                 signingConfig = signingConfigs.getByName("release")

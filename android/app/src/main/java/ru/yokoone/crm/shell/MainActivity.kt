@@ -14,6 +14,7 @@ import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.SslErrorHandler
 import android.webkit.ValueCallback
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -205,6 +206,7 @@ class MainActivity : AppCompatActivity() {
                 showContent()
                 currentTargetUrl = url ?: currentTargetUrl
                 rememberLastVisitedUrl()
+                emitConsoleCaptureSelfTest()
             }
         }
 
@@ -297,6 +299,32 @@ class MainActivity : AppCompatActivity() {
          * PermissionRequest.RESOURCE_AUDIO_CAPTURE — never the whole request.
          */
         override fun onPermissionRequest(request: PermissionRequest) = request.deny()
+
+        /**
+         * Mirror page-level JavaScript errors into logcat, test builds only.
+         *
+         * A failure that happens only inside the device WebView is otherwise
+         * unreadable: it renders as a generic "Application error" and the real
+         * exception never leaves the renderer. Chromium reports uncaught
+         * exceptions here, so this is the one place the message can be captured
+         * without attaching a desktop debugger.
+         *
+         * Deliberately narrow. Only ERROR level is taken, the text is capped,
+         * and the only other fields are the script name and line. No cookie, no
+         * request body and no page content is read, and nothing is written to
+         * disk or sent anywhere — it goes to logcat and nowhere else. A password
+         * cannot reach here: the CRM never writes one to the console, and the
+         * field's value is never part of an error message.
+         */
+        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+            if (!BuildConfig.CAPTURE_CONSOLE) return false
+            if (message.messageLevel() != ConsoleMessage.MessageLevel.ERROR) return false
+
+            val text = message.message().take(CONSOLE_MESSAGE_LIMIT)
+            val script = message.sourceId()?.substringAfterLast('/').orEmpty()
+            Log.e(CONSOLE_TAG, "$text | $script:${message.lineNumber()}")
+            return false
+        }
 
         override fun onShowFileChooser(
             webView: WebView,
@@ -457,8 +485,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Prove the capture path works before anyone relies on it.
+     *
+     * Emits one known error from inside the page, so a tester can confirm the
+     * pipeline end to end without having to reproduce the real fault first. If
+     * this line is absent from logcat, the capture is not working and any
+     * silence about the real error means nothing.
+     */
+    private fun emitConsoleCaptureSelfTest() {
+        if (!BuildConfig.CAPTURE_CONSOLE) return
+        val marker = "$CONSOLE_SELFTEST build=${BuildConfig.VERSION_NAME}"
+        webView.evaluateJavascript("console.error(${'"'}$marker${'"'})", null)
+    }
+
     companion object {
         private const val TAG = "YokoShell"
+        /** Single tag for everything the capture emits, so one filter finds it. */
+        const val CONSOLE_TAG = "YokoShellConsole"
+        const val CONSOLE_SELFTEST = "YOKO_CAPTURE_SELFTEST"
+        private const val CONSOLE_MESSAGE_LIMIT = 600
         private const val PREFS = "yoko_shell"
         private const val KEY_LAST_URL = "last_url"
     }
