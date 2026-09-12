@@ -235,8 +235,8 @@ class StageAContractTests(unittest.TestCase):
             workflow.count("uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"),
             12,
         )
-        self.assertIn("artifact-ids: '9786032152'", workflow)
-        self.assertIn("run-id: '33461902086'", workflow)
+        self.assertIn("artifact-ids: '10295593390'", workflow)
+        self.assertIn("run-id: '34682506102'", workflow)
 
     def test_application_and_builder_authorities_are_separate_and_fixed(self) -> None:
         workflow = (ROOT / ".github/workflows/coordinated-gravity-max-7d3b7f17.yml").read_text()
@@ -260,7 +260,7 @@ class StageAContractTests(unittest.TestCase):
         capture = workflow.split("- name: Capture exact public source authority identities", 1)[1].split(
             "- name: Set up one exact Buildx and BuildKit authority", 1
         )[0]
-        self.assertIn("artifact-ids: '9786032152'", download)
+        self.assertIn("artifact-ids: '10295593390'", download)
         self.assertIn("path: source-authority", download)
         self.assertIn("merge-multiple: true", download)
         self.assertIn("test -f source-authority/authoritative-ci-execution.json", capture)

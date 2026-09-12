@@ -56,25 +56,25 @@ jobs:
       - name: Download exact accepted source execution proof
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          artifact-ids: '9786032152'
+          artifact-ids: '10295593390'
           path: source-authority
           merge-multiple: true
           github-token: ${{ github.token }}
           repository: nashavtoparkmedia-byte/CRM
-          run-id: '33461902086'
+          run-id: '34682506102'
 
       - name: Capture exact public source authority identities
         run: |
           set -Eeuo pipefail
           test -f source-authority/authoritative-ci-execution.json
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/33461902086 \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/34682506102 \
             --output source-authority/run.json
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            'https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/33461902086/jobs?per_page=100' \
+            'https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/34682506102/jobs?per_page=100' \
             --output source-authority/jobs.json
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/9786032152 \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/10295593390 \
             --output source-authority/artifact.json
 
       - name: Set up one exact Buildx and BuildKit authority
