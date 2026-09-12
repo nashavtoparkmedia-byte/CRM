@@ -26,7 +26,7 @@ class MaxAdapter implements ChannelAdapter {
       content: params.content,
       options: {
         providerAccountId: binding.providerAccountId,
-        connectionId: binding.connectionId,
+        connectionId: binding.connectionId ?? undefined,
         isPersonal: binding.isMaxPersonal,
       },
     })
@@ -40,7 +40,7 @@ class TelegramAdapter implements ChannelAdapter {
     await getTelegramChannelDeliveryV1().sendText({
       target: binding.target,
       content: params.content,
-      connectionId: binding.connectionId,
+      connectionId: binding.connectionId ?? undefined,
       metadata: { chatId: params.chatId },
     })
   }
@@ -51,7 +51,7 @@ class TelegramAdapter implements ChannelAdapter {
 class WhatsAppAdapter implements ChannelAdapter {
   async send(params: SendMessageParams, binding: PreparedOutboundConversationV1) {
     await getWhatsAppChannelDeliveryV1().sendText({
-      connectionId: binding.connectionId,
+      connectionId: binding.connectionId ?? undefined,
       chatId: binding.target,
       content: params.content,
     })

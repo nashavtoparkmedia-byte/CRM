@@ -144,7 +144,7 @@ async function sendReactionToChannel(
     switch (outbound.channel) {
         case 'whatsapp':
             await getWhatsAppChannelDeliveryV1().sendReaction({
-                connectionId: outbound.connectionId,
+                connectionId: outbound.connectionId ?? undefined,
                 chatId: outbound.target,
                 messageId: externalMsgId,
                 emoji,
@@ -153,7 +153,7 @@ async function sendReactionToChannel(
             return { reactionConfirmed: true }
         case 'telegram':
             await getTelegramChannelDeliveryV1().sendReaction({
-                connectionId: outbound.connectionId,
+                connectionId: outbound.connectionId ?? undefined,
                 internalChatId: outbound.chatId!,
                 providerAccountId: outbound.providerAccountId,
                 identityTarget: outbound.identityTarget,
@@ -170,7 +170,7 @@ async function sendReactionToChannel(
                 emoji,
                 remove: isRemoving,
                 providerAccountId: outbound.providerAccountId,
-                connectionId: outbound.connectionId,
+                connectionId: outbound.connectionId ?? undefined,
                 isPersonal: outbound.isMaxPersonal,
             })
         default:

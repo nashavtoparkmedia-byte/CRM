@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
                     caption: caption || '',
                     mediaType,
                     providerAccountId: outbound.providerAccountId,
-                    connectionId: outbound.connectionId,
+                    connectionId: outbound.connectionId ?? undefined,
                     isPersonal: outbound.isMaxPersonal,
                 })
                 externalId = result.externalId || null
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
                     caption,
                     sendAsVoice: mediaType === 'voice',
                     sendAsDocument: mediaType === 'document',
-                    connectionId: outbound.connectionId,
+                    connectionId: outbound.connectionId ?? undefined,
                 })
             } catch (error: any) {
                 if (error?.message === 'No ready WhatsApp connection') {
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
                 filename,
                 mimeType,
                 caption,
-                connectionId: outbound.connectionId,
+                connectionId: outbound.connectionId ?? undefined,
             })
             // PR-Щ hotfix: TG может вернуть BigInt — приводим к string явно
             externalId = result.externalId != null ? String(result.externalId) : null

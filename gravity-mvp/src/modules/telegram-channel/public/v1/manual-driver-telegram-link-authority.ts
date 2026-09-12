@@ -11,7 +11,7 @@ export interface PreparedManualDriverTelegramLinkAuthorityV1 {
     contactId: string
     contactIdentityId: string
     providerAccountId: string | null
-    connectionId: string
+    connectionId: string | undefined
     target: string
     identityTarget: string
 }
@@ -249,7 +249,7 @@ export async function prepareManualDriverTelegramLinkAuthorityV1(input: {
         contactId: outbound.contactId,
         contactIdentityId: outbound.contactIdentityId,
         providerAccountId: outbound.providerAccountId,
-        connectionId: outbound.connectionId,
+        connectionId: outbound.connectionId ?? undefined,
         target,
         identityTarget: target,
     }

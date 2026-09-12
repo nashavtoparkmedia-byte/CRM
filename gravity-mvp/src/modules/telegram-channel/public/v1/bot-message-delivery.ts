@@ -8,7 +8,7 @@ export type TelegramBotInlineKeyboardV1 = TelegramBotInlineButtonV1[][]
 
 export type ExactTelegramBotDeliveryInputV1 = {
     providerAccountId: string | null
-    connectionId: string
+    connectionId: string | undefined
     peerId: string
     text: string
     inlineKeyboard?: TelegramBotInlineKeyboardV1

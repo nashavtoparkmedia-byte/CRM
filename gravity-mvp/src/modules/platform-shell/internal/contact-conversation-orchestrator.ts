@@ -121,8 +121,7 @@ function assertExactConversationBinding(
             expected.providerAccountId !== null
             && conversation.providerAccountId !== expected.providerAccountId
         )
-        || conversation.providerAccountId.trim() === ''
-        || conversation.providerAccountId === 'legacy'
+        || (conversation.providerAccountId !== null && conversation.providerAccountId.trim() === '')
     ) {
         throw new Error('CONTACT_CONVERSATION_BINDING_MISMATCH')
     }

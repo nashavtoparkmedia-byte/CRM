@@ -1364,27 +1364,59 @@ async function getTelegramClient(connection: any) {
 
 type ExactTelegramOutboundProof = {
     chatId: string
-    providerAccountId: string
+    providerAccountId?: string
     identityTarget: string
+}
+
+/**
+ * The transport a legacy unbound conversation routes through. Routing
+ * compatibility only: it persists nothing and resolves ONLY when exactly one
+ * active transport exists, so there is no second account to cross into and no
+ * choice to make. Zero or several fail closed.
+ */
+/**
+ * Media and reaction ids embed the provider account, and that key shape is the
+ * duplicate-detection key for already-persisted messages. Changing it would
+ * break dedup, so these two paths still need a concrete account and fail closed
+ * without one. This is a KEY-SHAPE requirement, not authorization: it never
+ * decides whose conversation or whose contact this is.
+ */
+function requireProviderAccountForKeyV1(value: string | undefined): string {
+    if (concreteOpaqueId(value) !== value || !value) {
+        throw new Error('TELEGRAM_PROVIDER_MESSAGE_KEY_ACCOUNT_REQUIRED')
+    }
+    return value
+}
+
+async function resolveLegacyTelegramCarrierV1(): Promise<string> {
+    const active = await (prisma as any).telegramConnection.findMany({
+        where: { isActive: true }, take: 2, select: { id: true },
+    })
+    if (active.length === 0) throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
+    if (active.length > 1) throw new Error('CONTACT_CONVERSATION_TRANSPORT_AMBIGUOUS')
+    return active[0].id
 }
 
 async function resolveExactTelegramOutboundPeer(
     target: string,
-    connectionId: string,
+    connectionId: string | undefined,
     proof: ExactTelegramOutboundProof,
 ) {
+    // A legacy conversation carries no transport; the single active carrier
+    // routes it. Provider-account provenance is deferred and asserts nothing.
+    const routedConnectionId = concreteOpaqueId(connectionId) === connectionId && connectionId
+        ? connectionId
+        : await resolveLegacyTelegramCarrierV1()
     if (
         !/^\d+$/.test(target)
         || target === '0'
-        || concreteOpaqueId(connectionId) !== connectionId
         || concreteOpaqueId(proof.chatId) !== proof.chatId
-        || concreteOpaqueId(proof.providerAccountId) !== proof.providerAccountId
         || proof.identityTarget !== target
     ) {
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
     const connection = await (prisma as any).telegramConnection.findUnique({
-        where: { id: connectionId, isActive: true },
+        where: { id: routedConnectionId, isActive: true },
     })
     if (!connection?.sessionString) {
         throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNAVAILABLE')
@@ -1438,18 +1470,22 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         })
         console.log(`[TG-SEND] Using specific connection: ${connectionId} (found: ${!!connection})`)
     } else {
-        connection = await (prisma as any).telegramConnection.findFirst({
-            where: { isActive: true, isDefault: true }
+        // ROUTING COMPATIBILITY for a legacy conversation that carries no
+        // transport binding and that no code path can ever add one to. It
+        // answers only "which socket carries this send": nothing is persisted,
+        // no binding is created, no provider account is invented, and no
+        // contact, identity or peer ownership changes. Every ownership guard in
+        // the outbound preparer has already run.
+        //
+        // It resolves ONLY when exactly one active transport exists, so there is
+        // no second account to cross into and no choice to make. Activating a
+        // second transport immediately makes these conversations ambiguous and
+        // they fail closed again, with no data change and no code change.
+        const carrierId = await resolveLegacyTelegramCarrierV1()
+        connection = await (prisma as any).telegramConnection.findUnique({
+            where: { id: carrierId, isActive: true },
         })
-        console.log(`[TG-SEND] Using default connection (found: ${!!connection})`)
-        
-        // Fallback to any active connection if default is not available
-        if (!connection) {
-             connection = await (prisma as any).telegramConnection.findFirst({
-                 where: { isActive: true }
-             })
-             console.log(`[TG-SEND] Fallback to any active connection (found: ${!!connection})`)
-        }
+        console.log('[TG-SEND] Legacy unbound conversation routed through the single active carrier')
     }
 
     if (!connection || !connection.sessionString) {
@@ -1610,7 +1646,7 @@ export async function sendTelegramMedia(
     filename: string,
     mimeType: string,
     caption: string | undefined,
-    connectionId: string,
+    connectionId: string | undefined,
     proof: ExactTelegramOutboundProof,
 ): Promise<{ success: boolean; externalId?: string }> {
     console.log(`[TG-MEDIA] START: phone=${phoneNumber} filename=${filename} mime=${mimeType} connId=${connectionId}`)
@@ -1661,7 +1697,7 @@ export async function sendTelegramMedia(
         return {
             success: true,
             externalId: rawExternalId
-                ? telegramMessageExternalId(proof.providerAccountId, proof.identityTarget, rawExternalId)
+                ? telegramMessageExternalId(requireProviderAccountForKeyV1(proof.providerAccountId), proof.identityTarget, rawExternalId)
                 : undefined,
         }
     } catch (err: any) {
@@ -1675,12 +1711,12 @@ export async function sendTelegramReaction(input: {
     messageId: string
     emoji: string
     remove: boolean
-    connectionId: string
+    connectionId?: string
     proof: ExactTelegramOutboundProof
 }): Promise<void> {
     const rawMessageId = exactTelegramProviderMessageId(
         input.messageId,
-        input.proof.providerAccountId,
+        requireProviderAccountForKeyV1(input.proof.providerAccountId),
         input.target,
     )
     const messageId = rawMessageId ? Number.parseInt(rawMessageId, 10) : Number.NaN

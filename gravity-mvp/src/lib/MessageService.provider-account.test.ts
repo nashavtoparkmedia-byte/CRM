@@ -731,14 +731,18 @@ describe('MessageService conversation transport routing', () => {
         }))
     })
 
-    test('fails a live-shaped Telegram bot chat closed when it has provider ownership but no transport binding', async () => {
+    test('routes a legacy unbound Telegram chat to the transport owner instead of failing closed here', async () => {
         mocks.chatFindUnique.mockResolvedValue(chat('telegram', {
             providerAccountId: 'telegram-default',
         }))
 
-        await expect(MessageService.send('chat-1', 'hello', 'telegram'))
-            .rejects.toThrow('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
-        expect(mocks.messageCreate).not.toHaveBeenCalled()
+        // The conversation carries no transport. This layer no longer rejects it:
+        // it forwards an absent connection so the Telegram transport owner can
+        // resolve the single active carrier, or fail closed itself.
+        await MessageService.send('chat-1', 'hello', 'telegram')
+        expect(mocks.telegramSendText).toHaveBeenCalledWith(expect.objectContaining({
+            connectionId: undefined,
+        }))
 
         const retry = failedMessage('telegram')
         retry.chat.metadata = {
@@ -756,13 +760,9 @@ describe('MessageService conversation transport routing', () => {
             },
         })
         mocks.messageFindUnique.mockResolvedValue(retry)
-        await expect(MessageService.retrySend('message-1')).resolves.toEqual({
-            success: false,
-            error: 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND',
-        })
-        expect(mocks.messageUpdate).not.toHaveBeenCalled()
-        expect(mocks.telegramSendText).not.toHaveBeenCalled()
-        expect(fetch).not.toHaveBeenCalled()
-        expect(mocks.queryRaw).not.toHaveBeenCalled()
+        await MessageService.retrySend('message-1')
+        expect(mocks.telegramSendText).toHaveBeenCalledWith(expect.objectContaining({
+            connectionId: undefined,
+        }))
     })
 })

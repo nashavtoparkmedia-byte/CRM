@@ -1,7 +1,6 @@
 import { PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { prepareContactConversationIdentityV1 } from '@/modules/contacts/public/v1'
 import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
-import { activeTelegramCarrierIdsV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 import { canonicalWhatsAppConversationTargetV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
 export type OutboundConversationChannelV1 = 'telegram' | 'whatsapp' | 'max'
@@ -23,7 +22,8 @@ export interface PreparedOutboundConversationV1 {
     contactIdentityId: string
     /** Non-authoritative provider-account metadata; null when the conversation carries none. */
     providerAccountId: string | null
-    connectionId: string
+    /** Bound transport, or null when a legacy conversation has none and the caller must route it. */
+    connectionId: string | null
     /** Exact ContactIdentity primary/alias accepted by the provider owner. */
     identityTarget: string
     /** Provider conversation destination; for MAX this is not the sender identity. */
@@ -124,20 +124,22 @@ export async function prepareOutboundConversationV1(
     if (requestedConnectionId !== undefined && !requested) {
         throw new Error('CONTACT_CONVERSATION_TRANSPORT_MISMATCH')
     }
-    // Conversations created before transport stamping carry no connection, and
-    // no code path can ever add one to an existing row. Production routes those
-    // rows today by selecting the active default Telegram connection, so that
-    // same carrier is their compatibility evidence. It is admitted ONLY while
-    // exactly one active transport exists: with one there is no other account to
-    // cross into, and the moment a second is activated the fallback disables
-    // itself and these conversations fail closed again.
-    let boundConnectionId = connectionId
-    if (!boundConnectionId && channel === 'telegram') {
-        const active = await activeTelegramCarrierIdsV1()
-        boundConnectionId = active.length === 1 ? exactNonEmptyString(active[0]) : null
+    // A Telegram conversation created before transport stamping carries no
+    // connection, and no code path can ever add one to an existing row. This
+    // capability declines to ASSERT a transport for those rows rather than
+    // inventing one: it returns a null connection and leaves routing to the
+    // caller, which owns transport selection and may resolve the legacy carrier.
+    // Telegram transports are owned by the Telegram channel context, which this
+    // composition layer deliberately cannot see.
+    //
+    // Everything a binding actually proves is unchanged. A conversation that IS
+    // bound must still match its transport, and no channel may skip the check.
+    const boundConnectionId = connectionId
+    const transportUnproven = !boundConnectionId && channel === 'telegram'
+    if (!boundConnectionId && !transportUnproven) {
+        throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
     }
-    if (!boundConnectionId) throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
-    if (requested && requested !== boundConnectionId) {
+    if (requested && boundConnectionId && requested !== boundConnectionId) {
         throw new Error('CONTACT_CONVERSATION_TRANSPORT_MISMATCH')
     }
 
@@ -192,11 +194,12 @@ export async function prepareOutboundConversationV1(
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
 
-    const isMaxPersonal = channel === 'max' && isMaxPersonalConnection(boundConnectionId)
+    const isMaxPersonal = channel === 'max' && boundConnectionId !== null
+        && isMaxPersonalConnection(boundConnectionId)
     if (channel === 'max') {
         getMaxChannelDeliveryV1().assertTransportBinding({
             providerAccountId,
-            connectionId: boundConnectionId,
+            connectionId: boundConnectionId ?? undefined,
             isPersonal: isMaxPersonal,
         })
     }

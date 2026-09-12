@@ -11,8 +11,8 @@ export interface WhatsAppChannelDeliveryV1 {
 
 export interface TelegramChannelDeliveryV1 {
     sendText(input: { target: string, content: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string } }): Promise<unknown>
-    sendMedia(input: { target: string, internalChatId: string, providerAccountId: string, identityTarget: string, base64: string, filename: string, mimeType: string, caption?: string, connectionId: string }): Promise<{ success: boolean, externalId?: string }>
-    sendReaction(input: { connectionId: string, internalChatId: string, providerAccountId: string, identityTarget: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
+    sendMedia(input: { target: string, internalChatId: string, providerAccountId: string | null, identityTarget: string, base64: string, filename: string, mimeType: string, caption?: string, connectionId?: string }): Promise<{ success: boolean, externalId?: string }>
+    sendReaction(input: { connectionId?: string, internalChatId: string, providerAccountId: string | null, identityTarget: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
 }
 
 export interface MaxTextDeliveryResultV1 {

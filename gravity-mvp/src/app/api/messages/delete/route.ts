@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
                 chatId: outbound.target,
                 messageId: message.externalId,
                 providerAccountId: outbound.providerAccountId,
-                connectionId: outbound.connectionId,
+                connectionId: outbound.connectionId ?? undefined,
                 isPersonal: outbound.isMaxPersonal,
             })
         }

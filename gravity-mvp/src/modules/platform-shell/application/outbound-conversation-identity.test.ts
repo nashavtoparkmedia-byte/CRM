@@ -125,39 +125,41 @@ describe('outbound person-conversation classification', () => {
             })
     })
 
-    test.each([
-        ['exactly one active transport is admitted', ['telegram-connection-1'], 'ok'],
-        ['two active transports fail closed', ['a', 'b'], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
-        ['no active transport fails closed', [], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
-    ] as const)('legacy unbound Telegram conversation: %s', async (_label, carriers, expected) => {
-        mocks.activeTelegramCarriers.mockResolvedValue([...carriers])
+    test('declines to assert a transport for a legacy unbound Telegram conversation', async () => {
         mocks.prepareIdentity.mockResolvedValue({
             status: 'ready',
             contact: { id: 'contact-1', displayName: 'Contact' },
             identity: {
-                id: 'identity-1',
-                channel: 'telegram',
-                externalId: '42',
-                providerAccountId: null,
-                providerAliasValues: [],
+                id: 'identity-1', channel: 'telegram', externalId: '42',
+                providerAccountId: null, providerAliasValues: [],
             },
         })
-        // 58 of 167 production Telegram conversations carry no connectionId and
-        // none can ever gain one. Production routes them today through the single
-        // active default transport, so that carrier is admitted here - but only
-        // while exactly one exists, so a second account can never claim them.
-        const unbound = {
-            ...telegramChat('private'),
-            metadata: { chatKind: 'private' },
-        }
+        // 58 of 167 production Telegram conversations carry no connection and none
+        // can ever gain one. This capability does not invent a transport for them:
+        // it returns null and leaves routing to the Telegram transport owner,
+        // which this composition layer deliberately cannot see. Every ownership
+        // guard below still ran.
+        const unbound = { ...telegramChat('private'), metadata: { chatKind: 'private' } }
 
-        if (expected === 'ok') {
-            await expect(prepareOutboundConversationV1(unbound)).resolves.toMatchObject({
-                connectionId: 'telegram-connection-1',
-                target: '42',
-            })
-        } else {
-            await expect(prepareOutboundConversationV1(unbound)).rejects.toThrow(expected)
-        }
+        await expect(prepareOutboundConversationV1(unbound)).resolves.toMatchObject({
+            connectionId: null,
+            target: '42',
+            contactId: 'contact-1',
+            contactIdentityId: 'identity-1',
+        })
+    })
+
+    test('still rejects a requested transport that disagrees with a bound conversation', async () => {
+        mocks.prepareIdentity.mockResolvedValue({
+            status: 'ready',
+            contact: { id: 'contact-1', displayName: 'Contact' },
+            identity: {
+                id: 'identity-1', channel: 'telegram', externalId: '42',
+                providerAccountId: null, providerAliasValues: [],
+            },
+        })
+
+        await expect(prepareOutboundConversationV1(telegramChat('private'), 'telegram-connection-other'))
+            .rejects.toThrow('CONTACT_CONVERSATION_TRANSPORT_MISMATCH')
     })
 })

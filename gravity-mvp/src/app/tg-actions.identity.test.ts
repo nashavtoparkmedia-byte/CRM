@@ -743,4 +743,27 @@ describe('GramJS private conversation identity admission', () => {
         expect(mocks.createMessage).not.toHaveBeenCalled()
     })
 
+
+    // Routing compatibility for the production Telegram conversations that carry
+    // no transport binding and can never gain one. It answers only which socket
+    // carries the send. It resolves ONLY when exactly one active transport
+    // exists, so there is no second account to cross into and no choice to make.
+    describe('legacy unbound Telegram carrier', () => {
+        const legacyPrepared = {
+            chatId: "chat-legacy", channel: "telegram", contactId: "contact-1",
+            contactIdentityId: "identity-1", providerAccountId: null, connectionId: null,
+            identityTarget: "42", target: "42", isMaxPersonal: false,
+        }
+
+        test.each([
+            ['no active carrier', [], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
+            ['several active carriers', [{ id: 'a' }, { id: 'b' }], 'CONTACT_CONVERSATION_TRANSPORT_AMBIGUOUS'],
+        ])('fails closed with %s', async (_label, carriers, expected) => {
+            mocks.prepareOutbound.mockResolvedValue(legacyPrepared)
+            mocks.telegramConnectionFindMany.mockResolvedValue(carriers)
+
+            await expect(sendTelegramMessage("42", "legacy", undefined, { chatId: "chat-legacy" }))
+                .rejects.toThrow(expected)
+        })
+    })
 })

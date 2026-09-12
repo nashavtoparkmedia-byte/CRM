@@ -18,7 +18,7 @@ const capability: TelegramChannelDeliveryV1 = {
             input.connectionId,
             {
                 chatId: input.internalChatId,
-                providerAccountId: input.providerAccountId,
+                providerAccountId: input.providerAccountId ?? undefined,
                 identityTarget: input.identityTarget,
             },
         )
@@ -32,7 +32,7 @@ const capability: TelegramChannelDeliveryV1 = {
             connectionId: input.connectionId,
             proof: {
                 chatId: input.internalChatId,
-                providerAccountId: input.providerAccountId,
+                providerAccountId: input.providerAccountId ?? undefined,
                 identityTarget: input.identityTarget,
             },
         })

@@ -512,7 +512,10 @@ export class MessageService {
         const channel = targetChat.channel
         const currentChatId = targetChatId
         const outboundBinding = await prepareOutboundConversationV1(targetChat, profileId)
-        const routedConnectionId = outboundBinding.connectionId
+        // A bound conversation routes through its own transport. A legacy Telegram
+        // row carries none, and the Telegram transport owner resolves the single
+        // active carrier for it, or fails closed.
+        const routedConnectionId = outboundBinding.connectionId ?? undefined
         const rawExternalChatId = outboundBinding.target
         let providerQuotedMsgId = channel === 'max' ? undefined : quotedMsgId
         let providerQuotedText: string | undefined
@@ -904,7 +907,9 @@ export class MessageService {
         try {
             const chat = message.chat
             const rawExternalId = outboundBinding.target
-            const connId = outboundBinding.connectionId
+            // Same rule on retry: the binding when there is one, otherwise the
+            // Telegram transport owner resolves the single active carrier.
+            const connId = outboundBinding.connectionId ?? undefined
 
             switch (message.channel) {
                 case 'whatsapp': {

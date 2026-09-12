@@ -62,19 +62,6 @@ export async function register() {
         messaging.registerOutboundConversationPreparerV1(
             platform.prepareOutboundConversationV1,
         )
-        // Legacy Telegram conversations carry no transport binding and none can
-        // ever be added to them. This supplies the same carrier the deployed
-        // build already selects, and the preparer admits it only while exactly
-        // one Telegram transport is active.
-        messaging.registerActiveTelegramCarrierResolverV1(async () => {
-            const { prisma } = await import('@/lib/prisma')
-            const active = await prisma.telegramConnection.findMany({
-                where: { isActive: true },
-                orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
-                select: { id: true },
-            })
-            return active.map(connection => connection.id)
-        })
         opsLog('info', 'outbound_conversation_preparer_registered', {
             operation: 'instrumentation',
         })

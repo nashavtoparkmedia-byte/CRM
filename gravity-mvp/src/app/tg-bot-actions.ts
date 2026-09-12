@@ -67,7 +67,7 @@ export async function sendTelegramBotMessage(
             peerId: outbound.target,
             text,
             providerAccountId: outbound.providerAccountId,
-            connectionId: outbound.connectionId,
+            connectionId: outbound.connectionId ?? undefined,
             ...(inlineKeyboard ? { inlineKeyboard } : {}),
         })
 

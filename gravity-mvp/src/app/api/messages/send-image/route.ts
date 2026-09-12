@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
             caption: caption || '',
             mediaType: 'image',
             providerAccountId: outbound.providerAccountId,
-            connectionId: outbound.connectionId,
+            connectionId: outbound.connectionId ?? undefined,
             isPersonal: outbound.isMaxPersonal,
         })
 
