@@ -165,6 +165,76 @@
           "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
         },
         {
+          "path": "gravity-mvp/src/app/api/debug-db/find-message/route.ts",
+          "previous_source_sha256": "53abb2c514ab579ab20c25906296f2d722146ddeae651f6e1b903fac1d4c1ceb",
+          "current_source_sha256": "ebdf92a812f4a6a3db5744f0ee3cad587e6d36183f08d424c6f2924dfcde0129",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
+          "previous_source_sha256": "8fadce79a46f238eb8268ec24f727c07a7f242af12fb1458fb91cbb9e534a1a4",
+          "current_source_sha256": "a6204d16c3495a86586f61092f7eb7de433a2b55c6ce8a05b9a9a61d70bb6658",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
+          "previous_source_sha256": "93c80eb07e7e1c443418f82cf4f7d8d877664aae9e4cf98e3aaebf79d5419b77",
+          "current_source_sha256": "90fe7247e4ab20cc9242546db1bb8ea2d5211744db32f5490cfc557ea20a6828",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/list-all-chats/route.ts",
+          "previous_source_sha256": "fcf0c0b4d89a0cb1684251723d13d5e34b3836d9afecb2beefb64c8eb97c0d26",
+          "current_source_sha256": "c54f24d999b53fd535ef797e5024fa903665a66a186f785e4887bcb9b32833dd",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/route.ts",
+          "previous_source_sha256": "b8e00a6ef135d0c31e038eca216d25c4d070352eaf944c42f2c91c0f7f110001",
+          "current_source_sha256": "66288a0cf5ca6920e6f5a9b86e5f7c9e0dddeb62eaa909f5dc255a5caaf47253",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
+          "previous_source_sha256": "e25f5309d35e263f6c2e92832b24774714352d618c91ecdeb59741c19a81be39",
+          "current_source_sha256": "97aa562f5e05b1ffd0a21f7b813dca21c181f3848c70f95d6c0fe14cc6fc459e",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
+          "previous_source_sha256": "697aaf95d1dcdc7c49e3a1045b95011d01a4f70e11a6776aee730c8c2ebbbd32",
+          "current_source_sha256": "8df95860180c526a5b5400d7e2767f8fa84071a2f572430deec8eb4732d471d4",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
+          "previous_source_sha256": "153598dad6a6a6555a57c953f0eff6a9286e11bf7f1e00b500bcf735d25cd5d6",
+          "current_source_sha256": "9f76462729b286cb72d3cd3b499419138521220aa9c3934749ec8e5986854476",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.ts",
+          "previous_source_sha256": "a88c5ce3df895330f9b30f1665727a0598aaf577d8c2cf5d99e6ceaf255ba403",
+          "current_source_sha256": "4341248793dccfd45123bd012cb638764e510d593e7735272c2fd1199126e6d7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "previous_source_sha256": "405c8edb00dbf461fb0cff7e1f8899da43fc9c912b34d07174e4bdb3bd94fdb2",
+          "current_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface had the provider-account arms removed from its ingress collision ladder, because provider-account isolation is deferred and those arms had no satisfiable production carrier. The contradiction arms it keeps are unchanged. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
           "path": "gravity-mvp/src/app/calls/[id]/CallDetailClient.tsx",
           "previous_source_sha256": "a9b257b3e9a6439a44327e117d147a1c71fc5e47dc6043440186176eff263891",
           "current_source_sha256": "61bba3382a6d122fffd76e8d0697267b98fe5de960670c173968014dd141272d",
@@ -177,6 +247,13 @@
           "current_source_sha256": "a02aefcfb78dde022fba2485d33dddaa0dd57670540e14259bce930f0c479332",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
           "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/lib/ReachabilityService.ts",
+          "previous_source_sha256": "a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd",
+          "current_source_sha256": "f255eb5c02644163a346dafd0d82cbd1d1094d571385a9986dafa0f0c726b012",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
         }
       ],
       "invariants": {
