@@ -15,7 +15,9 @@ const { SessionController }        = require('./session/SessionController')
 const {
   TransportInterceptor,
   OP,
+  selectPendingLiveDomCandidates,
   evaluatePhoneResolutionUiSend,
+  isUiTextSubmitObserved,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
@@ -24,6 +26,7 @@ const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
+const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -35,6 +38,7 @@ const USER_DATA_DIR        = path.join(__dirname, 'user_data')
 const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
+const BIDIRECTIONAL_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.bidirectional_history_recovery_v1')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -44,6 +48,8 @@ const UI_CHAT_ID_OVERRIDES = {
   '902454841098': '511708938',
   // Live inbound fallback observed in prod: protocol dialog id differs from browser route.
   '901943199056': '66896',
+  // Live outbound route observed in prod: protocol dialog id differs from browser route.
+  '902136564252': '193432092',
 }
 
 function protocolChatIdForUiRoute(routeId) {
@@ -339,6 +345,36 @@ function cachedPhoneForChatId(...chatIds) {
     if (phone) return phone
   }
   return null
+}
+
+async function runOneTimeBidirectionalHistoryRecovery() {
+  if (fs.existsSync(BIDIRECTIONAL_HISTORY_RECOVERY_FLAG)) {
+    return { status: 'already_completed' }
+  }
+
+  const sinceTs = Date.now() - 7 * 24 * 60 * 60 * 1000
+  console.log(`[MirrorRecovery] Importing MAX history since ${new Date(sinceTs).toISOString()}`)
+  const result = await initialSync.runIfNeeded('last_n_days', { sinceTs })
+  if (result?.status === 'failed') {
+    throw new Error('MAX bidirectional history recovery failed')
+  }
+
+  fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+  fs.writeFileSync(BIDIRECTIONAL_HISTORY_RECOVERY_FLAG, JSON.stringify({
+    completedAt: new Date().toISOString(),
+    sinceTs,
+    result,
+  }))
+  return result
+}
+
+async function runBidirectionalHistoryRecoverySafely() {
+  try {
+    const recoveryResult = await runOneTimeBidirectionalHistoryRecovery()
+    console.log('[MirrorRecovery] Result:', recoveryResult)
+  } catch (e) {
+    console.error('[MirrorRecovery] Error:', e.message)
+  }
 }
 
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
@@ -888,6 +924,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     const downloaded = []
     for (const att of msg.attachments) {
       let attUrl = att.url
+      const attType = String(att.type || '').toLowerCase()
       if (!attUrl && att.name && ['audio', 'voice', 'file', 'document'].includes(String(att.type || '').toLowerCase())) {
         const uiRouteId = UI_CHAT_ID_OVERRIDES[String(rawChatId)] || UI_CHAT_ID_OVERRIDES[String(msg.chatId)] || String(rawChatId || msg.chatId)
         const domFile = await downloadDomFileAttachment(uiRouteId, att.name, att.mimeType, att.type)
@@ -901,9 +938,18 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
           continue
         }
       }
-      // VIDEO/FILE не несут прямой ссылки — только videoId/fileId+token.
-      // Резолвим через opcode 83/88 перед скачиванием (см. resolveAttachmentUrl).
-      if (!attUrl && transport) {
+      // MAX Web already resolves live video through its own binary op:83 flow.
+      // Read the resulting DOM video source; synthetic JSON op:83 closes the
+      // current binary WebSocket and must not be used.
+      if (!attUrl && attType === 'video') {
+        const domVideo = await materializeCurrentLiveDomVideoAttachment(msg, att)
+        if (domVideo?.url) {
+          downloaded.push({ ...att, ...domVideo, type: 'video', downloadStatus: 'ok' })
+          continue
+        }
+      }
+      // FILE/AUDIO may still require their existing resolver.
+      if (!attUrl && transport && attType !== 'video') {
         try {
           attUrl = await resolveAttachmentUrl(transport, att, msg.chatId, msg.id)
         } catch (e) {
@@ -1014,10 +1060,12 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
 
-async function sendText(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId) {
+async function sendText(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId, quotedMessageContext) {
   const cid = stableTextCid(clientMessageId)
   const message = { text, cid, elements: [], attaches: [] }
   if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
+  let resolvedReplyToMessageId = replyToMessageId ? String(replyToMessageId) : null
+  let resolvedReplyChatId = null
 
   const directUiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
   if (directUiRouteId && !replyToMessageId) {
@@ -1040,9 +1088,50 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
 
   const sendProtocolText = async (timeoutMs) => {
     const wsChatId = chatId
-    if (replyToMessageId && directUiRouteId) {
-      console.log(`[sendText] reply via WS protocol chatId=${chatId} uiRoute=${directUiRouteId}`)
+    if (replyToMessageId) {
+      const replyBridge = new MaxWebReplyBridge(page)
+      if (!isRealMaxMessageId(resolvedReplyToMessageId)) {
+        const resolved = await replyBridge.resolveProviderId(
+          wsChatId,
+          quotedMessageContext || {},
+          { uiChatId: directUiRouteId },
+        )
+        console.log(
+          `[sendText] reply target scan chatId=${chatId} route=${directUiRouteId || 'none'} ` +
+          `candidates=${resolved.candidateCount} text=${resolved.textMatchCount} ` +
+          `direction=${resolved.directionMatchCount} time=${resolved.timeWindowMatchCount} ` +
+          `routeMatches=${resolved.routeMatchCount} storeChat=${resolved.providerChatId || 'none'}`,
+        )
+        if (!isRealMaxMessageId(resolved.providerMessageId)) {
+          throw new Error(`Reply target has no unambiguous MAX provider id: ${resolved.reason}`)
+        }
+        resolvedReplyToMessageId = resolved.providerMessageId
+        resolvedReplyChatId = resolved.providerChatId || null
+        console.log(`[sendText] resolved DOM reply target chatId=${chatId} providerId=${resolvedReplyToMessageId.slice(0, 18)} via=${resolved.reason}`)
+      }
+      console.log(`[sendText] reply via MAX Web store chatId=${chatId} uiRoute=${directUiRouteId || 'none'}`)
+      const ackPromise = waitForUiSendAck(transport, timeoutMs)
+      const replyResult = await replyBridge.sendReply(
+        resolvedReplyChatId || wsChatId,
+        text,
+        resolvedReplyToMessageId,
+        cid,
+        { uiChatId: directUiRouteId },
+      )
+      const storeConfirmedId = isRealMaxMessageId(replyResult?.providerMessageId)
+        ? replyResult.providerMessageId
+        : null
+      if (storeConfirmedId) {
+        console.log(`[sendText] MAX Web store confirmed reply msgId=${storeConfirmedId}`)
+      }
+      const maxMsgId = storeConfirmedId || await ackPromise
+      if (!isRealMaxMessageId(maxMsgId)) {
+        throw new Error('Timeout: MAX Web reply confirmation')
+      }
+      console.log(`[Send] MAX assigned reply msgId=${maxMsgId} for chatId=${chatId}`)
+      return maxMsgId
     }
+
     const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId: wsChatId, message, notify: true }, { waitResponse: true, timeoutMs })
     // MAX responds with the created message; extract its server-assigned ID
     const maxMsgId = resp?.message?.id ? String(resp.message.id) : null
@@ -1063,7 +1152,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
     }
     if (!e.maxError) {
       if (replyToMessageId) {
-        const isOpcode64Timeout = /Timeout: opcode 64/i.test(String(e.message || ''))
+        const isOpcode64Timeout = /Timeout: (?:opcode 64|MAX Web reply)/i.test(String(e.message || ''))
         if (isOpcode64Timeout && typeof transport?.waitForStableWs === 'function') {
           console.warn('[sendText] reply send timed out; waiting for stable WS and retrying once with same cid')
           const stable = await transport.waitForStableWs(800, 8_000).catch(() => false)
@@ -1096,6 +1185,15 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
     }
     throw e
   }
+}
+
+function maskPhoneForLog(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits ? `***${digits.slice(-4)}` : '[redacted]'
+}
+
+function normalizeUiSendText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').replace(/\s+/g, ' ').trim()
 }
 
 async function fillEditableText(locator, value) {
@@ -1193,7 +1291,9 @@ async function sendTextViaUi(chatId, text, protocolChatId = null) {
       afterText = await composeEl.textContent().catch(() => '')
     }
 
-    const sent = !String(afterText || '').trim()
+    // An empty box is not proof of a send: a failed fill leaves it empty too, and
+    // that would mint a delivery proof for a message MAX never received.
+    const sent = isUiTextSubmitObserved(beforeText, afterText, text)
     if (!sent) {
       await page.screenshot({ path: '/tmp/max_send_ui_not_sent.png', fullPage: false }).catch(() => {})
     }
@@ -1532,17 +1632,18 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
   const safeName = String(filename || 'upload.bin').replace(/[^\w.\-]+/g, '_').slice(-120) || 'upload.bin'
   const tmpPath = path.join('/tmp', `max_upload_${Date.now()}_${safeName}`)
 
-  fs.writeFileSync(tmpPath, fileBuffer)
-  maxDeliveryLog({
-    operation: 'upload',
-    status: 'upload_started',
-    conversationId: protocolChatIdForUiRoute(chatId),
-    protocolChatId: protocolChatIdForUiRoute(chatId),
-    webRouteId: uiRouteId,
-    uploadId: safeName,
-  })
-  console.log(`[sendMediaUi] opening ${targetUrl} file=${safeName} mime=${mimeType}`)
+  uiSendInProgress = true
   try {
+    fs.writeFileSync(tmpPath, fileBuffer)
+    maxDeliveryLog({
+      operation: 'upload',
+      status: 'upload_started',
+      conversationId: protocolChatIdForUiRoute(chatId),
+      protocolChatId: protocolChatIdForUiRoute(chatId),
+      webRouteId: uiRouteId,
+      uploadId: safeName,
+    })
+    console.log(`[sendMediaUi] opening ${targetUrl} file=${safeName} mime=${mimeType}`)
     if (!page.url().includes(`/${uiRouteId}`)) {
       await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
       await page.waitForTimeout(1200)
@@ -1772,6 +1873,7 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
       uploadId: safeName,
     }
   } finally {
+    uiSendInProgress = false
     try { fs.unlinkSync(tmpPath) } catch {}
   }
 }
@@ -1974,6 +2076,7 @@ function hasNearbyDirectNumericDomCandidate(candidates, index) {
 
 function shouldKeepDomTextRecoveryCandidate(chatId, candidate, candidates, index) {
   if (candidate?._directHit) return true
+  if (candidate?._pendingLiveProviderCandidate) return true
   if (candidate?._liveDomSeriesCandidate) return true
   if (candidate?._liveDomContextBeforeDirect) return true
   if (!candidate?.text || candidate.attachments?.length) return true
@@ -2015,6 +2118,7 @@ function applyDomTextRecoveryLimits(chatId, candidates) {
   const groups = new Map()
   for (const candidate of candidates) {
     if (!candidate?.text || candidate.attachments?.length) continue
+    if (candidate._pendingLiveProviderCandidate) continue
     const key = domRecoveredTextKey(chatId, candidate.text)
     if (!key) continue
     if (!groups.has(key)) groups.set(key, { text: candidate.text, items: [], directCount: 0 })
@@ -2132,10 +2236,7 @@ function markLiveDomContextBeforeFirstDirect(recoverable, keepFrom, firstDirectI
 
 function estimateDomRecoveryTimestampMs(candidates, index) {
   const now = Date.now()
-  const anchors = candidates.map(candidate => {
-    const hit = candidate._directHit || findRecentDirectInboundText(candidate.chatId || candidate._chatId, candidate.text)
-    return directHitTimestampMs(hit)
-  })
+  const anchors = candidates.map(candidate => directHitTimestampMs(candidate._directHit))
 
   let prevIndex = -1
   let prevMs = null
@@ -2203,6 +2304,29 @@ function latestRecentOp128ChatId() {
   const entries = Array.from(transport._recentOp128ChatIds.entries())
     .sort((a, b) => b[1] - a[1])
   return entries[0]?.[0] || transport?._activeUiChatId || null
+}
+
+function singleRecentOp128ChatId(maxAgeMs = 2500) {
+  if (!transport?._recentOp128ChatIds) return null
+  const now = Date.now()
+  const recent = Array.from(transport._recentOp128ChatIds.entries())
+    .filter(([, seenAt]) => seenAt && now - seenAt <= maxAgeMs)
+    .sort((a, b) => b[1] - a[1])
+  return recent.length === 1 ? recent[0][0] : null
+}
+
+function providerIdFromEmptyOp180Snapshot(payload) {
+  const entries = payload?.messagesReactions?.__complexEntries
+  if (!Array.isArray(entries)) return null
+
+  const ids = [...new Set(entries
+    .filter(entry => {
+      const value = entry?.value
+      return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+    })
+    .map(entry => extractMaxId(entry.key))
+    .filter(isRealMaxMessageId))]
+  return ids.length === 1 ? ids[0] : null
 }
 
 function resolveEmptyOp71DomRecoveryChatId(decodedChatId, maxAgeMs = 15_000) {
@@ -2275,8 +2399,11 @@ function scheduleAutomaticDomMirrorRecovery(chatId, reason = 'missing_protocol_a
 
     try {
       const result = await forwardRecentDomMessages(chatIdStr, reason, {
-        includeOutgoing: true,
         freshOnly: true,
+        // An op:128 notification can represent a message sent from another
+        // MAX client too. The candidate still has to resolve to an exact
+        // provider message ID before it is accepted downstream.
+        includeOutgoing: true,
         enrichPeer: true,
       })
       console.log(`[domMirror] ${reason} chatId=${chatIdStr} result=${JSON.stringify(result).slice(0, 600)}`)
@@ -2309,16 +2436,28 @@ function isDomNoiseText(text) {
   return false
 }
 
-function domReplyQuoteLeafText(text) {
+function domReplyQuoteParts(text) {
   const lines = cleanDomMessageText(text).split('\n').map(line => line.trim()).filter(Boolean)
-  return lines.length >= 3 ? lines[lines.length - 1] : null
+  if (lines.length < 3) return null
+  return {
+    headerText: lines[0],
+    quotedText: lines.slice(1, -1).join('\n').trim(),
+    leafText: lines[lines.length - 1],
+  }
+}
+
+function domReplyQuoteLeafText(text) {
+  return domReplyQuoteParts(text)?.leafText || null
 }
 
 function looksLikeDomReplyQuoteText(chatId, candidate) {
   if (!candidate?.text || candidate.attachments?.length) return false
   if (candidate.hasReplyQuote) return true
-  const leafText = domReplyQuoteLeafText(candidate.text)
-  return !!leafText && recentDirectInboundTextHits(chatId, leafText).length > 0
+  const parts = domReplyQuoteParts(candidate.text)
+  if (!parts?.leafText) return false
+  if (recentDirectInboundTextHits(chatId, parts.leafText).length > 0) return true
+  if (parts.quotedText && recentDirectInboundTextHits(chatId, parts.quotedText).length > 0) return true
+  return false
 }
 
 function decodeBase64Payload(base64) {
@@ -2404,6 +2543,38 @@ async function materializeUrlAttachment(att) {
     console.warn(`[domFallback] media URL download failed type=${att.type || 'unknown'} name=${att.name || ''}: ${e.message}`)
     return null
   }
+}
+
+async function materializeCurrentLiveDomVideoAttachment(msg, att) {
+  if (!page || !isReady || !msg?.chatId) return null
+  const { uiRouteId } = resolveUiRouteIdForChat(msg.chatId)
+  if (!uiRouteId || !page.url().includes(`/${uiRouteId}`)) {
+    console.warn(`[media_dom_video_recovery] current route does not match chatId=${msg.chatId}`)
+    return null
+  }
+
+  const candidates = await scrapeRecentDomMessages(uiRouteId)
+  const inboundVideos = candidates.filter(candidate => {
+    const outgoing = Boolean(candidate.isOutgoing || (candidate.viewportW && candidate.x > candidate.viewportW * 0.55))
+    return !outgoing && candidate.attachments?.some(item => String(item.type || '').toLowerCase() === 'video' && item.url)
+  })
+  if (!inboundVideos.length) return null
+
+  const expectedVideoId = String(att?.videoId || '')
+  const exact = expectedVideoId
+    ? [...inboundVideos].reverse().find(candidate =>
+        candidate.attachments.some(item => String(item.url || '').includes(expectedVideoId))
+      )
+    : null
+  const candidate = exact || inboundVideos[inboundVideos.length - 1]
+  const rawVideo = [...candidate.attachments].reverse()
+    .find(item => String(item.type || '').toLowerCase() === 'video' && item.url)
+  if (!rawVideo) return null
+
+  const materialized = await materializeUrlAttachment(rawVideo)
+  if (!materialized?.url) return null
+  console.log(`[media_dom_video_recovery] chatId=${msg.chatId} messageId=${msg.id || 'n/a'} size=${materialized.size || 0}`)
+  return materialized
 }
 
 async function downloadDomFileAttachment(uiRouteId, fileName, mimeType = null, type = null) {
@@ -2778,8 +2949,72 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
     return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
   }
+  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+    ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
+    : null
+  let resolvedProviderId = pendingProviderId
+  const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+    ? domReplyQuoteParts(latest.text)
+    : null
+  const replyBridge = new MaxWebReplyBridge(page)
+  if (pendingProviderId) {
+    try {
+      const providerMessage = await replyBridge.readProviderMessage(
+        chatId,
+        pendingProviderId,
+        { uiChatId: uiRouteId },
+      )
+      if (!providerMessage.isOutgoing && providerMessage.text) {
+        latest = {
+          ...latest,
+          text: providerMessage.text,
+          _providerTimestamp: providerMessage.timestamp,
+          _replyToExternalId: providerMessage.replyToExternalId,
+          _providerStoreRecovered: true,
+        }
+      }
+    } catch (error) {
+      console.warn(`[domFallback] provider store lookup failed chatId=${chatId} msgId=${pendingProviderId}: ${error.message}`)
+    }
+  }
+  if (!resolvedProviderId && replyParts?.leafText && replyParts.quotedText) {
+    try {
+      const receivedAt = options.timestamp || Date.now()
+      const resolvedReply = await replyBridge.resolveInboundReply(
+        chatId,
+        {
+          bodyText: replyParts.leafText,
+          quotedText: replyParts.quotedText,
+          receivedAt,
+          sentAt: receivedAt,
+        },
+        { uiChatId: uiRouteId },
+      )
+      if (isRealMaxMessageId(resolvedReply.providerMessageId) && isRealMaxMessageId(resolvedReply.replyToExternalId)) {
+        resolvedProviderId = resolvedReply.providerMessageId
+        latest = {
+          ...latest,
+          text: replyParts.leafText,
+          _providerTimestamp: resolvedReply.timestamp,
+          _replyToExternalId: resolvedReply.replyToExternalId,
+          _providerStoreRecovered: true,
+        }
+        console.log(
+          `[domFallback] resolved DOM reply provider identity chatId=${chatId} ` +
+          `msgId=${resolvedProviderId} replyTo=${resolvedReply.replyToExternalId}`,
+        )
+      }
+    } catch (error) {
+      console.warn(`[domFallback] strict reply lookup failed chatId=${chatId}: ${error.message}`)
+    }
+  }
   if (reason === 'empty_op71_after_op128' && looksLikeDomReplyQuoteText(chatId, latest)) {
-    return { skipped: 'dom_reply_quote_text', text: latest.text }
+    const leafText = domReplyQuoteLeafText(latest.text)
+    if (resolvedProviderId && leafText && !isDomNoiseText(leafText)) {
+      latest = { ...latest, text: leafText, _domReplyQuoteLeafRecovered: true }
+    } else {
+      return { skipped: 'dom_reply_quote_text', text: latest.text }
+    }
   }
   if (latest._skipDomTextAlreadyRecovered) {
     return { skipped: 'dom_text_already_recovered', text: latest.text }
@@ -2799,12 +3034,9 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const text = attachments.length > 0 ? cleanDomMediaCaption(latest.text, attachments) : latest.text
   if (!text && !attachments.length) return { skipped: 'no_download_source', rawAttachments: latest.attachments?.length || 0 }
 
-  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && text && attachments.length === 0
-    ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
-    : null
   const externalId = isOutgoingCandidate
     ? stableDomMirrorMessageId(chatId, text, attachments, latest)
-    : (pendingProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
+    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
   domFallbackSeen.add(externalId)
 
@@ -2819,11 +3051,12 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     externalId,
     chatId: String(chatId),
     text,
-    timestamp: options.timestamp || Date.now(),
+    timestamp: latest._providerTimestamp || options.timestamp || Date.now(),
     messageType,
     attachments,
     isOutgoing: isOutgoingCandidate,
-    source: isOutgoingCandidate ? 'max_web_mirror' : (pendingProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
@@ -2926,13 +3159,43 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
       const directDisplayMinutes = recoverable
         .filter(candidate => candidate._directHit && Number.isFinite(candidate.displayMinute))
         .map(candidate => candidate.displayMinute)
+      const pendingLiveProviderCount = transport?.pendingLiveTextCountForDomRecovery?.(chatId) || 0
+      let providerBackedWithoutDirectAnchor = false
       if (!directDisplayMinutes.length) {
-        return {
-          success: false,
-          count: 0,
-          scanned: candidates.length,
-          attempted: 0,
-          skipped: { no_recent_direct_time_anchor: recoverable.length },
+        const providerBackedCandidates = selectPendingLiveDomCandidates(recoverable, pendingLiveProviderCount)
+        if (providerBackedCandidates.length) {
+          providerBackedWithoutDirectAnchor = true
+          for (const candidate of providerBackedCandidates) {
+            candidate._pendingLiveProviderCandidate = true
+            directDisplayMinutes.push(candidate.displayMinute)
+          }
+        } else if (liveWindowDetails.recentOp128Count > 0) {
+          const liveOnlyCandidates = selectPendingLiveDomCandidates(
+            recoverable,
+            Math.min(recoverable.length, liveWindowDetails.recentOp128Count),
+          )
+          if (!liveOnlyCandidates.length) {
+            return {
+              success: false,
+              count: 0,
+              scanned: candidates.length,
+              attempted: 0,
+              skipped: { no_recent_direct_time_anchor: recoverable.length },
+            }
+          }
+          for (const candidate of liveOnlyCandidates) {
+            candidate._liveDomSeriesCandidate = true
+            candidate._liveDomNoAnchorCandidate = true
+            directDisplayMinutes.push(candidate.displayMinute)
+          }
+        } else {
+          return {
+            success: false,
+            count: 0,
+            scanned: candidates.length,
+            attempted: 0,
+            skipped: { no_recent_direct_time_anchor: recoverable.length },
+          }
         }
       }
       const beforeTimeFilter = recoverable.length
@@ -2970,6 +3233,18 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
         preSkipped.dom_context_before_first_direct = keepFrom
         recoverable = recoverable.slice(keepFrom)
       }
+      const liveRecoveryNowMs = Date.now()
+      for (let i = 0; i < recoverable.length; i++) {
+        if (!recoverable[i]._directHit) {
+          const useLiveRecoveryTime = recoverable[i]._pendingLiveProviderCandidate || recoverable[i]._liveDomNoAnchorCandidate
+          const liveOffsetMs = (recoverable.length - i) * 250
+          recoverable[i]._recoveryTimestamp = new Date(
+            useLiveRecoveryTime
+              ? liveRecoveryNowMs - liveOffsetMs
+              : estimateDomRecoveryTimestampMs(recoverable, i)
+          ).toISOString()
+        }
+      }
       const beforeAnchorFilter = recoverable.length
       recoverable = recoverable.filter((candidate, index, list) =>
         shouldKeepDomTextRecoveryCandidate(chatId, candidate, list, index)
@@ -2980,10 +3255,10 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
         shouldKeepNumericDomRecoveryCandidate(candidate, list, index)
       )
       preSkipped.dom_numeric_future_filtered = beforeNumericFutureFilter - recoverable.length
-      for (let i = 0; i < recoverable.length; i++) {
-        if (!recoverable[i]._directHit) {
-          recoverable[i]._recoveryTimestamp = new Date(estimateDomRecoveryTimestampMs(recoverable, i)).toISOString()
-        }
+      if (providerBackedWithoutDirectAnchor) {
+        const beforePendingProviderFilter = recoverable.length
+        recoverable = recoverable.filter(candidate => candidate._pendingLiveProviderCandidate)
+        preSkipped.dom_pending_provider_window_filtered = beforePendingProviderFilter - recoverable.length
       }
       assignDomTextRecoveryBudgets(chatId, recoverable)
       assignDomRecoveryExternalIds(chatId, recoverable)
@@ -3676,6 +3951,11 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
           }
           if (composeEl) {
+            // `page` is shared. Automatic DOM recovery navigates it to other chats, and
+            // the route signal below would then read a conversation that has nothing to
+            // do with this send. Claim the page for the whole compose-and-bind window.
+            uiSendInProgress = true
+            try {
             // Dismiss "Add to contacts" banner if present (it may overlay compose area)
             const bannerDismiss = page.locator('button[aria-label*="Hide" i][aria-label*="contacts" i]').first()
             if (await bannerDismiss.isVisible({ timeout: 500 }).catch(() => false)) {
@@ -3684,8 +3964,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
             await composeEl.click()
             await page.waitForTimeout(200)
-            // Use keyboard.type() instead of fill() to trigger MAX's key-event listeners
-            await page.keyboard.type(messageToSend, { delay: 20 })
+            // A newline inside keyboard.type() is delivered as Enter, which submits the
+            // first line and leaves the rest behind. Use the same multiline-safe fill the
+            // text UI send path uses so the whole message reaches the compose box intact.
+            await fillEditableText(composeEl, messageToSend)
             await page.waitForTimeout(400)
             const composeTextBeforeSubmit = await composeEl.textContent().catch(() => '')
             console.log(`[ResolvePhone] Compose text after typing: "${(composeTextBeforeSubmit || '').slice(0, 50)}"`)
@@ -3697,29 +3979,123 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             const sendBtn = page.locator('button[aria-label*="Send message" i]').first()
             const sendBtnVisible = await sendBtn.isVisible({ timeout: 500 }).catch(() => false)
             if (sendBtnVisible) {
-              // If compose area still has text (Enter didn't send), click the send button
-              const afterEnterText = await composeEl.textContent().catch(() => '')
-              if ((afterEnterText || '').trim()) {
+              // Click send only when the box still holds exactly what was filled. A
+              // partially cleared box means MAX is mid-accept, and clicking again would
+              // deliver a second copy of the same message.
+              const afterEnterText = await composeEl.textContent().catch(() => null)
+              if (afterEnterText !== null
+                && normalizeUiSendText(afterEnterText) === normalizeUiSendText(messageToSend)) {
                 await sendBtn.click()
                 console.log(`[ResolvePhone] Clicked Send message button (Enter didn't send)`)
+                await page.waitForTimeout(600)
               } else {
                 console.log(`[ResolvePhone] Enter sent the message (compose area empty)`)
               }
             }
-            await page.waitForTimeout(300)
-            const composeTextAfterSubmit = await composeEl.textContent().catch(() => '')
-            const postSendFrames = capturedFrames.slice(sendFrameStartIndex)
-            const phoneUiOutcome = evaluatePhoneResolutionUiSend({
-              beforeText: composeTextBeforeSubmit,
-              afterText: composeTextAfterSubmit,
-              expectedText: messageToSend,
-              postActionFrames: postSendFrames,
-            })
-            console.log(`[ResolvePhone] UI submit observation: ${phoneUiOutcome.submitObserved ? 'exact_text_cleared' : 'unconfirmed'}; delivery=send_requested`)
-            console.log(`[ResolvePhone] Post-action frames:`,
-              postSendFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(' | '))
+            // Pressing Enter is not proof that MAX accepted the text. The compose box
+            // still holding it means nothing was submitted, so the operation must not
+            // report a send it did not perform.
+            // A detached or unreadable compose element reads as empty, which would score
+            // as a cleared box. Only a successful read can prove the text left.
+            const composeTextAfterSubmit = await composeEl.textContent().catch(() => null)
+            const uiOutcome = composeTextAfterSubmit === null
+              ? { submitObserved: false, confirmationSource: 'compose_unreadable', observedFrameCount: 0 }
+              : evaluatePhoneResolutionUiSend({
+                  beforeText: composeTextBeforeSubmit,
+                  afterText: composeTextAfterSubmit,
+                  expectedText: messageToSend,
+                  postActionFrames: capturedFrames.slice(sendFrameStartIndex),
+                })
+            if (!uiOutcome.submitObserved) {
+              console.warn(
+                `[ResolvePhone] compose did not clear the exact typed text ` +
+                `(${uiOutcome.confirmationSource}, frames=${uiOutcome.observedFrameCount}); treating as not sent`,
+              )
+              await returnHome(); cleanup()
+              return {
+                chatId: null,
+                chatIdSource: null,
+                uiSendAttempted: true,
+                submitObserved: false,
+                messageSent: false,
+              }
+            }
+            console.log(`[ResolvePhone] Waiting for a send signal bound to this action...`)
+            // Only two signals are bound to the action we just performed: the SPA
+            // navigating to the new dialog, and MAX echoing back our own message.
+            // Chat-list, common-chats and generic frames can describe any conversation,
+            // so they must never define the target of this send.
+            const expectedSubmittedText = normalizeUiSendText(messageToSend)
+            const echoCandidates = new Set()
+            let boundChatId = null
+            let boundChatIdSource = null
+            try {
+            for (let i = 0; i < 50 && !boundChatId; i++) {
+              await page.waitForTimeout(200)
+              const urlCid = page.url().match(/web\.max\.ru\/(\d{12,15})(?:[/?#]|$)/)?.[1]
+              if (urlCid) {
+                boundChatId = urlCid
+                boundChatIdSource = 'ui_route_url'
+                break
+              }
+              // Only frames captured after the submit belong to this send. The buffer
+              // starts filling when the phone-lookup dialog opens, so an earlier self
+              // echo from another chat would otherwise bind the wrong conversation.
+              for (const f of capturedFrames.slice(sendFrameStartIndex)) {
+                if (f.opcode !== 128) continue
+                const fp = Array.isArray(f.payload)
+                  ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+                  : f.payload
+                const sender = fp?.message?.sender
+                if (!fp?.chatId || sender == null) continue
+                if (!transport?._myUserId || String(sender) !== String(transport._myUserId)) continue
+                // Our own echo proves only that this account sent something. A second
+                // outbound in flight would otherwise bind its chat to this operation, so
+                // the echoed body must be the text this request just submitted.
+                if (normalizeUiSendText(fp.message.text) !== expectedSubmittedText) continue
+                const cId = String(fp.chatId)
+                if (!/^\d{10,15}$/.test(cId)) continue
+                // This is a first send to a phone with no known chat, so the conversation
+                // it creates is new. An id we already know belongs to some other thread.
+                if (chatCache.has(cId)) continue
+                echoCandidates.add(cId)
+              }
+              // Exactly one candidate is a binding. Two mean we cannot tell which chat
+              // this message went to, and guessing is what this path exists to avoid.
+              if (echoCandidates.size === 1) {
+                boundChatId = [...echoCandidates][0]
+                boundChatIdSource = 'op128_self_echo'
+              } else if (echoCandidates.size > 1) {
+                console.warn(`[ResolvePhone] ${echoCandidates.size} self-echo candidates; refusing to guess the target`)
+                break
+              }
+            }
+            if (boundChatId) {
+              console.log(`[ResolvePhone] send-bound chatId ${boundChatId} via ${boundChatIdSource}`)
+            } else {
+              const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 72, 128, 177, 180, 198].includes(f.opcode))
+              console.log(`[ResolvePhone] no send-bound chat id; observed opcodes:`,
+                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(' | '))
+            }
+            } catch (bindError) {
+              // The message is already submitted; only the chat-id binding failed.
+              console.warn(`[ResolvePhone] chat-id binding failed after a proven submit: ${bindError?.message || bindError}`)
+              boundChatId = null
+              boundChatIdSource = null
+            }
             await returnHome(); cleanup()
-            return phoneUiOutcome
+            // The send was attempted either way, so this is terminal for the HTTP
+            // operation. The chat id is reported only when a bound signal supplied it.
+            return {
+              chatId: boundChatId,
+              chatIdSource: boundChatIdSource,
+              uiSendAttempted: true,
+              submitObserved: true,
+              messageSent: true,
+            }
+            } finally {
+              uiSendInProgress = false
+            }
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
@@ -4788,10 +5164,10 @@ async function resolveAttachmentUrl(transport, att, chatId, messageId) {
     console.warn(`[ResolveAttachment] photo has photoId but no baseUrl/url route available chatId=${chatId} msgId=${messageId || 'n/a'}`)
     return null
   }
-  if (type === 'video' && att.videoId) {
-    opcode = OP.RESOLVE_VIDEO
-    payload = { videoId: att.videoId, ...(att.token ? { token: att.token } : {}), chatId, messageId: String(messageId) }
-  } else if ((type === 'file' || type === 'document' || type === 'audio' || type === 'voice') && (att.fileId || att.token)) {
+  if (type === 'video') {
+    return null
+  }
+  if ((type === 'file' || type === 'document' || type === 'audio' || type === 'voice') && (att.fileId || att.token)) {
     opcode = OP.RESOLVE_FILE
     payload = { fileId: att.fileId || att.token, ...(att.token ? { token: att.token } : {}), chatId, messageId: String(messageId) }
   } else {
@@ -4799,7 +5175,7 @@ async function resolveAttachmentUrl(transport, att, chatId, messageId) {
   }
   const resp = await transport.sendFrame(opcode, payload, { waitResponse: true })
   console.log(`[ResolveAttachment] opcode=${opcode} payload=${JSON.stringify(redactForStructuredLog(payload))} response=${JSON.stringify(redactForStructuredLog(resp)).slice(0, 800)}`)
-  return opcode === OP.RESOLVE_VIDEO ? findBestVideoUrl(resp) : findFirstUrl(resp)
+  return findFirstUrl(resp)
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
@@ -5074,6 +5450,20 @@ async function init() {
     // Пропускаем если реакция пришла в ответ на нашу собственную отправку (seq >= 500).
     if (data.opcode === 180 && data.payload?.messagesReactions) {
       try {
+        const liveProviderId = providerIdFromEmptyOp180Snapshot(data.payload)
+        const liveChatId = liveProviderId ? singleRecentOp128ChatId() : null
+        if (liveProviderId && liveChatId) {
+          const looseMedia = transport?.hasRecentLooseMediaForDomRecovery?.({ maxAgeMs: 15_000 })
+          if (looseMedia) {
+            const mediaEmit = transport?.emitPendingLooseMediaMessage?.(liveChatId, liveProviderId, { maxAgeMs: 15_000 })
+            console.log(`[op180live] provider id used for loose media chatId:${liveChatId} id:${liveProviderId} result=${JSON.stringify(mediaEmit || {})}`)
+          } else {
+            const registration = transport?.registerPendingLiveTextIdForDomRecovery?.(liveChatId, liveProviderId)
+            if (registration?.registered) {
+              console.log(`[op180live] provider id queued chatId:${liveChatId} id:${liveProviderId}`)
+            }
+          }
+        }
         const byMessage = extractReactionCountersFromMap(data.payload.messagesReactions)
         if (byMessage.size > 0) {
           const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
@@ -5166,11 +5556,7 @@ async function init() {
       setTimeout(() => {
         const chatId = latestRecentOp128ChatId()
         if (!chatId) return
-        const anchorHex = transport?._op71AnchorForLiveNotification?.(String(chatId)) || null
-        const hasPendingLive = (transport?._pendingLiveMessageIds?.get(String(chatId)) || []).length > 0
-        if (!anchorHex && !hasPendingLive) {
-          scheduleAutomaticDomMirrorRecovery(String(chatId), 'missing_protocol_anchor')
-        }
+        scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')
       }, 700)
     }
 
@@ -5277,6 +5663,7 @@ async function init() {
       console.log('[App] WS reconnected, userId:', userId, '— catch-up...')
       const result = await initialSync.runIfNeeded('from_connection_time')
       console.log('[App] Reconnect catch-up:', result)
+      await runBidirectionalHistoryRecoverySafely()
       return
     }
 
@@ -5287,6 +5674,8 @@ async function init() {
 
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
     console.log('[App] Initial sync:', syncResult)
+
+    await runBidirectionalHistoryRecoverySafely()
 
     // PR-П: периодический name-sync для outbound-only placeholder-чатов.
     // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,
@@ -5537,7 +5926,7 @@ app.post('/debug/dom-identity', async (req, res) => {
 })
 
 app.post('/send-message', async (req, res) => {
-  let { chatId, message, phone, quotedMsgId, uiChatId, clientMessageId } = req.body
+  let { chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })
   }
@@ -5567,32 +5956,42 @@ app.post('/send-message', async (req, res) => {
       extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId)
     } else {
       const liveResult = await resolvePhoneLive(digits, message)
-      // A UI send attempt is terminal for this HTTP operation: never issue a
-      // second protocol send. Only the send-specific UI result may mark it delivered.
+      // liveResult is either a plain chatId string, or an object from the UI send path.
       const uiSendAttempted = Boolean(liveResult && typeof liveResult === 'object' && liveResult.uiSendAttempted === true)
-      const uiDeliveryConfirmed = Boolean(uiSendAttempted && liveResult.deliveryConfirmed === true)
       const liveId = typeof liveResult === 'string'
         ? liveResult
         : (liveResult?.chatId ? String(liveResult.chatId) : null)
       if (uiSendAttempted) {
+        // A UI send attempt is terminal for this HTTP operation: never issue a second
+        // protocol send, whether or not a send-bound signal supplied the chat id.
+        if (liveResult.submitObserved !== true) {
+          // The text never left the compose box. Reporting success here would record a
+          // message the contact will never receive, so fail the operation instead.
+          console.error(`[Send] UI send for ${maskPhoneForLog(digits)} did not take effect; reporting failure`)
+          return res.status(502).json({
+            success: false,
+            error: 'MAX UI send did not take effect: the message was not submitted',
+            phone: digits,
+            chatId: null,
+            deliveryConfirmed: false,
+            deliveryStatus: 'failed',
+          })
+        }
         if (liveId) {
-          console.log(`[Send] UI-resolved: ${digits} → chatId ${liveId}`)
+          console.log(`[Send] UI-resolved: ${maskPhoneForLog(digits)} → chatId ${liveId} via ${liveResult.chatIdSource}`)
           extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
           if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
-          savePhoneChatId(digits, liveId)
+          savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
+        } else {
+          console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
         }
         return res.json({
           success: true,
           chatId: liveId,
           externalId: null,
-          deliveryConfirmed: uiDeliveryConfirmed,
-          deliveryStatus: uiDeliveryConfirmed ? 'delivered' : 'send_requested',
-          source: uiDeliveryConfirmed ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
-          deliveryProof: uiDeliveryConfirmed ? {
-            kind: 'ui_send_action',
-            clientMessageId: clientMessageId ? String(clientMessageId) : null,
-            actionConfirmed: true,
-          } : undefined,
+          deliveryConfirmed: false,
+          deliveryStatus: 'send_requested',
+          source: liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
         })
       }
       if (liveId) {
@@ -5663,7 +6062,15 @@ app.post('/send-message', async (req, res) => {
     })
 
     try {
-      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
+      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(
+        transport,
+        Number(chatId),
+        message,
+        quotedMsgId,
+        uiChatId,
+        clientMessageId,
+        { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
+      )))
       if (sendResult.success === false || sendResult.error) {
         throw new Error(sendResult.error || 'MAX text delivery failed')
       }
@@ -5705,7 +6112,15 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
+    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(
+      transport,
+      Number(chatId),
+      message,
+      quotedMsgId,
+      uiChatId,
+      clientMessageId,
+      { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
+    )))
     if (sendResult.success === false || sendResult.error) {
       throw new Error(sendResult.error || 'MAX text delivery failed')
     }

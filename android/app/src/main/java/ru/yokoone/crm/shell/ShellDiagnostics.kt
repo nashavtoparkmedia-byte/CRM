@@ -119,6 +119,30 @@ object ShellDiagnostics {
             var reason = event.reason;
             say('rejection', (reason && (reason.message || reason.digest)) || reason, '', 0);
           });
+          // Observe requests the page makes. A sign-in that never arrives is
+          // otherwise invisible: the button simply stays pending and nothing is
+          // recorded anywhere. Method, path, status and duration only — never a
+          // header, a body, a cookie or a form field.
+          var nativeFetch = window.fetch;
+          if (typeof nativeFetch === 'function') {
+            window.fetch = function (input, init) {
+              var started = Date.now();
+              var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+              var raw = (input && input.url) || String(input || '');
+              var path = raw;
+              try { path = new URL(raw, location.href).pathname; } catch (ignored) {}
+              console.error('YOKO_NET start ' + method + ' ' + path);
+              return nativeFetch.apply(this, arguments).then(function (response) {
+                console.error('YOKO_NET done ' + method + ' ' + path +
+                  ' status=' + response.status + ' ' + (Date.now() - started) + 'ms');
+                return response;
+              }, function (failure) {
+                console.error('YOKO_NET fail ' + method + ' ' + path +
+                  ' ' + (Date.now() - started) + 'ms | ' + String(failure && failure.message).slice(0, 120));
+                throw failure;
+              });
+            };
+          }
           console.error('$JS_MARKER run=$runId');
         })();
     """.trimIndent()

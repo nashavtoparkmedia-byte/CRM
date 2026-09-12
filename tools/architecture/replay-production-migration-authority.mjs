@@ -20,12 +20,16 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-function isolatedSchema(databaseUrl, predecessorRecovery) {
+function isolatedSchema(databaseUrl, predecessorRecovery, pendingCount = 1) {
   const parsed = new URL(databaseUrl)
   const base = parsed.searchParams.get('schema')
   const schema = predecessorRecovery ? `${base}_predecessor` : base
   assert(schema && /^yoko_migration_authority_replay_[a-z0-9_]+$/.test(schema), 'DATABASE_URL must select an isolated yoko_migration_authority_replay_* schema')
-  const longestSchema = predecessorRecovery ? `${schema}_fresh` : schema
+  // The longest derived name is the per-pending-migration rollback schema, not
+  // the recovery reference schema, so budget for the highest ordinal.
+  const longestSchema = predecessorRecovery
+    ? `${schema}_fresh`
+    : `${schema}_rollback_${Math.max(0, pendingCount - 1)}`
   assert(Buffer.byteLength(longestSchema) <= 63, `isolated replay schema name exceeds PostgreSQL's 63-byte identifier limit: ${longestSchema}`)
   parsed.searchParams.set('schema', schema)
   return { databaseUrl: parsed.toString(), schema }
@@ -114,13 +118,37 @@ function assertOutboxSane(databaseUrl, schema) {
   return outbox
 }
 
-async function assertPendingMigrationAtomicRollback(databaseUrl, schema, appliedMigrations, pendingMigrations) {
-  assert(pendingMigrations.length === 1, 'atomic rollback proof requires the exact single pending source migration')
-  const pending = pendingMigrations[0]
+const quotedList = (values) => values.map((value) => `'${value}'`).join(',')
+
+/**
+ * Atomic-rollback proof for one pending source migration.
+ *
+ * The objects the migration creates are read from its declared `creates`
+ * evidence rather than hardcoded, so the same proof covers a migration owned
+ * by any authorized context. `priorMigrations` are applied verbatim first, so
+ * a later pending migration is proved on top of the earlier ones.
+ *
+ * Prisma datamodel parity is only asserted for the final pending migration,
+ * because schema.prisma describes the complete pending set and an intermediate
+ * state legitimately lacks the tables a later migration still has to create.
+ */
+async function assertOnePendingMigrationAtomicRollback(databaseUrl, schema, priorMigrations, pending, ordinal, assertParity) {
   assert(/^[0-9a-z_]+$/u.test(pending.name), 'pending source migration name is unsafe')
-  const rollbackSchema = `${schema}_rollback`
+  const creates = pending.creates
+  assert(creates && Array.isArray(creates.tables) && creates.tables.length > 0,
+    `pending source migration declares no created tables: ${pending.name}`)
+  assert(creates.tables.every((table) => /^[A-Za-z][A-Za-z0-9_]*$/u.test(table))
+    && (creates.forbidden_indexes ?? []).every((name) => /^[A-Za-z][A-Za-z0-9_]*$/u.test(name))
+    && (creates.columns ?? []).every((entry) => /^[A-Za-z][A-Za-z0-9_]*$/u.test(entry.table) && /^[A-Za-z][A-Za-z0-9_]*$/u.test(entry.column)),
+    `pending source migration creates declaration is unsafe: ${pending.name}`)
+  const rollbackSchema = `${schema}_rollback_${ordinal}`
   assert(/^[a-z0-9_]+$/u.test(rollbackSchema) && Buffer.byteLength(rollbackSchema) <= 63, 'atomic rollback proof schema is invalid')
   assertSchemaAbsent(databaseUrl, rollbackSchema)
+  const tableList = quotedList(creates.tables)
+  const forbiddenIndexes = creates.forbidden_indexes ?? []
+  const indexPredicate = forbiddenIndexes.length > 0
+    ? `(tablename IN (${tableList}) OR indexname IN (${quotedList(forbiddenIndexes)}))`
+    : `tablename IN (${tableList})`
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'yoko-pending-migration-rollback-'))
   try {
     query(databaseUrl, `CREATE SCHEMA "${rollbackSchema}"`)
@@ -130,7 +158,7 @@ async function assertPendingMigrationAtomicRollback(databaseUrl, schema, applied
       path.join(root, 'gravity-mvp/prisma/migrations/migration_lock.toml'),
       path.join(workspace, 'migrations/migration_lock.toml'),
     )
-    for (const row of appliedMigrations) {
+    for (const row of priorMigrations) {
       const destination = path.join(workspace, 'migrations', row.name, 'migration.sql')
       await mkdir(path.dirname(destination), { recursive: true })
       await copyFile(canonicalSource(root, row), destination)
@@ -168,13 +196,14 @@ async function assertPendingMigrationAtomicRollback(databaseUrl, schema, applied
     `))
     assert(failedLedger.total === 1 && failedLedger.unfinished === 1 && failedLedger.rolled_back === 0,
       `failed Prisma migration ledger transition mismatch: ${JSON.stringify(failedLedger)}`)
-    const campaignTableNames = "'AiCallCampaign','AiCallCampaignMember','AiCallCampaignAttempt','AiCallAdmissionControl','AiCallAdmissionLease','AiCallCampaignAuditEvent'"
-    const remainingCampaignTables = query(databaseUrl, `SELECT count(*) FROM information_schema.tables WHERE table_schema='${rollbackSchema}' AND table_name IN (${campaignTableNames})`)
-    assert(remainingCampaignTables === '0', `failed pending migration left ${remainingCampaignTables} partial AI Call tables`)
-    const remainingCallColumn = query(databaseUrl, `SELECT count(*) FROM information_schema.columns WHERE table_schema='${rollbackSchema}' AND table_name='Call' AND column_name='isSimulation'`)
-    assert(remainingCallColumn === '0', 'failed pending migration left Call.isSimulation behind')
-    const remainingIndexes = query(databaseUrl, `SELECT count(*) FROM pg_indexes WHERE schemaname='${rollbackSchema}' AND (tablename IN (${campaignTableNames}) OR indexname='Call_isSimulation_startedAt_idx')`)
-    assert(remainingIndexes === '0', `failed pending migration left ${remainingIndexes} campaign/simulation indexes behind`)
+    const remainingTables = query(databaseUrl, `SELECT count(*) FROM information_schema.tables WHERE table_schema='${rollbackSchema}' AND table_name IN (${tableList})`)
+    assert(remainingTables === '0', `failed pending migration left ${remainingTables} partial tables: ${pending.name}`)
+    for (const entry of creates.columns ?? []) {
+      const remainingColumn = query(databaseUrl, `SELECT count(*) FROM information_schema.columns WHERE table_schema='${rollbackSchema}' AND table_name='${entry.table}' AND column_name='${entry.column}'`)
+      assert(remainingColumn === '0', `failed pending migration left ${entry.table}.${entry.column} behind: ${pending.name}`)
+    }
+    const remainingIndexes = query(databaseUrl, `SELECT count(*) FROM pg_indexes WHERE schemaname='${rollbackSchema}' AND ${indexPredicate}`)
+    assert(remainingIndexes === '0', `failed pending migration left ${remainingIndexes} declared indexes behind: ${pending.name}`)
 
     runPrisma(workspace, rollbackUrl.toString(), [
       'migrate', 'resolve', '--rolled-back', pending.name, '--schema', 'schema.prisma',
@@ -193,29 +222,36 @@ async function assertPendingMigrationAtomicRollback(databaseUrl, schema, applied
     await writeFile(migrationPath, source)
     runPrisma(workspace, rollbackUrl.toString(), ['migrate', 'deploy', '--schema', 'schema.prisma'])
     runPrisma(workspace, rollbackUrl.toString(), ['migrate', 'status', '--schema', 'schema.prisma'])
-    assert(finishedMigrationCount(rollbackUrl.toString(), rollbackSchema) === appliedMigrations.length + 1,
+    assert(finishedMigrationCount(rollbackUrl.toString(), rollbackSchema) === priorMigrations.length + 1,
       'resolved pending migration retry did not produce the exact finished migration denominator')
-    const appliedCampaignTables = query(databaseUrl, `SELECT count(*) FROM information_schema.tables WHERE table_schema='${rollbackSchema}' AND table_name IN (${campaignTableNames})`)
-    assert(appliedCampaignTables === '6', `resolved pending migration retry created ${appliedCampaignTables}/6 AI Call tables`)
-    const appliedCallColumn = query(databaseUrl, `SELECT count(*) FROM information_schema.columns WHERE table_schema='${rollbackSchema}' AND table_name='Call' AND column_name='isSimulation'`)
-    assert(appliedCallColumn === '1', 'resolved pending migration retry did not create Call.isSimulation')
-    const forbiddenCallIndex = query(databaseUrl, `SELECT count(*) FROM pg_indexes WHERE schemaname='${rollbackSchema}' AND indexname='Call_isSimulation_startedAt_idx'`)
-    assert(forbiddenCallIndex === '0', 'pending migration unexpectedly created the blocking Call simulation index')
-    assertPrismaDatamodelParity(workspace, rollbackUrl.toString())
+    const appliedTables = query(databaseUrl, `SELECT count(*) FROM information_schema.tables WHERE table_schema='${rollbackSchema}' AND table_name IN (${tableList})`)
+    assert(appliedTables === String(creates.tables.length),
+      `resolved pending migration retry created ${appliedTables}/${creates.tables.length} declared tables: ${pending.name}`)
+    for (const entry of creates.columns ?? []) {
+      const appliedColumn = query(databaseUrl, `SELECT count(*) FROM information_schema.columns WHERE table_schema='${rollbackSchema}' AND table_name='${entry.table}' AND column_name='${entry.column}'`)
+      assert(appliedColumn === '1', `resolved pending migration retry did not create ${entry.table}.${entry.column}: ${pending.name}`)
+    }
+    for (const indexName of forbiddenIndexes) {
+      const forbidden = query(databaseUrl, `SELECT count(*) FROM pg_indexes WHERE schemaname='${rollbackSchema}' AND indexname='${indexName}'`)
+      assert(forbidden === '0', `pending migration unexpectedly created the blocking index ${indexName}: ${pending.name}`)
+    }
+    if (assertParity) assertPrismaDatamodelParity(workspace, rollbackUrl.toString())
     runPrisma(workspace, rollbackUrl.toString(), ['migrate', 'deploy', '--schema', 'schema.prisma'])
-    assert(finishedMigrationCount(rollbackUrl.toString(), rollbackSchema) === appliedMigrations.length + 1,
+    assert(finishedMigrationCount(rollbackUrl.toString(), rollbackSchema) === priorMigrations.length + 1,
       'resolved pending migration retry is not rerun-safe')
     return {
+      migration: pending.name,
+      owner_context: pending.owner_context,
       injected_late_failure: true,
       prisma_failed_ledger_rows: 1,
       prisma_resolved_rolled_back_rows: 1,
-      partial_campaign_tables: 0,
-      partial_call_columns: 0,
-      partial_indexes: 0,
-      retry_finished_migrations: appliedMigrations.length + 1,
-      retry_campaign_tables: 6,
-      retry_call_simulation_column: true,
-      retry_schema_prisma_parity: true,
+      partial_declared_tables: 0,
+      partial_declared_columns: 0,
+      partial_declared_indexes: 0,
+      retry_finished_migrations: priorMigrations.length + 1,
+      retry_declared_tables: creates.tables.length,
+      retry_declared_columns: (creates.columns ?? []).length,
+      retry_schema_prisma_parity: assertParity,
       retry_rerun_safe: true,
       transaction_rolled_back: true,
     }
@@ -225,12 +261,31 @@ async function assertPendingMigrationAtomicRollback(databaseUrl, schema, applied
   }
 }
 
+async function assertPendingMigrationAtomicRollback(databaseUrl, schema, appliedMigrations, pendingMigrations) {
+  assert(Array.isArray(pendingMigrations) && pendingMigrations.length > 0,
+    'atomic rollback proof requires at least one pending source migration')
+  const proofs = []
+  for (const [ordinal, pending] of pendingMigrations.entries()) {
+    const priorMigrations = [...appliedMigrations, ...pendingMigrations.slice(0, ordinal)]
+    proofs.push(await assertOnePendingMigrationAtomicRollback(
+      databaseUrl,
+      schema,
+      priorMigrations,
+      pending,
+      ordinal,
+      ordinal === pendingMigrations.length - 1,
+    ))
+  }
+  return proofs
+}
+
 async function main() {
   const requestedDatabaseUrl = process.env.DATABASE_URL
   const predecessorRecovery = process.argv.includes('--predecessor-recovery')
   assert(process.argv.includes('--allow-isolated-replay'), 'pass --allow-isolated-replay to execute against an isolated empty schema')
   assert(requestedDatabaseUrl, 'DATABASE_URL is required for isolated replay')
-  const { databaseUrl, schema } = isolatedSchema(requestedDatabaseUrl, predecessorRecovery)
+  const pendingCount = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8')).migrations.length
+  const { databaseUrl, schema } = isolatedSchema(requestedDatabaseUrl, predecessorRecovery, pendingCount)
   assertSchemaAbsent(databaseUrl, schema)
   if (predecessorRecovery) assertSchemaAbsent(databaseUrl, `${schema}_fresh`)
   const authority = await validateProductionMigrationAuthority(root)

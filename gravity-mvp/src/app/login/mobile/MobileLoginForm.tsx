@@ -1,10 +1,23 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UserIdentityV1 } from '@/contracts/identity-access/v1'
 import { submitMobileLoginAction } from './actions'
 
 const DEVICE_ID_STORAGE_KEY = 'yoko_mobile_device_id'
+
+/**
+ * How long to wait for the sign-in to answer before giving the operator back
+ * control of the form.
+ *
+ * A submission that never resolves used to leave the button reading "Вход…"
+ * for ever with nothing said. That is what happened on a phone whose tunnel to
+ * the test backend had died between loading the form and pressing the button:
+ * the request left the device, reached nothing, and the pending state had no
+ * way out. Twenty seconds is far longer than a real sign-in, which answers in
+ * tens of milliseconds.
+ */
+const LOGIN_TIMEOUT_MS = 20_000
 
 /**
  * Stable per-install identifier.
@@ -36,15 +49,63 @@ export default function MobileLoginForm({
     next: string
     operators: UserIdentityV1[]
 }) {
-    const [state, formAction, pending] = useActionState(submitMobileLoginAction, { error: null })
     const [deviceId, setDeviceId] = useState('')
+    const [error, setError] = useState<string | null>(null)
+    const [pending, setPending] = useState(false)
+    const inFlight = useRef(false)
 
     useEffect(() => {
         setDeviceId(readOrCreateDeviceId())
     }, [])
 
+    /**
+     * Submit with a bounded wait.
+     *
+     * Three things this deliberately does NOT do. It never treats a timeout as
+     * a successful sign-in: an unanswered request leaves the operator signed
+     * out and says so. It never retries on its own, because a submission that
+     * may still be in flight must not be duplicated. And it never hides the
+     * outcome: a rejection shows the server's message, a timeout shows a
+     * connectivity message, and the two are not conflated.
+     */
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        if (inFlight.current) return
+
+        const formData = new FormData(event.currentTarget)
+        inFlight.current = true
+        setPending(true)
+        setError(null)
+
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('login_timeout')), LOGIN_TIMEOUT_MS)
+        })
+
+        try {
+            // A successful sign-in redirects from the server, so this promise
+            // never settles on the happy path: the page navigates away and the
+            // component unmounts. Only a rejection or a timeout lands here.
+            const result = await Promise.race([
+                submitMobileLoginAction(null, formData),
+                timeout,
+            ])
+            if (result?.error) setError(result.error)
+        } catch (cause) {
+            setError(
+                (cause as Error)?.message === 'login_timeout'
+                    ? 'Сервер не ответил. Проверьте соединение и попробуйте ещё раз.'
+                    : 'Не удалось связаться с сервером. Попробуйте ещё раз.',
+            )
+        } finally {
+            if (timer) clearTimeout(timer)
+            inFlight.current = false
+            setPending(false)
+        }
+    }
+
     return (
-        <form action={formAction} className="mt-6 space-y-3">
+        <form onSubmit={handleSubmit} className="mt-6 space-y-3">
             <input type="hidden" name="next" value={next} />
             <input type="hidden" name="deviceId" value={deviceId} />
 
@@ -88,9 +149,12 @@ export default function MobileLoginForm({
                 />
             </label>
 
-            {state?.error ? (
-                <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive">
-                    {state.error}
+            {error ? (
+                <p
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+                >
+                    {error}
                 </p>
             ) : null}
 

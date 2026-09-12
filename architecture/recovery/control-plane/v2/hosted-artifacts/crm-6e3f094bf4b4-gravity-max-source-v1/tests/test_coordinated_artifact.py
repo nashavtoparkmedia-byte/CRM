@@ -19,6 +19,29 @@ sys.path.insert(0, str(AUTHORITY))
 import coordinated_release_contract as contract  # noqa: E402
 
 
+def pinned_bytes(relative: str) -> bytes:
+    """Read a file from the pinned application commit rather than the working tree.
+
+    This authority describes an artifact that was built once from
+    APPLICATION_COMMIT. Its fixtures have to come from that same commit, or the
+    synthetic layers below stop matching the contract the moment the live
+    application source moves on, and these tests fail for a reason that has
+    nothing to do with what they assert.
+    """
+    return subprocess.check_output(
+        ["git", "-C", str(ROOT), "show", f"{contract.APPLICATION_COMMIT}:{relative}"],
+    )
+
+
+def pinned_directory_files(relative: str) -> list[str]:
+    listing = subprocess.check_output(
+        ["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only",
+         contract.APPLICATION_COMMIT, "--", relative],
+        text=True,
+    )
+    return sorted(line for line in listing.splitlines() if line)
+
+
 def write_json(path: Path, value: object) -> None:
     path.write_bytes(contract.canonical_bytes(value))
 
@@ -48,23 +71,30 @@ def image_layer(
         if not empty:
             add_file("usr/bin/tini", tini_bytes)
         if not empty and maximum:
-            source = ROOT / "max-web-scraper"
             for relative in ("package.json", "package-lock.json", "index.js"):
-                add_file(f"app/{relative}", (source / relative).read_bytes(), uid=1000, gid=1000)
+                add_file(
+                    f"app/{relative}",
+                    pinned_bytes(f"max-web-scraper/{relative}"), uid=1000, gid=1000,
+                )
             for directory in ("contacts", "lib", "media", "parser", "session", "sync", "transport"):
-                for candidate in sorted((source / directory).rglob("*")):
-                    if candidate.is_file():
-                        add_file(
-                            f"app/{candidate.relative_to(source).as_posix()}",
-                            candidate.read_bytes(), uid=1000, gid=1000,
-                        )
+                for tracked in pinned_directory_files(f"max-web-scraper/{directory}"):
+                    add_file(
+                        f"app/{tracked[len('max-web-scraper/'):]}",
+                        pinned_bytes(tracked), uid=1000, gid=1000,
+                    )
             add_file("app/node_modules/playwright/index.js", b"module.exports = {}\n", uid=1000, gid=1000)
             add_file("ms-playwright/chromium-1208/chrome-linux/chrome", b"synthetic chromium", mode=0o555)
             add_directory("app/user_data", uid=1000, gid=1000)
             if include_forbidden:
-                add_file("app/maxBrowser.js", (source / "maxBrowser.js").read_bytes(), uid=1000, gid=1000)
+                add_file(
+                    "app/maxBrowser.js",
+                    pinned_bytes("max-web-scraper/maxBrowser.js"), uid=1000, gid=1000,
+                )
         elif not empty:
-            add_file("app/package.json", (ROOT / "gravity-mvp/package.json").read_bytes(), uid=999, gid=999)
+            add_file(
+                "app/package.json",
+                pinned_bytes("gravity-mvp/package.json"), uid=999, gid=999,
+            )
             for directory in ("app/.next", "app/node_modules", "app/prisma", "app/public"):
                 add_directory(directory, uid=999, gid=999)
     return layer.getvalue()
