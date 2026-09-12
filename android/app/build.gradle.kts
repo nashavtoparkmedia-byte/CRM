@@ -37,6 +37,12 @@ android {
         buildConfigField("String", "CRM_ORIGIN", "\"https://yokoone.ru\"")
         buildConfigField("boolean", "IS_TEST_BUILD", "false")
         buildConfigField("boolean", "CAPTURE_CONSOLE", "false")
+        // Stamped so a diagnostic line names the exact source it came from.
+        buildConfigField(
+            "String",
+            "GIT_COMMIT",
+            "\"${(project.findProperty("yokoGitCommit") as String?) ?: "unknown"}\"",
+        )
         // Server-side gate. The shell never builds a /messages URL itself;
         // it hands the target to this path and the CRM decides where to go.
         buildConfigField("String", "OPEN_CHAT_PATH", "\"/messages/open\"")
@@ -72,7 +78,12 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".acceptance"
             versionNameSuffix = "-acceptance"
-            isDebuggable = false
+            // Debuggable on purpose. The first diagnostic build was not, and a
+            // Samsung S23 Ultra produced no application logs at all: One UI
+            // drops them for a non-debuggable package. It also unlocks
+            // `adb shell run-as`, which is how the diagnostic file comes off the
+            // device when logcat is filtered. Test variant only.
+            isDebuggable = true
             matchingFallbacks += listOf("release")
 
             val testOrigin = (project.findProperty("yokoTestOrigin") as String?)

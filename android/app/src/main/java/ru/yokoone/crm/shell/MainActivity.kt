@@ -31,6 +31,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 
 /**
  * The whole shell.
@@ -83,6 +85,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Before anything else, and before a WebView exists. If this line is
+        // missing from a diagnostic run, nothing downstream can be trusted and
+        // the problem is log delivery, not the page.
+        ShellDiagnostics.start(this)
 
         // Draw behind the system bars, then hand the real insets to the layout
         // below. Without this the CRM composer sits under the navigation bar on
@@ -173,9 +180,19 @@ class MainActivity : AppCompatActivity() {
             // from this client entirely. The marker only ever selects a
             // stricter path, so it needs no integrity: stripping it makes this
             // an ordinary browser, which gains nothing it did not have.
-            userAgentString = "$userAgentString ${CrmOrigin.SHELL_UA_TOKEN}${CrmOrigin.SHELL_UA_VERSION}"
+            userAgentString = buildString {
+                append(userAgentString)
+                append(' ')
+                append(CrmOrigin.SHELL_UA_TOKEN)
+                append(CrmOrigin.SHELL_UA_VERSION)
+                // Random per app start, so one run can be matched across the
+                // phone log and the server request log. It says nothing about
+                // the device or the operator.
+                if (BuildConfig.CAPTURE_CONSOLE) append(" (run/${ShellDiagnostics.runId})")
+            }
         }
 
+        installPageErrorHook()
         webView.webViewClient = ShellWebViewClient()
         webView.webChromeClient = ShellWebChromeClient()
         webView.setBackgroundColor(ContextCompat.getColor(this, R.color.shell_background))
@@ -186,6 +203,10 @@ class MainActivity : AppCompatActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
             super.onPageStarted(view, url, favicon)
             currentLoadFailed = false
+            ShellDiagnostics.write("nav start ${ShellDiagnostics.safeUrl(url)}")
+            if (pageStartHookFallback) {
+                view.evaluateJavascript(ShellDiagnostics.errorHookScript(), null)
+            }
         }
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -206,7 +227,7 @@ class MainActivity : AppCompatActivity() {
                 showContent()
                 currentTargetUrl = url ?: currentTargetUrl
                 rememberLastVisitedUrl()
-                emitConsoleCaptureSelfTest()
+                ShellDiagnostics.write("nav done  ${ShellDiagnostics.safeUrl(url)}")
             }
         }
 
@@ -220,6 +241,7 @@ class MainActivity : AppCompatActivity() {
             // missing avatar is not.
             if (request.isForMainFrame) {
                 currentLoadFailed = true
+                ShellDiagnostics.write("main-frame error ${error.errorCode} ${ShellDiagnostics.safeUrl(request.url?.toString())}")
                 showError(getString(R.string.error_network))
             }
         }
@@ -237,6 +259,7 @@ class MainActivity : AppCompatActivity() {
             // stale content. Reload so the request boundary can hand us the
             // login screen, rather than leaving an operator typing into a
             // conversation that will never send.
+            ShellDiagnostics.write("http ${errorResponse.statusCode} ${ShellDiagnostics.safeUrl(request.url?.toString())}")
             if (errorResponse.statusCode == 401 && CrmOrigin.isInAppUrl(request.url?.toString())) {
                 val current = view.url.orEmpty()
                 if (!current.contains(CrmOrigin.LOGIN_PATH)) {
@@ -272,6 +295,7 @@ class MainActivity : AppCompatActivity() {
             detail: android.webkit.RenderProcessGoneDetail,
         ): Boolean {
             currentLoadFailed = true
+            ShellDiagnostics.write("renderer gone, crashed=${detail.didCrash()}")
             showError(getString(R.string.error_network))
             return true
         }
@@ -320,9 +344,8 @@ class MainActivity : AppCompatActivity() {
             if (!BuildConfig.CAPTURE_CONSOLE) return false
             if (message.messageLevel() != ConsoleMessage.MessageLevel.ERROR) return false
 
-            val text = message.message().take(CONSOLE_MESSAGE_LIMIT)
             val script = message.sourceId()?.substringAfterLast('/').orEmpty()
-            Log.e(CONSOLE_TAG, "$text | $script:${message.lineNumber()}")
+            ShellDiagnostics.write("console | ${message.message()} | $script:${message.lineNumber()}")
             return false
         }
 
@@ -486,25 +509,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Prove the capture path works before anyone relies on it.
+     * Install the page error hook so it runs before the page's own scripts.
      *
-     * Emits one known error from inside the page, so a tester can confirm the
-     * pipeline end to end without having to reproduce the real fault first. If
-     * this line is absent from logcat, the capture is not working and any
-     * silence about the real error means nothing.
+     * Document-start injection matters: an exception thrown while the page is
+     * still initialising happens before any listener added afterwards could see
+     * it, which is exactly the window the reported failure falls in. Where the
+     * WebView is too old for that API the hook is injected at page start
+     * instead, which still catches everything after the first script.
      */
-    private fun emitConsoleCaptureSelfTest() {
+    private fun installPageErrorHook() {
         if (!BuildConfig.CAPTURE_CONSOLE) return
-        val marker = "$CONSOLE_SELFTEST build=${BuildConfig.VERSION_NAME}"
-        webView.evaluateJavascript("console.error(${'"'}$marker${'"'})", null)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            runCatching {
+                WebViewCompat.addDocumentStartJavaScript(
+                    webView,
+                    ShellDiagnostics.errorHookScript(),
+                    setOf(CrmOrigin.ORIGIN),
+                )
+            }.onFailure { ShellDiagnostics.write("document-start hook unavailable: ${it.message}") }
+        } else {
+            ShellDiagnostics.write("document-start scripts unsupported; hooking at page start")
+            pageStartHookFallback = true
+        }
     }
+
+    private var pageStartHookFallback = false
 
     companion object {
         private const val TAG = "YokoShell"
-        /** Single tag for everything the capture emits, so one filter finds it. */
-        const val CONSOLE_TAG = "YokoShellConsole"
-        const val CONSOLE_SELFTEST = "YOKO_CAPTURE_SELFTEST"
-        private const val CONSOLE_MESSAGE_LIMIT = 600
         private const val PREFS = "yoko_shell"
         private const val KEY_LAST_URL = "last_url"
     }
