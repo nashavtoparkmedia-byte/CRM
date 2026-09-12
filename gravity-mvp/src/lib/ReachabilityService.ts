@@ -32,8 +32,6 @@ export type RecordExactProviderReachabilityResultV1 =
         | 'contact_archived'
         | 'channel_mismatch'
         | 'identity_conflicted'
-        | 'provider_account_unproven'
-        | 'provider_account_mismatch'
         | 'provider_target_mismatch'
         | 'persistence_error'
     }
@@ -64,10 +62,14 @@ function hasOpenIdentityConflict(customFields: unknown, identityId: string): boo
 /**
  * Persist provider reachability only for one already-resolved ContactIdentity.
  *
- * The caller must carry all authority returned by the accepted provider path:
- * the exact Contact owner, identity id, provider account and opaque provider
- * target. Phone numbers are deliberately absent from this command: two people
- * may share a phone claim, and a phone lookup cannot authorize either identity.
+ * The caller must carry the authority returned by the accepted provider path:
+ * the exact Contact owner, identity id and opaque provider target. Phone
+ * numbers are deliberately absent from this command: two people may share a
+ * phone claim, and a phone lookup cannot authorize either identity.
+ *
+ * The provider account travels as metadata only. Its authority is deferred to
+ * docs/design/provider-account-identity-v1.md, so an identity that carries no
+ * stamp stays recordable and no rejection is ever raised from the stamp.
  */
 export async function recordExactProviderReachability(
   command: RecordExactProviderReachabilityCommandV1,

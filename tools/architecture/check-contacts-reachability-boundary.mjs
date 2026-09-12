@@ -20,7 +20,7 @@ const exactCapabilities = [
     'recordExactProviderReachability',
 ]
 
-assert.equal(sha256(read(implementationPath)), 'a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd')
+assert.equal(sha256(read(implementationPath)), '7e1d5e57aa744a748b5c6f6e56067bbfa93e30ea5884b73d57a4d5dc6ada19af')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''
@@ -52,10 +52,29 @@ const implementationSource = read(implementationPath)
 assert.doesNotMatch(implementationSource, /findIdentityByPhoneAndChannel|contactIdentity\.findFirst/)
 assert.match(implementationSource, /where: \{ id: identityId \}/)
 assert.match(implementationSource, /identity\.contactId !== contactId/)
-assert.match(implementationSource, /storedProviderAccountId !== providerAccountId/)
 assert.match(implementationSource, /identityEvidence\.providerAliasValues/)
 assert.match(implementationSource, /exactProviderTargets\.has\(providerTargetId\)/)
 assert.doesNotMatch(implementationSource, /updateReachabilityByChatId/)
+
+// Provider-account authority is deferred (docs/design/provider-account-identity-v1.md).
+// The stamp is accepted as metadata and must never admit or reject a proof, so the
+// ~1k live identities that carry no stamp stay recordable. Pin both halves: the
+// stamp raises no rejection, and every rejection that does carry the boundary
+// remains present and reachable.
+assert.match(implementationSource, /providerAccountId\?: string \| null/)
+assert.doesNotMatch(implementationSource, /reason: 'provider_account_(unproven|mismatch)'/)
+assert.doesNotMatch(implementationSource, /'provider_account_(unproven|mismatch)'/)
+for (const preservedRejection of [
+    'identity_not_found',
+    'identity_inactive',
+    'contact_owner_mismatch',
+    'contact_archived',
+    'channel_mismatch',
+    'identity_conflicted',
+    'provider_target_mismatch',
+]) {
+    assert.match(implementationSource, new RegExp(`reason: '${preservedRejection}'`))
+}
 
 const profileDrawerSource = read(profileDrawerPath)
 assert.match(profileDrawerSource, /identityId: identity\.id/)

@@ -810,6 +810,13 @@ describe('GramJS private conversation identity admission', () => {
                 proof: { chatId: chat.id, identityTarget: PEER },
             })
             expect(mocks.invoke).toHaveBeenCalled()
+            // Every one of the three paths left through the sole active carrier,
+            // and none of them consulted a stored provider-account stamp.
+            expect(mocks.telegramConnectionFindMany).toHaveBeenCalledTimes(3)
+            expect(mocks.telegramConnectionFindUnique).toHaveBeenCalledTimes(3)
+            for (const call of mocks.telegramConnectionFindUnique.mock.calls) {
+                expect(call[0]).toMatchObject({ where: { id: CARRIER } })
+            }
         })
 
         test.each([

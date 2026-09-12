@@ -279,9 +279,9 @@
         {
           "path": "gravity-mvp/src/lib/ReachabilityService.ts",
           "previous_source_sha256": "a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd",
-          "current_source_sha256": "f255eb5c02644163a346dafd0d82cbd1d1094d571385a9986dafa0f0c726b012",
+          "current_source_sha256": "7e1d5e57aa744a748b5c6f6e56067bbfa93e30ea5884b73d57a4d5dc6ada19af",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved, and the two rejection reasons those gates alone could raise were then dropped from the result union so no consumer can branch on an outcome that can no longer occur. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
         }
       ],
       "invariants": {
