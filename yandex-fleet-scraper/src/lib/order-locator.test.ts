@@ -1,4 +1,4 @@
-import { extractFleetOrderId, scanFleetOrderRows } from '../src/lib/order-locator.js';
+import { extractFleetOrderId, scanFleetOrderRows } from './order-locator.js';
 
 describe('Fleet active-order locator', () => {
     test('finds a regular seven-digit taxi order', () => {
