@@ -105,30 +105,24 @@ test('MAX outbound text delivery consumes only MAX-owned validated semantic outc
   assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
 })
 
-test('MAX phone UI send correlation excludes pre-send and generic activity', () => {
+test('MAX phone UI send binds the chat id to the send action or reports none', () => {
   const scraper = read('max-web-scraper/index.js')
-  const transport = read('max-web-scraper/transport/TransportInterceptor.js')
 
-  assertBeforeAfter(
-    scraper,
-    'const composeTextBeforeSubmit',
-    'const sendFrameStartIndex = capturedFrames.length',
-    "await page.keyboard.press('Enter')",
-    'phone UI collector cursor must be captured immediately before the send action',
-  )
-  assert.match(scraper, /evaluatePhoneResolutionUiSend\(\{/)
-  assert.match(scraper, /postActionFrames: postSendFrames/)
-  assert.match(transport, /deliveryConfirmed: false/)
-  assert.match(transport, /chatId: null/)
-  assert.doesNotMatch(scraper, /findCorrelatedUiTextSendEcho/)
-  assert.doesNotMatch(scraper, /exact_text_submit_route_changed/)
-  assert.doesNotMatch(scraper, /confirmationSource = echo\.source/)
-  assert.match(scraper, /source: uiDeliveryConfirmed \? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'/)
-  assert.doesNotMatch(scraper, /messageSent: true/)
+  // Only the SPA route change and our own message echo are tied to the send.
+  assert.match(scraper, /boundChatIdSource = 'ui_route_url'/)
+  assert.match(scraper, /boundChatIdSource = 'op128_self_echo'/)
+  assert.match(scraper, /String\(sender\) !== String\(transport\._myUserId\)/)
+  assert.doesNotMatch(scraper, /UI send confirmed by op:64/)
+  assert.doesNotMatch(scraper, /op:198 chatId after UI send/)
+  assert.doesNotMatch(scraper, /op:71 chatId after UI send/)
+
+  // An attempted UI send is terminal even when no bound signal supplied a chat id.
+  assert.match(scraper, /uiSendAttempted: true/)
+  assert.match(scraper, /source: liveId \? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'/)
   assertBeforeAfter(
     scraper,
     'const liveResult = await resolvePhoneLive(digits, message)',
-    'if (uiSendAttempted)',
+    'if (uiSendAttempted) {',
     'const sendResult = normalizeTextSendResult',
     'an attempted phone UI send must return before the protocol send path can duplicate it',
   )
@@ -309,8 +303,9 @@ test('MAX UI text fallback does not depend on browser clipboard permission', () 
 })
 
 
-test('MAX reply text is sent through protocol chat id and is not downgraded to plain UI text', () => {
+test('MAX reply text uses MAX Web store with a real provider target and is not downgraded to plain UI text', () => {
   const scraper = read('max-web-scraper/index.js')
+  const bridge = read('max-web-scraper/lib/MaxWebReplyBridge.js')
   const start = scraper.indexOf('async function sendText')
   assert.notEqual(start, -1, 'missing sendText')
   const end = scraper.indexOf('async function fillEditableText', start)
@@ -319,7 +314,17 @@ test('MAX reply text is sent through protocol chat id and is not downgraded to p
 
   assert.match(block, /const wsChatId = chatId/)
   assert.doesNotMatch(block, /replyToMessageId && directUiRouteId \? Number\(directUiRouteId\) : chatId/)
-  assert.match(block, /reply via WS protocol chatId=\$\{chatId\} uiRoute=\$\{directUiRouteId\}/)
+  assert.match(block, /reply via MAX Web store chatId=\$\{chatId\}/)
+  assert.match(block, /const ackPromise = waitForUiSendAck\(transport, timeoutMs\)/)
+  assert.match(block, /const replyResult = await replyBridge\.sendReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
+  assert.match(block, /const storeConfirmedId = isRealMaxMessageId\(replyResult\?\.providerMessageId\)/)
+  assert.match(block, /const maxMsgId = storeConfirmedId \|\| await ackPromise/)
+  assert.match(block, /replyBridge\.resolveProviderId\([\s\S]*?quotedMessageContext \|\| \{\},[\s\S]*?\{ uiChatId: directUiRouteId \},[\s\S]*?\)/)
+  assert.match(block, /resolvedReplyChatId = resolved\.providerChatId \|\| null/)
+  assert.match(bridge, /await core\.module\.ro\(\{ chat, from: historyFrom \}\)/)
+  assert.match(bridge, /await core\.module\.\$i\(\{ chat, message: pending \}\)/)
+  assert.match(bridge, /pending\.id = BigInt\(args\.cid\)/)
+  assert.match(bridge, /Reply requires real MAX provider message id/)
   assert.match(block, /reply send failed without MAX confirmation; not downgrading to plain UI text/)
   assertBefore(
     block,
@@ -342,11 +347,11 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
   assert.match(scraper, /function looksLikeDomReplyQuoteText\(chatId, candidate\)/)
   assert.match(scraper, /candidate\.hasReplyQuote/)
   assert.match(scraper, /dom_reply_quote_text/)
-  assert.match(scraper, /recentDirectInboundTextHits\(chatId, leafText\)\.length > 0/)
+  assert.match(scraper, /recentDirectInboundTextHits\(chatId, parts\.leafText\)\.length > 0/)
   assertBefore(
     scraper,
     "return { skipped: 'dom_reply_quote_text', text: latest.text }",
-    "const pendingProviderId = reason === 'empty_op71_after_op128'",
+    'const externalId = isOutgoingCandidate',
     'DOM quote-composed reply bubbles must be filtered before assigning max-dom ids',
   )
 })
@@ -354,12 +359,13 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
 test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
   const scraper = read('max-web-scraper/index.js')
 
-  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)\)\)/)
-  assert.match(scraper, /const hasExplicitFailure = result\.success === false \|\| result\.failed === true \|\| result\.failure === true/)
-  assert.match(scraper, /if \(hasExplicitFailure \|\| hasExplicitError\)/)
+  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(/)
+  assert.match(scraper, /\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
   assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
   assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
   assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
+  assert.match(scraper, /const hasExplicitFailure = result\.success === false \|\| result\.failed === true \|\| result\.failure === true/)
+  assert.match(scraper, /if \(hasExplicitFailure \|\| hasExplicitError\)/)
 })
 
 test('CRM MAX delivery path never writes non-string send-result object as message externalId', () => {
@@ -382,13 +388,15 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
 
   assert.match(scraper, /function stableTextCid\(seed\)/)
   assert.match(scraper, /crypto\.createHash\('sha1'\)\.update\(String\(seed\)\)\.digest\(\)/)
-  assert.match(scraper, /async function sendText\(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId\)/)
+  assert.match(scraper, /async function sendText\(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId, quotedMessageContext\)/)
   assert.match(scraper, /const cid = stableTextCid\(clientMessageId\)/)
-  assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, uiChatId, clientMessageId \} = req\.body/)
-  assert.match(scraper, /sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)/)
+  assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId \} = req\.body/)
+  assert.match(scraper, /clientMessageId,\s*\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
 
   assert.match(maxActions, /clientMessageId\?: string/)
-  assert.match(maxActions, /JSON\.stringify\(\{ chatId: cleanTarget, message, quotedMsgId, uiChatId, clientMessageId \}\)/)
+  assert.match(maxActions, /quotedText: quotedContext\?\.text/)
+  assert.match(maxActions, /quotedSentAt: quotedContext\?\.sentAt/)
+  assert.match(maxActions, /quotedDirection: quotedContext\?\.direction/)
   assert.match(messageService, /clientMessageId: clientMessageId \|\| messageId/)
   assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
 })
@@ -403,7 +411,7 @@ test('MAX reply timeout does one quick retry on stable WS before falling back to
 
   assert.match(block, /const sendProtocolText = async \(timeoutMs\) =>/)
   assert.match(block, /return await sendProtocolText\(30_000\)/)
-  assert.match(block, /const isOpcode64Timeout = \/Timeout: opcode 64\/i\.test\(String\(e\.message \|\| ''\)\)/)
+  assert.match(block, /const isOpcode64Timeout = \/Timeout: \(\?:opcode 64\|MAX Web reply\)\/i\.test\(String\(e\.message \|\| ''\)\)/)
   assert.match(block, /reply send timed out; waiting for stable WS and retrying once with same cid/)
   assert.match(block, /await transport\.waitForStableWs\(800, 8_000\)/)
   assert.match(block, /return await sendProtocolText\(15_000\)/)
@@ -413,4 +421,26 @@ test('MAX reply timeout does one quick retry on stable WS before falling back to
     'reply send failed without MAX confirmation; not downgrading to plain UI text',
     'reply quick retry must happen before handing the failed message to the background retry worker',
   )
+})
+
+test('MAX failed reply retains quoted message identity for background retry', () => {
+  const messageService = read('gravity-mvp/src/lib/MessageService.ts')
+  const metadataStart = messageService.indexOf('const metadata: any = {}')
+  const metadataEnd = messageService.indexOf('await (prisma.message as any).update({', metadataStart)
+  assert.notEqual(metadataStart, -1, 'missing delivery metadata block')
+  assert.notEqual(metadataEnd, -1, 'missing delivery metadata update')
+  const metadataBlock = messageService.slice(metadataStart, metadataEnd)
+
+  assert.match(metadataBlock, /if \(quotedMsgId\) metadata\.quotedMsgId = quotedMsgId/)
+  assertBefore(
+    metadataBlock,
+    'if (quotedMsgId) metadata.quotedMsgId = quotedMsgId',
+    'if (maxDeliveryMetadata)',
+    'reply identity must survive provider failure even when maxDeliveryMetadata was not created',
+  )
+  assert.match(messageService, /let retryQuotedMsgId = meta\.quotedMsgId/)
+  assert.match(messageService, /quotedMsgId: retryQuotedMsgId/)
+  assert.match(messageService, /quotedText: retryQuotedText/)
+  assert.match(messageService, /quotedSentAt: retryQuotedSentAt/)
+  assert.match(messageService, /quotedDirection: retryQuotedDirection/)
 })
