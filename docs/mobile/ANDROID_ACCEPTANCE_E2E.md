@@ -42,6 +42,23 @@ stays red until the defect is fixed. A suite that goes green while the product
 is broken is worse than no suite, and encoding the crash as acceptable would
 throw away the only automated signal that it is still there.
 
+## Run #1: what it proved and what it did not
+
+Run #1 on `55b5bb9d` was cancelled, not failed. Every step up to and including
+the APK builds passed: the disposable database came up, migrations applied, the
+seed loaded, the CRM built and started, the shell lane was confirmed to fail
+closed, and both the acceptance APK and the instrumentation APK built.
+
+It then stalled in `Start an emulator`. Both waits in that step were unbounded,
+so when the emulator did not report a completed boot the step simply sat there
+until the job's 60-minute timeout cancelled the whole run. A cancelled run skips
+the collection step, so the emulator log that would have explained the stall was
+never kept — the run cost an hour and produced no evidence.
+
+Every wait in that step is now bounded and every failure path prints the
+emulator log and the device list before exiting. A boot problem now costs
+minutes and leaves something to read.
+
 ## What fails the run
 
 - Any uncaught JavaScript error, detected from the shell's `YOKO_PAGE_ERROR`

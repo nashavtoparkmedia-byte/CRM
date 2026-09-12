@@ -120,7 +120,14 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           test -w /dev/kvm && echo "KVM available"
 
+      # Run #1 was cancelled inside this step: both waits below were unbounded,
+      # the emulator never reported a completed boot, and the job's own 60-minute
+      # timeout eventually killed the run. A cancelled run skips the collection
+      # step, so the emulator log that would have explained it was never kept.
+      # Every wait is now bounded and every failure path prints that log before
+      # exiting, so a boot problem costs minutes and produces evidence.
       - name: Start an emulator
+        timeout-minutes: 20
         run: |
           set -e
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
@@ -130,12 +137,31 @@ jobs:
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             -n ci -k "system-images;android-34;google_apis;x86_64" --force
           nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
-            -gpu swiftshader_indirect -accel on > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+            -no-snapshot -gpu swiftshader_indirect -accel on \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+
+          give_up() {
+            echo "::error::$1"
+            echo "----- emulator log -----"
+            tail -100 "$RUNNER_TEMP/emulator.log" || true
+            echo "----- adb devices -----"
+            "$ANDROID_HOME/platform-tools/adb" devices -l || true
+            exit 1
+          }
+
+          timeout 300 "$ANDROID_HOME/platform-tools/adb" wait-for-device \
+            || give_up "no device appeared within 5 minutes"
+
           # Booted means the package manager is up, not just the kernel.
-          until [ "$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do
+          for _ in $(seq 1 200); do
+            kill -0 "$emulator_pid" 2>/dev/null || give_up "the emulator process exited during boot"
+            state=$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$state" = "1" ] && break
             sleep 3
           done
+          [ "$state" = "1" ] || give_up "the emulator did not finish booting within 10 minutes"
+
           "$ANDROID_HOME/platform-tools/adb" shell input keyevent 82 || true
           echo "emulator booted"
 
