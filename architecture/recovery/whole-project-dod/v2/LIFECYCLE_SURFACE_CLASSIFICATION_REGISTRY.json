@@ -1150,6 +1150,42 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/coordinated_release_contract.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Pure fail-closed Stage A artifact contract used by the bounded emitter and verifier. It reads exact local files and GitHub identity evidence and grants no install, deployment, credential, database, or provider mutation capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/hosted_artifact_transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Pure fail-closed Stage A authenticated transport contract. It validates, chunks, and reconstructs only the fixed hosted release artifact and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/verify-artifact-transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A transport reconstruction verifier. It validates exact chunks and source identity before reconstructing the fixed release ZIP and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/verify-coordinated-artifact.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only fail-closed verifier for one exact six-member Stage A artifact. It validates local archives and public source authority and grants no install, deployment, credential, database, or provider mutation capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/coordinated_release_contract.py",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
