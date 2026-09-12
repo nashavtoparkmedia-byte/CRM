@@ -24,11 +24,15 @@ import java.io.File
  * reader would see, so the assertions are about what a person can actually read
  * on the screen.
  *
- * These tests describe the behaviour the stage promises. They are NOT written to
- * accommodate the defect currently under investigation: the successful-login
- * test asserts that the messenger opens, and it is expected to stay red until
- * that defect is fixed. A test that passes while the product is broken is worse
- * than no test.
+ * These tests describe the behaviour the stage promises, never the behaviour
+ * that happens to exist. That distinction mattered when they were written: the
+ * successful-login test asserted that the messenger opens while the device was
+ * still showing a client-side exception, and it stayed red on purpose, because
+ * a test that passes while the product is broken is worse than no test.
+ *
+ * That defect is fixed. The assertions are unchanged — nothing here was
+ * loosened to make them pass — so the successful-login test is now expected to
+ * go green, and a red result means a real regression.
  */
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)

@@ -30,17 +30,19 @@ UI Automator reads the accessibility tree the WebView publishes, which is what a
 screen reader would see. The assertions are therefore about text a person can
 actually read on screen, not about implementation details.
 
-## Why it is expected to be red right now
+## Why it was written red, and why it should now be green
 
 `test02_correctPasswordAfterRejectionOpensTheMessenger` asserts that the
-messenger opens after a correct password following a rejection. That is the
-defect under investigation in PR #87, where the device shows a client-side
-exception instead.
+messenger opens after a correct password following a rejection. When it was
+written, the device showed a client-side exception instead, so the test was red
+on purpose: it described the promised behaviour rather than the current one,
+because a suite that goes green while the product is broken is worse than no
+suite.
 
-The test is written to describe the promised behaviour, not the current one. It
-stays red until the defect is fixed. A suite that goes green while the product
-is broken is worse than no suite, and encoding the crash as acceptable would
-throw away the only automated signal that it is still there.
+That defect is fixed, and separately so is the `POST /messages` 500 that a
+refused AI-intern read used to produce on every messenger page load. No
+assertion was loosened to accommodate either. The test is therefore expected to
+pass now, and a red result means a real regression rather than a known gap.
 
 ## Run #1: what it proved and what it did not
 
