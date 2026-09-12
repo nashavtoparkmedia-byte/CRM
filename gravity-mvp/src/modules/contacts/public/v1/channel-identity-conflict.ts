@@ -114,18 +114,15 @@ export async function markChannelIdentityConflictV1(
       })
     }
 
-    const identityMetadata = jsonRecord(identity.metadata)
-    if (identityMetadata.conflictState !== 'conflicted') {
-      await transaction.contactIdentity.update({
-        where: { id: identity.id },
-        data: {
-          metadata: {
-            ...identityMetadata,
-            conflictState: 'conflicted',
-          } as Prisma.InputJsonObject,
-        },
-      })
-    }
+    // The append-only audit above is the record of this ingress observation.
+    // Flipping the identity to conflictState='conflicted' is deliberately NOT
+    // done here: that flag is read as a hard deny by reachability, contact
+    // conversation preparation and the driver-link authority, so a single
+    // channel ingress observation must not be able to permanently disable an
+    // identity. Provider-account provenance is deferred (see
+    // docs/design/provider-account-identity-v1.md), and no production identity
+    // carries it, so every marker this would have written would be new and
+    // would deny an identity for a fact the old data model never recorded.
     await assertContactOwnershipPostconditions(transaction, scope)
   })
 }

@@ -409,7 +409,7 @@ describe('ContactResolutionService read-only planner', () => {
     }))
   })
 
-  test('the Prisma adapter fails closed when an opaque key belongs to another provider account', async () => {
+  test('the Prisma adapter resolves one person to one Contact regardless of account provenance', async () => {
     const client = {
       contactIdentity: {
         findUnique: vi.fn(async () => ({
@@ -423,7 +423,33 @@ describe('ContactResolutionService read-only planner', () => {
     }
     const repo = createPrismaContactResolutionRepository(client as never)
 
-    await expect(repo.findIdentity('max', 'account-b', 'opaque-user')).resolves.toBeNull()
+    // The identity key is (channel, externalId) and carries no account
+    // dimension. Hiding a found identity because its deferred account stamp
+    // differs does not isolate accounts: it makes the planner report
+    // create_required and duplicate the person.
+    await expect(repo.findIdentity('max', 'account-b', 'opaque-user'))
+      .resolves.toEqual(contact('account-a-contact'))
+    expect(client.contactIdentity.findMany).not.toHaveBeenCalled()
+  })
+
+  test('the Prisma adapter still fails closed when two identities claim one alias', async () => {
+    const client = {
+      contactIdentity: {
+        findUnique: vi.fn(async () => null),
+        findMany: vi.fn(async () => [
+          { contact: contact('contact-a'), metadata: { providerAccountId: 'account-a' } },
+          { contact: contact('contact-b'), metadata: { providerAccountId: 'account-b' } },
+        ]),
+      },
+      contactPhone: { findMany: vi.fn(async () => []) },
+      contactMerge: { findMany: vi.fn(async () => []) },
+    }
+    const repo = createPrismaContactResolutionRepository(client as never)
+
+    // Unique-or-nothing across every claimant. Dropping the account scope makes
+    // this check stricter: previously one claimant was hidden by its stamp and
+    // the other matched silently.
+    await expect(repo.findIdentity('max', 'account-b', 'shared-alias')).resolves.toBeNull()
   })
 
   test('uses the explicit legacy account scope when provider account is unavailable', async () => {

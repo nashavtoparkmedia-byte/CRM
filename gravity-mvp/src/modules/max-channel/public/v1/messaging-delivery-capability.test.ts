@@ -46,11 +46,13 @@ describe('MAX provider account to transport binding', () => {
             connectionId: 'max_scraper',
             isPersonal: true,
         })).not.toThrow()
+        // Account provenance is deferred and no longer admits or rejects a
+        // binding; the personal transport shape is still enforced exactly.
         expect(() => assertMaxTransportBindingV1({
-            providerAccountId: 'max-default',
+            providerAccountId: null,
             connectionId: 'max_scraper',
             isPersonal: true,
-        })).toThrow('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+        })).not.toThrow()
         expect(() => assertMaxTransportBindingV1({
             providerAccountId: 'live-account-a',
             connectionId: 'configured-account-a',
@@ -64,11 +66,24 @@ describe('MAX provider account to transport binding', () => {
             connectionId: 'bot-a',
             isPersonal: false,
         })).toThrow('MAX_BOT_DELIVERY_TRANSPORT_UNAVAILABLE')
+        // An unbound non-personal conversation still cannot route at all.
         expect(() => assertMaxTransportBindingV1({
             providerAccountId: 'bot-b',
-            connectionId: 'bot-a',
+            connectionId: undefined,
             isPersonal: false,
-        })).toThrow('CONTACT_CONVERSATION_PROVIDER_TRANSPORT_MISMATCH')
+        })).toThrow('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
+    })
+
+    test('the scraper still requires an account to select a live personal session', () => {
+        const capability = registeredCapability()
+        // A transport capability requirement, not identity authority: it decides
+        // whether a message can physically be sent, never whether a Contact or
+        // ChannelIdentity may be admitted.
+        return expect(capability.sendText({
+            target: '1',
+            content: 'x',
+            options: { providerAccountId: null, isPersonal: true },
+        })).rejects.toThrow('MAX_TRANSPORT_ACCOUNT_REQUIRED')
     })
 
     test('forwards exact personal text binding only through the server-only transport', async () => {

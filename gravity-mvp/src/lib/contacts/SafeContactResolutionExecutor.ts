@@ -14,7 +14,6 @@ import {
   identityEvidenceState,
   jsonRecord,
   phoneEvidenceState,
-  providerAccountMatches,
   withPhoneEvidence,
   type ContactPhoneTrustV1,
 } from '@/modules/contacts/public/v1/contact-evidence-state'
@@ -309,26 +308,26 @@ export function createPrismaContactResolutionExecutionTransactionV1(tx: Prisma.T
       // absent. Only when no primary exists may an exact, account-scoped alias
       // satisfy revalidation.
       if (row) return identityRow(row)
+      // No account predicate and no post-filter. The two must be dropped
+      // together: `take: 2` is applied by Postgres BEFORE any JS filtering, so
+      // a widened query combined with a surviving filter would silently reduce
+      // a two-row page to one match and never see a third colliding row.
+      // Widening the candidate set makes the uniqueness check below strictly
+      // stronger, never weaker.
       const aliases = await tx.contactIdentity.findMany({
         where: {
           channel,
           isActive: true,
-          AND: [
-            { metadata: { path: ['providerAliasValues'], array_contains: [externalId] } },
-            { metadata: { path: ['providerAccountId'], equals: providerAccountId } },
-          ],
+          metadata: { path: ['providerAliasValues'], array_contains: [externalId] },
         },
         orderBy: { id: 'asc' },
         take: 2,
         select: { id: true, contactId: true, channel: true, externalId: true, phoneId: true, metadata: true },
       })
-      const scoped = aliases.filter(candidate => (
-        identityEvidenceState(candidate.metadata).providerAccountId === providerAccountId
-      ))
-      if (scoped.length > 1) {
-        throw new ProviderIdentityAliasCollisionError(scoped.map(identityRow))
+      if (aliases.length > 1) {
+        throw new ProviderIdentityAliasCollisionError(aliases.map(identityRow))
       }
-      return scoped.length === 1 ? identityRow(scoped[0]) : null
+      return aliases.length === 1 ? identityRow(aliases[0]) : null
     },
     async findContact(contactId) {
       return tx.contact.findUnique({
@@ -604,32 +603,17 @@ export class SafeContactResolutionExecutor {
           externalId,
         )
       : null
-    const requestedProviderAccountId = nonEmpty(input.providerAccountId) ?? 'legacy'
-    if (existingIdentity && !providerAccountMatches(
-      { providerAccountId: existingIdentity.providerAccountId },
-      requestedProviderAccountId,
-    )) {
-      const plannedId = canonicalContactId(plan)
-      await transaction.recordConflict({
-        contactId: existingIdentity.contactId,
-        otherContactIds: plannedId && plannedId !== existingIdentity.contactId ? [plannedId] : [],
-        identityId: existingIdentity.id,
-        conflictType: 'provider_account_identity_collision',
-        evidenceRoot: `provider:${input.channel}:${requestedProviderAccountId}:${externalId}`,
-        details: {
-          channel: input.channel,
-          externalId,
-          storedProviderAccountId: existingIdentity.providerAccountId,
-          requestedProviderAccountId,
-        },
-      })
-      return {
-        status: 'identity_phone_conflict',
-        identityContactId: existingIdentity.contactId,
-        phoneContactIds: plannedId && plannedId !== existingIdentity.contactId ? [plannedId] : [],
-        warnings: plan.warnings,
-      }
-    }
+    // Provider-account isolation is DEFERRED out of this change set. There is no
+    // provider-authoritative account identity to enforce against: every value
+    // available here names a mutable application transport slot, and no
+    // production identity carries provenance at all. Comparing the stored stamp
+    // to the inbound one therefore proved nothing while blocking resolution and
+    // minting a permanent conflict marker for every real person on the system.
+    // See docs/design/provider-account-identity-v1.md.
+    //
+    // Identity contradictions that are NOT about accounts still fail closed: the
+    // alias collision below, the phone/identity contradiction above, and the
+    // archived and merge terminal states are all unchanged.
 
     let contact: ContactRow | null = null
     const plannedContactId = canonicalContactId(plan)

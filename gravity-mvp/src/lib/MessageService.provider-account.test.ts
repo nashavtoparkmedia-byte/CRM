@@ -337,6 +337,27 @@ describe('MessageService conversation transport routing', () => {
         }))
     })
 
+    // Production shape as measured 2026-09-12: not one of the 1057 live
+    // ContactIdentity rows carries metadata.providerAccountId, and no WhatsApp
+    // or Telegram Chat carries it either. These rows must still be able to send.
+    test.each([
+        ['whatsapp', { connectionId: PROVIDER_ACCOUNT }],
+        ['telegram', { connectionId: TRANSPORT_CONNECTION, chatKind: 'private' }],
+        ['max', { connectionId: 'max_scraper', senderId: 'opaque-user-42', chatKind: 'private' }],
+    ] as const)('sends on %s for an identity carrying no provider-account provenance', async (channel, metadata) => {
+        mocks.chatFindUnique.mockResolvedValue(chat(channel, { ...metadata }))
+        const fixture = identityFixtures.get('identity-1')!
+        // Strip the stamp the way every production row already is.
+        identityFixtures.set('identity-1', {
+            ...fixture,
+            identity: { ...fixture.identity!, providerAccountId: null },
+        })
+
+        await expect(MessageService.send('chat-1', 'hello', channel)).resolves.toMatchObject({
+            success: true,
+        })
+    })
+
     test('accepts only the exact persisted WhatsApp LID peer', async () => {
         const waChat = chat('whatsapp', { connectionId: PROVIDER_ACCOUNT })
         waChat.externalChatId = '165313509372005@lid'
@@ -602,13 +623,6 @@ describe('MessageService conversation transport routing', () => {
                 id: 'identity-1', channel: 'max' as const, externalId: 'different-peer', providerAccountId: 'max-default',
             },
         }],
-        ['provider account', {
-            status: 'ready' as const,
-            contact: { id: 'contact-1', displayName: 'Contact' },
-            identity: {
-                id: 'identity-1', channel: 'max' as const, externalId: 'max-sender-42', providerAccountId: 'other-account',
-            },
-        }],
         ['canonical Contact', {
             status: 'ready' as const,
             contact: { id: 'other-contact', displayName: 'Contact' },
@@ -631,6 +645,29 @@ describe('MessageService conversation transport routing', () => {
         expect(mocks.messageCreate).not.toHaveBeenCalled()
         expect(mocks.maxAssertTransportBinding).not.toHaveBeenCalled()
         expect(mocks.maxSendText).not.toHaveBeenCalled()
+    })
+
+    test('sends when only the deferred provider-account provenance differs', async () => {
+        mocks.chatFindUnique.mockResolvedValue(chat('max', {
+            providerAccountId: 'max-default',
+            connectionId: 'max_scraper',
+            senderId: 'max-sender-42',
+        }))
+        // Same canonical Contact, same identity, same channel, same peer target:
+        // every invariant that actually protects the conversation holds. Only the
+        // deferred account stamp disagrees, and it carries no authority, so the
+        // send proceeds instead of failing closed on a value that names a mutable
+        // transport slot. See docs/design/provider-account-identity-v1.md.
+        identityFixtures.set('identity-1', {
+            status: 'ready' as const,
+            contact: { id: 'contact-1', displayName: 'Contact' },
+            identity: {
+                id: 'identity-1', channel: 'max' as const, externalId: 'max-sender-42', providerAccountId: 'other-account',
+            },
+        })
+
+        await expect(MessageService.send('chat-1', 'hello', 'max')).resolves.toMatchObject({ success: true })
+        expect(mocks.maxSendText).toHaveBeenCalled()
     })
 
     test('rejects a stale identity binding on retry without changing the existing Message', async () => {

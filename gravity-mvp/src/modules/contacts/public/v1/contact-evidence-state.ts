@@ -126,7 +126,11 @@ export function withoutPhoneEvidence(customFields: unknown, phoneIds: readonly s
   return { ...fields, phoneEvidenceByPhoneId: map }
 }
 
-export function providerAccountMatches(metadata: unknown, requested: string): boolean {
-  const stored = identityEvidenceState(metadata).providerAccountId
-  return stored === requested
-}
+// providerAccountMatches was deliberately REMOVED, not merely left uncalled.
+// Comparing a stored provider-account stamp to an inbound one was an
+// authorization boundary with no authority behind it: every available value
+// names a mutable application transport slot rather than a provider-issued
+// account, and no production identity carries the stamp at all. Reintroducing
+// the helper would let that boundary return silently. identityEvidenceState
+// still exposes providerAccountId as telemetry and future migration metadata.
+// See docs/design/provider-account-identity-v1.md.

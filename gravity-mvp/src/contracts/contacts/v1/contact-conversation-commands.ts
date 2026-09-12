@@ -43,12 +43,25 @@ export interface ResolveChannelContactResultV1 {
     isNew: boolean
 }
 
+/**
+ * What the caller is about to do with the prepared identity.
+ *
+ * `open_conversation` is first contact: nothing proves the peer is reachable,
+ * so provider-confirmed reachability is required before a conversation is
+ * created. `send_in_bound_conversation` is a reply inside a conversation that
+ * already exists and is already bound to this identity; the conversation's own
+ * history is the proof, and demanding a separate reachability confirmation
+ * there would reject ordinary replies on long-running threads.
+ */
+export type ContactConversationPurposeV1 = 'open_conversation' | 'send_in_bound_conversation'
+
 export interface PrepareContactConversationIdentityCommandV1 {
     contract: typeof PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1
     contactId: string
     channel: ContactConversationChannelV1
     identityId: string | null
     phoneId: string | null
+    purpose: ContactConversationPurposeV1
 }
 
 export type PrepareContactConversationIdentityStatusV1 =
@@ -180,12 +193,15 @@ export function parsePrepareContactConversationIdentityCommandV1(
         input,
         PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
         'contacts.PrepareContactConversationIdentityCommand.',
-        ['contract', 'contactId', 'channel', 'identityId', 'phoneId'],
+        ['contract', 'contactId', 'channel', 'identityId', 'phoneId', 'purpose'],
     )
     requireLegacyIdentifier(value.contactId, 'contactId')
     requireChannel(value.channel)
     requireNullableLegacyIdentifier(value.identityId, 'identityId')
     requireNullableLegacyIdentifier(value.phoneId, 'phoneId')
+    if (value.purpose !== 'open_conversation' && value.purpose !== 'send_in_bound_conversation') {
+        throw new Error('contacts.PrepareContactConversationIdentityCommand.purpose must be exact')
+    }
     return value as unknown as PrepareContactConversationIdentityCommandV1
 }
 

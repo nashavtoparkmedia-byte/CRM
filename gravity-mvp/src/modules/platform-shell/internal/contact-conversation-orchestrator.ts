@@ -175,6 +175,8 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
     ): Promise<OpenContactConversationForContactResultV1> {
         const prepared = await owners.prepareContactConversationIdentityV1({
             contract: PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
+            // First contact from the contact card: prove the peer is reachable.
+            purpose: 'open_conversation',
             contactId: input.contactId,
             channel: input.channel,
             identityId: input.identityId,

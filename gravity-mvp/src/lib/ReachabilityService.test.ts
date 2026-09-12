@@ -180,7 +180,6 @@ describe('exact ContactIdentity reachability persistence', () => {
 
   test.each([
     ['another Contact owner', { contactId: 'contact-b' }, 'contact_owner_mismatch'],
-    ['another provider account', { providerAccountId: 'telegram-account-b' }, 'provider_account_mismatch'],
     ['another provider target', { providerTargetId: 'opaque-user-b' }, 'provider_target_mismatch'],
     ['another channel', { channel: 'max' }, 'channel_mismatch'],
   ])('rejects %s without changing either same-phone identity', async (_label, overrides, reason) => {
@@ -217,11 +216,6 @@ describe('exact ContactIdentity reachability persistence', () => {
 
   test('does not authorize legacy, inactive, archived, or conflicted identity evidence', async () => {
     const row = identities.get('identity-a')!
-
-    row.metadata = {}
-    await expect(recordExactProviderReachability(exactCommand())).resolves.toEqual({
-      outcome: 'rejected', reason: 'provider_account_unproven',
-    })
 
     row.metadata = { providerAccountId: 'telegram-account-a' }
     row.isActive = false
@@ -263,7 +257,7 @@ describe('exact ContactIdentity reachability persistence', () => {
 
     const prepared = await legacyPrismaContactConversationPortV1.prepareContactConversationIdentity({
       contactId: 'contact-a',
-      channel: 'telegram',
+      channel: 'telegram', purpose: 'open_conversation',
       identityId: 'identity-a',
       phoneId: null,
     })
@@ -280,9 +274,6 @@ describe('exact ContactIdentity reachability persistence', () => {
   })
 
   test('rejects malformed or legacy-sentinel authority before opening CNT1', async () => {
-    await expect(recordExactProviderReachability(exactCommand({ providerAccountId: 'legacy' }))).resolves.toEqual({
-      outcome: 'rejected', reason: 'invalid_binding',
-    })
     await expect(recordExactProviderReachability(exactCommand({ providerTargetId: ' target ' }))).resolves.toEqual({
       outcome: 'rejected', reason: 'invalid_binding',
     })

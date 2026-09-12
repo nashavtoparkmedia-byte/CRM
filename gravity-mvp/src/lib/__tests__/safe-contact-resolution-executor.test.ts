@@ -89,7 +89,7 @@ function expectNoMutation(tx: ContactResolutionExecutionTransaction) {
 }
 
 describe('SafeContactResolutionExecutor', () => {
-  test('scopes provider aliases by account before limiting candidates', async () => {
+  test('fails closed when several identities claim one provider alias', async () => {
     const aliases = [
       {
         id: 'identity-account-1',
@@ -145,24 +145,25 @@ describe('SafeContactResolutionExecutor', () => {
       contactIdentity,
     } as never)
 
+    // Three identities claim this alias. Account scoping used to hide two of
+    // them and return the third as a confident single match. Without it the
+    // ambiguity is visible and resolution fails closed instead of guessing.
     await expect(tx.findIdentity(
       ChatChannel.whatsapp,
       'wa-account-3',
       '79990000000@c.us',
-    )).resolves.toMatchObject({
-      id: 'identity-account-3',
-      contactId: 'contact-3',
-      externalId: 'opaque-3@lid',
-      providerAccountId: 'wa-account-3',
-    })
+    )).rejects.toThrow(ProviderIdentityAliasCollisionError)
+
+    // The candidate query carries no account predicate, and the row limit is
+    // applied by the database. Both facts matter together: a widened query with
+    // a surviving in-memory filter would shrink a two-row page back to one and
+    // never see the collision.
     expect(contactIdentity.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
+      where: {
         channel: ChatChannel.whatsapp,
-        AND: expect.arrayContaining([
-          { metadata: { path: ['providerAliasValues'], array_contains: ['79990000000@c.us'] } },
-          { metadata: { path: ['providerAccountId'], equals: 'wa-account-3' } },
-        ]),
-      }),
+        isActive: true,
+        metadata: { path: ['providerAliasValues'], array_contains: ['79990000000@c.us'] },
+      },
       take: 2,
     }))
   })
@@ -316,15 +317,18 @@ describe('SafeContactResolutionExecutor', () => {
     expect(tx.setPrimaryPhone).not.toHaveBeenCalled()
   })
 
-  test('persists a provider-account key collision and never cross-links its Contact', async () => {
-    const decision = plan({ status: 'create_required' })
+  test.each([
+    ['a different concrete account', 'account-a'],
+    ['no account provenance at all', 'legacy'],
+  ])('reuses an existing identity when the stored stamp is %s', async (_label, stored) => {
+    const decision = plan({ status: 'phone_matched', contactId: 'contact-account-a', canonicalContactId: 'contact-account-a' })
     const tx = transaction(decision)
     vi.mocked(tx.findIdentity).mockResolvedValue({
       id: 'identity-account-a',
       contactId: 'contact-account-a',
       channel: ChatChannel.max,
       externalId: 'opaque-user',
-      providerAccountId: 'account-a',
+      providerAccountId: stored,
       phoneId: null,
     })
 
@@ -333,53 +337,16 @@ describe('SafeContactResolutionExecutor', () => {
       providerAccountId: 'account-b',
       externalUserId: 'opaque-user',
       chatKind: 'private',
-    })).resolves.toMatchObject({
-      status: 'identity_phone_conflict',
-      identityContactId: 'contact-account-a',
-    })
-    expect(tx.recordConflict).toHaveBeenCalledWith(expect.objectContaining({
-      contactId: 'contact-account-a',
-      identityId: 'identity-account-a',
-      conflictType: 'provider_account_identity_collision',
-    }))
+    })).resolves.toMatchObject({ status: 'identity_reused' })
+
+    // Provider-account isolation is deferred: no value available here names a
+    // provider-issued account, so a stamp difference is not evidence and must
+    // never mint a permanent Contact or ContactIdentity conflict marker.
+    expect(tx.recordConflict).not.toHaveBeenCalled()
     expect(tx.createContact).not.toHaveBeenCalled()
     expect(tx.createIdentity).not.toHaveBeenCalled()
-    expect(tx.updateIdentity).not.toHaveBeenCalled()
   })
 
-  test('rejects a concrete provider account colliding with a legacy-scoped identity', async () => {
-    const decision = plan({ status: 'create_required' })
-    const tx = transaction(decision)
-    vi.mocked(tx.findIdentity).mockResolvedValue({
-      id: 'identity-legacy',
-      contactId: 'contact-legacy',
-      channel: ChatChannel.max,
-      externalId: 'opaque-user',
-      providerAccountId: 'legacy',
-      phoneId: null,
-    })
-
-    await expect(executor(decision, tx).executor.execute({
-      channel: 'max',
-      providerAccountId: 'account-b',
-      externalUserId: 'opaque-user',
-      chatKind: 'private',
-    })).resolves.toMatchObject({
-      status: 'identity_phone_conflict',
-      identityContactId: 'contact-legacy',
-    })
-    expect(tx.recordConflict).toHaveBeenCalledWith(expect.objectContaining({
-      identityId: 'identity-legacy',
-      conflictType: 'provider_account_identity_collision',
-      details: expect.objectContaining({
-        storedProviderAccountId: 'legacy',
-        requestedProviderAccountId: 'account-b',
-      }),
-    }))
-    expect(tx.createContact).not.toHaveBeenCalled()
-    expect(tx.createIdentity).not.toHaveBeenCalled()
-    expect(tx.updateIdentity).not.toHaveBeenCalled()
-  })
 
   test.each([
     plan({ status: 'archived_without_merge', contactId: 'A' }),

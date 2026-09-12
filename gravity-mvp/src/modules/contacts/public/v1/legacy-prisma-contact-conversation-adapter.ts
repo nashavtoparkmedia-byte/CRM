@@ -98,15 +98,25 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
                 return { status: 'identity_conflicted' as const }
             }
 
-            // Creating or opening an outbound conversation is a write-capable
-            // operation. Only delivery-confirmed provider reachability can
-            // authorize it; an operationally unknown result must fail closed
-            // just like a provider-confirmed negative result.
-            if (identity.reachabilityStatus === 'unreachable') {
-                return { status: 'identity_unreachable' as const }
-            }
-            if (identity.reachabilityStatus !== 'confirmed') {
-                return { status: 'identity_reachability_unknown' as const }
+            // OPENING a conversation is first contact: nothing yet proves the
+            // peer exists, so only delivery-confirmed provider reachability can
+            // authorize it, and an operationally unknown result fails closed
+            // just like a provider-confirmed negative one.
+            //
+            // REPLYING inside a conversation that is already bound to this exact
+            // identity is a different question. The conversation's own delivered
+            // history is the proof, so requiring a separate confirmation there
+            // rejects ordinary replies on threads that have been carrying
+            // messages for months. Every identity starts at 'unknown', so that
+            // reading would reject a majority of live outbound traffic while
+            // proving nothing the thread has not already demonstrated.
+            if (input.purpose === 'open_conversation') {
+                if (identity.reachabilityStatus === 'unreachable') {
+                    return { status: 'identity_unreachable' as const }
+                }
+                if (identity.reachabilityStatus !== 'confirmed') {
+                    return { status: 'identity_reachability_unknown' as const }
+                }
             }
 
             return {

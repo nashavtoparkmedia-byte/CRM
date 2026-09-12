@@ -8,6 +8,7 @@ import {
     type ContactConversationChannelV1,
     type ContactConversationContactV1,
     type ContactConversationIdentityV1,
+    type ContactConversationPurposeV1,
     type GetPreferredActiveContactPhoneQueryV1,
     type GetPreferredActiveContactPhoneResultV1,
     type PreparedContactConversationIdentityV1,
@@ -51,6 +52,7 @@ export interface ContactConversationPersistencePortV1 {
         channel: ContactConversationChannelV1
         identityId: string | null
         phoneId: string | null
+        purpose: ContactConversationPurposeV1
     }): Promise<PrepareContactConversationIdentityPersistenceResultV1>
     getPreferredActiveContactPhone(contactId: string, phoneId: string | null): Promise<string | null>
 }
@@ -85,6 +87,7 @@ export function createPrepareContactConversationIdentityHandlerV1(port: ContactC
             channel: parsed.channel,
             identityId: parsed.identityId,
             phoneId: parsed.phoneId,
+            purpose: parsed.purpose,
         })
 
         if (prepared.status !== 'ready') {

@@ -10,7 +10,7 @@ export interface PreparedManualDriverTelegramLinkAuthorityV1 {
     chatId: string
     contactId: string
     contactIdentityId: string
-    providerAccountId: string
+    providerAccountId: string | null
     connectionId: string
     target: string
     identityTarget: string

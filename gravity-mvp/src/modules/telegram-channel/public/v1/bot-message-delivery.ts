@@ -7,7 +7,7 @@ export type TelegramBotInlineButtonV1 = {
 export type TelegramBotInlineKeyboardV1 = TelegramBotInlineButtonV1[][]
 
 export type ExactTelegramBotDeliveryInputV1 = {
-    providerAccountId: string
+    providerAccountId: string | null
     connectionId: string
     peerId: string
     text: string
@@ -15,7 +15,7 @@ export type ExactTelegramBotDeliveryInputV1 = {
 }
 
 export type ExactTelegramBotDeliveryResultV1 = {
-    providerAccountId: string
+    providerAccountId: string | null
     connectionId: string
     messageId: string
 }
@@ -82,7 +82,10 @@ export async function sendExactTelegramBotMessageV1(
     const providerAccountId = concreteId(input.providerAccountId)
     const connectionId = concreteId(input.connectionId)
     const peerId = exactPrivatePeer(input.peerId)
-    if (!providerAccountId) throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN')
+    // No production Telegram conversation carries a provider-account stamp, so
+    // demanding one here would reject every bot send while proving nothing. The
+    // echo proof below still runs whenever we DID request a specific account.
+    // See docs/design/provider-account-identity-v1.md.
     if (!connectionId) throw new Error('TELEGRAM_BOT_CONNECTION_UNPROVEN')
     if (!peerId) throw new Error('TELEGRAM_OUTBOUND_PEER_INVALID')
     if (typeof input.text !== 'string' || !input.text) throw new Error('TELEGRAM_MESSAGE_EMPTY')
@@ -97,7 +100,7 @@ export async function sendExactTelegramBotMessageV1(
         body: JSON.stringify({
             chatId: peerId,
             text: input.text,
-            providerAccountId,
+            ...(providerAccountId ? { providerAccountId } : {}),
             connectionId,
             ...(input.inlineKeyboard ? { inlineKeyboard: input.inlineKeyboard } : {}),
         }),
@@ -112,7 +115,7 @@ export async function sendExactTelegramBotMessageV1(
             : `TELEGRAM_BOT_DELIVERY_FAILED:${response.status}`
         throw new Error(detail)
     }
-    if (payload.providerAccountId !== providerAccountId) {
+    if (providerAccountId && payload.providerAccountId !== providerAccountId) {
         throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_PROOF_MISMATCH')
     }
     if (payload.connectionId !== connectionId) {

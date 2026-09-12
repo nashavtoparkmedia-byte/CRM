@@ -4,7 +4,6 @@ import {
   contactAutomationState,
   identityEvidenceState,
   phoneEvidenceState,
-  providerAccountMatches,
   withPhoneEvidence,
 } from './contact-evidence-state'
 
@@ -50,14 +49,15 @@ describe('Contact JSON evidence compatibility', () => {
     })
   })
 
-  test('scopes opaque provider identities without treating legacy as a wildcard account', () => {
+  test('reads provider account provenance as telemetry, defaulting an absent stamp', () => {
     expect(identityEvidenceState({ providerAccountId: 'account-a', origin: 'provider' }))
       .toMatchObject({ providerAccountId: 'account-a', origin: 'provider' })
-    expect(providerAccountMatches({ providerAccountId: 'account-a' }, 'account-a')).toBe(true)
-    expect(providerAccountMatches({ providerAccountId: 'account-a' }, 'account-b')).toBe(false)
-    expect(providerAccountMatches({}, 'account-b')).toBe(false)
-    expect(providerAccountMatches({ providerAccountId: 'account-b' }, 'legacy')).toBe(false)
-    expect(providerAccountMatches({}, 'legacy')).toBe(true)
+    // An absent stamp reads back as the legacy sentinel. It is descriptive
+    // metadata only: no runtime authorization compares these values, because
+    // provider-account isolation is deferred until a provider-authoritative
+    // account identity exists. See docs/design/provider-account-identity-v1.md.
+    expect(identityEvidenceState({}).providerAccountId).toBe('legacy')
+    expect(identityEvidenceState({ providerAccountId: '  ' }).providerAccountId).toBe('legacy')
   })
 
   test('reads merge redirect, recovery, canonical pin and do-not-merge from existing JSON', () => {

@@ -22,14 +22,15 @@ export interface MaxTextDeliveryResultV1 {
 }
 
 export interface MaxTransportBindingV1 {
-    providerAccountId: string
+    /** Non-authoritative provider-account metadata; null when none is recorded. */
+    providerAccountId: string | null
     connectionId?: string
     isPersonal: boolean
 }
 
 export interface MaxChannelDeliveryV1 {
     assertTransportBinding(input: MaxTransportBindingV1): void
-    sendText(input: { target: string, content: string, options: { providerAccountId: string, name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<MaxTextDeliveryResultV1>
+    sendText(input: { target: string, content: string, options: { providerAccountId: string | null, name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<MaxTextDeliveryResultV1>
     sendMedia(input: MaxTransportBindingV1 & { chatId: string, base64: string, filename: string, mimeType: string, caption: string, mediaType: string }): Promise<{ externalId?: string }>
     sendReaction(input: MaxTransportBindingV1 & { chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<{
         reactionConfirmed: boolean

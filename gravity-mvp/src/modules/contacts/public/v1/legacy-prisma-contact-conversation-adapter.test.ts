@@ -81,6 +81,26 @@ describe('Contacts outbound conversation identity preparation', () => {
         })
     })
 
+    test.each(['unreachable', 'unknown'] as const)(
+        'admits a reply in an already bound conversation for %s reachability',
+        async reachabilityStatus => {
+            const tx = transaction(reachabilityStatus)
+            mocks.runTransaction.mockImplementation(async work => work(tx))
+
+            // The conversation already exists and is already bound to this exact
+            // identity, so its own delivered history is the proof. Every identity
+            // starts at 'unknown', so demanding a separate confirmation here
+            // would reject ordinary replies on long-running threads.
+            await expect(port.prepareContactConversationIdentity({
+                contactId: 'contact-1',
+                channel: 'telegram',
+                purpose: 'send_in_bound_conversation',
+                identityId: 'identity-1',
+                phoneId: null,
+            })).resolves.toMatchObject({ status: 'ready' })
+        },
+    )
+
     test.each([
         ['unreachable', 'identity_unreachable'],
         ['unknown', 'identity_reachability_unknown'],
@@ -94,6 +114,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: 'identity-1',
             phoneId: null,
         })).resolves.toEqual({ status: expectedStatus })
@@ -117,6 +138,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: 'identity-1',
             phoneId: null,
         })).resolves.toEqual({
@@ -139,6 +161,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: 'identity-1',
             phoneId: null,
         })).resolves.toMatchObject({
@@ -159,6 +182,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: 'identity-1',
             phoneId: null,
         })).resolves.toEqual({ status: 'identity_conflicted' })
@@ -174,6 +198,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: null,
             phoneId: 'phone-1',
         })).resolves.toEqual({ status: 'no_identity' })
@@ -210,6 +235,7 @@ describe('Contacts outbound conversation identity preparation', () => {
         await expect(port.prepareContactConversationIdentity({
             contactId: 'contact-1',
             channel: 'telegram',
+            purpose: 'open_conversation',
             identityId: null,
             phoneId: null,
         })).resolves.toEqual({ status: 'identity_ambiguous' })

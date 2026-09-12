@@ -68,8 +68,11 @@ export {
     retryEligibleMessagingDeliveriesV1,
 } from './delivery-recovery-operations'
 export {
+    activeTelegramCarrierIdsV1,
     prepareOutboundConversationV1,
+    registerActiveTelegramCarrierResolverV1,
     registerOutboundConversationPreparerV1,
+    type ActiveTelegramCarrierResolverV1,
     type OutboundConversationChannelV1,
     type OutboundConversationPreparerV1,
     type OutboundConversationSnapshotV1,

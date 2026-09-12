@@ -194,21 +194,20 @@ async function admitTelegramConversation(input: {
         : existingMetadata.chatKind === 'private' || existingMetadata.chatKind === 'group'
             ? existingMetadata.chatKind
             : null
+    // Same rule as the GramJS ladder in tg-actions: reject a CONTRADICTION, never
+    // the mere absence of provenance a legacy row could not have recorded and
+    // can never gain. Provider-account comparison is removed outright, because
+    // no production conversation carries that stamp and the value names a
+    // mutable transport slot. See docs/design/provider-account-identity-v1.md.
     const collisionReason = chat.channel !== 'telegram'
         ? 'channel_mismatch'
         : chat.externalChatId !== input.externalChatId
             ? 'conversation_key_mismatch'
-            : existingProviderAccountId === null
-                ? 'provider_account_unproven'
-                : existingProviderAccountId !== input.providerAccountId
-                    ? 'provider_account_mismatch'
-                    : existingConnectionId === null
-                        ? 'transport_connection_unproven'
-                        : existingConnectionId !== input.connectionId
-                            ? 'transport_connection_mismatch'
-                            : existingChatKind !== input.chatKind
-                                ? 'chat_kind_mismatch'
-                                : null
+            : existingConnectionId !== null && existingConnectionId !== input.connectionId
+                ? 'transport_connection_mismatch'
+                : existingChatKind !== input.chatKind
+                    ? 'chat_kind_mismatch'
+                    : null
 
     if (collisionReason) {
         const evidence = {
@@ -244,17 +243,11 @@ async function admitTelegramConversation(input: {
                 },
             })
         }
-        const error = collisionReason === 'provider_account_mismatch'
-            ? 'TELEGRAM_PROVIDER_ACCOUNT_COLLISION'
-            : collisionReason === 'provider_account_unproven'
-                ? 'TELEGRAM_PROVIDER_ACCOUNT_UNPROVEN'
-                : collisionReason === 'transport_connection_mismatch'
-                    ? 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION'
-                    : collisionReason === 'transport_connection_unproven'
-                        ? 'TELEGRAM_TRANSPORT_CONNECTION_UNPROVEN'
-                        : collisionReason === 'chat_kind_mismatch'
-                            ? 'TELEGRAM_CHAT_KIND_COLLISION'
-                            : 'TELEGRAM_CONVERSATION_COLLISION'
+        const error = collisionReason === 'transport_connection_mismatch'
+            ? 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION'
+            : collisionReason === 'chat_kind_mismatch'
+                ? 'TELEGRAM_CHAT_KIND_COLLISION'
+                : 'TELEGRAM_CONVERSATION_COLLISION'
         return { response: NextResponse.json({ error }, { status: 409 }) }
     }
 

@@ -633,28 +633,35 @@ async function admitTelegramPrivateConversation(input: {
     })
     const chat = admitted.conversation as TelegramPrivateConversation
     const storedMetadata = metadataRecord(chat.metadata)
-    const storedProviderAccountId = concreteOpaqueId(storedMetadata.providerAccountId)
     const storedConnectionId = concreteOpaqueId(storedMetadata.connectionId)
     const storedPeerId = concreteOpaqueId(storedMetadata.peerId)
+    // Each arm rejects only on a CONTRADICTION that production rows can actually
+    // express. A stored value that is simply absent is a legacy compatibility
+    // state: those rows predate transport/peer stamping, and the conversation
+    // adapter never writes metadata onto an existing row, so an "unproven" arm
+    // would fire forever on every one of them and could never self-heal.
+    // Measured 2026-09-12 over 167 production telegram Chat rows: 0 carry
+    // providerAccountId, 0 carry peerId, 0 carry chatKind, 109 carry
+    // connectionId, and all 167 carry chatType='private'.
+    // Provider-account comparison is gone entirely: see
+    // docs/design/provider-account-identity-v1.md.
     const reason = chat.channel !== 'telegram'
         ? 'channel_mismatch'
         : chat.externalChatId !== externalChatId
             ? 'conversation_key_mismatch'
-            : storedProviderAccountId === null
-                ? 'provider_account_unproven'
-                : storedProviderAccountId !== providerAccountId
-                    ? 'provider_account_mismatch'
-                    : storedConnectionId === null
-                        ? 'transport_connection_unproven'
-                        : storedConnectionId !== connectionId
-                            ? 'transport_connection_mismatch'
-                            : storedPeerId === null
-                                ? 'peer_identity_unproven'
-                                : storedPeerId !== peerId
-                                    ? 'peer_identity_mismatch'
-                                    : chat.chatType !== 'private' || storedMetadata.chatKind !== 'private'
-                                        ? 'chat_kind_mismatch'
-                                        : null
+            // A stored transport that disagrees is a real cross-transport claim.
+            : storedConnectionId !== null && storedConnectionId !== connectionId
+                ? 'transport_connection_mismatch'
+                // A stored peer that disagrees means this conversation belongs to
+                // somebody else. This is the cross-peer guard and it stays exact.
+                : storedPeerId !== null && storedPeerId !== peerId
+                    ? 'peer_identity_mismatch'
+                    // chatType is carried by every production row; chatKind is
+                    // only compared when the row actually has one.
+                    : chat.chatType !== 'private'
+                        || (storedMetadata.chatKind !== undefined && storedMetadata.chatKind !== 'private')
+                        ? 'chat_kind_mismatch'
+                        : null
     if (reason) {
         await rejectTelegramConversationCollision(chat, {
             phase: input.phase,

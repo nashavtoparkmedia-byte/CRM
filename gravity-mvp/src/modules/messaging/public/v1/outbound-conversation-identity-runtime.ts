@@ -15,7 +15,8 @@ export interface PreparedOutboundConversationV1 {
     channel: OutboundConversationChannelV1
     contactId: string
     contactIdentityId: string
-    providerAccountId: string
+    /** Non-authoritative provider-account metadata; null when the conversation carries none. */
+    providerAccountId: string | null
     connectionId: string
     identityTarget: string
     target: string
@@ -52,6 +53,39 @@ export function registerOutboundConversationPreparerV1(
             globalThis.__outboundConversationPreparerV1 = undefined
         }
     }
+}
+
+/**
+ * Resolves the ids of every currently active Telegram transport.
+ *
+ * Conversations created before transport stamping carry no connection binding,
+ * and nothing can ever add one to an existing row. Production routes them today
+ * by selecting the active default Telegram connection, so that same carrier is
+ * the compatibility evidence for them. The resolver returns ALL active ids so
+ * the caller can fail closed the moment more than one exists.
+ */
+export type ActiveTelegramCarrierResolverV1 = () => Promise<string[]>
+
+declare global {
+    var __activeTelegramCarrierResolverV1: ActiveTelegramCarrierResolverV1 | undefined
+}
+
+export function registerActiveTelegramCarrierResolverV1(
+    resolver: ActiveTelegramCarrierResolverV1,
+): () => void {
+    if (typeof resolver !== 'function') throw new TypeError('resolver must be a function')
+    globalThis.__activeTelegramCarrierResolverV1 = resolver
+    return () => {
+        if (globalThis.__activeTelegramCarrierResolverV1 === resolver) {
+            globalThis.__activeTelegramCarrierResolverV1 = undefined
+        }
+    }
+}
+
+export async function activeTelegramCarrierIdsV1(): Promise<string[]> {
+    const resolver = globalThis.__activeTelegramCarrierResolverV1
+    if (!resolver) return []
+    return resolver()
 }
 
 export async function prepareOutboundConversationV1(

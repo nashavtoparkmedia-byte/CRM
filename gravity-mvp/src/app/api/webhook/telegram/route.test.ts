@@ -234,24 +234,11 @@ describe('Telegram webhook account and transport admission', () => {
   })
 
   test.each([
-    ['another provider account', {
-      chatKind: 'private',
-      providerAccountId: 'telegram-bot-a',
-      connectionId: 'telegram-connection-a',
-    }, 'TELEGRAM_PROVIDER_ACCOUNT_COLLISION', 'provider_account_mismatch'],
-    ['unproven provider account', {
-      chatKind: 'private',
-      connectionId: 'telegram-connection-b',
-    }, 'TELEGRAM_PROVIDER_ACCOUNT_UNPROVEN', 'provider_account_unproven'],
     ['another transport connection', {
       chatKind: 'private',
       providerAccountId: 'telegram-bot-b',
       connectionId: 'telegram-connection-a',
     }, 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION', 'transport_connection_mismatch'],
-    ['unproven transport connection', {
-      chatKind: 'private',
-      providerAccountId: 'telegram-bot-b',
-    }, 'TELEGRAM_TRANSPORT_CONNECTION_UNPROVEN', 'transport_connection_unproven'],
   ])('rejects an existing private Chat with %s before downstream mutation', async (
     _label,
     metadata,
@@ -278,10 +265,9 @@ describe('Telegram webhook account and transport admission', () => {
     expectNoPersonOrMessageMutation()
   })
 
-  test('marks the exact linked ContactIdentity conflicted after durable Chat evidence', async () => {
+  test('records durable Chat evidence for a real cross-transport claim on a linked identity', async () => {
     const existing = chat({
       chatKind: 'private',
-      providerAccountId: 'telegram-bot-a',
       connectionId: 'telegram-connection-a',
     }, {
       contactId: 'contact-a',
@@ -298,11 +284,9 @@ describe('Telegram webhook account and transport admission', () => {
       contactId: 'contact-a',
       identityId: 'identity-a',
       channel: 'telegram',
-      reason: 'provider_account_mismatch',
+      reason: 'transport_connection_mismatch',
       evidenceRoot: expect.stringContaining('channel-collision:telegram:telegram:42:'),
       details: expect.objectContaining({
-        incomingProviderAccountId: 'telegram-bot-b',
-        existingProviderAccountId: 'telegram-bot-a',
         incomingConnectionId: 'telegram-connection-b',
         existingConnectionId: 'telegram-connection-a',
       }),
@@ -625,4 +609,31 @@ describe('Telegram webhook account and transport admission', () => {
       data: { botState: 'IDLE' },
     })
   })
+
+  // Legacy compatibility must not become 'accept anything'. A row that merely
+  // LACKS provenance it could never have recorded is admitted; a row that
+  // CONTRADICTS the inbound event is still rejected before any mutation.
+  test('admits a legacy private Chat carrying no provenance at all', async () => {
+    mocks.upsertConversation.mockResolvedValue({ conversation: chat({}) })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(200)
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['a different conversation key', { chatKind: 'private' }, { externalChatId: 'telegram:999' }],
+    ['a different channel', { chatKind: 'private' }, { channel: 'whatsapp' }],
+    ['a concrete group chatType', { chatKind: 'private' }, { chatType: 'group' }],
+    ['a conversation bound to another transport', { chatKind: 'private', connectionId: 'telegram-connection-a' }, {}],
+  ])('still rejects %s before any person or message mutation', async (_label, metadata, overrides) => {
+    mocks.upsertConversation.mockResolvedValue({ conversation: chat(metadata, overrides) })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(409)
+    expectNoPersonOrMessageMutation()
+  })
+
 })

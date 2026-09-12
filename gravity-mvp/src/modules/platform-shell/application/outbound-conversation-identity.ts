@@ -1,6 +1,7 @@
 import { PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { prepareContactConversationIdentityV1 } from '@/modules/contacts/public/v1'
 import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { activeTelegramCarrierIdsV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 import { canonicalWhatsAppConversationTargetV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
 export type OutboundConversationChannelV1 = 'telegram' | 'whatsapp' | 'max'
@@ -20,7 +21,8 @@ export interface PreparedOutboundConversationV1 {
     channel: OutboundConversationChannelV1
     contactId: string
     contactIdentityId: string
-    providerAccountId: string
+    /** Non-authoritative provider-account metadata; null when the conversation carries none. */
+    providerAccountId: string | null
     connectionId: string
     /** Exact ContactIdentity primary/alias accepted by the provider owner. */
     identityTarget: string
@@ -96,6 +98,8 @@ export async function prepareOutboundConversationV1(
 
     const prepared = await prepareContactConversationIdentityV1({
         contract: PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
+        // Replying inside a conversation already bound to this identity.
+        purpose: 'send_in_bound_conversation',
         contactId,
         channel,
         identityId: contactIdentityId,
@@ -120,32 +124,40 @@ export async function prepareOutboundConversationV1(
     if (requestedConnectionId !== undefined && !requested) {
         throw new Error('CONTACT_CONVERSATION_TRANSPORT_MISMATCH')
     }
-    if (!connectionId) throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
-    if (requested && requested !== connectionId) {
+    // Conversations created before transport stamping carry no connection, and
+    // no code path can ever add one to an existing row. Production routes those
+    // rows today by selecting the active default Telegram connection, so that
+    // same carrier is their compatibility evidence. It is admitted ONLY while
+    // exactly one active transport exists: with one there is no other account to
+    // cross into, and the moment a second is activated the fallback disables
+    // itself and these conversations fail closed again.
+    let boundConnectionId = connectionId
+    if (!boundConnectionId && channel === 'telegram') {
+        const active = await activeTelegramCarrierIdsV1()
+        boundConnectionId = active.length === 1 ? exactNonEmptyString(active[0]) : null
+    }
+    if (!boundConnectionId) throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
+    if (requested && requested !== boundConnectionId) {
         throw new Error('CONTACT_CONVERSATION_TRANSPORT_MISMATCH')
     }
 
-    // A WhatsApp connection is also the provider-account scope. Older live
-    // rows wrote only connectionId, so accept that exact owned value; when both
-    // fields exist they must agree. Other channels may model account and
-    // transport with distinct identifiers and therefore require the explicit
-    // providerAccountId.
-    if (
-        channel === 'whatsapp'
-        && declaredProviderAccountId
-        && declaredProviderAccountId !== connectionId
-    ) {
-        throw new Error('CONTACT_CONVERSATION_PROVIDER_TRANSPORT_MISMATCH')
-    }
+    // Provider-account provenance is DEFERRED and carries no authority here.
+    // Every value available is a mutable application transport slot rather than
+    // a provider-issued account, and no production identity or conversation
+    // carries the stamp at all, so requiring it rejected every outbound send on
+    // every channel while proving nothing. It is carried forward only as
+    // descriptive metadata for the transports that echo it back.
+    // See docs/design/provider-account-identity-v1.md.
+    //
+    // The transport binding above and the exact conversation target below are
+    // the real guards and are unchanged: an outbound message still may only
+    // leave through the transport this conversation is bound to, and only to
+    // the peer the resolved identity actually names.
     const providerAccountId = channel === 'whatsapp'
-        ? declaredProviderAccountId ?? connectionId
+        ? declaredProviderAccountId ?? boundConnectionId
         : declaredProviderAccountId
-    if (!providerAccountId || providerAccountId === 'legacy') {
-        throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
-    }
 
     const identityExternalId = exactNonEmptyString(prepared.identity.externalId)
-    const identityProviderAccountId = exactNonEmptyString(prepared.identity.providerAccountId)
     const matchedWhatsAppIdentityExternalId = channel === 'whatsapp'
         ? [identityExternalId, ...(prepared.identity.providerAliasValues ?? [])]
             .map(value => {
@@ -165,24 +177,26 @@ export async function prepareOutboundConversationV1(
         : channel === 'whatsapp'
             ? matchedWhatsAppIdentityExternalId !== null
             : externalChatId === expectedConversationTarget(channel, identityExternalId ?? '')
+    // Ownership and target remain exact: the prepared contact and identity must
+    // be the ones this conversation names, on this channel, and the conversation
+    // must address the peer that identity names. The provider-account clauses
+    // that used to sit in this condition were removed with the rest of the
+    // deferred account authority; they rejected every production identity.
     if (
         prepared.contact.id !== contactId
         || prepared.identity.id !== contactIdentityId
         || prepared.identity.channel !== channel
         || !identityExternalId
-        || !identityProviderAccountId
-        || identityProviderAccountId === 'legacy'
-        || identityProviderAccountId !== providerAccountId
         || !targetMatches
     ) {
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
 
-    const isMaxPersonal = channel === 'max' && isMaxPersonalConnection(connectionId)
+    const isMaxPersonal = channel === 'max' && isMaxPersonalConnection(boundConnectionId)
     if (channel === 'max') {
         getMaxChannelDeliveryV1().assertTransportBinding({
             providerAccountId,
-            connectionId,
+            connectionId: boundConnectionId,
             isPersonal: isMaxPersonal,
         })
     }
@@ -193,7 +207,7 @@ export async function prepareOutboundConversationV1(
         contactId,
         contactIdentityId,
         providerAccountId,
-        connectionId,
+        connectionId: boundConnectionId,
         identityTarget: matchedWhatsAppIdentityExternalId ?? identityExternalId,
         target: providerTarget(
             channel,

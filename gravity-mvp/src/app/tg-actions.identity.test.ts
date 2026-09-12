@@ -340,7 +340,7 @@ describe('GramJS private conversation identity admission', () => {
         expect(importSource).not.toMatch(/telegramConnection\.findMany|conns\[0\]/)
     })
 
-    test('live inbound records and rejects a cross-account Chat before Contact or message writes', async () => {
+    test('live inbound records and rejects a cross-transport Chat before Contact or message writes', async () => {
         const connectionId = `telegram-account-incoming-${connectionSequence}`
         const providerAccountId = '7002'
         const handler = await initializeListener(connectionId, providerAccountId)
@@ -368,7 +368,7 @@ describe('GramJS private conversation identity admission', () => {
             chatId: 'chat-owned-by-other-account',
             evidence: expect.objectContaining({
                 channel: 'telegram',
-                reason: 'provider_account_mismatch',
+                reason: 'transport_connection_mismatch',
                 phase: 'inbound',
                 incomingPeerId: '42',
                 incomingProviderAccountId: providerAccountId,
@@ -700,4 +700,47 @@ describe('GramJS private conversation identity admission', () => {
         })
         expect(mocks.getEntity).not.toHaveBeenCalled()
     })
+
+    // Legacy compatibility must not become 'accept anything'. A row lacking
+    // provenance it could never have recorded is admitted; a row that
+    // CONTRADICTS the inbound event still fails closed before any write.
+    test('admits a legacy private Chat carrying no transport or peer provenance', async () => {
+        const connectionId = `telegram-account-legacy-${connectionSequence}`
+        const handler = await initializeListener(connectionId, '7010')
+        mocks.upsertConversation.mockResolvedValueOnce({
+            conversation: {
+                id: 'chat-legacy', channel: 'telegram', externalChatId: 'telegram:42',
+                chatType: 'private', contactId: null, contactIdentityId: null, driverId: null,
+                metadata: {},
+            },
+        })
+
+        await handler({ message: inboundMessage('42') })
+
+        expect(mocks.appendCollision).not.toHaveBeenCalled()
+        expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+        expect(mocks.resolveContact).toHaveBeenCalled()
+    })
+
+    test('still rejects a conversation whose stored peer is somebody else', async () => {
+        const connectionId = `telegram-account-peer-${connectionSequence}`
+        const handler = await initializeListener(connectionId, '7011')
+        mocks.upsertConversation.mockResolvedValueOnce({
+            conversation: {
+                id: 'chat-other-peer', channel: 'telegram', externalChatId: 'telegram:42',
+                chatType: 'private', contactId: 'contact-x', contactIdentityId: 'identity-x',
+                driverId: null,
+                metadata: { chatKind: 'private', peerId: '999', connectionId },
+            },
+        })
+
+        await handler({ message: inboundMessage('42') })
+
+        expect(mocks.appendCollision).toHaveBeenCalledWith(expect.objectContaining({
+            evidence: expect.objectContaining({ reason: 'peer_identity_mismatch' }),
+        }))
+        expect(mocks.resolveContact).not.toHaveBeenCalled()
+        expect(mocks.createMessage).not.toHaveBeenCalled()
+    })
+
 })

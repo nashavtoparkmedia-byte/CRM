@@ -66,7 +66,7 @@ describe('Contacts-owned channel identity conflict', () => {
     })
   })
 
-  test('records an open Contact conflict and marks the exact identity conflicted', async () => {
+  test('records an open Contact conflict without permanently disabling the identity', async () => {
     await markChannelIdentityConflictV1(input)
 
     expect(mocks.lockRows).toHaveBeenCalledWith(expect.anything(), {
@@ -93,15 +93,11 @@ describe('Contacts-owned channel identity conflict', () => {
         }),
       },
     })
-    expect(mocks.identityUpdate).toHaveBeenCalledWith({
-      where: { id: 'identity-1' },
-      data: {
-        metadata: {
-          providerAccountId: 'telegram-bot-a',
-          conflictState: 'conflicted',
-        },
-      },
-    })
+    // The append-only audit above is the whole record. conflictState is read as
+    // a hard deny by reachability, contact conversation preparation and the
+    // driver-link authority, so one ingress observation must never be able to
+    // permanently disable an identity.
+    expect(mocks.identityUpdate).not.toHaveBeenCalled()
     expect(mocks.assertPostconditions).toHaveBeenCalledOnce()
   })
 

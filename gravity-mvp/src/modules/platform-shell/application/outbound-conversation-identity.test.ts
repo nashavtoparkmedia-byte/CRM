@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
     prepareIdentity: vi.fn(),
     assertMaxTransport: vi.fn(),
+    activeTelegramCarriers: vi.fn(),
 }))
 
 vi.mock('@/modules/contacts/public/v1', () => ({
@@ -10,6 +11,9 @@ vi.mock('@/modules/contacts/public/v1', () => ({
 }))
 vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
     getMaxChannelDeliveryV1: () => ({ assertTransportBinding: mocks.assertMaxTransport }),
+}))
+vi.mock('@/modules/messaging/public/v1/outbound-conversation-identity-runtime', () => ({
+    activeTelegramCarrierIdsV1: mocks.activeTelegramCarriers,
 }))
 
 import { prepareOutboundConversationV1 } from './outbound-conversation-identity'
@@ -119,5 +123,41 @@ describe('outbound person-conversation classification', () => {
                 target: '42',
                 connectionId: 'telegram-connection-1',
             })
+    })
+
+    test.each([
+        ['exactly one active transport is admitted', ['telegram-connection-1'], 'ok'],
+        ['two active transports fail closed', ['a', 'b'], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
+        ['no active transport fails closed', [], 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND'],
+    ] as const)('legacy unbound Telegram conversation: %s', async (_label, carriers, expected) => {
+        mocks.activeTelegramCarriers.mockResolvedValue([...carriers])
+        mocks.prepareIdentity.mockResolvedValue({
+            status: 'ready',
+            contact: { id: 'contact-1', displayName: 'Contact' },
+            identity: {
+                id: 'identity-1',
+                channel: 'telegram',
+                externalId: '42',
+                providerAccountId: null,
+                providerAliasValues: [],
+            },
+        })
+        // 58 of 167 production Telegram conversations carry no connectionId and
+        // none can ever gain one. Production routes them today through the single
+        // active default transport, so that carrier is admitted here - but only
+        // while exactly one exists, so a second account can never claim them.
+        const unbound = {
+            ...telegramChat('private'),
+            metadata: { chatKind: 'private' },
+        }
+
+        if (expected === 'ok') {
+            await expect(prepareOutboundConversationV1(unbound)).resolves.toMatchObject({
+                connectionId: 'telegram-connection-1',
+                target: '42',
+            })
+        } else {
+            await expect(prepareOutboundConversationV1(unbound)).rejects.toThrow(expected)
+        }
     })
 })

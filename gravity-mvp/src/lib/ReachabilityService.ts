@@ -13,7 +13,8 @@ export type RecordExactProviderReachabilityCommandV1 = {
   identityId: string
   contactId: string
   channel: ExactReachabilityChannelV1
-  providerAccountId: string
+  /** Non-authoritative provider-account metadata; not used to admit or reject a proof. */
+  providerAccountId?: string | null
   providerTargetId: string
   status: ExactReachabilityStatusV1
 }
@@ -73,12 +74,10 @@ export async function recordExactProviderReachability(
 ): Promise<RecordExactProviderReachabilityResultV1> {
   const identityId = exactNonLegacyValue(command?.identityId)
   const contactId = exactNonLegacyValue(command?.contactId)
-  const providerAccountId = exactNonLegacyValue(command?.providerAccountId)
   const providerTargetId = exactNonLegacyValue(command?.providerTargetId)
   if (
     !identityId
     || !contactId
-    || !providerAccountId
     || !providerTargetId
     || !isExactReachabilityChannel(command?.channel)
     || !isExactReachabilityStatus(command?.status)
@@ -146,15 +145,10 @@ export async function recordExactProviderReachability(
       }
 
       const identityEvidence = identityEvidenceState(identity.metadata)
-      const storedProviderAccountId = identityEvidence.providerAccountId
-      if (storedProviderAccountId === 'legacy') {
-        result = { outcome: 'rejected', reason: 'provider_account_unproven' }
-        return
-      }
-      if (storedProviderAccountId !== providerAccountId) {
-        result = { outcome: 'rejected', reason: 'provider_account_mismatch' }
-        return
-      }
+      // Provider-account provenance is deferred and proves nothing here. The
+      // reachability facts that matter are unchanged and enforced below: the
+      // identity must not be conflicted, must be on this channel, and the proof
+      // must name a target this identity actually owns.
       const exactProviderTargets = new Set([
         identity.externalId,
         ...identityEvidence.providerAliasValues,

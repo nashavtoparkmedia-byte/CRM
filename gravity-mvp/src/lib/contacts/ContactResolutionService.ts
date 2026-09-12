@@ -3,9 +3,7 @@ import { ChatChannel, type Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
-  identityEvidenceState,
   phoneEvidenceState,
-  providerAccountMatches,
 } from '@/modules/contacts/public/v1/contact-evidence-state'
 
 import type {
@@ -86,11 +84,11 @@ export function createPrismaContactResolutionRepository(
           metadata: true,
         },
       })
-      if (identity) {
-        return providerAccountMatches(identity.metadata, providerAccountId)
-          ? identity.contact
-          : null
-      }
+      // The identity key is (channel, externalId); it has no account dimension.
+      // Hiding a found identity because its deferred account stamp differs does
+      // not isolate accounts, it breaks one-person-one-contact: the planner
+      // would report create_required and a duplicate person would be created.
+      if (identity) return identity.contact
       const aliases = await client.contactIdentity.findMany({
         where: {
           channel: channel as ChatChannel,
@@ -102,10 +100,11 @@ export function createPrismaContactResolutionRepository(
           metadata: true,
         },
       })
-      const scopedAliases = aliases.filter(candidate => (
-        identityEvidenceState(candidate.metadata).providerAccountId === providerAccountId
-      ))
-      return scopedAliases.length === 1 ? scopedAliases[0].contact : null
+      // Unique-or-nothing across ALL alias claimants, not just those sharing a
+      // deferred account stamp. A wider candidate set makes this stricter: two
+      // identities claiming one alias now resolve to nothing instead of one
+      // being hidden by its stamp and the other matching silently.
+      return aliases.length === 1 ? aliases[0].contact : null
     },
 
     async findActivePhoneClaims(normalizedPhone) {

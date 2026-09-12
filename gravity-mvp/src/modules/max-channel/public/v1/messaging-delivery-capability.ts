@@ -17,12 +17,26 @@ function optionalString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+/**
+ * The scraper selects a live personal session by account id and echoes it back
+ * for verification, so delivery genuinely cannot proceed without one. This is a
+ * TRANSPORT capability requirement, not identity or conversation authority: it
+ * decides whether a message can physically be sent, never whether a Contact or
+ * ChannelIdentity may be admitted, re-parented or marked conflicted.
+ */
+function requireMaxTransportAccountV1(value: string | null | undefined): string {
+    const account = optionalString(value)
+    if (!account) throw new Error('MAX_TRANSPORT_ACCOUNT_REQUIRED')
+    return account
+}
+
 export function assertMaxTransportBindingV1(input: MaxTransportBindingV1): void {
-    const providerAccountId = optionalString(input.providerAccountId)
     const connectionId = optionalString(input.connectionId)
-    if (!providerAccountId || providerAccountId === 'legacy' || providerAccountId === 'max-default') {
-        throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
-    }
+    // Provider-account provenance is deferred and asserts nothing here: for MAX
+    // the stored connection is the constant 'max_scraper', so an account value
+    // could never be checked against it. The transport shape checks below are
+    // the real binding and are unchanged.
+    // See docs/design/provider-account-identity-v1.md.
     if (input.isPersonal) {
         if (connectionId && connectionId !== 'scraper' && connectionId !== 'max_scraper') {
             throw new Error('CONTACT_CONVERSATION_PROVIDER_TRANSPORT_MISMATCH')
@@ -33,9 +47,8 @@ export function assertMaxTransportBindingV1(input: MaxTransportBindingV1): void 
         return
     }
     if (!connectionId) throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
-    if (providerAccountId !== connectionId) {
-        throw new Error('CONTACT_CONVERSATION_PROVIDER_TRANSPORT_MISMATCH')
-    }
+    // Bot delivery has no implemented transport on MAX; a bound non-personal
+    // conversation still cannot send.
     throw new Error('MAX_BOT_DELIVERY_TRANSPORT_UNAVAILABLE')
 }
 
@@ -116,10 +129,11 @@ const capability: MaxChannelDeliveryV1 = {
             connectionId: input.options.connectionId,
             isPersonal: input.options.isPersonal === true,
         })
+        const providerAccountId = requireMaxTransportAccountV1(input.options.providerAccountId)
         const raw = await sendMaxTransportTextV1({
             target: input.target,
             content: input.content,
-            providerAccountId: input.options.providerAccountId,
+            providerAccountId,
             connectionId: input.options.connectionId,
             isPersonal: input.options.isPersonal === true,
             quotedMsgId: input.options.quotedMsgId,
@@ -128,11 +142,12 @@ const capability: MaxChannelDeliveryV1 = {
         })
         return validateMaxTextDeliveryResultV1(raw, {
             clientMessageId: input.options?.clientMessageId,
-            providerAccountId: input.options.providerAccountId,
+            providerAccountId,
         })
     },
     async sendMedia(input) {
         assertMaxTransportBindingV1(input)
+        const providerAccountId = requireMaxTransportAccountV1(input.providerAccountId)
         const payload = await post('/send-media', {
             chatId: input.chatId,
             base64: input.base64,
@@ -140,8 +155,8 @@ const capability: MaxChannelDeliveryV1 = {
             mimeType: input.mimeType,
             caption: input.caption,
             mediaType: input.mediaType,
-            providerAccountId: input.providerAccountId,
-        }, input.providerAccountId)
+            providerAccountId,
+        }, providerAccountId)
         return { externalId: typeof payload.externalId === 'string' ? payload.externalId : undefined }
     },
     async sendReaction(input) {
@@ -151,16 +166,17 @@ const capability: MaxChannelDeliveryV1 = {
             messageId: input.messageId,
             emoji: input.emoji,
             remove: input.remove,
-            providerAccountId: input.providerAccountId,
+            providerAccountId: requireMaxTransportAccountV1(input.providerAccountId),
         })
     },
     async deleteMessage(input) {
         assertMaxTransportBindingV1(input)
+        const providerAccountId = requireMaxTransportAccountV1(input.providerAccountId)
         await post('/delete-message', {
             chatId: Number(input.chatId),
             messageId: input.messageId,
-            providerAccountId: input.providerAccountId,
-        }, input.providerAccountId)
+            providerAccountId,
+        }, providerAccountId)
     },
 }
 
