@@ -11,7 +11,7 @@ from typing import Any
 
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
-EXPECTED_PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
+EXPECTED_PROFILE = "crm-7d3b7f175dde-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),

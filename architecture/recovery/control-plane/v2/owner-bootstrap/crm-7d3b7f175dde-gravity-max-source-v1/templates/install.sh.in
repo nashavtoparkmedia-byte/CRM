@@ -2,12 +2,12 @@
 set -euo pipefail
 umask 077
 
-PROFILE_ID='crm-6e3f094bf4b4-gravity-max-source-v1'
+PROFILE_ID='crm-7d3b7f175dde-gravity-max-source-v1'
 EXPECTED_HOST='jvxthcorvm'
 EXPECTED_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 HANDOFF='/opt/codex-work/yoko-stage-a-handoff.u0l9So/release-output'
 ARTIFACT_PARENT='/var/lib/yoko-privileged-runtime/coordinated-artifacts'
-ARTIFACT_STORE="$ARTIFACT_PARENT/721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea"
+ARTIFACT_STORE="$ARTIFACT_PARENT/06e7b2c5e979c4b49c72989af9f904dcc42ff50dd70652d8833f8cba8c84e679"
 BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'
 BOOTSTRAP_GUARD='/var/lib/yoko-privileged-runtime/activation-bootstrap-installing.v1'
 BOOTSTRAP_LOCK_DIR='/run/lock/yoko-privileged-runtime'
@@ -39,7 +39,7 @@ old_identity() {
 
 new_identity() {
     test "$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null)" = '2.0.0-16'
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-16" and e.get("activation_profile")=="crm-6e3f094bf4b4-gravity-max-source-v1" else 1)'
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-16" and e.get("activation_profile")=="crm-7d3b7f175dde-gravity-max-source-v1" else 1)'
     runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("coordinated_pair")==["gravity-mvp","max-web-scraper"] else 1)'
 }
 
@@ -149,7 +149,7 @@ directories={str(item.relative_to(root)) for item in root.rglob('*') if item.is_
 if observed != set(expected) or directories != {"review"}: raise SystemExit('payload allowlist mismatch')
 manifest=json.loads((root/'payload-manifest.json').read_text(encoding='ascii'))
 if set(manifest)!={"schema","profile_id","new_package","direct_rollback","files"}: raise SystemExit('payload manifest keys')
-if manifest["schema"]!='yoko.crm.coordinated-owner-bootstrap-payload.v1' or manifest["profile_id"]!='crm-6e3f094bf4b4-gravity-max-source-v1': raise SystemExit('payload identity')
+if manifest["schema"]!='yoko.crm.coordinated-owner-bootstrap-payload.v1' or manifest["profile_id"]!='crm-7d3b7f175dde-gravity-max-source-v1': raise SystemExit('payload identity')
 if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-16","architecture":"all"}: raise SystemExit('successor identity')
 if manifest["direct_rollback"]!={"name":"yoko-privileged-runtime","version":"2.0.0-15","sha256":"4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246/yoko-privileged-runtime_2.0.0-15_all.deb"}: raise SystemExit('rollback identity')
 if set(manifest["files"]) != set(expected)-{"payload-manifest.json"}: raise SystemExit('payload file registry')
@@ -195,7 +195,7 @@ PY
     clear_guard
     new_attempted=0
     trap - EXIT
-    printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"ALREADY_INSTALLED","package_version":"2.0.0-16","profile_id":"crm-6e3f094bf4b4-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
+    printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"ALREADY_INSTALLED","package_version":"2.0.0-16","profile_id":"crm-7d3b7f175dde-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
     exit 0
 fi
 test "$installed_version" = '2.0.0-15'
@@ -423,4 +423,4 @@ stored_deb_exact "$NEW_DEB_STORE" "$NEW_DEB" "$NEW_DEB_SHA"
 clear_guard
 new_attempted=0
 trap - EXIT
-printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"INSTALLED","package_version":"2.0.0-16","profile_id":"crm-6e3f094bf4b4-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
+printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"INSTALLED","package_version":"2.0.0-16","profile_id":"crm-7d3b7f175dde-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'

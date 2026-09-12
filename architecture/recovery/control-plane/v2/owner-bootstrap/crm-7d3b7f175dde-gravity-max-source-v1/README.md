@@ -3,9 +3,9 @@
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
 
-- application commit `6e3f094bf4b42c1400c705843ab107dacd6d1cf8`;
-- coordinated profile `crm-6e3f094bf4b4-gravity-max-source-v1`;
-- Stage A builder `64f3f529e5e31368c55a40a91157db7e740e5ed1`;
+- application commit `7d3b7f175ddebc7db3a9a3fbced24957f1be7c16`;
+- coordinated profile `crm-7d3b7f175dde-gravity-max-source-v1`;
+- Stage A builder `7867840d7da7ee371039e414a9f25c566a8eca36`;
 - hosted artifact run `33542881677`, artifact `9814812256`;
 - Gravity image `sha256:707a0e82514468338192d01600cf5cc46c15be6ca0a37e0498a48156b0fb5a3e`;
 - MAX scraper image `sha256:653d3c3714ed62777b3307a1da96c21ddc5218ce103a8b0fcf0a0bad88c86307`.

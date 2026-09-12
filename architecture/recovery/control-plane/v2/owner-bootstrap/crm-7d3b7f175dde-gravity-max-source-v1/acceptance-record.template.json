@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.coordinated-runtime-acceptance.v1",
-  "application_commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
-  "application_tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
-  "stage_a_builder_commit": "64f3f529e5e31368c55a40a91157db7e740e5ed1",
-  "stage_a_builder_tree": "a5448a31ffdb84ead24e9cbf6a8252c755c55293",
+  "application_commit": "7d3b7f175ddebc7db3a9a3fbced24957f1be7c16",
+  "application_tree": "4bec65fe7e800062700abf1af3abe64b8fecc1d9",
+  "stage_a_builder_commit": "7867840d7da7ee371039e414a9f25c566a8eca36",
+  "stage_a_builder_tree": "6fb45c9e09ece43fca1c560a72047cfbb5d9db15",
   "stage_a_run_id": 33542881677,
   "stage_a_artifact_id": 9814812256,
-  "stage_a_artifact_digest": "sha256:721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea",
+  "stage_a_artifact_digest": "sha256:06e7b2c5e979c4b49c72989af9f904dcc42ff50dd70652d8833f8cba8c84e679",
   "stage_a_artifact_bytes": 4803272912,
   "accepted_max_invariants": [
     "PHONE_RESOLUTION_FAIL_CLOSED",

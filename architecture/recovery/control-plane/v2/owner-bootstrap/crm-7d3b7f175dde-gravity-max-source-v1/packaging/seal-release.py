@@ -17,25 +17,25 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1"
-PROFILE_ID = "crm-6e3f094bf4b4-gravity-max-source-v1"
-APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
-APPLICATION_TREE = "8d3e507cda69a2862db946b2e34c5ea329c425ac"
-STAGE_A_COMMIT = "64f3f529e5e31368c55a40a91157db7e740e5ed1"
-STAGE_A_TREE = "a5448a31ffdb84ead24e9cbf6a8252c755c55293"
-ARTIFACT_DIGEST = "721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea"
+PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7d3b7f175dde-gravity-max-source-v1"
+PROFILE_ID = "crm-7d3b7f175dde-gravity-max-source-v1"
+APPLICATION_COMMIT = "7d3b7f175ddebc7db3a9a3fbced24957f1be7c16"
+APPLICATION_TREE = "4bec65fe7e800062700abf1af3abe64b8fecc1d9"
+STAGE_A_COMMIT = "7867840d7da7ee371039e414a9f25c566a8eca36"
+STAGE_A_TREE = "6fb45c9e09ece43fca1c560a72047cfbb5d9db15"
+ARTIFACT_DIGEST = "06e7b2c5e979c4b49c72989af9f904dcc42ff50dd70652d8833f8cba8c84e679"
 ARTIFACT_STORE = f"/var/lib/yoko-privileged-runtime/coordinated-artifacts/{ARTIFACT_DIGEST}"
 ROLLBACK_VERSION = "2.0.0-15"
 ROLLBACK_SHA = "4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246"
 ROLLBACK_SEAL_SHA = "2e94dac14c018b977c3c084addfe27dddcc00704472ac7801a855fc3569526ef"
 EPOCH = 1788307200
 ARTIFACT_FILES = {
-    "authoritative-ci-execution.json": {"sha256": "b3538bb506a173dbb67d9d306bb33889bb653dd64528e3bed620f140d4d2aa48", "bytes": 5454},
-    "coordinated-release-manifest.json": {"sha256": "6aee02bc32cddd648f5ceba94faac11201891b9363f1e5b5e1198d413eec8508", "bytes": 3044},
-    "gravity-image-attestation.json": {"sha256": "a3b2914928efd1537229afc6485d7489b2aa041d217c6ea1d649fd358ce1a9f2", "bytes": 2525},
-    "gravity-image.docker.tar": {"sha256": "4aa239fd788eeda5a192e4af3f5d9b126e57d8a224b3829954d487c2b3026d71", "bytes": 2525087744},
-    "max-scraper-image-attestation.json": {"sha256": "ef482d3555488e54a1b6b09a61955a2c33113da29500564b526b4bf4f9dedd3d", "bytes": 4475},
-    "max-scraper-image.docker.tar": {"sha256": "5d2e9ffbef26fb034089c6627ec7e3f1e5d07325ab79e4571ae088b4e8451428", "bytes": 2278168576},
+    "authoritative-ci-execution.json": {"sha256": "33271988c76712b6ba14abe5b1a4b598d5af01286d40a93ad3d7d4edcb2d09b1", "bytes": 5590},
+    "coordinated-release-manifest.json": {"sha256": "4f2ee940052a962bd6e4c8d1976d896b6b99c61d59b2c28ec5ef179da164b23d", "bytes": 3046},
+    "gravity-image-attestation.json": {"sha256": "ee9f9b3080158c1c2ac6dc6d41a6b22c842f96379a2e89e8f206e0a00da505e9", "bytes": 2525},
+    "gravity-image.docker.tar": {"sha256": "eea7c77eed67da49f03b257defa0f31b8d6ce5fdcb212e22de3101584b4b2540", "bytes": 2525849088},
+    "max-scraper-image-attestation.json": {"sha256": "37468c6ac8358946ad7a27e21c6c9d39d6e5ab197ce95075ec770e6e19d72965", "bytes": 4475},
+    "max-scraper-image.docker.tar": {"sha256": "e11d6787883b6c44d60daf69db155caa040d1ed2093660d50479e103fcbc2fe8", "bytes": 2278221312},
 }
 
 
@@ -298,6 +298,9 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         raise ValueError("production sealing projection mismatch")
     fixed = {
         "runtime_package_version": ROLLBACK_VERSION,
+        # The installed runtime being rolled back to still reports its own profile.
+        # This mirrors what the live snapshot records, so it must not follow the
+        # successor's profile id.
         "runtime_profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
         "gravity_image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
         "max_image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
@@ -340,7 +343,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
             raise ValueError(f"Stage A artifact file mismatch: {name}")
         if name.endswith(".json") and sha(artifact / name, 2 * 1024 * 1024) != expected["sha256"]:
             raise ValueError(f"Stage A metadata digest mismatch: {name}")
-    verifier = repository / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-coordinated-artifact.py"
+    verifier = repository / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-7d3b7f175dde-gravity-max-source-v1/verify-coordinated-artifact.py"
     completed = command([
         "/usr/bin/python3", "-I", "-B", str(verifier),
         "--artifact-directory", str(artifact),
@@ -356,11 +359,11 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         "schema": "yoko.crm.coordinated-gravity-max-release.v1",
         "application_commit": APPLICATION_COMMIT,
         "builder_commit": STAGE_A_COMMIT,
-        "gravity_image_id": "sha256:707a0e82514468338192d01600cf5cc46c15be6ca0a37e0498a48156b0fb5a3e",
-        "gravity_containerd_image_id": "sha256:00ffd8b1ae64aa3018f26578da05a96c9f1e77e42d8fc9906f0f4ddaa7918af2",
-        "max_image_id": "sha256:653d3c3714ed62777b3307a1da96c21ddc5218ce103a8b0fcf0a0bad88c86307",
-        "max_containerd_image_id": "sha256:75e2e96bb07acf9fe25f4aab6c89175b6c13fa10bf71e2b9005f6f8cc319ab5a",
-        "combined_docker_archive_bytes": 4803256320,
+        "gravity_image_id": "sha256:f6732139285613d808fced423b8dff91a0ffcab6497012a995e7270b6d686e0a",
+        "gravity_containerd_image_id": "sha256:9e2a4db7746b5e9a1dc124cf4f20e086b89eb57ab5002dbede1cf4bc69b0857d",
+        "max_image_id": "sha256:8ccce836055fae5e9dfe0ef5bc9f0bc7f33b949331d84bef1b749b1c5df4a325",
+        "max_containerd_image_id": "sha256:bbebbc85d65ec5f72979a10ba02c13462f4d5410bc309d211b3483a7ce7e3696",
+        "combined_docker_archive_bytes": 4804070400,
     }
     if result != expected_result:
         raise ValueError("Stage A content verifier result mismatch")
@@ -375,7 +378,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
             "bytes": 4803272912,
             "digest": "sha256:" + ARTIFACT_DIGEST,
             "id": 9814812256,
-            "name": "coordinated-gravity-max-6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1",
+            "name": "coordinated-gravity-max-7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36",
         }
     ):
         raise ValueError("authenticated Stage A transport identity mismatch")

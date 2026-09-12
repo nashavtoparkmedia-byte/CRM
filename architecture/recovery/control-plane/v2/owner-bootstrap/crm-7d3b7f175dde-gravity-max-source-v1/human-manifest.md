@@ -15,4 +15,4 @@ Required before installation:
 
 The accepted MAX application behavior and Contact/CNT1 ownership are outside
 this builder and must remain byte-identical to accepted application commit
-`6e3f094bf4b42c1400c705843ab107dacd6d1cf8`.
+`7d3b7f175ddebc7db3a9a3fbced24957f1be7c16`.

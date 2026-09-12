@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
-PROFILE_ID = "crm-6e3f094bf4b4-gravity-max-source-v1"
+PROFILE_ID = "crm-7d3b7f175dde-gravity-max-source-v1"
 PROFILE_DIR = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
 PROFILE_PATH = PROFILE_DIR + "/profile.v1.json"
 SEALED_INPUTS_PATH = PROFILE_DIR + "/sealed-inputs.v1.json"
@@ -34,8 +34,8 @@ DB_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]{0,62}")
 PROFILE_SCHEMA = "yoko.crm.coordinated-pair-activation-profile.v1"
 STATE_SCHEMA = "yoko.crm.coordinated-pair-state.v1"
 RECEIPT_SCHEMA = "yoko.crm.coordinated-artifact-admission.v1"
-TARGET_GRAVITY = "yoko/crm-gravity-mvp:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1"
-TARGET_MAX = "yoko/crm-max-scraper:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1"
+TARGET_GRAVITY = "yoko/crm-gravity-mvp:7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36-coordinated-v1"
+TARGET_MAX = "yoko/crm-max-scraper:7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36-coordinated-v1"
 ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
 ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9"
 
@@ -98,10 +98,10 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile["runtime_abi"] != "2.0.0"
         or profile["package_version"] != "2.0.0-16"
         or profile["accepted_application"] != {
-            "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
-            "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
-            "gravity_subtree": "abbe37034aa88c478eb8e44b6be5b047e9bcd574",
-            "max_subtree": "e9c3c0ce56c744de1843547276e70d8f2d970197",
+            "commit": "7d3b7f175ddebc7db3a9a3fbced24957f1be7c16",
+            "tree": "4bec65fe7e800062700abf1af3abe64b8fecc1d9",
+            "gravity_subtree": "e1964f1aa6048bcabea1d638d9d1eb482beb6ac2",
+            "max_subtree": "09e4c3ed062820da4a674f32b9a69b194aa1ec0c",
         }
         or profile["enabled_zero_argument_profiles"] != [
             "database-status", "release-preflight", "release-activate", "rollback"
@@ -116,12 +116,12 @@ def _load_profile(core: Any) -> dict[str, Any]:
         "ACTIVATION_PROFILE_INVALID",
     )
     if stage_a != {
-        "builder_commit": "64f3f529e5e31368c55a40a91157db7e740e5ed1",
-        "builder_tree": "a5448a31ffdb84ead24e9cbf6a8252c755c55293",
+        "builder_commit": "7867840d7da7ee371039e414a9f25c566a8eca36",
+        "builder_tree": "6fb45c9e09ece43fca1c560a72047cfbb5d9db15",
         "run_id": 33542881677,
         "artifact_id": 9814812256,
-        "artifact_name": "coordinated-gravity-max-6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1",
-        "artifact_digest": "sha256:721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea",
+        "artifact_name": "coordinated-gravity-max-7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36",
+        "artifact_digest": "sha256:06e7b2c5e979c4b49c72989af9f904dcc42ff50dd70652d8833f8cba8c84e679",
         "artifact_bytes": 4803272912,
     }:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
@@ -339,7 +339,7 @@ def _validate_target_image(core: Any, record: dict[str, Any], reference: str, co
         or image.get("Os") != "linux"
         or image.get("Architecture") != "amd64"
         or not isinstance(labels, dict)
-        or labels.get("org.opencontainers.image.revision") != "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
+        or labels.get("org.opencontainers.image.revision") != "7d3b7f175ddebc7db3a9a3fbced24957f1be7c16"
         or labels.get("yoko.activation.profile") != PROFILE_ID
     ):
         raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_MISMATCH", 74)

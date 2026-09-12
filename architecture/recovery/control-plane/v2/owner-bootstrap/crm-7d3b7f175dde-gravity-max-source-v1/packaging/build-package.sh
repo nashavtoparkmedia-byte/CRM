@@ -5,7 +5,7 @@ PROJECT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 DIST="$PROJECT_ROOT/dist"
 GENERATED="$PROJECT_ROOT/generated"
 PACKAGE='yoko-privileged-runtime_2.0.0-16_all.deb'
-PROFILE_ID='crm-6e3f094bf4b4-gravity-max-source-v1'
+PROFILE_ID='crm-7d3b7f175dde-gravity-max-source-v1'
 EPOCH=1788307200
 
 for file in \

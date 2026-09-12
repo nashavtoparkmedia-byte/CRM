@@ -15,7 +15,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 GENERATED = ROOT / "generated"
 DIST = ROOT / "dist"
-PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1"
+PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7d3b7f175dde-gravity-max-source-v1"
 REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"
 REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")
 REVIEW_VERDICTS = frozenset({"PASS", "PASS_WITH_LOW_FINDINGS"})
@@ -157,7 +157,7 @@ def main() -> None:
             raise ValueError(f"generated input mismatch: {name}")
     profile = load(GENERATED / "profile.v1.json")
     if (
-        profile.get("profile_id") != "crm-6e3f094bf4b4-gravity-max-source-v1"
+        profile.get("profile_id") != "crm-7d3b7f175dde-gravity-max-source-v1"
         or profile.get("package_version") != "2.0.0-16"
         or profile.get("artifact_admission", {}).get("receipt_sha256") != expected_generated["artifact-admission.v1.json"]
         or profile.get("database", {}).get("mutation_authorized") is not False
