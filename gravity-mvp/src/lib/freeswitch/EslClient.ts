@@ -36,9 +36,15 @@ import { projectCompletedCallTimelineV1 } from '@/modules/calling/public/v1/comp
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
 const FS_ESL_PASSWORD = process.env.ESL_PASSWORD ?? 'ClueCon'
-const MEGAFON_INBOUND_DID = normalizePhoneE164(
-    process.env.MEGAFON_NUMBER ?? process.env.MEGAFON_SIP_USERNAME ?? '+79221853150'
-) ?? '+79221853150'
+// MEGAFON_NUMBER is the DID Megafon routes inbound calls to, and the only
+// environment name the calling context is permitted to read for it. Production's
+// unmerged copy also fell back to MEGAFON_SIP_USERNAME; that is dropped here. It
+// is a SIP credential rather than a phone number, architecture enforcement
+// rejects the read, and in production it holds a placeholder that never
+// normalises. The literal matches the registered gateway (sip_profiles/external
+// /megafon.xml declares username 79221853150) and only applies until the
+// variable is set, which the controlled-call readiness gate requires anyway.
+const MEGAFON_INBOUND_DID = normalizePhoneE164(process.env.MEGAFON_NUMBER) ?? '+79221853150'
 
 const EVENTS_OF_INTEREST = [
     'CHANNEL_CREATE',
