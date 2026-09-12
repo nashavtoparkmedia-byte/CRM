@@ -41,7 +41,7 @@ const NOT_SAVED = { contract: SET_AI_INTERN_STATE_RESULT_V1, saved: false } as c
  * A refused read now returns the same unknown state the contract already
  * defines for a state that cannot be read, which is what every other read
  * failure here has always returned. The caller learns nothing it did not
- * already know from being refused, and the write below still throws.
+ * already know from being refused, and nothing is read once refused.
  */
 export async function getAiInternStateV1(query: GetAiInternStateQueryV1 | unknown) {
   try {
