@@ -8,7 +8,7 @@
   },
   "amendments": [
     {
-      "amendment_id": "pr81-main-integration-authority-composition-20260911b",
+      "amendment_id": "pr81-main-integration-authority-composition-20260912",
       "amendment_kind": "ACCEPTED_AUTHORITY_MERGE_COMPOSITION",
       "reviewed_at": "2026-09-11T00:00:00Z",
       "reviewed_by": "OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260911",
@@ -22,14 +22,14 @@
       },
       "reason": "This amendment composes two already accepted executable ownership authorities rather than reviewing surfaces. The upstream authority is current main at 5e204b99, whose accepted reviewed denominator is 2,326 tracked executable surfaces. The merged authority is the identity candidate at bb20e614, whose accepted amendment had already reached 2,429 tracked executable surfaces and whose per-surface decisions are carried verbatim below. Integrating the two accepted trees yields the exact merged denominator recorded in this amendment's current triple. Relative to the accepted identity current state the integration adds the tracked surfaces contributed by accepted main; relative to the accepted main current state the arithmetic difference is the already accepted identity-branch work. This reviewer re-examined neither set surface by surface and does not claim to have reviewed either.",
       "predecessor": {
-        "tracked_executable_surfaces": 2326,
-        "tracked_inventory_sha256": "64ce1ae1bd0ff64c6230c40d7fde744246a9061551a62223f56220c8f52897a8",
-        "coverage_sha256": "650314bb4c61059428a965e2168fbbe432400cfd6ee752682912bb41ae03cc55"
+        "tracked_executable_surfaces": 2332,
+        "tracked_inventory_sha256": "4ae875200f13173064d1e5240d07beffa14a07c9e091eb03df52ad8a54aa8e3a",
+        "coverage_sha256": "fab4d08d131ea047afba3003719dc684696a874dcf8fef838648691ccf8f4a6e"
       },
       "current": {
-        "tracked_executable_surfaces": 2463,
-        "tracked_inventory_sha256": "7061d69788d5d1708fcf60c037880f3a6f437963f69f14dc3ac21eff024666ec",
-        "coverage_sha256": "1ff3c29ab823a044e8675e35352e5e5f2551670abf6ae1e0bcb66507cf6146ed"
+        "tracked_executable_surfaces": 2470,
+        "tracked_inventory_sha256": "a5bee2f36d5fbbe9c9856932eb8bcaef9c304fc876d195ae7b7a7cc1deaa6b68",
+        "coverage_sha256": "6b8498ec364c92058aa88a003c26df04d834345fc27ba984a9e9577dde7f967b"
       },
       "authority_composition": {
         "review_decision": "APPROVED_ACCEPTED_AUTHORITY_MERGE_COMPOSITION",
@@ -38,14 +38,14 @@
         "accepted_authority_inputs": [
           {
             "authority": "UPSTREAM_MAIN",
-            "commit": "5e204b99c1cbc033c2fe7517110f837947b0a72e",
+            "commit": "7d3b7f175ddebc7db3a9a3fbced24957f1be7c16",
             "accepted_evidence_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-            "accepted_evidence_sha256": "418e3836fa61c1b672e7e2852b2653d6e2b22df4df787441ddc7d7d4c97017f9",
+            "accepted_evidence_sha256": "bd0b254723f7cd66051c5edf762cb049d21faf1c67a10980bed6bca2aa9fe4b8",
             "acceptance_note": "Accepted upstream ownership authority. Its reviewed decision narrative and its exact-runtime inventory transition are preserved verbatim in the merged decision registry, and its current denominator triple is the immutable anchor this composition extends.",
             "current": {
-              "tracked_executable_surfaces": 2326,
-              "tracked_inventory_sha256": "64ce1ae1bd0ff64c6230c40d7fde744246a9061551a62223f56220c8f52897a8",
-              "coverage_sha256": "650314bb4c61059428a965e2168fbbe432400cfd6ee752682912bb41ae03cc55"
+              "tracked_executable_surfaces": 2332,
+              "tracked_inventory_sha256": "4ae875200f13173064d1e5240d07beffa14a07c9e091eb03df52ad8a54aa8e3a",
+              "coverage_sha256": "fab4d08d131ea047afba3003719dc684696a874dcf8fef838648691ccf8f4a6e"
             }
           },
           {
@@ -119,19 +119,19 @@
           }
         ],
         "merge_delta": {
-          "net_surfaces_relative_to_identity_current": 34,
-          "net_surfaces_relative_to_upstream_main_current": 137,
+          "net_surfaces_relative_to_identity_current": 41,
+          "net_surfaces_relative_to_upstream_main_current": 138,
           "surface_movement": {
             "relative_to_identity_current": {
-              "added": 34,
+              "added": 41,
               "retired": 0
             },
             "relative_to_upstream_main_current": {
-              "added": 138,
+              "added": 139,
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is thirty-four additions and no retirements, contributed by the three accepted main integrations this branch has taken. Relative to the accepted upstream main current state the net one hundred and thirty-seven is one hundred and thirty-eight additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator and were derived by running the repository’s own tracked-surface inventory over each accepted commit’s tree. This reviewer reviewed neither set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is forty-one additions and no retirements, contributed by the accepted main integrations this branch has taken, the latest of which is PR #88 MAX production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2470, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
