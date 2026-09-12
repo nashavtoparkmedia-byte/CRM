@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "0288469cef9733a2f92fe3fd9fd72d566758c19775685812aa1b90e72fc6328a"
+      "sha256": "c83feabd462b03935aaaacbfbc97e218fb2c02d42407e8186ca83fd65f3f3210"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "30a276bd3125ae74f2012001835e84581d96c7234105e9169c90ee14c5d70cc0"
+      "sha256": "c55d3d902fd57f8734d5a2cf8af062d41b06842ff51daa358d782d6f0319dc3d"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
