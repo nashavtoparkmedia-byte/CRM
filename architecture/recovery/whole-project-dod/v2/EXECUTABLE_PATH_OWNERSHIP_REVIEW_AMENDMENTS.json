@@ -221,13 +221,6 @@
           "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
         },
         {
-          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.ts",
-          "previous_source_sha256": "a88c5ce3df895330f9b30f1665727a0598aaf577d8c2cf5d99e6ceaf255ba403",
-          "current_source_sha256": "4341248793dccfd45123bd012cb638764e510d593e7735272c2fd1199126e6d7",
-          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
-        },
-        {
           "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
           "previous_source_sha256": "405c8edb00dbf461fb0cff7e1f8899da43fc9c912b34d07174e4bdb3bd94fdb2",
           "current_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
