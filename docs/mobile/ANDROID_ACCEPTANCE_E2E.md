@@ -148,6 +148,30 @@ ship debug-signed. One consequence to know: an acceptance APK built on the
 server and one built in CI carry different signatures, so neither installs over
 the other.
 
+## Run #8: real Android instrumentation, and a real test failure
+
+The APK installed, `LoginAcceptanceTest` executed on `emulator-5554`, and the
+shell's own `YOKO_NATIVE_OK` marker appeared, so the crash-and-JavaScript gate
+passed for the first time. This is the first run that produced an Android test
+result rather than an infrastructure failure.
+
+Four tests failed, all with the same assertion:
+
+```
+Tests on emulator-5554 - 14 failed: There was 4 failure(s).
+java.lang.AssertionError: app did not reach the sign-in screen
+```
+
+The shell starts and reports natively, but the sign-in screen does not appear
+within the test's window. That is a genuine acceptance finding, not a CI defect,
+and it is what the suite exists to catch.
+
+The annotation budget is now spent deliberately — GitHub caps them at ten per
+level per step, and the shell's diagnostics were being crowded out by emulator
+noise. The shell's own `YOKO_NET` / `YOKO_JS_OK` lines and the CRM's request log
+come first, because together they separate "the device never reached the CRM"
+from "it did and the UI did not appear".
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run

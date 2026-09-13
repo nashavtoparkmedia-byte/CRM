@@ -370,36 +370,25 @@ jobs:
 
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
-          echo "::notice::runner /dev/kvm: $(ls -l /dev/kvm 2>&1 | head -1)"
-          echo "::notice::adb devices: $(head -c 300 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
-          diag=$(head -c 600 "$OUT/shell-diagnostics-file.log" 2>/dev/null | tr '\n' '~')
-          [ -n "$diag" ] && echo "::notice::shell diagnostics: ${diag}"
-          tail -6 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
-            echo "::notice::emulator.log: ${l}"
-          done
-
-          # What the instrumentation run actually said. Gradle's tail carries
-          # the task failure; the JUnit XML carries the per-test reason.
-          grep -iE "FAILURE|error:|Caused by|INSTALL_FAILED|No tests found|Test failed|Unable to|not found" \
-            "$OUT/gradle-connected.log" 2>/dev/null | head -12 | while read -r l; do
-              echo "::error::gradle: ${l}"
+          # GitHub caps annotations at ten per level per step, so the budget
+          # is spent deliberately: the shell's own diagnostics and the server's
+          # view of the device come first, because together they separate "the
+          # device never reached the CRM" from "it did and the UI did not
+          # appear". Everything else is a fallback for when those are empty.
+          grep -E "YOKO_NET|YOKO_JS_OK|YOKO_NATIVE_OK|YOKO_PAGE_ERROR" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | head -6 | while read -r l; do
+              echo "::notice::shell: ${l}"
             done
-          # The JUnit XML carries the per-test reason. Read it with grep rather
-          # than an inline script: a heredoc inside a YAML block scalar ends the
-          # block at the first unindented line.
-          grep -rhoE '<(failure|error)[^>]*message="[^"]*"' "$OUT" 2>/dev/null \
-            | sed -e 's/.*message="//' -e 's/"$//' | head -10 | while read -r l; do
-                echo "::error::test failure: ${l}"
-              done
-          grep -rhoE '<testcase[^>]*name="[^"]*"' "$OUT" 2>/dev/null \
-            | sed -e 's/.*name="//' -e 's/"$//' | head -10 | while read -r l; do
-                echo "::notice::test ran: ${l}"
-              done
-
-          # The shell's own diagnostics are the whole point of the suite.
-          head -20 "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | while read -r l; do
-            echo "::notice::YokoShellDiag: ${l}"
-          done
+          grep -E "GET |POST |Error|error" "$OUT/crm-server.log" 2>/dev/null \
+            | tail -4 | while read -r l; do
+              echo "::notice::crm: ${l}"
+            done
+          echo "::notice::adb devices: $(head -c 200 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
+          if ! grep -q YOKO_NATIVE_OK "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
+            tail -4 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
+              echo "::notice::emulator.log: ${l}"
+            done
+          fi
           exit 0
 
       - name: Fail on any uncaught JavaScript error or Android crash
