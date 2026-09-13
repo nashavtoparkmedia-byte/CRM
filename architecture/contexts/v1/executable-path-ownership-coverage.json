@@ -289,11 +289,11 @@
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "f9859c7012fad1455be5908c7355bb882738b5845f7ff406394726d7b2887808",
+    "decision_registry_sha256": "1bed1ac116ebdf94b6ad50dbc5ab8999d409624413e8a558a6696b8ddc74199a",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
     "tracked_inventory_sha256": "ea2da740bd381dbf85affce3780f68722b8f032f8ef9800cc91e9e678fbb11c3",
     "exact_inventory_change_count": 4,
-    "reviewed_assignment_count": 47
+    "reviewed_assignment_count": 292
   }
 }
