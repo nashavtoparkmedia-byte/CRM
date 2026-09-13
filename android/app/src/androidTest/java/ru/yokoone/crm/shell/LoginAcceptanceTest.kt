@@ -60,9 +60,7 @@ class LoginAcceptanceTest {
             val name = "FAIL-${description.methodName}"
             runCatching { screenshot(name) }
             runCatching {
-                val dir = InstrumentationRegistry.getInstrumentation().targetContext
-                    .getExternalFilesDir(null) ?: return@runCatching
-                val out = File(dir, "screenshots").apply { mkdirs() }
+                val out = evidenceDir() ?: return@runCatching
                 device.dumpWindowHierarchy(File(out, "$name.xml"))
             }
         }
@@ -200,10 +198,22 @@ class LoginAcceptanceTest {
      * pulls afterwards. A failing assertion is much cheaper to act on with a
      * picture of the screen attached.
      */
+    /**
+     * Where evidence goes.
+     *
+     * The instrumentation runs in its own process, and under scoped storage it
+     * cannot write into the app-under-test's external directory — which is why
+     * the first attempt at this produced no files at all. Its own external
+     * directory it can write to, and adb can pull.
+     */
+    private fun evidenceDir(): File? {
+        val dir = InstrumentationRegistry.getInstrumentation().context
+            .getExternalFilesDir(null) ?: return null
+        return File(dir, "screenshots").apply { mkdirs() }
+    }
+
     private fun screenshot(name: String) {
-        val dir = InstrumentationRegistry.getInstrumentation().targetContext
-            .getExternalFilesDir(null) ?: return
-        val shots = File(dir, "screenshots").apply { mkdirs() }
+        val shots = evidenceDir() ?: return
         device.takeScreenshot(File(shots, "$name.png"))
     }
 

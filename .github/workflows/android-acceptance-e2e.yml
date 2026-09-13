@@ -398,8 +398,14 @@ jobs:
           timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E > "$OUT/logcat-shell-diagnostics.log" 2>&1
           timeout 60 "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
             > "$OUT/shell-diagnostics-file.log" 2>/dev/null
-          timeout 120 "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance/files/screenshots \
+          # The instrumentation writes into its OWN external directory, not the
+          # app-under-test's: scoped storage forbids the latter. Both are pulled
+          # so nothing is lost if a capture ever lands on the other side.
+          timeout 120 "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance.test/files/screenshots \
             "$OUT/screenshots" 2>/dev/null
+          timeout 120 "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance/files/screenshots \
+            "$OUT/screenshots-app" 2>/dev/null
+          echo "pulled captures: $(find "$OUT/screenshots" "$OUT/screenshots-app" -type f 2>/dev/null | wc -l)"
 
           echo "collected:"; ls -R "$OUT" | head -60
         working-directory: android
@@ -489,11 +495,11 @@ jobs:
           # failed. These are the only dumps taken while the screen under test
           # was still up, so they are what says whether the expected text was
           # absent from the screen or only from the accessibility tree.
-          for f in "$OUT"/screenshots/FAIL-*.xml; do
+          for f in $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.xml' 2>/dev/null); do
             [ -e "$f" ] || continue
             echo "::notice::$(basename "$f" .xml): nodes=$(grep -o '<node' "$f" | wc -l) $(grep -oE 'Тест · [A-Za-z]+|Неверный логин или пароль|Вход в мобильное приложение|Нет связи с CRM|Application error' "$f" | sort -u | head -3 | tr '\n' ' ')"
           done
-          echo "::notice::failure captures: $(ls "$OUT"/screenshots/FAIL-*.png 2>/dev/null | wc -l) screenshots, $(ls "$OUT"/screenshots/FAIL-*.xml 2>/dev/null | wc -l) hierarchies"
+          echo "::notice::failure captures: $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.png' 2>/dev/null | wc -l) screenshots, $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.xml' 2>/dev/null | wc -l) hierarchies"
 
           # 10: the device itself.
           echo "::notice::adb devices: $(head -c 160 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
