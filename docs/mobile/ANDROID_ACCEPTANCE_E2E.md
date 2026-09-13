@@ -411,6 +411,24 @@ WebView cookie store is deleted through `run-as` — which works because the
 acceptance variant is debuggable — and everything else, diagnostics included,
 is left alone.
 
+## How the scenarios are isolated
+
+Each scenario runs in its own `am instrument` invocation, with `pm clear`
+between them, so every one starts on a genuinely fresh install: no session, no
+cookies, no permissions.
+
+That is not a stylistic choice. A session established by one test survives into
+the next, because `FLAG_ACTIVITY_CLEAR_TASK` clears the task and not the
+WebView's cookie jar, and neither obvious remedy works from inside a test:
+`pm clear` and `am force-stop` on the target package both kill the
+instrumentation that is attached to it. Runs #26 and #27 each executed one test
+and then died, which is how that was learned.
+
+Between invocations those same commands are safe, and the result is stronger
+isolation than a shared run could offer. Gradle still builds and installs; only
+the running is done by hand, so each scenario's result can be read and published
+on its own.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run

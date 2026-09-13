@@ -97,26 +97,19 @@ class LoginAcceptanceTest {
         //
         // pm clear wipes the app's data, cookies included, which is what
         // "launchFreshApp" has claimed to do all along.
-        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-
-        // `pm clear` was the obvious way to do this and it is the wrong one:
-        // the instrumentation is attached to the target package, so clearing it
-        // tears the run down. Run #26 executed a single test and then died, and
-        // it also wiped the shell's own diagnostics file, so the run proved
-        // nothing.
+        // Nothing here tries to clear the session any more. Both obvious ways
+        // to do it from inside a test — `pm clear` and `am force-stop` on the
+        // target package — kill the instrumentation along with the app, and
+        // each cost a run that executed one test and then died.
         //
-        // Only the cookie jar needs to go. Stop the app, delete the WebView
-        // cookie store — the acceptance variant is debuggable, so run-as can
-        // reach it — and leave everything else, diagnostics included, alone.
-        automation.executeShellCommand("am force-stop $targetPackage").close()
-        automation.executeShellCommand(
-            "run-as $targetPackage sh -c 'rm -f app_webview/Cookies app_webview/Cookies-journal'",
-        ).close()
-        Thread.sleep(1_500)
-
-        // force-stop does not revoke permissions, but granting is idempotent and
-        // costs nothing, and it keeps a fresh install working too.
-        automation.executeShellCommand(
+        // Isolation belongs between instrumentation invocations, not inside
+        // one, so the workflow now runs each scenario in its own `am instrument`
+        // call with a `pm clear` between them. Every test therefore starts on a
+        // genuinely fresh install, which is stronger than what a shared run
+        // could offer.
+        //
+        // The permission grant stays: a fresh install has none.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
             "pm grant $targetPackage android.permission.POST_NOTIFICATIONS",
         ).close()
 

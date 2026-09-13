@@ -343,24 +343,69 @@ jobs:
           exit 0
         working-directory: android
 
-      # Gradle's own failure text lives in the step log, which needs an
-      # authenticated download, so it is captured to a file here and the
-      # decisive lines are republished as annotations by the step below.
-      - name: Run the acceptance tests
-        id: tests
-        timeout-minutes: 25
+      # Each scenario runs in its OWN instrumentation invocation, with the
+      # app's data cleared in between.
+      #
+      # Doing it inside a single Gradle run is not possible: the instrumentation
+      # is attached to the target package, so `pm clear` or `am force-stop` on
+      # it tears the run down — runs #26 and #27 each executed one test and
+      # died. But between invocations those commands are safe, and the result
+      # is stronger than shared-run isolation: every scenario starts on a
+      # genuinely fresh install with no session, no cookies and no permissions.
+      #
+      # Gradle still builds and installs; only the running is done by hand, so
+      # that each result can be read and published separately.
+      - name: Install the app and the instrumentation
+        timeout-minutes: 15
         run: |
           cd android
-          ADB="$ANDROID_HOME/platform-tools/adb"
-          "$ADB" logcat -c
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:installAcceptance :app:installAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      - name: Run each acceptance scenario on a fresh install
+        id: tests
+        timeout-minutes: 30
+        run: |
           set +e
-          bash tools/bootstrap-gradle.sh --no-daemon :app:connectedAcceptanceAndroidTest \
-            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}" \
-            2>&1 | tee "$RUNNER_TEMP/gradle-connected.log"
-          status=${PIPESTATUS[0]}
-          echo "installed packages:"
-          timeout 30 "$ADB" shell pm list packages 2>&1 | grep -i yokoone || echo "  (none matching yokoone)"
-          exit $status
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.LoginAcceptanceTest
+          LOG="$RUNNER_TEMP/gradle-connected.log"
+          : > "$LOG"
+          failed=0
+
+          for t in \
+            test01_wrongPasswordKeepsTheFormAndExplainsWhy \
+            test02_correctPasswordAfterRejectionOpensTheMessenger \
+            test03_directCorrectLoginOpensTheMessenger \
+            test04_allThreeSeededConversationsAreListed
+          do
+            echo "===== $t =====" | tee -a "$LOG"
+            timeout 60 "$ADB" shell pm clear "$PKG" >> "$LOG" 2>&1
+            timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >> "$LOG" 2>&1
+            timeout 30 "$ADB" reverse tcp:3002 tcp:3002 >> "$LOG" 2>&1
+            timeout 60 "$ADB" logcat -c
+            timeout 600 "$ADB" shell am instrument -w -r \
+              -e class "$CLASS#$t" "$RUNNER" 2>&1 | tee -a "$LOG"
+            # am instrument reports failures in its stream, not in its exit code.
+            if grep -q "FAILURES!!!\|INSTRUMENTATION_STATUS: stack=" "$LOG"; then
+              if tail -60 "$LOG" | grep -q "FAILURES!!!"; then
+                echo "SCENARIO FAILED: $t" | tee -a "$LOG"
+                failed=1
+              fi
+            fi
+            # Keep the shell's own diagnostics from this scenario before the
+            # next pm clear removes them.
+            timeout 60 "$ADB" shell run-as "$PKG" cat files/diagnostics.log \
+              >> "$RUNNER_TEMP/shell-diagnostics-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E \
+              >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null
+          done
+
+          echo "scenarios failed: $failed" | tee -a "$LOG"
+          exit $failed
 
       # This step is why runs #1, #2 and #3 uploaded nothing. Every adb call
       # here BLOCKS when no device is present: `adb logcat` waits for one
@@ -414,7 +459,9 @@ jobs:
           timeout 30 "$ADB" shell settings get secure enabled_accessibility_services \
             > "$OUT/accessibility.txt" 2>&1
           timeout 60 "$ADB" logcat -d -v time > "$OUT/logcat-full.log" 2>&1
-          timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E > "$OUT/logcat-shell-diagnostics.log" 2>&1
+          cat "$RUNNER_TEMP/logcat-shell-all.log" > "$OUT/logcat-shell-diagnostics.log" 2>/dev/null
+          timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E >> "$OUT/logcat-shell-diagnostics.log" 2>&1
+          cat "$RUNNER_TEMP/shell-diagnostics-all.log" > "$OUT/shell-diagnostics-file.log" 2>/dev/null
           timeout 60 "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
             > "$OUT/shell-diagnostics-file.log" 2>/dev/null
           # The instrumentation writes into its OWN external directory, not the
@@ -465,8 +512,8 @@ jobs:
           # footer -- "BUILD FAILED", "Run with --scan". Run #15 spent the whole
           # budget on that and dropped the lines that say what failed. Grep for
           # the meaningful lines instead of taking a blind tail.
-          echo "::error::tests executed: $(grep -rhoE '<testcase' "$OUT" 2>/dev/null | wc -l); junit files: $(find "$OUT" -name '*.xml' 2>/dev/null | wc -l); gradle log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
-          grep -hE "Tests on |AssertionError|Exception|FAILURE: |Execution failed|INSTALL_|No tests|did not|Caused by" \
+          echo "::error::scenarios: $(grep -c '^===== ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0) started, $(grep -c 'SCENARIO FAILED' "$OUT/gradle-connected.log" 2>/dev/null || echo 0) failed; log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
+          grep -hE "SCENARIO FAILED|AssertionError|Exception|INSTALL_|No tests|scenarios failed|OK \\(|FAILURES" \\
             "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
               echo "::error::gradle: $(printf '%s' "$l" | head -c 500)"
             done
