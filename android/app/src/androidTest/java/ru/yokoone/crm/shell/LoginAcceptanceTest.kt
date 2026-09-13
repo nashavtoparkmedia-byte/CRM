@@ -17,6 +17,7 @@ import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
 import java.io.File
+import java.util.regex.Pattern
 
 /**
  * End-to-end acceptance for the Android shell, driven against a disposable CRM.
@@ -188,13 +189,13 @@ class LoginAcceptanceTest {
             ?: device.findObject(By.descContains("Сотрудник"))
             ?: device.findObject(By.textContains("Сотрудник"))
         assertNotNull(
-            "the operator select was not found, so the form can never submit; on screen: ${visibleText(400)}",
+            "the operator select was not found, so the form can never submit; tree: ${treeShape(460)}",
             picker,
         )
         picker!!.click()
         val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
         assertNotNull(
-            "the operator list did not open after clicking the select; on screen: ${visibleText(400)}",
+            "the operator list did not open after clicking the select; tree: ${treeShape(460)}",
             option,
         )
         option!!.click()
@@ -266,6 +267,30 @@ class LoginAcceptanceTest {
         return if (joined.isEmpty()) "(tree carries no text)"
         else joined.take(limit).replace('\n', ' ')
     }
+
+    /**
+     * The tree's shape, not just its words.
+     *
+     * `visibleText` cannot see a node that carries no text, and the operator
+     * select is exactly such a node: the failure screens show "Сотрудник"
+     * straight through to "Логин" with nothing between them. Reporting each
+     * node's class alongside its text is what says which element is the select
+     * and therefore what to click.
+     */
+    private fun treeShape(limit: Int = 400): String = runCatching {
+        device.findObjects(By.clazz(Pattern.compile(".*")))
+            .take(30)
+            .joinToString(" | ") { node ->
+                val cls = node.className?.substringAfterLast('.') ?: "?"
+                val text = node.text?.take(18) ?: ""
+                val desc = node.contentDescription?.take(18) ?: ""
+                buildString {
+                    append(cls)
+                    if (text.isNotBlank()) append("='").append(text).append("'")
+                    if (desc.isNotBlank()) append("[").append(desc).append("]")
+                }
+            }
+    }.getOrDefault("(tree unreadable)").take(limit)
 
     private fun screenshot(name: String) {
         val shots = evidenceDir() ?: return
