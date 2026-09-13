@@ -153,6 +153,29 @@ jobs:
           [ "$code" = "401" ] || { echo "shell API expected 401, got $code"; exit 1; }
           echo "shell lane closed as expected"
 
+      # An unsigned APK cannot be installed — the emulator answers
+      # INSTALL_PARSE_FAILED_NO_CERTIFICATES — and a runner has no release
+      # keystore. The build already reads one from a properties file named by
+      # YOKO_SHELL_KEYSTORE_PROPERTIES, so a throwaway keystore generated here
+      # satisfies it without changing a single Android source file. That keeps
+      # this branch's android/ tree byte-identical to the PR candidate's, which
+      # is the point: the suite must test the candidate, not a variant of it.
+      #
+      # The key lives for the length of the job, is never committed, and signs
+      # nothing that leaves the runner.
+      - name: Generate an ephemeral signing key for this run
+        run: |
+          set -e
+          KS="$RUNNER_TEMP/acceptance.jks"
+          keytool -genkeypair -v -keystore "$KS" -storetype JKS \
+            -alias acceptance -keyalg RSA -keysize 2048 -validity 1 \
+            -storepass acceptance -keypass acceptance \
+            -dname "CN=YOKO acceptance, OU=CI, O=YOKO, L=-, S=-, C=RU" > /dev/null
+          printf 'storeFile=%s\nstorePassword=acceptance\nkeyAlias=acceptance\nkeyPassword=acceptance\n' \
+            "$KS" > "$RUNNER_TEMP/keystore.properties"
+          echo "YOKO_SHELL_KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+          echo "ephemeral keystore ready"
+
       - name: Build the acceptance APK and the test APK
         run: |
           cd android

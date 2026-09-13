@@ -30,9 +30,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0-stage1"
-        // UI Automator drives the WebView through its accessibility tree, which
-        // is the only way to assert on what the operator actually sees.
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // The single origin this shell is allowed to render. Compile-time
         // constant: there is no runtime setting, no intent extra and no
@@ -62,11 +59,6 @@ android {
             }
         }
     }
-
-    // Instrumentation tests run against the acceptance variant, because that is
-    // the build that talks to a disposable backend. Without this AGP would only
-    // generate androidTest tasks for `debug`, which points nowhere useful.
-    testBuildType = "acceptance"
 
     buildTypes {
         /**
@@ -103,23 +95,8 @@ android {
             // builds only; the production variant below leaves this false.
             buildConfigField("boolean", "CAPTURE_CONSOLE", "true")
 
-            // An unsigned APK cannot be installed at all: the emulator answers
-            // INSTALL_PARSE_FAILED_NO_CERTIFICATES and the acceptance suite
-            // never gets to run. A CI runner has no release keystore, so this
-            // variant falls back to the standard Android debug keystore, which
-            // is auto-generated, is not a secret, and grants nothing. It is a
-            // test variant and already debuggable. `release` below deliberately
-            // has no such fallback: a release build without the real keystore
-            // must stay unsigned rather than quietly ship debug-signed.
-            //
-            // One consequence worth knowing: an acceptance APK built where the
-            // release keystore exists and one built in CI carry different
-            // signatures, so neither can be installed over the other. Uninstall
-            // first when switching between them.
-            signingConfig = if (keystoreProperties != null) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (keystoreProperties != null) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
 
@@ -166,10 +143,6 @@ dependencies {
 
     // Robolectric runs the shell's pure navigation logic on the JVM, so origin
     // pinning and payload validation are provable without a device.
-    androidTestImplementation("androidx.test:runner:1.5.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
-
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.test:core:1.5.0")
