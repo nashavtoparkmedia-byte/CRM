@@ -30,3 +30,15 @@ CREATE INDEX IF NOT EXISTS "TelegramIdentityReview_telegramUserId_idx"
 ALTER TABLE "TelegramIdentityReview"
   ADD CONSTRAINT "TelegramIdentityReview_resolution_complete"
   CHECK (("resolvedAt" IS NULL) = ("resolvedBy" IS NULL));
+
+-- The attestation columns belong to the same owner as this table, and a
+-- column-only migration cannot be declared in the pending manifest, so
+-- they travel together rather than as an undeclarable fragment.
+ALTER TABLE "DriverTelegram" ADD COLUMN IF NOT EXISTS "attestedPhone" TEXT;
+ALTER TABLE "DriverTelegram" ADD COLUMN IF NOT EXISTS "attestedPhoneAt" TIMESTAMP(3);
+
+-- A stored attestation must carry its timestamp, and a timestamp must carry a
+-- phone. Half a proof is not a proof.
+ALTER TABLE "DriverTelegram"
+  ADD CONSTRAINT "DriverTelegram_attested_phone_complete"
+  CHECK (("attestedPhone" IS NULL) = ("attestedPhoneAt" IS NULL));

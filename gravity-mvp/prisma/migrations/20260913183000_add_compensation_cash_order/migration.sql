@@ -36,3 +36,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS "CompensationCashOrder_provider_identity_key"
 -- Serves the driver-facing list: this park, this profile, this month.
 CREATE INDEX IF NOT EXISTS "CompensationCashOrder_driver_month_idx"
   ON "CompensationCashOrder" ("externalParkId", "externalDriverProfileId", "endedAt");
+
+-- Driver eligibility facts travel with this migration because Driver and
+-- CompensationCashOrder share one owner, and a migration that only added
+-- columns could not be declared: the pending-migration manifest requires
+-- every entry to create an object its rollback proof can check.
+-- driver_profile.is_selfemployed is the authoritative park-SMZ flag. NULL is an
+-- unknown, not a "no": eligibility fails closed on it rather than guessing.
+ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "isSelfEmployed" BOOLEAN;
+
+-- driver_profile.employment_type, carried for audit. Observed live values are
+-- park_employee, selfemployed and individual_entrepreneur. The entrepreneur
+-- value is NOT park-SMZ, which is why the boolean above stays decisive.
+ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "employmentType" TEXT;
+
+-- driver_profile.hire_date: the park connection date. Kept apart from
+-- "hiredAt", which is populated from created_date and is already consumed by
+-- scoring and the driver views; compensation eligibility reads only this one.
+ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "yandexHireDate" TIMESTAMP(3);
+
+CREATE INDEX IF NOT EXISTS "Driver_yandexHireDate_idx" ON "Driver" ("yandexHireDate");

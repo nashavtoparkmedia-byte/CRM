@@ -9,13 +9,14 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "9c2ce0f306d65272360765effae9ceaf44ef27207d359e74983658b4acb8b478",
-    "size": 158960,
+    "sha256": "1423e02da5acfdb1fd2699512372a665704f9812006037a65fe93246a4ce7e3c",
+    "size": 162964,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
-    "fleet_operations"
+    "fleet_operations",
+    "telegram_channel"
   ],
   "migrations": [
     {
@@ -68,6 +69,79 @@
           "CompensationReconciliationTask",
           "CompensationSettlement",
           "CompensationVerifiedOrder"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260913173000_add_telegram_identity_review",
+      "path": "gravity-mvp/prisma/migrations/20260913173000_add_telegram_identity_review/migration.sql",
+      "sha256": "33ece158438193ebb2eaf40ce46cab37514b0b09224042fbac6d6f2f9685ded4",
+      "size": 2113,
+      "owner_context": "telegram_channel",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "TelegramIdentityReview"
+        ],
+        "columns": [
+          {
+            "table": "DriverTelegram",
+            "column": "attestedPhone"
+          },
+          {
+            "table": "DriverTelegram",
+            "column": "attestedPhoneAt"
+          }
+        ],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260913183000_add_compensation_cash_order",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "sha256": "57232a50a0034e87df943e824d917824553d30a7b3835b9b755da8d3435767cb",
+      "size": 3303,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationCashOrder"
+        ],
+        "columns": [
+          {
+            "table": "Driver",
+            "column": "employmentType"
+          },
+          {
+            "table": "Driver",
+            "column": "isSelfEmployed"
+          },
+          {
+            "table": "Driver",
+            "column": "yandexHireDate"
+          }
+        ],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260913190000_add_compensation_pilot_submission",
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "sha256": "7231058a15975cf701a0b295b058480698b4b9de5e5a4584094736f1fe65993f",
+      "size": 1567,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationPilotSubmission"
         ],
         "columns": [],
         "forbidden_indexes": []
