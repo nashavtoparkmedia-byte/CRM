@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const REPO = path.resolve(__dirname, '../../../../../..')
+const REPO = path.resolve(__dirname, '../../../../../../..')
 const read = (relative: string) => readFileSync(path.join(REPO, relative), 'utf8')
 
 const SCENE = read('tg-bot/src/handlers/compensation.js')

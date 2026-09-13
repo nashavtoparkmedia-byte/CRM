@@ -6,8 +6,8 @@ import { revalidatePath } from 'next/cache'
 import {
     compensationManagerActionV1,
     compensationManagerApplicationsV1,
-} from '@/modules/fleet-operations/application/compensation-pilot-operations'
-import { resolveManagerPrincipalV1 } from '@/modules/fleet-operations/public/v1/compensation-manager-principal'
+    resolveCompensationManagerPrincipalV1,
+} from '@/modules/fleet-operations/public/v1'
 import { CURRENT_USER_QUERY_V1 } from '@/contracts/identity-access/v1'
 import { queryCurrentUserV1 } from '@/modules/identity-access/public/v1/identity-actions'
 
@@ -72,7 +72,7 @@ export interface ManagerActionResult {
  */
 async function actingPrincipal() {
     const result = await queryCurrentUserV1({ contract: CURRENT_USER_QUERY_V1 })
-    return resolveManagerPrincipalV1((result as { user: unknown }).user as never)
+    return resolveCompensationManagerPrincipalV1((result as { user: unknown }).user as never)
 }
 
 /**

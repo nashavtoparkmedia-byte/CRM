@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import {
     decideTelegramAttestedPhoneV1,
     type TelegramIdentitySnapshotV1,
-} from '../../../contacts/public/v1/telegram-attested-phone'
+} from '../../../contacts/internal/telegram-attested-phone'
 import { matchYandexProfileByExactPhoneV1 } from '../../../telegram-channel/public/v1/yandex-profile-match'
 import { compensationPilotEligibilityV1 } from './compensation-eligibility'
 import {

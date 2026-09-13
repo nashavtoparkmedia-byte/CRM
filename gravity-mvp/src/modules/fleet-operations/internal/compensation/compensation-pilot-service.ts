@@ -13,8 +13,8 @@
 import {
     cashOrderCatalogueV1,
     type StoredCashOrderV1,
-} from '../../internal/compensation/compensation-cash-order-ingestion'
-import type { CompensationEligibilityFactsV1 } from '../../internal/compensation/compensation-eligibility'
+} from './compensation-cash-order-ingestion'
+import type { CompensationEligibilityFactsV1 } from './compensation-eligibility'
 import {
     decidePilotSubmissionV1,
     pilotDriverStatusV1,
@@ -23,7 +23,7 @@ import {
     type ManagerActionV1,
     type PilotDriverStatusV1,
     type PilotSubmissionRefusalV1,
-} from '../../internal/compensation/compensation-pilot-flow'
+} from './compensation-pilot-flow'
 
 export interface PilotDriverIdentityV1 {
     telegramUserId: string

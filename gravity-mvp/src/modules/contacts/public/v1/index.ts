@@ -71,4 +71,3 @@ export {
     type LegacyContactResolutionOutcome,
     type YandexDriverContactLinkResultV1,
 } from '../../application/contact-external-operations'
-export * from './telegram-attested-phone'

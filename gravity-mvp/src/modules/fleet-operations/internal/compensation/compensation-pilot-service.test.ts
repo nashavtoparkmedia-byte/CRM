@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { StoredCashOrderV1 } from '../../internal/compensation/compensation-cash-order-ingestion'
+import type { StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 import {
     compensationSectionViewV1,
     performManagerActionV1,

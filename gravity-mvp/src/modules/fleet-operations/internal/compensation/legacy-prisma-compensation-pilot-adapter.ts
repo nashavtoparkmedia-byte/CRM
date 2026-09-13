@@ -17,15 +17,15 @@ import {
     START_COMPENSATION_PAYOUT_COMMAND_V1,
     SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
 } from '../../../../contracts/fleet-operations/v1'
-import { compensationLineageDigestForContactV1 } from '../../internal/compensation/compensation-pilot-lineage'
+import { compensationLineageDigestForContactV1 } from './compensation-pilot-lineage'
 import {
     finalizeCompensationPayoutV1,
     rejectCompensationApplicationV1,
     resolveCompensationReconciliationV1,
     startCompensationPayoutV1,
     submitCompensationApplicationV1,
-} from '../../internal/compensation/compensation-prisma-adapter'
-import { pilotDriverStatusV1 } from '../../internal/compensation/compensation-pilot-flow'
+} from './compensation-prisma-adapter'
+import { pilotDriverStatusV1 } from './compensation-pilot-flow'
 import type {
     CompensationPilotPortV1,
     ManagerApplicationRowV1,

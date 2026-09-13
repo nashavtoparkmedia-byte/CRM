@@ -26,7 +26,7 @@ const CRM_URL = () => {
     return 'http://localhost:3002/api/webhooks/bot';
 };
 
-const CRM_SECRET = () => process.env.BOT_WEBHOOK_SECRET || process.env.CRM_BOT_SECRET || '';
+const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
 
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {

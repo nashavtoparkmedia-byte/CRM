@@ -5,7 +5,9 @@
  * can reach past the service into the monetary core.
  */
 
-import { legacyPrismaCompensationPilotPortV1 } from '../public/v1/legacy-prisma-compensation-pilot-adapter'
+import { legacyPrismaCompensationPilotPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-adapter'
+import { resolveManagerPrincipalV1 } from '../internal/compensation/compensation-manager-principal'
+import type { AuthenticatedCrmUserV1, ManagerPrincipalResolutionV1 } from '../internal/compensation/compensation-manager-principal'
 import {
     compensationSectionViewV1,
     performManagerActionV1,
@@ -14,7 +16,7 @@ import {
     type ManagerApplicationRowV1,
     type CompensationSectionViewV1,
     type PilotSubmitOutcomeV1,
-} from '../public/v1/compensation-pilot-service'
+} from '../internal/compensation/compensation-pilot-service'
 
 export async function compensationPilotSectionV1(
     telegramUserId: string,
@@ -38,4 +40,11 @@ export async function compensationManagerActionV1(
     input: Parameters<typeof performManagerActionV1>[0],
 ): Promise<ManagerActionOutcomeV1> {
     return performManagerActionV1(input, legacyPrismaCompensationPilotPortV1)
+}
+
+/** Resolves the acting manager. Exposed so no surface reads identity itself. */
+export function resolveCompensationManagerPrincipalV1(
+    user: AuthenticatedCrmUserV1 | null | undefined,
+): ManagerPrincipalResolutionV1 {
+    return resolveManagerPrincipalV1(user)
 }

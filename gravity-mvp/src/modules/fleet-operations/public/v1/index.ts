@@ -85,3 +85,10 @@ export {
     updateScoringThresholdsV1,
     upsertParkMatchedDriverV1,
 } from '../../application/fleet-operations'
+export {
+  compensationManagerActionV1,
+  compensationManagerApplicationsV1,
+  compensationPilotSectionV1,
+  compensationPilotSubmitV1,
+  resolveCompensationManagerPrincipalV1,
+} from '../../application/compensation-pilot-operations'

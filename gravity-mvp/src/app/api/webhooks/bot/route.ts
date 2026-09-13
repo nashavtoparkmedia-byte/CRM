@@ -4,7 +4,7 @@ import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, li
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import { matchYandexProfileByExactPhoneV1 } from '@/modules/telegram-channel/public/v1'
-import { compensationPilotSectionV1, compensationPilotSubmitV1 } from '@/modules/fleet-operations/application/compensation-pilot-operations'
+import { compensationPilotSectionV1, compensationPilotSubmitV1 } from '@/modules/fleet-operations/public/v1'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
