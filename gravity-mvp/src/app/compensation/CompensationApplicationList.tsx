@@ -19,6 +19,9 @@ const STATUS_LABELS: Record<string, string> = {
 /** Refusals come back as codes; the manager needs a sentence. */
 const REFUSAL_LABELS: Record<string, string> = {
     approve_requires_pending: 'Заявку уже одобрили или закрыли.',
+    not_authenticated: 'Войдите в CRM — действие не выполнено.',
+    user_disabled: 'Учётная запись отключена — действие не выполнено.',
+    user_identity_incomplete: 'Не удалось определить пользователя — действие не выполнено.',
     reject_requires_no_live_authorization: 'Выплата уже начата — сначала закройте её.',
     mark_paid_requires_authorization: 'Сначала одобрите заявку.',
     reject_requires_reason: 'Укажите причину отказа.',
@@ -40,10 +43,6 @@ export default function CompensationApplicationList({
     const [rejecting, setRejecting] = useState<string | null>(null)
     const [reason, setReason] = useState('')
 
-    // The pilot has no manager identity plumbed through yet; the acting user is
-    // recorded by C1 as the principal, so this is the one place it is named.
-    const managerId = 'crm_manager'
-    const managerLabel = 'CRM'
 
     function run(action: () => Promise<{ ok: boolean; refusal?: string }>) {
         startTransition(async () => {
@@ -102,8 +101,7 @@ export default function CompensationApplicationList({
                                     <button
                                         type="button"
                                         disabled={pending}
-                                        onClick={() => run(() => approveCompensationApplication(
-                                            application.applicationId, managerId, managerLabel))}
+                                        onClick={() => run(() => approveCompensationApplication(application.applicationId))}
                                         className="h-11 rounded-lg bg-primary px-4 text-[15px] font-semibold text-white disabled:opacity-50"
                                     >
                                         Одобрить
@@ -113,8 +111,7 @@ export default function CompensationApplicationList({
                                     <button
                                         type="button"
                                         disabled={pending}
-                                        onClick={() => run(() => markCompensationApplicationPaid(
-                                            application.applicationId, managerId, managerLabel))}
+                                        onClick={() => run(() => markCompensationApplicationPaid(application.applicationId))}
                                         className="h-11 rounded-lg bg-accent px-4 text-[15px] font-semibold text-white disabled:opacity-50"
                                     >
                                         Выплачено
@@ -145,8 +142,7 @@ export default function CompensationApplicationList({
                                     type="button"
                                     disabled={pending || reason.trim() === ''}
                                     onClick={() => {
-                                        run(() => rejectCompensationApplication(
-                                            application.applicationId, managerId, managerLabel, reason))
+                                        run(() => rejectCompensationApplication(application.applicationId, reason))
                                         setRejecting(null)
                                         setReason('')
                                     }}

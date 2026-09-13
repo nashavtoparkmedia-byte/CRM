@@ -166,6 +166,36 @@ describe('the manager screen acts only through the service', () => {
         expect(MANAGER_LIST).toContain("reason.trim() === ''")
     })
 
+    it('resolves the acting manager from the session, never from the client', () => {
+        expect(MANAGER_ACTIONS).toContain('queryCurrentUserV1')
+        expect(MANAGER_ACTIONS).toContain('resolveManagerPrincipalV1')
+        // The client sends an application id and a reason. If it could send a
+        // principal, a crafted post could put someone else's name on a payout.
+        expect(MANAGER_LIST).not.toContain('managerId')
+        expect(MANAGER_LIST).not.toContain('operatorLabel')
+        expect(MANAGER_LIST).not.toContain('principalId')
+    })
+
+    it('carries no shared fallback principal anywhere in the surface', () => {
+        for (const source of [MANAGER_ACTIONS, MANAGER_LIST]) {
+            expect(source).not.toMatch(/'crm_manager'|"crm_manager"/)
+            expect(source).not.toMatch(/principalId:\s*'(manager|admin|system)'/)
+        }
+    })
+
+    it('stops before any monetary call when the principal is refused', () => {
+        // Each action returns on an unresolved principal before it reaches
+        // compensationManagerActionV1.
+        const guards = MANAGER_ACTIONS.match(/if \(!acting\.resolved\) return/g) ?? []
+        expect(guards.length).toBe(3)
+    })
+
+    it('renders the identity refusals a manager can hit', () => {
+        for (const refusal of ['not_authenticated', 'user_disabled', 'user_identity_incomplete']) {
+            expect(MANAGER_LIST).toContain(refusal)
+        }
+    })
+
     it('renders the refusal codes the service can return', () => {
         for (const refusal of [
             'approve_requires_pending', 'reject_requires_no_live_authorization',

@@ -7,6 +7,9 @@ import {
     compensationManagerActionV1,
     compensationManagerApplicationsV1,
 } from '@/modules/fleet-operations/application/compensation-pilot-operations'
+import { resolveManagerPrincipalV1 } from '@/modules/fleet-operations/public/v1/compensation-manager-principal'
+import { CURRENT_USER_QUERY_V1 } from '@/contracts/identity-access/v1'
+import { queryCurrentUserV1 } from '@/modules/identity-access/public/v1/identity-actions'
 
 export interface CompensationApplicationView {
     applicationId: string
@@ -29,8 +32,7 @@ export interface CompensationApplicationView {
 }
 
 /**
- * The manager list. The screen renders these rows and decides nothing: which
- * buttons are live follows from the flags, which the service derived.
+ * The manager list, under the existing CRM access model.
  */
 export async function listCompensationApplications(): Promise<CompensationApplicationView[]> {
     const rows = await compensationManagerApplicationsV1()
@@ -62,16 +64,32 @@ export interface ManagerActionResult {
 }
 
 /**
- * Approve: takes the C1 payout authorization. The money is still paid by hand
- * afterwards; this records that a manager authorised it.
+ * Resolves who is acting from the session cookie the CRM already issues.
+ *
+ * No action below takes a principal as an argument, so a crafted form post
+ * cannot choose whose name ends up on a payout. An unproven session returns a
+ * refusal and every caller stops before touching monetary state.
+ */
+async function actingPrincipal() {
+    const result = await queryCurrentUserV1({ contract: CURRENT_USER_QUERY_V1 })
+    return resolveManagerPrincipalV1((result as { user: unknown }).user as never)
+}
+
+/**
+ * Approve: takes the C1 payout authorization, attributed to the signed-in
+ * manager. The money is still paid by hand afterwards.
  */
 export async function approveCompensationApplication(
     applicationId: string,
-    managerId: string,
-    managerLabel: string | null,
 ): Promise<ManagerActionResult> {
+    const acting = await actingPrincipal()
+    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
+
     const outcome = await compensationManagerActionV1({
-        applicationId, action: 'approve', principalId: managerId, operatorLabel: managerLabel,
+        applicationId,
+        action: 'approve',
+        principalId: acting.principal.principalId,
+        operatorLabel: acting.principal.operatorLabel,
     })
     revalidatePath('/compensation')
     return outcome.performed
@@ -81,15 +99,16 @@ export async function approveCompensationApplication(
 
 export async function rejectCompensationApplication(
     applicationId: string,
-    managerId: string,
-    managerLabel: string | null,
     reason: string,
 ): Promise<ManagerActionResult> {
+    const acting = await actingPrincipal()
+    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
+
     const outcome = await compensationManagerActionV1({
         applicationId,
         action: 'reject',
-        principalId: managerId,
-        operatorLabel: managerLabel,
+        principalId: acting.principal.principalId,
+        operatorLabel: acting.principal.operatorLabel,
         reason,
         // A fresh key per attempt; a repeat of the same rejection is harmless.
         rejectionKey: randomUUID(),
@@ -106,11 +125,15 @@ export async function rejectCompensationApplication(
  */
 export async function markCompensationApplicationPaid(
     applicationId: string,
-    managerId: string,
-    managerLabel: string | null,
 ): Promise<ManagerActionResult> {
+    const acting = await actingPrincipal()
+    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
+
     const outcome = await compensationManagerActionV1({
-        applicationId, action: 'mark_paid', principalId: managerId, operatorLabel: managerLabel,
+        applicationId,
+        action: 'mark_paid',
+        principalId: acting.principal.principalId,
+        operatorLabel: acting.principal.operatorLabel,
     })
     revalidatePath('/compensation')
     return outcome.performed
