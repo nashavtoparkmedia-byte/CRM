@@ -110,6 +110,22 @@ after `sdkmanager`, `ci.ini` has to exist after `avdmanager`, and
 `emulator -list-avds` has to list `ci` before the emulator is started. Each
 check prints the relevant tool output as annotations when it fails.
 
+## Run #6: the emulator boots
+
+With the AVD actually verified, the device came up:
+
+```
+INFO | Boot completed in 42081 ms
+adb devices: emulator-5554  device  product:sdk_gphone64_x86_64
+```
+
+Forty-two seconds with hardware acceleration, which also settles the boot
+budget question: the 15-minute ceiling is roughly twenty times what is needed.
+
+The failure moved one step later, into the instrumentation run itself, so the
+same treatment is applied to it: Gradle's output is captured to a file, and its
+salient lines plus every JUnit failure message are republished as annotations.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run

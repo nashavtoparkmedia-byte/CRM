@@ -269,14 +269,24 @@ jobs:
           "$ADB" shell settings put global animator_duration_scale 0 || true
           echo "emulator booted"
 
+      # Gradle's own failure text lives in the step log, which needs an
+      # authenticated download, so it is captured to a file here and the
+      # decisive lines are republished as annotations by the step below.
       - name: Run the acceptance tests
         id: tests
         timeout-minutes: 25
         run: |
           cd android
-          "$ANDROID_HOME/platform-tools/adb" logcat -c
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          "$ADB" logcat -c
+          set +e
           bash tools/bootstrap-gradle.sh --no-daemon :app:connectedAcceptanceAndroidTest \
-            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}" \
+            2>&1 | tee "$RUNNER_TEMP/gradle-connected.log"
+          status=${PIPESTATUS[0]}
+          echo "installed packages:"
+          timeout 30 "$ADB" shell pm list packages 2>&1 | grep -i yokoone || echo "  (none matching yokoone)"
+          exit $status
 
       # This step is why runs #1, #2 and #3 uploaded nothing. Every adb call
       # here BLOCKS when no device is present: `adb logcat` waits for one
@@ -296,6 +306,8 @@ jobs:
           # Host-side evidence first: it exists whether or not a device ever did.
           cp "$RUNNER_TEMP/crm.log" "$OUT/crm-server.log" 2>/dev/null
           cp "$RUNNER_TEMP/emulator.log" "$OUT/emulator.log" 2>/dev/null
+          cp "$RUNNER_TEMP/gradle-connected.log" "$OUT/gradle-connected.log" 2>/dev/null
+          cp "$RUNNER_TEMP/avdmanager.log" "$OUT/avdmanager.log" 2>/dev/null
           cp -r app/build/reports/androidTests "$OUT/test-report" 2>/dev/null
           cp -r app/build/outputs/androidTest-results "$OUT/junit" 2>/dev/null
           sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
@@ -364,6 +376,29 @@ jobs:
           [ -n "$diag" ] && echo "::notice::shell diagnostics: ${diag}"
           tail -6 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
             echo "::notice::emulator.log: ${l}"
+          done
+
+          # What the instrumentation run actually said. Gradle's tail carries
+          # the task failure; the JUnit XML carries the per-test reason.
+          grep -iE "FAILURE|error:|Caused by|INSTALL_FAILED|No tests found|Test failed|Unable to|not found" \
+            "$OUT/gradle-connected.log" 2>/dev/null | head -12 | while read -r l; do
+              echo "::error::gradle: ${l}"
+            done
+          # The JUnit XML carries the per-test reason. Read it with grep rather
+          # than an inline script: a heredoc inside a YAML block scalar ends the
+          # block at the first unindented line.
+          grep -rhoE '<(failure|error)[^>]*message="[^"]*"' "$OUT" 2>/dev/null \
+            | sed -e 's/.*message="//' -e 's/"$//' | head -10 | while read -r l; do
+                echo "::error::test failure: ${l}"
+              done
+          grep -rhoE '<testcase[^>]*name="[^"]*"' "$OUT" 2>/dev/null \
+            | sed -e 's/.*name="//' -e 's/"$//' | head -10 | while read -r l; do
+                echo "::notice::test ran: ${l}"
+              done
+
+          # The shell's own diagnostics are the whole point of the suite.
+          head -20 "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | while read -r l; do
+            echo "::notice::YokoShellDiag: ${l}"
           done
           exit 0
 
