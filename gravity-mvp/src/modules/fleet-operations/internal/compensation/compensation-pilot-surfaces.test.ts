@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const REPO = path.resolve(__dirname, '../../../../../../..')
+const REPO = path.resolve(__dirname, '..', '..', '..', '..', '..', '..')
 const read = (relative: string) => readFileSync(path.join(REPO, relative), 'utf8')
 
 const SCENE = read('tg-bot/src/handlers/compensation.js')
@@ -111,7 +111,9 @@ describe('the webhook routes those actions to the service', () => {
     it('calls the pilot service and nothing lower', () => {
         expect(ROUTE).toContain('compensationPilotSectionV1')
         expect(ROUTE).toContain('compensationPilotSubmitV1')
-        expect(ROUTE).toContain("from '@/modules/fleet-operations/application/compensation-pilot-operations'")
+        // The module public path, not the composition root: reaching past the
+        // public surface is what made the whole facade read as laundering.
+        expect(ROUTE).toContain("from '@/modules/fleet-operations/public/v1'")
     })
 
     it('refuses a submit with no idempotency key instead of inventing one', () => {
@@ -129,7 +131,7 @@ describe('the manager screen acts only through the service', () => {
     it('lists and acts through the pilot operations module', () => {
         expect(MANAGER_ACTIONS).toContain('compensationManagerApplicationsV1')
         expect(MANAGER_ACTIONS).toContain('compensationManagerActionV1')
-        expect(MANAGER_ACTIONS).toContain("from '@/modules/fleet-operations/application/compensation-pilot-operations'")
+        expect(MANAGER_ACTIONS).toContain("from '@/modules/fleet-operations/public/v1'")
     })
 
     it('offers approve, reject and mark paid, and nothing else', () => {
@@ -168,7 +170,7 @@ describe('the manager screen acts only through the service', () => {
 
     it('resolves the acting manager from the session, never from the client', () => {
         expect(MANAGER_ACTIONS).toContain('queryCurrentUserV1')
-        expect(MANAGER_ACTIONS).toContain('resolveManagerPrincipalV1')
+        expect(MANAGER_ACTIONS).toContain('resolveCompensationManagerPrincipalV1')
         // The client sends an application id and a reason. If it could send a
         // principal, a crafted post could put someone else's name on a payout.
         expect(MANAGER_LIST).not.toContain('managerId')

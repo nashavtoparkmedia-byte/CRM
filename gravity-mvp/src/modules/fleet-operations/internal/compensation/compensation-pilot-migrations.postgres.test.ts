@@ -12,7 +12,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
 
@@ -35,8 +35,15 @@ proof('pilot migrations on real PostgreSQL', () => {
         database = new PrismaClient()
         await database.$connect()
     })
+    // The constraint proofs insert fixed ids, so a previous run's rows would
+    // make a uniqueness proof pass for the wrong reason.
+    beforeEach(async () => {
+        await database.$executeRawUnsafe(
+            'TRUNCATE TABLE "TelegramIdentityReview","DriverTelegram","CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
+    })
     afterAll(async () => {
-        await database.$executeRawUnsafe('TRUNCATE TABLE "TelegramIdentityReview" RESTART IDENTITY CASCADE')
+        await database.$executeRawUnsafe(
+            'TRUNCATE TABLE "TelegramIdentityReview","DriverTelegram","CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
         await database.$disconnect()
     })
 

@@ -3565,7 +3565,7 @@ model TelegramIdentityReview {
   normalizedPhone    String?
   reason             String
   identityContactId  String?
-  candidateContactIds String[]
+  candidateContactIds String[] @default([])
   observedAt         DateTime
   resolvedAt         DateTime?
   resolvedBy         String?
