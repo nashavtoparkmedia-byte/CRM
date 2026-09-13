@@ -329,6 +329,16 @@ jobs:
 
           # Device-side evidence, every call bounded.
           timeout 30 "$ADB" devices -l > "$OUT/adb-devices.txt" 2>&1
+          # What UI Automator can actually see. A WebView publishes its content
+          # to the accessibility tree only when an accessibility client is
+          # attached, so an assertion that cannot find on-screen text needs this
+          # to tell "the text is not there" from "the tree is empty".
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/window.xml > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/window.xml "$OUT/ui-hierarchy.xml" > /dev/null 2>&1
+          timeout 60 "$ADB" shell screencap -p /sdcard/final-screen.png > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/final-screen.png "$OUT/final-screen.png" > /dev/null 2>&1
+          timeout 30 "$ADB" shell settings get secure enabled_accessibility_services \
+            > "$OUT/accessibility.txt" 2>&1
           timeout 60 "$ADB" logcat -d -v time > "$OUT/logcat-full.log" 2>&1
           timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E > "$OUT/logcat-shell-diagnostics.log" 2>&1
           timeout 60 "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
@@ -384,6 +394,17 @@ jobs:
               echo "::notice::crm: ${l}"
             done
           echo "::notice::adb devices: $(head -c 200 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
+          if [ -s "$OUT/ui-hierarchy.xml" ]; then
+            nodes=$(grep -o '<node' "$OUT/ui-hierarchy.xml" | wc -l)
+            webviews=$(grep -c 'android.webkit.WebView' "$OUT/ui-hierarchy.xml" 2>/dev/null || echo 0)
+            signin=$(grep -c 'Вход в мобильное приложение' "$OUT/ui-hierarchy.xml" 2>/dev/null || echo 0)
+            echo "::notice::ui tree: ${nodes} nodes, ${webviews} WebView node(s), sign-in text present=${signin}"
+            grep -oE 'text="[^"]{3,60}"' "$OUT/ui-hierarchy.xml" 2>/dev/null | sort -u | head -4 | while read -r l; do
+              echo "::notice::ui text: ${l}"
+            done
+          else
+            echo "::notice::ui tree: uiautomator dump produced nothing"
+          fi
           if ! grep -q YOKO_NATIVE_OK "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
             tail -4 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
               echo "::notice::emulator.log: ${l}"
