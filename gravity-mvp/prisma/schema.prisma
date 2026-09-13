@@ -3573,7 +3573,7 @@ model TelegramIdentityReview {
 
   /// One open review per account and reason: a driver retrying the same share
   /// must not create a queue of identical rows for a manager to wade through.
-  @@unique([telegramUserId, reason, observedAt])
+  @@unique([telegramUserId, reason, observedAt], map: "TelegramIdentityReview_account_reason_key")
   @@index([resolvedAt])
   @@index([telegramUserId])
 }

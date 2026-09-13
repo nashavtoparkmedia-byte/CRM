@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "ab30719a4bdcbe5adc03d517fdb0f40b2dd839393e8009b9c28657c34bc8f4ec",
-    "size": 162977,
+    "sha256": "0d72d6db6cd991a405fa0fa31745be563d0f57a9380ec90e8f9fcf66b3d8e082",
+    "size": 163027,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
