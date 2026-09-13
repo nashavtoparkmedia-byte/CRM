@@ -380,36 +380,41 @@ jobs:
 
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
-          # GitHub caps annotations at ten per level per step, so the budget
-          # is spent deliberately: the shell's own diagnostics and the server's
-          # view of the device come first, because together they separate "the
-          # device never reached the CRM" from "it did and the UI did not
-          # appear". Everything else is a fallback for when those are empty.
-          grep -E "YOKO_NET|YOKO_JS_OK|YOKO_NATIVE_OK|YOKO_PAGE_ERROR" \
-            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | head -6 | while read -r l; do
-              echo "::notice::shell: ${l}"
-            done
-          grep -E "GET |POST |Error|error" "$OUT/crm-server.log" 2>/dev/null \
-            | tail -4 | while read -r l; do
-              echo "::notice::crm: ${l}"
-            done
-          echo "::notice::adb devices: $(head -c 200 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
+          # GitHub caps annotations at TEN per level per step and drops the
+          # rest silently, so this budget is allocated explicitly. Run #10 lost
+          # its accessibility-tree summary to four lines of Redis noise, which
+          # is exactly the failure mode being guarded against here.
+          #
+          # 1-4: what UI Automator can see. This is the open question.
           if [ -s "$OUT/ui-hierarchy.xml" ]; then
-            nodes=$(grep -o '<node' "$OUT/ui-hierarchy.xml" | wc -l)
-            webviews=$(grep -c 'android.webkit.WebView' "$OUT/ui-hierarchy.xml" 2>/dev/null || echo 0)
-            signin=$(grep -c 'Вход в мобильное приложение' "$OUT/ui-hierarchy.xml" 2>/dev/null || echo 0)
-            echo "::notice::ui tree: ${nodes} nodes, ${webviews} WebView node(s), sign-in text present=${signin}"
-            grep -oE 'text="[^"]{3,60}"' "$OUT/ui-hierarchy.xml" 2>/dev/null | sort -u | head -4 | while read -r l; do
+            nodes=$(grep -o "<node" "$OUT/ui-hierarchy.xml" | wc -l)
+            webviews=$(grep -c "android.webkit.WebView" "$OUT/ui-hierarchy.xml" 2>/dev/null || true)
+            signin=$(grep -c "Вход в мобильное приложение" "$OUT/ui-hierarchy.xml" 2>/dev/null || true)
+            echo "::notice::ui tree: ${nodes} nodes, WebView nodes=${webviews:-0}, sign-in text present=${signin:-0}"
+            grep -oE 'text="[^"]{3,60}"' "$OUT/ui-hierarchy.xml" 2>/dev/null | sort -u | head -3 | while read -r l; do
               echo "::notice::ui text: ${l}"
             done
           else
             echo "::notice::ui tree: uiautomator dump produced nothing"
+            echo "::notice::accessibility services: $(head -c 150 "$OUT/accessibility.txt" 2>/dev/null | tr '\n' ' ')"
           fi
-          if ! grep -q YOKO_NATIVE_OK "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
-            tail -4 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
-              echo "::notice::emulator.log: ${l}"
+
+          # 5-7: the shell's own view of what it fetched.
+          grep -E "YOKO_NET|YOKO_JS_OK|YOKO_PAGE_ERROR" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | tail -3 | while read -r l; do
+              echo "::notice::shell: $(echo "$l" | sed -e 's/.*console | //')"
             done
-          fi
+
+          # 8-9: the server's view, with the disposable stand's expected noise
+          # removed. Redis and FreeSWITCH are absent there by design and their
+          # connection errors say nothing about the acceptance path.
+          grep -E "GET |POST " "$OUT/crm-server.log" 2>/dev/null \
+            | grep -vE "ECONNREFUSED|esl_|redis" | tail -2 | while read -r l; do
+              echo "::notice::crm: $(echo "$l" | head -c 180)"
+            done
+
+          # 10: the device itself.
+          echo "::notice::adb devices: $(head -c 160 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
           exit 0
 
       - name: Fail on any uncaught JavaScript error or Android crash
