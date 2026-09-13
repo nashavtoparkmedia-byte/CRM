@@ -137,6 +137,20 @@
       },
       "source_hash_rebinds": [
         {
+          "path": "gravity-mvp/src/app/api/calls/sip-credentials/route.ts",
+          "previous_source_sha256": "b53b75410c24b689aa4d42c99d3ca47b4f2c9f51dbea87078754154855ad2d3f",
+          "current_source_sha256": "23c206f6dbb447196ab6d8262ef39347f68a68eece9137730dc0582a55b27fc7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #87 changed only the bytes of this already assigned runtime surface while adding the mobile shell lane. The path appears in no lifecycle registry entry on either side, so its classification still comes solely from the identity-side assignment: lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "3925ec93c6f46d93442c988fda53c96a1d6c93b6fb6fcabd8add9a75cff7212b",
+          "current_source_sha256": "e0d6cdbe7846edec5c5d22b4f94558bbd32bf1c0c2bbb651175effe58b9361ce",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #87 changed only the bytes of this already assigned runtime surface while routing the mobile shell lane. The path appears in no lifecycle registry entry on either side, so its classification still comes solely from the identity-side assignment, and every semantic ownership field is carried forward unchanged; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
           "path": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
           "previous_source_sha256": "bbe2880412ea021499b40ef18e4a43df707930a6af91e7cb09faf79159b4db70",
           "current_source_sha256": "be441926e967718fa1030bffdbc82fe907f552f7d3e2f0f6db2739bd27094e7b",
