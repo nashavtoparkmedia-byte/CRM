@@ -33,7 +33,7 @@ const exactConsumerImports = [
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
 const executableDigests = {
     recoverStuckMessages: 'aae8c67e89f6e728c65e95a16f1a49493f19c0c99414f94e8e609926190e6ef2',
-    retrySend: 'c66293a93568e368b1d4e4d0c0a67bf6c6dc04eac35e6f2c8225927e473e87e5',
+    retrySend: 'f05670671cc7ee2f73d2f051a8c3c00fa987a23d3ae39828f5758eba46385b70',
     sendReachabilityBlock: 'cee5e85ebaf2c10f76453683d850e645755d9664489d4acbcb1af3b9ba99be76',
 }
 
@@ -718,7 +718,10 @@ function assertMessageServiceRecoveryImplementation(source) {
         /const\s+retryClaim\s*=\s*await\s+\(prisma\.message\s+as\s+any\)\.updateMany\(\{[\s\S]*status:\s*['"]failed['"][\s\S]*updatedAt:\s*message\.updatedAt[\s\S]*status:\s*['"]sent['"][\s\S]*sentAt:\s*retryStartedAt[\s\S]*retryLeaseId/,
         /if\s*\(retryClaim\.count\s*!==\s*1\)[\s\S]*Retry already claimed/,
         /const\s+rawExternalId\s*=\s*outboundBinding\.target/,
-        /const\s+connId\s*=\s*outboundBinding\.connectionId/,
+        // A legacy conversation carries no bound transport, so the retry must
+        // hand the delivery owner undefined and let it resolve the sole active
+        // carrier. Passing the null straight through would fail every such retry.
+        /const\s+connId\s*=\s*outboundBinding\.connectionId\s*\?\?\s*undefined/,
         /providerAccountId:\s*retryMaxBinding\.providerAccountId/,
         /connectionId:\s*retryMaxBinding\.isPersonal\s*\?\s*undefined\s*:\s*connId/,
         /getTelegramChannelDeliveryV1\(\)\.sendText\(\{[\s\S]*connectionId:\s*connId/,
