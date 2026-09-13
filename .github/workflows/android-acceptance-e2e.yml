@@ -427,14 +427,19 @@ jobs:
           # Errors have their own budget of ten, separate from notices. Runs #13
           # and #14 published none of this because an earlier rewrite of the
           # notice budget deleted these emitters along with it.
-          tail -6 "$OUT/gradle-connected.log" 2>/dev/null | while IFS= read -r l; do
-            echo "::error::gradle tail: $(printf '%s' "$l" | head -c 200)"
-          done
+          # Ten error slots, and Gradle's last six lines are its own boilerplate
+          # footer -- "BUILD FAILED", "Run with --scan". Run #15 spent the whole
+          # budget on that and dropped the lines that say what failed. Grep for
+          # the meaningful lines instead of taking a blind tail.
+          echo "::error::tests executed: $(grep -rhoE '<testcase' "$OUT" 2>/dev/null | wc -l); junit files: $(find "$OUT" -name '*.xml' 2>/dev/null | wc -l); gradle log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
+          grep -hE "Tests on |AssertionError|Exception|FAILURE: |Execution failed|INSTALL_|No tests|did not|Caused by" \
+            "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
+              echo "::error::gradle: $(printf '%s' "$l" | head -c 220)"
+            done
           grep -rhoE '<(failure|error)[^>]*message="[^"]*"' "$OUT" 2>/dev/null \
-            | sed -e 's/.*message="//' -e 's/"$//' | head -3 | while IFS= read -r l; do
-                echo "::error::test failure: $(printf '%s' "$l" | head -c 200)"
+            | sed -e 's/.*message="//' -e 's/"$//' | head -2 | while IFS= read -r l; do
+                echo "::error::test failure: $(printf '%s' "$l" | head -c 220)"
               done
-          echo "::error::tests executed: $(grep -rhoE '<testcase' "$OUT" 2>/dev/null | wc -l); gradle log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
 
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
