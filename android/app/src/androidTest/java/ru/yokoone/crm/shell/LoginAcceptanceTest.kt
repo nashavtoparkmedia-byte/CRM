@@ -100,7 +100,7 @@ class LoginAcceptanceTest {
         context.startActivity(intent)
 
         assertTrue(
-            "app did not reach the sign-in screen",
+            "app did not reach the sign-in screen; on screen: ${visibleText()}",
             device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), LAUNCH_TIMEOUT),
         )
     }
@@ -110,12 +110,12 @@ class LoginAcceptanceTest {
         signIn(wrongPassword)
 
         assertTrue(
-            "no readable rejection message after a wrong password",
+            "no readable rejection message after a wrong password; on screen: ${visibleText()}",
             device.wait(Until.hasObject(By.textContains("Неверный логин или пароль")), ACTION_TIMEOUT),
         )
         // The operator has to be able to try again without restarting anything.
         assertTrue(
-            "the form was not usable again after the rejection",
+            "the form was not usable again after the rejection; on screen: ${visibleText()}",
             device.findObjects(By.clazz("android.widget.EditText")).size >= 2,
         )
         screenshot("01-wrong-password")
@@ -132,7 +132,7 @@ class LoginAcceptanceTest {
         screenshot("02-after-correct-password")
         assertTrue(
             "the messenger did not open after a correct password following a rejection; " +
-                "if an application error is on screen this is the defect under investigation",
+                "on screen: ${visibleText()}",
             opened,
         )
     }
@@ -143,20 +143,20 @@ class LoginAcceptanceTest {
 
         val opened = device.wait(Until.hasObject(By.textContains("Тест · Telegram")), MESSENGER_TIMEOUT)
         screenshot("03-direct-login")
-        assertTrue("the messenger did not open on a direct correct login", opened)
+        assertTrue("the messenger did not open on a direct correct login; on screen: ${visibleText()}", opened)
     }
 
     @Test
     fun test04_allThreeSeededConversationsAreListed() {
         signIn(correctPassword)
         assertTrue(
-            "the conversation list never appeared",
+            "the conversation list never appeared; on screen: ${visibleText()}",
             device.wait(Until.hasObject(By.textContains("Тест · Telegram")), MESSENGER_TIMEOUT),
         )
 
         for (name in listOf("Тест · Telegram", "Тест · WhatsApp", "Тест · MAX")) {
             assertTrue(
-                "seeded conversation missing from the list: $name",
+                "seeded conversation missing from the list: $name; on screen: ${visibleText()}",
                 device.wait(Until.hasObject(By.textContains(name)), ACTION_TIMEOUT),
             )
         }
@@ -210,6 +210,28 @@ class LoginAcceptanceTest {
         val dir = InstrumentationRegistry.getInstrumentation().context
             .getExternalFilesDir(null) ?: return null
         return File(dir, "screenshots").apply { mkdirs() }
+    }
+
+    /**
+     * What the accessibility tree holds right now, for a failure message.
+     *
+     * Files written by the test have not survived the trip out of the emulator,
+     * and the JUnit failure message is the one channel from inside a run that
+     * has proved reliable, so the evidence travels in the message itself. It
+     * also answers the actual question: an assertion that cannot find its text
+     * cannot say whether the text is off-screen or merely unpublished, and this
+     * shows what WAS published at that moment.
+     */
+    private fun visibleText(limit: Int = 220): String {
+        val texts = runCatching {
+            device.findObjects(By.textStartsWith(""))
+                .mapNotNull { it.text }
+                .filter { it.isNotBlank() }
+                .distinct()
+        }.getOrDefault(emptyList())
+        val joined = texts.joinToString(" / ")
+        return if (joined.isEmpty()) "(tree carries no text)"
+        else joined.take(limit).replace('\n', ' ')
     }
 
     private fun screenshot(name: String) {
