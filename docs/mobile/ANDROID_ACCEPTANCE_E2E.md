@@ -372,6 +372,33 @@ lane match the lane that already works rather than weakening the cookie, which
 would have hidden a real production constraint: over plain HTTP to a non-local
 origin, this shell cannot hold a session, by design.
 
+## Run #25: the messenger is reached
+
+The loopback route worked. Three failures became two, and the shell's own log
+carries the proof:
+
+```
+YOKO_NET done POST /messages status=200 212ms
+YOKO_NET done POST /messages status=200  69ms
+YOKO_NET done POST /messages status=200 154ms
+YOKO_NET done POST /messages status=200 129ms
+```
+
+Sign-in now establishes a session and the messenger loads. That `POST /messages`
+answers 200 rather than 500 is also the `POST /messages` fix from PR #87
+confirmed on a real Android device, independently of the local stand.
+
+The two remaining failures are both `app did not reach the sign-in screen` with
+an empty tree — and they are a consequence of the success. The session survives
+between tests: `FLAG_ACTIVITY_CLEAR_TASK` clears the task but not the WebView's
+cookie jar, so once `test02` signs in, `test03` and `test04` launch straight
+into the messenger and wait for a sign-in screen they will never see.
+
+`@Before` now runs `pm clear` before each test, which wipes cookies along with
+everything else, and re-grants the notification permission afterwards because
+`pm clear` revokes it. That is what `launchFreshApp` has claimed to do all
+along.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run

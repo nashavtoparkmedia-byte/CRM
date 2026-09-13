@@ -88,7 +88,21 @@ class LoginAcceptanceTest {
         // once on a real handset and never sees it again. Leaving it to chance
         // would mean the suite measures the timing of an OS dialog rather than
         // the product.
-        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+        // Each test must start signed out. FLAG_ACTIVITY_CLEAR_TASK clears the
+        // task but not the WebView's cookie jar, so once one test signs in
+        // successfully the next one launches straight into the messenger and
+        // waits forever for a sign-in screen it will never see. That is what
+        // run #25's two remaining failures were: test02 established a session
+        // and test03 and test04 inherited it.
+        //
+        // pm clear wipes the app's data, cookies included, which is what
+        // "launchFreshApp" has claimed to do all along.
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        automation.executeShellCommand("pm clear $targetPackage").close()
+        Thread.sleep(2_000)
+
+        // pm clear also revokes runtime permissions, so this has to follow it.
+        automation.executeShellCommand(
             "pm grant $targetPackage android.permission.POST_NOTIFICATIONS",
         ).close()
 
@@ -101,7 +115,7 @@ class LoginAcceptanceTest {
         context.startActivity(intent)
 
         assertTrue(
-            "app did not reach the sign-in screen; on screen: ${visibleText()}",
+            "app did not reach the sign-in screen; on screen: ${visibleText()}; tree: ${treeShape(200)}",
             device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), LAUNCH_TIMEOUT),
         )
     }
