@@ -59,6 +59,10 @@ const ambiguitySemanticsByOutcome = new Map([
     'REPOSITORY_MIGRATION_DEPLOY_NO_CREDENTIAL_VALUE_READ',
     'SQLITE_SCHEMA_SYNC_NO_CREDENTIAL_VALUE_READ',
   ])],
+  ['DISPOSABLE_ACCEPTANCE_DATABASE_SETUP', new Set([
+    'ACCEPTANCE_SCHEMA_DEPLOY_NO_CREDENTIAL_VALUE_READ',
+    'SYNTHETIC_ACCEPTANCE_FIXTURE_WRITE_NO_CREDENTIAL_VALUE_ACCESS',
+  ])],
   ['STATICALLY_RESOLVABLE', new Set([
     'AUTHORIZATION_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS',
     'CLIENT_VERSION_QUERY_NO_DATABASE_OR_CREDENTIAL_ACCESS',
@@ -174,7 +178,83 @@ const staticMethodsBySemantics = new Map([
   ['PRISMA_MIGRATION_METADATA_WRITE_ONLY', /^dynamic-mixed-database-write:prisma migrate resolve$/u],
   ['SCHEMA_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS', /^mixed-script-sql:embedded_database_string$/u],
 ])
-const assertAmbiguityCompatibility = (record, current) => {
+const acceptanceSetupMethodsBySemantics = new Map([
+  ['ACCEPTANCE_SCHEMA_DEPLOY_NO_CREDENTIAL_VALUE_READ', /^dynamic-mixed-database-write:prisma migrate deploy$/u],
+  ['SYNTHETIC_ACCEPTANCE_FIXTURE_WRITE_NO_CREDENTIAL_VALUE_ACCESS', /^dynamic-mixed-database-unknown:psql$/u],
+])
+const acceptanceSetupIntentBySemantics = new Map([
+  ['ACCEPTANCE_SCHEMA_DEPLOY_NO_CREDENTIAL_VALUE_READ', 'WRITE'],
+  ['SYNTHETIC_ACCEPTANCE_FIXTURE_WRITE_NO_CREDENTIAL_VALUE_ACCESS', 'UNKNOWN'],
+])
+const acceptanceSetupTargetKindBySemantics = new Map([
+  ['ACCEPTANCE_SCHEMA_DEPLOY_NO_CREDENTIAL_VALUE_READ', 'disposable_acceptance_database_schema'],
+  ['SYNTHETIC_ACCEPTANCE_FIXTURE_WRITE_NO_CREDENTIAL_VALUE_ACCESS', 'disposable_acceptance_database_fixture'],
+])
+const acceptanceFixtureInsertEntities = (text) => {
+  const statements = String(text).replace(/--[^\n]*/gu, '').split(';').map((statement) => statement.trim()).filter(Boolean)
+  if (statements.length === 0) return null
+  const entities = []
+  for (const statement of statements) {
+    const match = /^INSERT\s+INTO\s+"([A-Za-z_][A-Za-z0-9_]*)"\s*\(/u.exec(statement)
+    if (!match) return null
+    entities.push(match[1])
+  }
+  return [...new Set(entities)].sort()
+}
+const namesCredentialIdentifier = (text, identifiers) => normalizedStrings(identifiers).some((identifier) => new RegExp(
+  `(?<![A-Za-z0-9_])${identifier.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![A-Za-z0-9_])`,
+  'iu',
+).test(String(text)))
+const assertDisposableAcceptanceSetup = (record, current, context) => {
+  const target = record.resolved_target
+  const label = `disposable acceptance database setup ${record.site_signature}`
+  assert(acceptanceSetupMethodsBySemantics.get(record.resolved_semantics)?.test(current.method), `${label} contradicts the analyzed operation`)
+  assert.equal(current.database_command_intent, acceptanceSetupIntentBySemantics.get(record.resolved_semantics), `${label} contradicts analyzer command intent`)
+  assert.equal(current.access, 'UNKNOWN', `${label} is not the analyzed ambiguous access`)
+  assert.equal(current.credential_exposure, 'AMBIGUOUS', `${label} is not an analyzed credential ambiguity`)
+  assert.equal(current.surface?.registry_classified, true, `${label} lacks a reviewed lifecycle classification`)
+  assert.equal(current.surface?.lifecycle, 'TEST', `${label} is not a test-infrastructure surface`)
+  assert.equal(current.surface?.disposition, 'TEST_SUPPORT', `${label} is not a test-support surface`)
+  assert.equal(current.surface?.production_capability, 'NONE', `${label} is production-capable`)
+  assert.equal(current.context_classification, 'TEST', `${label} is not analyzed in a test context`)
+  assert.equal(current.surface?.registered_source_sha256, current.source_sha256, `${label} is not pinned to the registered source bytes`)
+  assert.equal(target.credential_entities_in_scope, false, `${label} still targets credential entities`)
+  assert.equal(current.public_boundary, false, `${label} crosses a public boundary`)
+  assert.equal(current.public_secret_risk, false, `${label} carries public credential risk`)
+  assert.deepEqual(normalizedStrings(current.candidate_entities), [], `${label} has analyzed credential entity candidates`)
+  assert.deepEqual(normalizedStrings(current.sensitive_field_names), [], `${label} reaches analyzed sensitive fields`)
+  assert.deepEqual(normalizedStrings(current.exposed_sensitive_field_names), [], `${label} exposes analyzed sensitive fields`)
+  assert.equal(target.kind, acceptanceSetupTargetKindBySemantics.get(record.resolved_semantics), `${label} target kind contradicts resolved semantics`)
+  assert.equal(target.entity, null, `${label} resolves a database entity`)
+  assert.equal(target.acceptance_surface, current.file, `${label} is not bound to the analyzed surface`)
+  assert.equal(target.production_credential_required, false, `${label} requires a production credential`)
+  assert.equal(target.provider_credential_present, false, `${label} carries a provider credential`)
+  const surfaceAccesses = context.accesses.filter((entry) => entry.file === current.file)
+  assert(surfaceAccesses.length > 0, `${label} lacks analyzed surface evidence`)
+  assert.equal(surfaceAccesses.every((entry) => (
+    entry.credential_exposure !== 'SECRET_READ'
+    && entry.public_secret_risk !== true
+    && normalizedStrings(entry.exposed_sensitive_field_names).length === 0
+  )), true, `${label} surface carries a credential-bearing access`)
+  if (record.resolved_semantics === 'ACCEPTANCE_SCHEMA_DEPLOY_NO_CREDENTIAL_VALUE_READ') {
+    assert.equal(target.authorizes_runtime_database_writes, false, `${label} claims runtime database write authority`)
+    assert.match(String(target.schema_source), /\.prisma$/u, `${label} schema source is not a committed Prisma schema`)
+    assert(existsSync(`${root}${target.schema_source}`), `${label} schema source is not a repository file`)
+    return
+  }
+  assert.equal(target.authorizes_generic_database_writes, false, `${label} claims generic database write authority`)
+  assert(existsSync(`${root}${target.fixture_source}`), `${label} fixture source is not a repository file`)
+  const fixtureText = readFileSync(`${root}${target.fixture_source}`, 'utf8')
+  assert.equal(sha256File(target.fixture_source), target.fixture_sha256, `${label} fixture source-byte binding drift`)
+  const declaredEntities = normalizedStrings(target.fixture_entities)
+  assert(declaredEntities.length > 0, `${label} declares no synthetic entity`)
+  assert.deepEqual(acceptanceFixtureInsertEntities(fixtureText), declaredEntities, `${label} writes outside the reviewed synthetic entity set`)
+  const credentialEntities = normalizedStrings(context.credentialEntities)
+  assert(credentialEntities.length > 0, `${label} lacks the authoritative credential entity set`)
+  assert.equal(declaredEntities.some((entity) => credentialEntities.some((candidate) => candidate.toLowerCase() === entity.toLowerCase())), false, `${label} targets a credential entity`)
+  assert.equal(namesCredentialIdentifier(fixtureText, credentialEntities), false, `${label} names a credential entity`)
+}
+const assertAmbiguityCompatibility = (record, current, context) => {
   const target = record.resolved_target
   assert(target && typeof target === 'object' && typeof target.credential_entities_in_scope === 'boolean', `credential ambiguity resolved target is incomplete: ${record.site_signature}`)
   const candidates = normalizedStrings(current.candidate_entities).map((value) => value.toLowerCase())
@@ -191,6 +271,8 @@ const assertAmbiguityCompatibility = (record, current) => {
   } else if (record.classification === 'CONTROLLED_SCHEMA_OPERATION') {
     assert(!target.credential_entities_in_scope && current.database_command_intent === 'WRITE' && /^dynamic-mixed-database-write:prisma (?:migrate deploy|db push)$/u.test(current.method)
       && current.surface?.lifecycle === 'MIGRATION' && ![undefined, null, 'UNKNOWN'].includes(current.surface?.production_capability), `controlled schema operation contradiction: ${record.site_signature}`)
+  } else if (record.classification === 'DISPOSABLE_ACCEPTANCE_DATABASE_SETUP') {
+    assertDisposableAcceptanceSetup(record, current, context)
   } else {
     assert(!target.credential_entities_in_scope && staticMethodsBySemantics.get(record.resolved_semantics)?.test(current.method), `static credential ambiguity resolution contradiction: ${record.site_signature}`)
     if (record.resolved_semantics === 'CLIENT_VERSION_QUERY_NO_DATABASE_OR_CREDENTIAL_ACCESS') {
@@ -556,7 +638,10 @@ for (const record of ambiguityRecords) {
   assert(current, `stale credential ambiguity disposition: ${record.site_signature}`)
   assertExactSourceBinding(record, current, `credential ambiguity review ${record.site_signature}`)
   assert.deepEqual(record.review_scope, credentialReviewScope(current), `credential ambiguity semantic scope drift: ${record.site_signature}`)
-  assertAmbiguityCompatibility(record, current)
+  assertAmbiguityCompatibility(record, current, {
+    accesses: currentCredentialInventory.accesses,
+    credentialEntities: (credentialFields.records ?? []).map((entry) => entry.entity).filter(Boolean),
+  })
 }
 
 assert.equal(crossDomain.exact_coverage, true, 'cross-domain credential coverage drift')
