@@ -4,6 +4,7 @@ import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, li
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import { matchYandexProfileByExactPhoneV1 } from '@/modules/telegram-channel/public/v1'
+import { compensationPilotSectionV1, compensationPilotSubmitV1 } from '@/modules/fleet-operations/application/compensation-pilot-operations'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -27,6 +28,10 @@ export async function POST(request: Request) {
         const { action, payload } = body
 
         switch (action) {
+            case 'compensation_section':
+                return await handleCompensationSection(payload)
+            case 'compensation_submit':
+                return await handleCompensationSubmit(payload)
             case 'sync_user':
                 return await handleSyncUser(payload)
             case 'change_limit':
@@ -250,6 +255,88 @@ async function findCarById(connection: any, carId: string) {
         if (total === null && cars.length < PAGE) break // last page (no total field)
     }
     return null
+}
+
+
+// ── Cash compensation pilot ────────────────────────────────────────────────
+// The bot renders; every rule lives behind compensationPilotSectionV1 and
+// compensationPilotSubmitV1, so the two surfaces cannot drift apart.
+
+function serializeCompensationApplication(application: {
+    applicationId: string
+    status: string
+    shortOrderIdDisplay: string | null
+    amountKopecks: number
+    submittedAt: Date
+    rejectionReason: string | null
+}) {
+    return {
+        applicationId: application.applicationId,
+        status: application.status,
+        shortOrderId: application.shortOrderIdDisplay,
+        amountKopecks: application.amountKopecks,
+        submittedAt: application.submittedAt.toISOString(),
+        rejectionReason: application.rejectionReason,
+    }
+}
+
+async function handleCompensationSection(payload: any) {
+    const { telegramId } = payload
+    if (!telegramId) return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
+
+    const view = await compensationPilotSectionV1(String(telegramId))
+    if (!view.available) {
+        return NextResponse.json({
+            available: false,
+            reason: view.reason,
+            applications: view.applications.map(serializeCompensationApplication),
+        })
+    }
+    return NextResponse.json({
+        available: true,
+        monthKey: view.firstMonthKey,
+        remainingBudgetKopecks: view.remainingBudgetKopecks,
+        orders: view.orders.map((order) => ({
+            externalOrderId: order.externalOrderId,
+            shortOrderId: order.shortOrderIdDisplay,
+            amountKopecks: order.amountKopecks,
+            endedAt: order.endedAt.toISOString(),
+        })),
+        applications: view.applications.map(serializeCompensationApplication),
+    })
+}
+
+async function handleCompensationSubmit(payload: any) {
+    const { telegramId, externalOrderId, claimedRubles, supportConfirmed, attachmentFileId, attachmentKind, idempotencyKey } = payload
+    if (!telegramId || !externalOrderId) {
+        return NextResponse.json({ error: 'Missing telegramId or externalOrderId' }, { status: 400 })
+    }
+    // The bot supplies the key so a retried tap is the same logical submit.
+    if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
+        return NextResponse.json({ error: 'Missing idempotencyKey' }, { status: 400 })
+    }
+
+    const outcome = await compensationPilotSubmitV1({
+        telegramUserId: String(telegramId),
+        externalOrderId: String(externalOrderId),
+        // A non-numeric amount becomes NaN, which the gate refuses as not whole
+        // rubles rather than coercing it into something plausible.
+        claimedRubles: Number(claimedRubles),
+        supportConfirmed: supportConfirmed === true,
+        attachmentFileId: attachmentFileId ? String(attachmentFileId) : null,
+        attachmentKind: attachmentKind ? String(attachmentKind) : null,
+        idempotencyKey,
+    })
+
+    if (!outcome.submitted) {
+        return NextResponse.json({ submitted: false, refusal: outcome.refusal })
+    }
+    return NextResponse.json({
+        submitted: true,
+        applicationId: outcome.applicationId,
+        amountKopecks: outcome.amountKopecks,
+        status: outcome.status,
+    })
 }
 
 // Handle "Отправить данные менеджеру" from bot — try auto-link by phone, fallback to manual

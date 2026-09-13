@@ -122,7 +122,8 @@ bot.use(async (ctx, next) => {
 });
 
 // 2. Stage initialization
-const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene, parkSelectScene]);
+const { compensationScene } = require('./handlers/compensation');
+const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene, parkSelectScene, compensationScene]);
 
 // 2.1 Universal Commands within Stage
 stage.start(startHandler.handleStart);
