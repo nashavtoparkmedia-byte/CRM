@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+      # One isolated release projection, named exactly. A push here produces an
+      # authoritative run, but the branch grants nothing on its own: the
+      # coordinated release contract pins the exact commit, tree, both component
+      # subtrees and the exact hosted run and artifact identities before it
+      # builds anything. Named exactly rather than as a family, because no
+      # control asserts this trigger block, so a glob would be ungoverned.
+      - release/messaging-max-20260913
 
 permissions:
   contents: read
