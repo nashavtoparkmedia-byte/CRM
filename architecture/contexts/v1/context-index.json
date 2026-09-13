@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "46c3f74bf9a6104283f88ef583ac249c39e96a99e2d0795028d37280351a1500"
+      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
     },
     {
       "context": "telegram_channel",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "6c4ae5b97ffd665e7c016657b3039f3bfb153a462afec1596d994ce63fd2a0d1"
+      "sha256": "39e00f4974b321cc88772a43f5db8693949c24d2f7eac5dd391ad011dae5d3b6"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "d0364caa67a75896976a8765e03f4e7d2fb7a51d5a7f04805099b577033d3139"
+      "sha256": "058a9b5cafd618891026f9d4a1e33d4a7e159ec265a902542ca40ad11addad73"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
