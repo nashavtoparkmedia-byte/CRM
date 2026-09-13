@@ -37,10 +37,13 @@ export default function AiInternToggle() {
         setEnabled(newVal)  // optimistic
         startTransition(async () => {
             try {
-                await setAiInternStateV1({
+                const result = await setAiInternStateV1({
                     contract: SET_AI_INTERN_STATE_COMMAND_V1,
                     enabled: newVal,
                 })
+                // A refused save reports saved:false rather than throwing, so
+                // the revert has to key on the answer, not only on an error.
+                if (!result?.saved) setEnabled(!newVal)
             } catch (e: any) {
                 setEnabled(!newVal)  // revert
                 console.error('[AiInternToggle] save failed:', e?.message)
