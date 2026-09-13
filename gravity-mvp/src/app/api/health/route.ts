@@ -4,6 +4,7 @@ import {
   transportRegistryHealthV1,
   type TransportConnectionEntryV1,
 } from '@/modules/messaging/public/v1/transport-registry-health'
+import { channelDeliveryRegistrationStatusV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 import { getOperationalJobStateV1 } from '@/modules/operations-observability/public/v1/operational-job-registry'
 import { getCumulativeCounters } from '@/lib/RetentionCleanup'
 
@@ -229,6 +230,16 @@ export async function GET() {
     healthLatencyMs: Date.now() - now.getTime(),
   }
 
+  // ── Channel delivery capabilities ──────────────────────────────────────
+  // A process can serve HTTP perfectly while being unable to send a single
+  // message, so readiness must be reported from the registry itself rather
+  // than assumed from a successful boot.
+  const deliverySection = channelDeliveryRegistrationStatusV1()
+  if (!deliverySection.ready) {
+    overallStatus = 'error'
+    degradedReasons.push(`channel_delivery_unregistered:${deliverySection.missing.join(',')}`)
+  }
+
   // ── Overall status aggregation ─────────────────────────────────────────
   if (overallStatus !== 'error' && degradedReasons.length > 0) {
     overallStatus = 'degraded'
@@ -242,6 +253,7 @@ export async function GET() {
     environment: process.env.NODE_ENV || 'unknown',
     version: process.env.APP_VERSION || 'unknown',
     transport: transportSection,
+    channelDelivery: deliverySection,
     pipeline: pipelineSection,
     workflow: workflowSection,
     recovery: recoverySection,

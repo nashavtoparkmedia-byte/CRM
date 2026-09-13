@@ -5985,6 +5985,24 @@ app.post('/send-message', async (req, res) => {
         } else {
           console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
         }
+        // The compose box was observed to clear of the exact typed text, which is
+        // the same action-bound evidence the direct-UI and UI-fallback paths treat
+        // as delivery. Reporting 'send_requested' here made Gravity record the
+        // message as merely sent; the recovery sweeper then marked it failed after
+        // five minutes and the retry job sent the contact a second copy. The proof
+        // needs the CRM's clientMessageId to be bindable, so without one we keep
+        // the old, weaker answer rather than asserting an unverifiable delivery.
+        if (clientMessageId) {
+          const proven = uiTextDeliveredResult(
+            liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
+            clientMessageId,
+          )
+          return res.json({
+            success: true,
+            chatId: liveId,
+            ...proven,
+          })
+        }
         return res.json({
           success: true,
           chatId: liveId,
