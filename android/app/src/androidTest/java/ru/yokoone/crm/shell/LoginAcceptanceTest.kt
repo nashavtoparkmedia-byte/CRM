@@ -173,13 +173,31 @@ class LoginAcceptanceTest {
      * instead of being typed into.
      */
     private fun signIn(password: String) {
-        val picker = device.wait(Until.findObject(By.textContains("Выберите сотрудника")), ACTION_TIMEOUT)
-        if (picker != null) {
-            picker.click()
-            val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
-            assertNotNull("operator list did not open; on screen: ${visibleText()}", option)
-            option.click()
-        }
+        // The operator select is `required`, so the browser refuses to submit
+        // without it and shows its own "Please select an item in the list."
+        // — which is exactly what the failure screens carried once the submit
+        // button was being clicked correctly.
+        //
+        // This used to be `if (picker != null) { ... }`: when the select was not
+        // found, the whole step was skipped in silence and the run failed much
+        // later for an unrelated-looking reason. Not finding it is now a
+        // failure that says so, in the same class of mistake as a tool that
+        // exits 0 when it did nothing.
+        val picker = device.wait(Until.findObject(By.textContains("Выберите сотрудника")), 5_000)
+            ?: device.findObject(By.clazz("android.widget.Spinner"))
+            ?: device.findObject(By.descContains("Сотрудник"))
+            ?: device.findObject(By.textContains("Сотрудник"))
+        assertNotNull(
+            "the operator select was not found, so the form can never submit; on screen: ${visibleText(400)}",
+            picker,
+        )
+        picker!!.click()
+        val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
+        assertNotNull(
+            "the operator list did not open after clicking the select; on screen: ${visibleText(400)}",
+            option,
+        )
+        option!!.click()
 
         val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
         assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
@@ -237,7 +255,7 @@ class LoginAcceptanceTest {
      * cannot say whether the text is off-screen or merely unpublished, and this
      * shows what WAS published at that moment.
      */
-    private fun visibleText(limit: Int = 220): String {
+    private fun visibleText(limit: Int = 260): String {
         val texts = runCatching {
             device.findObjects(By.textStartsWith(""))
                 .mapNotNull { it.text }

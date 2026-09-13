@@ -303,6 +303,27 @@ That is a defect in the suite, not in the product. The selector is now exact
 text, and `signIn` reports whether the button entered its pending state after
 the click, which is the cheap proof that the click landed on the form.
 
+## Run #21: the form submits, and the browser refuses it
+
+With the submit button selected by exact text, the form is genuinely submitted
+and the next layer appears in the failure screens:
+
+```
+Please select an item in the list. / Главная / ... / Сотрудник / Логин /
+acceptance / Пароль / •••••••••••••••••••••••••• / Войти
+```
+
+That is the browser's own validation message for a `required` select with no
+value. The operator was never chosen, so the page refuses to submit and nothing
+reaches the server.
+
+`signIn` looked for the select by its placeholder text and, when it did not
+find it, skipped the whole step inside an `if (picker != null)`. A silent skip
+of a mandatory step is the same class of mistake as a tool that exits 0 without
+doing anything, and it hid this for as long as the button selector hid the
+previous layer. The select is now located by several selectors in turn, and
+failing to find it is an assertion that says so.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
