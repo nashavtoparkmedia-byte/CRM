@@ -30,6 +30,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0-stage1"
+        // UI Automator drives the WebView through its accessibility tree, which
+        // is the only way to assert on what the operator actually sees.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // The single origin this shell is allowed to render. Compile-time
         // constant: there is no runtime setting, no intent extra and no
@@ -59,6 +62,11 @@ android {
             }
         }
     }
+
+    // Instrumentation tests run against the acceptance variant, because that is
+    // the build that talks to a disposable backend. Without this AGP would only
+    // generate androidTest tasks for `debug`, which points nowhere useful.
+    testBuildType = "acceptance"
 
     buildTypes {
         /**
@@ -143,6 +151,10 @@ dependencies {
 
     // Robolectric runs the shell's pure navigation logic on the JVM, so origin
     // pinning and payload validation are provable without a device.
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.test:core:1.5.0")

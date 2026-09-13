@@ -405,27 +405,49 @@ jobs:
             test03_directCorrectLoginOpensTheMessenger \
             test04_allThreeSeededConversationsAreListed
           do
+            out="$RUNNER_TEMP/scenario-$t.log"
             echo "===== $t =====" | tee -a "$LOG"
             timeout 60 "$ADB" shell pm clear "$PKG" >> "$LOG" 2>&1
             timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >> "$LOG" 2>&1
             timeout 30 "$ADB" reverse tcp:3002 tcp:3002 >> "$LOG" 2>&1
             timeout 60 "$ADB" logcat -c
             timeout 600 "$ADB" shell am instrument -w -r \
-              -e class "$CLASS#$t" "$RUNNER" 2>&1 | tee -a "$LOG"
-            # am instrument reports failures in its stream, not in its exit code.
-            if grep -q "FAILURES!!!\|INSTRUMENTATION_STATUS: stack=" "$LOG"; then
-              if tail -60 "$LOG" | grep -q "FAILURES!!!"; then
-                echo "SCENARIO FAILED: $t" | tee -a "$LOG"
-                failed=1
-              fi
+              -e class "$CLASS#$t" "$RUNNER" 2>&1 | tee -a "$LOG" > "$out"
+
+            # Score on a POSITIVE result, in THIS scenario's own output.
+            #
+            # Searching for "FAILURES!!!" and treating its absence as a pass is
+            # what the rest of this file exists to avoid: a killed `timeout`, an
+            # INSTRUMENTATION_FAILED, or an app process crash
+            # (shortMsg=Process crashed., INSTRUMENTATION_CODE: 0) all print no
+            # such line, and every one of them would have scored as a pass. The
+            # crash case is the one this suite exists to catch.
+            if grep -q "OK (1 test)" "$out"; then
+              echo "SCENARIO OK: $t" | tee -a "$LOG"
+            else
+              echo "SCENARIO DID NOT REPORT OK: $t" | tee -a "$LOG"
+              failed=1
             fi
-            # Keep the shell's own diagnostics from this scenario before the
-            # next pm clear removes them.
+
+            # Keep this scenario's evidence before the next pm clear and the
+            # next logcat -c take it away. The full buffer is kept as well as
+            # the filtered one, because the crash gate needs FATAL EXCEPTION
+            # lines that a YokoShellDiag filter would drop.
             timeout 60 "$ADB" shell run-as "$PKG" cat files/diagnostics.log \
               >> "$RUNNER_TEMP/shell-diagnostics-all.log" 2>/dev/null
             timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E \
               >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time \
+              >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null
           done
+
+          # Every scenario in the list must have reported. A loop that silently
+          # ran three of four would otherwise pass.
+          ran=$(grep -c '^SCENARIO OK: ' "$LOG")
+          if [ "$ran" -ne 4 ]; then
+            echo "only $ran of 4 scenarios reported OK" | tee -a "$LOG"
+            failed=1
+          fi
 
           echo "scenarios failed: $failed" | tee -a "$LOG"
           exit $failed
@@ -450,8 +472,10 @@ jobs:
           cp "$RUNNER_TEMP/emulator.log" "$OUT/emulator.log" 2>/dev/null
           cp "$RUNNER_TEMP/gradle-connected.log" "$OUT/gradle-connected.log" 2>/dev/null
           cp "$RUNNER_TEMP/avdmanager.log" "$OUT/avdmanager.log" 2>/dev/null
-          cp -r app/build/reports/androidTests "$OUT/test-report" 2>/dev/null
-          cp -r app/build/outputs/androidTest-results "$OUT/junit" 2>/dev/null
+          # No JUnit XML is produced: the scenarios run through `am instrument`,
+          # not through Gradle's connected-test task. The per-scenario logs in
+          # $RUNNER_TEMP are the record.
+          cp "$RUNNER_TEMP"/scenario-*.log "$OUT/" 2>/dev/null
           sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
 
           # Runner-side facts that explain an emulator that never came up.
@@ -481,12 +505,17 @@ jobs:
           timeout 60 "$ADB" pull /sdcard/final-screen.png "$OUT/final-screen.png" > /dev/null 2>&1
           timeout 30 "$ADB" shell settings get secure enabled_accessibility_services \
             > "$OUT/accessibility.txt" 2>&1
-          timeout 60 "$ADB" logcat -d -v time > "$OUT/logcat-full.log" 2>&1
+          # Accumulated across every scenario. A single dump at the end would
+          # only ever hold the last one, because logcat is cleared before each.
+          cat "$RUNNER_TEMP/logcat-full-all.log" > "$OUT/logcat-full.log" 2>/dev/null
+          timeout 60 "$ADB" logcat -d -v time >> "$OUT/logcat-full.log" 2>&1
           cat "$RUNNER_TEMP/logcat-shell-all.log" > "$OUT/logcat-shell-diagnostics.log" 2>/dev/null
           timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E >> "$OUT/logcat-shell-diagnostics.log" 2>&1
+          # APPEND. This used to be a truncating redirect placed after the
+          # accumulated copy, which threw away three scenarios of evidence.
           cat "$RUNNER_TEMP/shell-diagnostics-all.log" > "$OUT/shell-diagnostics-file.log" 2>/dev/null
           timeout 60 "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
-            > "$OUT/shell-diagnostics-file.log" 2>/dev/null
+            >> "$OUT/shell-diagnostics-file.log" 2>/dev/null
           # The instrumentation writes into its OWN external directory, not the
           # app-under-test's: scoped storage forbids the latter. Both are pulled
           # so nothing is lost if a capture ever lands on the other side.
@@ -535,15 +564,20 @@ jobs:
           # footer -- "BUILD FAILED", "Run with --scan". Run #15 spent the whole
           # budget on that and dropped the lines that say what failed. Grep for
           # the meaningful lines instead of taking a blind tail.
-          echo "::error::scenarios: $(grep -c '^===== ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0) started, $(grep -c 'SCENARIO FAILED' "$OUT/gradle-connected.log" 2>/dev/null || echo 0) failed; log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
-          grep -hE "SCENARIO FAILED|AssertionError|Exception|INSTALL_|No tests|scenarios failed|OK \\(|FAILURES" \\
+          started=$(grep -c '^===== ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          okd=$(grep -c '^SCENARIO OK: ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          bad=$(grep -c 'SCENARIO DID NOT REPORT OK' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          line="scenarios: ${started} started, ${okd} reported OK, ${bad} did not"
+          # A green run must not carry a red annotation.
+          if [ "$bad" -eq 0 ] && [ "$okd" -eq 4 ]; then
+            echo "::notice::${line}"
+          else
+            echo "::error::${line}"
+          fi
+          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 4 scenarios" \
             "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
               echo "::error::gradle: $(printf '%s' "$l" | head -c 500)"
             done
-          grep -rhoE '<(failure|error)[^>]*message="[^"]*"' "$OUT" 2>/dev/null \
-            | sed -e 's/.*message="//' -e 's/"$//' | head -2 | while IFS= read -r l; do
-                echo "::error::test failure: $(printf '%s' "$l" | head -c 500)"
-              done
 
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
@@ -616,6 +650,39 @@ jobs:
             echo "::error::the shell's own diagnostics never reported; the run proves nothing"
             status=1
           fi
+
+          # The defect this whole stage turns on: a refused AI-intern read used
+          # to throw out of a Server Action, so every messenger page load
+          # answered HTTP 500. No UI assertion can see that — the broken and the
+          # fixed page render identically, because the component catches — so it
+          # has to be asserted here, against the shell's own record of what it
+          # fetched.
+          msg=$(grep -c "YOKO_NET done POST /messages status=200" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          bad=$(grep -cE "YOKO_NET done POST /messages status=5[0-9][0-9]" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          echo "::notice::messenger Server Action: ${msg} answered 200, ${bad} answered 5xx"
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::POST /messages answered 5xx ${bad} time(s); the AI-intern refusal is throwing again"
+            grep -E "YOKO_NET done POST /messages status=5" "$OUT/logcat-shell-diagnostics.log" | head -5
+            status=1
+          fi
+          if [ "$msg" -eq 0 ]; then
+            echo "::error::no POST /messages was observed at all, so the messenger was never exercised"
+            status=1
+          fi
+
+          # A sign-in that is accepted redirects; one that is refused does not.
+          # Seeing both proves the suite drove the real journey rather than one
+          # half of it.
+          ok=$(grep -c "YOKO_NET done POST /login/mobile status=303" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          rej=$(grep -c "YOKO_NET done POST /login/mobile status=200" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          echo "::notice::sign-in: ${ok} accepted (303), ${rej} refused (200)"
+          if [ "$ok" -eq 0 ] || [ "$rej" -eq 0 ]; then
+            echo "::error::expected both an accepted and a refused sign-in; saw ${ok} accepted and ${rej} refused"
+            status=1
+          fi
+
           exit $status
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -136,9 +136,17 @@ class LoginAcceptanceTest {
             device.wait(Until.hasObject(By.textContains("Неверный логин или пароль")), ACTION_TIMEOUT),
         )
         // The operator has to be able to try again without restarting anything.
+        // Counting the fields is not enough: they survive a submit button that
+        // is stuck on "Вход…", which is exactly the regression this scenario is
+        // named for. So the button has to be back to its idle label too.
         assertTrue(
             "the form was not usable again after the rejection; on screen: ${visibleText()}",
             device.findObjects(By.clazz("android.widget.EditText")).size >= 2,
+        )
+        assertNotNull(
+            "the submit button did not return to its idle state after the rejection, " +
+                "so the form cannot be retried; on screen: ${visibleText()}",
+            device.wait(Until.findObject(By.text("Войти")), ACTION_TIMEOUT),
         )
         screenshot("01-wrong-password")
     }
@@ -257,11 +265,12 @@ class LoginAcceptanceTest {
         )
         submit.click()
 
-        // The button says "Вход…" while the action is in flight. Seeing it
-        // proves the click reached the form rather than the chrome; not seeing
-        // it is itself the finding, so it is reported and not asserted.
-        val pending = device.wait(Until.hasObject(By.textStartsWith("Вход")), 5_000)
-        android.util.Log.i("YokoAcceptance", "submit clicked, pending state observed=$pending")
+        // No pending-state probe here. The one that used to live at this point
+        // waited for By.textStartsWith("Вход"), which the page's own heading
+        // "Вход в мобильное приложение" satisfies and has satisfied since
+        // before the click — so it reported true whatever happened and proved
+        // nothing. What the click reached is established by the assertions the
+        // scenarios make about the screen that follows it.
     }
 
     /**
