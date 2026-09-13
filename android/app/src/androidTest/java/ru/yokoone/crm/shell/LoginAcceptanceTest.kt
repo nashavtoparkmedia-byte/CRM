@@ -10,7 +10,10 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.FixMethodOrder
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
 import java.io.File
@@ -41,6 +44,29 @@ class LoginAcceptanceTest {
     private lateinit var device: UiDevice
 
     private val targetPackage = "ru.yokoone.crm.shell.acceptance"
+
+    /**
+     * A failing assertion here says only that some text never appeared. It
+     * cannot say whether the text was absent from the screen or merely absent
+     * from the accessibility tree, and those need very different fixes: one is
+     * a product defect, the other is a WebView that did not publish a
+     * client-side update. So every failure leaves both a screenshot and the
+     * hierarchy it was judged against, captured at the moment it failed rather
+     * than after the run has moved on.
+     */
+    @get:Rule
+    val evidenceOnFailure: TestWatcher = object : TestWatcher() {
+        override fun failed(e: Throwable, description: Description) {
+            val name = "FAIL-${description.methodName}"
+            runCatching { screenshot(name) }
+            runCatching {
+                val dir = InstrumentationRegistry.getInstrumentation().targetContext
+                    .getExternalFilesDir(null) ?: return@runCatching
+                val out = File(dir, "screenshots").apply { mkdirs() }
+                device.dumpWindowHierarchy(File(out, "$name.xml"))
+            }
+        }
+    }
 
     /** Credentials for the disposable stand. Never a production secret. */
     private val user = "acceptance"

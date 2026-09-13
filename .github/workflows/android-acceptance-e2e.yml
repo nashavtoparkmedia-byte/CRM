@@ -485,12 +485,15 @@ jobs:
             "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | tail -4 | while read -r l; do
               echo "::notice::shell: $(echo "$l" | sed -e 's/.*console | //' | head -c 200)"
             done
-          # Whatever the shell last showed, in its own words.
-          grep -oE "Нет связи с CRM|Application error|Неверный логин или пароль|Вход в мобильное приложение" \
-            "$OUT/ui-hierarchy.xml" "$RUNNER_TEMP/probe-hierarchy.xml" 2>/dev/null \
-            | sort -u | head -1 | while read -r l; do
-              echo "::notice::last screen text: ${l}"
-            done
+          # The per-failure hierarchies, captured by the test at the moment it
+          # failed. These are the only dumps taken while the screen under test
+          # was still up, so they are what says whether the expected text was
+          # absent from the screen or only from the accessibility tree.
+          for f in "$OUT"/screenshots/FAIL-*.xml; do
+            [ -e "$f" ] || continue
+            echo "::notice::$(basename "$f" .xml): nodes=$(grep -o '<node' "$f" | wc -l) $(grep -oE 'Тест · [A-Za-z]+|Неверный логин или пароль|Вход в мобильное приложение|Нет связи с CRM|Application error' "$f" | sort -u | head -3 | tr '\n' ' ')"
+          done
+          echo "::notice::failure captures: $(ls "$OUT"/screenshots/FAIL-*.png 2>/dev/null | wc -l) screenshots, $(ls "$OUT"/screenshots/FAIL-*.xml 2>/dev/null | wc -l) hierarchies"
 
           # 10: the device itself.
           echo "::notice::adb devices: $(head -c 160 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"

@@ -245,6 +245,36 @@ disposable stand has no request-logging proxy in front of it. The shell's
 `YOKO_NET` lines are the only record of method, path and status on this side,
 so the published ones are now filtered to the sign-in POST and to failures.
 
+## Run #17, and a reading that does not hold
+
+Run #17 published the sign-in requests:
+
+```
+YOKO_NET done POST /login/mobile status=200 47ms
+YOKO_NET done POST /login/mobile status=200 68ms
+YOKO_NET done POST /login/mobile status=200 23ms
+YOKO_NET done POST /login/mobile status=200 79ms
+```
+
+On the local stand a rejected sign-in is 200 and a successful one is 303, so
+four 200s look like four rejections. **That inference is wrong here.** Those
+local numbers come from a request-logging proxy watching raw HTTP; the shell's
+`YOKO_NET` line comes from `fetch`, which follows redirects, so a 303 to
+`/messages` is reported as the final 200. The status alone cannot tell a
+rejection from a success on this side.
+
+What is real is that `test01` fails on the rejection path too: a wrong password
+produces no readable "Неверный логин или пароль". Both that and the messenger
+never opening are consistent with a single mechanism — the accessibility tree
+is built when the page first renders, and a client-side update may not be
+published to it. The text can be on screen and invisible to the assertion.
+
+Distinguishing those needs a dump taken while the screen under test is still
+up, which no dump so far has been. `LoginAcceptanceTest` now carries a
+`TestWatcher` that writes a screenshot and the hierarchy at the moment an
+assertion fails, and the workflow reports what each of those hierarchies
+contains.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
