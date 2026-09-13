@@ -156,20 +156,65 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
           df -h / | tail -1
 
-      - name: Install the emulator and the system image
+      # Run #5 died here without saying so. `avdmanager create avd` prints
+      # "Error: Package path is not valid" on stdout and still EXITS 0, so
+      # `set -e` did not catch it, the step reported success, and the emulator
+      # then failed with "Unknown AVD name [ci]". Every stage is now verified by
+      # its observable result rather than by an exit code, and each failure
+      # explains itself through an annotation.
+      - name: Install the emulator and the system image, and verify each step
         run: |
           set -e
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" "platforms;android-34" "emulator" \
-            "system-images;android-34;google_apis;x86_64" > /dev/null
-          # Second assertion, from the emulator's own point of view. Exit 0 is
-          # "KVM installed and usable"; exit 3 would mean the CPU exposes no
-          # vmx/svm at all, which no udev rule can repair.
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+          IMAGE="system-images;android-34;google_apis;x86_64"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+
+          announce() { echo "::error::$1"; }
+          dump() { while IFS= read -r l; do echo "::error::$2: ${l}"; done; }
+
+          yes | "$SDK/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$SDK/sdkmanager" "platform-tools" "platforms;android-34" "emulator" "$IMAGE" \
+            > "$RUNNER_TEMP/sdkmanager.log" 2>&1 \
+            || { announce "sdkmanager failed"; tail -20 "$RUNNER_TEMP/sdkmanager.log" | dump x sdkmanager; exit 1; }
+
+          # The package has to be on disk where avdmanager will look for it.
+          IMAGE_DIR="$ANDROID_HOME/system-images/android-34/google_apis/x86_64"
+          if [ ! -d "$IMAGE_DIR" ]; then
+            announce "the system image is not at $IMAGE_DIR after sdkmanager reported success"
+            ls -la "$ANDROID_HOME/system-images" 2>&1 | dump x system-images
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            exit 1
+          fi
+          echo "system image present: $(ls "$IMAGE_DIR" | tr '\n' ' ')"
+
+          # Exit 0 is "KVM installed and usable"; exit 3 would mean the CPU
+          # exposes no vmx/svm at all, which no udev rule can repair.
           "$ANDROID_HOME/emulator/emulator" -accel-check
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
-            -n ci -k "system-images;android-34;google_apis;x86_64" --force
-          "$ANDROID_HOME/emulator/emulator" -list-avds
+
+          echo no | "$SDK/avdmanager" create avd -n ci -k "$IMAGE" --force \
+            > "$RUNNER_TEMP/avdmanager.log" 2>&1 || true
+          cat "$RUNNER_TEMP/avdmanager.log"
+
+          # avdmanager's exit code is not evidence. The AVD file is.
+          if [ ! -f "$ANDROID_AVD_HOME/ci.ini" ]; then
+            announce "avdmanager did not create ci.ini, and its exit code did not say so"
+            tail -20 "$RUNNER_TEMP/avdmanager.log" | dump x avdmanager
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            ls -la "$ANDROID_AVD_HOME" 2>&1 | dump x avd-home
+            exit 1
+          fi
+
+          # And the emulator has to agree that it can see it.
+          "$ANDROID_HOME/emulator/emulator" -list-avds > "$RUNNER_TEMP/avds.txt" 2>&1
+          cat "$RUNNER_TEMP/avds.txt"
+          grep -qx "ci" "$RUNNER_TEMP/avds.txt" || {
+            announce "the emulator does not list the AVD that avdmanager just created"
+            cat "$RUNNER_TEMP/avds.txt" | dump x list-avds
+            exit 1
+          }
+          echo "AVD ci created and visible to the emulator"
 
       # Driven directly rather than through a third-party action, for one
       # reason: the action's diagnostics live in the step log, and a step log

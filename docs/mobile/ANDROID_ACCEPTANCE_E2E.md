@@ -85,6 +85,31 @@ that action's diagnostics live in the step log, and a step log needs an
 authenticated download. So the emulator is driven directly again, and its log
 is republished as annotations, which are public on a public repository.
 
+## Run #5: the actual cause, from the emulator's own log
+
+Run #5 published it as an annotation, which is what all the plumbing above was
+for:
+
+```
+ERROR | Unknown AVD name [ci], use -list-avds to see valid list.
+ERROR | HOME is defined but there is no file ci.ini in $HOME/.android/avd
+```
+
+The AVD was never created. The step that creates it reported **success**,
+because `avdmanager create avd` prints `Error: Package path is not valid` on
+stdout and still exits 0, so `set -e` had nothing to catch. The emulator then
+started, found no AVD named `ci`, and exited immediately — which is why the
+device never appeared, in this run and almost certainly in the earlier ones.
+
+It is not a KVM problem, not a runner problem, not a boot timeout and not
+software emulation. It is a configuration step that failed silently.
+
+The remedy is to stop trusting exit codes for this tool. Each stage is now
+verified by its observable result: the system image directory has to exist
+after `sdkmanager`, `ci.ini` has to exist after `avdmanager`, and
+`emulator -list-avds` has to list `ci` before the emulator is started. Each
+check prints the relevant tool output as annotations when it fails.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
