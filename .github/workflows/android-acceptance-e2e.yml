@@ -269,6 +269,44 @@ jobs:
           "$ADB" shell settings put global animator_duration_scale 0 || true
           echo "emulator booted"
 
+      # A targeted experiment, ahead of the suite. Run #11 showed the shell
+      # loading its login page (GET /login/mobile 200) while the accessibility
+      # tree held 31 nodes, zero of them a WebView — but that dump was taken
+      # after the run, with the launcher in front, so it could not say whether
+      # the WebView ever publishes its content at all. This launches the app,
+      # leaves it in the foreground, and dumps the tree while it is there.
+      # A WebView exposes its content to the accessibility tree only while an
+      # accessibility client is attached, which is the thing being measured.
+      - name: Probe whether the WebView reaches the accessibility tree
+        if: always()
+        timeout-minutes: 8
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          APK=$(ls app/build/outputs/apk/acceptance/*.apk 2>/dev/null | head -1)
+          echo "apk: $APK"
+          timeout 180 "$ADB" install -r -t "$APK" 2>&1 | tail -3
+          timeout 60 "$ADB" shell settings put secure accessibility_enabled 1
+          timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
+          sleep 25
+          echo "foreground: $(timeout 30 "$ADB" shell dumpsys window 2>/dev/null | grep -m1 -i 'mCurrentFocus\|mFocusedApp')"
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/probe.xml > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/probe.xml "$RUNNER_TEMP/probe-hierarchy.xml" > /dev/null 2>&1
+          if [ -s "$RUNNER_TEMP/probe-hierarchy.xml" ]; then
+            n=$(grep -o "<node" "$RUNNER_TEMP/probe-hierarchy.xml" | wc -l)
+            w=$(grep -c "WebView" "$RUNNER_TEMP/probe-hierarchy.xml")
+            t=$(grep -c "Вход в мобильное приложение" "$RUNNER_TEMP/probe-hierarchy.xml")
+            echo "::notice::probe: ${n} nodes, WebView=${w}, sign-in text=${t}, pkg-in-tree=$(grep -c "$PKG" "$RUNNER_TEMP/probe-hierarchy.xml")"
+            grep -oE 'text="[^"]{2,50}"' "$RUNNER_TEMP/probe-hierarchy.xml" | sort -u | head -4 | while read -r l; do
+              echo "::notice::probe text: ${l}"
+            done
+          else
+            echo "::notice::probe: uiautomator dump produced nothing"
+          fi
+          exit 0
+        working-directory: android
+
       # Gradle's own failure text lives in the step log, which needs an
       # authenticated download, so it is captured to a file here and the
       # decisive lines are republished as annotations by the step below.
