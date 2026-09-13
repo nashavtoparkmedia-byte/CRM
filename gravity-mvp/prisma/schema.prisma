@@ -3577,3 +3577,28 @@ model TelegramIdentityReview {
   @@index([resolvedAt])
   @@index([telegramUserId])
 }
+
+/// A completed Yandex cash order, projected from the Fleet API and kept as the
+/// catalogue a driver picks from. Distinct from CompensationVerifiedOrder,
+/// which is the evidence captured at submission time: this row is ingestion,
+/// that row is the monetary record, and neither reinterprets the other.
+model CompensationCashOrder {
+  id                      String   @id
+  provider                String   @db.VarChar(32)
+  externalParkId          String   @db.VarChar(64)
+  externalOrderId         String   @db.VarChar(64)
+  shortOrderIdDisplay     String?  @db.VarChar(32)
+  externalDriverProfileId String   @db.VarChar(64)
+  /// Provider price string kept verbatim, e.g. "335.0000".
+  rawPrice                String   @db.VarChar(32)
+  amountKopecks           Int
+  endedAt                 DateTime @db.Timestamptz(3)
+  observedAt              DateTime @db.Timestamptz(3)
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  /// Provider identity. One external order can exist once per park, so a
+  /// repeated page cannot ingest the same trip twice.
+  @@unique([provider, externalParkId, externalOrderId], map: "CompensationCashOrder_provider_identity_key")
+  @@index([externalParkId, externalDriverProfileId, endedAt], map: "CompensationCashOrder_driver_month_idx")
+}
