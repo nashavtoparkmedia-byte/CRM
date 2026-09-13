@@ -23,3 +23,5 @@ export {
     saveManualDriverTelegramLinkV1,
     upsertDriverTelegramLinkV1,
 } from '../../application/telegram-link-operations'
+export { comparablePhoneV1, matchYandexProfileByExactPhoneV1 } from '../../internal/yandex-profile-match'
+export type { YandexProfileCandidateV1, YandexProfileMatchV1 } from '../../internal/yandex-profile-match'

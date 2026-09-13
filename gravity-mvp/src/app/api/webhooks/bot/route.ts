@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { matchYandexProfileByExactPhoneV1 } from '@/modules/telegram-channel/public/v1'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -253,7 +254,7 @@ async function findCarById(connection: any, carId: string) {
 
 // Handle "Отправить данные менеджеру" from bot — try auto-link by phone, fallback to manual
 async function handleSyncUser(payload: any) {
-    const { telegramId, username, phone } = payload
+    const { telegramId, username, phone, contactUserId } = payload
 
     if (!telegramId || !phone) {
         return NextResponse.json({ error: 'Missing telegramId or phone' }, { status: 400 })
@@ -287,13 +288,28 @@ async function handleSyncUser(payload: any) {
             const yandexData = await yandexRes.json()
             const profiles = yandexData.driver_profiles || []
 
-            // All profiles matching by phone
-            const phoneMatches = profiles.filter((p: any) => {
-                const phones: string[] = p.driver_profile.phones || []
-                return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
-            })
-            // Prefer working status — handles "swap" scenario (two profiles same driver)
-            const matched = phoneMatches.find((p: any) => p.driver_profile.work_status !== 'fired') || phoneMatches[0]
+            // Exact match only. A substring test lets a shorter number match a
+            // longer one, and picking the first of several matches is a guess;
+            // neither can support the monetary claim this link later carries.
+            const match = matchYandexProfileByExactPhoneV1(phone, profiles.map((p: any) => ({
+                id: p.driver_profile.id,
+                phones: p.driver_profile.phones || [],
+                workStatus: p.driver_profile.work_status ?? null,
+            })))
+
+            if (match.kind === 'ambiguous') {
+                console.warn(JSON.stringify({
+                    level: 'warn',
+                    event: 'telegram_link_ambiguous_profiles',
+                    park: connection.parkId,
+                    profileCount: match.profileIds.length,
+                }))
+                continue
+            }
+
+            const matched = match.kind === 'matched'
+                ? profiles.find((p: any) => p.driver_profile.id === match.profileId)
+                : null
 
             if (matched) {
                 const yandexId = matched.driver_profile.id
@@ -305,7 +321,19 @@ async function handleSyncUser(payload: any) {
                     if (crmDriver) driverId = crmDriver.id
                 } catch { /* keep yandexId as fallback */ }
 
-                await upsertDriverTelegramLinkV1({ contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId })
+                // Telegram attests the number only when the shared card carries
+                // the sending account's own id. Without that it is just a string
+                // someone sent us, so it is not stored as proof.
+                const ownershipProven = contactUserId !== undefined && contactUserId !== null
+                    && String(contactUserId) === String(telegramId)
+                await upsertDriverTelegramLinkV1({
+                    contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+                    driverId,
+                    telegramId: BigInt(telegramId),
+                    username: username || null,
+                    activeParkId: connection.parkId,
+                    attestation: ownershipProven ? { phone, attestedAt: new Date() } : null,
+                })
 
                 console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
                 await notifyDriverLinked(telegramId.toString(), driverName)
