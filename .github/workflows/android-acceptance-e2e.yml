@@ -293,6 +293,12 @@ jobs:
           timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
           sleep 25
           echo "foreground: $(timeout 30 "$ADB" shell dumpsys window 2>/dev/null | grep -m1 -i 'mCurrentFocus\|mFocusedApp')"
+          # Dump twice. The first dump is what attaches an accessibility client
+          # in the first place, and a WebView does not backfill a tree it
+          # rendered before one existed. The second dump is the one that says
+          # whether its content ever reaches the tree.
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/probe0.xml > /dev/null 2>&1
+          sleep 10
           timeout 60 "$ADB" shell uiautomator dump /sdcard/probe.xml > /dev/null 2>&1
           timeout 60 "$ADB" pull /sdcard/probe.xml "$RUNNER_TEMP/probe-hierarchy.xml" > /dev/null 2>&1
           if [ -s "$RUNNER_TEMP/probe-hierarchy.xml" ]; then
