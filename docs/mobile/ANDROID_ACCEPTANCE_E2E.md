@@ -399,6 +399,18 @@ everything else, and re-grants the notification permission afterwards because
 `pm clear` revokes it. That is what `launchFreshApp` has claimed to do all
 along.
 
+## Run #26: pm clear was the wrong tool
+
+Isolating the tests with `pm clear` took the run down with it. Only one test
+executed, and the shell's diagnostics file was wiped along with the app's data,
+so the run proved nothing.
+
+The instrumentation is attached to the target package, so clearing that package
+tears down the run. Only the cookie jar needed to go: the app is stopped, the
+WebView cookie store is deleted through `run-as` — which works because the
+acceptance variant is debuggable — and everything else, diagnostics included,
+is left alone.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
