@@ -48,7 +48,7 @@
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "1ca09259a166e9c04fdc92fcf9a922490e3bb6bbd39696f5396fa331935c4f04"
+      "sha256": "3bc82cbee62905688ebb8cac98e9b38ebfe67d1740f15e35acd3efd683745d23"
     },
     {
       "context": "messaging",
@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "46c3f74bf9a6104283f88ef583ac249c39e96a99e2d0795028d37280351a1500"
+      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
     },
     {
       "context": "telegram_channel",
@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "342fb5eb30f2638674a2d2578056926013c1775f5370e782f87af08f3ea90f2d"
+      "sha256": "29245ec44f968214c14296d8dc73c41da1c6c80abba6f42d97f8c6c8a7d6bd53"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "a1adc7f827beace65a6c3233d876b75d46f3168968bd9104ce958b1cd64ea8a2"
+      "sha256": "39e00f4974b321cc88772a43f5db8693949c24d2f7eac5dd391ad011dae5d3b6"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "fdd4fb4d65f53592c58fb600774a68934a4285f2605e8c5d3acce09714285ab2"
+      "sha256": "058a9b5cafd618891026f9d4a1e33d4a7e159ec265a902542ca40ad11addad73"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "626c63f1d15c10b2576e50543911a71930413804f6351f051517776c923389c2"
+      "sha256": "8bf5133e7c6ee1aad84ee530047184bb4419f43b8f155f928cd75ea8a26050ca"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "62cc49233b919d7fad493bd1e31a18603cc27b646b4a7bcbbd6290ff2f7abfcc"
+      "sha256": "5fd4d4e4082e98d15a943f64eeb6e8546f6b17fed0270d3ad08a372776887417"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
