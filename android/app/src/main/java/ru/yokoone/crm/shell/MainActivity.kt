@@ -1,0 +1,543 @@
+package ru.yokoone.crm.shell
+
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.view.View
+import android.webkit.CookieManager
+import android.webkit.PermissionRequest
+import android.webkit.SslErrorHandler
+import android.webkit.ValueCallback
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+
+/**
+ * The whole shell.
+ *
+ * It renders the deployed CRM Messenger at the pinned origin and adds exactly
+ * four things the browser cannot give an operator: a launcher icon, a session
+ * that survives the app being killed, a notification that opens a specific
+ * conversation, and a readable failure when the CRM is unreachable.
+ *
+ * It deliberately contains no CRM logic. It does not parse messages, does not
+ * know what a chat is beyond an opaque identifier, never marks anything read,
+ * and issues no network request of its own — every byte on the wire is the
+ * WebView loading the CRM.
+ */
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var webView: WebView
+    private lateinit var errorPanel: View
+    private lateinit var errorText: TextView
+
+    /** URL the shell most recently decided to load; the retry button reuses it. */
+    private var currentTargetUrl: String = CrmOrigin.startUrl()
+
+    /**
+     * Whether the load now in flight has already failed.
+     *
+     * `onPageFinished` fires even for a navigation that errored, and it fires
+     * AFTER `onReceivedError`, carrying the URL that was being attempted. Without
+     * this flag the finish handler saw an in-app URL, called `showContent`, and
+     * revealed the WebView's own technical error page — the operator lost the
+     * retry screen a fraction of a second after seeing it.
+     */
+    private var currentLoadFailed = false
+
+    private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+
+    private val filePicker = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val callback = fileChooserCallback
+        fileChooserCallback = null
+        callback?.onReceiveValue(
+            WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data),
+        )
+    }
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) TestNotificationSeed.ensureDiagnosticsNotification(this) }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Before anything else, and before a WebView exists. If this line is
+        // missing from a diagnostic run, nothing downstream can be trusted and
+        // the problem is log delivery, not the page.
+        ShellDiagnostics.start(this)
+
+        // Draw behind the system bars, then hand the real insets to the layout
+        // below. Without this the CRM composer sits under the navigation bar on
+        // a gesture-navigation device.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContentView(R.layout.activity_main)
+
+        webView = findViewById(R.id.web_view)
+        errorPanel = findViewById(R.id.error_panel)
+        errorText = findViewById(R.id.error_text)
+        findViewById<Button>(R.id.error_retry).setOnClickListener { retry() }
+
+        applyWindowInsets()
+        configureWebView()
+        installBackHandler()
+        ChatNotifications.ensureChannel(this)
+        requestNotificationPermissionIfNeeded()
+
+        val fromNotification = consumeDeepLinkUrl(intent)
+        when {
+            // A notification tap always wins over restored state: the operator
+            // asked for a specific conversation.
+            fromNotification != null -> load(fromNotification)
+            // Process recreation with live state: put back the history stack and
+            // the scroll position instead of reloading from scratch.
+            savedInstanceState != null && webView.restoreState(savedInstanceState) != null -> {
+                currentTargetUrl = CrmOrigin.sanitizeRestoredUrl(webView.url) ?: CrmOrigin.startUrl()
+            }
+            // Cold start after the process was killed: state is gone but the
+            // persisted cookie is not, so the CRM resumes the session itself.
+            else -> load(lastVisitedUrl() ?: CrmOrigin.startUrl())
+        }
+    }
+
+    /**
+     * launchMode=singleTask, so a notification tap on a running app arrives
+     * here rather than creating a second activity.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val target = consumeDeepLinkUrl(intent) ?: return
+        load(target)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Persist cookies now: the process may never get another chance.
+        CookieManager.getInstance().flush()
+        rememberLastVisitedUrl()
+    }
+
+    // ── WebView configuration ────────────────────────────────────────────
+
+    private fun configureWebView() {
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            // The shell renders one origin; it has no use for third-party
+            // cookies and refusing them removes a whole class of surprises.
+            setAcceptThirdPartyCookies(webView, false)
+        }
+
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            loadsImagesAutomatically = true
+            mediaPlaybackRequiresUserGesture = true
+            // The CRM is responsive; let it lay out at device width rather than
+            // rendering a desktop page scaled down.
+            useWideViewPort = true
+            loadWithOverviewMode = false
+            builtInZoomControls = false
+            displayZoomControls = false
+            // No local file or content access: the shell loads nothing but https.
+            allowFileAccess = false
+            allowContentAccess = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+            // Declare the lane. The CRM fails every shell request closed unless
+            // it carries a live mobile session, and withholds SIP credentials
+            // from this client entirely. The marker only ever selects a
+            // stricter path, so it needs no integrity: stripping it makes this
+            // an ordinary browser, which gains nothing it did not have.
+            userAgentString = buildString {
+                append(userAgentString)
+                append(' ')
+                append(CrmOrigin.SHELL_UA_TOKEN)
+                append(CrmOrigin.SHELL_UA_VERSION)
+                // Random per app start, so one run can be matched across the
+                // phone log and the server request log. It says nothing about
+                // the device or the operator.
+                if (BuildConfig.CAPTURE_CONSOLE) append(" (run/${ShellDiagnostics.runId})")
+            }
+        }
+
+        installPageErrorHook()
+        webView.webViewClient = ShellWebViewClient()
+        webView.webChromeClient = ShellWebChromeClient()
+        webView.setBackgroundColor(ContextCompat.getColor(this, R.color.shell_background))
+    }
+
+    private inner class ShellWebViewClient : WebViewClient() {
+
+        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            super.onPageStarted(view, url, favicon)
+            currentLoadFailed = false
+            ShellDiagnostics.write("nav start ${ShellDiagnostics.safeUrl(url)}")
+            if (pageStartHookFallback) {
+                view.evaluateJavascript(ShellDiagnostics.errorHookScript(), null)
+            }
+        }
+
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+            val url = request.url?.toString()
+            if (CrmOrigin.isInAppUrl(url)) return false
+            openExternally(url)
+            // Consumed: an off-origin URL never renders inside the shell.
+            return true
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            super.onPageFinished(view, url)
+            // A failed navigation still finishes, and the URL it reports is the
+            // one we asked for. Showing content here would put the WebView's own
+            // error page back on screen in place of ours.
+            if (currentLoadFailed) return
+            if (CrmOrigin.isInAppUrl(url)) {
+                showContent()
+                currentTargetUrl = url ?: currentTargetUrl
+                rememberLastVisitedUrl()
+                ShellDiagnostics.write("nav done  ${ShellDiagnostics.safeUrl(url)}")
+            }
+        }
+
+        override fun onReceivedError(
+            view: WebView,
+            request: WebResourceRequest,
+            error: WebResourceError,
+        ) {
+            super.onReceivedError(view, request, error)
+            // Only a failed main-frame load is worth a full error screen; a
+            // missing avatar is not.
+            if (request.isForMainFrame) {
+                currentLoadFailed = true
+                ShellDiagnostics.write("main-frame error ${error.errorCode} ${ShellDiagnostics.safeUrl(request.url?.toString())}")
+                showError(getString(R.string.error_network))
+            }
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView,
+            request: WebResourceRequest,
+            errorResponse: WebResourceResponse,
+        ) {
+            super.onReceivedHttpError(view, request, errorResponse)
+
+            // The CRM answers 401 to this lane when the mobile session has
+            // expired or been revoked. That reaches us on a background request
+            // — a poll, the stream, a send — while the page carries on showing
+            // stale content. Reload so the request boundary can hand us the
+            // login screen, rather than leaving an operator typing into a
+            // conversation that will never send.
+            ShellDiagnostics.write("http ${errorResponse.statusCode} ${ShellDiagnostics.safeUrl(request.url?.toString())}")
+            if (errorResponse.statusCode == 401 && CrmOrigin.isInAppUrl(request.url?.toString())) {
+                val current = view.url.orEmpty()
+                if (!current.contains(CrmOrigin.LOGIN_PATH)) {
+                    view.post { load(CrmOrigin.startUrl()) }
+                }
+                return
+            }
+
+            if (request.isForMainFrame && errorResponse.statusCode >= 500) {
+                currentLoadFailed = true
+                showError(getString(R.string.error_server, errorResponse.statusCode))
+            }
+        }
+
+        override fun onReceivedSslError(
+            view: WebView,
+            handler: SslErrorHandler,
+            error: android.net.http.SslError,
+        ) {
+            // Never proceed. A certificate problem on the CRM origin is a hard
+            // stop, not something an operator should be able to click through.
+            handler.cancel()
+            currentLoadFailed = true
+            showError(getString(R.string.error_tls))
+        }
+
+        /**
+         * The renderer died, usually out of memory. Without this the shell keeps
+         * a dead grey WebView on screen with no way forward.
+         */
+        override fun onRenderProcessGone(
+            view: WebView,
+            detail: android.webkit.RenderProcessGoneDetail,
+        ): Boolean {
+            currentLoadFailed = true
+            ShellDiagnostics.write("renderer gone, crashed=${detail.didCrash()}")
+            showError(getString(R.string.error_network))
+            return true
+        }
+    }
+
+    private inner class ShellWebChromeClient : WebChromeClient() {
+
+        /**
+         * Deny every device capability the page asks for.
+         *
+         * This has a known cost: the composer's hold-to-record voice message
+         * calls getUserMedia, so holding the microphone button does nothing in
+         * the shell. It fails silently, because the CRM swallows the rejection.
+         * Typed messages, photo and file attachments are unaffected.
+         *
+         * It is still the right default for stage 1. Granting audio would mean
+         * declaring RECORD_AUDIO and asking the operator for the microphone on
+         * a CRM app whose next stage is telephony — which reads as "this app is
+         * about to start taking calls" at exactly the moment the shell must not
+         * suggest that. The softphone itself is already stopped server-side, so
+         * this is defence in depth, not the mechanism.
+         *
+         * Re-enabling voice messages is a small, separate change: declare
+         * RECORD_AUDIO, request it on first use, and grant only
+         * PermissionRequest.RESOURCE_AUDIO_CAPTURE — never the whole request.
+         */
+        override fun onPermissionRequest(request: PermissionRequest) = request.deny()
+
+        /**
+         * Mirror page-level JavaScript errors into logcat, test builds only.
+         *
+         * A failure that happens only inside the device WebView is otherwise
+         * unreadable: it renders as a generic "Application error" and the real
+         * exception never leaves the renderer. Chromium reports uncaught
+         * exceptions here, so this is the one place the message can be captured
+         * without attaching a desktop debugger.
+         *
+         * Deliberately narrow. Only ERROR level is taken, the text is capped,
+         * and the only other fields are the script name and line. No cookie, no
+         * request body and no page content is read, and nothing is written to
+         * disk or sent anywhere — it goes to logcat and nowhere else. A password
+         * cannot reach here: the CRM never writes one to the console, and the
+         * field's value is never part of an error message.
+         */
+        override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+            if (!BuildConfig.CAPTURE_CONSOLE) return false
+            if (message.messageLevel() != ConsoleMessage.MessageLevel.ERROR) return false
+
+            val script = message.sourceId()?.substringAfterLast('/').orEmpty()
+            ShellDiagnostics.write("console | ${message.message()} | $script:${message.lineNumber()}")
+            return false
+        }
+
+        override fun onShowFileChooser(
+            webView: WebView,
+            filePathCallback: ValueCallback<Array<Uri>>,
+            fileChooserParams: FileChooserParams,
+        ): Boolean {
+            fileChooserCallback?.onReceiveValue(null)
+            fileChooserCallback = filePathCallback
+            return try {
+                filePicker.launch(fileChooserParams.createIntent())
+                true
+            } catch (e: ActivityNotFoundException) {
+                fileChooserCallback = null
+                filePathCallback.onReceiveValue(null)
+                false
+            }
+        }
+    }
+
+    // ── Bridge ───────────────────────────────────────────────────────────
+    //
+    // There is none, deliberately.
+    //
+    // Stage 1 needs no native operation from the page. Session expiry is
+    // handled by the CRM redirecting to the mobile login, a notification target
+    // is consumed natively from the Intent, and every other decision is the
+    // CRM's. Injecting an object into the page to carry messages nothing sends
+    // would be attack surface bought for nothing.
+    //
+    // When push lands it will need exactly one operation, to hand the FCM
+    // registration token to the page so it can be bound to the session that
+    // owns the device. That will use WebViewCompat.addWebMessageListener with
+    // an allowed-origin rule of BuildConfig.CRM_ORIGIN — never
+    // addJavascriptInterface, which injects into every frame regardless of
+    // origin and cannot be restricted.
+
+    // ── Navigation and state ─────────────────────────────────────────────
+
+    private fun installBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    // No history left: leave the app rather than showing a blank
+                    // screen. The session stays on the device.
+                    finish()
+                }
+            }
+        })
+    }
+
+    private fun load(url: String) {
+        currentTargetUrl = url
+        currentLoadFailed = false
+        showContent()
+        webView.loadUrl(url)
+    }
+
+    private fun retry() {
+        load(currentTargetUrl)
+    }
+
+    /**
+     * Read a notification target and then strip it from the Intent.
+     *
+     * The strip is the point. Android keeps the launching Intent attached to
+     * the activity, so without it a target would be replayed every time the
+     * activity is recreated — after a process kill the operator would be pulled
+     * back to whichever conversation they last tapped, losing wherever they had
+     * navigated since. A notification opens a conversation once.
+     */
+    private fun consumeDeepLinkUrl(intent: Intent?): String? {
+        val chatId = intent?.getStringExtra(ChatNotifications.EXTRA_CHAT_ID) ?: return null
+        val url = CrmOrigin.buildOpenChatUrl(
+            chatId = chatId,
+            channelTab = intent.getStringExtra(ChatNotifications.EXTRA_CHANNEL_TAB),
+            messageId = intent.getStringExtra(ChatNotifications.EXTRA_MESSAGE_ID),
+        )
+
+        intent.removeExtra(ChatNotifications.EXTRA_CHAT_ID)
+        intent.removeExtra(ChatNotifications.EXTRA_CHANNEL_TAB)
+        intent.removeExtra(ChatNotifications.EXTRA_MESSAGE_ID)
+
+        if (url == null) {
+            // A payload the shell will not act on. Fall back to the Messenger
+            // rather than guessing.
+            Log.w(TAG, "rejected notification target: identifier failed validation")
+        }
+        return url
+    }
+
+    private fun openExternally(url: String?) {
+        if (!CrmOrigin.isLaunchableExternally(url)) {
+            Log.w(TAG, "refused to open unsupported scheme from page")
+            return
+        }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // Do not let this shell be its own handler and re-enter itself.
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        runCatching { startActivity(intent) }
+            .onFailure { Log.w(TAG, "no app available for external link") }
+    }
+
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun rememberLastVisitedUrl() {
+        val url = CrmOrigin.sanitizeRestoredUrl(webView.url) ?: return
+        prefs().edit().putString(KEY_LAST_URL, url).apply()
+    }
+
+    private fun lastVisitedUrl(): String? =
+        CrmOrigin.sanitizeRestoredUrl(prefs().getString(KEY_LAST_URL, null))
+
+    // ── Error surface ────────────────────────────────────────────────────
+
+    private fun showError(message: String) {
+        errorText.text = message
+        errorPanel.visibility = View.VISIBLE
+        webView.visibility = View.GONE
+    }
+
+    private fun showContent() {
+        errorPanel.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+    }
+
+    // ── Insets ───────────────────────────────────────────────────────────
+
+    private fun applyWindowInsets() {
+        val root = findViewById<View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            // Bottom padding follows the keyboard when it is up and the
+            // navigation bar when it is not, so the CRM composer is always
+            // reachable and never covered.
+            view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            insets
+        }
+    }
+
+    // ── Local test notifications (stage 1 only) ──────────────────────────
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            TestNotificationSeed.ensureDiagnosticsNotification(this)
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            TestNotificationSeed.ensureDiagnosticsNotification(this)
+        } else {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /**
+     * Install the page error hook so it runs before the page's own scripts.
+     *
+     * Document-start injection matters: an exception thrown while the page is
+     * still initialising happens before any listener added afterwards could see
+     * it, which is exactly the window the reported failure falls in. Where the
+     * WebView is too old for that API the hook is injected at page start
+     * instead, which still catches everything after the first script.
+     */
+    private fun installPageErrorHook() {
+        if (!BuildConfig.CAPTURE_CONSOLE) return
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            runCatching {
+                WebViewCompat.addDocumentStartJavaScript(
+                    webView,
+                    ShellDiagnostics.errorHookScript(),
+                    setOf(CrmOrigin.ORIGIN),
+                )
+            }.onFailure { ShellDiagnostics.write("document-start hook unavailable: ${it.message}") }
+        } else {
+            ShellDiagnostics.write("document-start scripts unsupported; hooking at page start")
+            pageStartHookFallback = true
+        }
+    }
+
+    private var pageStartHookFallback = false
+
+    companion object {
+        private const val TAG = "YokoShell"
+        private const val PREFS = "yoko_shell"
+        private const val KEY_LAST_URL = "last_url"
+    }
+}

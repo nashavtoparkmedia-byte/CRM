@@ -202,13 +202,77 @@ function functionDeclaration(sourceFile, name) {
     return declaration
 }
 
-function assertAwaitedIdentifierCall(statement, name) {
-    assert(ts.isExpressionStatement(statement))
-    assert(ts.isAwaitExpression(statement.expression))
-    const call = unwrapExpression(statement.expression)
+/**
+ * The authorization prelude, pinned statement by statement.
+ *
+ * `requireIntegrationAdminAccess()` used to be a bare awaited call here, and a
+ * denial therefore escaped the Server Action as an unhandled rejection: every
+ * messenger page load without an integration-admin session answered HTTP 500.
+ * The guard still runs first and unconditionally; only the refusal is now
+ * reported as the contract's own state instead of as a server fault.
+ *
+ * This is deliberately stricter than the shape it replaces. It pins that the
+ * ONLY error absorbed is `IntegrationAdminAuthorizationError`, that absorbing
+ * it returns the named refusal constant and nothing else, and that every other
+ * error is rethrown unchanged. A catch that swallowed more, or returned a
+ * permissive value, or dropped the rethrow, fails here.
+ */
+function assertGuardPrelude(statement, refusalName) {
+    assert(ts.isTryStatement(statement), 'the guard must run inside its own try')
+    assert(statement.catchClause && !statement.finallyBlock)
+
+    assert.equal(statement.tryBlock.statements.length, 1, 'the guard try must hold only the guard')
+    const guard = statement.tryBlock.statements[0]
+    assert(ts.isExpressionStatement(guard))
+    assert(ts.isAwaitExpression(guard.expression))
+    const call = unwrapExpression(guard.expression)
     assert(ts.isCallExpression(call))
-    assert(ts.isIdentifier(call.expression) && call.expression.text === name)
+    assert(ts.isIdentifier(call.expression) && call.expression.text === 'requireIntegrationAdminAccess')
     assert.equal(call.arguments.length, 0)
+
+    const caught = statement.catchClause.variableDeclaration
+    assert(caught && ts.isIdentifier(caught.name), 'the denial must be bound to inspect it')
+    const errorName = caught.name.text
+
+    assert.equal(statement.catchClause.block.statements.length, 2)
+    const [narrowed, rethrow] = statement.catchClause.block.statements
+
+    assert(ts.isIfStatement(narrowed) && !narrowed.elseStatement)
+    const condition = unwrapExpression(narrowed.expression)
+    assert(ts.isBinaryExpression(condition))
+    assert.equal(condition.operatorToken.kind, ts.SyntaxKind.InstanceOfKeyword)
+    assert(ts.isIdentifier(condition.left) && condition.left.text === errorName)
+    assert(ts.isIdentifier(condition.right) && condition.right.text === 'IntegrationAdminAuthorizationError')
+    const refusal = ts.isBlock(narrowed.thenStatement)
+        ? (assert.equal(narrowed.thenStatement.statements.length, 1), narrowed.thenStatement.statements[0])
+        : narrowed.thenStatement
+    assert(ts.isReturnStatement(refusal) && refusal.expression)
+    assert(ts.isIdentifier(refusal.expression) && refusal.expression.text === refusalName)
+
+    assert(ts.isThrowStatement(rethrow) && rethrow.expression)
+    assert(ts.isIdentifier(rethrow.expression) && rethrow.expression.text === errorName)
+}
+
+/** A refusal constant: module-private, const, and exactly the contract value. */
+function assertRefusalConstant(sourceFile, name, expected) {
+    const matches = []
+    for (const statement of sourceFile.statements) {
+        if (!ts.isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+                matches.push({ statement, declaration })
+            }
+        }
+    }
+    assert.equal(matches.length, 1, `expected one ${name}`)
+    const [{ statement, declaration }] = matches
+    assert((statement.declarationList.flags & ts.NodeFlags.Const) !== 0)
+    assert.equal(hasModifier(statement, ts.SyntaxKind.ExportKeyword), false, `${name} must stay module-private`)
+    assert(declaration.initializer)
+    assert.equal(
+        declaration.initializer.getText(sourceFile).replace(/\s+/gu, '').replace(/asconst$/u, ''),
+        expected,
+    )
 }
 
 function assertAwaitedPortCall(expression, method, argument) {
@@ -224,6 +288,7 @@ function assertAwaitedPortCall(expression, method, argument) {
 
 function assertApplicationBoundary(source) {
     exactNamedImport(applicationPath, source, '../../identity-access/public/v1', [
+        ['IntegrationAdminAuthorizationError', 'IntegrationAdminAuthorizationError', false],
         ['requireIntegrationAdminAccess', 'requireIntegrationAdminAccess', false],
     ])
     exactNamedImport(applicationPath, source, '../public/v1/ai-intern-control-handler', [
@@ -236,6 +301,7 @@ function assertApplicationBoundary(source) {
     assert.deepEqual(
         nonImportDeclarations(applicationPath, source).filter((name) => [
             'requireIntegrationAdminAccess',
+            'IntegrationAdminAuthorizationError',
             'createAiInternControlHandlerV1',
             'legacyPrismaAiInternControlPortV1',
         ].includes(name)),
@@ -265,7 +331,7 @@ function assertApplicationBoundary(source) {
     assert.equal(getState.parameters.length, 1)
     assert(ts.isIdentifier(getState.parameters[0].name) && getState.parameters[0].name.text === 'query')
     assert.equal(getState.body.statements.length, 2)
-    assertAwaitedIdentifierCall(getState.body.statements[0], 'requireIntegrationAdminAccess')
+    assertGuardPrelude(getState.body.statements[0], 'UNKNOWN_INTERN_STATE')
     const getTry = getState.body.statements[1]
     assert(ts.isTryStatement(getTry) && getTry.catchClause && !getTry.finallyBlock)
     assert.equal(getTry.tryBlock.statements.length, 1)
@@ -275,16 +341,23 @@ function assertApplicationBoundary(source) {
     assert.equal(getTry.catchClause.block.statements.length, 1)
     const getFallback = getTry.catchClause.block.statements[0]
     assert(ts.isReturnStatement(getFallback) && getFallback.expression)
-    assert.equal(
-        getFallback.expression.getText(sourceFile).replace(/\s+/g, ''),
+    assert(ts.isIdentifier(getFallback.expression) && getFallback.expression.text === 'UNKNOWN_INTERN_STATE')
+    assertRefusalConstant(
+        sourceFile,
+        'UNKNOWN_INTERN_STATE',
         '{contract:GET_AI_INTERN_STATE_RESULT_V1,internEnabled:null}',
+    )
+    assertRefusalConstant(
+        sourceFile,
+        'NOT_SAVED',
+        '{contract:SET_AI_INTERN_STATE_RESULT_V1,saved:false}',
     )
 
     const setState = functionDeclaration(sourceFile, 'setAiInternStateV1')
     assert.equal(setState.parameters.length, 1)
     assert(ts.isIdentifier(setState.parameters[0].name) && setState.parameters[0].name.text === 'command')
     assert.equal(setState.body.statements.length, 2)
-    assertAwaitedIdentifierCall(setState.body.statements[0], 'requireIntegrationAdminAccess')
+    assertGuardPrelude(setState.body.statements[0], 'NOT_SAVED')
     const setTry = setState.body.statements[1]
     assert(ts.isTryStatement(setTry) && setTry.catchClause && !setTry.finallyBlock)
     assert.equal(setTry.tryBlock.statements.length, 3)
@@ -458,6 +531,59 @@ rejectProbe(
     ),
     assertApplicationBoundary,
 )
+// The prelude absorbs exactly one error and reports exactly one value. These
+// probes are the proof: each is a way the refusal could be quietly weakened
+// into something that grants access or hides a real fault, and each must be
+// rejected. A control that merely fits the current source proves nothing.
+rejectProbe(
+    application,
+    application.replace(
+        '    await requireIntegrationAdminAccess()\n',
+        '',
+    ),
+    assertApplicationBoundary,
+)
+rejectProbe(
+    application,
+    application.replace(
+        'if (error instanceof IntegrationAdminAuthorizationError) return UNKNOWN_INTERN_STATE',
+        'return UNKNOWN_INTERN_STATE',
+    ),
+    assertApplicationBoundary,
+)
+rejectProbe(
+    application,
+    application.replace(
+        'if (error instanceof IntegrationAdminAuthorizationError) return NOT_SAVED',
+        'return NOT_SAVED',
+    ),
+    assertApplicationBoundary,
+)
+rejectProbe(
+    application,
+    application.replace(
+        "internEnabled: null } as const",
+        "internEnabled: true } as const",
+    ),
+    assertApplicationBoundary,
+)
+rejectProbe(
+    application,
+    application.replace(
+        'SET_AI_INTERN_STATE_RESULT_V1, saved: false }',
+        'SET_AI_INTERN_STATE_RESULT_V1, saved: true }',
+    ),
+    assertApplicationBoundary,
+)
+rejectProbe(
+    application,
+    application.replace(
+        '    throw error\n  }\n  try { return await aiInternControl.getState(query) }',
+        '  }\n  try { return await aiInternControl.getState(query) }',
+    ),
+    assertApplicationBoundary,
+)
+
 rejectProbe(
     actions,
     actions.replace(
@@ -486,6 +612,10 @@ rejectProbe(
 assert.match(component, /result\.internEnabled \?\? true/)
 assert.match(component, /setEnabled\(newVal\)/)
 assert.match(component, /setEnabled\(!newVal\)/)
+// A refused save reports saved:false instead of throwing, so the revert has to
+// key on the answer too. Without this the toggle would keep an optimistic state
+// the server refused to store.
+assert.match(component, /if \(!result\?\.saved\) setEnabled\(!newVal\)/)
 assert.match(component, /SET_AI_INTERN_STATE_COMMAND_V1/)
 assert.match(application, /console\.error\('\[AI Config\] saveAiConfig error:', detail\)/)
 assert.match(application, /throw new Error\(`Не удалось сохранить настройки AI: \$\{detail\}`\)/)
@@ -528,7 +658,7 @@ process.stdout.write(`${JSON.stringify({
     runtime_consumers: 1,
     read_capabilities: 1,
     write_capabilities: 1,
-    negative_application_wiring_probes: 4,
+    negative_application_wiring_probes: 10,
     negative_comment_consumer_probes: 1,
     negative_consumer_denominator_probes: 1,
     credential_fields_exposed: 0,
