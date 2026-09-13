@@ -286,7 +286,9 @@ jobs:
           PKG=ru.yokoone.crm.shell.acceptance
           APK=$(ls app/build/outputs/apk/acceptance/*.apk 2>/dev/null | head -1)
           echo "apk: $APK"
-          timeout 180 "$ADB" install -r -t "$APK" 2>&1 | tail -3
+          # -g grants the runtime permissions at install time, so the probe
+          # sees the shell rather than the notification-permission dialog.
+          timeout 180 "$ADB" install -r -t -g "$APK" 2>&1 | tail -3
           timeout 60 "$ADB" shell settings put secure accessibility_enabled 1
           timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
           sleep 25

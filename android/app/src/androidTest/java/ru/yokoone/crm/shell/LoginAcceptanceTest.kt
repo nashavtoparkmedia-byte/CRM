@@ -50,6 +50,23 @@ class LoginAcceptanceTest {
     @Before
     fun launchFreshApp() {
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        // Android 13 asks for POST_NOTIFICATIONS the first time the shell runs,
+        // and that dialog sits in front of everything: a hierarchy dump taken
+        // while it is up shows thirteen nodes reading "Allow YOKO CRM to send
+        // you notifications?" and no WebView at all. That is why every test
+        // failed with "app did not reach the sign-in screen" while the shell's
+        // own log showed it loading the login page perfectly well.
+        //
+        // Granting it here is not a weakening of the acceptance. What is being
+        // accepted is the sign-in and messenger flow; an operator grants this
+        // once on a real handset and never sees it again. Leaving it to chance
+        // would mean the suite measures the timing of an OS dialog rather than
+        // the product.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(
+            "pm grant $targetPackage android.permission.POST_NOTIFICATIONS",
+        ).close()
+
         device.pressHome()
 
         val context = InstrumentationRegistry.getInstrumentation().context

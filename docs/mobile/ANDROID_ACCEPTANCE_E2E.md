@@ -172,6 +172,32 @@ noise. The shell's own `YOKO_NET` / `YOKO_JS_OK` lines and the CRM's request log
 come first, because together they separate "the device never reached the CRM"
 from "it did and the UI did not appear".
 
+## Run #12: the cause of the failing assertion
+
+The probe launched the shell, left it in the foreground, and dumped the
+accessibility tree while it was there:
+
+```
+probe: 13 nodes, WebView=0, sign-in text=0, pkg-in-tree=0
+probe text: text="Allow YOKO CRM to send you notifications?"
+probe text: text="Allow"   text="Don't allow"
+```
+
+Android 13 asks for `POST_NOTIFICATIONS` the first time the shell runs, and
+that dialog sits in front of everything. The WebView is behind it. Every test
+failed with "app did not reach the sign-in screen" while the shell's own log
+showed it loading the login page in under 100 ms, because UI Automator was
+looking at a system dialog.
+
+It never surfaced on the physical handset because a person dismissed it once
+without it registering as a finding.
+
+The suite now grants that permission before launching the app. This is not a
+weakening: what is being accepted is the sign-in and messenger flow, an
+operator grants this once on a real device and never sees it again, and leaving
+it to chance would mean measuring the timing of an OS dialog rather than the
+product.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
