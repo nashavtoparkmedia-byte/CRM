@@ -10,29 +10,63 @@
     "avito-worker/src",
     "tools/audio-bridge-day1"
   ],
-  "exclude_segments": ["node_modules", ".next", "dist", "build", "coverage", ".artifacts"],
-  "test_path_patterns": ["/__tests__/", "/test/", "/tests/", ".test.", ".spec."],
+  "exclude_segments": [
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "coverage",
+    ".artifacts"
+  ],
+  "test_path_patterns": [
+    "/__tests__/",
+    "/test/",
+    "/tests/",
+    ".test.",
+    ".spec."
+  ],
   "shared_infrastructure_targets": [
     "gravity-mvp/src/infrastructure/",
     "gravity-mvp/src/lib/prisma.ts"
   ],
   "sensitive_environment_pattern": "(TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|SESSION|COOKIE|DATABASE_URL|DSN|AUTH|SIP_)",
   "provider_transport_packages": {
-    "telegram": ["^telegram(?:/|$)"],
-    "whatsapp": ["^whatsapp-web\\.js$", "^@whiskeysockets/baileys(?:/|$)"],
-    "max": ["^@maxhub/", "^max-bot-api"],
-    "freeswitch": ["^modesl$"],
-    "openai": ["^openai$"],
-    "anthropic": ["^@anthropic-ai/sdk$"],
-    "aws_s3": ["^@aws-sdk/"],
-    "bullmq": ["^bullmq$", "^ioredis$"]
+    "telegram": [
+      "^telegram(?:/|$)"
+    ],
+    "whatsapp": [
+      "^whatsapp-web\\.js$",
+      "^@whiskeysockets/baileys(?:/|$)"
+    ],
+    "max": [
+      "^@maxhub/",
+      "^max-bot-api"
+    ],
+    "freeswitch": [
+      "^modesl$"
+    ],
+    "openai": [
+      "^openai$"
+    ],
+    "anthropic": [
+      "^@anthropic-ai/sdk$"
+    ],
+    "aws_s3": [
+      "^@aws-sdk/"
+    ],
+    "bullmq": [
+      "^bullmq$",
+      "^ioredis$"
+    ]
   },
   "provider_aliases": {
     "whatsapp-web.js": "whatsapp",
     "aws_s3": "aws_s3"
   },
   "provider_allowed_context_overrides": {
-    "bullmq": ["calling"]
+    "bullmq": [
+      "calling"
+    ]
   },
   "approved_infrastructure_writers": [
     {
@@ -104,7 +138,8 @@
     "architecture/isolation/platform-shell/manager-driver-communication-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json",
     "architecture/isolation/calling/ai-agent-config-v1/module-manifest-amendments.json",
-    "architecture/isolation/platform-shell/channel-delivery-runtime-v1/module-manifest-amendments.json"
+    "architecture/isolation/platform-shell/channel-delivery-runtime-v1/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",

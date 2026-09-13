@@ -413,7 +413,14 @@ try {
   }
   const restorePending = () => cp(path.join(root, pendingSourcePath), pendingPath)
 
-  await writePending((draft) => { draft.migrations[0].owner_context = 'fleet_operations' })
+  // A real bounded context that this artifact has not authorized for pending
+  // migrations. Derived so the case stays valid as the authorized list grows.
+  const contextIndex = JSON.parse(await readFile(path.join(root, contextIndexPath), 'utf8'))
+  const unauthorizedContext = contextIndex.contexts
+    .map((entry) => entry.context)
+    .find((context) => !pendingSource.authorized_owner_contexts.includes(context))
+  assert(unauthorizedContext, 'fixture needs at least one unauthorized bounded context')
+  await writePending((draft) => { draft.migrations[0].owner_context = unauthorizedContext })
   await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration record mismatch/)
 
   // An owner that is not a real bounded context cannot authorize itself.
