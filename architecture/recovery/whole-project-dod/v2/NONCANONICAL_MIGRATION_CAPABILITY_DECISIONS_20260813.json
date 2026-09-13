@@ -119,6 +119,76 @@
       ]
     },
     {
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "0088fd98936d85c6e7f5bd6b554bac3e431f3ac624db5235998286cdba07f752",
+        "021818f3d6f309013e0c941495292e929b26c521a7fffb1ea6a15ffd7583f7ee",
+        "02d25fedb1106b47a31cd8078546d489cb1d1e3ad4fdd5bd54d0fc1e3710bad6",
+        "05a6f3dfcc4dcf557b13d11d7f99f646a0474a7356e958837c697b85ec008fcb",
+        "1991c83d6f839a89383303206f6d91c26f246ed38a8f0cabe71feacc9a726a13",
+        "1b40af20b66af5e1798e965c4912aafde9749f003948df326db2de499c7f78a8",
+        "1c59dbe30b8b6351165258127d198118d68df416cecf4e1fdb1f57cda7e0af38",
+        "1db92e3a5d7263e888fb220d1dbe179f27e0fc56473d3305324bade57df78673",
+        "1eecdf9b828dece4b2bdf78275f892bcc30b36ef34573d935f71dce448cc24cd",
+        "1ffa91539c1312470f0b8d12933271394b73e60fee3a4d72faaaa7e99afa7dbe",
+        "21c2e66fd7d2cb8d8a74ef9db72f2be0f347d103acee3977ef72a7d44c655289",
+        "24ebbd1adfd0401f7d68f0688f77b6e3c60f3bdfceee7599421b510621e94e24",
+        "274c5daf4b8834dd69f63e1d32d2285e0fb6774803d70aa987bef03138d1a9cc",
+        "28f4ac1c35a5782ba60e2abee82838eac0c20e359ba7a19e3a3ca10532993c77",
+        "2ae975e5587ef5f77ff77391b9fef5f3ec343318bcbe64c6184d36ecc44980f6",
+        "3ea4464417239dadcec6155370ff3958d54ecec3a173ccd8a3809ce827de3e5c",
+        "3f0eb552a7bd5744dcfa529c8244a3a362123e85691b84251b73f9df2c98dad3",
+        "3fc14f361170395453b02383960540079b411f67fffe674132bcbdf488de063f",
+        "3fca46234671d47213cf0205dcae71dfc3e2d58bd3b602e4f5f65aea338fc482",
+        "45d6a5f52e0280309553602528c2dd7d15a132e755b0061a9772c29484f1b82c",
+        "499e605fda920ddd75d5101524f1cd532fb02e54e6cf807684cf54aa2954d748",
+        "4eac292a83dafd9815f7aaa4c15123a2838f71e575f3b6fccd1cb0a8df9034f2",
+        "5fe10029ea4f0258b3361f17c80f2fcca88e30c565223388445b8a26c7545613",
+        "68ad908507880a4162dd88153cb117c09eb32030864b9207a72370c06f9e18ad",
+        "6b9c032ab750ecfcd64b2cdcd3da641b7f2dd2c2ac2846498016d3b462f75a1b",
+        "6c1706c854b09b985c53f710268a3c58398c790dffb0a679af076831414cef39",
+        "7171998bd6342ac024866261e2e9ea653ec840873ff4e2a77f7f235ceda16f98",
+        "7657dd2651789bd84d6a775bb9aa7697e8a3606cf3124915d120eb5fb0583298",
+        "76e35fcea04e0bb12cb8ced4a15c858e097e20f0837ee3e5a681eb7f11743f8c",
+        "781937cdaa7eb37d3a4a03c2a22ae42f7d9eec2386e5f4ed6bc105d7b27066ef",
+        "79a41380bb655bbc5d265b5661afb0ec968c77ed0e6c4fb0c22f16274d417e50",
+        "7db006fc0819b6d1ec9d29a2d3fc090ffe4d4e2cbd651faa8a012d69ea6d2e9c",
+        "7ffbded658510f0900ef5130b923bf144e57342e75e3630a66caff92b8786c89",
+        "803d6c77bfa8104b31c0d7c9437cd90b2eae2f8379d3dc392b8e5b355fd98557",
+        "88da64ecd56564ff8713232d4ff95d094fe392000dcb1773831b323833575a15",
+        "8ac36e4c2e1c215046ab3b5704c51974ce05a33f242e342cfdbb8b3ddf3b822f",
+        "9f24bc02042395dc73a9a804ba57f15fce6775fc761ad01b8caa32a364f04a62",
+        "a2919473a31266a18dc80e839669f8f12105482cc1c2cd3484c7efb0926b3642",
+        "a9fd0780250a6f385c5765e0dc285ac08439c5b6119c5a4c8df6a6e8139ad270",
+        "ab73b6fdfa401bb2ce61351b2800b52b1ee43782d74f89903bb9a50dc28acdff",
+        "ad05bb761375aa2d26f6573c512167bf9e9d476ccd1e7dfc33323970ae57245f",
+        "ae6f828c6595b691f8a54892c858e2b99f9a5da504dc65daf8a3ee5f4afd3435",
+        "af5394410ee478ad818ab73ea08f143273ca8742aa9ecf9350ff06b8dc810492",
+        "afb986c9d92cd3ce729ad6908f355b1ec2fa864ef35ca4c6c00fb6120bf80acd",
+        "b2f5045057bd743ac5abee7ae94e9a0acbb720a5d912e55c4ed6e286a31c7bd8",
+        "b989db8fdfd2a31431f379cea47d5014735d23bbff67e75c2fb318c6d2d1165e",
+        "c0cdca6344e9184eed221ea2754fe93186c8899dffe5ba9d241b33a6688ae4f3",
+        "c7480706f13b3675b4534a5b6d52328ebc2997564978c2b51682642abbc4643c",
+        "d39ecd00c536cfe4920174a4b6a6458bbfff795584cbf5a97725b6634fa4382f",
+        "db912d18e57dcdb666998db2e2d2ce8bda6d3353b9c61063da38e2c173ba1c4d",
+        "e2a043cf6964bea1bb47075926cefb273751888c8f0dc1fc1924c5a4d2f0de6f",
+        "e34e19f386a6151b60885879d727c001ffc5f7c36be29df1af6693cdfe8334e1",
+        "e3db11c6aa515b3a2a6c0d9daa82d78e090aa330109903a09ce0197568c9014d",
+        "e3ecd19625f254af631111ab9a6c856462132d084ecfa269740d33a4390fc963",
+        "e55a1afe6159437569f7fd9eb32679979b3cde726e718a1a894efecc526a268a",
+        "efc724736144b9c7f6aa8c90b2558da95f83711c9d935a61c20e074922a99c34",
+        "f103b5f1c28e1e919aac3c4fe9826ce87029e0b8572849e353404feefc195a08",
+        "f732b85147c71237fdf844a9c1c89d6352d08acdb01b061ee8e543245b5e3a64",
+        "f9209e316a1984ea16c67cee2d0b0dda085b8eb66430f20e07c03a28df53551b",
+        "fa9cfafb7774d76a3c75cb964b5b83f0be5a9ffa031bbaea1d963e70d4cb3f0f",
+        "fd84079cf6bdb4d8082fb4a43e30b0147e7856a9cdbb9e9dcc8491fc727dbcb7"
+      ]
+    },
+    {
       "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
       "functional_owner": "task_management",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -1363,6 +1433,1104 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "fd84079cf6bdb4d8082fb4a43e30b0147e7856a9cdbb9e9dcc8491fc727dbcb7",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 14,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationBudgetPeriod",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "efc724736144b9c7f6aa8c90b2558da95f83711c9d935a61c20e074922a99c34",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 33,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPerson",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1991c83d6f839a89383303206f6d91c26f246ed38a8f0cabe71feacc9a726a13",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 43,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPersonBinding",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1b40af20b66af5e1798e965c4912aafde9749f003948df326db2de499c7f78a8",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 55,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationVerifiedOrder",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "db912d18e57dcdb666998db2e2d2ce8bda6d3353b9c61063da38e2c173ba1c4d",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 72,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationOrderClaim",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "c0cdca6344e9184eed221ea2754fe93186c8899dffe5ba9d241b33a6688ae4f3",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 90,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "803d6c77bfa8104b31c0d7c9437cd90b2eae2f8379d3dc392b8e5b355fd98557",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 115,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "4eac292a83dafd9815f7aaa4c15123a2838f71e575f3b6fccd1cb0a8df9034f2",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 139,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "3f0eb552a7bd5744dcfa529c8244a3a362123e85691b84251b73f9df2c98dad3",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 157,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e34e19f386a6151b60885879d727c001ffc5f7c36be29df1af6693cdfe8334e1",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 175,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationAuditEvent",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "6c1706c854b09b985c53f710268a3c58398c790dffb0a679af076831414cef39",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 197,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationBudgetPeriod",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "b989db8fdfd2a31431f379cea47d5014735d23bbff67e75c2fb318c6d2d1165e",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 200,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationBudgetPeriod",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "f732b85147c71237fdf844a9c1c89d6352d08acdb01b061ee8e543245b5e3a64",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 203,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPerson",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7ffbded658510f0900ef5130b923bf144e57342e75e3630a66caff92b8786c89",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 206,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPersonBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ab73b6fdfa401bb2ce61351b2800b52b1ee43782d74f89903bb9a50dc28acdff",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 209,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPersonBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "af5394410ee478ad818ab73ea08f143273ca8742aa9ecf9350ff06b8dc810492",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 212,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationVerifiedOrder",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "afb986c9d92cd3ce729ad6908f355b1ec2fa864ef35ca4c6c00fb6120bf80acd",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 215,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationOrderClaim",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "3ea4464417239dadcec6155370ff3958d54ecec3a173ccd8a3809ce827de3e5c",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 218,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationOrderClaim",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e55a1afe6159437569f7fd9eb32679979b3cde726e718a1a894efecc526a268a",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 221,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ad05bb761375aa2d26f6573c512167bf9e9d476ccd1e7dfc33323970ae57245f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 224,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7171998bd6342ac024866261e2e9ea653ec840873ff4e2a77f7f235ceda16f98",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 227,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1ffa91539c1312470f0b8d12933271394b73e60fee3a4d72faaaa7e99afa7dbe",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 230,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "781937cdaa7eb37d3a4a03c2a22ae42f7d9eec2386e5f4ed6bc105d7b27066ef",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 233,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "a9fd0780250a6f385c5765e0dc285ac08439c5b6119c5a4c8df6a6e8139ad270",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 236,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1c59dbe30b8b6351165258127d198118d68df416cecf4e1fdb1f57cda7e0af38",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 239,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "021818f3d6f309013e0c941495292e929b26c521a7fffb1ea6a15ffd7583f7ee",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 242,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "79a41380bb655bbc5d265b5661afb0ec968c77ed0e6c4fb0c22f16274d417e50",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 245,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "fa9cfafb7774d76a3c75cb964b5b83f0be5a9ffa031bbaea1d963e70d4cb3f0f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 248,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "0088fd98936d85c6e7f5bd6b554bac3e431f3ac624db5235998286cdba07f752",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 251,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "21c2e66fd7d2cb8d8a74ef9db72f2be0f347d103acee3977ef72a7d44c655289",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 254,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "d39ecd00c536cfe4920174a4b6a6458bbfff795584cbf5a97725b6634fa4382f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 257,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "28f4ac1c35a5782ba60e2abee82838eac0c20e359ba7a19e3a3ca10532993c77",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 260,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e3ecd19625f254af631111ab9a6c856462132d084ecfa269740d33a4390fc963",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 263,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationAuditEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "3fca46234671d47213cf0205dcae71dfc3e2d58bd3b602e4f5f65aea338fc482",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 266,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationAuditEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "76e35fcea04e0bb12cb8ced4a15c858e097e20f0837ee3e5a681eb7f11743f8c",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 269,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPersonBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "68ad908507880a4162dd88153cb117c09eb32030864b9207a72370c06f9e18ad",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 272,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "8ac36e4c2e1c215046ab3b5704c51974ce05a33f242e342cfdbb8b3ddf3b822f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 275,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "05a6f3dfcc4dcf557b13d11d7f99f646a0474a7356e958837c697b85ec008fcb",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 278,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "5fe10029ea4f0258b3361f17c80f2fcca88e30c565223388445b8a26c7545613",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 281,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "45d6a5f52e0280309553602528c2dd7d15a132e755b0061a9772c29484f1b82c",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 284,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "24ebbd1adfd0401f7d68f0688f77b6e3c60f3bdfceee7599421b510621e94e24",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 287,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "c7480706f13b3675b4534a5b6d52328ebc2997564978c2b51682642abbc4643c",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 290,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1eecdf9b828dece4b2bdf78275f892bcc30b36ef34573d935f71dce448cc24cd",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 293,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7657dd2651789bd84d6a775bb9aa7697e8a3606cf3124915d120eb5fb0583298",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 296,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e3db11c6aa515b3a2a6c0d9daa82d78e090aa330109903a09ce0197568c9014d",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 299,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "6b9c032ab750ecfcd64b2cdcd3da641b7f2dd2c2ac2846498016d3b462f75a1b",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 302,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "3fc14f361170395453b02383960540079b411f67fffe674132bcbdf488de063f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 305,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7db006fc0819b6d1ec9d29a2d3fc090ffe4d4e2cbd651faa8a012d69ea6d2e9c",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 314,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationBudgetPeriod",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "274c5daf4b8834dd69f63e1d32d2285e0fb6774803d70aa987bef03138d1a9cc",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 332,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPerson",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "f9209e316a1984ea16c67cee2d0b0dda085b8eb66430f20e07c03a28df53551b",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 336,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationVerifiedOrder",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "02d25fedb1106b47a31cd8078546d489cb1d1e3ad4fdd5bd54d0fc1e3710bad6",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 342,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationOrderClaim",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "f103b5f1c28e1e919aac3c4fe9826ce87029e0b8572849e353404feefc195a08",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 352,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e2a043cf6964bea1bb47075926cefb273751888c8f0dc1fc1924c5a4d2f0de6f",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 374,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "a2919473a31266a18dc80e839669f8f12105482cc1c2cd3484c7efb0926b3642",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 390,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationSettlement",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "2ae975e5587ef5f77ff77391b9fef5f3ec343318bcbe64c6184d36ecc44980f6",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 396,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "b2f5045057bd743ac5abee7ae94e9a0acbb720a5d912e55c4ed6e286a31c7bd8",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 407,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationAuditEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "9f24bc02042395dc73a9a804ba57f15fce6775fc761ad01b8caa32a364f04a62",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 428,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationApplication",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "88da64ecd56564ff8713232d4ff95d094fe392000dcb1773831b323833575a15",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 433,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ae6f828c6595b691f8a54892c858e2b99f9a5da504dc65daf8a3ee5f4afd3435",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 438,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1db92e3a5d7263e888fb220d1dbe179f27e0fc56473d3305324bade57df78673",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 445,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPayoutAuthorization",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "499e605fda920ddd75d5101524f1cd532fb02e54e6cf807684cf54aa2954d748",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "line": 450,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationReconciliationTask",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",
