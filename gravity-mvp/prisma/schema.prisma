@@ -976,6 +976,10 @@ model DriverTelegram {
   activeParkId  String?
   submittedPhone String?
   submittedPhoneAt DateTime?
+  /// Phone Telegram itself attested, stored only when the shared contact
+  /// card carried the sending account id. Never a typed-in number.
+  attestedPhone    String?
+  attestedPhoneAt  DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -1152,6 +1156,16 @@ model Driver {
   hiredAt              DateTime?
   lastOrderAt          DateTime?
   customFields         Json?                @default("{}")
+  /// Yandex driver_profile.is_selfemployed. Authoritative park-SMZ flag.
+  /// Null means the park never stated it; eligibility fails closed on null.
+  isSelfEmployed       Boolean?
+  /// Yandex driver_profile.employment_type. Audit and diagnostics only.
+  /// Observed values: park_employee, selfemployed, individual_entrepreneur.
+  employmentType       String?
+  /// Yandex driver_profile.hire_date: the park connection date.
+  /// Deliberately separate from hiredAt, which carries created_date
+  /// semantics that scoring and the driver views already depend on.
+  yandexHireDate       DateTime?
   primaryYandexId      String?              @unique
   calls                Call[]
   chats                Chat[]
@@ -1180,6 +1194,7 @@ model Driver {
   @@index([externalParkId])
   @@index([externalPersonKey])
   @@index([personResolutionStatus])
+  @@index([yandexHireDate])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
