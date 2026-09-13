@@ -14,9 +14,9 @@
     "coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29"
   },
   "current": {
-    "tracked_inventory_sha256": "ea2da740bd381dbf85affce3780f68722b8f032f8ef9800cc91e9e678fbb11c3",
-    "tracked_executable_surfaces": 2386,
-    "coverage_sha256": "41d153dcffcc0a337119d86aa404897eb50141c48573570fbde1ce6377d6f1fd"
+    "tracked_inventory_sha256": "43a24b0ef9d86fd007bfc1e78f5ce2e5a16474dbeb7f2d68d533044d1de70d41",
+    "tracked_executable_surfaces": 2383,
+    "coverage_sha256": "cf1c72157ac5080baca21a3393fa95b8de2b57cf438bd6f14ed776086c9bccf7"
   },
   "exact_inventory_changes": [
     {
@@ -2109,7 +2109,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "741e8725a6a334eb4dd9cbbeeee7fffedc05f4b8e3979cab2751c8a91a6738d6",
+      "source_sha256": "43b3f31155401f2d044b3a3da47ff172cd9bbf2d6292cb9d8dfbd3374e953c05",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
     },
@@ -2219,7 +2219,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "5c2c57e65a8d774e15ef8996ac506a844b75deb246e14ae300172c3ddca95faa",
+      "source_sha256": "091ce94534aa61617fd7ee2270485b64a9cca3c9d484bcc024b3510df1c8a3a1",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
     },
