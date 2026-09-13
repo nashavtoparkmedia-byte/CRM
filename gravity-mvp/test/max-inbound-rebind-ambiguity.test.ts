@@ -86,7 +86,16 @@ describe('Ambiguous inbound rebinding fails closed', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         mocks.chatFindUnique.mockResolvedValue(null)
-        mocks.chatFindFirst.mockResolvedValue(null)
+        // findFirst must behave like the database the pre-fix code queried: it returned
+        // the most recently active candidate. Stubbing it to null would make these tests
+        // pass on the old code for the wrong reason — no rebind because the mock was
+        // empty, rather than no rebind because the guard refused. Wiring it to the same
+        // candidate list is what makes this a regression test rather than a
+        // characterisation of the mocks.
+        mocks.chatFindFirst.mockImplementation(async () => {
+            const candidates = await mocks.chatFindMany()
+            return Array.isArray(candidates) && candidates.length ? candidates[0] : null
+        })
         mocks.messageFindUnique.mockResolvedValue(null)
         mocks.createExternalConversationV1.mockResolvedValue({ conversation: { ...CONVERSATION, id: 'chat-new' } })
         mocks.patchExternalConversationV1.mockResolvedValue({ conversation: CONVERSATION })
