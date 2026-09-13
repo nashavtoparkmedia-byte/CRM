@@ -81,12 +81,20 @@ describe('manual Telegram link multi-park wiring', () => {
         expect(route).toContain('if (matchingYandexPhones && localPhone && matchingYandexPhones.has(localPhone)) continue')
     })
 
-    test('revalidates and persists a selected Yandex profile before linking', () => {
+    test('revalidates a selected Yandex profile and refuses to invent the Driver', () => {
         const route = source('src/app/api/bot-link/route.ts')
+        // The provider profile is still revalidated in the named park before
+        // anything is persisted.
+        expect(route).toContain('searchYandexParksByDriverQueryV1(validatedQuery.query)')
         expect(route).toContain('candidate.id === yandexDriverId')
-        expect(route).toContain('upsertParkMatchedDriverV1({')
-        expect(route).toContain('upsertDriverTelegramLinkV1({')
-        expect(route).toContain('activeParkId: parkId')
+        // A provider search result is not a person decision. The link is only
+        // written onto a Driver that already exists and already carries this
+        // exact Yandex profile, and the route creates no Driver to make the
+        // link possible.
+        expect(route).toContain('driver.yandexDriverId !== profile.id')
+        expect(route).toContain('Confirm the driver person on an existing CRM Driver before linking Telegram')
+        expect(route).toContain('saveConfirmedTelegramLink(driver.id, telegramId)')
+        expect(route).not.toContain('upsertParkMatchedDriverV1(')
     })
 
     test('does not remove a pending request when linking fails', () => {
