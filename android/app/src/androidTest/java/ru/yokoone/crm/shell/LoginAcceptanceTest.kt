@@ -177,20 +177,35 @@ class LoginAcceptanceTest {
         if (picker != null) {
             picker.click()
             val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
-            assertNotNull("operator list did not open", option)
+            assertNotNull("operator list did not open; on screen: ${visibleText()}", option)
             option.click()
         }
 
         val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
-        assertNotNull("sign-in fields not found", fields)
+        assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
         assertTrue("expected a login and a password field, found ${fields.size}", fields.size >= 2)
 
         fields[0].text = user
         fields[1].text = password
 
-        val submit = device.wait(Until.findObject(By.textContains("Войти")), ACTION_TIMEOUT)
-        assertNotNull("submit button not found", submit)
+        // EXACT text, not textContains. The sign-in page renders inside the CRM
+        // chrome, and that chrome carries its own "Войти..." item — visible in
+        // every failure dump, listed before the form's button. textContains
+        // matches both, findObject returns whichever comes first, and clicking
+        // the chrome item leaves the form filled, unsubmitted and errorless,
+        // which is exactly what every failing assertion has been reporting.
+        val submit = device.wait(Until.findObject(By.text("Войти")), ACTION_TIMEOUT)
+        assertNotNull(
+            "submit button not found by exact text; on screen: ${visibleText()}",
+            submit,
+        )
         submit.click()
+
+        // The button says "Вход…" while the action is in flight. Seeing it
+        // proves the click reached the form rather than the chrome; not seeing
+        // it is itself the finding, so it is reported and not asserted.
+        val pending = device.wait(Until.hasObject(By.textStartsWith("Вход")), 5_000)
+        android.util.Log.i("YokoAcceptance", "submit clicked, pending state observed=$pending")
     }
 
     /**

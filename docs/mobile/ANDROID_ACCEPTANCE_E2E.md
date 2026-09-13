@@ -275,6 +275,34 @@ up, which no dump so far has been. `LoginAcceptanceTest` now carries a
 assertion fails, and the workflow reports what each of those hierarchies
 contains.
 
+## Run #20: the suite was clicking the wrong button
+
+Carrying the evidence in the failure message itself produced the answer that
+six runs of file-based capture could not. All four assertions reported the same
+screen:
+
+```
+Главная / Открыть меню / Войти... / Новые лиды / — / YOKO CRM /
+Вход в мобильное приложение / Сотрудник / Логин / acceptance / Пароль /
+•••••••••••••••••••••••••• / Войти / Вход · YOKO CRM
+```
+
+Read it carefully. The form is still there, the login field holds `acceptance`,
+the password field holds the right number of characters — 26 for the correct
+password, 27 for the wrong one, so the typing works. There is no error message,
+no navigation, and the button reads `Войти` rather than `Вход…`, so nothing was
+ever in flight.
+
+And two elements match `Войти`: the CRM chrome's own `Войти...`, listed first,
+and the form's button. `signIn` selected the submit button with
+`By.textContains("Войти")`, which matches both, and `findObject` returns
+whichever comes first. The suite was clicking a navigation item and then
+waiting for a login that had never been submitted.
+
+That is a defect in the suite, not in the product. The selector is now exact
+text, and `signIn` reports whether the button entered its pending state after
+the click, which is the cheap proof that the click landed on the form.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
