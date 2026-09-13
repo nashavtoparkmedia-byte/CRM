@@ -110,7 +110,7 @@ async function main() {
       output: outputPath,
     })
     assert.equal(result.canonical_reviewed_paths, 62)
-    assert.equal(result.noncanonical_reviewed_paths, 18)
+    assert.equal(result.noncanonical_reviewed_paths, 19)
     const materializedLifecycle = JSON.parse(await readFile(outputPath, 'utf8'))
     const lifecycleByPath = new Map(materializedLifecycle.surfaces.map((surface) => [surface.path, surface]))
     for (const migration of productionMigrationAuthority.migrations) {

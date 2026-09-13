@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CASH-COMPENSATION-MONETARY-CORE",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:CompensationApplication",
+        "gravity-mvp/prisma/schema.prisma:CompensationAuditEvent",
+        "gravity-mvp/prisma/schema.prisma:CompensationBudgetPeriod",
+        "gravity-mvp/prisma/schema.prisma:CompensationOrderClaim",
+        "gravity-mvp/prisma/schema.prisma:CompensationPayoutAuthorization",
+        "gravity-mvp/prisma/schema.prisma:CompensationPerson",
+        "gravity-mvp/prisma/schema.prisma:CompensationPersonBinding",
+        "gravity-mvp/prisma/schema.prisma:CompensationReconciliationTask",
+        "gravity-mvp/prisma/schema.prisma:CompensationSettlement",
+        "gravity-mvp/prisma/schema.prisma:CompensationVerifiedOrder"
+      ],
+      "reason": "Fleet Operations owns the cash compensation budget period, monetary person identity and its contact bindings, verified order snapshots, order claims, applications, payout authorizations, settlements, reconciliation tasks and the monetary audit log. These models are pending source state and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}
