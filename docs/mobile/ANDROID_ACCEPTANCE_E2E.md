@@ -5,8 +5,9 @@ product owner's time on APK debugging.
 
 ## What it does
 
-On a GitHub-hosted Linux runner, for every push to
-`codex/android-acceptance-e2e-**`:
+On a GitHub-hosted Linux runner, for every push to `epic/android-messenger` or
+to the `android-acceptance/**` namespace, for every pull request targeting
+`epic/android-messenger`, and on demand through `workflow_dispatch`:
 
 1. Brings up a disposable PostgreSQL service and applies the committed
    migrations to it.
@@ -22,6 +23,32 @@ On a GitHub-hosted Linux runner, for every push to
    tests against it.
 7. Collects logcat, the shell's own diagnostics file, screenshots, the JUnit
    report and the APK digest as artifacts.
+
+## The trigger contract, and why it is what it is
+
+Permanent, and deliberately free of any tool's branch naming. An earlier draft
+keyed on `codex/**`, which would have tied a permanent harness to temporary
+branch names.
+
+- **push to `epic/android-messenger`** — every integrated Android state gets a
+  full acceptance result.
+- **push to `android-acceptance/**`** — a namespace for candidate-anchored
+  acceptance trees. It proves an exact product candidate before it integrates,
+  and it proves this harness itself: a suite that never runs on the tree
+  carrying it is one nobody has tested.
+- **pull requests targeting the epic, with no path filter** — every feature
+  branch gets a full result *before* it integrates, which is the gap a
+  push-only contract leaves. The filter is omitted on purpose: the defect this
+  suite was built around, a refused Server Action turning every messenger page
+  load into HTTP 500, lived in `gravity-mvp`, not `android/`. A filter narrow
+  enough to look cheap is one that misses the class of bug this exists to
+  catch, and inside the epic every change is Android work.
+- **`workflow_dispatch`** — re-runs an existing tree without a new commit.
+
+Pull requests to `main` are deliberately not covered. Charging every unrelated
+CRM pull request a ten-minute emulator job is not a trade worth making, and the
+only pull request that should reach `main` from this work is the epic, whose
+tree a push to `epic/android-messenger` has already proven.
 
 ## Why UI Automator
 

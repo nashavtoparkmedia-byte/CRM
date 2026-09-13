@@ -13,14 +13,40 @@ name: Android acceptance E2E
 # That defect is fixed and the assertions were never loosened, so the test is now
 # expected to go green and a red result means a real regression.
 
+# Trigger contract. Permanent, and deliberately free of any tool's branch
+# naming — an earlier draft keyed on `codex/**`, which would have tied a
+# permanent harness to temporary branch names.
+#
+# push:
+#   epic/android-messenger    the Android integration branch: every integrated
+#                             state gets a full acceptance result
+#   android-acceptance/**     a namespace for candidate-anchored acceptance
+#                             trees. Used to prove an exact product candidate
+#                             before it integrates, and to prove this harness
+#                             itself. A suite that never runs on the tree
+#                             carrying it is one nobody has tested.
+#
+# pull_request, targeting the epic only, with NO path filter. Every feature
+# branch therefore gets a full acceptance result BEFORE it integrates, which is
+# the gap a push-only contract leaves. The filter is omitted on purpose: the
+# defect this suite was built around — a refused Server Action turning every
+# messenger page load into HTTP 500 — lived in gravity-mvp, not android/. A
+# filter narrow enough to look cheap is one that misses the class of bug this
+# exists to catch, and inside the epic every change is Android work.
+#
+# Pull requests to main are deliberately NOT covered. Charging every unrelated
+# CRM pull request a ten-minute emulator job is not a trade worth making, and
+# the only PR that should reach main from this work is the epic, whose tree a
+# push to epic/android-messenger has already proven.
+#
+# workflow_dispatch re-runs an existing tree without a new commit.
 on:
   push:
     branches:
-      # The suite validates itself on its own branch as well as on the
-      # candidate-anchored ones. A harness that is never run on the branch that
-      # carries it is a harness nobody has tested.
-      - 'codex/android-acceptance-e2e-**'
-      - 'codex/android-acceptance-harness-**'
+      - 'epic/android-messenger'
+      - 'android-acceptance/**'
+  pull_request:
+    branches:
       - 'epic/android-messenger'
   workflow_dispatch:
 
