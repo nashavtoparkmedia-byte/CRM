@@ -184,12 +184,28 @@ class LoginAcceptanceTest {
         // later for an unrelated-looking reason. Not finding it is now a
         // failure that says so, in the same class of mistake as a tool that
         // exits 0 when it did nothing.
-        val picker = device.wait(Until.findObject(By.textContains("Выберите сотрудника")), 5_000)
-            ?: device.findObject(By.clazz("android.widget.Spinner"))
-            ?: device.findObject(By.descContains("Сотрудник"))
-            ?: device.findObject(By.textContains("Сотрудник"))
+        // Run #23 printed the tree with classes and settled what this element
+        // is. Inside a WebView the select is not a Spinner — it is a plain
+        // `android.view.View`, and it sits immediately after a TextView that
+        // carries the same word:
+        //
+        //   TextView='Сотрудник' | View='Сотрудн…'
+        //
+        // Matching on text alone therefore finds the LABEL first, because it
+        // comes first in tree order, and clicking a label opens nothing. So
+        // pick among the candidates by what a control actually is: clickable,
+        // and not a TextView.
+        device.wait(Until.hasObject(By.textContains("Сотрудник")), ACTION_TIMEOUT)
+        val candidates = (
+            device.findObjects(By.textContains("Выберите")) +
+                device.findObjects(By.textContains("Сотрудник"))
+            ).distinct()
+        val picker = candidates.firstOrNull { it.isClickable }
+            ?: candidates.firstOrNull { it.className != "android.widget.TextView" }
         assertNotNull(
-            "the operator select was not found, so the form can never submit; tree: ${treeShape(460)}",
+            "no clickable operator select among ${candidates.size} candidates " +
+                "(${candidates.joinToString { "${it.className?.substringAfterLast('.')}:clickable=${it.isClickable}" }}); " +
+                "tree: ${treeShape(300)}",
             picker,
         )
         picker!!.click()

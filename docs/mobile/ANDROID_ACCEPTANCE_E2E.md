@@ -324,6 +324,30 @@ doing anything, and it hid this for as long as the button selector hid the
 previous layer. The select is now located by several selectors in turn, and
 failing to find it is an assertion that says so.
 
+## Run #23: what the operator select actually is
+
+Printing the tree with classes rather than only text settled it:
+
+```
+TextView='Главная' | ... | Button='Открыть меню' | Button='Войти...' |
+TextView='YOKO CRM' | TextView='Вход в мобильное п' |
+TextView='Сотрудник' | View='Сотрудн…'
+```
+
+Inside a WebView the `<select>` is not a Spinner. It is a plain
+`android.view.View`, and it sits immediately after a TextView carrying the same
+word. Matching on text alone finds the label first, because the label comes
+first in tree order, and clicking a label opens nothing — which is why the list
+never appeared.
+
+The select is now chosen among the candidates by what a control actually is:
+clickable, and not a TextView. The failure message lists every candidate with
+its class and clickability, so the next miss says why in one line.
+
+Three of the four failure trees in that run were the status bar rather than the
+app, which is a reminder that `findObjects` sees system UI too and that reading
+the first N nodes is not the same as reading the screen.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
