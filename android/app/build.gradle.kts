@@ -103,8 +103,23 @@ android {
             // builds only; the production variant below leaves this false.
             buildConfigField("boolean", "CAPTURE_CONSOLE", "true")
 
-            if (keystoreProperties != null) {
-                signingConfig = signingConfigs.getByName("release")
+            // An unsigned APK cannot be installed at all: the emulator answers
+            // INSTALL_PARSE_FAILED_NO_CERTIFICATES and the acceptance suite
+            // never gets to run. A CI runner has no release keystore, so this
+            // variant falls back to the standard Android debug keystore, which
+            // is auto-generated, is not a secret, and grants nothing. It is a
+            // test variant and already debuggable. `release` below deliberately
+            // has no such fallback: a release build without the real keystore
+            // must stay unsigned rather than quietly ship debug-signed.
+            //
+            // One consequence worth knowing: an acceptance APK built where the
+            // release keystore exists and one built in CI carry different
+            // signatures, so neither can be installed over the other. Uninstall
+            // first when switching between them.
+            signingConfig = if (keystoreProperties != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
 

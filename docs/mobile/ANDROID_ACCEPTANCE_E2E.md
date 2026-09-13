@@ -126,6 +126,28 @@ The failure moved one step later, into the instrumentation run itself, so the
 same treatment is applied to it: Gradle's output is captured to a file, and its
 salient lines plus every JUnit failure message are republished as annotations.
 
+## Run #7: the APK was unsigned
+
+The emulator booted again and the instrumentation run named its own cause:
+
+```
+com.android.ddmlib.InstallException: INSTALL_PARSE_FAILED_NO_CERTIFICATES:
+Failed to collect certificates from .../app-acceptance-unsigned.apk
+```
+
+The `acceptance` build type was signed only when a release keystore was present
+on the build machine. A CI runner has none, so Gradle produced
+`app-acceptance-unsigned.apk`, and Android refuses to install an unsigned APK.
+This never showed up on the physical phone because the server that built that
+APK does have the keystore.
+
+The variant now falls back to the standard Android debug keystore when no
+release keystore exists. `release` deliberately keeps no such fallback: a
+release build without the real keystore must stay unsigned rather than quietly
+ship debug-signed. One consequence to know: an acceptance APK built on the
+server and one built in CI carry different signatures, so neither installs over
+the other.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
