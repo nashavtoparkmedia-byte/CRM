@@ -3602,3 +3602,24 @@ model CompensationCashOrder {
   @@unique([provider, externalParkId, externalOrderId], map: "CompensationCashOrder_provider_identity_key")
   @@index([externalParkId, externalDriverProfileId, endedAt], map: "CompensationCashOrder_driver_month_idx")
 }
+
+/// What the Telegram pilot collects around a C1 application: the driver's
+/// confirmation that they contacted Yandex support, and the response they
+/// attached. Kept out of CompensationApplication so the monetary record keeps
+/// exactly the shape C1 froze.
+model CompensationPilotSubmission {
+  id                  String   @id
+  /// One pilot row per C1 application, never many.
+  applicationId       String   @unique(map: "CompensationPilotSubmission_application_key")
+  telegramUserId      String
+  /// The driver said they contacted support, and when they said it.
+  supportContactedAt  DateTime @db.Timestamptz(3)
+  /// Telegram file identifier for the support response. The file itself stays
+  /// with Telegram; only the reference is kept here.
+  attachmentFileId    String
+  attachmentKind      String   @db.VarChar(16)
+  claimedRubles       Int
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([telegramUserId])
+}
