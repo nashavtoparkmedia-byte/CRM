@@ -61,19 +61,53 @@ Every wait in that step is now bounded and every failure path prints the
 emulator log and the device list before exiting. A boot problem now costs
 minutes and leaves something to read.
 
-Run #2, with those bounds in place, died one step earlier and for a different
-reason: `test -w /dev/kvm` returned false, so the KVM step's own exit status
-killed the run. Hardware acceleration is **not guaranteed** on a standard
-GitHub-hosted runner — run #1 got a writable `/dev/kvm`, run #2 did not. That
-probe no longer decides the run's fate; it records what it found, warns, and
-hands the acceleration mode to the emulator step.
+Run #2, with those bounds in place, died one step earlier: `test -w /dev/kvm`
+was the KVM step's own exit status, so a runner without hardware acceleration
+failed the run with no explanation. Run #3 stalled in the emulator step again,
+and its `::error::` annotation did not survive the cancellation, so the reason
+was never recoverable.
 
-This is the open risk in the approach: without KVM the emulator falls back to
-software emulation on a two-core runner, which may not finish booting inside
-any sensible budget. If that turns out to be the steady state, the realistic
-options are a larger runner, a third-party emulator action, or accepting that
-this suite runs only when a runner happens to offer KVM. None of them should
-be chosen without seeing a software-emulation run actually time out first.
+Run #4 is the first run that finished rather than being cancelled, and it
+settled the question that three runs could not:
+
+```
+[notice] runner /dev/kvm: crw-rw-rw- 1 root kvm 10, 232 Sep 12 23:53 /dev/kvm
+```
+
+Hardware acceleration **is** available on a pinned `ubuntu-24.04` runner once
+GitHub's own udev rule is applied. "No KVM on the runner" is ruled out. The
+collection and upload steps also ran for the first time, which is what made any
+of this readable.
+
+Run #4 still failed, in the third-party emulator action, with
+`The process '/usr/bin/sh' failed with exit code 1` and nothing else — because
+that action's diagnostics live in the step log, and a step log needs an
+authenticated download. So the emulator is driven directly again, and its log
+is republished as annotations, which are public on a public repository.
+
+## Why the runner is pinned
+
+`ubuntu-latest` is a moving label and is how this job became a lottery: one run
+found a writable `/dev/kvm` and the next did not. The label is pinned to
+`ubuntu-24.04`, the udev rule is the **first** step in the job because a
+mid-job systemd upgrade resets `/dev` permissions after the rule is applied
+(actions/runner-images#8670), and acceleration is then asserted twice: once on
+the device node and once through `emulator -accel-check`. A run either has
+hardware acceleration or fails in seconds saying so. It never quietly drops to
+software emulation, which reads as a slow boot and reports as a timeout.
+
+Software emulation is not a fallback worth having here: measured cold boots of
+an API 34 x86_64 image without KVM run to roughly 38 minutes when they finish
+at all.
+
+## Why no third-party emulator action
+
+`reactivecircus/android-emulator-runner` is the maintained community path and
+was tried in run #4. Two things rule it out for this job: its failure output is
+only in the step log, which cannot be read without a token, and its default
+`disable-linux-hw-accel: auto` silently appends `-accel off` when `/dev/kvm` is
+not accessible, which is the exact ambiguity this suite exists to remove. The
+hand-rolled path writes a log this job owns and asserts acceleration up front.
 
 ## What fails the run
 

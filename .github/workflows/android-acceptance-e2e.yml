@@ -59,6 +59,40 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      # /dev/kvm on a GitHub-hosted runner is root:kvm 0660 and the `runner`
+      # user is not in the kvm group (actions/runner-images#8542), so this rule
+      # is not optional — without it the emulator silently drops to software
+      # emulation and then times out with no stated cause.
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+
+      # A silent fallback to software emulation is what makes a run
+      # unreproducible: it looks like a slow boot and reports as a timeout. This
+      # step refuses to continue without hardware acceleration, so the outcome
+      # is either a real acceptance result or a legible infrastructure failure,
+      # never a guess.
+      - name: Assert hardware acceleration is actually available
+        run: |
+          {
+            echo "### Runner"
+            echo '```'
+            echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
+            nproc; free -m | head -2; df -h / | tail -1
+            ls -l /dev/kvm 2>&1
+            echo "cpu virtualization flags: $(grep -Ec '(vmx|svm)' /proc/cpuinfo)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -l /dev/kvm
+          test -c /dev/kvm || { echo "::error::/dev/kvm is missing on this runner"; exit 1; }
+          test -w /dev/kvm || { echo "::error::/dev/kvm is not writable by $(id -un)"; exit 1; }
+          echo "KVM present and writable"
+
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20.20.2
@@ -115,38 +149,6 @@ jobs:
             -PyokoTestOrigin="$EMULATOR_ORIGIN" \
             -PyokoGitCommit="${GITHUB_SHA::8}"
 
-      # /dev/kvm on a GitHub-hosted runner is root:kvm 0660 and the `runner`
-      # user is not in the kvm group (actions/runner-images#8542), so this rule
-      # is not optional — without it the emulator silently drops to software
-      # emulation and then times out with no stated cause.
-      - name: Enable KVM group permissions
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      # A silent fallback to software emulation is what makes a run
-      # unreproducible: it looks like a slow boot and reports as a timeout. This
-      # step refuses to continue without hardware acceleration, so the outcome
-      # is either a real acceptance result or a legible infrastructure failure,
-      # never a guess.
-      - name: Assert hardware acceleration is actually available
-        run: |
-          {
-            echo "### Runner"
-            echo '```'
-            echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
-            nproc; free -m | head -2; df -h / | tail -1
-            ls -l /dev/kvm 2>&1
-            echo "cpu virtualization flags: $(grep -Ec '(vmx|svm)' /proc/cpuinfo)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          ls -l /dev/kvm
-          test -c /dev/kvm || { echo "::error::/dev/kvm is missing on this runner"; exit 1; }
-          test -w /dev/kvm || { echo "::error::/dev/kvm is not writable by $(id -un)"; exit 1; }
-          echo "KVM present and writable"
-
       # 14 GB of SSD has to hold node_modules, a Next.js build, the Android SDK,
       # a system image and two APKs.
       - name: Reclaim disk before the system image lands
@@ -154,31 +156,82 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
           df -h / | tail -1
 
-      # The hand-rolled emulator start is gone. It created the AVD, launched
-      # QEMU and polled for a boot itself, and three runs never produced a
-      # booted device. This action is the maintained path for the same job: it
-      # creates the AVD, boots it, waits for boot-completed properly, and
-      # retries. Pinned to the full commit SHA that the v2.38.0 annotated tag
-      # dereferences to, not to a floating tag.
-      - name: Boot an emulator and run the acceptance tests
+      - name: Install the emulator and the system image
+        run: |
+          set -e
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-34" "emulator" \
+            "system-images;android-34;google_apis;x86_64" > /dev/null
+          # Second assertion, from the emulator's own point of view. Exit 0 is
+          # "KVM installed and usable"; exit 3 would mean the CPU exposes no
+          # vmx/svm at all, which no udev rule can repair.
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            -n ci -k "system-images;android-34;google_apis;x86_64" --force
+          "$ANDROID_HOME/emulator/emulator" -list-avds
+
+      # Driven directly rather than through a third-party action, for one
+      # reason: the action's diagnostics live in the step log, and a step log
+      # needs an authenticated download. Here the emulator writes a file this
+      # job owns, and the failure path republishes it as annotations, which are
+      # public. Acceleration is asserted above, so -accel on is unconditional:
+      # a silent fall back to software emulation reads as a slow boot and
+      # reports as a timeout, which is precisely the ambiguity to avoid.
+      - name: Start an emulator
+        timeout-minutes: 20
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect -accel on -camera-back none -camera-front none \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+
+          give_up() {
+            echo "::error::emulator: $1"
+            # Annotations are the only channel a plain API read can see, so the
+            # decisive log lines go there, not only into the artifact.
+            grep -iE "error|panic|cannot|unable|refus|denied|not supported|unsupported|no such|failed|invalid" \
+              "$RUNNER_TEMP/emulator.log" 2>/dev/null | head -6 | while read -r l; do
+                echo "::error::emulator.log: ${l}"
+              done
+            tail -8 "$RUNNER_TEMP/emulator.log" 2>/dev/null | while read -r l; do
+              echo "::error::emulator.log tail: ${l}"
+            done
+            echo "::error::adb devices: $(timeout 30 "$ADB" devices -l 2>&1 | tr '\n' '~')"
+            exit 1
+          }
+
+          timeout 300 "$ADB" wait-for-device || give_up "no device appeared within 5 minutes"
+
+          # Booted means the package manager is up, not just the kernel.
+          state=""
+          for _ in $(seq 1 300); do
+            kill -0 "$emulator_pid" 2>/dev/null || give_up "the emulator process exited during boot"
+            state=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$state" = "1" ] && break
+            sleep 3
+          done
+          [ "$state" = "1" ] || give_up "the emulator did not report boot_completed within 15 minutes"
+
+          # The input service registers after boot_completed, so unlocking
+          # immediately races it (ReactiveCircus/android-emulator-runner#489).
+          "$ADB" wait-for-device shell 'while [ -z "$(service list | grep -w input)" ]; do sleep 1; done' || true
+          "$ADB" shell input keyevent 82 || true
+          "$ADB" shell settings put global window_animation_scale 0 || true
+          "$ADB" shell settings put global transition_animation_scale 0 || true
+          "$ADB" shell settings put global animator_duration_scale 0 || true
+          echo "emulator booted"
+
+      - name: Run the acceptance tests
         id: tests
-        timeout-minutes: 30
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          ram-size: 4096M
-          force-avd-creation: false
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect -camera-back none -camera-front none
-          disable-animations: true
-          working-directory: android
-          script: |
-            adb logcat -c
-            adb devices -l
-            bash tools/bootstrap-gradle.sh --no-daemon :app:connectedAcceptanceAndroidTest \
-              -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
+        timeout-minutes: 25
+        run: |
+          cd android
+          "$ANDROID_HOME/platform-tools/adb" logcat -c
+          bash tools/bootstrap-gradle.sh --no-daemon :app:connectedAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
 
       # This step is why runs #1, #2 and #3 uploaded nothing. Every adb call
       # here BLOCKS when no device is present: `adb logcat` waits for one
@@ -197,10 +250,7 @@ jobs:
 
           # Host-side evidence first: it exists whether or not a device ever did.
           cp "$RUNNER_TEMP/crm.log" "$OUT/crm-server.log" 2>/dev/null
-          # The emulator action manages its own device; its log lands under the
-          # runner temp tree, so take whatever is there rather than a fixed name.
-          find "$RUNNER_TEMP" "$HOME/.android" -maxdepth 3 -name "*.log" -newermt '-2 hours' \
-            -exec cp {} "$OUT/" \; 2>/dev/null
+          cp "$RUNNER_TEMP/emulator.log" "$OUT/emulator.log" 2>/dev/null
           cp -r app/build/reports/androidTests "$OUT/test-report" 2>/dev/null
           cp -r app/build/outputs/androidTest-results "$OUT/junit" 2>/dev/null
           sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
@@ -251,12 +301,9 @@ jobs:
             echo '```'
             cat "$OUT/adb-devices.txt" 2>/dev/null
             echo '```'
-            echo "## emulator logs found on the runner"
+            echo "## emulator.log (last 120 lines)"
             echo '```'
-            for f in "$OUT"/*.log; do
-              case "$f" in *logcat*|*crm-server*|*shell-diagnostics*) continue;; esac
-              echo "--- $(basename "$f") ---"; tail -60 "$f" 2>/dev/null
-            done
+            tail -120 "$OUT/emulator.log" 2>/dev/null
             echo '```'
             echo "## shell diagnostics (last 60 lines)"
             echo '```'
@@ -266,10 +313,13 @@ jobs:
 
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
-          kvm=$(ls -l /dev/kvm 2>&1 | head -1)
-          echo "::notice::runner /dev/kvm: ${kvm}"
+          echo "::notice::runner /dev/kvm: $(ls -l /dev/kvm 2>&1 | head -1)"
+          echo "::notice::adb devices: $(head -c 300 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
           diag=$(head -c 600 "$OUT/shell-diagnostics-file.log" 2>/dev/null | tr '\n' '~')
           [ -n "$diag" ] && echo "::notice::shell diagnostics: ${diag}"
+          tail -6 "$OUT/emulator.log" 2>/dev/null | while read -r l; do
+            echo "::notice::emulator.log: ${l}"
+          done
           exit 0
 
       - name: Fail on any uncaught JavaScript error or Android crash
