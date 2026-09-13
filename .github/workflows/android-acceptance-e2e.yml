@@ -16,7 +16,12 @@ name: Android acceptance E2E
 on:
   push:
     branches:
+      # The suite validates itself on its own branch as well as on the
+      # candidate-anchored ones. A harness that is never run on the branch that
+      # carries it is a harness nobody has tested.
       - 'codex/android-acceptance-e2e-**'
+      - 'codex/android-acceptance-harness-**'
+      - 'epic/android-messenger'
   workflow_dispatch:
 
 permissions:
