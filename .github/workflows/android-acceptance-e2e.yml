@@ -424,6 +424,18 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+          # Errors have their own budget of ten, separate from notices. Runs #13
+          # and #14 published none of this because an earlier rewrite of the
+          # notice budget deleted these emitters along with it.
+          tail -6 "$OUT/gradle-connected.log" 2>/dev/null | while IFS= read -r l; do
+            echo "::error::gradle tail: $(printf '%s' "$l" | head -c 200)"
+          done
+          grep -rhoE '<(failure|error)[^>]*message="[^"]*"' "$OUT" 2>/dev/null \
+            | sed -e 's/.*message="//' -e 's/"$//' | head -3 | while IFS= read -r l; do
+                echo "::error::test failure: $(printf '%s' "$l" | head -c 200)"
+              done
+          echo "::error::tests executed: $(grep -rhoE '<testcase' "$OUT" 2>/dev/null | wc -l); gradle log lines: $(wc -l < "$OUT/gradle-connected.log" 2>/dev/null || echo 0)"
+
           # Annotations survive independently of the summary and are listed by
           # the check-runs API, so the cause is readable from a plain GET.
           # GitHub caps annotations at TEN per level per step and drops the

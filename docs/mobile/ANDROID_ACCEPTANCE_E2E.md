@@ -198,6 +198,26 @@ operator grants this once on a real device and never sees it again, and leaving
 it to chance would mean measuring the timing of an OS dialog rather than the
 product.
 
+## Run #14: the WebView does publish its content
+
+Dumping the tree a second time, after a pause, answered the question the first
+dump could not:
+
+```
+probe: 63 nodes, WebView=1, sign-in text=1, pkg-in-tree=1
+probe text: text="Войти"   text="YOKO CRM"
+```
+
+The WebView publishes its content to the accessibility tree, including the
+sign-in text the assertions look for. The earlier `7 nodes, sign-in text=0` was
+an artifact of the probe itself: `uiautomator dump` is what attaches an
+accessibility client, and a WebView does not backfill a tree it rendered before
+one existed. Given a client and a moment, everything is there.
+
+So the suite's reading mechanism is sound and needs no redesign. What is still
+unexplained is why the instrumentation run fails, and that is readable only
+from Gradle's output.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
