@@ -49,12 +49,24 @@ jobs:
           --health-retries 20
 
     env:
-      # Loopback on the runner. The emulator reaches it through 10.0.2.2, which
-      # is the host alias inside Android's user-mode network stack.
+      # Loopback on the runner, and loopback ON THE DEVICE too, via adb reverse.
+      #
+      # 10.0.2.2 — the host alias in Android's user-mode network stack — is the
+      # obvious choice and it does not work here. The mobile session cookie is
+      # issued with Secure whenever NODE_ENV is production, and a browser stores
+      # a Secure cookie only over HTTPS or on a trustworthy origin. 127.0.0.1 is
+      # trustworthy; 10.0.2.2 over plain HTTP is not. Against the host alias the
+      # cookie is silently dropped, no session is established, and a correct
+      # password lands back on the sign-in form with no error — which is exactly
+      # what runs #21 to #24 showed.
+      #
+      # The physical handset reaches the stand over `adb reverse` at 127.0.0.1,
+      # so this makes the emulator lane match the lane that already works
+      # instead of weakening the cookie.
       DATABASE_URL: postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public
       MOBILE_ACCESS_USER: acceptance
       MOBILE_ACCESS_PASS: yoko acceptance passphrase
-      EMULATOR_ORIGIN: http://10.0.2.2:3002
+      EMULATOR_ORIGIN: http://127.0.0.1:3002
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -263,6 +275,12 @@ jobs:
           # The input service registers after boot_completed, so unlocking
           # immediately races it (ReactiveCircus/android-emulator-runner#489).
           "$ADB" wait-for-device shell 'while [ -z "$(service list | grep -w input)" ]; do sleep 1; done' || true
+          # Give the device a loopback route to the stand, the same way the
+          # physical handset gets one. Without this the origin above is
+          # unreachable from inside the emulator.
+          "$ADB" reverse tcp:3002 tcp:3002
+          echo "reverse: $("$ADB" reverse --list)"
+
           "$ADB" shell input keyevent 82 || true
           "$ADB" shell settings put global window_animation_scale 0 || true
           "$ADB" shell settings put global transition_animation_scale 0 || true
@@ -293,12 +311,13 @@ jobs:
           # The probe must not race the emulator's network bring-up: an app
           # launched before 10.0.2.2 is routable shows its own offline screen,
           # which would read as a product defect and is not one.
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
           for _ in $(seq 1 20); do
             timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' \
-              http://10.0.2.2:3002/login/mobile 2>/dev/null | grep -q 200 && break
+              http://127.0.0.1:3002/login/mobile 2>/dev/null | grep -q 200 && break
             sleep 3
           done
-          echo "device reachability: $(timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' http://10.0.2.2:3002/login/mobile 2>&1)"
+          echo "device reachability: $(timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/login/mobile 2>&1)"
           timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
           sleep 25
           echo "foreground: $(timeout 30 "$ADB" shell dumpsys window 2>/dev/null | grep -m1 -i 'mCurrentFocus\|mFocusedApp')"

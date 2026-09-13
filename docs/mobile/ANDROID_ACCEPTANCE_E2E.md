@@ -348,6 +348,30 @@ Three of the four failure trees in that run were the status bar rather than the
 app, which is a reminder that `findObjects` sees system UI too and that reading
 the first N nodes is not the same as reading the screen.
 
+## Run #24: the wrong-password path passes, and why the right one did not
+
+Four failures became three. `test01_wrongPasswordKeepsTheFormAndExplainsWhy`
+passes end to end: the operator is selected, the form submits, and the rejection
+message appears. The three that remain are all the correct-password paths, and
+all of them end back on the sign-in form with no error at all.
+
+A rejection that works and an acceptance that silently does not is the signature
+of a session that is never established. The mobile session cookie is issued with
+`Secure` whenever `NODE_ENV` is production, and a browser stores a `Secure`
+cookie only over HTTPS or on a trustworthy origin. `127.0.0.1` is trustworthy;
+`10.0.2.2` over plain HTTP is not.
+
+So the emulator, reaching the stand through Android's host alias, was having the
+session cookie dropped on every successful sign-in. The local stand and the
+physical handset both reach the CRM at `http://127.0.0.1:3002` — the handset via
+`adb reverse` — which is why this never appeared anywhere else.
+
+The emulator now gets the same loopback route, `adb reverse tcp:3002 tcp:3002`,
+and the APK is built against `http://127.0.0.1:3002`. That makes the emulator
+lane match the lane that already works rather than weakening the cookie, which
+would have hidden a real production constraint: over plain HTTP to a non-local
+origin, this shell cannot hold a session, by design.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
