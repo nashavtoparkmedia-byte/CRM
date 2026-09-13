@@ -218,6 +218,33 @@ So the suite's reading mechanism is sound and needs no redesign. What is still
 unexplained is why the instrumentation run fails, and that is readable only
 from Gradle's output.
 
+## Run #16: the suite reaches the product
+
+`app did not reach the sign-in screen` is gone. All four tests now get past
+launch and fail on the flow itself:
+
+```
+Tests on emulator-5554 - 14 failed: There was 4 failure(s).
+  no readable rejection message after a wrong password
+  the messenger did not open after a correct password following a rejection
+  the messenger did not open on a direct correct login
+  the conversation list never appeared
+```
+
+These are the assertions the stage promises, failing about the product rather
+than about the harness. The sign-in form is reached and submitted; what comes
+back is not.
+
+The probe in the same run showed the shell's own offline screen — `Нет связи с
+CRM` with a `Повторить` button — which is a race in the probe rather than a
+finding: it launches the app immediately after boot, before `10.0.2.2` is
+routable. It now waits for the CRM to answer from inside the emulator first.
+
+The CRM's own log is no use here, because Next.js does not log requests and the
+disposable stand has no request-logging proxy in front of it. The shell's
+`YOKO_NET` lines are the only record of method, path and status on this side,
+so the published ones are now filtered to the sign-in POST and to failures.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run

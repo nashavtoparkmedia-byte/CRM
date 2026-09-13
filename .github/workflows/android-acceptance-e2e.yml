@@ -290,6 +290,15 @@ jobs:
           # sees the shell rather than the notification-permission dialog.
           timeout 180 "$ADB" install -r -t -g "$APK" 2>&1 | tail -3
           timeout 60 "$ADB" shell settings put secure accessibility_enabled 1
+          # The probe must not race the emulator's network bring-up: an app
+          # launched before 10.0.2.2 is routable shows its own offline screen,
+          # which would read as a product defect and is not one.
+          for _ in $(seq 1 20); do
+            timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' \
+              http://10.0.2.2:3002/login/mobile 2>/dev/null | grep -q 200 && break
+            sleep 3
+          done
+          echo "device reachability: $(timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' http://10.0.2.2:3002/login/mobile 2>&1)"
           timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
           sleep 25
           echo "foreground: $(timeout 30 "$ADB" shell dumpsys window 2>/dev/null | grep -m1 -i 'mCurrentFocus\|mFocusedApp')"
@@ -462,18 +471,25 @@ jobs:
             echo "::notice::accessibility services: $(head -c 150 "$OUT/accessibility.txt" 2>/dev/null | tr '\n' ' ')"
           fi
 
-          # 5-7: the shell's own view of what it fetched.
-          grep -E "YOKO_NET|YOKO_JS_OK|YOKO_PAGE_ERROR" \
-            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | tail -3 | while read -r l; do
-              echo "::notice::shell: $(echo "$l" | sed -e 's/.*console | //')"
+          # 5-9: the shell's own view, and specifically the sign-in POST. The
+          # tests now fail on "no readable rejection message after a wrong
+          # password" and on the messenger not opening, so what that POST
+          # returned is the whole question. GET lines are plentiful and say
+          # nothing, hence the filter.
+          #
+          # The CRM's own log is not used here: Next.js does not log requests,
+          # and the stand has no request-logging proxy in front of it, so the
+          # shell's YOKO_NET lines are the only record of method, path and
+          # status on this side.
+          grep -E "YOKO_NET (done|fail) POST|YOKO_NET fail|YOKO_PAGE_ERROR" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | tail -4 | while read -r l; do
+              echo "::notice::shell: $(echo "$l" | sed -e 's/.*console | //' | head -c 200)"
             done
-
-          # 8-9: the server's view, with the disposable stand's expected noise
-          # removed. Redis and FreeSWITCH are absent there by design and their
-          # connection errors say nothing about the acceptance path.
-          grep -E "GET |POST " "$OUT/crm-server.log" 2>/dev/null \
-            | grep -vE "ECONNREFUSED|esl_|redis" | tail -2 | while read -r l; do
-              echo "::notice::crm: $(echo "$l" | head -c 180)"
+          # Whatever the shell last showed, in its own words.
+          grep -oE "Нет связи с CRM|Application error|Неверный логин или пароль|Вход в мобильное приложение" \
+            "$OUT/ui-hierarchy.xml" "$RUNNER_TEMP/probe-hierarchy.xml" 2>/dev/null \
+            | sort -u | head -1 | while read -r l; do
+              echo "::notice::last screen text: ${l}"
             done
 
           # 10: the device itself.
