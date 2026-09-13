@@ -429,6 +429,31 @@ isolation than a shared run could offer. Gradle still builds and installs; only
 the running is done by hand, so each scenario's result can be read and published
 on its own.
 
+## Run #28: green
+
+Four scenarios, zero failures, every step of the job green including the
+crash-and-JavaScript gate — which only passes when the shell's own
+`YOKO_NATIVE_OK` marker is present, so a silent no-op cannot pass it.
+
+The request log carries exactly the shapes the flow should produce:
+
+```
+YOKO_NET done POST /login/mobile status=200 492ms    <- rejection
+YOKO_NET done POST /login/mobile status=200 104ms    <- rejection
+YOKO_NET done POST /login/mobile status=303  22ms    <- accepted, redirect
+YOKO_NET done POST /messages     status=200  43ms    <- messenger, not a 500
+```
+
+A rejected sign-in answers 200 and a successful one answers 303, which is what
+the local stand has always shown. `POST /messages` answering 200 is the fix
+from PR #87 holding on a real Android device.
+
+The artifact is 263 KB against the 4.5 KB a failed run produced, so the logs,
+diagnostics and screenshots are genuinely there.
+
+One green run is not a reproducible suite. The result has to hold on a second,
+independent runner before it means anything.
+
 ## Why the runner is pinned
 
 `ubuntu-latest` is a moving label and is how this job became a lottery: one run
