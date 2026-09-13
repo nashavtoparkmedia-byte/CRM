@@ -30,20 +30,44 @@ export interface MaxChannelDeliveryV1 {
     }>
 }
 
-let whatsappDelivery: WhatsAppChannelDeliveryV1 | null = null
-let telegramDelivery: TelegramChannelDeliveryV1 | null = null
-let maxDelivery: MaxChannelDeliveryV1 | null = null
+/**
+ * The registry is held on globalThis, not in module scope.
+ *
+ * The production build emits this module into many server chunks, and
+ * `instrumentation` lands in its own. Module-level state would therefore give
+ * each chunk its own registry: registration would succeed in the instrumentation
+ * copy while every route handler still saw an empty one, and every send would
+ * fail with "channel delivery capability is not registered". A process-wide slot
+ * keyed by a shared symbol is resolved identically from any chunk.
+ */
+interface ChannelDeliveryRegistryV1 {
+    whatsapp: WhatsAppChannelDeliveryV1 | null
+    telegram: TelegramChannelDeliveryV1 | null
+    max: MaxChannelDeliveryV1 | null
+}
+
+const REGISTRY_SLOT = Symbol.for('yoko.messaging.channel-delivery-registry.v1')
+
+function registry(): ChannelDeliveryRegistryV1 {
+    const host = globalThis as typeof globalThis & {
+        [REGISTRY_SLOT]?: ChannelDeliveryRegistryV1
+    }
+    if (!host[REGISTRY_SLOT]) {
+        host[REGISTRY_SLOT] = { whatsapp: null, telegram: null, max: null }
+    }
+    return host[REGISTRY_SLOT]
+}
 
 export function registerWhatsAppChannelDeliveryV1(capability: WhatsAppChannelDeliveryV1): void {
-    whatsappDelivery = capability
+    registry().whatsapp = capability
 }
 
 export function registerTelegramChannelDeliveryV1(capability: TelegramChannelDeliveryV1): void {
-    telegramDelivery = capability
+    registry().telegram = capability
 }
 
 export function registerMaxChannelDeliveryV1(capability: MaxChannelDeliveryV1): void {
-    maxDelivery = capability
+    registry().max = capability
 }
 
 function required<T>(capability: T | null, channel: string): T {
@@ -52,13 +76,31 @@ function required<T>(capability: T | null, channel: string): T {
 }
 
 export function getWhatsAppChannelDeliveryV1(): WhatsAppChannelDeliveryV1 {
-    return required(whatsappDelivery, 'WhatsApp')
+    return required(registry().whatsapp, 'WhatsApp')
 }
 
 export function getTelegramChannelDeliveryV1(): TelegramChannelDeliveryV1 {
-    return required(telegramDelivery, 'Telegram')
+    return required(registry().telegram, 'Telegram')
 }
 
 export function getMaxChannelDeliveryV1(): MaxChannelDeliveryV1 {
-    return required(maxDelivery, 'MAX')
+    return required(registry().max, 'MAX')
+}
+
+/**
+ * Which channels can actually deliver right now. Readiness reporting must use
+ * this rather than assuming registration succeeded: the failure this guards
+ * against is invisible to a liveness probe, because the process serves HTTP
+ * perfectly well while being unable to send a single message.
+ */
+export function channelDeliveryRegistrationStatusV1(): {
+    ready: boolean
+    registered: Array<'whatsapp' | 'telegram' | 'max'>
+    missing: Array<'whatsapp' | 'telegram' | 'max'>
+} {
+    const current = registry()
+    const channels: Array<'whatsapp' | 'telegram' | 'max'> = ['whatsapp', 'telegram', 'max']
+    const registered = channels.filter(channel => current[channel] !== null)
+    const missing = channels.filter(channel => current[channel] === null)
+    return { ready: missing.length === 0, registered, missing }
 }

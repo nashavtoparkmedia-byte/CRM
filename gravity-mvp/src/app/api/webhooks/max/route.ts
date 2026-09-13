@@ -330,13 +330,27 @@ export async function POST(request: Request) {
     })
 
     if (!chat && !isOutgoing && senderIdString) {
-      const existingBySender = await prisma.chat.findFirst({
+      // Rebinding rewrites a conversation's canonical externalChatId, so it may
+      // only proceed on unambiguous evidence. senderId is NOT unique in practice
+      // (one operator account id is shared by dozens of chats), so choosing the
+      // most recently active candidate would silently rewrite the wrong
+      // conversation. Take two: exactly one match rebinds, anything else falls
+      // through and a new conversation is created instead.
+      const senderCandidates = await prisma.chat.findMany({
         where: {
           channel: 'max',
           metadata: { path: ['senderId'], equals: senderIdString },
         },
-        orderBy: { lastMessageAt: 'desc' },
+        take: 2,
       })
+      const existingBySender = senderCandidates.length === 1 ? senderCandidates[0] : null
+
+      if (senderCandidates.length > 1) {
+        opsLog('warn', 'max_inbound_rebind_ambiguous', {
+          operation: 'webhook', channel: 'max', matchedBy: 'senderId',
+          candidateCount: senderCandidates.length, externalChatId,
+        })
+      }
 
       if (existingBySender) {
         const existingMetadata = metadataRecord(existingBySender.metadata)
@@ -362,7 +376,9 @@ export async function POST(request: Request) {
 
     if (!chat && !isOutgoing && effectiveSenderPhone) {
       const last10 = effectiveSenderPhone.slice(-10)
-      const existingByPhone = await prisma.chat.findFirst({
+      // Same rule as the senderId branch: a phone may legitimately match more
+      // than one conversation, and choosing by recency is a guess. Fail closed.
+      const phoneCandidates = await prisma.chat.findMany({
         where: {
           channel: 'max',
           OR: [
@@ -370,8 +386,16 @@ export async function POST(request: Request) {
             { driver: { phone: { contains: last10 } } },
           ],
         },
-        orderBy: { lastMessageAt: 'desc' },
+        take: 2,
       })
+      const existingByPhone = phoneCandidates.length === 1 ? phoneCandidates[0] : null
+
+      if (phoneCandidates.length > 1) {
+        opsLog('warn', 'max_inbound_rebind_ambiguous', {
+          operation: 'webhook', channel: 'max', matchedBy: 'phone',
+          candidateCount: phoneCandidates.length, externalChatId,
+        })
+      }
 
       if (existingByPhone) {
         const existingMetadata = metadataRecord(existingByPhone.metadata)
