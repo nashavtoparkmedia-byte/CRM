@@ -4,6 +4,7 @@ import { chromium } from 'playwright-extra';
 import type { Page, BrowserContext, Locator } from 'playwright';
 import stealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { parseDriverHistory } from './lib/parser.js';
+import { scanFleetOrderRows, type LocatedOrder } from './lib/order-locator.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { expect } from '@playwright/test';
@@ -601,7 +602,7 @@ async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> 
  * NOTE: the orders tab does NOT carry the live price. For that we make a
  * separate one-shot trip to /map/drivers/<id> in `getOrderPriceFromMap`.
  */
-async function locateActiveOrder(page: Page, driverYandexId: string, parkId: string) {
+async function locateActiveOrder(page: Page, driverYandexId: string, parkId: string): Promise<LocatedOrder | null> {
     const periodFrom = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 19) + 'Z';
     const periodTo   = new Date(Date.now() +  1 * 86400_000).toISOString().slice(0, 19) + 'Z';
     const url = `https://fleet.yandex.ru/contractors/${driverYandexId}/orders` +
@@ -621,32 +622,25 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
         throw new Error('NEED_REAUTH');
     }
 
-    return await page.evaluate(() => {
-        const rows = Array.from(document.querySelectorAll<HTMLElement>('tr'));
-        for (const row of rows) {
-            const text = (row.textContent || '');
-            if (/^\s*(Статус|Код заказа|Исполнитель)/i.test(text)) continue;
-            if (/Выполнен|Отменён|Отменен/i.test(text)) continue;
-            const links = Array.from(row.querySelectorAll<HTMLAnchorElement>('a'));
-            let orderLink: HTMLAnchorElement | null = null;
-            for (const a of links) {
-                const t = (a.textContent || '').trim();
-                if (/^\d{6,}$/.test(t)) { orderLink = a; break; }
-            }
-            if (!orderLink) continue;
+    // The page only snapshots rows; row analysis lives in ./lib/order-locator.ts
+    // so it can be unit-tested against the real shapes Fleet serves. Do not
+    // reintroduce an inline scan here: the two regexes it used to carry
+    // (/^\d{6,}$/ for the visible code, /[a-f0-9]{24,}/ for the id) both reject
+    // real delivery orders, which use five-digit codes and `cargo_`-prefixed ids.
+    const rows = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('tr')).map(row => ({
+        text: row.textContent || '',
+        links: Array.from(row.querySelectorAll<HTMLAnchorElement>('a')).map(link => ({
+            text: link.textContent || '',
+            href: link.href,
+        })),
+    })));
 
-            const shortOrderId = (orderLink.textContent || '').trim();
-            const orderIdMatch = orderLink.href.match(/\/orders\/([a-f0-9]{24,})/);
-
-            return {
-                shortOrderId,
-                orderHref: orderLink.href,
-                orderLongId: orderIdMatch?.[1] || null,
-                rowText: text.slice(0, 200),
-            };
-        }
-        return null;
-    });
+    const scan = scanFleetOrderRows(rows);
+    if (!scan.activeOrder) {
+        // observedOrders is how a manager sees *why* we reported no active order.
+        console.log(`[locateActiveOrder] No active order driver=${driverYandexId} park=${parkId} observed=${JSON.stringify(scan.observedOrders)}`);
+    }
+    return scan.activeOrder;
 }
 
 /**
