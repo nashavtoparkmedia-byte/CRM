@@ -2192,7 +2192,7 @@
       "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "contacts",
-      "source_sha256": "33ece158438193ebb2eaf40ce46cab37514b0b09224042fbac6d6f2f9685ded4"
+      "source_sha256": "69ebb3e99e16db2f7513c80256c4b4b4a89263ee8fbe1cf93b7dec231410454a"
     },
     {
       "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
@@ -2202,7 +2202,7 @@
       "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
-      "source_sha256": "57232a50a0034e87df943e824d917824553d30a7b3835b9b755da8d3435767cb"
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4"
     },
     {
       "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
@@ -2212,7 +2212,7 @@
       "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
-      "source_sha256": "7231058a15975cf701a0b295b058480698b4b9de5e5a4584094736f1fe65993f"
+      "source_sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147"
     },
     {
       "path": "gravity-mvp/query.sql",

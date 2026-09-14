@@ -7,6 +7,11 @@
 -- This one is ingestion state, one row per real trip, and the two must not be
 -- collapsed: a re-ingested page must not disturb a recorded claim.
 
+-- Wrapped in one explicit transaction. The canonical replay proves a pending
+-- migration rolls back cleanly, and it can only do that if the migration
+-- declares its own transaction boundary rather than relying on the tool's.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS "CompensationCashOrder" (
   "id"                      TEXT NOT NULL,
   "provider"                VARCHAR(32) NOT NULL,
@@ -56,3 +61,5 @@ ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "employmentType" TEXT;
 ALTER TABLE "Driver" ADD COLUMN IF NOT EXISTS "yandexHireDate" TIMESTAMP(3);
 
 CREATE INDEX IF NOT EXISTS "Driver_yandexHireDate_idx" ON "Driver" ("yandexHireDate");
+
+COMMIT;

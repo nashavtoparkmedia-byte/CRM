@@ -4,6 +4,11 @@
 -- record C1 froze, and adding pilot workflow columns to it would make the
 -- money table depend on how one channel happens to ask its questions.
 
+-- Wrapped in one explicit transaction. The canonical replay proves a pending
+-- migration rolls back cleanly, and it can only do that if the migration
+-- declares its own transaction boundary rather than relying on the tool's.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS "CompensationPilotSubmission" (
   "id"                 TEXT NOT NULL,
   "applicationId"      TEXT NOT NULL,
@@ -29,3 +34,5 @@ CREATE UNIQUE INDEX IF NOT EXISTS "CompensationPilotSubmission_application_key"
 
 CREATE INDEX IF NOT EXISTS "CompensationPilotSubmission_telegramUserId_idx"
   ON "CompensationPilotSubmission" ("telegramUserId");
+
+COMMIT;

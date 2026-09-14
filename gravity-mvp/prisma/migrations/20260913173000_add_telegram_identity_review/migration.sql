@@ -2,6 +2,11 @@
 -- Fail-closed is only safe if somebody can see what failed and why; without
 -- this table an unidentifiable driver just vanishes from the funnel.
 
+-- Wrapped in one explicit transaction. The canonical replay proves a pending
+-- migration rolls back cleanly, and it can only do that if the migration
+-- declares its own transaction boundary rather than relying on the tool's.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS "TelegramIdentityReview" (
   "id"                  TEXT NOT NULL,
   "telegramUserId"      TEXT NOT NULL,
@@ -42,3 +47,5 @@ ALTER TABLE "DriverTelegram" ADD COLUMN IF NOT EXISTS "attestedPhoneAt" TIMESTAM
 ALTER TABLE "DriverTelegram"
   ADD CONSTRAINT "DriverTelegram_attested_phone_complete"
   CHECK (("attestedPhone" IS NULL) = ("attestedPhoneAt" IS NULL));
+
+COMMIT;
