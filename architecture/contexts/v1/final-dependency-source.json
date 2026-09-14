@@ -6,9 +6,9 @@
   },
   "observed": {
     "architecture_findings": 0,
-    "cross_context_imports": 861,
-    "cross_context_imports_sha256": "6529fcd632fe8ab60650905e6b926052ab2563124fcad1401386add3d8683e94",
-    "scanned_files": 1432
+    "cross_context_imports": 860,
+    "cross_context_imports_sha256": "bb229b395746c538b1cd18e677fd2082a1bbfdf06b8024ce5013ef9f8c15e9b3",
+    "scanned_files": 1434
   },
   "public_surface_migrations": [],
   "relationship_projection": {
