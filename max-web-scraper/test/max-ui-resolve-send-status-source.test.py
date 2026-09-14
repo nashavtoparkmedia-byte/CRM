@@ -66,9 +66,12 @@ def test_attempted_ui_send_is_terminal_even_without_a_bound_chat_id():
 
     # Every exit from the branch is a return, so an attempted UI send can never fall
     # through into a second send of the same message, with or without a chat id.
+    # There are three: the unproven-submit failure, the proven send reported with its
+    # delivery proof, and the proof-less fallback when the caller supplied no
+    # clientMessageId to bind a proof to.
     assert 'res.status(502)' in branch
     assert 'success: true,' in branch
-    assert branch.count('return res.') == 2, branch.count('return res.')
+    assert branch.count('return res.') == 3, branch.count('return res.')
     assert 'normalizeTextSendResult' not in branch
 
     # Both responses precede the protocol send path in the enclosing handler.
@@ -215,3 +218,26 @@ def test_direct_ui_text_send_proves_the_exact_text_cleared():
     # alone must not mint deliveryProof{actionConfirmed:true}.
     assert 'const sent = isUiTextSubmitObserved(beforeText, afterText, text)' in source
     assert "const sent = !String(afterText || '').trim()" not in source
+
+
+def test_a_proven_ui_resolve_send_reports_its_delivery_proof():
+    # A submit confirmed against the compose box is the same action-bound evidence the
+    # direct-UI and UI-fallback paths report as a proof. Reporting it as merely
+    # 'send_requested' made the canonical message sweep to failed after five minutes
+    # and the retry job send the contact a second copy.
+    branch = _branch_body(source, 'if (uiSendAttempted) {')
+    assert 'if (clientMessageId) {' in branch
+    assert 'const proven = uiTextDeliveredResult(' in branch
+    assert '...proven,' in branch
+    # The proof is only mintable when there is a clientMessageId to bind it to, so the
+    # weaker answer must remain reachable rather than asserting an unverifiable delivery.
+    assert "deliveryStatus: 'send_requested'," in branch
+
+
+def test_the_delivery_proof_is_bound_to_this_operation():
+    # uiTextDeliveredResult stamps the caller's clientMessageId into the proof, and the
+    # consumer refuses any proof whose clientMessageId does not match the message it sent.
+    helper = _branch_body(source, 'function uiTextDeliveredResult(')
+    assert "kind: 'ui_send_action'," in helper
+    assert 'clientMessageId: clientMessageId ? String(clientMessageId) : null,' in helper
+    assert 'actionConfirmed: true,' in helper
