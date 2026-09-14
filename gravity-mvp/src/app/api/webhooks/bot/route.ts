@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
-import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
+import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import {
+    patchDriverTelegramLinkV1,
+    prepareManualDriverTelegramLinkAuthorityV1,
+    recordBotUserProfileV1,
+    recordPendingBotLinkRequestV1,
+} from '@/modules/telegram-channel/public/v1'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -12,8 +18,6 @@ import {
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
 import { mirrorDriverActionResultV1, recordDriverActionV1 } from '@/modules/fleet-operations/public/v1'
-
-const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
 export async function POST(request: Request) {
     try {
@@ -59,6 +63,46 @@ export async function POST(request: Request) {
     }
 }
 
+async function requireCurrentBotDriverAuthority(
+    payload: unknown,
+    input: { driverId: string; telegramId: bigint },
+): Promise<NextResponse | null> {
+    const record = payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : {}
+    const providerAccountId = typeof record.providerAccountId === 'string'
+        ? record.providerAccountId.trim()
+        : ''
+    const connectionId = typeof record.connectionId === 'string'
+        ? record.connectionId.trim()
+        : ''
+    if (!providerAccountId || !connectionId) {
+        return NextResponse.json({
+            error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
+        }, { status: 409 })
+    }
+
+    try {
+        const authority = await prepareManualDriverTelegramLinkAuthorityV1(input)
+        if (
+            authority.target !== input.telegramId.toString()
+            || authority.providerAccountId !== providerAccountId
+            || authority.connectionId !== connectionId
+        ) {
+            throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
+        }
+        return null
+    } catch (error: unknown) {
+        console.warn(
+            '[driver-bot] Current Telegram Driver authority rejected:',
+            error instanceof Error ? error.message : String(error),
+        )
+        return NextResponse.json({
+            error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
+        }, { status: 409 })
+    }
+}
+
 // Check if a Telegram user is linked to a driver
 async function handleCheckLink(payload: any) {
     const { telegramId } = payload
@@ -66,13 +110,19 @@ async function handleCheckLink(payload: any) {
         return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
     }
 
+    const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
-        where: { telegramId: BigInt(telegramId) }
+        where: { telegramId: telegramIdBigInt }
     })
 
     if (!mapping || !mapping.driverId) {
         return NextResponse.json({ linked: false })
     }
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
 
     let driverName = mapping.username || null
     let carInfo: string | null = null
@@ -147,6 +197,11 @@ async function handleCheckLink(payload: any) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
                         // Cache to DriverTelegram so future check_link calls skip Yandex pagination
+                        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+                            driverId: mapping.driverId,
+                            telegramId: telegramIdBigInt,
+                        })
+                        if (mutationAuthorityFailure) return mutationAuthorityFailure
                         await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                     }
                 }
@@ -190,6 +245,11 @@ async function handleCheckLink(payload: any) {
                                         if (car) {
                                             carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                                             console.log('[check_link] phone-search fallback car:', carInfo)
+                                            const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+                                                driverId: mapping.driverId,
+                                                telegramId: telegramIdBigInt,
+                                            })
+                                            if (mutationAuthorityFailure) return mutationAuthorityFailure
                                             await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                                         }
                                     }
@@ -251,82 +311,96 @@ async function findCarById(connection: any, carId: string) {
     return null
 }
 
-// Handle "Отправить данные менеджеру" from bot — try auto-link by phone, fallback to manual
-async function handleSyncUser(payload: any) {
-    const { telegramId, username, phone } = payload
+// Handle a phone submitted through the driver bot. Generic bot ingress is a
+// local-CRM-only path: provider/Fleet refresh belongs to the explicit park
+// search and reconciliation workflows, never this request.
+async function handleSyncUser(payload: unknown) {
+    const input = payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? payload as Record<string, unknown>
+        : {}
+    const { telegramId, contactUserId } = input
+    const phone = typeof input.phone === 'string' ? input.phone.trim() : ''
+    const username = typeof input.username === 'string' && input.username.trim() ? input.username.trim() : null
+    const firstName = typeof input.firstName === 'string' && input.firstName.trim() ? input.firstName.trim() : null
+    const lastName = typeof input.lastName === 'string' && input.lastName.trim() ? input.lastName.trim() : null
 
     if (!telegramId || !phone) {
         return NextResponse.json({ error: 'Missing telegramId or phone' }, { status: 400 })
     }
 
-    console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
-
-    // 1. Try to auto-link by phone via Yandex API — search ALL parks
-    const connections = await listYandexConnectionCredentialsV1()
-    const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
-
-    for (const connection of connections) {
-        try {
-            const yandexRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: {
-                    'X-Client-ID': connection.clid,
-                    'X-Api-Key': connection.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: { park: { id: connection.parkId }, text: phone },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: ['status'] },
-                    limit: 10,
-                    offset: 0
-                })
-            })
-
-            if (!yandexRes.ok) continue
-            const yandexData = await yandexRes.json()
-            const profiles = yandexData.driver_profiles || []
-
-            // All profiles matching by phone
-            const phoneMatches = profiles.filter((p: any) => {
-                const phones: string[] = p.driver_profile.phones || []
-                return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
-            })
-            // Prefer working status — handles "swap" scenario (two profiles same driver)
-            const matched = phoneMatches.find((p: any) => p.driver_profile.work_status !== 'fired') || phoneMatches[0]
-
-            if (matched) {
-                const yandexId = matched.driver_profile.id
-                const driverName = `${matched.driver_profile.first_name || ''} ${matched.driver_profile.last_name || ''}`.trim()
-
-                let driverId = yandexId
-                try {
-                    const crmDriver = await prisma.driver.findFirst({ where: { yandexDriverId: yandexId } })
-                    if (crmDriver) driverId = crmDriver.id
-                } catch { /* keep yandexId as fallback */ }
-
-                await upsertDriverTelegramLinkV1({ contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId })
-
-                console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
-                await notifyDriverLinked(telegramId.toString(), driverName)
-                return NextResponse.json({ success: true, autoLinked: true, driverName, parkName: connection.name || connection.parkId })
-            }
-        } catch (err: any) {
-            console.error(`[Webhook] Auto-link failed for park ${connection.parkId}:`, err.message)
-        }
+    const telegramIdText = String(telegramId).trim()
+    if (!/^\d+$/.test(telegramIdText) || telegramIdText === '0') {
+        return NextResponse.json({ error: 'Invalid telegramId' }, { status: 400 })
+    }
+    const normalizedPhone = normalizePhoneE164(String(phone))
+    if (!normalizedPhone) {
+        return NextResponse.json({ error: 'Invalid phone' }, { status: 400 })
     }
 
-    // 2. Fallback: save as an unlinked message for manual manager review
+    // Telegram contact cards prove ownership only when their immutable
+    // contact.user_id equals the authenticated sender id. Older/manual retry
+    // payloads have no contactUserId and remain unverified, but are still kept
+    // for manager review.
+    const hasContactOwnershipEvidence = contactUserId !== undefined && contactUserId !== null
+    if (hasContactOwnershipEvidence && String(contactUserId).trim() !== telegramIdText) {
+        return NextResponse.json({
+            error: 'CONTACT_OWNER_MISMATCH',
+            message: 'Пожалуйста, отправьте свой контакт.',
+        }, { status: 409 })
+    }
+
+    const observedAt = new Date()
+    await recordBotUserProfileV1({
+        contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
+        telegramId: BigInt(telegramIdText),
+        username,
+        firstName,
+        lastName,
+        // Never replace a previously verified registry phone with an
+        // unverified retry payload. The pending request retains that claim for
+        // operator review without upgrading its trust.
+        phone: hasContactOwnershipEvidence ? normalizedPhone : null,
+        phoneVerified: hasContactOwnershipEvidence,
+        observedAt,
+    })
+
+    // An existing Telegram→Driver mapping is durable local authority. Never
+    // move it because of a newly submitted phone; simply report the existing
+    // link. Creating a new physical-driver link requires the explicit manager
+    // or canonical reconciliation workflow.
+    const existingLink = await prisma.driverTelegram.findUnique({
+        where: { telegramId: BigInt(telegramIdText) },
+        select: { driverId: true, username: true },
+    })
+    if (existingLink?.driverId) {
+        return NextResponse.json({
+            success: true,
+            autoLinked: true,
+            alreadyLinked: true,
+            driverId: existingLink.driverId,
+            driverName: existingLink.username || null,
+        })
+    }
+
+    // A phone alone cannot select one of several park-qualified Driver rows or
+    // override a stable channel owner. Persist the evidence and fail closed to
+    // the manager-link queue; scheduled/manual Fleet reconciliation can refresh
+    // provider data independently.
     await recordPendingBotLinkRequestV1({
         contract: RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1,
-        telegramId: String(telegramId),
-        text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
+        telegramId: telegramIdText,
+        text: `[Запрос привязки] Телефон: ${normalizedPhone}, @${username || 'нет'}`,
     })
 
     // Notify manager: drop a system message into the driver's existing TG chat
-    await notifyManagerPendingLink({ telegramId, username, phone })
+    await notifyManagerPendingLink({ telegramId: telegramIdText, username: username ?? undefined, phone: normalizedPhone })
 
-    return NextResponse.json({ success: true, autoLinked: false, message: 'Pending manual link by manager' })
+    return NextResponse.json({
+        success: true,
+        autoLinked: false,
+        status: 'PENDING_MANAGER_LINK',
+        message: 'Pending manual link by manager',
+    })
 }
 
 // Inject a system message into the driver's TG chat so the manager sees the pending link request
@@ -350,7 +424,7 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
             operation: APPEND_SYSTEM_NOTIFICATION_V1,
             chatId: chat.id,
             channel: 'telegram',
-            content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
+            content: `⚠️ Запрос привязки TG Бота\n\nДля водителя ${userLabel} недостаточно локальных подтверждённых данных для автоматической привязки.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
             externalId: `bot_link_req_${telegramId}_${Date.now()}`,
             sentAt: new Date().toISOString(),
         })
@@ -366,24 +440,6 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
     }
 }
 
-// Called by TelegramLinkClient or TelegramManualLinkClient when manager links a driver
-// This sends a Telegram notification to the driver via the bot API
-export async function notifyDriverLinked(telegramId: string, driverName: string) {
-    try {
-        const message = `✅ Ваш профиль водителя успешно привязан к Telegram!\n\nВодитель: *${driverName}*\n\nТеперь вы можете использовать кнопку «💳 Управление лимитом» в меню бота.`
-        const response = await fetch(`${BOT_API_URL}/send-message`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chatId: telegramId, text: message })
-        })
-        if (!response.ok) {
-            console.error('[notifyDriverLinked] Bot API error:', await response.text())
-        }
-    } catch (err: any) {
-        console.error('[notifyDriverLinked] Error:', err.message)
-    }
-}
-
 async function handleChangeLimit(payload: any) {
     const { telegramId, limitValue } = payload
 
@@ -392,13 +448,19 @@ async function handleChangeLimit(payload: any) {
     }
 
     // 1. Find the driver mapping
+    const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
-        where: { telegramId: BigInt(telegramId) }
+        where: { telegramId: telegramIdBigInt }
     })
 
     if (!mapping) {
         return NextResponse.json({ error: 'NOT_LINKED', message: 'Driver not linked to this Telegram ID' }, { status: 404 })
     }
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
 
     // 2. Use the driver's active park connection
     const connection = mapping.activeParkId
@@ -495,6 +557,11 @@ async function handleChangeLimit(payload: any) {
         }
 
         console.log(`[changeLimit] PUT ${contractorUrl} with balance_limit=${limitValue}`)
+        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (mutationAuthorityFailure) return mutationAuthorityFailure
         const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
             method: 'PUT',
             headers: yandexAuthHeaders,
@@ -582,8 +649,14 @@ async function handleUpdateDriverCar(payload: any) {
         return NextResponse.json({ error: 'Missing telegramId or carId' }, { status: 400 })
     }
 
-    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+    const telegramIdBigInt = BigInt(telegramId)
+    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: telegramIdBigInt } })
     if (!mapping?.driverId) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
 
     const connection = mapping.activeParkId
         ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
@@ -611,6 +684,11 @@ async function handleUpdateDriverCar(payload: any) {
         if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
 
         const putBody = { ...profile, car_id: carId }
+        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (mutationAuthorityFailure) return mutationAuthorityFailure
         const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
             method: 'PUT', headers, body: JSON.stringify(putBody)
         }))
@@ -644,8 +722,9 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 1. Resolve telegram → driver → yandexDriverId
+    const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
-        where: { telegramId: BigInt(telegramId) }
+        where: { telegramId: telegramIdBigInt }
     })
     if (!mapping?.driverId) {
         return NextResponse.json({
@@ -654,6 +733,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             message: 'Профиль не привязан. Нажмите «Мой автомобиль» и поделитесь номером.',
         })
     }
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
         select: { id: true, fullName: true, yandexDriverId: true },
@@ -665,6 +749,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
     if (!driver?.yandexDriverId) {
+        const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (recordAuthorityFailure) return recordAuthorityFailure
         await recordDriverActionV1({
             contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
@@ -721,6 +810,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     // 2b. Enqueue scraper task — Playwright on fleet.yandex.ru (price, map, full addresses)
     let scraperTaskId: string | null = null
     try {
+        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (mutationAuthorityFailure) return mutationAuthorityFailure
         const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -737,6 +831,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         }
         scraperTaskId = json.taskId
     } catch (e: any) {
+        const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (recordAuthorityFailure) return recordAuthorityFailure
         await recordDriverActionV1({
             contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
@@ -755,6 +854,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 3. Audit row in CRM
+    const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (recordAuthorityFailure) return recordAuthorityFailure
     const { action } = await recordDriverActionV1({
         contract: RECORD_DRIVER_ACTION_COMMAND_V1,
         data: {
@@ -786,8 +890,14 @@ async function handleSetActivePark(payload: any) {
     const { telegramId, parkId } = payload
     if (!telegramId || !parkId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
 
-    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+    const telegramIdBigInt = BigInt(telegramId)
+    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: telegramIdBigInt } })
     if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
 
     const park = await getYandexConnectionCredentialsV1(undefined, parkId)
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
@@ -833,6 +943,11 @@ async function handleSetActivePark(payload: any) {
         // Don't block if Yandex check fails — allow the switch
     }
 
+    const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (mutationAuthorityFailure) return mutationAuthorityFailure
     await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
@@ -851,8 +966,22 @@ async function handleGetParkInfo(payload: any) {
 }
 
 async function handlePollDriverAction(payload: any) {
-    const { taskId } = payload || {}
-    if (!taskId) return NextResponse.json({ ok: false, error: 'Missing taskId' }, { status: 400 })
+    const { taskId, telegramId } = payload || {}
+    if (!taskId || !telegramId) {
+        return NextResponse.json({ ok: false, error: 'Missing taskId or telegramId' }, { status: 400 })
+    }
+    const telegramIdBigInt = BigInt(telegramId)
+    const mapping = await prisma.driverTelegram.findFirst({
+        where: { telegramId: telegramIdBigInt },
+    })
+    if (!mapping?.driverId) {
+        return NextResponse.json({ ok: false, error: 'NOT_LINKED' }, { status: 404 })
+    }
+    const authorityFailure = await requireCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId: telegramIdBigInt,
+    })
+    if (authorityFailure) return authorityFailure
 
     let scraperState: any
     try {
@@ -867,6 +996,11 @@ async function handlePollDriverAction(payload: any) {
 
     // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
     if (scraperState.status && scraperState.status !== 'PENDING') {
+        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (mutationAuthorityFailure) return mutationAuthorityFailure
         await mirrorDriverActionResultV1({
             contract: MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1,
             scraperTaskId: taskId,

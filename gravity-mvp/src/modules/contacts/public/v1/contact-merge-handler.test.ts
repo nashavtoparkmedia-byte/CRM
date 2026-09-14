@@ -23,6 +23,11 @@ function source(overrides: Partial<ContactMergeSourceV1> = {}): ContactMergeSour
     displayNameSource: 'channel',
     masterSource: 'chat',
     yandexDriverId: null,
+    mainDriverId: null,
+    mainDriverSelection: 'auto',
+    mainDriverSelectedBy: null,
+    mainDriverSelectedAt: null,
+    primaryPhoneId: 'phone-duplicate',
     notes: 'source notes',
     tags: ['lead'],
     isArchived: false,
@@ -37,6 +42,9 @@ function source(overrides: Partial<ContactMergeSourceV1> = {}): ContactMergeSour
         externalId: 'shared-external',
         displayName: 'Source Telegram',
         reachabilityStatus: 'confirmed',
+        providerAccountId: 'legacy',
+        source: 'auto',
+        phoneId: 'phone-duplicate',
       },
       {
         id: 'identity-move',
@@ -44,23 +52,47 @@ function source(overrides: Partial<ContactMergeSourceV1> = {}): ContactMergeSour
         externalId: 'source-only',
         displayName: null,
         reachabilityStatus: 'unknown',
+        providerAccountId: 'legacy',
+        source: 'auto',
+        phoneId: 'phone-move',
       },
     ],
     chats: [{ id: 'chat-1' }],
     tasks: [{ id: 'task-1' }],
+    calls: [],
+    createdAt: new Date('2025-01-02T00:00:00.000Z'),
+    canonicalPinnedAt: null,
+    doNotMerge: false,
+    customFields: {},
+    driverProfiles: [],
+    driverConfirmations: [],
     ...overrides,
   }
 }
 
 function survivor(overrides: Partial<ContactMergeSurvivorV1> = {}): ContactMergeSurvivorV1 {
-  return {
+  return source({
     id: 'survivor-contact',
+    displayName: 'Survivor Name',
+    notes: null,
+    tags: [],
     yandexDriverId: 'yandex-driver',
+    primaryPhoneId: 'survivor-phone',
     isArchived: false,
-    phones: [{ id: 'survivor-phone', phone: '+70000000001' }],
-    identities: [{ id: 'survivor-identity', channel: 'telegram', externalId: 'shared-external' }],
+    phones: [{
+      id: 'survivor-phone', phone: '+70000000001', isPrimary: true, source: 'manual', isActive: true,
+    }],
+    identities: [{
+      id: 'survivor-identity', channel: 'telegram', externalId: 'shared-external',
+      displayName: null, reachabilityStatus: 'confirmed', providerAccountId: 'legacy', source: 'auto',
+      phoneId: 'survivor-phone',
+    }],
+    chats: [],
+    tasks: [],
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    canonicalPinnedAt: new Date('2025-01-01T00:00:00.000Z'),
     ...overrides,
-  }
+  })
 }
 
 const defaultDriver: ContactMergeDriverV1 = {
@@ -79,8 +111,16 @@ interface HarnessOptions {
   targets?: Record<string, ContactMergeSurvivorV1 | null>
   survivorByYandexDriverId?: ContactMergeSurvivorV1 | null
   driver?: ContactMergeDriverV1 | null
-  completedMerge?: boolean
+  completedMerges?: string[]
   targetDriverId?: string | null
+  automaticEvidence?: {
+    trustedUniqueCurrentPhone: boolean
+    phoneEvidenceRoot: string | null
+    confirmedPersonEvidenceRoots: string[]
+    confirmedPersonKeys?: string[]
+    normalizedVuEvidenceRoots: string[]
+  }
+  fleetEvidenceFence?: () => Promise<void>
   failAt?: string
 }
 
@@ -88,6 +128,10 @@ function makeHarness(options: HarnessOptions = {}) {
   const attempted: RepositoryCall[] = []
   const committed: RepositoryCall[] = []
   const logs: string[] = []
+  const admitOwnershipMutation = vi.fn(async () => undefined)
+  const admitAutomaticMergeEvidenceRead = vi.fn(async () => {
+    await options.fleetEvidenceFence?.()
+  })
   let currentStage: RepositoryCall[] | null = null
 
   async function stage(name: string, ...args: unknown[]): Promise<void> {
@@ -97,13 +141,97 @@ function makeHarness(options: HarnessOptions = {}) {
     if (options.failAt === name) throw new Error(`injected failure: ${name}`)
   }
 
+  const sources = options.sources ?? { 'source-contact': source() }
+  const targets = options.targets ?? { 'target-contact': survivor({ id: 'target-contact' }) }
+  const survivorForDriver = options.survivorByYandexDriverId ?? null
+  const queries: ContactMergeQueryRepositoriesV1 = {
+    contacts: {
+      findSourceContact: vi.fn(async (contactId: string) => sources[contactId]
+        ?? targets[contactId]
+        ?? (survivorForDriver?.id === contactId ? survivorForDriver : null)),
+      findTargetContact: vi.fn(async (contactId: string) => targets[contactId] ?? null),
+      findSurvivorByYandexDriverId: vi.fn(async () => survivorForDriver),
+      hasCompletedMerge: vi.fn(async (sourceId: string, targetId: string) => (
+        options.completedMerges?.includes(`${sourceId}->${targetId}`) ?? false
+      )),
+    },
+    fleet: {
+      findDriverById: vi.fn(async () => options.driver === undefined ? defaultDriver : options.driver),
+    },
+  }
+
   const repositories: ContactMergeTransactionalRepositoriesV1 = {
     contacts: {
+      admitOwnershipMutation,
+      async findSourceContact(contactId) {
+        return queries.contacts.findSourceContact(contactId)
+      },
+      async findTargetContact(contactId) {
+        return queries.contacts.findTargetContact(contactId)
+      },
+      async findSurvivorByYandexDriverId(yandexDriverId) {
+        return queries.contacts.findSurvivorByYandexDriverId(yandexDriverId)
+      },
+      async hasCompletedMerge(sourceId, targetId) {
+        return queries.contacts.hasCompletedMerge(sourceId, targetId)
+      },
       async lockContactPairOrdered(survivorId, mergedId) {
         await stage('contacts.lockContactPairOrdered', survivorId, mergedId)
       },
+      async findLockedMergeLineageNode(contactId) {
+        const contact = sources[contactId]
+          ?? targets[contactId]
+          ?? (survivorForDriver?.id === contactId ? survivorForDriver : null)
+        if (!contact) return null
+        const fields = contact.customFields && typeof contact.customFields === 'object'
+          && !Array.isArray(contact.customFields)
+          ? contact.customFields as Record<string, unknown>
+          : {}
+        return {
+          id: contact.id,
+          isArchived: contact.isArchived,
+          mergedIntoContactId: typeof fields.mergedIntoContactId === 'string'
+            && fields.mergedIntoContactId.trim()
+            ? fields.mergedIntoContactId
+            : null,
+        }
+      },
+      async hasCompletedMergePath(sourceId, targetId) {
+        const adjacency = new Map<string, string[]>()
+        for (const edge of options.completedMerges ?? []) {
+          const separator = edge.indexOf('->')
+          const from = edge.slice(0, separator)
+          const to = edge.slice(separator + 2)
+          adjacency.set(from, [...(adjacency.get(from) ?? []), to])
+        }
+        const pending = [sourceId]
+        const visited = new Set<string>()
+        while (pending.length > 0) {
+          const current = pending.shift()!
+          if (current === targetId) return true
+          if (visited.has(current)) continue
+          visited.add(current)
+          pending.push(...(adjacency.get(current) ?? []))
+        }
+        return false
+      },
+      async deriveAutomaticMergeEvidence() {
+        await stage('contacts.deriveAutomaticMergeEvidence')
+        return options.automaticEvidence ?? {
+          trustedUniqueCurrentPhone: false,
+          phoneEvidenceRoot: null,
+          confirmedPersonEvidenceRoots: [],
+          normalizedVuEvidenceRoots: [],
+        }
+      },
+      async recordAutomaticMergeBlock(leftContactId, rightContactId, reason) {
+        await stage('contacts.recordAutomaticMergeBlock', leftContactId, rightContactId, reason)
+      },
       async linkContactToDriver(input) {
         await stage('contacts.linkContactToDriver', input)
+      },
+      async transferDriverLink(input) {
+        await stage('contacts.transferDriverLink', input)
       },
       async deleteDuplicateIdentities(identityIds) {
         await stage('contacts.deleteDuplicateIdentities', identityIds)
@@ -114,8 +242,17 @@ function makeHarness(options: HarnessOptions = {}) {
       async deleteDuplicatePhones(phoneIds) {
         await stage('contacts.deleteDuplicatePhones', phoneIds)
       },
+      async repointIdentitiesToPhone(oldPhoneId, newPhoneId) {
+        await stage('contacts.repointIdentitiesToPhone', oldPhoneId, newPhoneId)
+      },
       async movePhonesToContact(sourceContactId, targetContactId) {
         await stage('contacts.movePhonesToContact', sourceContactId, targetContactId)
+      },
+      async reconcilePrimaryPhonesAfterMove(sourceContactId, targetContactId) {
+        await stage('contacts.reconcilePrimaryPhonesAfterMove', sourceContactId, targetContactId)
+      },
+      async composeContactState(sourceContactId, targetContactId) {
+        await stage('contacts.composeContactState', sourceContactId, targetContactId)
       },
       async recordMerge(input) {
         await stage('contacts.recordMerge', input)
@@ -124,11 +261,24 @@ function makeHarness(options: HarnessOptions = {}) {
       async archiveContact(contactId) {
         await stage('contacts.archiveContact', contactId)
       },
+      async setMergedRedirect(contactId, survivorId) {
+        await stage('contacts.setMergedRedirect', contactId, survivorId)
+      },
+      async verifyOwnershipPostconditions() {
+        await stage('contacts.verifyOwnershipPostconditions')
+      },
     },
     fleet: {
+      admitAutomaticMergeEvidenceRead,
+      async findDriverById(driverId) {
+        return queries.fleet.findDriverById(driverId)
+      },
       async findDriverIdByYandexDriverId(yandexDriverId) {
         await stage('fleet.findDriverIdByYandexDriverId', yandexDriverId)
         return options.targetDriverId ?? null
+      },
+      async moveDriverProfilesToContact(sourceContactId, targetContactId) {
+        await stage('fleet.moveDriverProfilesToContact', sourceContactId, targetContactId)
       },
     },
     messaging: {
@@ -150,6 +300,11 @@ function makeHarness(options: HarnessOptions = {}) {
         await stage('work.moveTasksToContact', sourceContactId, targetContactId)
       },
     },
+    calling: {
+      async moveCallsToContact(sourceContactId, targetContactId) {
+        await stage('calling.moveCallsToContact', sourceContactId, targetContactId)
+      },
+    },
   }
 
   async function runStaged(operation: () => Promise<void>): Promise<void> {
@@ -164,41 +319,27 @@ function makeHarness(options: HarnessOptions = {}) {
   }
 
   const unitOfWork: ContactMergeUnitOfWorkV1 = {
-    async runSimpleLink(operation) {
-      await runStaged(() => operation({
-        contacts: { linkContactToDriver: repositories.contacts.linkContactToDriver },
-        messaging: {
-          attachUnlinkedContactChatsToDriver:
-            repositories.messaging.attachUnlinkedContactChatsToDriver,
-        },
-      }))
-    },
-    async runMerge(operation) {
-      await runStaged(() => operation(repositories))
+    async run(operation) {
+      let result
+      await runStaged(async () => { result = await operation(repositories) })
+      return result!
     },
   }
 
-  const sources = options.sources ?? { 'source-contact': source() }
-  const targets = options.targets ?? { 'target-contact': survivor({ id: 'target-contact' }) }
-  const queries: ContactMergeQueryRepositoriesV1 = {
-    contacts: {
-      findSourceContact: vi.fn(async (contactId: string) => sources[contactId] ?? null),
-      findTargetContact: vi.fn(async (contactId: string) => targets[contactId] ?? null),
-      findSurvivorByYandexDriverId: vi.fn(async () => options.survivorByYandexDriverId ?? null),
-      hasCompletedMerge: vi.fn(async () => options.completedMerge ?? false),
-    },
-    fleet: {
-      findDriverById: vi.fn(async () => options.driver === undefined ? defaultDriver : options.driver),
-    },
-  }
   const handler = createMergeContactsHandlerV1({
-    queries,
     unitOfWork,
     generateMergeRecordId: () => 'generated-merge-id',
     log: (message) => logs.push(message),
   })
 
-  return { attempted, committed, handler, logs, queries }
+  return {
+    admissions: { contacts: admitOwnershipMutation, fleet: admitAutomaticMergeEvidenceRead },
+    attempted,
+    committed,
+    handler,
+    logs,
+    queries,
+  }
 }
 
 function names(calls: RepositoryCall[]): string[] {
@@ -267,7 +408,28 @@ describe('MergeContactsCommand.v1 contract', () => {
 })
 
 describe('MergeContactsCommand.v1 preconditions', () => {
-  it('preserves driver lookup ordering and exact DRIVER_NOT_FOUND behavior', async () => {
+  it('retires contact-to-driver before opening owner repositories', async () => {
+    const harness = makeHarness()
+
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_driver',
+      contactId: 'source-contact',
+      driverId: 'driver-db-id',
+      mergedBy: 'system',
+    })).rejects.toMatchObject({
+      name: 'MergeError',
+      code: 'DRIVER_PERSON_CONFIRMATION_REQUIRED',
+    })
+    expect(harness.admissions.contacts).not.toHaveBeenCalled()
+    expect(harness.admissions.fleet).not.toHaveBeenCalled()
+    expect(harness.queries.contacts.findSourceContact).not.toHaveBeenCalled()
+    expect(harness.queries.fleet.findDriverById).not.toHaveBeenCalled()
+    expect(harness.attempted).toEqual([])
+    expect(harness.committed).toEqual([])
+  })
+
+  it.skip('preserves driver lookup ordering and exact DRIVER_NOT_FOUND behavior (retired)', async () => {
     const harness = makeHarness({ driver: null })
 
     await expect(harness.handler({
@@ -281,13 +443,13 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       code: 'DRIVER_NOT_FOUND',
       message: 'Driver missing-driver not found',
     })
-    expect(harness.queries.contacts.findSourceContact).toHaveBeenCalledBefore(
-      harness.queries.fleet.findDriverById as ReturnType<typeof vi.fn>,
+    expect(harness.queries.fleet.findDriverById).toHaveBeenCalledBefore(
+      harness.queries.contacts.findSourceContact as ReturnType<typeof vi.fn>,
     )
-    expect(harness.attempted).toEqual([])
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 
-  it('returns the exact already-linked no-op without opening a unit of work', async () => {
+  it.skip('returns the exact already-linked no-op without opening a unit of work (retired)', async () => {
     const harness = makeHarness({
       sources: { 'source-contact': source({ yandexDriverId: 'yandex-driver' }) },
     })
@@ -304,11 +466,11 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       contactId: 'source-contact',
       driverId: 'requested-driver-id',
     })
-    expect(harness.queries.contacts.findSurvivorByYandexDriverId).not.toHaveBeenCalled()
-    expect(harness.attempted).toEqual([])
+    expect(harness.queries.contacts.findSurvivorByYandexDriverId).toHaveBeenCalled()
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 
-  it('preserves contact-to-driver conflict and archive errors', async () => {
+  it.skip('preserves contact-to-driver conflict and archive errors (retired)', async () => {
     const conflict = makeHarness({
       sources: { 'source-contact': source({ yandexDriverId: 'other-yandex-driver' }) },
     })
@@ -332,7 +494,7 @@ describe('MergeContactsCommand.v1 preconditions', () => {
     })).rejects.toMatchObject({ code: 'CONTACT_ARCHIVED' })
   })
 
-  it('preserves contact-to-driver CONTACT_NOT_FOUND and survivor archive guards', async () => {
+  it.skip('preserves contact-to-driver CONTACT_NOT_FOUND and survivor archive guards (retired)', async () => {
     const missingContact = makeHarness({ sources: { 'source-contact': null } })
     await expect(missingContact.handler({
       contract: MERGE_CONTACTS_COMMAND_V1,
@@ -344,7 +506,7 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       code: 'CONTACT_NOT_FOUND',
       message: 'Contact source-contact not found',
     })
-    expect(missingContact.queries.fleet.findDriverById).not.toHaveBeenCalled()
+    expect(missingContact.queries.fleet.findDriverById).toHaveBeenCalled()
 
     const archivedSurvivor = makeHarness({
       survivorByYandexDriverId: survivor({ isArchived: true }),
@@ -359,7 +521,7 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       code: 'SURVIVOR_ARCHIVED',
       message: 'Survivor contact survivor-contact is archived',
     })
-    expect(archivedSurvivor.attempted).toEqual([])
+    expect(names(archivedSurvivor.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 
   it('rejects self merge before any lookup', async () => {
@@ -378,12 +540,16 @@ describe('MergeContactsCommand.v1 preconditions', () => {
     expect(harness.queries.contacts.findSourceContact).not.toHaveBeenCalled()
   })
 
-  it('preserves archived-source idempotency before source-driver and target checks', async () => {
+  it('resolves a one-hop completed merge retry to the active survivor', async () => {
     const harness = makeHarness({
       sources: {
-        'source-contact': source({ isArchived: true, yandexDriverId: 'ignored-driver-link' }),
+        'source-contact': source({
+          isArchived: true,
+          yandexDriverId: 'ignored-driver-link',
+          customFields: { mergedIntoContactId: 'target-contact' },
+        }),
       },
-      completedMerge: true,
+      completedMerges: ['source-contact->target-contact'],
     })
     await expect(harness.handler({
       contract: MERGE_CONTACTS_COMMAND_V1,
@@ -397,11 +563,160 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       sourceId: 'source-contact',
       targetId: 'target-contact',
     })
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('retains a locked direct-ledger retry when a legacy completed merge has no redirect', async () => {
+    const harness = makeHarness({
+      sources: {
+        'source-contact': source({ isArchived: true, customFields: {} }),
+      },
+      completedMerges: ['source-contact->target-contact'],
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'already_merged',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+    })
     expect(harness.queries.contacts.hasCompletedMerge).toHaveBeenCalledWith(
       'source-contact',
       'target-contact',
     )
-    expect(harness.queries.contacts.findTargetContact).not.toHaveBeenCalled()
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('resolves an archived intermediate in a completed merge chain to the active canonical survivor', async () => {
+    const harness = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'b' } }),
+        b: source({ id: 'b', isArchived: true, customFields: { mergedIntoContactId: 'c' } }),
+        c: survivor({ id: 'c', isArchived: false, customFields: {} }),
+      },
+      targets: {},
+      completedMerges: ['a->b', 'b->c'],
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'a',
+      targetId: 'b',
+      mergedBy: 'system:auto-merge',
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'already_merged',
+      sourceId: 'a',
+      targetId: 'c',
+    })
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('resolves the reverse direction of a completed merge-chain retry to the same active survivor', async () => {
+    const harness = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'b' } }),
+        b: source({ id: 'b', isArchived: true, customFields: { mergedIntoContactId: 'c' } }),
+        c: survivor({ id: 'c', isArchived: false, customFields: {} }),
+      },
+      targets: {},
+      completedMerges: ['a->b', 'b->c'],
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'b',
+      targetId: 'a',
+      mergedBy: 'system:auto-merge',
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'already_merged',
+      sourceId: 'b',
+      targetId: 'c',
+    })
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('fails closed on cyclic and broken completed-merge lineages', async () => {
+    const cycle = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'b' } }),
+        b: source({ id: 'b', isArchived: true, customFields: { mergedIntoContactId: 'a' } }),
+      },
+      targets: {},
+    })
+    await expect(cycle.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'a',
+      targetId: 'b',
+      mergedBy: 'system:auto-merge',
+    })).rejects.toMatchObject({ code: 'INVALID_MERGE_STATE' })
+
+    const broken = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'missing' } }),
+        b: survivor({ id: 'b', isArchived: false, customFields: {} }),
+      },
+      targets: {},
+    })
+    await expect(broken.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'a',
+      targetId: 'b',
+      mergedBy: 'system:auto-merge',
+    })).rejects.toMatchObject({ code: 'INVALID_MERGE_STATE' })
+    expect(names(cycle.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+    expect(names(broken.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('fails closed when the locked merge ledger contradicts the current redirect lineage', async () => {
+    const harness = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'c' } }),
+        b: survivor({ id: 'b', isArchived: false, customFields: {} }),
+        c: survivor({ id: 'c', isArchived: false, customFields: {} }),
+      },
+      targets: {},
+      completedMerges: ['a->b'],
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'a',
+      targetId: 'b',
+      mergedBy: 'system:auto-merge',
+    })).rejects.toMatchObject({
+      code: 'INVALID_MERGE_STATE',
+    })
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
+  })
+
+  it('fails closed on an archived redirect with no completed ledger path', async () => {
+    const harness = makeHarness({
+      sources: {
+        a: source({ id: 'a', isArchived: true, customFields: { mergedIntoContactId: 'c' } }),
+        c: survivor({ id: 'c', isArchived: false, customFields: {} }),
+      },
+      targets: {},
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'a',
+      targetId: 'c',
+      mergedBy: 'system:auto-merge',
+    })).rejects.toMatchObject({
+      code: 'INVALID_MERGE_STATE',
+      message: 'Merge redirect a -> c has no completed ledger path',
+    })
+    expect(names(harness.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 
   it('preserves missing-source, missing-target and non-idempotent archived-source errors', async () => {
@@ -431,7 +746,6 @@ describe('MergeContactsCommand.v1 preconditions', () => {
 
     const archivedSource = makeHarness({
       sources: { 'source-contact': source({ isArchived: true }) },
-      completedMerge: false,
     })
     await expect(archivedSource.handler({
       contract: MERGE_CONTACTS_COMMAND_V1,
@@ -443,10 +757,10 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       code: 'CONTACT_ARCHIVED',
       message: 'Source contact source-contact is archived',
     })
-    expect(archivedSource.queries.contacts.findTargetContact).not.toHaveBeenCalled()
+    expect(names(archivedSource.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 
-  it('preserves SOURCE_HAS_DRIVER and target archive guards outside the unit of work', async () => {
+  it('allows the survivor policy to preserve a source driver and still guards archived targets', async () => {
     const linkedSource = makeHarness({
       sources: { 'source-contact': source({ yandexDriverId: 'source-driver' }) },
     })
@@ -456,8 +770,7 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       sourceId: 'source-contact',
       targetId: 'target-contact',
       mergedBy: 'system',
-    })).rejects.toMatchObject({ code: 'SOURCE_HAS_DRIVER' })
-    expect(linkedSource.queries.contacts.findTargetContact).not.toHaveBeenCalled()
+    })).resolves.toMatchObject({ status: 'contact_merged', survivorId: 'target-contact' })
 
     const archivedTarget = makeHarness({
       targets: { 'target-contact': survivor({ id: 'target-contact', isArchived: true }) },
@@ -469,12 +782,12 @@ describe('MergeContactsCommand.v1 preconditions', () => {
       targetId: 'target-contact',
       mergedBy: 'system',
     })).rejects.toMatchObject({ code: 'SURVIVOR_ARCHIVED' })
-    expect(archivedTarget.attempted).toEqual([])
+    expect(names(archivedTarget.attempted)).toEqual(['contacts.lockContactPairOrdered'])
   })
 })
 
 describe('MergeContactsCommand.v1 ordered unit of work', () => {
-  it('executes a simple link in exact order and logs only after commit', async () => {
+  it.skip('executes a simple link in exact order and logs only after commit (retired)', async () => {
     const harness = makeHarness()
     const result = await harness.handler({
       contract: MERGE_CONTACTS_COMMAND_V1,
@@ -491,10 +804,12 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       driverId: 'driver-db-id',
     })
     expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
       'contacts.linkContactToDriver',
       'messaging.attachUnlinkedContactChatsToDriver',
+      'contacts.verifyOwnershipPostconditions',
     ])
-    expect(harness.committed[0].args[0]).toEqual({
+    expect(harness.committed[1].args[0]).toEqual({
       contactId: 'source-contact',
       driverYandexId: 'yandex-driver',
       driverFullName: 'Driver Name',
@@ -505,7 +820,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     ])
   })
 
-  it('skips the Messaging write for a simple link whose source has no chats', async () => {
+  it.skip('skips the Messaging write for a simple link whose source has no chats (retired)', async () => {
     const harness = makeHarness({
       sources: { 'source-contact': source({ chats: [] }) },
     })
@@ -516,10 +831,14 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       driverId: 'driver-db-id',
       mergedBy: 'system',
     })
-    expect(names(harness.committed)).toEqual(['contacts.linkContactToDriver'])
+    expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.linkContactToDriver',
+      'contacts.verifyOwnershipPostconditions',
+    ])
   })
 
-  it('executes driver merge statements, deduplication and snapshot in legacy order', async () => {
+  it.skip('executes driver merge statements, deduplication and snapshot in legacy order (retired)', async () => {
     const merged = source()
     const harness = makeHarness({
       sources: { 'source-contact': merged },
@@ -538,39 +857,57 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'messaging.remapChatsToIdentity',
       'contacts.deleteDuplicateIdentities',
       'contacts.moveIdentitiesToContact',
+      'contacts.repointIdentitiesToPhone',
       'contacts.deleteDuplicatePhones',
       'contacts.movePhonesToContact',
+      'contacts.reconcilePrimaryPhonesAfterMove',
+      'contacts.composeContactState',
       'messaging.moveChatsToDriverContact',
       'messaging.attachUnlinkedContactChatsToDriver',
       'work.moveTasksToContact',
+      'calling.moveCallsToContact',
+      'fleet.moveDriverProfilesToContact',
       'contacts.recordMerge',
       'contacts.archiveContact',
+      'contacts.setMergedRedirect',
+      'contacts.verifyOwnershipPostconditions',
     ])
-    expect(harness.committed[0].args).toEqual(['survivor-contact', 'source-contact'])
+    expect(harness.committed[0].args).toEqual(['source-contact', 'survivor-contact'])
     const record = harness.committed.find((call) => call.name === 'contacts.recordMerge')
-    expect(record?.args[0]).toEqual({
+    expect(record?.args[0]).toEqual(expect.objectContaining({
       id: 'generated-merge-id',
       survivorId: 'survivor-contact',
       mergedId: 'source-contact',
       mergedBy: 'manager-1',
       reason: 'yandex_link',
       driverYandexId: 'yandex-driver',
-      snapshotBefore: {
+      snapshotBefore: expect.objectContaining({
         contact: {
           id: merged.id,
           displayName: merged.displayName,
           displayNameSource: merged.displayNameSource,
           masterSource: merged.masterSource,
           yandexDriverId: merged.yandexDriverId,
+          mainDriverId: merged.mainDriverId,
+          mainDriverSelection: merged.mainDriverSelection,
+          mainDriverSelectedBy: merged.mainDriverSelectedBy,
+          mainDriverSelectedAt: merged.mainDriverSelectedAt,
+          primaryPhoneId: merged.primaryPhoneId,
           notes: merged.notes,
           tags: merged.tags,
+          doNotMerge: merged.doNotMerge,
+          customFields: merged.customFields,
         },
         phones: merged.phones,
         identities: merged.identities,
         chatIds: ['chat-1'],
         taskIds: ['task-1'],
-      },
-    })
+        callIds: [],
+        driverProfileIds: [],
+      }),
+      automated: false,
+      evidenceRoots: [],
+    }))
     expect(result).toMatchObject({
       contract: MERGE_CONTACTS_RESULT_V1,
       status: 'merged',
@@ -597,15 +934,22 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'messaging.remapChatsToIdentity',
       'contacts.deleteDuplicateIdentities',
       'contacts.moveIdentitiesToContact',
+      'contacts.repointIdentitiesToPhone',
       'contacts.deleteDuplicatePhones',
       'contacts.movePhonesToContact',
+      'contacts.reconcilePrimaryPhonesAfterMove',
+      'contacts.composeContactState',
       'fleet.findDriverIdByYandexDriverId',
       'messaging.moveChatsToDriverContact',
       'work.moveTasksToContact',
+      'calling.moveCallsToContact',
+      'fleet.moveDriverProfilesToContact',
       'contacts.recordMerge',
       'contacts.archiveContact',
+      'contacts.setMergedRedirect',
+      'contacts.verifyOwnershipPostconditions',
     ])
-    expect(harness.committed[7].args).toEqual([
+    expect(harness.committed[10].args).toEqual([
       'source-contact',
       'target-contact',
       'target-driver-db-id',
@@ -633,6 +977,38 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     expect(names(harness.committed)).not.toContain('fleet.findDriverIdByYandexDriverId')
   })
 
+  it('moves losing Driver profiles through the Fleet owner and preserves them in recovery', async () => {
+    const harness = makeHarness({
+      sources: {
+        'source-contact': source({
+          yandexDriverId: 'source-yandex-driver',
+          driverProfiles: [{ id: 'source-driver-profile', personResolutionStatus: 'operator_confirmed' }],
+        }),
+      },
+      targets: {
+        'target-contact': survivor({ id: 'target-contact', yandexDriverId: null }),
+      },
+      targetDriverId: 'source-driver-db-id',
+    })
+    await harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'manager',
+    })
+
+    expect(harness.committed.find(call => call.name === 'fleet.moveDriverProfilesToContact')?.args)
+      .toEqual(['source-contact', 'target-contact'])
+    expect(harness.committed.find(call => call.name === 'fleet.findDriverIdByYandexDriverId')?.args)
+      .toEqual(['source-yandex-driver'])
+    expect(harness.committed.find(call => call.name === 'contacts.recordMerge')?.args[0])
+      .toEqual(expect.objectContaining({
+        driverYandexId: 'source-yandex-driver',
+        snapshotBefore: expect.objectContaining({ driverProfileIds: ['source-driver-profile'] }),
+      }))
+  })
+
   it('keeps the in-transaction Fleet lookup and contact-only move when the linked driver is missing', async () => {
     const harness = makeHarness({ targetDriverId: null })
     await harness.handler({
@@ -651,48 +1027,491 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     )
   })
 
+  it('revalidates automatic merge eligibility after locking and commits a substantive phone-only block', async () => {
+    const harness = makeHarness({
+      sources: { 'source-contact': source({ notes: 'left business state' }) },
+      targets: { 'target-contact': survivor({ id: 'target-contact', tags: ['right-business-state'] }) },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'provider-phone:+79990000000',
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'substantive_phone_only',
+    })
+    expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.deriveAutomaticMergeEvidence',
+      'contacts.recordAutomaticMergeBlock',
+    ])
+    expect(harness.committed[2].args).toEqual([
+      'source-contact',
+      'target-contact',
+      'substantive_phone_only',
+    ])
+  })
+
+  it('passes persisted manual identity sources into the locked automatic-merge policy', async () => {
+    const manualDisplayIdentity = source({
+      displayNameSource: 'manual',
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const manualMasterIdentity = survivor({
+      id: 'target-contact',
+      masterSource: 'manual',
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const harness = makeHarness({
+      sources: { 'source-contact': manualDisplayIdentity },
+      targets: { 'target-contact': manualMasterIdentity },
+      automaticEvidence: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'phone:+79990000000:provider:left|provider:right',
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })
+
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'caller-supplied-root',
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toMatchObject({
+      status: 'automatic_merge_blocked',
+      reason: 'business_state_collision',
+    })
+    expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.deriveAutomaticMergeEvidence',
+      'contacts.recordAutomaticMergeBlock',
+    ])
+  })
+
+  it('does not trust fabricated automatic evidence after the ownership lock', async () => {
+    const shell = source({
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const otherShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const harness = makeHarness({
+      sources: { 'source-contact': shell },
+      targets: { 'target-contact': otherShell },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'fabricated-root',
+        confirmedPersonEvidenceRoots: ['fabricated-confirmation'],
+        normalizedVuEvidenceRoots: ['fabricated-vu'],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'insufficient_evidence',
+    })
+    expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.deriveAutomaticMergeEvidence',
+      'contacts.recordAutomaticMergeBlock',
+    ])
+    expect(names(harness.attempted)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.deriveAutomaticMergeEvidence',
+      'contacts.recordAutomaticMergeBlock',
+    ])
+  })
+
+  it('commits the automatic block audit without verifying unchanged ownership state', async () => {
+    const shell = source({
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const otherShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const harness = makeHarness({
+      sources: { 'source-contact': shell },
+      targets: { 'target-contact': otherShell },
+      // Models a pre-existing ownership violation that would make the verifier
+      // fail even though this path changes only the automatic-block audit.
+      failAt: 'contacts.verifyOwnershipPostconditions',
+    })
+
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'caller-only-evidence',
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'insufficient_evidence',
+    })
+    expect(names(harness.committed)).toEqual([
+      'contacts.lockContactPairOrdered',
+      'contacts.deriveAutomaticMergeEvidence',
+      'contacts.recordAutomaticMergeBlock',
+    ])
+    expect(names(harness.attempted)).not.toContain('contacts.verifyOwnershipPostconditions')
+  })
+
+  it('persists a policy block when one Contact has an extra confirmed-person key', async () => {
+    const harness = makeHarness({
+      sources: {
+        'source-contact': source({
+          driverConfirmations: [{ profileClusterKey: 'person-X', status: 'confirmed' }],
+        }),
+      },
+      targets: {
+        'target-contact': survivor({
+          id: 'target-contact',
+          driverConfirmations: [
+            { profileClusterKey: 'person-X', status: 'confirmed' },
+            { profileClusterKey: 'person-Y', status: 'confirmed' },
+          ],
+        }),
+      },
+      automaticEvidence: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'phone:shared',
+        confirmedPersonEvidenceRoots: ['confirmed-person:person-X:left|right'],
+        confirmedPersonKeys: ['person-X'],
+        normalizedVuEvidenceRoots: [],
+      },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'confirmed_person_key_mismatch',
+    })
+    expect(harness.committed.at(-1)).toEqual({
+      name: 'contacts.recordAutomaticMergeBlock',
+      args: ['source-contact', 'target-contact', 'confirmed_person_key_mismatch'],
+    })
+    expect(names(harness.attempted)).not.toContain('contacts.verifyOwnershipPostconditions')
+  })
+
+  it('persists a hard-conflict block for current shared phone evidence', async () => {
+    const harness = makeHarness({
+      sources: {
+        'source-contact': source({
+          customFields: {
+            phoneEvidenceByPhoneId: {
+              'phone-duplicate': { lifecycle: 'current', resolutionState: 'shared' },
+            },
+          },
+          driverConfirmations: [{ profileClusterKey: 'person-X', status: 'confirmed' }],
+        }),
+      },
+      targets: {
+        'target-contact': survivor({
+          id: 'target-contact',
+          driverConfirmations: [{ profileClusterKey: 'person-X', status: 'confirmed' }],
+        }),
+      },
+      automaticEvidence: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'phone:shared',
+        confirmedPersonEvidenceRoots: ['confirmed-person:person-X:left|right'],
+        confirmedPersonKeys: ['person-X'],
+        normalizedVuEvidenceRoots: [],
+      },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'hard_conflict',
+    })
+    expect(harness.committed.at(-1)).toEqual({
+      name: 'contacts.recordAutomaticMergeBlock',
+      args: ['source-contact', 'target-contact', 'hard_conflict'],
+    })
+    expect(names(harness.attempted)).not.toContain('contacts.verifyOwnershipPostconditions')
+  })
+
+  it('waits for FLT1 before CNT1 and observes a Fleet conflict published during the wait', async () => {
+    let markFenceEntered!: () => void
+    let releaseFleetMutation!: () => void
+    const fenceEntered = new Promise<void>(resolve => { markFenceEntered = resolve })
+    const fleetMutationCommitted = new Promise<void>(resolve => { releaseFleetMutation = resolve })
+    const fleetLinkedContact = source({
+      chats: [], tasks: [], calls: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+      driverProfiles: [{ id: 'driver-profile', personResolutionStatus: 'vu_observed' }],
+      driverConfirmations: [],
+    })
+    const channelShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+      mainDriverId: null, canonicalPinnedAt: null, driverProfiles: [], driverConfirmations: [],
+    })
+    const harness = makeHarness({
+      sources: { 'source-contact': fleetLinkedContact },
+      targets: { 'target-contact': channelShell },
+      automaticEvidence: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'phone:+79990000000:provider:left|provider:right',
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+      fleetEvidenceFence: async () => {
+        markFenceEntered()
+        await fleetMutationCommitted
+      },
+    })
+
+    const result = harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })
+    await fenceEntered
+    expect(harness.admissions.contacts).not.toHaveBeenCalled()
+
+    fleetLinkedContact.driverProfiles[0].personResolutionStatus = 'conflict'
+    releaseFleetMutation()
+
+    await expect(result).resolves.toMatchObject({
+      status: 'automatic_merge_blocked',
+      reason: 'hard_conflict',
+    })
+    expect(harness.admissions.fleet.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.admissions.contacts.mock.invocationCallOrder[0])
+    expect(harness.committed.at(-1)).toEqual({
+      name: 'contacts.recordAutomaticMergeBlock',
+      args: ['source-contact', 'target-contact', 'hard_conflict'],
+    })
+  })
+
+  it('persists a block for conflicting substantive notes instead of overwriting one side', async () => {
+    const harness = makeHarness({
+      sources: {
+        'source-contact': source({
+          notes: 'left operational note',
+          driverConfirmations: [{ profileClusterKey: 'person-X', status: 'confirmed' }],
+        }),
+      },
+      targets: {
+        'target-contact': survivor({
+          id: 'target-contact',
+          notes: 'right operational note',
+          driverConfirmations: [{ profileClusterKey: 'person-X', status: 'confirmed' }],
+        }),
+      },
+      automaticEvidence: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'phone:shared',
+        confirmedPersonEvidenceRoots: ['confirmed-person:person-X:left|right'],
+        confirmedPersonKeys: ['person-X'],
+        normalizedVuEvidenceRoots: [],
+      },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toEqual({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source-contact',
+      rightContactId: 'target-contact',
+      reason: 'business_state_collision',
+    })
+    expect(harness.committed.at(-1)).toEqual({
+      name: 'contacts.recordAutomaticMergeBlock',
+      args: ['source-contact', 'target-contact', 'business_state_collision'],
+    })
+    expect(names(harness.attempted)).not.toContain('contacts.verifyOwnershipPostconditions')
+  })
+
+  it('uses persisted locked evidence for the approved channel-shell merge', async () => {
+    const shell = source({
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const otherShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const persistedEvidence = {
+      trustedUniqueCurrentPhone: true,
+      phoneEvidenceRoot: 'phone:+79990000000:provider:left|provider:right',
+      confirmedPersonEvidenceRoots: [],
+      normalizedVuEvidenceRoots: [],
+    }
+    const harness = makeHarness({
+      sources: { 'source-contact': shell },
+      targets: { 'target-contact': otherShell },
+      automaticEvidence: persistedEvidence,
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toMatchObject({ status: 'contact_merged' })
+    expect(harness.committed.find(call => call.name === 'contacts.recordMerge')?.args[0])
+      .toEqual(expect.objectContaining({ automated: true, evidenceRoots: [persistedEvidence.phoneEvidenceRoot] }))
+  })
+
   const simpleLinkSequence = [
+    'contacts.lockContactPairOrdered',
     'contacts.linkContactToDriver',
     'messaging.attachUnlinkedContactChatsToDriver',
+    'contacts.verifyOwnershipPostconditions',
   ]
   const driverMergeSequence = [
     'contacts.lockContactPairOrdered',
     'messaging.remapChatsToIdentity',
     'contacts.deleteDuplicateIdentities',
     'contacts.moveIdentitiesToContact',
+    'contacts.repointIdentitiesToPhone',
     'contacts.deleteDuplicatePhones',
     'contacts.movePhonesToContact',
+    'contacts.reconcilePrimaryPhonesAfterMove',
+    'contacts.composeContactState',
     'messaging.moveChatsToDriverContact',
     'messaging.attachUnlinkedContactChatsToDriver',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
+    'contacts.setMergedRedirect',
+    'contacts.verifyOwnershipPostconditions',
   ]
   const manualMergeWithDriverSequence = [
     'contacts.lockContactPairOrdered',
     'messaging.remapChatsToIdentity',
     'contacts.deleteDuplicateIdentities',
     'contacts.moveIdentitiesToContact',
+    'contacts.repointIdentitiesToPhone',
     'contacts.deleteDuplicatePhones',
     'contacts.movePhonesToContact',
+    'contacts.reconcilePrimaryPhonesAfterMove',
+    'contacts.composeContactState',
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToDriverContact',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
+    'contacts.setMergedRedirect',
+    'contacts.verifyOwnershipPostconditions',
   ]
   const manualMergeWithoutDriverSequence = [
     'contacts.lockContactPairOrdered',
     'messaging.remapChatsToIdentity',
     'contacts.deleteDuplicateIdentities',
     'contacts.moveIdentitiesToContact',
+    'contacts.repointIdentitiesToPhone',
     'contacts.deleteDuplicatePhones',
     'contacts.movePhonesToContact',
+    'contacts.reconcilePrimaryPhonesAfterMove',
+    'contacts.composeContactState',
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToContact',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
+    'contacts.setMergedRedirect',
+    'contacts.verifyOwnershipPostconditions',
   ]
   const failureScenarios: Array<{
     flow: string
@@ -749,13 +1568,15 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       sequence: manualMergeWithoutDriverSequence,
     },
   ]
-  const failureCases = failureScenarios.flatMap((scenario) =>
+  const failureCases = failureScenarios
+    .filter(scenario => scenario.command.operation === 'contact_to_contact')
+    .flatMap((scenario) =>
     scenario.sequence.map((failAt, index) => ({
       ...scenario,
       failAt,
       expectedAttemptedPrefix: scenario.sequence.slice(0, index + 1),
     })),
-  )
+    )
 
   it.each(failureCases)(
     '$flow rolls back when $failAt fails',

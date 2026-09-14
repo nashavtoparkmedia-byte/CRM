@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ContactMergeService, MergeError } from '@/lib/ContactMergeService'
+import {
+  getIntegrationAdminPrincipal,
+  isExactSameOriginMutationRequest,
+} from '@/modules/identity-access/public/v1'
 
 /**
  * POST /api/contacts/:sourceId/merge-to/:targetId
@@ -7,26 +11,26 @@ import { ContactMergeService, MergeError } from '@/lib/ContactMergeService'
  * Merge source contact INTO target contact (contact-to-contact).
  * Source is archived. Target becomes survivor.
  *
- * Body (optional): { mergedBy?: string }
+ * The audit actor is derived from the verified integration-admin session.
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; targetId: string }> },
 ) {
-  const { id: sourceId, targetId } = await params
-
-  let mergedBy = 'system'
-  try {
-    const body = await req.json()
-    if (body.mergedBy) mergedBy = body.mergedBy
-  } catch {
-    // No body is fine — mergedBy defaults to 'system'
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  const principal = await getIntegrationAdminPrincipal()
+  if (!principal) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const { id: sourceId, targetId } = await params
+
   try {
-    const result = await ContactMergeService.mergeContactToContact(sourceId, targetId, mergedBy)
+    const result = await ContactMergeService.mergeContactToContact(sourceId, targetId, principal.id)
     return NextResponse.json(result)
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err instanceof MergeError) {
       const statusMap: Record<string, number> = {
         CONTACT_NOT_FOUND: 404,

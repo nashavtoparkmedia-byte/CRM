@@ -17,7 +17,7 @@ check('handler is implementation neutral', !/(prisma|next\/|@\/lib|@\/app)/i.tes
 check('write is isolated in Messaging adapter', adapter.includes('prisma.message.create') && !/prisma\.message\.create/.test(consumer), 'foreign write remains')
 check('fixed system semantics retained', ["direction: 'system'", "type: 'system'", "status: 'sent'"].every((value) => adapter.includes(value)), 'fixed fields drifted')
 check('bot invokes SendMessage v1', consumer.includes('SEND_MESSAGE_COMMAND_V1') && consumer.includes('APPEND_SYSTEM_NOTIFICATION_V1') && consumer.includes('sendMessageV1({'), 'owner command absent')
-check('notification text retained', ['Запрос привязки TG Бота', 'не найден в Яндекс Флит', 'Привяжите вручную'].every((value) => consumer.includes(value)), 'notification content drifted')
+check('notification text retained', ['Запрос привязки TG Бота', 'недостаточно локальных подтверждённых данных', 'Привяжите вручную'].every((value) => consumer.includes(value)), 'notification content drifted')
 check('external id retained', consumer.includes('`bot_link_req_${telegramId}_${Date.now()}`'), 'external id drifted')
 check('fresh sent instant retained', consumer.includes('sentAt: new Date().toISOString()'), 'sentAt drifted')
 check('message precedes conversation update', consumer.indexOf('await sendMessageV1') < consumer.indexOf('await updateConversationV1'), 'operation order drifted')
@@ -25,7 +25,7 @@ check('nonblocking outer catch retained', consumer.includes("console.error('[not
 check('later neighboring Chat migration remains explicit', consumer.includes('UPDATE_CONVERSATION_COMMAND_V1') && consumer.includes('updateConversationV1({'), 'later neighboring migration absent')
 check('SendMessage command predeclared', messaging.commands.includes('SendMessageCommand.v1'), 'manifest command absent')
 check('Platform Messaging dependency pre-approved', platform.allowed_dependencies.some((item) => item.context === 'messaging' && item.surface === 'messaging.public'), 'approved dependency absent')
-check('secret references unchanged in kind', consumer.includes('process.env.BOT_CRM_SECRET') && consumer.includes('process.env.BOT_API_URL'), 'secret reference drifted')
+check('authenticated ingress secret retained without raw Bot API delivery', consumer.includes('process.env.BOT_CRM_SECRET') && !/BOT_API_URL|notifyDriverLinked/.test(consumer), 'secret or raw delivery boundary drifted')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

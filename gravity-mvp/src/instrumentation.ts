@@ -50,6 +50,49 @@ export async function register() {
         })
     }
 
+    // Messaging owns the outbound-send entry points while Platform Shell owns
+    // the cross-owner ContactIdentity/account/transport composition. Bind the
+    // narrow proof callback without introducing a Messaging -> Platform Shell
+    // dependency cycle.
+    try {
+        const [messaging, platform] = await Promise.all([
+            import('@/modules/messaging/public/v1'),
+            import('@/modules/platform-shell/public/v1'),
+        ])
+        messaging.registerOutboundConversationPreparerV1(
+            platform.prepareOutboundConversationV1,
+        )
+        opsLog('info', 'outbound_conversation_preparer_registered', {
+            operation: 'instrumentation',
+        })
+    } catch (err: unknown) {
+        opsLog('error', 'outbound_conversation_preparer_registration_failed', {
+            operation: 'instrumentation',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+
+    // Fleet owns synchronization and its SyncStatus writes; Platform Shell
+    // supplies only the cross-owner reconciliation composition. The Fleet
+    // runtime fails closed if this explicit bootstrap binding is unavailable.
+    try {
+        const [fleet, platform] = await Promise.all([
+            import('@/modules/fleet-operations/public/v1'),
+            import('@/modules/platform-shell/public/v1'),
+        ])
+        fleet.registerYandexFleetReconciliationRunnerV1(
+            platform.reconcileYandexFleetWithAutomaticMergeV1,
+        )
+        opsLog('info', 'yandex_fleet_reconciliation_runner_registered', {
+            operation: 'instrumentation',
+        })
+    } catch (err: unknown) {
+        opsLog('error', 'yandex_fleet_reconciliation_runner_registration_failed', {
+            operation: 'instrumentation',
+            error: err instanceof Error ? err.message : String(err),
+        })
+    }
+
     // Delay initialization to let DB connection pool warm up
     setTimeout(async () => {
         // ── Configuration validation ────────────────────────────────────
