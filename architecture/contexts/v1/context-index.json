@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "5805539ad1c7a9f1c922045cca7f7b524530dc68aed3c8fccb98e5cf5d57673d"
+      "sha256": "c8e1b1820f618f3d46111a2dc346ae5ee665c59f364ef3920f89abd260e07f83"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "4f53b2735eb28e3b995c3c4df3c67a4c7e028c6d0d0df15ffdd13b830834cd4f"
+      "sha256": "5ef9477bd456fe770fee72dbdab001bfe608c720b51ce1d0a5aff903c215623f"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "094156f5b3adcc8607e1b87839f925a4b50ae414d20b42cf127b013bee0e4267"
+      "sha256": "99a723235087bbfe02b3788b045fdd250698b92465b283d31b2e28a02071394f"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
