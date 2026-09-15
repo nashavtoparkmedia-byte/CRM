@@ -10,7 +10,6 @@ function mainMenu(ctx) {
     return ctx.reply(
         'Выберите действие:',
         Markup.keyboard([
-            ['💰 Компенсация наличных'],
             ['🛠 Поддержка'],
             ['📊 Опрос качества'],
             ['📖 Информация'],
@@ -31,11 +30,6 @@ async function handleMenu(ctx, surveyHandler) {
     logger.info(`Menu action: "${text}" from user: ${ctx.from.id}`);
 
     switch (text) {
-        // Eligibility, the order list and every refusal come from the CRM;
-        // the scene only renders what it is told.
-        case '💰 Компенсация наличных':
-            await ctx.scene.enter('compensation');
-            break;
         case '🛠 Поддержка':
             await ctx.reply('🧑‍💻 *Техподдержка*\n\nНапишите нам: @yokopark\nРаботаем 24/7', { parse_mode: 'Markdown' });
             break;

@@ -14,7 +14,7 @@ import { queryCurrentUserV1 } from '@/modules/identity-access/public/v1/identity
 export interface CompensationApplicationView {
     applicationId: string
     status: string
-    canonicalContactId: string
+    boundContactIds: string[]
     externalParkId: string
     externalOrderId: string
     shortOrderId: string | null
@@ -39,7 +39,7 @@ export async function listCompensationApplications(): Promise<CompensationApplic
     return rows.map((row) => ({
         applicationId: row.applicationId,
         status: row.status,
-        canonicalContactId: row.canonicalContactId,
+        boundContactIds: row.boundContactIds,
         externalParkId: row.externalParkId,
         externalOrderId: row.externalOrderId,
         shortOrderId: row.shortOrderIdDisplay,

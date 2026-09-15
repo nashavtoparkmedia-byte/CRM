@@ -4,12 +4,6 @@
   "milestone": "YOKO-CASH-COMPENSATION-TELEGRAM-PILOT",
   "amendments": [
     {
-      "context": "contacts",
-      "add_owned_infrastructure_state": [
-        "gravity-mvp/prisma/schema.prisma:TelegramIdentityReview"
-      ]
-    },
-    {
       "context": "fleet_operations",
       "add_owned_infrastructure_state": [
         "gravity-mvp/prisma/schema.prisma:CompensationCashOrder",

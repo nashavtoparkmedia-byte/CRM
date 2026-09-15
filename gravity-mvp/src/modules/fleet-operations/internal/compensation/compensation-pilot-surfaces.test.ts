@@ -19,7 +19,7 @@ const REPO = path.resolve(__dirname, '..', '..', '..', '..', '..', '..')
 const read = (relative: string) => readFileSync(path.join(REPO, relative), 'utf8')
 
 const SCENE = read('tg-bot/src/handlers/compensation.js')
-const MENU = read('tg-bot/src/handlers/menu.js')
+const MENU = read('tg-bot/src/handlers/start.js')
 const BOT = read('tg-bot/src/bot.js')
 const ROUTE = read('gravity-mvp/src/app/api/webhooks/bot/route.ts')
 const MANAGER_ACTIONS = read('gravity-mvp/src/app/compensation/actions.ts')
@@ -31,6 +31,13 @@ describe('the telegram scene is reachable and registered', () => {
         expect(MENU).toContain("ctx.scene.enter('compensation')")
     })
 
+    it('interrupts any active scene or connection mode, so the entry works from every state', () => {
+        // Without this, an abandoned compensation step or the connection flow
+        // swallows the tap before the main-menu fallback ever sees it.
+        const staticButtons = BOT.slice(BOT.indexOf('const staticButtons = ['), BOT.indexOf('];', BOT.indexOf('const staticButtons = [')))
+        expect(staticButtons).toContain("'💰 Компенсация наличных'")
+    })
+
     it('is registered on the bot stage', () => {
         expect(BOT).toContain("require('./handlers/compensation')")
         expect(BOT).toContain('compensationScene')
@@ -40,6 +47,16 @@ describe('the telegram scene is reachable and registered', () => {
 describe('the telegram scene calls the backend for every decision', () => {
     it('asks the CRM for the section rather than building a list itself', () => {
         expect(SCENE).toContain("callCRM('compensation_section'")
+    })
+
+    it('binds both calls to the receiving bot account, as every bot Driver action does', () => {
+        expect(SCENE).toContain("require('../services/exactTelegramActionBinding')")
+        expect(SCENE.match(/\.\.\.exactTelegramActionBinding\(ctx\)/g) ?? []).toHaveLength(2)
+    })
+
+    it('tells a driver whose chat authority was refused something other than "share your number"', () => {
+        expect(SCENE).toContain('error.status === 409')
+        expect(SCENE).toContain('AUTHORITY_REFUSED_TEXT')
     })
 
     it('submits through the CRM with the full evidence payload', () => {
@@ -64,10 +81,11 @@ describe('the telegram scene calls the backend for every decision', () => {
 
     it('renders every refusal the backend can return', () => {
         for (const refusal of [
-            'identity_not_proven', 'not_self_employed', 'self_employment_unknown',
+            'identity_not_proven', 'identity_needs_review', 'identity_busy',
+            'not_self_employed', 'self_employment_unknown',
             'outside_first_calendar_month', 'support_not_confirmed', 'attachment_missing',
             'claim_above_pilot_cap', 'order_not_in_catalogue', 'order_already_claimed',
-            'budget_exhausted',
+            'budget_exhausted', 'active_pending_exists', 'submission_window_closed',
         ]) {
             expect(SCENE).toContain(refusal)
         }
@@ -116,6 +134,14 @@ describe('the webhook routes those actions to the service', () => {
         expect(ROUTE).toContain("from '@/modules/fleet-operations/public/v1'")
     })
 
+    it('proves the person through current Telegram Driver authority and writes no link', () => {
+        const block = ROUTE.slice(ROUTE.indexOf('// ── Cash compensation pilot'), ROUTE.indexOf('// Handle a phone submitted through the driver bot'))
+        expect(block).toContain('resolveCurrentBotDriverAuthority(payload')
+        expect(block).toContain('contactId: authority.contactId')
+        expect(block).not.toMatch(/driverTelegram\.(create|update|upsert|delete)/)
+        expect(block).not.toMatch(/phone|BotUserRegistry|botUserRegistry|fetch\(/)
+    })
+
     it('refuses a submit with no idempotency key instead of inventing one', () => {
         // Inventing a key would turn a retried tap into a second application.
         expect(ROUTE).toContain("Missing idempotencyKey")
@@ -151,7 +177,7 @@ describe('the manager screen acts only through the service', () => {
 
     it('shows the person, park, order, both amounts and the attachment', () => {
         for (const field of [
-            'canonicalContactId', 'externalParkId', 'externalOrderId',
+            'boundContactIds', 'externalParkId', 'externalOrderId',
             'requestedKopecks', 'verifiedKopecks', 'attachmentFileId',
         ]) {
             expect(MANAGER_ACTIONS).toContain(field)

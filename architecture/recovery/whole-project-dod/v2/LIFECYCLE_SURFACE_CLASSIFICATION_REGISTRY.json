@@ -394,16 +394,6 @@
       "source_sha256": "d580311706422564f49a7f6a98d64fbb46108c7e0249deb1bcfe34a3f1a1bf11"
     },
     {
-      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/DriverMatchService.ts",
-      "lifecycle": "DEAD_HISTORICAL",
-      "disposition": "DEAD_HISTORICAL",
-      "production_capability": "NONE",
-      "rationale": "Exact immutable source-shaped file retained only inside the sealed 20260808 production-provenance snapshot. The snapshot manifest, rather than this archived byte copy, governs lineage; classification grants no runtime, deployment, migration, or write authority.",
-      "classification_artifact": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/manifest.json",
-      "functional_owner": "architecture_recovery_evidence",
-      "source_sha256": "abdc925ab88d0432b6fe8745ea1aa4131ed0aa333640b2a5f7ca2e639cafba8b"
-    },
-    {
       "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/botDriverResolver.ts",
       "lifecycle": "DEAD_HISTORICAL",
       "disposition": "DEAD_HISTORICAL",
@@ -422,6 +412,16 @@
       "classification_artifact": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/manifest.json",
       "functional_owner": "architecture_recovery_evidence",
       "source_sha256": "ec9f73ecfd8f4805f58b96a97ce3ad7ec4f05c19be3bac03014614872ac50fad"
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/DriverMatchService.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "production_capability": "NONE",
+      "rationale": "Exact immutable source-shaped file retained only inside the sealed 20260808 production-provenance snapshot. The snapshot manifest, rather than this archived byte copy, governs lineage; classification grants no runtime, deployment, migration, or write authority.",
+      "classification_artifact": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/manifest.json",
+      "functional_owner": "architecture_recovery_evidence",
+      "source_sha256": "abdc925ab88d0432b6fe8745ea1aa4131ed0aa333640b2a5f7ca2e639cafba8b"
     },
     {
       "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/max-web-scraper/scripts/check_recent_max.js",
@@ -552,159 +552,6 @@
       "classification_artifact": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/manifest.json",
       "functional_owner": "architecture_recovery_evidence",
       "source_sha256": "5696ed34caf4c4d5b24fed3addf407ea03e057051c1958ea16a533bf94e42a2c"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/chunk-hosted-artifact.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Finite Stage A authenticated-artifact chunker. It accepts only the exact hosted ZIP stream and fixed identity inputs, writes the bounded transport set, and grants no install, deployment, database, credential, or provider capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/emit-coordinated-release.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Finite Stage A artifact emitter. It reads two locally built archives and exact source/builder evidence, writes only the bounded six-member staging directory, and grants no install, deployment, database, credential, or provider capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/max-runtime-probe.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Read-only Stage A image probe executed with network disabled, a read-only filesystem, all capabilities dropped, and no-new-privileges. It inspects only packaged runtime identities and grants no live MAX, credential, database, or production capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/max-scraper.Dockerfile",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Strict release-owned Docker build recipe for the fixed accepted MAX subtree. Its base and tini package materials are digest-bound, it excludes test/debug source, and it grants no registry, deployment, credential, production, or live-provider authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/verify-hosted-transport-registry.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Read-only Stage A hosted transport identity verifier. It validates the exact GitHub artifact registry against the fixed builder and run identities and grants no install, deployment, database, credential, or provider capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/coordinated_release_contract.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Pure fail-closed Stage A artifact contract used by the bounded emitter and verifier. It reads exact local files and GitHub identity evidence and grants no install, deployment, credential, database, or provider mutation capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/hosted_artifact_transport.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Pure fail-closed Stage A authenticated transport contract. It validates, chunks, and reconstructs only the fixed hosted release artifact and grants no install, deployment, database, credential, or provider capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-artifact-transport.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Read-only Stage A transport reconstruction verifier. It validates exact chunks and source identity before reconstructing the fixed release ZIP and grants no install, deployment, database, credential, or provider capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-coordinated-artifact.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Read-only fail-closed verifier for one exact six-member Stage A artifact. It validates local archives and public source authority and grants no install, deployment, credential, database, or provider mutation capability.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/build-package.sh",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Deterministic package builder for the exact Runtime 2.0.0-15 coordinated Gravity and MAX profile. It writes only bounded local staging, DEB, seal, and bootstrap artifacts and grants no installation, deployment, database, credential, provider, or arbitrary-image authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/capture-production-snapshot.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Finite read-only predecessor snapshot capture for the exact coordinated release. It invokes only the installed Runtime's fixed observation operations, emits bounded secret-safe evidence, and grants no installation, activation, database write, credential, or provider authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/seal-release.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Finite source-release sealer for one exact application, Stage A artifact, predecessor snapshot, and v14 rollback authority. It writes only bounded local package artifacts and grants no installation, activation, database write, credential, provider, or arbitrary-path authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/verify-sealed-inputs.py",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Read-only verifier for the exact Runtime 2.0.0-15 package, release seal, bootstrap, coordinated Stage A artifact, and rollback identities. It grants no installation, activation, database, credential, provider, or arbitrary-path authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Tracked compound-suffix source template rendered only by the content-specific sealer into the finite coordinated activation profile. Its fixed operations remain subject to the reviewed Runtime ABI and exact pair state machine; lifecycle classification grants no additional deployment, database, credential, provider, or arbitrary-input authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/install.sh.in",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Content-specific Owner installer template for the exact sealed Runtime successor. It accepts no arguments, admits only fixed checksum-bound artifacts, preserves exact v14 rollback, and gains no generic package, path, Docker, database, credential, or provider authority from classification.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/postinst.in",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Deterministically rendered Debian package-hook template for the exact Runtime successor. It installs only sealed fixed profile/runtime material and gains no deployment, database, credential, provider, or arbitrary-command authority from classification.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/yoko-privileged-runtime.in",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Deterministically rendered zero-argument Runtime wrapper template. It remains constrained by the finite packaged ABI and fixed profile and gains no shell, arbitrary path, image, service, database, credential, or provider authority from classification.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
-      "functional_owner": "platform_engineering"
     },
     {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/bundle/payload/install.sh",
@@ -987,6 +834,78 @@
       "source_sha256": "ccb0f96fa3cf53a5d17bd2a4b4e57a1c657d1cc60d480c1b6c52ffe943ee435d"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/build-package.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministic package builder for the exact Runtime 2.0.0-15 coordinated Gravity and MAX profile. It writes only bounded local staging, DEB, seal, and bootstrap artifacts and grants no installation, deployment, database, credential, provider, or arbitrary-image authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/capture-production-snapshot.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite read-only predecessor snapshot capture for the exact coordinated release. It invokes only the installed Runtime's fixed observation operations, emits bounded secret-safe evidence, and grants no installation, activation, database write, credential, or provider authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/seal-release.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite source-release sealer for one exact application, Stage A artifact, predecessor snapshot, and v14 rollback authority. It writes only bounded local package artifacts and grants no installation, activation, database write, credential, provider, or arbitrary-path authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/verify-sealed-inputs.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only verifier for the exact Runtime 2.0.0-15 package, release seal, bootstrap, coordinated Stage A artifact, and rollback identities. It grants no installation, activation, database, credential, provider, or arbitrary-path authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Tracked compound-suffix source template rendered only by the content-specific sealer into the finite coordinated activation profile. Its fixed operations remain subject to the reviewed Runtime ABI and exact pair state machine; lifecycle classification grants no additional deployment, database, credential, provider, or arbitrary-input authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/install.sh.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Content-specific Owner installer template for the exact sealed Runtime successor. It accepts no arguments, admits only fixed checksum-bound artifacts, preserves exact v14 rollback, and gains no generic package, path, Docker, database, credential, or provider authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/postinst.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministically rendered Debian package-hook template for the exact Runtime successor. It installs only sealed fixed profile/runtime material and gains no deployment, database, credential, provider, or arbitrary-command authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/yoko-privileged-runtime.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministically rendered zero-argument Runtime wrapper template. It remains constrained by the finite packaged ABI and fixed profile and gains no shell, arbitrary path, image, service, database, credential, or provider authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/bundle/payload/install.sh",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -1159,6 +1078,96 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/chunk-hosted-artifact.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite Stage A authenticated-artifact chunker. It accepts only the exact hosted ZIP stream and fixed identity inputs, writes the bounded transport set, and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/emit-coordinated-release.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite Stage A artifact emitter. It reads two locally built archives and exact source/builder evidence, writes only the bounded six-member staging directory, and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/max-runtime-probe.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A image probe executed with network disabled, a read-only filesystem, all capabilities dropped, and no-new-privileges. It inspects only packaged runtime identities and grants no live MAX, credential, database, or production capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/max-scraper.Dockerfile",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Strict release-owned Docker build recipe for the fixed accepted MAX subtree. Its base and tini package materials are digest-bound, it excludes test/debug source, and it grants no registry, deployment, credential, production, or live-provider authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/verify-hosted-transport-registry.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A hosted transport identity verifier. It validates the exact GitHub artifact registry against the fixed builder and run identities and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/coordinated_release_contract.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Pure fail-closed Stage A artifact contract used by the bounded emitter and verifier. It reads exact local files and GitHub identity evidence and grants no install, deployment, credential, database, or provider mutation capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/hosted_artifact_transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Pure fail-closed Stage A authenticated transport contract. It validates, chunks, and reconstructs only the fixed hosted release artifact and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-artifact-transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A transport reconstruction verifier. It validates exact chunks and source identity before reconstructing the fixed release ZIP and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-coordinated-artifact.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only fail-closed verifier for one exact six-member Stage A artifact. It validates local archives and public source authority and grants no install, deployment, credential, database, or provider mutation capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Authoritative architecture control for only the content-specific Stage A workflow, deterministic materials, dual authority, runtime-equivalence contract, and fail-closed artifact verifier. It is test-only enforcement and grants no release, deployment, credential, database, or provider authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "architecture_governance"
+    },
+    {
       "path": "avito-worker/package.json",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -1185,16 +1194,6 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
       "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34"
-    },
-    {
-      "path": "gravity-mvp/Dockerfile",
-      "lifecycle": "MIGRATION",
-      "disposition": "MIGRATION_ONLY",
-      "production_capability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
-      "rationale": "Production container command invokes Prisma migrate deploy before starting the application, so its database write is migration-only rather than application runtime.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-      "functional_owner": "production_migration_authority",
-      "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336"
     },
     {
       "path": "gravity-mvp/add_partial_index.sql",
@@ -1243,6 +1242,24 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/check_db.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/check_logs.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/check-driver-v2.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -1279,24 +1296,6 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/check_db.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/check_logs.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
       "path": "gravity-mvp/debug-driver-data.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -1313,6 +1312,16 @@
       "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/Dockerfile",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "rationale": "Production container command invokes Prisma migrate deploy before starting the application, so its database write is migration-only rather than application runtime.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "production_migration_authority",
+      "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336"
     },
     {
       "path": "gravity-mvp/dump-order.js",
@@ -1423,16 +1432,6 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
     },
     {
-      "path": "gravity-mvp/fix_nav.js",
-      "lifecycle": "DEAD_HISTORICAL",
-      "disposition": "DEAD_HISTORICAL",
-      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
-      "source_sha256": "d90d00979dc8cd588e31993d0ff1d99ce34e0cbf2031c7237158b7107f69a711",
-      "production_capability": "NONE",
-      "functional_owner": "gravity_application_operations",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
-    },
-    {
       "path": "gravity-mvp/fix_nav_back_to_settings.js",
       "lifecycle": "DEAD_HISTORICAL",
       "disposition": "DEAD_HISTORICAL",
@@ -1448,6 +1447,16 @@
       "disposition": "DEAD_HISTORICAL",
       "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
       "source_sha256": "6394a14cf6ad450e2b2d2723441ff852084eef6a57ed4a0f52d5a73683f1852a",
+      "production_capability": "NONE",
+      "functional_owner": "gravity_application_operations",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
+    },
+    {
+      "path": "gravity-mvp/fix_nav.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+      "source_sha256": "d90d00979dc8cd588e31993d0ff1d99ce34e0cbf2031c7237158b7107f69a711",
       "production_capability": "NONE",
       "functional_owner": "gravity_application_operations",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
@@ -1493,21 +1502,21 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
     },
     {
-      "path": "gravity-mvp/fix_pane_syntax.js",
-      "lifecycle": "DEAD_HISTORICAL",
-      "disposition": "DEAD_HISTORICAL",
-      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
-      "source_sha256": "8e16052231c0b82060e41554306b17aa49bd2380f41d9a1ec9ade73c385812c6",
-      "production_capability": "NONE",
-      "functional_owner": "gravity_application_operations",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
-    },
-    {
       "path": "gravity-mvp/fix_pane_syntax_bracket.js",
       "lifecycle": "DEAD_HISTORICAL",
       "disposition": "DEAD_HISTORICAL",
       "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
       "source_sha256": "20e711acf9bc2f6ae42a60cdd41e61adae250d9fa3c25bcbbd8abd4a0c9b6f05",
+      "production_capability": "NONE",
+      "functional_owner": "gravity_application_operations",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
+    },
+    {
+      "path": "gravity-mvp/fix_pane_syntax.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+      "source_sha256": "8e16052231c0b82060e41554306b17aa49bd2380f41d9a1ec9ade73c385812c6",
       "production_capability": "NONE",
       "functional_owner": "gravity_application_operations",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_GRAVITY_MVP.json"
@@ -2185,16 +2194,6 @@
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e"
     },
     {
-      "path": "gravity-mvp/prisma/migrations/20260913173000_add_telegram_identity_review/migration.sql",
-      "lifecycle": "MIGRATION",
-      "disposition": "MIGRATION_ONLY",
-      "production_capability": "CONTROLLED_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-      "functional_owner": "contacts",
-      "source_sha256": "69ebb3e99e16db2f7513c80256c4b4b4a89263ee8fbe1cf93b7dec231410454a"
-    },
-    {
       "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
       "lifecycle": "MIGRATION",
       "disposition": "MIGRATION_ONLY",
@@ -2215,7 +2214,7 @@
       "source_sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147"
     },
     {
-      "path": "gravity-mvp/query.sql",
+      "path": "gravity-mvp/query_driver.sql",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -2224,7 +2223,7 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/query_driver.sql",
+      "path": "gravity-mvp/query.sql",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -2326,70 +2325,6 @@
     },
     {
       "path": "gravity-mvp/scripts/audit-wa-groups.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-call-statuses.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-contact-id.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-phone-chats.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-reachability.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-scenario-data.js",
-      "lifecycle": "MIGRATION",
-      "disposition": "MIGRATION_ONLY",
-      "production_capability": "CONFIRMED_MANUAL_DATA_MIGRATION",
-      "rationale": "Explicit one-shot script backfills only task scenario data under operator invocation.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-      "functional_owner": "task_management",
-      "source_sha256": "e39851c10c4e31849985765c844fa053e542bd205065d328c9f4de1413370546"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-trips.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/backfill-trips.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -2500,6 +2435,70 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/backfill-call-statuses.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-contact-id.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-phone-chats.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-reachability.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-scenario-data.js",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "rationale": "Explicit one-shot script backfills only task scenario data under operator invocation.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "task_management",
+      "source_sha256": "e39851c10c4e31849985765c844fa053e542bd205065d328c9f4de1413370546"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-trips.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-trips.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/baseline-vps.sh",
       "lifecycle": "MIGRATION",
       "disposition": "MIGRATION_ONLY",
@@ -2511,6 +2510,96 @@
     },
     {
       "path": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_enum.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_import.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_job.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_kazbek_unread.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_max_dates.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_messenger_status.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_msg_duplicates.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_msg_timestamps.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_multifon_route.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/check_status_field.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -2825,97 +2914,52 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/check_enum.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_import.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_job.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_kazbek_unread.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_max_dates.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_messenger_status.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_msg_duplicates.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_msg_timestamps.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_multifon_route.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/check_status_field.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
       "path": "gravity-mvp/scripts/clamp-wa-timestamps.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/cleanup_churn.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/cleanup_epoch_dates.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/cleanup_isakov_phantom.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/cleanup_megrabyan_phantom.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/cleanup_stale_ai_sessions.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -2979,51 +3023,6 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/cleanup_churn.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/cleanup_epoch_dates.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/cleanup_isakov_phantom.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/cleanup_megrabyan_phantom.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/cleanup_stale_ai_sessions.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
       "path": "gravity-mvp/scripts/count-db.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3043,6 +3042,15 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/debug_ai_config.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/debug-max-chats.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3053,15 +3061,6 @@
     },
     {
       "path": "gravity-mvp/scripts/debug-remezov.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/debug_ai_config.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3178,33 +3177,6 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/fix-call-messages.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/fix-last-order-dates.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/fix-recent.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
       "path": "gravity-mvp/scripts/fix_ai_intern.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3259,6 +3231,33 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/fix-call-messages.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/fix-last-order-dates.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/fix-recent.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/freeze_spacing.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3286,6 +3285,15 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/import_tg_missed_outbound.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/import-churn-from-excel.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3304,15 +3312,6 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/import_tg_missed_outbound.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
       "path": "gravity-mvp/scripts/inject_test_data.sql",
       "lifecycle": "DEAD_HISTORICAL",
       "disposition": "DEAD_HISTORICAL",
@@ -3320,6 +3319,15 @@
       "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json",
       "source_sha256": "6f1c1fe7e3ed13f23cd76b4596fb5bc6064d34a6b55d24516c52467ecdd6364b",
       "production_capability": "NONE",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/inspect_14.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "gravity_application_operations"
     },
     {
@@ -3369,15 +3377,6 @@
     },
     {
       "path": "gravity-mvp/scripts/inspect-profiles.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/inspect_14.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3496,6 +3495,15 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/recalculate_v2.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/recalculate-all-drivers.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3506,15 +3514,6 @@
     },
     {
       "path": "gravity-mvp/scripts/recalculate.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/recalculate_v2.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3552,6 +3551,24 @@
       "source_sha256": "22aa837bb2e74b73c0f7d78e640790fa9fa8617eda49c17462c6bf00e40d451f"
     },
     {
+      "path": "gravity-mvp/scripts/seed_ai_profiles.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/seed_knowledge_sections.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/seed-cells.ts",
       "lifecycle": "TEST",
       "disposition": "TEST_SUPPORT",
@@ -3575,24 +3592,6 @@
       "production_capability": "NONE",
       "rationale": "Explicit dashboard demo seed: file header states it populates team-overview with realistic demo data; no production entrypoint evidence.",
       "classification_artifact": "LIFECYCLE_TEST_RECLASSIFICATION_20260811.json"
-    },
-    {
-      "path": "gravity-mvp/scripts/seed_ai_profiles.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/seed_knowledge_sections.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
     },
     {
       "path": "gravity-mvp/scripts/set_park_names.js",
@@ -3773,7 +3772,7 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/trigger-import.ts",
+      "path": "gravity-mvp/scripts/trigger_import.js",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3782,7 +3781,7 @@
       "functional_owner": "gravity_application_operations"
     },
     {
-      "path": "gravity-mvp/scripts/trigger_import.js",
+      "path": "gravity-mvp/scripts/trigger-import.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3951,6 +3950,12 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/verify_channels.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
       "path": "gravity-mvp/verify-final-counts.ts",
       "lifecycle": "TEST",
       "disposition": null,
@@ -3963,22 +3968,7 @@
       "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
     },
     {
-      "path": "gravity-mvp/verify_channels.js",
-      "lifecycle": "TEST",
-      "disposition": null,
-      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
-    },
-    {
       "path": "gravity-mvp/vitest.config.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/wa-cleanup.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -3996,6 +3986,15 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/wa-cleanup.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "last-call-uuid.sql",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -4003,15 +4002,6 @@
       "rationale": "Active operational surface classified in exact-set batch; functional owner repository_operations; approved path: explicit repository operations entrypoint. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "repository_operations"
-    },
-    {
-      "path": "max-web-scraper/Dockerfile",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner max_ingestion; approved path: max-web-scraper service. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "max_ingestion"
     },
     {
       "path": "max-web-scraper/check-contacts.js",
@@ -4033,6 +4023,15 @@
     },
     {
       "path": "max-web-scraper/diag.bat",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner max_ingestion; approved path: max-web-scraper service. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "max_ingestion"
+    },
+    {
+      "path": "max-web-scraper/Dockerfile",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -4224,15 +4223,6 @@
       "functional_owner": "repository_operations"
     },
     {
-      "path": "telephony/Dockerfile",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner telephony_operations; approved path: telephony deployment capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "telephony_operations"
-    },
-    {
       "path": "telephony/compare-invites.sh",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -4243,6 +4233,15 @@
     },
     {
       "path": "telephony/docker-compose.yml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner telephony_operations; approved path: telephony deployment capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "telephony_operations"
+    },
+    {
+      "path": "telephony/Dockerfile",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -4312,15 +4311,6 @@
       "rationale": "Active operational surface classified in exact-set batch; functional owner telephony_operations; approved path: telephony deployment capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "telephony_operations"
-    },
-    {
-      "path": "tg-bot/Dockerfile",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner telegram_bot_operations; approved path: tg-bot service command/adapter. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "telegram_bot_operations"
     },
     {
       "path": "tg-bot/apply-beauty.js",
@@ -4473,6 +4463,15 @@
       "production_capability": "NONE",
       "rationale": "Active tg-bot container entrypoint; exact source review proves it only repairs ownership of the container-internal /app/data volume mount and then drops privilege to the unchanged non-root account, with no credential, database, provider, telephony, or write capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_PARITY_OPERATIONAL_SURFACE_REVIEW_20260910.json",
+      "functional_owner": "telegram_bot_operations"
+    },
+    {
+      "path": "tg-bot/Dockerfile",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner telegram_bot_operations; approved path: tg-bot service command/adapter. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "telegram_bot_operations"
     },
     {
@@ -5863,6 +5862,15 @@
       "functional_owner": "architecture_governance"
     },
     {
+      "path": "tools/architecture/reviewed-ownership-amendments.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Repository architecture-control surface owned by architecture_governance; pure IO-free resolver for additive reviewed executable ownership amendments. Lifecycle classification does not grant application-runtime writes and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_governance"
+    },
+    {
       "path": "tools/architecture/run-authoritative-ci.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -5887,15 +5895,6 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture acceptance harness owned by architecture_governance. It requires a fresh source checkout, performs only locked local dependency generation, bounded isolated migration replay, architecture verification and production build evidence outside the repository; lifecycle classification grants no application-runtime or business-data write authority.",
       "classification_artifact": "tools/architecture/run-local-clean-acceptance.mjs",
-      "functional_owner": "architecture_governance"
-    },
-    {
-      "path": "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Authoritative architecture control for only the content-specific Stage A workflow, deterministic materials, dual authority, runtime-equivalence contract, and fail-closed artifact verifier. It is test-only enforcement and grants no release, deployment, credential, database, or provider authority.",
-      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
       "functional_owner": "architecture_governance"
     },
     {
@@ -6349,7 +6348,7 @@
       "functional_owner": "architecture_recovery"
     },
     {
-      "path": "yandex-fleet-scraper/Dockerfile",
+      "path": "yandex-fleet-scraper/docker-compose.yml",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -6358,7 +6357,7 @@
       "functional_owner": "fleet_acquisition"
     },
     {
-      "path": "yandex-fleet-scraper/docker-compose.yml",
+      "path": "yandex-fleet-scraper/Dockerfile",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
@@ -6521,15 +6520,6 @@
       "functional_owner": "fleet_acquisition"
     },
     {
-      "path": "yandex-fleet-scraper/update_locator.cjs",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner fleet_acquisition; approved path: yandex-fleet-scraper command. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "fleet_acquisition"
-    },
-    {
       "path": "yandex-fleet-scraper/update_locator_href.cjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -6540,6 +6530,15 @@
     },
     {
       "path": "yandex-fleet-scraper/update_locator_row.cjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active operational surface classified in exact-set batch; functional owner fleet_acquisition; approved path: yandex-fleet-scraper command. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "fleet_acquisition"
+    },
+    {
+      "path": "yandex-fleet-scraper/update_locator.cjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",

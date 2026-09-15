@@ -116,3 +116,29 @@ export function compensationPilotEligibilityV1(
 
     return { eligible: true, firstMonth, firstMonthKey, windowEndsAt }
 }
+
+/**
+ * Reads the eligibility facts from one Fleet `driver_profile` object.
+ *
+ * The Fleet reconciler owns Driver ingestion, so this is the single place the
+ * facts are lifted out of a profile. A value the park did not state, or one
+ * that does not parse, stays null so the gate above fails closed on it rather
+ * than reading absence as "not self-employed" or as a hire date.
+ */
+export function compensationEligibilityFactsFromFleetProfileV1(
+    profile: unknown,
+): CompensationEligibilityFactsV1 {
+    const record = profile && typeof profile === 'object' && !Array.isArray(profile)
+        ? profile as Record<string, unknown>
+        : {}
+    const hireDate = typeof record.hire_date === 'string' && record.hire_date.trim() !== ''
+        ? new Date(record.hire_date)
+        : null
+    return {
+        isSelfEmployed: typeof record.is_selfemployed === 'boolean' ? record.is_selfemployed : null,
+        employmentType: typeof record.employment_type === 'string' && record.employment_type.trim() !== ''
+            ? record.employment_type
+            : null,
+        parkHireDate: hireDate && !Number.isNaN(hireDate.getTime()) ? hireDate : null,
+    }
+}

@@ -73,7 +73,10 @@ async function callCRM(action, payload) {
     const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': CRM_SECRET() });
     logger.info(`[crmAction] ${action}: status=${result.status}`);
     if (!result.ok) {
-        throw new Error(`CRM action ${action} failed with status ${result.status}`);
+        const error = new Error(`CRM action ${action} failed with status ${result.status}`);
+        // Kept so a caller can tell an authority refusal from an outage.
+        error.status = result.status;
+        throw error;
     }
     return result.data;
 }

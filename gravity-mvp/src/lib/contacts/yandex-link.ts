@@ -12,8 +12,12 @@
  * cron'а sync-trips, без дополнительных passes по БД.
  */
 
-import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import {
+  assertContactOwnershipPostconditions,
+  lockContactOwnershipRows,
+  runContactOwnershipTransaction,
+} from '@/modules/contacts/internal/contact-ownership-coordinator'
 
 export interface LinkResult {
   action: 'noop' | 'linked' | 'no_contact' | 'no_driver' | 'ambiguous'
@@ -88,8 +92,11 @@ export async function linkContactToBestDriver(
   const normalized = normalizePhoneE164(phone)
   if (!normalized) return { action: 'noop', reason: 'phone could not be normalized' }
 
+  return runContactOwnershipTransaction(async transaction => {
+  const scope = await lockContactOwnershipRows(transaction, { normalizedPhones: [normalized] })
+
   // 1. Найти все Driver с этим телефоном.
-  const drivers = await prisma.driver.findMany({
+  const drivers = await transaction.driver.findMany({
     where: { phone: normalized },
     select: {
       id: true,
@@ -105,7 +112,7 @@ export async function linkContactToBestDriver(
 
   // 2. Find all active phone owners. DB order, isArchived, primary phone,
   // and activity are not identity proof and must not pick a winner.
-  const contactPhones = await prisma.contactPhone.findMany({
+  const contactPhones = await transaction.contactPhone.findMany({
     where: { phone: normalized, isActive: true },
     include: { contact: true },
   })
@@ -198,10 +205,11 @@ export async function linkContactToBestDriver(
     update.displayName = matched.fullName
     update.displayNameSource = 'yandex'
   }
-  await prisma.contact.update({
+  await transaction.contact.update({
     where: { id: contact.id },
     data: update,
   })
+  await assertContactOwnershipPostconditions(transaction, scope)
 
   console.log(
     `[yandex-link] linked contact=${contact.id} ` +
@@ -217,4 +225,5 @@ export async function linkContactToBestDriver(
     driverId: matched.yandexDriverId,
     previousDriverYandexId: contact.yandexDriverId,
   }
+  })
 }

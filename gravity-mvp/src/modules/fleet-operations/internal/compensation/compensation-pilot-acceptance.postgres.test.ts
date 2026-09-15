@@ -46,6 +46,17 @@ import {
     submitCompensationApplicationV1,
 } from './compensation-prisma-adapter'
 import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
+import {
+    compensationSectionViewV1,
+    resolvePilotIdentityV1,
+    submitPilotApplicationV1,
+    type PilotTelegramPersonProofV1,
+} from './compensation-pilot-service'
+import { legacyPrismaCompensationPilotPortV1 } from './legacy-prisma-compensation-pilot-adapter'
+import {
+    CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
+    CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1,
+} from '@/modules/contacts/public/v1/contact-ownership-lock-contract'
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
 
@@ -512,4 +523,217 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
             'SELECT count(*) AS count FROM "CompensationApplication"')
         expect(Number(applications[0].count)).toBe(0)
     })
+})
+
+/**
+ * The same journey through the real pilot port: the person is proven through
+ * Contacts' public reads from the proof Telegram channel authority produced,
+ * and the lists and C1 submit run the adapter's own SQL.
+ */
+proof('telegram pilot port proves the person through Contacts on real PostgreSQL', () => {
+    const DRIVER_ID = 'pilot-port-driver-1'
+    const CONTACT_ID = 'pilot-port-contact-1'
+    const OTHER_CONTACT_ID = 'pilot-port-contact-2'
+    const PROOF: PilotTelegramPersonProofV1 = {
+        telegramUserId: TELEGRAM_USER,
+        driverId: DRIVER_ID,
+        contactId: CONTACT_ID,
+    }
+    const port = legacyPrismaCompensationPilotPortV1
+    const submitInput = (idempotencyKey: string, externalOrderId: string) => ({
+        ...PROOF,
+        externalOrderId,
+        claimedRubles: 300,
+        supportConfirmed: true,
+        attachmentFileId: 'tg-file-port-1',
+        attachmentKind: 'photo',
+        idempotencyKey,
+    })
+
+    async function clearIdentityFixtures(): Promise<void> {
+        await database.$executeRawUnsafe(`DELETE FROM "ContactMerge" WHERE "survivorId" LIKE 'pilot-port-%'`)
+        await database.$executeRawUnsafe(`DELETE FROM "Contact" WHERE "id" LIKE 'pilot-port-%'`)
+        await database.$executeRawUnsafe(`DELETE FROM "Driver" WHERE "id" LIKE 'pilot-port-%'`)
+    }
+
+    // Fixtures are written with static SQL, the same way as the rest of this
+    // file, so every row they touch is visible from the statement text alone.
+    async function seedPerson(confirmedDriverId = DRIVER_ID): Promise<void> {
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Contact" ("id","displayName","updatedAt") VALUES ($1,'Unrelated contact',NOW())`,
+            OTHER_CONTACT_ID,
+        )
+        // Driver.contactId is only a Fleet projection. Pointing it elsewhere
+        // proves the port never takes the person from it.
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Driver"
+               ("id","yandexDriverId","fullName","externalParkId","externalDriverProfileId",
+                "isSelfEmployed","employmentType","yandexHireDate","contactId","updatedAt")
+             VALUES ($1,'park-profile:pilot-port-1','Pilot Port Driver',$2,$3,true,'selfemployed',$4,$5,NOW())`,
+            DRIVER_ID, PARK, PROFILE, MONTH_START, OTHER_CONTACT_ID,
+        )
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Contact" ("id","displayName","mainDriverId","customFields","updatedAt")
+             VALUES ($1,'Pilot Port Person',$2,$3::jsonb,NOW())`,
+            CONTACT_ID, DRIVER_ID,
+            JSON.stringify({ driverConfirmations: [{ status: 'confirmed', representativeDriverId: confirmedDriverId }] }),
+        )
+    }
+
+    async function count(table: string): Promise<number> {
+        const rows = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
+            `SELECT count(*) AS count FROM "${table}"`)
+        return Number(rows[0].count)
+    }
+
+    beforeAll(async () => {
+        database = new PrismaClient()
+        await database.$connect()
+    })
+    afterAll(async () => {
+        await truncateAll()
+        await clearIdentityFixtures()
+        await database.$disconnect()
+    })
+    beforeEach(async () => {
+        await truncateAll()
+        await clearIdentityFixtures()
+        await openPeriod(CURRENT_MONTH)
+        await ingestCashOrderPageV1([fleetOrder()], CONTEXT, ingestionPort())
+    })
+
+    it('shows the confirmed person their orders and submits through C1 with the Contacts lineage', async () => {
+        await seedPerson()
+
+        const section = await compensationSectionViewV1(PROOF, port, NOW)
+        expect(section).toMatchObject({ available: true, firstMonthKey: PERIOD_KEY, remainingBudgetKopecks: 500_000 })
+        if (!section.available) return
+        expect(section.orders).toHaveLength(1)
+        const externalOrderId = section.orders[0].externalOrderId
+
+        const idempotencyKey = randomUUID()
+        const created = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, NOW)
+        expect(created).toMatchObject({ submitted: true, amountKopecks: 30_000, status: 'created' })
+        // A repeated tap is stopped by the claimed-order check before C1, so it
+        // can neither create a second application nor a second evidence row.
+        const repeated = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, NOW)
+        expect(repeated).toEqual({ submitted: false, refusal: 'order_already_claimed' })
+        expect(await count('CompensationApplication')).toBe(1)
+
+        const bindings = await database.$queryRawUnsafe<Array<{ contactId: string; lineageDigest: string }>>(
+            `SELECT "contactId","lineageDigest" FROM "CompensationPersonBinding"`)
+        expect(bindings).toEqual([{
+            contactId: CONTACT_ID,
+            lineageDigest: createHash('sha256').update(CONTACT_ID).digest('hex'),
+        }])
+        expect(await count('CompensationPilotSubmission')).toBe(1)
+
+        expect(await port.findClaimedOrderIds([CONTACT_ID])).toEqual([externalOrderId])
+        expect(await port.findClaimedOrderIds([OTHER_CONTACT_ID])).toEqual([])
+
+        const after = await compensationSectionViewV1(PROOF, port, NOW)
+        expect(after.applications).toHaveLength(1)
+        expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
+
+        const managerRows = await port.findManagerApplications()
+        expect(managerRows).toHaveLength(1)
+        expect(managerRows[0]).toMatchObject({
+            boundContactIds: [CONTACT_ID],
+            externalParkId: PARK,
+            telegramUserId: TELEGRAM_USER,
+            attachmentFileId: 'tg-file-port-1',
+            claimedKopecks: 30_000,
+            verifiedKopecks: 33_500,
+        })
+    })
+
+    it('answers a second claim while one is pending with the monetary-core refusal, writing nothing', async () => {
+        await seedPerson()
+        await ingestCashOrderPageV1([fleetOrder({ id: 'c'.repeat(32), short_id: 3982092 })], CONTEXT, ingestionPort())
+
+        const section = await compensationSectionViewV1(PROOF, port, NOW)
+        expect(section.available && section.orders).toHaveLength(2)
+        if (!section.available) return
+        const [first, second] = section.orders
+
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), first.externalOrderId), port, NOW))
+            .toMatchObject({ submitted: true, status: 'created' })
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), second.externalOrderId), port, NOW))
+            .toEqual({ submitted: false, refusal: 'active_pending_exists' })
+        expect(await count('CompensationApplication')).toBe(1)
+        expect(await count('CompensationPilotSubmission')).toBe(1)
+    })
+
+    it('refuses a Contact whose operator confirmation names another Driver, binding nothing', async () => {
+        await seedPerson('pilot-port-driver-elsewhere')
+
+        expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_not_proven' })
+        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, NOW)
+        expect(outcome).toEqual({ submitted: false, refusal: 'identity_not_proven' })
+        expect(await count('CompensationPerson')).toBe(0)
+        expect(await count('CompensationPersonBinding')).toBe(0)
+    })
+
+    it('refuses a person whose lineage carries a merged contact instead of binding both', async () => {
+        await seedPerson()
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Contact" ("id","displayName","customFields","updatedAt")
+             VALUES ('pilot-port-contact-merged','Merged away',$1::jsonb,NOW())`,
+            JSON.stringify({ mergedIntoContactId: CONTACT_ID }),
+        )
+        await database.$executeRawUnsafe(
+            `INSERT INTO "ContactMerge" ("id","survivorId","mergedId","reason","snapshotBefore")
+             VALUES ('pilot-port-merge-1',$1,'pilot-port-contact-merged','manual','{}'::jsonb)`,
+            CONTACT_ID,
+        )
+
+        expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_needs_review' })
+        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, NOW)
+        expect(outcome).toEqual({ submitted: false, refusal: 'identity_needs_review' })
+        expect(await count('CompensationPersonBinding')).toBe(0)
+        expect(await count('CompensationApplication')).toBe(0)
+    })
+
+    it('refuses a proof naming a contact that was merged away after authority was proven', async () => {
+        await seedPerson()
+        await database.$executeRawUnsafe(
+            `UPDATE "Contact" SET "customFields" = $1::jsonb WHERE "id" = $2`,
+            JSON.stringify({
+                driverConfirmations: [{ status: 'confirmed', representativeDriverId: DRIVER_ID }],
+                mergedIntoContactId: OTHER_CONTACT_ID,
+            }),
+            CONTACT_ID,
+        )
+
+        expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_not_proven' })
+    })
+
+    it('answers a held Contacts ownership fence as retryable rather than unlinked', async () => {
+        await seedPerson()
+        let release!: () => void
+        const released = new Promise<void>((resolve) => { release = resolve })
+        let locked!: () => void
+        let failed!: (error: unknown) => void
+        const holding = new Promise<void>((resolve, reject) => { locked = resolve; failed = reject })
+        const holder = database.$transaction(async (transaction) => {
+            // The lock function returns void, which a raw query cannot decode.
+            await transaction.$executeRawUnsafe(
+                'SELECT pg_advisory_xact_lock($1::integer, $2::integer)',
+                CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
+                CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1,
+            )
+            locked()
+            await released
+        }, { timeout: 20_000 })
+        holder.catch(failed)
+
+        try {
+            await holding
+            expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_busy' })
+        } finally {
+            release()
+            await holder
+        }
+        expect(await resolvePilotIdentityV1(PROOF, port)).toMatchObject({ proven: true })
+    }, 30_000)
 })

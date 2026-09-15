@@ -8,8 +8,10 @@ import {
     type ContactConversationChannelV1,
     type ContactConversationContactV1,
     type ContactConversationIdentityV1,
+    type ContactConversationPurposeV1,
     type GetPreferredActiveContactPhoneQueryV1,
     type GetPreferredActiveContactPhoneResultV1,
+    type PreparedContactConversationIdentityV1,
     type PrepareContactConversationIdentityCommandV1,
     type PrepareContactConversationIdentityResultV1,
     type ResolveChannelContactCommandV1,
@@ -20,9 +22,19 @@ export type PrepareContactConversationIdentityPersistenceResultV1 =
     | {
         status: 'ready'
         contact: ContactConversationContactV1
-        identity: ContactConversationIdentityV1
+        identity: PreparedContactConversationIdentityV1
     }
-    | { status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity' }
+    | {
+        status:
+            | 'contact_not_found'
+            | 'identity_not_found'
+            | 'identity_ambiguous'
+            | 'identity_conflicted'
+            | 'identity_unreachable'
+            | 'identity_reachability_unknown'
+            | 'phone_not_found'
+            | 'no_identity'
+    }
 
 export interface ContactConversationPersistencePortV1 {
     resolveChannelContact(input: {
@@ -40,6 +52,7 @@ export interface ContactConversationPersistencePortV1 {
         channel: ContactConversationChannelV1
         identityId: string | null
         phoneId: string | null
+        purpose: ContactConversationPurposeV1
     }): Promise<PrepareContactConversationIdentityPersistenceResultV1>
     getPreferredActiveContactPhone(contactId: string, phoneId: string | null): Promise<string | null>
 }
@@ -74,6 +87,7 @@ export function createPrepareContactConversationIdentityHandlerV1(port: ContactC
             channel: parsed.channel,
             identityId: parsed.identityId,
             phoneId: parsed.phoneId,
+            purpose: parsed.purpose,
         })
 
         if (prepared.status !== 'ready') {

@@ -9,6 +9,11 @@
 import { randomUUID } from 'node:crypto'
 
 import { prisma } from '@/lib/prisma'
+import {
+    contactOwnershipBusyResultV1,
+    isContactConfirmedMainDriverV1,
+    resolveContactLineageV1,
+} from '@/modules/contacts/public/v1'
 
 import {
     FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
@@ -17,8 +22,9 @@ import {
     START_COMPENSATION_PAYOUT_COMMAND_V1,
     SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
 } from '../../../../contracts/fleet-operations/v1'
-import { compensationLineageDigestForContactV1 } from './compensation-pilot-lineage'
+import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import {
+    CompensationErrorV1,
     finalizeCompensationPayoutV1,
     rejectCompensationApplicationV1,
     resolveCompensationReconciliationV1,
@@ -36,13 +42,22 @@ function principal(principalId: string, operatorLabel: string | null) {
     return { principalId, principalKind: 'crm_user' as const, operatorLabel }
 }
 
+/** A person's applications, found through any contact bound to it. */
+const BOUND_TO_LINEAGE = `
+    EXISTS (
+        SELECT 1 FROM "CompensationPersonBinding" pb
+        WHERE pb."compensationPersonId" = app."compensationPersonId"
+          AND pb."contactId" = ANY($1::text[])
+    )
+`
+
 /** Shared row shape for both the driver and manager lists. */
 const APPLICATION_SELECT = `
     app."id" AS "applicationId", app."status", app."claimedKopecks", app."amountKopecks",
     app."submittedAt", app."rejectionReason",
     vo."externalOrderId", vo."shortOrderIdDisplay", vo."externalParkId",
     vo."amountKopecks" AS "verifiedKopecks",
-    pb."contactId" AS "canonicalContactId",
+    bound."contactIds" AS "boundContactIds",
     ps."telegramUserId", ps."attachmentFileId", ps."attachmentKind", ps."supportContactedAt",
     live."id" AS "payoutAuthorizationId", live."authorizationFence",
     (live."id" IS NOT NULL) AS "hasLiveAuthorization",
@@ -52,8 +67,12 @@ const APPLICATION_SELECT = `
 const APPLICATION_FROM = `
     FROM "CompensationApplication" app
     JOIN "CompensationVerifiedOrder" vo ON vo."id" = app."verifiedOrderId"
-    JOIN "CompensationPersonBinding" pb ON pb."compensationPersonId" = app."compensationPersonId"
     LEFT JOIN "CompensationPilotSubmission" ps ON ps."applicationId" = app."id"
+    LEFT JOIN LATERAL (
+        SELECT array_agg(pb."contactId" ORDER BY pb."contactId") AS "contactIds"
+        FROM "CompensationPersonBinding" pb
+        WHERE pb."compensationPersonId" = app."compensationPersonId"
+    ) bound ON true
     LEFT JOIN LATERAL (
         SELECT pa."id", pa."authorizationFence" FROM "CompensationPayoutAuthorization" pa
         WHERE pa."applicationId" = app."id" AND pa."state" IN ('active','unknown_outcome')
@@ -87,7 +106,7 @@ function toSummary(row: Record<string, unknown>): PilotApplicationSummaryV1 {
 function toManagerRow(row: Record<string, unknown>): ManagerApplicationRowV1 {
     return {
         ...toSummary(row),
-        canonicalContactId: String(row.canonicalContactId),
+        boundContactIds: Array.isArray(row.boundContactIds) ? row.boundContactIds.map(String) : [],
         externalParkId: String(row.externalParkId),
         telegramUserId: row.telegramUserId === null ? null : String(row.telegramUserId),
         attachmentFileId: row.attachmentFileId === null ? null : String(row.attachmentFileId),
@@ -101,19 +120,40 @@ function toManagerRow(row: Record<string, unknown>): ManagerApplicationRowV1 {
 }
 
 export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
-    async findDriverIdentity(telegramUserId) {
-        const link = await prisma.driverTelegram.findFirst({
-            where: { telegramId: BigInt(telegramUserId) },
-            select: { driverId: true },
-        })
-        if (!link) return null
+    async confirmMainDriver(contactId, driverId) {
+        try {
+            return await isContactConfirmedMainDriverV1(contactId, driverId) ? 'confirmed' : 'not_confirmed'
+        } catch (error) {
+            // Contacts' ownership fence was held; the answer is unknown, not no.
+            if (contactOwnershipBusyResultV1(error)) return 'busy'
+            throw error
+        }
+    },
+
+    async resolveContactLineage(contactId) {
+        try {
+            const lineage = await resolveContactLineageV1(contactId)
+            if (!lineage) return { status: 'missing' }
+            return {
+                status: 'resolved',
+                canonicalContactId: lineage.canonicalContactId,
+                contactIds: lineage.contactIds,
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : ''
+            if (message.startsWith('CONTACT_MERGE_REDIRECT_')) return { status: 'unresolvable' }
+            throw error
+        }
+    },
+
+    async findDriverFacts(driverId) {
+        // Driver.contactId is a Fleet projection, never the person; the person
+        // was proven through Contacts above.
         const driver = await prisma.driver.findUnique({
-            where: { id: link.driverId },
+            where: { id: driverId },
             select: {
-                contactId: true,
                 externalParkId: true,
                 externalDriverProfileId: true,
-                yandexDriverId: true,
                 isSelfEmployed: true,
                 employmentType: true,
                 yandexHireDate: true,
@@ -121,12 +161,8 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
         })
         if (!driver) return null
         return {
-            telegramUserId,
-            canonicalContactId: driver.contactId,
             externalParkId: driver.externalParkId,
-            // Falls back to the Yandex id, which is the profile id the orders
-            // carry when the profile column was never backfilled.
-            externalDriverProfileId: driver.externalDriverProfileId ?? driver.yandexDriverId,
+            externalDriverProfileId: driver.externalDriverProfileId,
             facts: {
                 isSelfEmployed: driver.isSelfEmployed,
                 employmentType: driver.employmentType,
@@ -168,25 +204,24 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
         return rows[0] ?? null
     },
 
-    async findClaimedOrderIds(canonicalContactId) {
+    async findClaimedOrderIds(lineage) {
         // A rejected application frees the order for a second attempt, which is
         // C1's rule; only live and paid claims block it.
         const rows = await prisma.$queryRawUnsafe<Array<{ externalOrderId: string }>>(
             `SELECT DISTINCT vo."externalOrderId"
              FROM "CompensationApplication" app
              JOIN "CompensationVerifiedOrder" vo ON vo."id" = app."verifiedOrderId"
-             JOIN "CompensationPersonBinding" pb ON pb."compensationPersonId" = app."compensationPersonId"
-             WHERE pb."contactId" = $1 AND app."status" IN ('PENDING','PAID')`,
-            canonicalContactId,
+             WHERE ${BOUND_TO_LINEAGE} AND app."status" IN ('PENDING','PAID')`,
+            [...lineage],
         )
         return rows.map((row) => row.externalOrderId)
     },
 
-    async findDriverApplications(canonicalContactId) {
+    async findDriverApplications(lineage) {
         const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
             `SELECT ${APPLICATION_SELECT} ${APPLICATION_FROM}
-             WHERE pb."contactId" = $1 ORDER BY app."submittedAt" DESC`,
-            canonicalContactId,
+             WHERE ${BOUND_TO_LINEAGE} ORDER BY app."submittedAt" DESC`,
+            [...lineage],
         )
         return rows.map(toSummary)
     },
@@ -207,28 +242,36 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
     },
 
     async submitApplication(input) {
-        const result = await submitCompensationApplicationV1({
-            contract: SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
-            idempotencyKey: input.idempotencyKey,
-            person: {
-                canonicalContactId: input.canonicalContactId,
-                resolutionStatus: 'live',
-                lineage: [input.canonicalContactId],
-                lineageDigest: compensationLineageDigestForContactV1(input.canonicalContactId),
-                evidenceAt: input.submittedAt,
-            },
-            order: {
-                provider: input.order.provider,
-                externalParkId: input.order.externalParkId,
-                externalOrderId: input.order.externalOrderId,
-                shortOrderIdDisplay: input.order.shortOrderIdDisplay,
-                rawPrice: input.order.rawPrice,
-                endedAt: input.order.endedAt,
-                verifiedAt: input.submittedAt,
-            },
-            claimedRubles: input.claimedRubles,
-            submittedAt: input.submittedAt,
-        })
+        let result: Awaited<ReturnType<typeof submitCompensationApplicationV1>>
+        try {
+            result = await submitCompensationApplicationV1({
+                contract: SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
+                idempotencyKey: input.idempotencyKey,
+                person: {
+                    canonicalContactId: input.canonicalContactId,
+                    resolutionStatus: 'live',
+                    lineage: [...input.lineage],
+                    lineageDigest: compensationLineageDigestV1(input.lineage),
+                    evidenceAt: input.submittedAt,
+                },
+                order: {
+                    provider: input.order.provider,
+                    externalParkId: input.order.externalParkId,
+                    externalOrderId: input.order.externalOrderId,
+                    shortOrderIdDisplay: input.order.shortOrderIdDisplay,
+                    rawPrice: input.order.rawPrice,
+                    endedAt: input.order.endedAt,
+                    verifiedAt: input.submittedAt,
+                },
+                claimedRubles: input.claimedRubles,
+                submittedAt: input.submittedAt,
+            })
+        } catch (error) {
+            // A C1 refusal is an answer for the driver, not an outage; nothing
+            // was written, so no evidence row follows it.
+            if (error instanceof CompensationErrorV1) return { refusal: error.code }
+            throw error
+        }
 
         // Evidence is keyed by application, so a replayed submit keeps one row.
         await prisma.$executeRawUnsafe(

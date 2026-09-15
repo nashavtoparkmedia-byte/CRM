@@ -17,6 +17,7 @@ const { Scenes, Markup } = require('telegraf');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { callCRM } = require('../services/crmAction');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const STATUS_TEXT = {
     submitted: 'на рассмотрении',
@@ -29,6 +30,8 @@ const STATUS_TEXT = {
 // tells them what to do next rather than what the system checked.
 const REFUSAL_TEXT = {
     identity_not_proven: 'Профиль не привязан. Откройте «Мой автомобиль» и поделитесь номером.',
+    identity_needs_review: 'Ваш профиль нужно проверить. Напишите менеджеру.',
+    identity_busy: 'Профиль сейчас обновляется. Попробуйте через минуту.',
     driver_not_in_park: 'Не вижу вас в парке. Напишите менеджеру.',
     not_self_employed: 'Компенсация доступна только самозанятым водителям парка.',
     self_employment_unknown: 'Пока не вижу ваш налоговый статус. Напишите менеджеру.',
@@ -42,9 +45,30 @@ const REFUSAL_TEXT = {
     order_not_in_catalogue: 'Этот заказ больше недоступен для компенсации.',
     order_already_claimed: 'По этому заказу заявка уже есть.',
     budget_exhausted: 'Месячный бюджет парка исчерпан.',
+    // Refusals from the monetary core itself.
+    active_pending_exists: 'У вас уже есть заявка на рассмотрении. Дождитесь решения по ней.',
+    submission_window_closed: 'Срок подачи заявок за этот месяц закончился.',
+    order_already_settled: 'По этому заказу новую заявку подать нельзя.',
+    max_attempts_reached: 'По этому заказу новую заявку подать нельзя.',
+    second_attempt_requires_rejected_first: 'По этому заказу новую заявку подать нельзя.',
+    period_missing: 'Приём заявок за этот месяц закрыт. Напишите менеджеру.',
+    period_not_open: 'Приём заявок за этот месяц закрыт. Напишите менеджеру.',
+    person_reconciliation_required: 'Ваш профиль нужно проверить. Напишите менеджеру.',
 };
 
+// A 409 means this chat is linked but the CRM could not confirm, right now,
+// that it belongs to the driver's person. That can be a brief lock as well as a
+// missing confirmation, and sharing the number again would not help because
+// the link already exists; so the driver is told to retry or ask a manager.
+const AUTHORITY_REFUSED_TEXT = 'Не удалось подтвердить привязку этого чата. Попробуйте позже или напишите менеджеру.';
+
 const rubles = (kopecks) => (kopecks / 100).toFixed(2);
+
+function crmFailureText(error) {
+    return error && error.status === 409
+        ? AUTHORITY_REFUSED_TEXT
+        : 'Система недоступна, попробуйте позже.';
+}
 
 function refusalText(code) {
     return REFUSAL_TEXT[code] || 'Не получилось отправить заявку. Напишите менеджеру.';
@@ -75,10 +99,13 @@ compensationScene.enter(async (ctx) => {
 
     let view;
     try {
-        view = await callCRM('compensation_section', { telegramId: String(ctx.from.id) });
+        view = await callCRM('compensation_section', {
+            telegramId: String(ctx.from.id),
+            ...exactTelegramActionBinding(ctx),
+        });
     } catch (error) {
         logger.error('[compensation] section failed', error);
-        await ctx.reply('Система недоступна, попробуйте позже.');
+        await ctx.reply(crmFailureText(error));
         return ctx.scene.leave();
     }
 
@@ -174,10 +201,11 @@ async function captureAttachment(ctx, fileId, kind) {
             attachmentFileId: fileId,
             attachmentKind: kind,
             idempotencyKey: ctx.scene.state.idempotencyKey,
+            ...exactTelegramActionBinding(ctx),
         });
     } catch (error) {
         logger.error('[compensation] submit failed', error);
-        await ctx.reply('Система недоступна, попробуйте позже.');
+        await ctx.reply(crmFailureText(error));
         return ctx.scene.leave();
     }
 

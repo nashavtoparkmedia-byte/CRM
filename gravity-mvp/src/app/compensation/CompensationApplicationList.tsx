@@ -74,7 +74,7 @@ export default function CompensationApplicationList({
                                     <span className="ml-2 text-xs text-muted">{STATUS_LABELS[application.status] ?? application.status}</span>
                                 </div>
                                 <div className="mt-1 text-[13px] text-muted">
-                                    Парк {application.externalParkId} · Контакт {application.canonicalContactId}
+                                    Парк {application.externalParkId} · Контакт {application.boundContactIds.join(', ') || '—'}
                                     {application.telegramUserId ? ` · Telegram ${application.telegramUserId}` : ''}
                                 </div>
                                 <div className="mt-1 text-[13px] text-muted">

@@ -610,13 +610,7 @@ async function syncDriversByStatuses(
                         "phones",
                         "work_status",
                         "created_date",
-                        "driver_license",
-                        // Cash-compensation eligibility facts. is_selfemployed is
-                        // the authoritative park-SMZ flag; hire_date is the park
-                        // connection date, which created_date above is not.
-                        "is_selfemployed",
-                        "employment_type",
-                        "hire_date"
+                        "driver_license"
                     ],
                     current_status: [
                         "status",
@@ -662,19 +656,6 @@ async function syncDriversByStatuses(
 
                 const hiredAt = profile.created_date ? new Date(profile.created_date) : null
 
-                // Kept separate from hiredAt on purpose: scoring and the driver
-                // views already read hiredAt as the profile creation date.
-                // Compensation eligibility reads yandexHireDate and nothing else.
-                const yandexHireDate = profile.hire_date ? new Date(profile.hire_date) : null
-                // A missing flag stays null so eligibility can fail closed on it
-                // rather than reading absence as "not self-employed".
-                const isSelfEmployed = typeof profile.is_selfemployed === 'boolean'
-                    ? profile.is_selfemployed
-                    : null
-                const employmentType = typeof profile.employment_type === 'string'
-                    ? profile.employment_type
-                    : null
-
                 const licenseData = profile.driver_license
                 const licenseNumber = typeof licenseData === 'string'
                     ? licenseData
@@ -687,9 +668,6 @@ async function syncDriversByStatuses(
                 }
 
                 if (hiredAt) updateData.hiredAt = hiredAt
-                if (yandexHireDate) updateData.yandexHireDate = yandexHireDate
-                if (isSelfEmployed !== null) updateData.isSelfEmployed = isSelfEmployed
-                if (employmentType) updateData.employmentType = employmentType
                 if (licenseNumber) updateData.licenseNumber = licenseNumber
 
                 await prisma.driver.upsert({

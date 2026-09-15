@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+    compensationEligibilityFactsFromFleetProfileV1,
     compensationPilotEligibilityV1,
     isParkSelfEmployedV1,
     parkFirstCalendarMonthV1,
@@ -86,5 +87,42 @@ describe('gate ordering', () => {
             new Date('2026-09-10T06:00:00.000Z'),
         )
         expect(decision).toMatchObject({ eligible: false, reason: 'not_self_employed' })
+    })
+})
+
+describe('facts lifted from a Fleet driver profile', () => {
+    it('reads the three stated values in the wire shape Fleet returns', () => {
+        expect(compensationEligibilityFactsFromFleetProfileV1({
+            id: 'profile-1',
+            is_selfemployed: true,
+            employment_type: 'selfemployed',
+            hire_date: '2026-09-05T00:00:00+00:00',
+        })).toEqual({
+            isSelfEmployed: true,
+            employmentType: 'selfemployed',
+            parkHireDate: new Date('2026-09-05T00:00:00.000Z'),
+        })
+    })
+
+    it('keeps an unstated value null so the gate fails closed on it', () => {
+        const unstated = compensationEligibilityFactsFromFleetProfileV1({ id: 'profile-1' })
+        expect(unstated).toEqual({ isSelfEmployed: null, employmentType: null, parkHireDate: null })
+        expect(compensationPilotEligibilityV1(unstated, new Date('2026-09-10T06:00:00.000Z')))
+            .toMatchObject({ eligible: false, reason: 'self_employment_unknown' })
+    })
+
+    it('never reads a truthy string as a self-employment statement', () => {
+        expect(compensationEligibilityFactsFromFleetProfileV1({ is_selfemployed: 'true' }).isSelfEmployed)
+            .toBeNull()
+    })
+
+    it('refuses a hire date that does not parse rather than inventing one', () => {
+        expect(compensationEligibilityFactsFromFleetProfileV1({ hire_date: 'not-a-date' }).parkHireDate)
+            .toBeNull()
+    })
+
+    it('tolerates a missing profile', () => {
+        expect(compensationEligibilityFactsFromFleetProfileV1(undefined))
+            .toEqual({ isSelfEmployed: null, employmentType: null, parkHireDate: null })
     })
 })

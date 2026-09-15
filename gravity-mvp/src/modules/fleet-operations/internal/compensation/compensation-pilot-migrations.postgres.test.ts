@@ -39,11 +39,11 @@ proof('pilot migrations on real PostgreSQL', () => {
     // make a uniqueness proof pass for the wrong reason.
     beforeEach(async () => {
         await database.$executeRawUnsafe(
-            'TRUNCATE TABLE "TelegramIdentityReview","DriverTelegram","CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
+            'TRUNCATE TABLE "CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
     })
     afterAll(async () => {
         await database.$executeRawUnsafe(
-            'TRUNCATE TABLE "TelegramIdentityReview","DriverTelegram","CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
+            'TRUNCATE TABLE "CompensationCashOrder","CompensationPilotSubmission" RESTART IDENTITY CASCADE')
         await database.$disconnect()
     })
 
@@ -56,39 +56,6 @@ proof('pilot migrations on real PostgreSQL', () => {
         const rows = await database.$queryRawUnsafe<Array<{ indexname: string }>>(
             `SELECT indexname FROM pg_indexes WHERE tablename = 'Driver' AND indexname = 'Driver_yandexHireDate_idx'`)
         expect(rows).toHaveLength(1)
-    })
-
-    it('adds the telegram attestation columns as optional', async () => {
-        expect(await columns('DriverTelegram', ['attestedPhone', 'attestedPhoneAt']))
-            .toEqual(['attestedPhone', 'attestedPhoneAt'])
-    })
-
-    it('refuses half an attestation', async () => {
-        await expect(database.$executeRawUnsafe(
-            `INSERT INTO "DriverTelegram" ("id","driverId","telegramId","attestedPhone")
-             VALUES ('mig-t1','mig-d1',9001,'+79001112233')`,
-        )).rejects.toThrow()
-        await expect(database.$executeRawUnsafe(
-            `INSERT INTO "DriverTelegram" ("id","driverId","telegramId","attestedPhoneAt")
-             VALUES ('mig-t2','mig-d2',9002,NOW())`,
-        )).rejects.toThrow()
-    })
-
-    it('refuses half a review resolution', async () => {
-        await expect(database.$executeRawUnsafe(
-            `INSERT INTO "TelegramIdentityReview" ("id","telegramUserId","reason","observedAt","resolvedAt")
-             VALUES ('mig-r1','9003','phone_owned_by_several_contacts',NOW(),NOW())`,
-        )).rejects.toThrow()
-    })
-
-    it('keeps one open review per account, reason and moment', async () => {
-        await database.$executeRawUnsafe(
-            `INSERT INTO "TelegramIdentityReview" ("id","telegramUserId","reason","observedAt")
-             VALUES ('mig-r2','9004','ownership_not_proven','2026-09-13T12:00:00Z')`)
-        await expect(database.$executeRawUnsafe(
-            `INSERT INTO "TelegramIdentityReview" ("id","telegramUserId","reason","observedAt")
-             VALUES ('mig-r3','9004','ownership_not_proven','2026-09-13T12:00:00Z')`,
-        )).rejects.toThrow()
     })
 
     it('refuses a cash-order price the monetary parser could not read', async () => {

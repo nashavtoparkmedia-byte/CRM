@@ -101,6 +101,7 @@ async function getMainMenu(ctx) {
         ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
         ['🚗 Подключиться', surveyButtons[0]],
         ['💬 Чат водителей', '🛠 Поддержка'],
+        ['💰 Компенсация наличных'],
         ['© Yoko Park · Бот для водителей'],
     ];
 
@@ -228,6 +229,10 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
     switch (text) {
         case '© Yoko Park · Бот для водителей':
             return await showMainMenu(ctx);
+
+        case '💰 Компенсация наличных':
+            if (ctx.scene) return await ctx.scene.enter('compensation');
+            return await ctx.reply('Компенсация временно недоступна.');
 
         case '🛠 Поддержка':
             return await ctx.reply('🧑‍💻 *Техподдержка*\n\nНажмите кнопку ниже, чтобы написать в поддержку парка или задать вопрос.', {

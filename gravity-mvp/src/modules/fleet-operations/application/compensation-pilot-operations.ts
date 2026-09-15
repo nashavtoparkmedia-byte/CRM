@@ -16,13 +16,18 @@ import {
     type ManagerApplicationRowV1,
     type CompensationSectionViewV1,
     type PilotSubmitOutcomeV1,
+    type PilotTelegramPersonProofV1,
 } from '../internal/compensation/compensation-pilot-service'
 
+/**
+ * The driver's section. The caller must already hold Telegram channel
+ * authority for the proof; the service re-checks the person through Contacts.
+ */
 export async function compensationPilotSectionV1(
-    telegramUserId: string,
+    proof: PilotTelegramPersonProofV1,
     now: Date = new Date(),
 ): Promise<CompensationSectionViewV1> {
-    return compensationSectionViewV1(telegramUserId, legacyPrismaCompensationPilotPortV1, now)
+    return compensationSectionViewV1(proof, legacyPrismaCompensationPilotPortV1, now)
 }
 
 export async function compensationPilotSubmitV1(

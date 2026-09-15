@@ -976,10 +976,6 @@ model DriverTelegram {
   activeParkId  String?
   submittedPhone String?
   submittedPhoneAt DateTime?
-  /// Phone Telegram itself attested, stored only when the shared contact
-  /// card carried the sending account id. Never a typed-in number.
-  attestedPhone    String?
-  attestedPhoneAt  DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -3554,28 +3550,6 @@ model CompensationAuditEvent {
 
   @@index([subjectType, subjectId, occurredAt, id], map: "CompensationAuditEvent_subject_idx")
   @@index([action, occurredAt], map: "CompensationAuditEvent_action_idx")
-}
-
-/// Anything the Telegram-attested phone decision refused to do on its own.
-/// A fail-closed branch has to leave a trace, otherwise a driver who cannot
-/// be identified simply disappears and nobody finds out why.
-model TelegramIdentityReview {
-  id                 String   @id @default(cuid())
-  telegramUserId     String
-  normalizedPhone    String?
-  reason             String
-  identityContactId  String?
-  candidateContactIds String[] @default([])
-  observedAt         DateTime
-  resolvedAt         DateTime?
-  resolvedBy         String?
-  createdAt          DateTime @default(now())
-
-  /// One open review per account and reason: a driver retrying the same share
-  /// must not create a queue of identical rows for a manager to wade through.
-  @@unique([telegramUserId, reason, observedAt], map: "TelegramIdentityReview_account_reason_key")
-  @@index([resolvedAt])
-  @@index([telegramUserId])
 }
 
 /// A completed Yandex cash order, projected from the Fleet API and kept as the

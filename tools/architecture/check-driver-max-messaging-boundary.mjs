@@ -116,6 +116,42 @@ const assertSimpleDelegate = (ast, name, target, parameters) => {
   assert(ts.isIdentifier(returned.expression.expression) && returned.expression.expression.text === target, `${name}: exact delegate target`)
   assert.deepEqual(returned.expression.arguments.map((argument) => argument.getText(ast)), parameters)
 }
+// The MAX owner façade no longer forwards a phone-only send. The accepted
+// identity model retires manager-to-driver phone sends that carry no admitted
+// Chat identity, so the owned capability must fail closed on the exact identity
+// error instead of delegating, and the retired action must be unreachable from
+// the module at all. Parameters keep their exact arity and order; the retired
+// declaration marks them unused, so a single leading underscore is tolerated
+// while the shape itself stays pinned.
+const assertRetiredCapability = (ast, name, retiredTarget, parameters, errorCode) => {
+  const functions = exportedFunction(ast, name)
+  assert.equal(functions.length, 1, `${name}: exact exported wrapper`)
+  const declaration = functions[0]
+  assert(declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword), `${name}: async wrapper`)
+  assert.deepEqual(
+    declaration.parameters.map((parameter) => parameter.name.getText(ast).replace(/^_/u, '')),
+    parameters,
+    `${name}: exact retired parameter shape`,
+  )
+  assert.equal(declaration.body?.statements.length, 1, `${name}: one executable statement`)
+  const thrown = declaration.body.statements[0]
+  assert(ts.isThrowStatement(thrown) && thrown.expression && ts.isNewExpression(thrown.expression), `${name}: retired capability must fail closed`)
+  assert(ts.isIdentifier(thrown.expression.expression) && thrown.expression.expression.text === 'Error', `${name}: exact error constructor`)
+  // Exactly one argument. A second one, such as an options bag carrying a
+  // cause, is evaluated before the throw and would let a live send ride along
+  // inside an expression that still looks like a fail-closed capability.
+  assert.equal((thrown.expression.arguments ?? []).length, 1, `${name}: exact identity error shape`)
+  const [thrownArgument] = thrown.expression.arguments ?? []
+  assert(
+    thrownArgument && ts.isStringLiteralLike(thrownArgument) && thrownArgument.text === errorCode,
+    `${name}: exact identity error code`,
+  )
+  let reachesRetiredTarget = false
+  visit(ast, (node) => {
+    if (ts.isIdentifier(node) && node.text === retiredTarget) reachesRetiredTarget = true
+  })
+  assert.equal(reachesRetiredTarget, false, `${name}: retired delegate target must be unreachable`)
+}
 
 const allSourcePaths = walk(path.join(root, 'gravity-mvp/src'))
   .map(relative)
@@ -162,7 +198,13 @@ function assertBoundaryModel(overrides = new Map()) {
 
   const ownerAst = parse(ownerCapabilityPath, sourceFor(ownerCapabilityPath))
   assertSimpleDelegate(ownerAst, 'listMaxDriverDeliveryConnectionsV1', 'getMaxConnections', [])
-  assertSimpleDelegate(ownerAst, 'sendMaxDriverMessageV1', 'sendMaxMessage', ['phone', 'message', 'options'])
+  assertRetiredCapability(
+    ownerAst,
+    'sendMaxDriverMessageV1',
+    'sendMaxMessage',
+    ['phone', 'message', 'options'],
+    'CONTACT_CONVERSATION_IDENTITY_REQUIRED',
+  )
 }
 const acceptsBoundaryModel = (overrides) => {
   try {
@@ -191,8 +233,43 @@ const probes = [
   new Map([[sendConsumer, sendSource.replace(infrastructureSpecifier, ownerSpecifier)]]),
   new Map([[sendConsumer, removedCall]]),
   new Map([[sendConsumer, `${sendSource}\nvoid sendMaxDriverMessageV1('', '')\n`]]),
+  // Restoring the pre-retirement phone-only delegate must fail closed. This is
+  // the exact shape the owned capability carried before manager-to-driver phone
+  // sends without an admitted Chat identity were retired.
+  new Map([[ownerCapabilityPath, [
+    '"use server"',
+    '',
+    "import { getMaxConnections, sendMaxMessage } from '@/app/max-actions'",
+    '',
+    'export interface MaxDriverMessageOptionsV1 {',
+    '  connectionId?: string',
+    '  isPersonal?: boolean',
+    '  name?: string',
+    '}',
+    'export async function listMaxDriverDeliveryConnectionsV1() {',
+    '  return getMaxConnections()',
+    '}',
+    'export async function sendMaxDriverMessageV1(',
+    '  phone: string,',
+    '  message: string,',
+    '  options?: MaxDriverMessageOptionsV1,',
+    ') {',
+    '  return sendMaxMessage(phone, message, options)',
+    '}',
+    '',
+  ].join('\n')]]),
+  // Failing closed on a different error is not the accepted identity contract.
+  new Map([[ownerCapabilityPath, baseSources.get(ownerCapabilityPath)
+    .replace("throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')", "throw new Error('MAX_SEND_DISABLED')")]]),
+  // A second argument to the thrown error is evaluated before the throw, so a
+  // live send may not ride along inside it.
+  new Map([[ownerCapabilityPath, baseSources.get(ownerCapabilityPath)
+    .replace(
+      "throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')",
+      "throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED', { cause: getMaxConnections() })",
+    )]]),
 ]
-assert(probes.every((probe) => !acceptsBoundaryModel(probe)), 'comment/dead-code/bypass/denominator probes must fail')
+assert(probes.every((probe) => !acceptsBoundaryModel(probe)), 'comment/dead-code/bypass/denominator/retirement probes must fail')
 
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 assert.equal(registry.exceptions.filter((entry) => (

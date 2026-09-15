@@ -47,7 +47,7 @@ def write_json(path: Path, value: object) -> None:
 
 
 def image_layer(
-    *, maximum: bool, empty: bool = False, include_forbidden: bool = False,
+    *, application: Path, maximum: bool, empty: bool = False, include_forbidden: bool = False,
     tini_bytes: bytes = b"synthetic tini",
 ) -> bytes:
     layer = BytesIO()
@@ -154,6 +154,7 @@ def docker_archive(
     path: Path,
     reference: str,
     *,
+    application: Path,
     maximum: bool,
     empty: bool = False,
     include_forbidden: bool = False,
@@ -193,10 +194,10 @@ def docker_archive(
         })
     base_layers = synthetic_base_layers(maximum=maximum)
     if substitute_base:
-        base_layers[0] = image_layer(maximum=False, empty=True) + b"substituted base"
+        base_layers[0] = image_layer(application=application, maximum=False, empty=True) + b"substituted base"
     layers = base_layers + [
         image_layer(
-            maximum=maximum, empty=empty, include_forbidden=include_forbidden,
+            application=application, maximum=maximum, empty=empty, include_forbidden=include_forbidden,
             tini_bytes=tini_bytes,
         ),
     ]
@@ -421,8 +422,18 @@ class CoordinatedArtifactTests(unittest.TestCase):
 
         cls.artifact = cls.base / "artifact"
         cls.artifact.mkdir()
-        docker_archive(cls.artifact / contract.GRAVITY_ARCHIVE, contract.expected_image_reference("gravity", cls.builder_commit), maximum=False)
-        docker_archive(cls.artifact / contract.MAX_ARCHIVE, contract.expected_image_reference("max-scraper", cls.builder_commit), maximum=True)
+        docker_archive(
+            cls.artifact / contract.GRAVITY_ARCHIVE,
+            contract.expected_image_reference("gravity", cls.builder_commit),
+            application=cls.application,
+            maximum=False,
+        )
+        docker_archive(
+            cls.artifact / contract.MAX_ARCHIVE,
+            contract.expected_image_reference("max-scraper", cls.builder_commit),
+            application=cls.application,
+            maximum=True,
+        )
         cls.run_emitter(cls.artifact)
 
     @classmethod
@@ -554,12 +565,14 @@ class CoordinatedArtifactTests(unittest.TestCase):
         gravity_ids = docker_archive(
             artifact / contract.GRAVITY_ARCHIVE,
             contract.expected_image_reference("gravity", self.builder_commit),
+            application=self.application,
             maximum=False,
             oci_blob=True,
         )
         maximum_ids = docker_archive(
             artifact / contract.MAX_ARCHIVE,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             oci_blob=True,
         )
@@ -602,6 +615,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         image_id, containerd_image_id = docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             oci_blob=True,
         )
@@ -655,6 +669,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             oci_blob=True,
             descriptor_size_delta=1,
@@ -666,6 +681,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             oci_blob=True,
             substitute_blob_digest=True,
@@ -677,6 +693,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             oci_blob=True,
             extra_blob=True,
@@ -721,6 +738,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             empty=True,
         )
@@ -731,6 +749,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             substitute_base=True,
         )
@@ -741,6 +760,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             tini_bytes=b"not the pinned Tini binary",
         )
@@ -751,6 +771,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
         docker_archive(
             path,
             contract.expected_image_reference("max-scraper", self.builder_commit),
+            application=self.application,
             maximum=True,
             include_forbidden=True,
         )

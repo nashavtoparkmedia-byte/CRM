@@ -21,8 +21,10 @@ const unlinkStart = del.indexOf("if (body.action === 'unlink')")
 const requestStart = del.indexOf("if (body.action === 'dismiss')")
 const requestEnd = del.indexOf("return NextResponse.json({ error: 'valid action required'", requestStart)
 const requestBranch = del.slice(requestStart, requestEnd)
-const fallbackStart = webhook.indexOf('// 2. Fallback:')
+const syncUserStart = webhook.indexOf('async function handleSyncUser')
+const fallbackStart = webhook.indexOf('await recordPendingBotLinkRequestV1', syncUserStart)
 const fallback = webhook.slice(fallbackStart, webhook.indexOf('// Inject a system message', fallbackStart))
+const syncUser = webhook.slice(syncUserStart, webhook.indexOf('// Inject a system message', syncUserStart))
 
 check('contract neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(contract), 'contract leak')
 check('handler neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(handler), 'handler leak')
@@ -54,17 +56,29 @@ check(
   adapterCompact.includes("asyncrecordPending(input){awaitprisma.botChatMessage.create({data:{telegramId:BigInt(input.telegramId),text:input.text,direction:'INCOMING',driverId:null}})}"),
   'record mapping drift',
 )
-check('fallback text retained', fallback.includes("`[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`"), 'fallback text drift')
+check('fallback text retained', fallback.includes("`[Запрос привязки] Телефон: ${normalizedPhone}, @${username || 'нет'}`"), 'fallback text drift')
 check(
   'fallback order retained',
   fallback.indexOf('recordPendingBotLinkRequestV1') < fallback.indexOf('notifyManagerPendingLink')
-    && fallback.indexOf('notifyManagerPendingLink') < fallback.indexOf('NextResponse.json({ success: true, autoLinked: false'),
+    && fallback.indexOf('notifyManagerPendingLink') < fallback.indexOf('NextResponse.json({')
+    && fallback.indexOf('autoLinked: false') > fallback.indexOf('NextResponse.json({'),
   'fallback order drift',
 )
 check(
   'string conversion precedes owner conversion',
-  fallback.includes('telegramId: String(telegramId)') && adapter.includes('BigInt(input.telegramId)'),
+  syncUser.indexOf('const telegramIdText = String(telegramId).trim()') < syncUser.indexOf('await recordPendingBotLinkRequestV1')
+    && fallback.includes('telegramId: telegramIdText')
+    && adapter.includes('BigInt(input.telegramId)'),
   'telegram id drift',
+)
+check(
+  'generic phone ingress remains local only',
+  !syncUser.includes('listYandexConnectionCredentialsV1')
+    && !syncUser.includes('fleet-api.taxi.yandex.net')
+    && !/\bfetch\s*\(/u.test(syncUser)
+    && !syncUser.includes('upsertDriverTelegramLinkV1')
+    && syncUser.includes("status: 'PENDING_MANAGER_LINK'"),
+  'generic phone ingress provider boundary drift',
 )
 check(
   'commands amendment exact',

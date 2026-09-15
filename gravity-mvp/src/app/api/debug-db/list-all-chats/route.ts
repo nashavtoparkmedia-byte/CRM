@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 export async function GET(req: NextRequest) {
+    // Debug surface: same signed integration-admin session that guards the
+    // WhatsApp/Telegram connection admin actions this endpoint can drive.
+    if (!await getIntegrationAdminPrincipal()) {
+        return NextResponse.json({ success: false, error: 'DEBUG_ENDPOINT_FORBIDDEN' }, { status: 403 })
+    }
     try {
         const chats = await (prisma.chat as any).findMany({
             include: { driver: true },

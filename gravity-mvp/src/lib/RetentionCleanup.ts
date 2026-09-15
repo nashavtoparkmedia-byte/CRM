@@ -1,7 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { RUN_API_LOG_RETENTION_COMMAND_V1, RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1, RUN_DRIVER_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { DELETE_CONTACT_FOR_RETENTION_COMMAND_V1 } from '@/contracts/contacts/v1'
+import {
+  CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1,
+  DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
+} from '@/contracts/contacts/v1'
 import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { DETACH_CONTACT_TASKS_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { deleteContactForRetentionV1 } from '@/modules/contacts/public/v1'
@@ -126,8 +129,9 @@ export class RetentionCleanup {
         result.skippedContacts = contactResult.skipped
       }
 
-    } catch (err: any) {
-      opsLog('error', 'retention_cleanup_error', { error: err.message, dryRun })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      opsLog('error', 'retention_cleanup_error', { error: message, dryRun })
     }
 
     result.durationMs = Date.now() - start
@@ -255,10 +259,18 @@ export class RetentionCleanup {
           contract: DETACH_CONTACT_TASKS_COMMAND_V1,
           contactId: id,
         })
-        await deleteContactForRetentionV1({
-          contract: DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
-          contactId: id,
-        })
+        try {
+          await deleteContactForRetentionV1({
+            contract: DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
+            contactId: id,
+          })
+        } catch (error: unknown) {
+          if ((error as { code?: unknown })?.code === CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1) {
+            skipped++
+            continue
+          }
+          throw error
+        }
       }
       deleted++
     }

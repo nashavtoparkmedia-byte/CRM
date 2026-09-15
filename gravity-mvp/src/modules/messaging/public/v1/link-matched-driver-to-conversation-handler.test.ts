@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
     LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1,
@@ -9,17 +9,23 @@ import {
 
 import { createLinkMatchedDriverToConversationHandlerV1 } from './link-matched-driver-to-conversation-handler'
 
-const { chatFindUnique, chatUpdateMany } = vi.hoisted(() => ({
-    chatFindUnique: vi.fn(),
-    chatUpdateMany: vi.fn(),
+const mocks = vi.hoisted(() => ({
+    transaction: {
+        $queryRaw: vi.fn(),
+        chat: {
+            findUnique: vi.fn(),
+            updateMany: vi.fn(),
+        },
+        contact: {
+            findUnique: vi.fn(),
+        },
+    },
+    transactionRunner: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
     prisma: {
-        chat: {
-            findUnique: chatFindUnique,
-            updateMany: chatUpdateMany,
-        },
+        $transaction: mocks.transactionRunner,
     },
 }))
 
@@ -82,58 +88,207 @@ describe('LinkMatchedDriverToConversationCommand.v1', () => {
 })
 
 describe('matched-driver conversation persistence', () => {
-    it('exposes a bound owner capability without making callers provide a contract', async () => {
-        chatUpdateMany.mockResolvedValueOnce({ count: 1 })
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mocks.transactionRunner.mockImplementation(async (operation: (transaction: unknown) => unknown) => (
+            operation(mocks.transaction)
+        ))
+        mocks.transaction.$queryRaw.mockResolvedValue([{ admitted: true }])
+        mocks.transaction.chat.findUnique.mockResolvedValue({ contactId: null, driverId: null })
+        mocks.transaction.chat.updateMany.mockResolvedValue({ count: 1 })
+    })
 
+    it('exposes a bound owner capability that fails closed for a Contactless Chat', async () => {
         await expect(linkMatchedDriverToConversationCapabilityV1({
             chatId: 'chat-1',
             driverId: 'driver-1',
         })).resolves.toEqual({
             contract: LINK_MATCHED_DRIVER_TO_CONVERSATION_RESULT_V1,
-            linked: true,
+            linked: false,
         })
-        expect(chatUpdateMany).toHaveBeenCalledWith({
-            where: { id: 'chat-1', driverId: null },
-            data: { driverId: 'driver-1' },
-        })
+        expect(mocks.transaction.chat.updateMany).not.toHaveBeenCalled()
     })
 
-    it('uses an atomic null-only update for the first driver link', async () => {
-        chatUpdateMany.mockResolvedValueOnce({ count: 1 })
-
+    it('does not turn a Contactless provider match into a canonical Driver link', async () => {
         await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
             chatId: 'chat-1',
             driverId: 'driver-1',
-        })).resolves.toBe(true)
+        })).resolves.toBe(false)
 
-        expect(chatUpdateMany).toHaveBeenCalledWith({
-            where: { id: 'chat-1', driverId: null },
-            data: { driverId: 'driver-1' },
-        })
-        expect(chatFindUnique).not.toHaveBeenCalled()
+        expect(mocks.transaction.chat.updateMany).not.toHaveBeenCalled()
+        expect(mocks.transaction.chat.findUnique).toHaveBeenCalledTimes(1)
+        expect(mocks.transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+            mocks.transaction.chat.findUnique.mock.invocationCallOrder[0],
+        )
     })
 
     it('does not overwrite a different existing driver link', async () => {
-        chatUpdateMany.mockResolvedValueOnce({ count: 0 })
-        chatFindUnique.mockResolvedValueOnce({ driverId: 'different-driver' })
+        mocks.transaction.chat.findUnique.mockResolvedValueOnce({
+            contactId: 'contact-1',
+            driverId: 'different-driver',
+        })
 
         await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
             chatId: 'chat-1',
             driverId: 'driver-1',
         })).resolves.toBe(false)
-        expect(chatFindUnique).toHaveBeenCalledWith({
-            where: { id: 'chat-1' },
-            select: { driverId: true },
-        })
+        expect(mocks.transaction.contact.findUnique).not.toHaveBeenCalled()
+        expect(mocks.transaction.chat.updateMany).not.toHaveBeenCalled()
     })
 
     it('treats the same existing driver link as idempotently linked', async () => {
-        chatUpdateMany.mockResolvedValueOnce({ count: 0 })
-        chatFindUnique.mockResolvedValueOnce({ driverId: 'driver-1' })
+        mocks.transaction.chat.findUnique.mockResolvedValueOnce({
+            contactId: 'contact-1',
+            driverId: 'driver-1',
+        })
+        mocks.transaction.contact.findUnique.mockResolvedValueOnce({
+            id: 'contact-1',
+            isArchived: false,
+            mainDriverId: 'driver-1',
+            customFields: {
+                driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-1' }],
+            },
+        })
 
         await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
             chatId: 'chat-1',
             driverId: 'driver-1',
         })).resolves.toBe(true)
+        expect(mocks.transaction.contact.findUnique).toHaveBeenCalledOnce()
+        expect(mocks.transaction.chat.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('links a Contact-owned Chat only with the exact canonical confirmed Driver', async () => {
+        mocks.transaction.chat.findUnique.mockResolvedValueOnce({ contactId: 'contact-1', driverId: null })
+        mocks.transaction.contact.findUnique.mockResolvedValueOnce({
+            id: 'contact-1',
+            isArchived: false,
+            mainDriverId: 'driver-1',
+            customFields: {
+                driverConfirmations: [{
+                    id: 'confirmation-1',
+                    status: 'confirmed',
+                    representativeDriverId: 'driver-1',
+                }],
+            },
+        })
+
+        await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
+            chatId: 'chat-1',
+            driverId: 'driver-1',
+        })).resolves.toBe(true)
+
+        expect(mocks.transaction.contact.findUnique).toHaveBeenCalledWith({
+            where: { id: 'contact-1' },
+            select: {
+                id: true,
+                isArchived: true,
+                mainDriverId: true,
+                customFields: true,
+            },
+        })
+        expect(mocks.transaction.chat.updateMany).toHaveBeenCalledWith({
+            where: { id: 'chat-1', contactId: 'contact-1', driverId: null },
+            data: { driverId: 'driver-1' },
+        })
+    })
+
+    it.each([
+        {
+            label: 'has no durable confirmation',
+            contact: {
+                id: 'contact-1', isArchived: false, mainDriverId: 'driver-1', customFields: {},
+            },
+        },
+        {
+            label: 'has a different canonical Driver',
+            contact: {
+                id: 'contact-1',
+                isArchived: false,
+                mainDriverId: 'driver-2',
+                customFields: {
+                    driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-1' }],
+                },
+            },
+        },
+        {
+            label: 'has only a pending confirmation',
+            contact: {
+                id: 'contact-1',
+                isArchived: false,
+                mainDriverId: 'driver-1',
+                customFields: {
+                    driverConfirmations: [{ status: 'needs_reconciliation', representativeDriverId: 'driver-1' }],
+                },
+            },
+        },
+        {
+            label: 'has only a contradicted confirmation',
+            contact: {
+                id: 'contact-1',
+                isArchived: false,
+                mainDriverId: 'driver-1',
+                customFields: {
+                    driverConfirmations: [{ status: 'contradicted', representativeDriverId: 'driver-1' }],
+                },
+            },
+        },
+        {
+            label: 'has a confirmation for another representative Driver',
+            contact: {
+                id: 'contact-1',
+                isArchived: false,
+                mainDriverId: 'driver-1',
+                customFields: {
+                    driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-2' }],
+                },
+            },
+        },
+        {
+            label: 'is archived',
+            contact: {
+                id: 'contact-1',
+                isArchived: true,
+                mainDriverId: 'driver-1',
+                customFields: {
+                    driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-1' }],
+                },
+            },
+        },
+    ])('fails closed without a Chat mutation when the Contact $label', async ({ contact }) => {
+        mocks.transaction.chat.findUnique.mockResolvedValueOnce({ contactId: 'contact-1', driverId: null })
+        mocks.transaction.contact.findUnique.mockResolvedValueOnce(contact)
+
+        await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
+            chatId: 'chat-1',
+            driverId: 'driver-1',
+        })).resolves.toBe(false)
+
+        expect(mocks.transaction.chat.updateMany).not.toHaveBeenCalled()
+    })
+
+    it('fails closed if the Contact binding changes before the null-only update', async () => {
+        mocks.transaction.chat.findUnique
+            .mockResolvedValueOnce({ contactId: 'contact-1', driverId: null })
+            .mockResolvedValueOnce({ contactId: 'contact-2', driverId: null })
+        mocks.transaction.contact.findUnique.mockResolvedValueOnce({
+            id: 'contact-1',
+            isArchived: false,
+            mainDriverId: 'driver-1',
+            customFields: {
+                driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-1' }],
+            },
+        })
+        mocks.transaction.chat.updateMany.mockResolvedValueOnce({ count: 0 })
+
+        await expect(legacyPrismaMatchedDriverConversationLinkPortV1.linkMatchedDriverToConversation({
+            chatId: 'chat-1',
+            driverId: 'driver-1',
+        })).resolves.toBe(false)
+
+        expect(mocks.transaction.chat.updateMany).toHaveBeenCalledWith({
+            where: { id: 'chat-1', contactId: 'contact-1', driverId: null },
+            data: { driverId: 'driver-1' },
+        })
     })
 })

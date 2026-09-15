@@ -9,14 +9,13 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "0d72d6db6cd991a405fa0fa31745be563d0f57a9380ec90e8f9fcf66b3d8e082",
-    "size": 163027,
+    "sha256": "745c11cc1b913f2e883d361baefbd973ca91cf8d26b59a986dabf4ccefbe2f87",
+    "size": 161925,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
-    "fleet_operations",
-    "telegram_channel"
+    "fleet_operations"
   ],
   "migrations": [
     {
@@ -71,32 +70,6 @@
           "CompensationVerifiedOrder"
         ],
         "columns": [],
-        "forbidden_indexes": []
-      }
-    },
-    {
-      "name": "20260913173000_add_telegram_identity_review",
-      "path": "gravity-mvp/prisma/migrations/20260913173000_add_telegram_identity_review/migration.sql",
-      "sha256": "69ebb3e99e16db2f7513c80256c4b4b4a89263ee8fbe1cf93b7dec231410454a",
-      "size": 2358,
-      "owner_context": "telegram_channel",
-      "classification": "EXPAND_ONLY",
-      "production_application": false,
-      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
-      "creates": {
-        "tables": [
-          "TelegramIdentityReview"
-        ],
-        "columns": [
-          {
-            "table": "DriverTelegram",
-            "column": "attestedPhone"
-          },
-          {
-            "table": "DriverTelegram",
-            "column": "attestedPhoneAt"
-          }
-        ],
         "forbidden_indexes": []
       }
     },

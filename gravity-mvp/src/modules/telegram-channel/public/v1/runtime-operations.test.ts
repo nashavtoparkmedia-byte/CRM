@@ -23,18 +23,18 @@ import {
 beforeEach(() => vi.clearAllMocks())
 
 describe('Telegram owner runtime operations', () => {
-  it('delegates only fixed lifecycle, text, reachability and history operations', async () => {
-    mocks.sendTelegramMessage.mockResolvedValue({ success: true })
+  it('delegates lifecycle, reachability and history but retires unbound phone sends', async () => {
     mocks.checkTelegramReachability.mockResolvedValue({ reachable: true, telegramId: 'tg-1' })
 
     await initializeTelegramRuntimeV1()
-    await sendTelegramTextV1('+70000000001', 'hello', 'tg-connection-1')
+    await expect(sendTelegramTextV1('+70000000001', 'hello', 'tg-connection-1'))
+      .rejects.toThrow('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
     await importTelegramHistoryV1('job-1', 'last_n_days', 7, 'tg-connection-1')
     await checkTelegramReachabilityV1('+70000000001', 'tg-connection-1')
     await stopTelegramRuntimeV1()
 
     expect(mocks.initTelegramListeners).toHaveBeenCalledWith()
-    expect(mocks.sendTelegramMessage).toHaveBeenCalledWith('+70000000001', 'hello', 'tg-connection-1')
+    expect(mocks.sendTelegramMessage).not.toHaveBeenCalled()
     expect(mocks.importTelegramHistory).toHaveBeenCalledWith('job-1', 'last_n_days', 7, 'tg-connection-1')
     expect(mocks.checkTelegramReachability).toHaveBeenCalledWith('+70000000001', 'tg-connection-1')
     expect(mocks.stopTelegramHealthCheck).toHaveBeenCalledWith()

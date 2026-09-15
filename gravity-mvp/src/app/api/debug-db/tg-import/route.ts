@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { importOperationalTelegramHistoryV1 } from '@/infrastructure/telegram/operational-capabilities'
 import { prisma } from '@/lib/prisma'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 export async function POST(req: Request) {
+    // Debug surface: same signed integration-admin session that guards the
+    // WhatsApp/Telegram connection admin actions this endpoint can drive.
+    if (!await getIntegrationAdminPrincipal()) {
+        return NextResponse.json({ success: false, error: 'DEBUG_ENDPOINT_FORBIDDEN' }, { status: 403 })
+    }
     try {
         const { connectionId, daysBack = 30 } = await req.json()
 
