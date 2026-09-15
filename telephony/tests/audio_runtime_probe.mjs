@@ -2,39 +2,53 @@
 // Isolated audio-runtime probe for the CRM FreeSWITCH image and the AI audio bridge.
 //
 // Proves, against real containers and without any provider, trunk or phone:
+//   S. the probe network is internal, has no host address (isolated gateway mode) and no container
+//      on it can reach a host address, the internet or DNS — checked before FreeSWITCH starts;
+//   D. the image refuses to start without a real MEGAFON_SIP_PASSWORD;
 //   A. the image runs FreeSWITCH 1.10.12 with mod_audio_fork loaded, uuid_audio_fork registered,
-//      extensions 9999/9998 installed, existing telephony modules loaded, no new listeners;
-//      real call audio reaches a WebSocket (8 kHz and 16 kHz), stop and hangup clean up;
-//   B. malformed commands and malformed playAudio messages do not crash FreeSWITCH, nor do a
-//      refused connection or a far end that closes mid-stream;
+//      extensions 9999/9998 installed, existing telephony modules loaded, the module opens no
+//      listener, runtime unload is refused, the trunk password reaches FreeSWITCH from the environment; real call audio
+//      reaches a WebSocket (8 kHz and 16 kHz), stop and hangup clean up;
+//   B. the proven crash inputs (four-argument start, START without arguments, playAudio without a
+//      string audioContentType), invalid start arguments, a refused connection and a far end that
+//      closes mid-stream neither crash FreeSWITCH nor start anything; a valid playAudio still works;
 //   C. with the bridge code under test, a production-shaped originate
 //      `originate {origination_uuid=X,...,execute_on_answer='record_session ...'}<callee> 9999 XML default`
-//      forks exactly once and delivers the callee's audio to the bound CallSession whether or not the
-//      callee sends early media, including a fast answer, a late CRM bind, a rejected call and
-//      concurrent calls, alongside record_session, with full cleanup on hangup;
-//   D. the image refuses to start without a real MEGAFON_SIP_PASSWORD.
+//      forks exactly once, after answer, and delivers the callee's own audio to the bound CallSession
+//      whether or not the callee sends early media — including a fast answer, a late CRM bind, a
+//      rejected call, a hangup while the CRM bind is in flight, an answer after the originating
+//      client gave up (as the CRM does after 10 s) and concurrent calls — alongside record_session,
+//      with one finalize per call and full cleanup;
+//   N. (with --baseline-bridge-dir) the previous bridge never forks the no-early-media call.
 //
-// Safety: every container this probe creates is named probe-art-<run>-* and attached only to a
-// fresh `docker network create --internal` network that is verified before FreeSWITCH starts. No
-// port is published and DNS points at an unroutable resolver, so the Megafon gateway in the image can
-// never reach the trunk. The ESL password and the trunk password are random per run and are never
-// printed. No other container is inspected, executed into or modified.
+// Safety: every container is named probe-art-<run>-* and attached only to a fresh internal network
+// in isolated gateway mode, so containers have no route to the host or anywhere else. No port is
+// published and DNS points at an unroutable resolver. The host talks to FreeSWITCH only through a
+// driver container on that network, over `docker exec` stdin/stdout. The ESL and trunk passwords are
+// random per run, reach containers through 0600 env files that are deleted at teardown, and are
+// never printed. No production image is started and no other container is inspected or modified.
 //
-// Usage (needs Docker; run from the repository root):
-//   node telephony/tests/audio_runtime_probe.mjs --image <candidate> --out <dir>
+// Usage (needs Docker):
+//   node telephony/tests/audio_runtime_probe.mjs --image <candidate> --out <dir outside the repo>
 //     [--bridge-dir tools/audio-bridge-day1] [--bridge-image crm/audio-bridge:latest]
-//     [--control-image crm/freeswitch:latest] [--baseline-bridge-dir <dir>] [--keep]
+//     [--baseline-bridge-dir <dir>] [--keep]
 //
-// PROBE_MODE=sink and PROBE_MODE=bridge-stubs are internal modes used inside probe containers.
+// PROBE_MODE=sink, PROBE_MODE=bridge-stubs and PROBE_MODE=driver are internal modes used inside
+// probe containers.
 
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import crypto from 'node:crypto'
+import dns from 'node:dns/promises'
 import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
+import readline from 'node:readline'
+import { fileURLToPath } from 'node:url'
 
 const MODE = process.env.PROBE_MODE ?? 'run'
+const PROBE_PATH = fileURLToPath(import.meta.url)
+const REPO_ROOT = path.resolve(path.dirname(PROBE_PATH), '../..')
 const CANDIDATE_TONES = [425, 440, 700, 880, 1234]
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -53,6 +67,8 @@ function goertzelPower(samples, rate, freq) {
     return samples.length ? (s1 * s1 + s2 * s2 - c * s1 * s2) / samples.length : 0
 }
 
+// A capture that spans whole periods of a synthetic tone has (numerically) zero energy at the other
+// candidate frequencies, so the margin can be very large; the checks only require >= 20 dB.
 function analysePcm(buf, rate) {
     const n = Math.floor(buf.length / 2)
     const samples = new Float64Array(n)
@@ -122,8 +138,12 @@ async function runSink() {
     console.log('[probe-sink] listening :8080/audio')
 }
 
+// Messages 1-7 reached strcmp(NULL) on the libwebsockets thread before patch 0002 and must now be
+// logged and ignored. Messages 8-10 exercise adjacent paths (no data, unknown type, unsupported type).
+// Message 11 is a valid raw playAudio: the positive control that the module still writes its temp file.
+const HOSTILE_GUARDED_MESSAGES = 7
+
 function sendHostile(ws, rec) {
-    // Each of these reached strcmp(NULL) on the libwebsockets thread before patch 0002.
     const messages = [
         { type: 'playAudio', data: {} },
         { type: 'playAudio', data: { audioContent: 'AAAA', sampleRate: 8000 } },
@@ -135,6 +155,7 @@ function sendHostile(ws, rec) {
         { type: 'playAudio' },
         { type: 'PlayAudio', data: {} },
         { type: 'playAudio', data: { audioContentType: 'mp3', audioContent: 'AAAA' } },
+        { type: 'playAudio', data: { audioContentType: 'raw', sampleRate: 8000, audioContent: Buffer.alloc(1600).toString('base64') } },
     ]
     messages.forEach((message, index) => {
         setTimeout(() => {
@@ -194,7 +215,7 @@ function installBridgeStubs() {
         },
     })
 
-    // 1.0 s of 700 Hz, 8 kHz mono 16-bit: playback the fork must NOT hear in mono mode.
+    // 1.0 s of 700 Hz, 8 kHz mono 16-bit: the bot's own playback, on the write side of the call.
     const rate = 8000
     const pcm = Buffer.alloc(rate * 2)
     for (let i = 0; i < rate; i++) pcm.writeInt16LE(Math.round(8000 * Math.sin((2 * Math.PI * 700 * i) / rate)), i * 2)
@@ -216,36 +237,23 @@ function installBridgeStubs() {
     console.log('[probe] bridge provider stubs installed')
 }
 
-// ---- Host orchestration -----------------------------------------------------------------------------
+// ---- Mode: driver (inside a container on the probe network) ------------------------------------
+// The host has no address on the isolated network, so ESL traffic runs here. JSON lines on stdin
+// are requests; JSON lines on stdout are replies and forwarded events.
 
-function docker(args, { allowFail = false, input } = {}) {
-    try {
-        return execFileSync('docker', args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], input }).trim()
-    } catch (err) {
-        if (allowFail) return null
-        throw new Error(`docker ${args[0]} failed: ${String(err.stderr || err.message).trim().slice(0, 300)}`)
-    }
-}
-
-// Container output: the guard and the bridge write to both stdout and stderr.
-function dockerLogs(name) {
-    const res = spawnSync('docker', ['logs', name], { encoding: 'utf8' })
-    return res.status === 0 ? `${res.stdout}${res.stderr}` : ''
-}
-
-class Esl {
-    constructor(host, password) { this.host = host; this.password = password }
+class EslClient {
+    constructor(host, password) { this.host = host; this.password = password; this.pending = [] }
 
     connect(onEvent) {
         return new Promise((resolve, reject) => {
             const sock = net.connect(8021, this.host)
             let buf = ''
             let authed = false
-            const pending = []
             this.sock = sock
-            this.pending = pending
+            const failAll = err => { for (const waiter of this.pending.splice(0)) waiter.reject(err) }
             sock.setEncoding('utf8')
-            sock.once('error', reject)
+            sock.on('error', err => { if (!authed) reject(err); failAll(err) })
+            sock.on('close', () => { if (!authed) reject(new Error('ESL closed before auth')); failAll(new Error('ESL connection closed')) })
             sock.on('data', chunk => {
                 buf += chunk
                 for (;;) {
@@ -262,7 +270,7 @@ class Esl {
                         if (String(head['Reply-Text']).startsWith('+OK')) { authed = true; resolve(this) } else reject(new Error('ESL auth failed'))
                         continue
                     }
-                    if (type === 'api/response' || type === 'command/reply') { pending.shift()?.(body || head['Reply-Text'] || ''); continue }
+                    if (type === 'api/response' || type === 'command/reply') { this.pending.shift()?.resolve(body || head['Reply-Text'] || ''); continue }
                     if (type === 'text/event-plain' && onEvent) onEvent(parseHeaders(body, true))
                 }
             })
@@ -270,12 +278,157 @@ class Esl {
     }
 
     send(line) {
-        return new Promise(resolve => { this.pending.push(resolve); this.sock.write(`${line}\n\n`) })
+        return new Promise((resolve, reject) => {
+            if (!this.sock || this.sock.destroyed) { reject(new Error('ESL not connected')); return }
+            this.pending.push({ resolve, reject })
+            this.sock.write(`${line}\n\n`)
+        })
     }
 
-    api(command) { return this.send(`api ${command}`).then(out => String(out).trim()) }
-
     close() { this.sock?.destroy() }
+}
+
+async function reachability(targets, hostnames) {
+    const results = {}
+    for (const target of targets) {
+        const [host, port] = target.split(':')
+        results[target] = await new Promise(resolve => {
+            const sock = net.connect({ host, port: Number(port) })
+            const timer = setTimeout(() => { sock.destroy(); resolve('TIMEOUT') }, 3000)
+            sock.once('connect', () => { clearTimeout(timer); sock.destroy(); resolve('CONNECTED') })
+            sock.once('error', err => { clearTimeout(timer); resolve(err.code ?? 'ERROR') })
+        })
+    }
+    for (const hostname of hostnames) {
+        try { await dns.lookup(hostname); results[`dns:${hostname}`] = 'RESOLVED' } catch (err) { results[`dns:${hostname}`] = err.code ?? 'ERROR' }
+    }
+    return results
+}
+
+async function runDriver() {
+    const password = process.env.PROBE_ESL_PASSWORD
+    const connections = new Map()
+    const emit = obj => process.stdout.write(`${JSON.stringify(obj)}\n`)
+    const input = readline.createInterface({ input: process.stdin })
+    input.on('line', async line => {
+        let msg
+        try { msg = JSON.parse(line) } catch { return }
+        const reply = (ok, value) => emit({ id: msg.id, ok, value })
+        try {
+            if (msg.op === 'connect') {
+                const client = new EslClient(msg.host, password)
+                await client.connect(msg.events ? headers => emit({ event: msg.conn, headers }) : null)
+                connections.set(msg.conn, client)
+                reply(true, 'connected')
+            } else if (msg.op === 'send') {
+                const client = connections.get(msg.conn)
+                if (!client) throw new Error('unknown connection')
+                reply(true, await client.send(msg.line))
+            } else if (msg.op === 'send-abandon') {
+                // Like the CRM's ESL client: stop waiting after ms and drop the connection.
+                const client = connections.get(msg.conn)
+                if (!client) throw new Error('unknown connection')
+                const sent = client.send(msg.line)
+                sent.catch(() => {})
+                const result = await Promise.race([sent.then(value => ({ value })), sleep(msg.ms).then(() => null)])
+                if (result) { reply(true, result.value); return }
+                client.close()
+                connections.delete(msg.conn)
+                reply(true, 'ABANDONED')
+            } else if (msg.op === 'close') {
+                connections.get(msg.conn)?.close()
+                connections.delete(msg.conn)
+                reply(true, 'closed')
+            } else if (msg.op === 'reach') {
+                reply(true, await reachability(msg.targets ?? [], msg.hostnames ?? []))
+            } else {
+                throw new Error(`unknown op ${msg.op}`)
+            }
+        } catch (err) {
+            reply(false, err.message)
+        }
+    })
+    input.on('close', () => { for (const client of connections.values()) client.close(); process.exit(0) })
+}
+
+// ---- Host orchestration -----------------------------------------------------------------------------
+
+function docker(args, { allowFail = false, input } = {}) {
+    try {
+        return execFileSync('docker', args, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], input }).trim()
+    } catch (err) {
+        if (allowFail) return null
+        throw new Error(`docker ${args[0]} failed: ${String(err.stderr || err.message).trim().slice(0, 300)}`)
+    }
+}
+
+// Container output: the guard and the bridge write to both stdout and stderr.
+function dockerLogs(name) {
+    const res = spawnSync('docker', ['logs', name], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+    return res.status === 0 ? `${res.stdout}${res.stderr}` : ''
+}
+
+class Driver {
+    constructor(container) {
+        this.proc = spawn('docker', ['exec', '-i', '-e', 'PROBE_MODE=driver', container, 'node', '/probe/probe.mjs'], { stdio: ['pipe', 'pipe', 'pipe'] })
+        this.seq = 0
+        this.waiters = new Map()
+        this.listeners = new Map()
+        this.stderr = ''
+        readline.createInterface({ input: this.proc.stdout }).on('line', line => {
+            let msg
+            try { msg = JSON.parse(line) } catch { return }
+            if (msg.event) { this.listeners.get(msg.event)?.(msg.headers); return }
+            const waiter = this.waiters.get(msg.id)
+            if (!waiter) return
+            this.waiters.delete(msg.id)
+            clearTimeout(waiter.timer)
+            if (msg.ok) waiter.resolve(msg.value)
+            else waiter.reject(new Error(msg.value))
+        })
+        this.proc.stderr.on('data', data => { this.stderr = `${this.stderr}${data}`.slice(-4000) })
+        this.proc.on('exit', () => {
+            for (const waiter of this.waiters.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('probe driver exited')) }
+            this.waiters.clear()
+        })
+    }
+
+    request(op, payload = {}, timeoutMs = 30000) {
+        return new Promise((resolve, reject) => {
+            const id = ++this.seq
+            const timer = setTimeout(() => { this.waiters.delete(id); reject(new Error(`driver ${op} timed out after ${timeoutMs} ms`)) }, timeoutMs)
+            this.waiters.set(id, { resolve, reject, timer })
+            this.proc.stdin.write(`${JSON.stringify({ id, op, ...payload })}\n`)
+        })
+    }
+
+    close() {
+        try { this.proc.stdin.end() } catch {}
+        try { this.proc.kill() } catch {}
+    }
+}
+
+class Esl {
+    constructor(driver, host) { this.driver = driver; this.host = host; this.conn = `c${crypto.randomBytes(4).toString('hex')}` }
+
+    async connect(onEvent) {
+        if (onEvent) this.driver.listeners.set(this.conn, onEvent)
+        await this.driver.request('connect', { conn: this.conn, host: this.host, events: Boolean(onEvent) }, 10000)
+        return this
+    }
+
+    send(line, timeoutMs = 30000) { return this.driver.request('send', { conn: this.conn, line }, timeoutMs) }
+
+    api(command, timeoutMs = 30000) { return this.send(`api ${command}`, timeoutMs).then(out => String(out).trim()) }
+
+    apiAbandonAfter(command, ms) {
+        return this.driver.request('send-abandon', { conn: this.conn, line: `api ${command}`, ms }, ms + 30000).then(out => String(out).trim())
+    }
+
+    close() {
+        this.driver.listeners.delete(this.conn)
+        return this.driver.request('close', { conn: this.conn }, 5000).catch(() => {})
+    }
 }
 
 function parseHeaders(text, decode) {
@@ -289,8 +442,14 @@ function parseHeaders(text, decode) {
 
 function safeDecode(value) { try { return decodeURIComponent(value) } catch { return value } }
 
+function sha256File(file) { return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex') }
+
+function bridgeFiles(dir) {
+    return Object.fromEntries(fs.readdirSync(dir).filter(f => f.endsWith('.js')).sort().map(f => [f, sha256File(path.join(dir, f))]))
+}
+
 function parseArgs(argv) {
-    const args = { bridgeDir: 'tools/audio-bridge-day1', bridgeImage: 'crm/audio-bridge:latest', controlImage: 'crm/freeswitch:latest', keep: false }
+    const args = { bridgeDir: 'tools/audio-bridge-day1', bridgeImage: 'crm/audio-bridge:latest', keep: false }
     for (let i = 0; i < argv.length; i++) {
         const key = argv[i]
         const next = () => argv[++i]
@@ -298,12 +457,16 @@ function parseArgs(argv) {
         else if (key === '--out') args.out = next()
         else if (key === '--bridge-dir') args.bridgeDir = next()
         else if (key === '--bridge-image') args.bridgeImage = next()
-        else if (key === '--control-image') args.controlImage = next()
         else if (key === '--baseline-bridge-dir') args.baselineBridgeDir = next()
         else if (key === '--keep') args.keep = true
         else throw new Error(`unknown argument ${key}`)
     }
     if (!args.image || !args.out) throw new Error('--image and --out are required')
+    args.out = path.resolve(args.out)
+    const insideRepo = path.relative(REPO_ROOT, args.out)
+    if (!insideRepo.startsWith('..') && !path.isAbsolute(insideRepo)) throw new Error('--out must be outside the repository')
+    args.bridgeDir = path.resolve(REPO_ROOT, args.bridgeDir)
+    if (args.baselineBridgeDir) args.baselineBridgeDir = path.resolve(args.baselineBridgeDir)
     return args
 }
 
@@ -338,52 +501,137 @@ const CALLEE_DIALPLAN = `<include>
     <action application="playback" data="tone_stream://%(400,200,425);loops=3"/>
     <action application="hangup" data="CALL_REJECTED"/>
   </condition></extension>
+  <extension name="probe_callee_slow_no_early_media"><condition field="destination_number" expression="^5560$">
+    <action application="unset" data="execute_on_answer"/>
+    <action application="sleep" data="12000"/>
+    <action application="answer"/>
+    <action application="playback" data="tone_stream://%(9000,0,1234)"/>
+    <action application="hangup"/>
+  </condition></extension>
+  <extension name="probe_callee_no_early_media_880"><condition field="destination_number" expression="^5561$">
+    <action application="unset" data="execute_on_answer"/>
+    <action application="sleep" data="1500"/>
+    <action application="answer"/>
+    <action application="playback" data="tone_stream://%(9000,0,880)"/>
+    <action application="hangup"/>
+  </condition></extension>
+  <extension name="probe_callee_no_early_media_440"><condition field="destination_number" expression="^5562$">
+    <action application="unset" data="execute_on_answer"/>
+    <action application="sleep" data="1000"/>
+    <action application="answer"/>
+    <action application="playback" data="tone_stream://%(9000,0,440)"/>
+    <action application="hangup"/>
+  </condition></extension>
 </include>
 `
+
+function megafonHostnames() {
+    const text = fs.readFileSync(path.join(REPO_ROOT, 'telephony/conf/sip_profiles/external/megafon.xml'), 'utf8')
+    const names = new Set()
+    for (const param of ['proxy', 'realm', 'outbound-proxy']) {
+        const match = text.match(new RegExp(`<param\\s+name="${param}"\\s+value="([^"]+)"`))
+        if (match) names.add(match[1].replace(/^sips?:/, '').split(/[:;]/)[0])
+    }
+    return [...names].filter(name => /[a-z]/i.test(name))
+}
 
 async function runProbe() {
     const args = parseArgs(process.argv.slice(2))
     const run = crypto.randomBytes(3).toString('hex')
     const prefix = `probe-art-${run}`
-    const out = path.resolve(args.out)
+    const out = args.out
     const shared = path.join(out, 'shared')
     for (const dir of ['crm', 'stt', 'tts', 'sink']) fs.mkdirSync(path.join(shared, dir), { recursive: true })
     fs.chmodSync(shared, 0o777)
     for (const dir of ['crm', 'stt', 'tts', 'sink']) fs.chmodSync(path.join(shared, dir), 0o777)
     const eslPassword = crypto.randomBytes(24).toString('hex')
     const trunkPassword = `probe${crypto.randomBytes(12).toString('hex')}`
+    const secretDir = fs.mkdtempSync(path.join(out, '.probe-secrets-'))
+    fs.chmodSync(secretDir, 0o700)
+    const envFile = (name, entries) => {
+        const file = path.join(secretDir, name)
+        fs.writeFileSync(file, entries.map(([k, v]) => `${k}=${v}\n`).join(''), { mode: 0o600 })
+        return file
+    }
+    const fsEnv = envFile('fs.env', [['ESL_PASSWORD', eslPassword], ['MEGAFON_SIP_PASSWORD', trunkPassword]])
+    const eslEnv = envFile('esl.env', [['ESL_PASSWORD', eslPassword], ['PROBE_ESL_PASSWORD', eslPassword]])
+
     const results = []
     const created = []
+    const provenance = {
+        started_at: new Date().toISOString(),
+        node: process.version,
+        probe_sha256: sha256File(PROBE_PATH),
+        git_head: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: REPO_ROOT, encoding: 'utf8' }).stdout.trim() || null,
+        git_dirty_paths: spawnSync('git', ['status', '--porcelain'], { cwd: REPO_ROOT, encoding: 'utf8' }).stdout.split('\n').filter(Boolean).length,
+        candidate_image: args.image,
+        candidate_image_id: docker(['image', 'inspect', args.image, '--format', '{{.Id}}'], { allowFail: true }),
+        bridge_image: args.bridgeImage,
+        bridge_image_id: docker(['image', 'inspect', args.bridgeImage, '--format', '{{.Id}}'], { allowFail: true }),
+        bridge_dir_files: bridgeFiles(args.bridgeDir),
+        baseline_bridge_dir_files: args.baselineBridgeDir ? bridgeFiles(args.baselineBridgeDir) : null,
+    }
     const check = (id, name, pass, detail = '') => {
         results.push({ id, name, pass: Boolean(pass), detail })
         console.log(`${pass ? 'PASS' : 'FAIL'} ${id} ${name}${detail ? ` — ${detail}` : ''}`)
     }
 
     const network = `${prefix}-net`
-    let subnet = null
-    for (let third = 240; third < 255 && !subnet; third++) {
-        const candidate = `172.31.${third}.0/24`
-        if (docker(['network', 'create', '--internal', '--subnet', candidate, '--label', 'io.yoko.probe=audio-runtime', network], { allowFail: true }) !== null) subnet = candidate
-    }
-    if (!subnet) throw new Error('could not create an isolated network')
-    const base = subnet.replace('.0/24', '')
-    const ip = { fs: `${base}.10`, control: `${base}.11`, sink: `${base}.20`, bridge: `${base}.30` }
-    const netInfo = JSON.parse(docker(['network', 'inspect', network]))[0]
-    check('S1', 'probe network is internal (no egress)', netInfo.Internal === true, subnet)
-    if (!netInfo.Internal) throw new Error('refusing to continue without an internal network')
-
-    const runContainer = (name, extra) => {
-        docker(['run', '-d', '--name', name, '--label', 'io.yoko.probe=audio-runtime', '--network', network, '--dns', '127.0.0.254', ...extra])
-        created.push(name)
-    }
-    const fsName = `${prefix}-fs`
+    let driver = null
+    let tornDown = false
     const teardown = () => {
+        if (tornDown) return
+        tornDown = true
+        driver?.close()
+        fs.rmSync(secretDir, { recursive: true, force: true })
         if (args.keep) return
-        for (const name of created) docker(['rm', '-f', name], { allowFail: true })
+        for (const name of [...created].reverse()) docker(['rm', '-f', name], { allowFail: true })
         docker(['network', 'rm', network], { allowFail: true })
     }
+    const onSignal = signal => { console.log(`probe interrupted by ${signal}; tearing down`); teardown(); process.exit(130) }
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+
+    const runContainer = (name, extra) => {
+        created.push(name)
+        docker(['run', '-d', '--name', name, '--label', 'io.yoko.probe=audio-runtime', '--network', network, '--dns', '127.0.0.254', ...extra])
+    }
+    const fsName = `${prefix}-fs`
 
     try {
+        // ---- S: isolation, proven before any FreeSWITCH container starts ----------------------------
+        let subnet = null
+        for (let third = 240; third < 255 && !subnet; third++) {
+            const candidate = `172.31.${third}.0/24`
+            if (docker(['network', 'create', '--internal', '-o', 'com.docker.network.bridge.gateway_mode_ipv4=isolated',
+                '--subnet', candidate, '--label', 'io.yoko.probe=audio-runtime', network], { allowFail: true }) !== null) subnet = candidate
+        }
+        if (!subnet) throw new Error('could not create an isolated network')
+        const base = subnet.replace('.0/24', '')
+        const ip = { fs: `${base}.10`, control: `${base}.11`, sink: `${base}.20`, bridge: `${base}.30`, driver: `${base}.40` }
+        const netInfo = JSON.parse(docker(['network', 'inspect', network]))[0]
+        const bridgeIface = `br-${netInfo.Id.slice(0, 12)}`
+        const hostAddr = spawnSync('ip', ['-4', '-o', 'addr', 'show', 'dev', bridgeIface], { encoding: 'utf8' }).stdout.trim()
+        provenance.network = { subnet, internal: netInfo.Internal, options: netInfo.Options, host_ipv4_on_bridge: hostAddr !== '' }
+        const isolated = netInfo.Internal === true && netInfo.Options?.['com.docker.network.bridge.gateway_mode_ipv4'] === 'isolated' && hostAddr === ''
+        check('S1', 'probe network is internal with no host address (isolated gateway)', isolated, `${subnet} ${bridgeIface}`)
+        if (!isolated) throw new Error('refusing to continue without an isolated network')
+
+        runContainer(`${prefix}-driver`, ['--ip', ip.driver, '--memory', '256m', '--env-file', eslEnv,
+            '-v', `${PROBE_PATH}:/probe/probe.mjs:ro`, '--entrypoint', 'sleep', args.bridgeImage, 'infinity'])
+        driver = new Driver(`${prefix}-driver`)
+        const offSubnet = ['172.17.0.1:8021', '172.17.0.1:5060', '1.1.1.1:443', '8.8.8.8:53']
+        const gateway = [`${base}.1:8021`, `${base}.1:5060`, `${base}.1:5080`, `${base}.1:7080`, `${base}.1:22`]
+        const hostnames = megafonHostnames()
+        const reach = await driver.request('reach', { targets: [...gateway, ...offSubnet], hostnames: [...hostnames, 'example.com'] }, 60000)
+        const unreachable = code => ['ENETUNREACH', 'EHOSTUNREACH', 'TIMEOUT'].includes(code)
+        const reachOk = Object.values(reach).every(v => v !== 'CONNECTED' && v !== 'RESOLVED')
+            && offSubnet.every(t => unreachable(reach[t])) && hostnames.length > 0
+        provenance.reachability = reach
+        check('S2', 'no probe container can reach the host, the internet or the trunk hostname', reachOk,
+            Object.entries(reach).map(([k, v]) => `${k}=${v}`).join(' '))
+        if (!reachOk) throw new Error('refusing to continue: the probe network is not isolated')
+
         // ---- D: the image refuses to start without a real trunk password -------------------------
         for (const [id, label, value] of [['D1', 'missing', null], ['D2', 'placeholder', '__FILL_LATER__']]) {
             const name = `${prefix}-guard-${label}`
@@ -404,12 +652,17 @@ async function runProbe() {
         // ---- A: runtime ------------------------------------------------------------------------------
         const callees = path.join(out, '97_probe_callees.xml')
         fs.writeFileSync(callees, CALLEE_DIALPLAN)
-        runContainer(fsName, ['--ip', ip.fs, '--memory', '768m', '-e', `ESL_PASSWORD=${eslPassword}`, '-e', `MEGAFON_SIP_PASSWORD=${trunkPassword}`,
-            '-v', `${shared}:/shared`, args.image])
-        const esl = new Esl(ip.fs, eslPassword)
+        runContainer(fsName, ['--ip', ip.fs, '--memory', '768m', '--env-file', fsEnv, '-v', `${shared}:/shared`, args.image])
+        let esl = null
         let up = false
         for (let i = 0; i < 90 && !up; i++) {
-            try { await esl.connect(); up = (await esl.api('status')).includes('UP') } catch { await sleep(1000) }
+            try {
+                const attempt = new Esl(driver, ip.fs)
+                await attempt.connect()
+                up = (await attempt.api('status')).includes('UP')
+                if (up) esl = attempt
+                else await attempt.close()
+            } catch { await sleep(1000) }
         }
         check('A1', 'FreeSWITCH starts and answers ESL', up)
         if (!up) throw new Error('FreeSWITCH did not start')
@@ -436,26 +689,56 @@ async function runProbe() {
         const installed = docker(['exec', fsName, 'sha256sum', '/usr/lib/freeswitch/mod/mod_audio_fork.so']).split(/\s+/)[0]
         check('A7', 'installed module matches the image provenance label', label && installed === label, installed)
 
+        // Control: the same image with the pinned base image's modules.conf.xml, i.e. without mod_audio_fork.
+        // Docker's embedded DNS (127.0.0.11) listens on random ports per container; it is not FreeSWITCH.
         const listeners = name => new Set(docker(['exec', name, 'busybox', 'netstat', '-lntu']).split('\n')
             .filter(l => /^(tcp|udp)/.test(l)).map(l => l.split(/\s+/)).map(p => `${p[0]} ${p[3]}`).filter(l => !l.includes('127.0.0.11:')))
-        runContainer(`${prefix}-control`, ['--ip', ip.control, '--memory', '512m', '-e', `ESL_PASSWORD=${eslPassword}`, args.controlImage])
-        let controlUp = false
-        const controlEsl = new Esl(ip.control, eslPassword)
-        for (let i = 0; i < 90 && !controlUp; i++) {
-            try { await controlEsl.connect(); controlUp = (await controlEsl.api('status')).includes('UP') } catch { await sleep(1000) }
+        const runtimeRef = fs.readFileSync(path.join(REPO_ROOT, 'telephony/Dockerfile'), 'utf8').match(/^ARG FREESWITCH_RUNTIME="([^"]+)"$/m)[1]
+        const controlModules = path.join(out, 'control-modules.conf.xml')
+        fs.writeFileSync(controlModules, `${docker(['run', '--rm', '--network', 'none', '--entrypoint', 'cat', runtimeRef,
+            '/usr/share/freeswitch/conf/vanilla/autoload_configs/modules.conf.xml'])}\n`)
+        fs.chmodSync(controlModules, 0o644)
+        runContainer(`${prefix}-control`, ['--ip', ip.control, '--memory', '512m', '--env-file', fsEnv,
+            '-v', `${controlModules}:/usr/share/freeswitch/conf/vanilla/autoload_configs/modules.conf.xml:ro`, args.image])
+        let control = null
+        for (let i = 0; i < 90 && !control; i++) {
+            try {
+                const attempt = new Esl(driver, ip.control)
+                await attempt.connect()
+                if ((await attempt.api('status')).includes('UP')) control = attempt
+                else await attempt.close()
+            } catch { await sleep(1000) }
         }
-        controlEsl.close()
+        const controlWithoutModule = control ? (await control.api('module_exists mod_audio_fork')) === 'false' : false
+        await control?.close()
         const candidateListeners = listeners(fsName)
-        const controlListeners = controlUp ? listeners(`${prefix}-control`) : new Set()
+        const controlListeners = control ? listeners(`${prefix}-control`) : new Set()
         const added = [...candidateListeners].filter(l => !controlListeners.has(l))
-        check('A8', 'no listener beyond the unmodified control image', controlUp && added.length === 0, added.join(',') || `${candidateListeners.size} listeners`)
+        check('A8', 'mod_audio_fork opens no listener (same sockets as the image without the module)',
+            Boolean(control) && controlWithoutModule && !fs.readFileSync(controlModules, 'utf8').includes('mod_audio_fork') && added.length === 0,
+            added.join(',') || `${candidateListeners.size} listeners, control without module=${controlWithoutModule}`)
         docker(['rm', '-f', `${prefix}-control`], { allowFail: true })
+
+        const unload = await esl.api('unload mod_audio_fork')
+        const reload = await esl.api('reload mod_audio_fork')
+        await sleep(1000)
+        // "reload" reports "+OK Reloading XML" even though its unload step is refused; what matters is
+        // that the module was never torn down and FreeSWITCH did not abort.
+        check('A14', 'unload of mod_audio_fork is refused, reload does not tear it down, FreeSWITCH stays up (upstream teardown aborts)',
+            unload.startsWith('-ERR') && unload.includes('not unloadable')
+                && (await esl.api('module_exists mod_audio_fork')) === 'true' && await alive(),
+            `unload=${unload.slice(0, 40)} reload=${reload.slice(0, 40)}`)
+
+        const trunkGlobal = await esl.api('global_getvar megafon_password')
+        const gatewayStatus = await esl.api('sofia status gateway megafon')
+        check('A13', 'the trunk password reaches FreeSWITCH from MEGAFON_SIP_PASSWORD (compared, never printed)',
+            trunkGlobal === trunkPassword && /Password\s+yes/.test(gatewayStatus))
 
         docker(['cp', callees, `${fsName}:/etc/freeswitch/dialplan/default/97_probe_callees.xml`])
         await esl.api('reloadxml')
 
         runContainer(`${prefix}-sink`, ['--ip', ip.sink, '--memory', '256m', '-e', 'PROBE_MODE=sink', '-e', 'PROBE_SINK_OUT=/shared/sink',
-            '-v', `${shared}:/shared`, '-v', `${path.resolve('telephony/tests/audio_runtime_probe.mjs')}:/probe/probe.mjs:ro`,
+            '-v', `${shared}:/shared`, '-v', `${PROBE_PATH}:/probe/probe.mjs:ro`,
             '--entrypoint', 'node', args.bridgeImage, '/probe/probe.mjs'])
         await sleep(1500)
         const sinkUrl = `ws://${ip.sink}:8080/audio`
@@ -501,7 +784,7 @@ async function runProbe() {
                 reply.startsWith('+OK') && r && r.binaryFrames > 50 && sizesOk && r.analysis.nonZeroSamples > 0.9 * r.analysis.samples
                     && r.analysis.dominantHz === 440 && r.analysis.dominantMarginDb >= 20 && Math.abs(r.bytesPerSecond - 16000) < 1000
                     && r.protocolNegotiated === 'audio.drachtio.org' && r.callUuid === b,
-                r && `frames=${r.binaryFrames} B/s=${r.bytesPerSecond} dominant=${r.analysis.dominantHz}Hz +${r.analysis.dominantMarginDb}dB`)
+                r && `frames=${r.binaryFrames} B/s=${r.bytesPerSecond} dominant=${r.analysis.dominantHz}Hz margin>=20dB:${r.analysis.dominantMarginDb >= 20}`)
             check('A10', 'stop by bug name removes the fork, keeps the call and closes the socket cleanly',
                 during.includes(`callUuid=${b}`) && stop.startsWith('+OK') && after.length === 0 && stillUp && r?.close?.code === 1000)
         }
@@ -528,30 +811,45 @@ async function runProbe() {
         }
 
         // ---- B: crash hardening --------------------------------------------------------------------
+        const fsLogCount = needle => {
+            const consoleCount = dockerLogs(fsName).split(needle).length - 1
+            const fileCount = Number(docker(['exec', fsName, 'sh', '-c', `grep -c '${needle}' /var/log/freeswitch/freeswitch.log 2>/dev/null; true`], { allowFail: true }) ?? 0) || 0
+            return Math.max(consoleCount, fileCount)
+        }
+        const tempDir = await esl.api('global_getvar temp_dir')
+        const tempFileCount = uuid => docker(['exec', fsName, 'sh', '-c', `ls ${tempDir}/${uuid}_*.tmp.r8 2>/dev/null | wc -l`], { allowFail: true })
         {
-            const { a, b } = await toneCall(9999, 440, 20000)
+            const { a, b } = await toneCall(9999, 440, 30000)
             const four = await esl.api(`uuid_audio_fork ${b} start ${sinkUrl}?callUuid=${b}&label=b4 mono`)
             await sleep(2000)
             const fourBugs = await bugs(b)
             await esl.api(`uuid_audio_fork ${b} stop`)
             await sleep(800)
-            check('B1', 'four-argument start does not crash and defaults to 8000 Hz',
-                four.startsWith('+OK') && fourBugs.includes('audio_fork') && await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true')
+            const b4 = await sinkResult('b4')
+            check('B1', 'four-argument start does not crash and streams at the default 8000 Hz',
+                four.startsWith('+OK') && fourBugs.includes('audio_fork') && await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true'
+                    && b4 && Math.abs(b4.bytesPerSecond - 16000) < 1000,
+                b4 && `B/s=${b4.bytesPerSecond}`)
             const upper = await esl.api(`uuid_audio_fork ${b} START ${sinkUrl}`)
             const upper2 = await esl.api(`uuid_audio_fork ${b} Start`)
             check('B2', 'START with too few arguments returns usage instead of crashing',
                 upper.startsWith('-USAGE') && upper2.startsWith('-USAGE') && await alive())
+            const guardNeedle = 'playAudio request has no string audioContentType, ignoring'
+            const guardedBefore = fsLogCount(guardNeedle)
             await esl.api(`uuid_audio_fork ${b} start ${sinkUrl}?callUuid=${b}&label=bh&hostile=1 mono 8000 hostile`)
             await sleep(4500)
             const hostileAlive = await alive()
             const stillStreaming = (await bugs(b)).includes('hostile')
+            const filesDuring = tempFileCount(b)
             await esl.api(`uuid_audio_fork ${b} stop hostile`)
             await sleep(800)
-            const tempFiles = docker(['exec', fsName, 'sh', '-c', `ls /tmp/${b}_* 2>/dev/null | wc -l`], { allowFail: true })
+            const filesAfter = tempFileCount(b)
+            const guarded = fsLogCount(guardNeedle) - guardedBefore
             const r = await sinkResult('bh')
-            check('B3', 'malformed playAudio messages do not crash FreeSWITCH or write files',
-                hostileAlive && stillStreaming && r?.sentHostile >= 9 && r.binaryFrames > 100 && (tempFiles === null || tempFiles === '0'),
-                r && `sent=${r.sentHostile} frames=${r.binaryFrames}`)
+            check('B3', 'playAudio without a string audioContentType is logged and ignored; a valid playAudio still writes its file, removed on stop',
+                hostileAlive && stillStreaming && r?.sentHostile === 11 && r.binaryFrames > 100 && guarded >= HOSTILE_GUARDED_MESSAGES
+                    && filesDuring !== null && Number(filesDuring) >= 1 && filesAfter === '0',
+                r && `sent=${r.sentHostile} guardedLogLines=${guarded} tempFiles=${filesDuring}->${filesAfter} frames=${r.binaryFrames}`)
             await esl.api(`uuid_audio_fork ${b} start ws://${ip.sink}:9/audio mono 8000 refused`)
             await sleep(3000)
             check('B4', 'a refused connection does not crash FreeSWITCH', await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true')
@@ -560,23 +858,38 @@ async function runProbe() {
                 await esl.api(`uuid_audio_fork ${b} start ${sinkUrl}?callUuid=${b}&label=bc${code}&closeAfter=50&closeCode=${code} mono 8000 close${code}`)
                 await sleep(2500)
             }
+            const closes = [await sinkResult('bc1000'), await sinkResult('bc1011')]
             check('B5', 'a far end closing mid-stream (1000 and 1011) does not crash FreeSWITCH',
-                await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true')
+                await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true' && closes[0]?.close?.code === 1000 && closes[1]?.close?.code === 1011,
+                `close=${closes.map(c => c?.close?.code).join('/')}`)
+            const invalid = [
+                ['neg', `${sinkUrl}?label=neg mono -8000 neg`],
+                ['big', `${sinkUrl}?label=big mono 2147480000 big`],
+                ['zero', `${sinkUrl}?label=zero mono abc zero`],
+                ['badurl', 'not-a-url mono 8000 badurl'],
+            ]
+            const replies = []
+            for (const [tag, rest] of invalid) replies.push([tag, await esl.api(`uuid_audio_fork ${b} start ${rest}`)])
+            await sleep(1500)
+            const afterInvalid = await bugs(b)
+            check('B6', 'start with an invalid sampling rate or URL returns -ERR and starts nothing',
+                replies.every(([, reply]) => reply.startsWith('-ERR')) && !afterInvalid.some(n => invalid.some(([tag]) => tag === n))
+                    && await alive() && (await esl.api(`uuid_exists ${b}`)) === 'true',
+                replies.map(([tag, reply]) => `${tag}:${reply.slice(0, 4)}`).join(' '))
             await hangup(a, b)
         }
 
         // ---- C: call lifecycle with the bridge code under test ---------------------------------------
-        const lifecycle = await runLifecycle({ args, esl, fsName, shared, ip, prefix, network, runContainer, bugs, channelCount, forkConnections, check, alive, created, bridgeDir: args.bridgeDir, idPrefix: 'C', eslPassword })
-        if (args.baselineBridgeDir) {
-            await runLifecycle({ args, esl, fsName, shared, ip, prefix, network, runContainer, bugs, channelCount, forkConnections, check, alive, created, bridgeDir: args.baselineBridgeDir, idPrefix: 'N', eslPassword, negativeControl: true })
-        }
+        const shared_ = { args, esl, driver, fsName, shared, ip, prefix, runContainer, bugs, channelCount, forkConnections, check, alive, eslEnv }
+        await runLifecycle({ ...shared_, bridgeDir: args.bridgeDir, idPrefix: 'C' })
+        if (args.baselineBridgeDir) await runLifecycle({ ...shared_, bridgeDir: args.baselineBridgeDir, idPrefix: 'N', negativeControl: true })
         check('Z1', 'FreeSWITCH never restarted during the probe', await alive())
-        esl.close()
-        void lifecycle
+        await esl.close()
     } catch (err) {
         check('X', 'probe aborted', false, err.message)
     } finally {
-        fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ run, subnet, results }, null, 1))
+        provenance.finished_at = new Date().toISOString()
+        fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ run, provenance, results }, null, 1))
         teardown()
     }
     const failed = results.filter(r => !r.pass)
@@ -590,36 +903,52 @@ function extractJson(text) {
 }
 
 async function runLifecycle(ctx) {
-    const { args, esl, fsName, shared, ip, prefix, runContainer, bugs, channelCount, forkConnections, check, alive, bridgeDir, idPrefix, eslPassword, negativeControl } = ctx
+    const { args, esl, driver, fsName, shared, ip, prefix, runContainer, bugs, channelCount, forkConnections, check, alive, bridgeDir, idPrefix, eslEnv, negativeControl } = ctx
     const bridgeName = `${prefix}-bridge-${idPrefix.toLowerCase()}`
-    const mounts = fs.readdirSync(path.resolve(bridgeDir)).filter(f => f.endsWith('.js'))
-        .flatMap(f => ['-v', `${path.resolve(bridgeDir, f)}:/app/${f}:ro`])
-    runContainer(bridgeName, ['--ip', ip.bridge, '--memory', '384m', ...mounts,
-        '-v', `${shared}:/shared`, '-v', `${path.resolve('telephony/tests/audio_runtime_probe.mjs')}:/probe/probe.mjs:ro`,
+    const mounts = fs.readdirSync(bridgeDir).filter(f => f.endsWith('.js'))
+        .flatMap(f => ['-v', `${path.join(bridgeDir, f)}:/app/${f}:ro`])
+    runContainer(bridgeName, ['--ip', ip.bridge, '--memory', '384m', ...mounts, '--env-file', eslEnv,
+        '-v', `${shared}:/shared`, '-v', `${PROBE_PATH}:/probe/probe.mjs:ro`,
         '-e', 'PROBE_MODE=bridge-stubs', '-e', 'PROBE_SHARED=/shared',
-        '-e', `FS_ESL_HOST=${ip.fs}`, '-e', 'FS_ESL_PORT=8021', '-e', `ESL_PASSWORD=${eslPassword}`,
+        '-e', `FS_ESL_HOST=${ip.fs}`, '-e', 'FS_ESL_PORT=8021',
         '-e', 'AUDIO_BRIDGE_PORT=3030', '-e', `BRIDGE_LAN_IP=${ip.bridge}`,
         '-e', 'BRIDGE_AUDIO_DIR=/shared/tts', '-e', 'BRIDGE_AUDIO_DIR_FS=/shared/tts', '-e', 'CRM_BASE_URL=http://127.0.0.254:9',
         '--entrypoint', 'node', args.bridgeImage, '--import', '/probe/probe.mjs', '/app/server.js'])
-    for (let i = 0; i < 40; i++) {
-        if (dockerLogs(bridgeName).includes('[esl-events] subscribed')) break
-        await sleep(500)
+    let subscribed = false
+    for (let i = 0; i < 40 && !subscribed; i++) {
+        subscribed = dockerLogs(bridgeName).includes('[esl-events] subscribed')
+        if (!subscribed) await sleep(500)
+    }
+    const bridgeLog = () => dockerLogs(bridgeName)
+    check(`${idPrefix}0`, 'bridge under test starts and subscribes to FreeSWITCH events', subscribed)
+    if (!subscribed) {
+        fs.writeFileSync(path.join(shared, `${bridgeName}.log`), bridgeLog())
+        docker(['rm', '-f', bridgeName], { allowFail: true })
+        return
     }
     const events = []
-    const observer = new Esl(ip.fs, eslPassword)
+    const observer = new Esl(driver, ip.fs)
     await observer.connect(e => events.push({ ...e, seenAt: Date.now() }))
     await observer.send('event plain CHANNEL_PARK CHANNEL_ANSWER CHANNEL_HANGUP_COMPLETE MEDIA_BUG_START PLAYBACK_START')
 
-    const originate = async (callee, { bind = true, delayMs = 0 } = {}) => {
+    const originate = async (callee, { bind = true, delayMs = 0, abandonAfterMs = 0 } = {}) => {
         const x = crypto.randomUUID()
         fs.writeFileSync(path.join(shared, 'crm', `${x}.json`), JSON.stringify({ bind, delayMs }))
         const vars = `origination_uuid=${x},origination_caller_id_name='AI Assistant',RECORD_STEREO=true,recording_follow_transfer=true,`
             + `recording_file=/var/lib/freeswitch/recordings/${x}.wav,execute_on_answer='record_session /var/lib/freeswitch/recordings/${x}.wav'`
+        const command = `originate {${vars}}loopback/${callee}/default 9999 XML default`
         const t0 = Date.now()
-        const reply = await esl.api(`originate {${vars}}loopback/${callee}/default 9999 XML default`)
+        let reply
+        if (abandonAfterMs) {
+            const client = new Esl(driver, ip.fs)
+            await client.connect()
+            reply = await client.apiAbandonAfter(command, abandonAfterMs)
+        } else {
+            reply = await esl.api(command, 45000)
+        }
         return { x, reply, originateMs: Date.now() - t0 }
     }
-    const waitForHangup = async (x, timeoutMs = 20000) => {
+    const waitForHangup = async (x, timeoutMs = 25000) => {
         const until = Date.now() + timeoutMs
         while (Date.now() < until) {
             if (events.some(e => e['Event-Name'] === 'CHANNEL_HANGUP_COMPLETE' && e['Unique-ID'] === x)) return true
@@ -627,7 +956,6 @@ async function runLifecycle(ctx) {
         }
         return false
     }
-    const bridgeLog = () => dockerLogs(bridgeName)
     const forkLines = x => bridgeLog().split('\n').filter(l => l.includes(`auto-forking audio for ${x}`))
     const finalizes = x => {
         const file = path.join(shared, 'crm', 'finalize.jsonl')
@@ -638,60 +966,98 @@ async function runLifecycle(ctx) {
     const recordingBytes = x => Number(docker(['exec', fsName, 'sh', '-c', `stat -c %s /var/lib/freeswitch/recordings/${x}.wav 2>/dev/null || echo 0`], { allowFail: true }) ?? 0)
     const eventOrder = x => events.filter(e => e['Unique-ID'] === x && ['CHANNEL_PARK', 'CHANNEL_ANSWER'].includes(e['Event-Name']))
         .map(e => `${e['Event-Name'].replace('CHANNEL_', '')}(${e['Caller-Destination-Number']},${e['Answer-State']})`).join(' ')
+    // Gating from FreeSWITCH's own events, independent of the bridge's log: exactly one media bug named
+    // callUuid=<x> started, not before the channel was answered, and no playback before answer.
+    const stamp = e => Number(e['Event-Date-Timestamp'] ?? 0)
+    const gating = x => {
+        const answer = events.find(e => e['Event-Name'] === 'CHANNEL_ANSWER' && e['Unique-ID'] === x)
+        const forkBugs = events.filter(e => e['Event-Name'] === 'MEDIA_BUG_START' && e['Unique-ID'] === x && Object.values(e).includes(`callUuid=${x}`))
+        const playbacks = events.filter(e => e['Event-Name'] === 'PLAYBACK_START' && e['Unique-ID'] === x)
+        const answeredAt = answer ? stamp(answer) : null
+        return {
+            forkBugStarts: forkBugs.length,
+            playbacks: playbacks.length,
+            afterAnswer: answeredAt !== null && forkBugs.every(e => stamp(e) >= answeredAt) && playbacks.every(e => stamp(e) >= answeredAt),
+        }
+    }
+    const caseUuids = []
 
     const lifecycleCase = async (id, name, callee, options, expect) => {
         const { x, reply, originateMs } = await originate(callee, options)
+        caseUuids.push(x)
         await sleep(expect.observeAfterMs ?? 6000)
-        const midBugs = reply.startsWith('+OK') ? await bugs(x) : []
+        const midBugs = reply.startsWith('+OK') || reply === 'ABANDONED' ? await bugs(x) : []
         const hung = await waitForHangup(x)
-        await sleep(2500)
+        await sleep(expect.settleMs ?? 2500)
         const forks = forkLines(x)
         const stt = sttResult(x)
         const fin = finalizes(x)
         const order = eventOrder(x)
-        const result = { x, reply: reply.slice(0, 40), originateMs, order, forks: forks.length, midBugs, stt, finalizes: fin.length, recordingBytes: recordingBytes(x) }
+        const gate = gating(x)
+        const result = { x, reply: reply.slice(0, 40), originateMs, order, forks: forks.length, midBugs, stt, finalizes: fin.length,
+            finalReason: fin[0]?.reason ?? null, recordingBytes: recordingBytes(x), hung, gate }
         const pass = expect.check(result)
-        check(id, name, pass, `originate=${originateMs}ms order=[${order}] forks=${forks.length} bugs=[${midBugs.join(',')}] stt=${stt ? `${stt.analysis.dominantHz}Hz/${stt.bytes}B` : 'none'} finalize=${fin.length} rec=${result.recordingBytes}B`)
+        check(id, name, pass, `originate=${originateMs}ms reply=${result.reply.slice(0, 12)} order=[${order}] forks=${forks.length} bugs=[${midBugs.join(',')}] `
+            + `bugStarts=${gate.forkBugStarts} playbacks=${gate.playbacks} afterAnswer=${gate.afterAnswer} `
+            + `stt=${stt ? `${stt.analysis.dominantHz}Hz/${stt.bytes}B` : 'none'} finalize=${fin.length}${fin[0] ? `(${fin[0].reason})` : ''} rec=${result.recordingBytes}B`)
         return result
     }
 
     if (negativeControl) {
-        await lifecycleCase(`${idPrefix}1`, 'negative control: baseline bridge never forks a no-early-media call', 5557, { bind: true },
-            { check: r => r.reply.startsWith('+OK') && r.forks === 0 && !r.midBugs.some(b => b.startsWith('callUuid=')) })
+        await lifecycleCase(`${idPrefix}1`, 'negative control: baseline bridge binds but never forks a no-early-media call', 5557, { bind: true },
+            { check: r => r.reply.startsWith('+OK') && r.forks === 0 && r.gate.forkBugStarts === 0 && !r.midBugs.some(b => b.startsWith('callUuid='))
+                && bridgeLog().includes(`[session] bind ${r.x}`) })
     } else {
-        const audioReachedSession = r => r.stt && r.stt.bytes > 8000 && r.stt.analysis.dominantHz === 1234 && r.stt.analysis.dominantMarginDb >= 20
-        const exactlyOneFork = r => r.forks === 1 && r.midBugs.filter(b => b === `callUuid=${r.x}`).length === 1
-        const common = r => r.reply.startsWith('+OK') && exactlyOneFork(r) && r.midBugs.includes('session_record') && audioReachedSession(r) && r.finalizes === 1 && r.recordingBytes > 44
-        await lifecycleCase(`${idPrefix}1`, 'early media: one fork via CHANNEL_ANSWER, callee audio reaches the bound session', 5556, { bind: true },
-            { check: r => common(r) && r.order.startsWith('PARK(9999,early) ANSWER(9999,answered)') && r.originateMs < 2000 && bridgeLog().includes(`auto-forking audio for ${r.x}`) && forkLines(r.x)[0].includes('via CHANNEL_ANSWER') })
+        const audioReached = (r, hz = 1234) => r.stt && r.stt.bytes > 8000 && r.stt.analysis.dominantHz === hz && r.stt.analysis.dominantMarginDb >= 20
+        const exactlyOneFork = r => r.forks === 1 && r.midBugs.filter(b => b === `callUuid=${r.x}`).length === 1 && r.gate.forkBugStarts === 1
+        const common = r => exactlyOneFork(r) && r.gate.afterAnswer && r.gate.playbacks >= 1 && r.midBugs.includes('session_record')
+            && audioReached(r) && r.finalizes === 1 && r.recordingBytes > 44
+        await lifecycleCase(`${idPrefix}1`, 'early media: one fork via CHANNEL_ANSWER after answer, callee audio reaches the bound session', 5556, { bind: true },
+            { check: r => r.reply.startsWith('+OK') && common(r) && r.order.startsWith('PARK(9999,early) ANSWER(9999,answered)') && r.originateMs < 2000
+                && forkLines(r.x)[0].includes('via CHANNEL_ANSWER') })
         await lifecycleCase(`${idPrefix}2`, 'no early media: one fork via the answered CHANNEL_PARK, callee audio reaches the bound session', 5557, { bind: true },
-            { check: r => common(r) && r.order.startsWith('ANSWER(5557,answered) PARK(9999,answered)') && r.originateMs < 5000 && forkLines(r.x)[0].includes('via CHANNEL_PARK') })
+            { check: r => r.reply.startsWith('+OK') && common(r) && r.order.startsWith('ANSWER(5557,answered) PARK(9999,answered)') && r.originateMs < 5000
+                && forkLines(r.x)[0].includes('via CHANNEL_PARK') })
         await lifecycleCase(`${idPrefix}3`, 'fast answer inside the dialplan sleeps: exactly one fork', 5558, { bind: true },
-            { check: r => common(r) })
+            { check: r => r.reply.startsWith('+OK') && common(r) })
         await lifecycleCase(`${idPrefix}4`, 'late CRM bind: the socket binds its session after connecting', 5557, { bind: true, delayMs: 3000 },
-            { check: r => common(r) && new RegExp(`${r.x} session bound after \\d+ frame`).test(bridgeLog()) })
+            { check: r => r.reply.startsWith('+OK') && common(r) && new RegExp(`${r.x} session bound after \\d+ frame`).test(bridgeLog()) })
         await lifecycleCase(`${idPrefix}5`, 'rejected call: no fork, session finalized once', 5559, { bind: true },
-            { observeAfterMs: 1500, check: r => r.forks === 0 && r.finalizes === 1 })
+            { observeAfterMs: 1500, check: r => r.forks === 0 && r.gate.forkBugStarts === 0 && r.finalizes === 1 })
+        await lifecycleCase(`${idPrefix}8`, 'hangup while the CRM bind is in flight: finalized once as closed, nothing played or streamed', 5559, { bind: true, delayMs: 4000 },
+            { observeAfterMs: 1500, settleMs: 5000, check: r => r.forks === 0 && r.gate.forkBugStarts === 0 && r.gate.playbacks === 0
+                && r.finalizes === 1 && r.finalReason === 'closed' && (!r.stt || r.stt.bytes === 0)
+                && bridgeLog().includes(`[session] ${r.x} hung up during CRM bind`) })
+        await lifecycleCase(`${idPrefix}9`, 'answer after the originating client gave up at 10 s (as the CRM does): one fork, audio reaches the session', 5560, { bind: true, abandonAfterMs: 10000 },
+            { observeAfterMs: 6000, check: r => r.reply === 'ABANDONED' && r.originateMs >= 9500 && common(r)
+                && r.order.startsWith('ANSWER(5560,answered) PARK(9999,answered)') })
         {
-            const calls = await Promise.all([5556, 5557, 5557].map(c => originate(c, { bind: true })))
+            const plan = [[5556, 1234], [5561, 880], [5562, 440]]
+            const calls = await Promise.all(plan.map(([callee]) => originate(callee, { bind: true })))
+            caseUuids.push(...calls.map(c => c.x))
             await sleep(6000)
             const mid = await Promise.all(calls.map(c => bugs(c.x)))
             for (const c of calls) await waitForHangup(c.x)
             await sleep(3000)
-            const ok = calls.every((c, i) => forkLines(c.x).length === 1 && mid[i].filter(b => b === `callUuid=${c.x}`).length === 1
-                && audioReachedSession({ stt: sttResult(c.x) }) && finalizes(c.x).length === 1)
-            check(`${idPrefix}6`, 'three concurrent calls: each forked exactly once with its own callee audio', ok,
-                calls.map((c, i) => `${c.x.slice(0, 8)}:forks=${forkLines(c.x).length},bugs=${mid[i].length}`).join(' '))
+            const rows = calls.map((c, i) => ({ c, hz: plan[i][1], forks: forkLines(c.x).length, bugsOfCall: mid[i].filter(b => b === `callUuid=${c.x}`).length,
+                stt: sttResult(c.x), fin: finalizes(c.x).length, gate: gating(c.x) }))
+            const ok = rows.every(row => row.forks === 1 && row.bugsOfCall === 1 && row.gate.forkBugStarts === 1 && row.gate.afterAnswer
+                && audioReached({ stt: row.stt }, row.hz) && row.fin === 1)
+            check(`${idPrefix}6`, 'three concurrent calls: each forked exactly once and its session hears its own callee tone', ok,
+                rows.map(row => `${row.c.x.slice(0, 8)}:forks=${row.forks},tone=${row.stt?.analysis?.dominantHz ?? 'none'}/${row.hz}`).join(' '))
         }
-        check(`${idPrefix}7`, 'after all calls: no channel, no fork connection, FreeSWITCH alive',
-            (await channelCount()) === 0 && (await forkConnections(3030)) === 0 && await alive())
+        await sleep(3000)
+        const finalizedOnce = caseUuids.every(x => finalizes(x).length === 1)
+        check(`${idPrefix}7`, 'after all calls: no channel, no fork connection, every call finalized exactly once, FreeSWITCH alive',
+            (await channelCount()) === 0 && (await forkConnections(3030)) === 0 && finalizedOnce && await alive(),
+            `calls=${caseUuids.length} finalizedOnce=${finalizedOnce}`)
     }
-    observer.close()
+    await observer.close()
     fs.writeFileSync(path.join(shared, `${bridgeName}.log`), bridgeLog())
     docker(['rm', '-f', bridgeName], { allowFail: true })
-    return true
 }
 
 if (MODE === 'sink') await runSink()
 else if (MODE === 'bridge-stubs') installBridgeStubs()
+else if (MODE === 'driver') await runDriver()
 else await runProbe()
