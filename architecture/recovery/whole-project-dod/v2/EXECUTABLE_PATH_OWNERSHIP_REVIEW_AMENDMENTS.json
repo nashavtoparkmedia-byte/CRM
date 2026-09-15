@@ -309,6 +309,60 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "calling-audio-runtime-hardening-20260915",
+      "reviewed_at": "2026-09-15T00:00:00Z",
+      "reviewed_by": "CALLING_MEDIA_RUNTIME_REMEDIATION_EXECUTOR_REVIEW_20260915",
+      "role": "EXECUTOR_REVIEW_WITH_INDEPENDENT_CRITIC",
+      "authorization": "OWNER_TASK_CALLING_MEDIA_RUNTIME_REMEDIATION_20260915",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the accepted composition of main at 016669a1 and reviews only the three surfaces added by the Calling media-runtime remediation."
+      },
+      "reason": "The Calling media-runtime remediation (branch calling/audio-runtime-hardening, integrated with main at 016669a1) adds three tracked executable surfaces, all owned by the calling context: the bridge's per-channel lifecycle module, its unit tests and the isolated FreeSWITCH runtime probe. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the merged tree: 2501 + 3 = 2504 surfaces, context-owned 1292 -> 1295, governed exclusions 1209 unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2501,
+        "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
+        "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2504,
+        "tracked_inventory_sha256": "e964ff21cf71fd41a46dc994d6bddc4f7addf5238380de708d6408f16dd1d63b",
+        "coverage_sha256": "1aba450da56c6b9c5be925ff326355a1a445e49a7797aac88e670fa5a0dd6e8f"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "telephony/tests/audio_runtime_probe.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/__tests__/channel-lifecycle.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/channel-lifecycle.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
