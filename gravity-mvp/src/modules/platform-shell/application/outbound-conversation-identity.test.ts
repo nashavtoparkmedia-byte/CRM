@@ -149,6 +149,33 @@ describe('outbound person-conversation classification', () => {
         })
     })
 
+    test('sends a MAX route only through the route account, never the identity stamp', async () => {
+        // The identity was first observed through another account. Its stamp is
+        // telemetry about the person and must not become the sending account: the
+        // transport binding and the scraper's account echo both use the route's.
+        mocks.prepareIdentity.mockResolvedValue({
+            status: 'ready',
+            contact: { id: 'contact-1' },
+            identity: {
+                id: 'identity-1',
+                channel: 'max',
+                externalId: 'max-peer-42',
+                providerAccountId: 'max-account-first-seen',
+                providerAliasValues: [],
+            },
+        })
+
+        await expect(prepareOutboundConversationV1(maxChat('private'))).resolves.toMatchObject({
+            providerAccountId: 'max-account-1',
+            connectionId: 'max_scraper',
+        })
+        expect(mocks.assertMaxTransport).toHaveBeenCalledWith({
+            providerAccountId: 'max-account-1',
+            connectionId: 'max_scraper',
+            isPersonal: true,
+        })
+    })
+
     test('still rejects a requested transport that disagrees with a bound conversation', async () => {
         mocks.prepareIdentity.mockResolvedValue({
             status: 'ready',

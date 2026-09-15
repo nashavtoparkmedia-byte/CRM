@@ -4,7 +4,10 @@ import {
   lockContactOwnershipRows,
   runContactOwnershipTransaction,
 } from '@/modules/contacts/internal/contact-ownership-coordinator'
-import { identityEvidenceState, jsonRecord } from '@/modules/contacts/public/v1/contact-evidence-state'
+import {
+  hasPersonBlockingIdentityConflictV1,
+  identityEvidenceState,
+} from '@/modules/contacts/public/v1/contact-evidence-state'
 
 export type ExactReachabilityChannelV1 = Extract<ChatChannel, 'telegram' | 'whatsapp' | 'max'>
 export type ExactReachabilityStatusV1 = 'confirmed' | 'unreachable'
@@ -49,14 +52,6 @@ function isExactReachabilityChannel(value: unknown): value is ExactReachabilityC
 
 function isExactReachabilityStatus(value: unknown): value is ExactReachabilityStatusV1 {
   return value === 'confirmed' || value === 'unreachable'
-}
-
-function hasOpenIdentityConflict(customFields: unknown, identityId: string): boolean {
-  const conflicts = jsonRecord(customFields).identityConflicts
-  return Array.isArray(conflicts) && conflicts.some(item => {
-    const conflict = jsonRecord(item)
-    return conflict.status === 'open' && conflict.identityId === identityId
-  })
 }
 
 /**
@@ -138,9 +133,12 @@ export async function recordExactProviderReachability(
         result = { outcome: 'rejected', reason: 'channel_mismatch' }
         return
       }
+      // A genuine person conflict still denies recording. A proven transport-only
+      // ingress collision does not: a problem on one transport must not stop a
+      // legitimate proof arriving through another.
       if (
         identityEvidenceState(identity.metadata).conflictState === 'conflicted'
-        || hasOpenIdentityConflict(identity.contact.customFields, identityId)
+        || hasPersonBlockingIdentityConflictV1(identity.contact.customFields, identity)
       ) {
         result = { outcome: 'rejected', reason: 'identity_conflicted' }
         return

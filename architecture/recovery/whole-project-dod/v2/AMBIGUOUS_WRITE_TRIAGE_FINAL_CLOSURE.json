@@ -1465,9 +1465,9 @@
     {
       "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
-      "source_sha256": "f0d05b2d61aa74a2e117b40561c86263bf351fe8a7aab7931232e4693f945fc4",
+      "source_sha256": "c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line": 1920,
+      "line": 1936,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1490,7 +1490,7 @@
         "min"
       ],
       "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
-      "sql_provenance_sha256": "f06d6dd57fb7bb5b07c06aababe20a1f75b3d4291d36e820ff74c774e42ee6b0",
+      "sql_provenance_sha256": "f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0",
       "source_context": "telegram_channel",
       "source_technical_module": "telegram_provider",
       "owner_contexts": [],
@@ -2016,9 +2016,9 @@
     {
       "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
-      "source_sha256": "cd3930607ca56198fdf536a250c101afd79c63e00baedfaee1820c7c18001a04",
+      "source_sha256": "ec61aa9f43e435a8681d2271e225b47ab399d894e02a1bdabb1da85dfba40a59",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line": 2600,
+      "line": 2537,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -2045,7 +2045,7 @@
         "min"
       ],
       "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
-      "sql_provenance_sha256": "431a0849720d828af4b588fa1e63e944f349df1bec948e257a015e6df19d37d2",
+      "sql_provenance_sha256": "1c82e40c5700248525e5dbf3c7912b37dcb736cdae5ca5afb6f72a434b7f90bf",
       "source_context": "whatsapp_channel",
       "source_technical_module": "whatsapp_provider",
       "owner_contexts": [],
@@ -4086,11 +4086,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/tg-actions.ts",
-        "line": 1920,
+        "line": 1936,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "f0d05b2d61aa74a2e117b40561c86263bf351fe8a7aab7931232e4693f945fc4",
-        "sql_provenance_sha256": "f06d6dd57fb7bb5b07c06aababe20a1f75b3d4291d36e820ff74c774e42ee6b0"
+        "source_sha256": "c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
+        "sql_provenance_sha256": "f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4109,12 +4109,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/tg-actions.ts:1875:32",
+        "gravity-mvp/src/app/tg-actions.ts:1891:32",
         "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
         "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:f0d05b2d61aa74a2e117b40561c86263bf351fe8a7aab7931232e4693f945fc4",
-        "sql_provenance_sha256:f06d6dd57fb7bb5b07c06aababe20a1f75b3d4291d36e820ff74c774e42ee6b0"
+        "source_sha256:c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
+        "sql_provenance_sha256:f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0"
       ]
     },
     {
@@ -4486,11 +4486,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-        "line": 2600,
+        "line": 2537,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "cd3930607ca56198fdf536a250c101afd79c63e00baedfaee1820c7c18001a04",
-        "sql_provenance_sha256": "431a0849720d828af4b588fa1e63e944f349df1bec948e257a015e6df19d37d2"
+        "source_sha256": "ec61aa9f43e435a8681d2271e225b47ab399d894e02a1bdabb1da85dfba40a59",
+        "sql_provenance_sha256": "1c82e40c5700248525e5dbf3c7912b37dcb736cdae5ca5afb6f72a434b7f90bf"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4513,12 +4513,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2600:32",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2537:32",
         "analysis_site_signature:490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
         "sql_sha256:50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:cd3930607ca56198fdf536a250c101afd79c63e00baedfaee1820c7c18001a04",
-        "sql_provenance_sha256:431a0849720d828af4b588fa1e63e944f349df1bec948e257a015e6df19d37d2"
+        "source_sha256:ec61aa9f43e435a8681d2271e225b47ab399d894e02a1bdabb1da85dfba40a59",
+        "sql_provenance_sha256:1c82e40c5700248525e5dbf3c7912b37dcb736cdae5ca5afb6f72a434b7f90bf"
       ]
     },
     {

@@ -5,7 +5,7 @@ import {
     lockContactOwnershipRows,
     runContactOwnershipTransaction,
 } from '@/modules/contacts/internal/contact-ownership-coordinator'
-import { identityEvidenceState, jsonRecord } from './contact-evidence-state'
+import { hasPersonBlockingIdentityConflictV1, identityEvidenceState } from './contact-evidence-state'
 import type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
 
 export const legacyPrismaContactConversationPortV1: ContactConversationPersistencePortV1 = {
@@ -86,14 +86,16 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
                 return { status: 'no_identity' as const }
             }
 
-            const hasOpenIdentityConflict = Array.isArray(jsonRecord(contact.customFields).identityConflicts)
-                && (jsonRecord(contact.customFields).identityConflicts as unknown[]).some(item => {
-                    const conflict = jsonRecord(item)
-                    return conflict.status === 'open' && conflict.identityId === identity.id
-                })
+            // Only a genuine person conflict denies this identity. A proven
+            // transport-only ingress collision failed its own conversation closed
+            // and must not stop the person being reached through a correct route.
             if (
                 identityEvidenceState(identity.metadata).conflictState === 'conflicted'
-                || hasOpenIdentityConflict
+                || hasPersonBlockingIdentityConflictV1(contact.customFields, {
+                    id: identity.id,
+                    channel: input.channel,
+                    externalId: identity.externalId,
+                })
             ) {
                 return { status: 'identity_conflicted' as const }
             }

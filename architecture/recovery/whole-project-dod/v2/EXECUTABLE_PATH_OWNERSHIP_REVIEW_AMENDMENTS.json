@@ -265,9 +265,9 @@
         {
           "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
           "previous_source_sha256": "405c8edb00dbf461fb0cff7e1f8899da43fc9c912b34d07174e4bdb3bd94fdb2",
-          "current_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
+          "current_source_sha256": "7562c0e054139d69038686c589d8a0cbdcd35c22b31722d527729dda4ce6615d",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "This already assigned runtime surface had the provider-account arms removed from its ingress collision ladder, because provider-account isolation is deferred and those arms had no satisfiable production carrier. The contradiction arms it keeps are unchanged. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+          "review_rationale": "This already assigned runtime surface had the provider-account arms removed from its ingress collision ladder, because provider-account isolation is deferred and those arms had no satisfiable production carrier. The contradiction arms it keeps are unchanged. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves. Contact identity M1 (feature/contact-identity-transport-conflict-separation-m1, 2026-09-15) then moved the same fingerprint: this surface stopped recording a Bot API transport collision as a Contacts person conflict. The conversation is still refused with the same error and audited on the conversation, and a chat-kind contradiction the transport arm masks is still recorded as a person conflict."
         },
         {
           "path": "gravity-mvp/src/app/calls/[id]/CallDetailClient.tsx",
@@ -293,9 +293,16 @@
         {
           "path": "gravity-mvp/src/lib/ReachabilityService.ts",
           "previous_source_sha256": "a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd",
-          "current_source_sha256": "7e1d5e57aa744a748b5c6f6e56067bbfa93e30ea5884b73d57a4d5dc6ada19af",
+          "current_source_sha256": "a3935cadbcdcd743814b8dd08c01cefcf2947a1ca830beba3f35b1c32dd79970",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved, and the two rejection reasons those gates alone could raise were then dropped from the result union so no consumer can branch on an outcome that can no longer occur. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved, and the two rejection reasons those gates alone could raise were then dropped from the result union so no consumer can branch on an outcome that can no longer occur. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves. Contact identity M1 (feature/contact-identity-transport-conflict-separation-m1, 2026-09-15) then moved the same fingerprint: the open identity-conflict deny is delegated to the Contacts classifier, which exempts only an ingress collision its own details prove transport-only, while every other conflict and the identity conflict flag still deny. No ownership, write target or credential access changed."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "67fe16a55a8b9e37cb4cc20493e4a2b84738f45659a33a839e8d0cae17f5fd81",
+          "current_source_sha256": "8b74d0737bbdb954dfc27a7a6aa8283a151dd62d2c667eee64f8730babd3edd3",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Contact identity M1 (feature/contact-identity-transport-conflict-separation-m1, 2026-09-15) moved this fingerprint, recorded here because the resolver admits a rebind only inside an amendment that moves the denominator and M1 moves none: this already assigned runtime surface stopped recording a MAX provider-account collision as a Contacts person conflict. The conversation is still refused with the same account errors and audited on the conversation, and a person-level reason the account arm masks (a sender contradiction or missing sender proof, or a chat-kind contradiction) is still recorded as a person conflict. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
         }
       ],
       "invariants": {

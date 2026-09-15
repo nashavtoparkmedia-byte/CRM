@@ -57,9 +57,10 @@ function conversationResult(overrides: Record<string, unknown> = {}) {
         status: stored.status,
         contactId: stored.contactId,
         contactIdentityId: stored.contactIdentityId,
+        // The route's own account, never the identity's first-writer stamp.
         providerAccountId: typeof metadata.providerAccountId === 'string'
             ? metadata.providerAccountId
-            : input.providerAccountId,
+            : null,
         transportConnectionId: typeof metadata.connectionId === 'string'
             ? metadata.connectionId
             : null,
@@ -254,14 +255,18 @@ describe('Messaging outbound conversation ownership', () => {
         expect(mocks.updateMany).not.toHaveBeenCalled()
     })
 
-    test('rejects an exact identity chat owned by another provider account', async () => {
-        mocks.findMany.mockResolvedValueOnce([conversation({
+    test('does not reject an exact conversation because the identity was first seen through another account', async () => {
+        const routeChat = conversation({
             metadata: {
                 providerAccountId: 'telegram-account-a',
                 connectionId: 'telegram-connection-b',
             },
-        })])
+        })
+        mocks.findMany.mockResolvedValueOnce([routeChat])
 
+        // The identity's stamp says telegram-account-b; the route says account-a.
+        // That is not a fact about who the person is, so it no longer rejects.
+        // The route keeps its own account and transport for outbound preparation.
         await expect(port.findAndBackfill({
             contactId: input.contactId,
             contactIdentityId: input.contactIdentityId,
@@ -270,8 +275,48 @@ describe('Messaging outbound conversation ownership', () => {
             exactExternalChatIds: input.exactExternalChatIds,
             providerAccountId: input.providerAccountId,
             allowContactFallback: false,
-        })).rejects.toThrow('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_MISMATCH')
+        })).resolves.toMatchObject({
+            id: 'chat-1',
+            providerAccountId: 'telegram-account-a',
+            transportConnectionId: 'telegram-connection-b',
+        })
 
+        expect(mocks.updateMany).not.toHaveBeenCalled()
+    })
+
+    test('fails closed as ambiguous when one MAX sender has conversations under two accounts', async () => {
+        mocks.findMany
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+                conversation({
+                    id: 'chat-account-a',
+                    channel: 'max',
+                    externalChatId: 'max-conversation-a',
+                    contactIdentityId: null,
+                    metadata: { senderId: 'sender-42', providerAccountId: 'max-account-a', connectionId: 'max_scraper' },
+                }),
+                conversation({
+                    id: 'chat-account-b',
+                    channel: 'max',
+                    externalChatId: 'max-conversation-b',
+                    contactIdentityId: null,
+                    metadata: { senderId: 'sender-42', providerAccountId: 'max-account-b', connectionId: 'max_scraper' },
+                }),
+            ])
+
+        // The identity's own account stamp must not silently pick one route.
+        await expect(port.findAndBackfill({
+            contactId: input.contactId,
+            contactIdentityId: input.contactIdentityId,
+            channel: 'max',
+            identityExternalId: 'sender-42',
+            exactExternalChatIds: [],
+            providerAccountId: 'max-account-a',
+            allowContactFallback: true,
+        })).rejects.toThrow('CONTACT_CONVERSATION_AMBIGUOUS')
+
+        const fallbackQuery = mocks.findMany.mock.calls[1][0] as { where: Record<string, unknown> }
+        expect(JSON.stringify(fallbackQuery.where)).not.toContain('providerAccountId')
         expect(mocks.updateMany).not.toHaveBeenCalled()
     })
 
@@ -400,13 +445,35 @@ describe('Messaging outbound conversation ownership', () => {
         expect(mocks.updateMany).not.toHaveBeenCalled()
     })
 
-    test('does not backfill the legacy sentinel when neither identity nor Chat proves an account', async () => {
+    test('a legacy conversation with no account stamp anywhere and no transport still fails closed on its route', async () => {
         mocks.findMany.mockResolvedValueOnce([conversation({ metadata: {} })])
 
+        // Missing account evidence is not the reason; the unproven route is.
         await expect(port.openFallback({ ...input, providerAccountId: null }))
-            .resolves.toEqual({ status: 'provider_account_unproven' })
+            .resolves.toEqual({ status: 'transport_unbound' })
 
         expect(mocks.updateMany).not.toHaveBeenCalled()
+        expect(mocks.create).not.toHaveBeenCalled()
+    })
+
+    test('opens a legacy conversation bound to a transport even though no account stamp exists', async () => {
+        const legacyChat = conversation({ metadata: { connectionId: 'telegram-connection-b' } })
+        mocks.findMany.mockResolvedValueOnce([legacyChat])
+
+        await expect(port.openFallback({ ...input, providerAccountId: null })).resolves.toEqual({
+            status: 'ready',
+            conversation: conversationResult({ metadata: { connectionId: 'telegram-connection-b' } }),
+            isNew: false,
+        })
+        expect(mocks.create).not.toHaveBeenCalled()
+    })
+
+    test('never opens a brand-new conversation, with or without an identity account stamp', async () => {
+        for (const providerAccountId of [null, 'telegram-account-b']) {
+            mocks.findMany.mockResolvedValueOnce([])
+            await expect(port.openFallback({ ...input, providerAccountId }))
+                .resolves.toEqual({ status: 'transport_unbound' })
+        }
         expect(mocks.create).not.toHaveBeenCalled()
     })
 })

@@ -114,8 +114,12 @@ assertCheck(
         && !/@\/lib\/prisma|\bContactService\b|\bprisma\s*\./.test(orchestrator),
     'owner implementation leaked into Platform orchestration',
 )
+// The identity's providerAccountId is first-writer telemetry about the person
+// (docs/design/provider-account-identity-v1.md). The versioned Messaging command
+// still carries it, but neither Platform nor Messaging may compare a route with
+// it, narrow a route search by it, or substitute it for the route's own account.
 assertCheck(
-    'exact identity fallback is account-scoped while driver-wide legacy fallback stays unscoped',
+    'exact identity fallback is identity-scoped while driver-wide legacy fallback stays unscoped',
     orchestrator.includes('input.identityId === null && input.phoneId === null')
         && orchestrator.includes('const allowContactFallback = true')
         && orchestrator.includes('const allowLegacyDriverFallback = input.identityId === null && input.phoneId === null')
@@ -125,11 +129,12 @@ assertCheck(
         && orchestrator.includes('providerAccountId: prepared.identity.providerAccountId')
         && orchestrator.includes("if (opened.status !== 'ready') return { status: opened.status }")
         && orchestrator.includes('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
-        && orchestrator.includes('CONTACT_CONVERSATION_BINDING_MISMATCH'),
-    'Platform can use a broad driver fallback or trust a mismatched Contact/provider binding',
+        && orchestrator.includes('CONTACT_CONVERSATION_BINDING_MISMATCH')
+        && !orchestrator.includes('expected.providerAccountId'),
+    'Platform can use a broad driver fallback, trust a mismatched Contact binding, or gate a route by the identity account stamp',
 )
 assertCheck(
-    'Messaging backfill requires exact identity ownership, account scope, channel target proof and transport proof',
+    'Messaging backfill requires exact identity ownership, channel target proof, route uniqueness and transport proof, and never gates a route by the identity account stamp',
     messagingAdapter.includes('assertExactConversationTarget(conversation, input)')
         && messagingAdapter.includes('contactIdentityId: input.contactIdentityId, channel: input.channel')
         && messagingAdapter.includes('{ contactIdentityId: null }')
@@ -137,13 +142,32 @@ assertCheck(
         && messagingAdapter.includes("metadataRecord(conversation.metadata).providerAccountId")
         && messagingAdapter.includes("metadataRecord(conversation.metadata).connectionId")
         && messagingAdapter.includes('CONTACT_CONVERSATION_PROVIDER_KEY_MISMATCH')
-        && messagingAdapter.includes('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_MISMATCH')
         && messagingAdapter.includes('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH')
+        && messagingAdapter.includes("throw new Error('CONTACT_CONVERSATION_AMBIGUOUS')")
+        && messagingAdapter.includes('const providerAccountId = storedProviderAccountId(conversation)\n')
         && messagingAdapter.includes("return { status: 'conversation_target_unproven' }")
         && messagingAdapter.includes("return { status: 'transport_unbound' }")
+        && !messagingAdapter.includes('input.providerAccountId')
+        && !messagingAdapter.includes("'provider_account_unproven'")
         && !messagingAdapter.includes('prisma.chat.create('),
-    'Messaging can claim or fabricate a conversation whose owner, account, target or transport differs',
+    'Messaging can claim or fabricate a conversation whose owner, target or transport differs, or lets the identity account stamp scope, reject or stand in for a route account',
 )
+// Without the identity-stamp filter, only the two-row read plus the ambiguity
+// refusal stops one sender's conversations under two company accounts from
+// silently resolving to whichever route saw them first. Every conversation read
+// must stay a uniqueCandidate over at most two rows.
+const conversationReads = messagingAdapter.match(/await prisma\.chat\.findMany\(/g)?.length ?? 0
+assertCheck(
+    'every Messaging contact-conversation read is an ambiguity-refusing two-row unique-candidate read',
+    conversationReads === 4
+        && (messagingAdapter.match(/\bprisma\.|\$queryRaw|\$executeRaw/g)?.length ?? 0) === conversationReads
+        && (messagingAdapter.match(/uniqueCandidate\(await prisma\.chat\.findMany\(\{/g)?.length ?? 0) === conversationReads
+        && (messagingAdapter.match(/\n\s+take: 2,\n/g)?.length ?? 0) === conversationReads
+        && messagingAdapter.includes('const unique = [...new Map(conversations.map(conversation => [conversation.id, conversation])).values()]')
+        && /if \(unique\.length > 1\) throw new Error\('CONTACT_CONVERSATION_AMBIGUOUS'\)/.test(messagingAdapter),
+    'a conversation read can return one of several routes without refusing the ambiguity',
+)
+
 assertCheck(
     'orchestration remains sequential and non-transactional',
     !/Promise\.all|\$transaction|\bcatch\s*\(|\bfor\s*\(|\bwhile\s*\(/.test(orchestrator)

@@ -273,6 +273,135 @@ describe('exact ContactIdentity reachability persistence', () => {
     expect(identities.get('identity-b')?.reachabilityStatus).toBe('unknown')
   })
 
+  describe('transport collisions versus genuine person conflicts', () => {
+    function ingressCollision(
+      row: IdentityRow,
+      reason: string,
+      details: Record<string, unknown>,
+    ) {
+      return {
+        otherContactIds: [],
+        identityId: row.id,
+        conflictType: 'channel_identity_collision',
+        evidenceRoot: `channel-collision:${row.channel}:key:${reason}`,
+        source: 'channel-ingress',
+        details: { ...details, channel: row.channel, reason, externalUserId: row.externalId },
+        detectedAt: '2026-09-10T00:00:00.000Z',
+        status: 'open',
+      }
+    }
+
+    function botApiTransportMismatch(row: IdentityRow) {
+      return ingressCollision(row, 'transport_connection_mismatch', {
+        incomingProviderAccountId: 'telegram-bot-b',
+        existingProviderAccountId: null,
+        incomingConnectionId: 'driver-bot-primary',
+        existingConnectionId: '7001',
+        incomingChatKind: 'private',
+        existingChatKind: 'private',
+      })
+    }
+
+    async function prepareOpen(identityId: string, channel: IdentityRow['channel'] = 'telegram') {
+      return legacyPrismaContactConversationPortV1.prepareContactConversationIdentity({
+        contactId: 'contact-a',
+        channel,
+        purpose: 'open_conversation',
+        identityId,
+        phoneId: null,
+      })
+    }
+
+    test('a transport failure on one route does not stop legitimate reachability through another account', async () => {
+      const row = identities.get('identity-a')!
+      row.contact.customFields = { identityConflicts: [botApiTransportMismatch(row)] }
+
+      // The proof arrives through telegram-account-a; the recorded collision was
+      // between the Bot API connection and an MTProto connection.
+      await expect(recordExactProviderReachability(exactCommand())).resolves.toMatchObject({
+        outcome: 'updated',
+        identityId: 'identity-a',
+        status: 'confirmed',
+      })
+      await expect(prepareOpen('identity-a')).resolves.toMatchObject({ status: 'ready' })
+    })
+
+    // Person level only: neither of the Contact's identities may be disabled by a
+    // transport fact. The collided inbound event itself is refused at ingress.
+    test('a WhatsApp transport mismatch disables neither that identity nor the same Contact\'s Telegram identity', async () => {
+      const telegramRow = identities.get('identity-a')!
+      telegramRow.reachabilityStatus = 'confirmed'
+      const whatsappRow: IdentityRow = {
+        ...identity('identity-wa', 'contact-a', '79990001122@c.us', 'wa-slot-a'),
+        channel: 'whatsapp',
+        reachabilityStatus: 'confirmed',
+        contact: telegramRow.contact,
+      }
+      identities.set('identity-wa', whatsappRow)
+      telegramRow.contact.customFields = {
+        identityConflicts: [ingressCollision(whatsappRow, 'transport_mismatch', {
+          phase: 'live',
+          externalChatId: 'whatsapp:79990001122',
+          incomingConnectionId: 'wa-slot-b',
+          existingConnectionId: 'wa-slot-a',
+        })],
+      }
+
+      await expect(prepareOpen('identity-wa', 'whatsapp')).resolves.toMatchObject({ status: 'ready' })
+      await expect(prepareOpen('identity-a')).resolves.toMatchObject({ status: 'ready' })
+    })
+
+    test('a genuine identity conflict still denies reachability and outbound preparation', async () => {
+      const row = identities.get('identity-a')!
+      row.reachabilityStatus = 'confirmed'
+      row.contact.customFields = {
+        identityConflicts: [
+          botApiTransportMismatch(row),
+          ingressCollision(row, 'peer_identity_mismatch', { incomingPeerId: 'opaque-user-a', existingPeerId: 'other-peer' }),
+        ],
+      }
+
+      await expect(recordExactProviderReachability(exactCommand())).resolves.toEqual({
+        outcome: 'rejected', reason: 'identity_conflicted',
+      })
+      await expect(prepareOpen('identity-a')).resolves.toEqual({ status: 'identity_conflicted' })
+      expect(mocks.identityUpdate).not.toHaveBeenCalled()
+    })
+
+    test('an existing historical conflict without provable transport provenance stays fail-closed', async () => {
+      const row = identities.get('identity-a')!
+      row.reachabilityStatus = 'confirmed'
+      // MTProto-shaped: the transport arm could have hidden a chat-kind
+      // contradiction that was never recorded, so it cannot be classified.
+      row.contact.customFields = {
+        identityConflicts: [ingressCollision(row, 'transport_connection_mismatch', {
+          phase: 'inbound',
+          incomingPeerId: 'opaque-user-a',
+          existingPeerId: 'opaque-user-a',
+          incomingConnectionId: '7002',
+          existingConnectionId: '7001',
+        })],
+      }
+
+      await expect(recordExactProviderReachability(exactCommand())).resolves.toEqual({
+        outcome: 'rejected', reason: 'identity_conflicted',
+      })
+      await expect(prepareOpen('identity-a')).resolves.toEqual({ status: 'identity_conflicted' })
+    })
+
+    test('the identity conflictState flag keeps blocking whatever the conflict list says', async () => {
+      const row = identities.get('identity-a')!
+      row.reachabilityStatus = 'confirmed'
+      row.metadata = { ...row.metadata, conflictState: 'conflicted' }
+      row.contact.customFields = { identityConflicts: [botApiTransportMismatch(row)] }
+
+      await expect(recordExactProviderReachability(exactCommand())).resolves.toEqual({
+        outcome: 'rejected', reason: 'identity_conflicted',
+      })
+      await expect(prepareOpen('identity-a')).resolves.toEqual({ status: 'identity_conflicted' })
+    })
+  })
+
   test('rejects malformed or legacy-sentinel authority before opening CNT1', async () => {
     await expect(recordExactProviderReachability(exactCommand({ providerTargetId: ' target ' }))).resolves.toEqual({
       outcome: 'rejected', reason: 'invalid_binding',

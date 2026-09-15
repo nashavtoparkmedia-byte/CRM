@@ -4,6 +4,7 @@ import {
   lockContactOwnershipRows,
   runContactOwnershipTransaction,
 } from '../../internal/contact-ownership-coordinator'
+import { isTransportCollisionReasonV1 } from './contact-evidence-state'
 
 export type MarkChannelIdentityConflictInputV1 = {
   contactId: string
@@ -34,12 +35,22 @@ function validate(input: MarkChannelIdentityConflictInputV1): void {
   if (!['telegram', 'whatsapp', 'max'].includes(input.channel)) {
     throw new TypeError('channel is invalid')
   }
+  // A transport, connection or company-account contradiction fails its own
+  // conversation closed and is audited there by Messaging. It is never a fact
+  // about the person, so Contacts refuses to record it as one, whatever the
+  // caller. Callers escalate only a person or conversation-shape reason.
+  if (isTransportCollisionReasonV1(input.channel, input.reason)) {
+    throw new TypeError('transport collision is not a person identity conflict')
+  }
 }
 
 /**
- * Marks the exact ContactIdentity linked by an admitted Chat as conflicted.
- * Existing outbound preparation and automatic-merge policy both consume this
- * Contacts-owned state and therefore fail closed after an ingress collision.
+ * Records a person-level ingress collision on the exact ContactIdentity linked
+ * by an admitted Chat: the conversation names a different peer or sender, or has
+ * a contradictory shape. Outbound preparation, reachability recording, the
+ * Telegram driver link and automatic-merge policy all consume the open entry and
+ * fail closed. Transport and account contradictions are rejected by `validate`
+ * and belong in Messaging's conversation audit instead.
  */
 export async function markChannelIdentityConflictV1(
   input: MarkChannelIdentityConflictInputV1,

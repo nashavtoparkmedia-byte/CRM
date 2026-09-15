@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { isContactConfirmedMainDriverV1 } from '@/modules/contacts/public/v1'
+import { hasPersonBlockingIdentityConflictV1 } from '@/modules/contacts/public/v1/contact-evidence-state'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 const MAX_SIGNED_BIGINT = 9_223_372_036_854_775_807n
@@ -143,6 +144,10 @@ export async function revalidatePreparedManualDriverTelegramLinkAuthorityV1(
         },
     })
     const identityMetadata = metadataRecord(identity?.metadata)
+    // The identity's providerAccountId is first-writer telemetry, not evidence of
+    // who the person is, so it is no longer compared. The route binding above is
+    // still exact: the Chat must carry the same provider account and connection
+    // that were proven when this authority was prepared.
     if (
         !identity
         || !identity.isActive
@@ -151,7 +156,6 @@ export async function revalidatePreparedManualDriverTelegramLinkAuthorityV1(
         || identity.channel !== 'telegram'
         || identity.externalId !== target
         || identity.reachabilityStatus !== 'confirmed'
-        || identityMetadata.providerAccountId !== prepared.providerAccountId
         || identityMetadata.conflictState === 'conflicted'
     ) {
         throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
@@ -166,18 +170,20 @@ export async function revalidatePreparedManualDriverTelegramLinkAuthorityV1(
             customFields: true,
         },
     })
-    const contactFields = metadataRecord(contact?.customFields)
-    const hasOpenIdentityConflict = Array.isArray(contactFields.identityConflicts)
-        && contactFields.identityConflicts.some(item => {
-            const conflict = metadataRecord(item)
-            return conflict.status === 'open' && conflict.identityId === identity.id
-        })
+    // A genuine person conflict on this identity still denies the link. A proven
+    // transport-only ingress collision does not make the person permanently
+    // conflicted.
+    const hasPersonBlockingConflict = hasPersonBlockingIdentityConflictV1(contact?.customFields, {
+        id: identity.id,
+        channel: identity.channel,
+        externalId: identity.externalId,
+    })
     if (
         !contact
         || contact.id !== prepared.contactId
         || contact.isArchived
         || contact.mainDriverId !== driverId
-        || hasOpenIdentityConflict
+        || hasPersonBlockingConflict
         || !hasConfirmedMainDriverAuthority(contact.customFields, driverId)
     ) {
         throw new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED')

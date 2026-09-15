@@ -22,11 +22,11 @@ const input = {
   contactId: 'contact-1',
   identityId: 'identity-1',
   channel: 'telegram' as const,
-  reason: 'provider_account_mismatch',
-  evidenceRoot: 'channel-collision:telegram:telegram:42:telegram-bot-b',
+  reason: 'peer_identity_mismatch',
+  evidenceRoot: 'channel-collision:telegram:telegram:42:telegram-bot-b:conn-b:42:peer_identity_mismatch',
   details: {
-    incomingProviderAccountId: 'telegram-bot-b',
-    existingProviderAccountId: 'telegram-bot-a',
+    incomingPeerId: '42',
+    existingPeerId: '99',
   },
 }
 
@@ -86,7 +86,7 @@ describe('Contacts-owned channel identity conflict', () => {
             status: 'open',
             details: expect.objectContaining({
               channel: 'telegram',
-              reason: 'provider_account_mismatch',
+              reason: 'peer_identity_mismatch',
               externalUserId: '42',
             }),
           })],
@@ -99,6 +99,24 @@ describe('Contacts-owned channel identity conflict', () => {
     // permanently disable an identity.
     expect(mocks.identityUpdate).not.toHaveBeenCalled()
     expect(mocks.assertPostconditions).toHaveBeenCalledOnce()
+  })
+
+  test.each([
+    ['telegram', 'transport_connection_mismatch'],
+    ['telegram', 'transport_connection_unproven'],
+    ['telegram', 'provider_account_mismatch'],
+    ['telegram', 'provider_account_unproven'],
+    ['whatsapp', 'transport_mismatch'],
+    ['whatsapp', 'transport_unbound'],
+    ['max', 'provider_account_mismatch'],
+    ['max', 'provider_account_unproven'],
+  ] as const)('refuses to record a %s %s transport collision as a person conflict', async (channel, reason) => {
+    await expect(markChannelIdentityConflictV1({ ...input, channel, reason }))
+      .rejects.toThrow('transport collision is not a person identity conflict')
+
+    expect(mocks.runOwnership).not.toHaveBeenCalled()
+    expect(mocks.contactUpdate).not.toHaveBeenCalled()
+    expect(mocks.identityUpdate).not.toHaveBeenCalled()
   })
 
   test('rejects a stale Contact/Identity pair without mutation', async () => {

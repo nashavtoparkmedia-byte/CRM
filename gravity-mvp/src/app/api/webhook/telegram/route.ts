@@ -226,13 +226,20 @@ async function admitTelegramConversation(input: {
             chatId: chat.id,
             evidence,
         })
-        if (chat.contactId && chat.contactIdentityId) {
+        // The admission above already failed this conversation closed and the
+        // conversation audit records why. Only a contradiction about the person or
+        // the conversation itself reaches the Contacts person record. A transport
+        // mismatch is not one, but the chat-kind comparison it pre-empts still is.
+        const personReason = collisionReason === 'transport_connection_mismatch'
+            ? (existingChatKind !== input.chatKind ? 'chat_kind_mismatch' : null)
+            : collisionReason
+        if (personReason && chat.contactId && chat.contactIdentityId) {
             await markChannelIdentityConflictV1({
                 contactId: chat.contactId,
                 identityId: chat.contactIdentityId,
                 channel: 'telegram',
-                reason: collisionReason,
-                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${collisionReason}`,
+                reason: personReason,
+                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${personReason}`,
                 details: {
                     incomingProviderAccountId: input.providerAccountId,
                     existingProviderAccountId,
