@@ -48,30 +48,30 @@ const crm = require('./crm-client')
 const runtime = require('./runtime-config')
 const { opsLog } = require('./opsLog')
 const { CallSession } = require('./call-session')
-
+const { createChannelLifecycle, createSessionResolver, parseEslEventHeaders } = require('./channel-lifecycle')
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
 // reference one of these by the `call-id` query string (set in fork_meta).
 const sessions = new Map()
 
-// Pre-answer TTS queueing — see «answer-gated broadcast» note in
-// broadcastWav() and the ESL onEvent handler. The bridge synthesises the
-// bot's greeting during ringing (so it's ready by the time the lead
-// answers) but must NOT push audio onto the channel until the lead's
-// handset is actually live — Megafon's SBC routes early-media RTP into
-// the ringback rather than the user's ear (issue #23). These three
-// collections track per-channel state through the PARK → ANSWER →
-// HANGUP lifecycle.
+// Per-channel lifecycle state (answered / forked / dead channels and the
+// answer-gated broadcast queue) lives in channel-lifecycle.js, created
+// below once FORK_WS_URL and AUTO_FORK_EXTENSIONS are known.
 //
-// deadChannels is intentionally a separate set rather than an
-// `aliveChannels.delete(uuid)` on hangup: TTS synthesis can outlive the
-// call (LLM tail + ~3 s synth wallclock), and a broadcastWav() invocation
-// that lands AFTER HANGUP_COMPLETE must short-circuit instead of queueing
-// into an orphan slot that no future ANSWER will flush. The set is small
-// (one entry per call ID) and cleared whenever a new PARK arrives for
-// the same UUID — see the relevant branch in onEvent().
-const answeredChannels = new Set()        // callUuids that have fired CHANNEL_ANSWER
-const deadChannels = new Set()            // callUuids past CHANNEL_HANGUP_COMPLETE
-const pendingBroadcasts = new Map()       // callUuid → Array<{ file, durMs, resolve }>
+// The bridge synthesises the bot's greeting as early as it can (CHANNEL_PARK)
+// but must NOT push audio onto the channel until the lead's handset is live —
+// Megafon's SBC routes early-media RTP into the ringback rather than the
+// user's ear (issue #23). The audio fork is answer-gated for the same reason:
+// forking during ringing would stream the ringback into STT.
+//
+// A channel counts as answered on CHANNEL_ANSWER or on a CHANNEL_PARK whose
+// Answer-State is already "answered". The second case is what makes calls
+// work when the provider sends no early media: originate then returns only
+// on answer, the CHANNEL_ANSWER is emitted before the transfer into the AI
+// extension (so it does not name 9999), and the PARK that follows is the
+// first event recognisably ours. See channel-lifecycle.js for the captured
+// event sequences. Every answer action (flush queued playback, start the
+// audio fork) runs exactly once per channel, whichever event proves it first,
+// and nothing happens for a channel after its CHANNEL_HANGUP_COMPLETE.
 
 const PORT = Number(process.env.AUDIO_BRIDGE_PORT ?? 3030)
 const ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -121,10 +121,24 @@ function detectLanIp() {
 const LAN_IP = detectLanIp()
 const FORK_WS_URL = `ws://${LAN_IP}:${PORT}/audio`
 
-// Trigger uuid_audio_fork on calls landing on these dialplan extensions.
-// Bridge listens to CHANNEL_ANSWER events and auto-invokes the API.
+// Trigger uuid_audio_fork on calls landing on these dialplan extensions, once
+// the channel is answered (CHANNEL_ANSWER or an already-answered CHANNEL_PARK).
 const AUTO_FORK_EXTENSIONS = (process.env.AUTO_FORK_EXTENSIONS ?? '9999,9998')
     .split(',').map(s => s.trim()).filter(Boolean)
+
+// `mono` = SMBF_READ_STREAM only: the media bug taps the caller's inbound audio
+// and never the outbound side that uuid_broadcast writes our TTS into, so STT
+// cannot hear the bot (verified in scripts/test_mod_audio_fork.js, issue #20).
+// `mixed` delivers no frames while the leg's write side is silent. Override via
+// BRIDGE_FORK_MIX only if a regression appears.
+const lifecycle = createChannelLifecycle({
+    autoForkExtensions: AUTO_FORK_EXTENSIONS,
+    forkWsUrl: FORK_WS_URL,
+    mixType: process.env.BRIDGE_FORK_MIX ?? 'mono',
+    eslApi: command => eslApi(command),
+    ensureSession: (callUuid, isChannelDead) => ensureSessionForCall(callUuid, isChannelDead),
+    getSession: callUuid => sessions.get(callUuid),
+})
 
 // ── HTTP server: serves WAV for uuid_broadcast + control endpoints ─────────────
 
@@ -188,8 +202,12 @@ wss.on('connection', (ws, req) => {
     // WS stream back to the right CallSession.
     const urlObj = new URL(req.url, `http://${req.headers.host}`)
     const callUuid = urlObj.searchParams.get('callUuid')
-    const session = callUuid ? sessions.get(callUuid) : null
-    console.log(`[ws] connected from ${remote} callUuid=${callUuid ?? '?'} session=${session ? 'YES' : 'no'}`)
+    // The CallSession is bound on CHANNEL_PARK after two CRM round-trips, and the
+    // fork can connect first (always without early media). Resolve lazily per
+    // frame until found instead of once at connect.
+    const currentSession = createSessionResolver(callUuid, uuid => sessions.get(uuid))
+    let sessionSeen = Boolean(currentSession())
+    console.log(`[ws] connected from ${remote} callUuid=${callUuid ?? '?'} session=${sessionSeen ? 'YES' : 'pending'}`)
 
     let metaSeen = false
     let frames = 0
@@ -212,6 +230,11 @@ wss.on('connection', (ws, req) => {
         }
 
         const now = Date.now()
+        const session = currentSession()
+        if (session && !sessionSeen) {
+            sessionSeen = true
+            console.log(`[ws] ${callUuid} session bound after ${frames} frame(s)`)
+        }
         if (!firstFrameAt) {
             firstFrameAt = now
             console.log(`[ws] first PCM frame: ${data.length} bytes (session=${session ? 'on' : 'audio-only'})`)
@@ -253,6 +276,7 @@ wss.on('connection', (ws, req) => {
             `[ws] closed code=${code} frames=${frames} bytes=${bytes} ` +
             `dur=${elapsedSec.toFixed(1)}s`,
         )
+        const session = currentSession()
         if (session) session.stop()
     })
 
@@ -337,7 +361,7 @@ function eslApi(command, timeoutMs = 5000) {
 // bridge looks the row up here and builds a CallSession around the
 // scenario.
 
-async function ensureSessionForCall(callUuid) {
+async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
     if (sessions.has(callUuid)) return sessions.get(callUuid)
 
     // Refresh provider keys from CRM (DB-backed). The fetch is cached
@@ -364,6 +388,10 @@ async function ensureSessionForCall(callUuid) {
         return null
     }
     if (!resolved?.callId || !resolved?.scenario) return null
+
+    // Another CHANNEL_PARK for this call may have bound a session while we were
+    // awaiting the CRM; never create a second CallSession for one channel.
+    if (sessions.has(callUuid)) return sessions.get(callUuid)
 
     console.log(`[session] bind ${callUuid} → callId=${resolved.callId} scenario="${resolved.scenario.name}"`)
 
@@ -423,6 +451,14 @@ async function ensureSessionForCall(callUuid) {
         },
     })
     sessions.set(callUuid, session)
+    if (isChannelDead()) {
+        // The call hung up during the CRM awaits. Finalize it as closed without
+        // starting (stop() -> _end('closed') -> onFinalize) so no greeting,
+        // STT stream or silence timer is created for a channel that is gone.
+        console.log(`[session] ${callUuid} hung up during CRM bind -> finalize as closed without starting`)
+        session.stop()
+        return null
+    }
     session.start().catch(err => {
         console.error(`[session ${callUuid}] start failed: ${err.message}`)
         sessions.delete(callUuid)
@@ -509,53 +545,21 @@ async function broadcastWav(callUuid, wavBuffer) {
         setTimeout(() => fs.promises.unlink(fileWin).catch(() => {}), 60_000).unref()
     }
 
-    // Channel-state-aware playback.
+    // Channel-state-aware playback (channel-lifecycle.js playOrQueue):
     //
-    //   dead     — CHANNEL_HANGUP_COMPLETE has already fired. Don't even
-    //              hand the WAV to FreeSWITCH: the leg is gone and any
-    //              uuid_broadcast would fail with «no session». Returning
-    //              null here also short-circuits CallSession._speak()'s
-    //              mute-window math (it treats 0/null as «nothing to
-    //              wait for»), which lets the session torn-down logic
-    //              run unblocked. Without this branch a late-arriving
-    //              synthesis (e.g. the end_call goodbye that synthesises
-    //              after FS already closed the channel) would enter the
-    //              pre-answer branch below, find no ANSWER ever coming,
-    //              and leak a permanent entry in pendingBroadcasts.
+    //   dead     — CHANNEL_HANGUP_COMPLETE has already fired. The WAV is not
+    //              handed to FreeSWITCH and null is returned, which also
+    //              short-circuits CallSession._speak()'s mute-window math.
+    //              Without this, a late synthesis (e.g. the end_call goodbye)
+    //              would queue into a slot no answer will ever flush.
     //
-    //   pre-answer (not yet in answeredChannels, not in deadChannels)
-    //            — Megafon's SBC routes pre-answer audio into the ringback
-    //              leg, so a uuid_broadcast started during RINGING is
-    //              either lost entirely or truncated when the lead picks
-    //              up mid-phrase. Queue the WAV and return a Promise that
-    //              resolves with durMs once the ANSWER handler fires
-    //              uuid_broadcast on its behalf. CallSession._speak()
-    //              awaits this Promise, so its acceptSttAfter window
-    //              stays anchored to actual-playback-start rather than
-    //              synth-completion.
+    //   pre-answer — Megafon's SBC routes pre-answer audio into the ringback
+    //              leg, so the WAV is queued and the returned Promise resolves
+    //              with durMs once the answer fact flushes it. _speak() awaits
+    //              it, keeping acceptSttAfter anchored to actual playback start.
     //
-    //   live     — already answered; fire-and-forget below.
-    if (deadChannels.has(callUuid)) {
-        console.log(`[broadcast] ${callUuid} dropped — channel already hung up`)
-        return null
-    }
-    if (!answeredChannels.has(callUuid)) {
-        return new Promise(resolve => {
-            const list = pendingBroadcasts.get(callUuid) ?? []
-            list.push({ file: fileFs, durMs, resolve })
-            pendingBroadcasts.set(callUuid, list)
-            console.log(`[broadcast] ${callUuid} queued (pre-answer) — queue size: ${list.length}`)
-        })
-    }
-
-    try {
-        const reply = await eslApi(`uuid_broadcast ${callUuid} ${fileFs} aleg`)
-        console.log(`[broadcast] ${callUuid} fs reply: ${reply.trim().slice(0, 120)}`)
-    } catch (err) {
-        console.error(`[broadcast] ${callUuid} → ${name} failed: ${err.message}`)
-        return null
-    }
-    return durMs
+    //   live     — already answered; uuid_broadcast now.
+    return lifecycle.playOrQueue(callUuid, fileFs, durMs)
 }
 
 // ── ESL persistent event listener: drives the per-call lifecycle ───────────────
@@ -563,17 +567,17 @@ async function broadcastWav(callUuid, wavBuffer) {
 // Subscribes once to ALL FreeSWITCH events and filters in onEvent() down to
 // three that matter:
 //   CHANNEL_PARK            → bind CRM session + start greeting synthesis
-//                             (during RINGING, so the WAV is on disk by the
-//                             time the lead picks up)
+//                             (with early media this is during RINGING); if
+//                             Answer-State is already "answered" (no early
+//                             media) also run the answer actions below
 //   CHANNEL_ANSWER          → start uuid_audio_fork (STT stream) AND flush
-//                             any pre-synthesised playback queued in
-//                             pendingBroadcasts
-//   CHANNEL_HANGUP_COMPLETE → release per-call gating state and resolve
-//                             orphan awaiters
+//                             any pre-synthesised playback queued before answer
+//   CHANNEL_HANGUP_COMPLETE → release per-call gating state, resolve orphan
+//                             awaiters and stop the bound CallSession
 //
-// The full motivation (answer-gated playback for issue #23) is documented
-// inline at the top of onEvent() and in broadcastWav(). Connection
-// reconnects with exponential backoff on disconnect.
+// The rules and the captured event sequences are documented in
+// channel-lifecycle.js; answer-gated playback (issue #23) in broadcastWav().
+// Connection reconnects with exponential backoff on disconnect.
 
 function startEslEventListener() {
     let reconnectDelay = 2000
@@ -583,210 +587,12 @@ function startEslEventListener() {
     const sock = net.connect(ESL_PORT, ESL_HOST)
     sock.setEncoding('utf8')
 
+    // Every event is parsed and handed to the channel lifecycle, which filters
+    // down to CHANNEL_PARK / CHANNEL_ANSWER / CHANNEL_HANGUP_COMPLETE for our
+    // extensions (see channel-lifecycle.js for the rules and captured traces).
     function onEvent(headersText) {
         try {
-            // Parse "key: value" headers — keep raw values; decode lazily.
-            const headers = {}
-            for (const line of headersText.split('\n')) {
-                const idx = line.indexOf(': ')
-                if (idx > 0) headers[line.substring(0, idx)] = line.substring(idx + 2)
-            }
-            const eventName = headers['Event-Name']
-
-            // Three event types drive the session lifecycle. Each does ONE
-            // thing — splitting "synth" from "play" was the whole point of
-            // this rework (see «answer-gated broadcast» note at the top of
-            // the file and in broadcastWav()).
-            //
-            //   CHANNEL_PARK            — dialplan executed park(). For
-            //                             outbound calls through Megafon's
-            //                             SBC this fires 5–15 s BEFORE the
-            //                             lead picks up, while the channel
-            //                             is still RINGING. Use it as the
-            //                             earliest reliable trigger to
-            //                             bind the CallSession and let the
-            //                             greeting synthesise in the
-            //                             background, so the WAV is ready
-            //                             on disk by the time ANSWER fires.
-            //                             broadcastWav() queues the file
-            //                             into pendingBroadcasts until then.
-            //   CHANNEL_ANSWER          — SIP 200 OK landed; channel went
-            //                             RINGING → ACTIVE. NOW audio
-            //                             actually reaches the handset.
-            //                             Start uuid_audio_fork (STT
-            //                             stream) AND flush any
-            //                             pre-synthesised playback queued
-            //                             during PARK.
-            //   CHANNEL_HANGUP_COMPLETE — release gating maps so they don't
-            //                             leak per-call. Also resolves any
-            //                             orphaned queued broadcasts (e.g.
-            //                             lead rejected the call before
-            //                             answering) so the awaiting
-            //                             _speak() doesn't hang forever.
-            //
-            // Earlier attempts that DIDN'T work:
-            //   - Trigger everything on CHANNEL_PARK: bot starts speaking
-            //     into a still-ringing channel. Megafon's SBC routes that
-            //     audio into the ringback leg instead of the user's ear;
-            //     first 1–3 s of greeting (or the entire short utterance)
-            //     gets lost. Manifested as «teryayutsya bukvy» / choppy
-            //     greeting (issue #23, first pass).
-            //   - Trigger everything on CHANNEL_ANSWER: synthesis only
-            //     starts AFTER pickup, so the lead hears 8–12 s of dead air
-            //     while CRM + LLM + TTS round-trip runs. Tested live
-            //     2026-05-18: confirmed unusable (issue #23, second pass).
-            //   - park = synth, answer = play (current): synthesis overlaps
-            //     with ringing wait; playback fires the instant the channel
-            //     is live. No dead air, no lost syllables.
-            if (eventName !== 'CHANNEL_PARK'
-                && eventName !== 'CHANNEL_ANSWER'
-                && eventName !== 'CHANNEL_HANGUP_COMPLETE') return
-
-            const uuid = headers['Unique-ID'] || headers['Channel-Call-UUID']
-            if (!uuid) return
-
-            // For `originate user/103 9999 XML default`, the actually-dialed
-            // dialplan extension lands in variable_dialed_extension /
-            // variable_originate_called_number, while Caller-Destination-Number
-            // shows the SIP user URI piece. Check every plausible field.
-            //
-            // We do the extension filter BEFORE the event-specific branches
-            // so HANGUP_COMPLETE on unrelated channels (other extensions
-            // in the dialplan — manager outbound, MAX inbound, etc.) never
-            // pollutes our per-channel state maps. Without this, every
-            // hangup in the system would leak one entry into deadChannels.
-            const dialedExts = [
-                headers['variable_dialed_extension'],
-                headers['variable_originate_called_number'],
-                headers['variable_destination_number'],
-                headers['Caller-Destination-Number'],
-            ].filter(Boolean)
-
-            const matched = AUTO_FORK_EXTENSIONS.find(ext => dialedExts.includes(ext))
-            // Log only for our extensions OR for a UUID we've already
-            // bound (so we see HANGUPs on bound channels even if the
-            // extension headers got dropped by FS on the way out — happens
-            // on aborted originates).
-            const knownUuid = answeredChannels.has(uuid) || pendingBroadcasts.has(uuid)
-            if (matched || knownUuid) {
-                console.log(`[esl] ${eventName} uuid=${uuid} dialed=[${dialedExts.join(',')}] matched=${matched ?? 'none'}`)
-            }
-            if (!matched && !knownUuid) return
-
-            if (eventName === 'CHANNEL_HANGUP_COMPLETE') {
-                // Release any awaiters and clear gating state. Use durMs=0
-                // so the resumed _speak() falls through its mute-window
-                // calculation immediately — the session is being torn down
-                // anyway via the WS close → session.stop() path.
-                const queued = pendingBroadcasts.get(uuid)
-                if (queued && queued.length) {
-                    console.log(`[esl] CHANNEL_HANGUP_COMPLETE ${uuid} → dropping ${queued.length} unplayed broadcast(s)`)
-                    for (const item of queued) {
-                        try { item.resolve(0) } catch {}
-                    }
-                }
-                pendingBroadcasts.delete(uuid)
-                answeredChannels.delete(uuid)
-                // Mark dead so any future broadcastWav() (e.g. the
-                // end_call goodbye that finished synthesising after FS
-                // closed the channel) drops the WAV instead of queueing
-                // into a slot that no future ANSWER will flush. Bounded
-                // memory: the entry is reaped on the next PARK for this
-                // UUID, and call UUIDs are unique-per-call anyway, so
-                // worst-case is one dangling entry until the next call
-                // on the same UUID — which Megafon will never reuse.
-                deadChannels.add(uuid)
-                return
-            }
-
-            if (eventName === 'CHANNEL_PARK') {
-                // Bind CRM session + kick off greeting synthesis NOW. The
-                // returned Promise resolves once tts.synthesize() lands a
-                // WAV in AUDIO_DIR; broadcastWav() then sees
-                // answeredChannels still empty and queues it into
-                // pendingBroadcasts[uuid] until ANSWER arrives. We do NOT
-                // start uuid_audio_fork here — fork during ringing would
-                // stream the SBC's ringback tone into STT, which Whisper
-                // would happily transcribe as garbage user speech.
-                //
-                // For ad-hoc test calls (no CRM-side session row)
-                // resolveCallByUuid returns 404 and ensureSessionForCall
-                // resolves to null — no session is bound, but the ANSWER
-                // branch still fires audio_fork so the audio path can be
-                // verified end-to-end via the WS log.
-                //
-                // Clear deadChannels for this UUID in the unlikely event
-                // FS reuses it for a retry — keeps the gating state
-                // bounded over a long process lifetime.
-                deadChannels.delete(uuid)
-                ensureSessionForCall(uuid)
-                    .catch(err => console.error(`[esl] session bind failed for ${uuid}: ${err.message}`))
-                return
-            }
-
-            // CHANNEL_ANSWER — channel is live. Three jobs in order:
-            //   1. Mark the channel as answered so any broadcastWav() that
-            //      lands AFTER this point fires immediately.
-            //   2. Flush anything queued during PARK→ANSWER ringing.
-            //   3. Start uuid_audio_fork to begin streaming user PCM to the
-            //      bridge for STT.
-            answeredChannels.add(uuid)
-
-            const queued = pendingBroadcasts.get(uuid)
-            if (queued && queued.length) {
-                pendingBroadcasts.delete(uuid)
-                console.log(`[esl] CHANNEL_ANSWER ${uuid} → flushing ${queued.length} queued broadcast(s)`)
-                // Fire each queued broadcast sequentially. The await-chain
-                // here matters: uuid_broadcast itself is fire-and-forget on
-                // the FS side, but we want each item.resolve() to land in
-                // order so CallSession._speak()'s acceptSttAfter math is
-                // anchored to actual playback-start, not synth completion.
-                ;(async () => {
-                    for (const item of queued) {
-                        try {
-                            const reply = await eslApi(`uuid_broadcast ${uuid} ${item.file} aleg`)
-                            console.log(`[broadcast] ${uuid} (deferred) fs reply: ${reply.trim().slice(0, 120)}`)
-                        } catch (err) {
-                            console.error(`[broadcast] ${uuid} (deferred) failed: ${err.message}`)
-                        }
-                        try { item.resolve(item.durMs) } catch {}
-                    }
-                })()
-            }
-
-            // Start audio_fork in `mono` mix-type. mono = SMBF_READ_STREAM
-            // only — the media bug taps ONLY the inbound (caller's)
-            // audio side of the channel, never the outbound side that
-            // playback() writes our TTS into. STT therefore physically
-            // CANNOT hear our own bot voice, regardless of timing —
-            // eliminating the entire class of "Whisper finalises stale
-            // TTS audio as if the lead said it" race conditions.
-            //
-            // Prior assertion in this codebase: «mono produces 0 PCM
-            // frames in this build of mod_audio_fork, only mixed works».
-            // That was wrong — the assertion was based on a transient
-            // test condition (loopback channel without active playback
-            // → mixed/stereo see no write-side audio → looks broken;
-            // but mono is unaffected because it reads only the inbound
-            // side, which always has at least silence frames). Verified
-            // empirically in scripts/test_mod_audio_fork.js (issue #20):
-            //   mono   → 46 fps, 320 B/frame, WS opens, PCM flows
-            //   mixed  → 46 fps, 320 B/frame (with audio on write side)
-            //   stereo → 46 fps, 640 B/frame
-            //   pause  → frames stop within 2 s
-            //   resume → frames restart within 2 s
-            //
-            // BRIDGE_FORK_MIX env overrides if a regression appears
-            // (`mixed` falls back to the source-gate echo workaround
-            // in call-session.js onPcm()). Default `mono`.
-            const mixType = process.env.BRIDGE_FORK_MIX ?? 'mono'
-            const meta = `callUuid=${encodeURIComponent(uuid)}`
-            const forkUrl = `${FORK_WS_URL}?${meta}`
-            const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} ${mixType} 8000 ${meta}`
-            console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched}, mix=${mixType})`)
-            eslApi(cmd)
-                .then(out => console.log(`[esl] auto-fork: ${out}`))
-                .catch(err => console.error(`[esl] auto-fork FAILED: ${err.message}`))
+            lifecycle.handleEvent(parseEslEventHeaders(headersText))
         } catch (err) {
             console.error(`[esl] onEvent error: ${err.message}`)
         }
@@ -825,7 +631,7 @@ function startEslEventListener() {
             stage = 'listening'
             // Keep buf — there may already be queued events after the reply.
             buf = buf.substring(buf.indexOf('+OK event listener enabled') + 'X'.length * 26)
-            console.log(`[esl-events] subscribed (auto-fork URL: ${FORK_WS_URL}, triggers: PARK→synth, ANSWER→play+fork on ${AUTO_FORK_EXTENSIONS.join('/')})`)
+            console.log(`[esl-events] subscribed (auto-fork URL: ${FORK_WS_URL}, triggers: PARK→bind (+play/fork when Answer-State=answered), ANSWER→play+fork, once per channel on ${AUTO_FORK_EXTENSIONS.join('/')})`)
             // Fall through to listening parser
         }
 

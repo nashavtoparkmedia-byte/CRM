@@ -302,6 +302,10 @@ class CallSession {
 
     _setState(s) {
         if (!STATES.includes(s)) throw new Error(`Unknown state: ${s}`)
+        // 'ended' is terminal. A hangup-driven stop() can land while _doTurn or
+        // _speak awaits the LLM or TTS; their continuations must not move the
+        // session back to 'listening', re-arm the silence timer or finalize twice.
+        if (this.state === 'ended' && s !== 'ended') return
         const prev = this.state
         this.state = s
         this.onState(s)
@@ -695,6 +699,8 @@ class CallSession {
 
     async _speak(text) {
         if (!tts.enabled() || !this.broadcastWav) return
+        // A call that already ended must not pay for TTS synthesis.
+        if (this.state === 'ended') return
         this._setState('speaking')
         // Drop any pending user text that arrived while we were thinking —
         // it's stale relative to what the bot is about to say.

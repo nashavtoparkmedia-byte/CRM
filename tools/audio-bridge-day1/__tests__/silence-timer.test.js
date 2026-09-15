@@ -292,3 +292,58 @@ test('leaving listening state clears the silence timer', (t) => {
     s._setState('listening')
     assert.notEqual(s.silenceTimer, null, 're-armed on re-entering listening')
 })
+
+// ---- Extra: 'ended' is terminal for in-flight turns --------------------------
+// A hangup stops the session (CHANNEL_HANGUP_COMPLETE or WS close) while a turn
+// may still be awaiting playback or the LLM. The continuation must not move the
+// session back to 'listening', re-arm the silence timer, finalize a second time
+// or pay for TTS synthesis.
+
+test('stop() during in-flight playback keeps the session ended and finalizes once', async (t) => {
+    resetMocks()
+    mockState.llmReturn = { kind: 'text', content: 'Здравствуйте!' }
+    let releasePlayback = null
+    const { s, events, cleanup } = makeSession({
+        broadcastWav: () => new Promise(resolve => { releasePlayback = resolve }),
+    })
+    t.after(cleanup)
+
+    const turn = s._doTurn(false)
+    for (let i = 0; i < 50 && !releasePlayback; i++) await new Promise(r => setImmediate(r))
+    assert.ok(releasePlayback, 'turn reached playback')
+
+    s.stop()
+    releasePlayback(1000)
+    await turn
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'closed')
+    assert.equal(s.silenceTimer, null, 'no silence timer re-armed after stop()')
+    const endedAt = events.state.indexOf('ended')
+    assert.ok(endedAt >= 0)
+    assert.deepEqual(events.state.slice(endedAt + 1), [], 'no state transition after ended')
+})
+
+test('a turn whose LLM reply arrives after stop() does not synthesise speech', async (t) => {
+    resetMocks()
+    let releaseLlm = null
+    mockState.llmReturn = new Promise(resolve => {
+        releaseLlm = () => resolve({ kind: 'text', content: 'Слишком поздно' })
+    })
+    let broadcasts = 0
+    const { s, events, cleanup } = makeSession({
+        broadcastWav: async () => { broadcasts++; return 1000 },
+    })
+    t.after(cleanup)
+
+    const turn = s._doTurn(false)
+    s.stop()
+    releaseLlm()
+    await turn
+
+    assert.equal(broadcasts, 0, 'no playback handed to FreeSWITCH after stop()')
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1)
+    assert.equal(s.silenceTimer, null)
+})
