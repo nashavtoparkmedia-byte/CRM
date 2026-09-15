@@ -6072,9 +6072,32 @@ app.post('/send-message', async (req, res) => {
         } else {
           console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
         }
+        // Every success response echoes the live account this request was checked
+        // against above; Gravity rejects a send result without it as
+        // MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH and records a delivered message as failed.
+        //
+        // The compose box was observed to clear of the exact typed text. Bound to the
+        // CRM's clientMessageId, that is the same action proof the direct-UI and
+        // UI-fallback paths report. Answering 'send_requested' left the message 'sent'
+        // with no provider id, so recovery marked it failed and retryable after five
+        // minutes and the retry job sent the contact a second copy. Without a
+        // clientMessageId there is nothing to bind a proof to, so keep the weaker answer.
+        if (clientMessageId) {
+          const proven = uiTextDeliveredResult(
+            liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
+            clientMessageId,
+          )
+          return res.json({
+            success: true,
+            chatId: liveId,
+            providerAccountId,
+            ...proven,
+          })
+        }
         return res.json({
           success: true,
           chatId: liveId,
+          providerAccountId,
           externalId: null,
           deliveryConfirmed: false,
           deliveryStatus: 'send_requested',
