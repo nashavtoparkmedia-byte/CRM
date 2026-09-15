@@ -1,0 +1,32 @@
+Third-party notices for the CRM FreeSWITCH image (crm/freeswitch)
+==================================================================
+
+mod_audio_fork
+--------------
+Source: drachtio-freeswitch-modules, commit 88e1465908a89bed5c95d336aa53a3899bb5abb5,
+path modules/mod_audio_fork, retrieved from the Software Heritage archive
+(swh:1:rev:88e1465908a89bed5c95d336aa53a3899bb5abb5). Modified by the two patches in patches/.
+
+  MIT License, Copyright 2023, Drachtio Communications Services, LLC
+  (full text: upstream/LICENSE)
+
+  MIT License, Copyright (c) 2021 Dave Horton
+  (repository licence, full text: upstream/LICENSE.drachtio-freeswitch-modules)
+
+  base64.hpp: Copyright (C) 2004-2008 René Nyffenegger, zlib-style licence
+  (full text in the header of upstream/base64.hpp)
+
+libwebsockets
+-------------
+Source: https://github.com/warmcat/libwebsockets tag v4.3.3,
+commit 4415e84c095857629863804e941b9e1c2e9347ef. Statically linked into mod_audio_fork.so.
+
+  MIT License, with some bundled sources under BSD-3-Clause, BSD-2-Clause or CC0 as stated
+  in the upstream LICENSE file, which the image installs as
+  /usr/share/doc/crm-telephony/mod_audio_fork/LICENSE.libwebsockets
+
+FreeSWITCH
+----------
+The runtime image is safarov/freeswitch pinned by digest (FreeSWITCH 1.10.12). FreeSWITCH is
+licensed under the Mozilla Public License 1.1. Its v1.10.12 source headers are used at build
+time only to compile the module against the runtime's own libfreeswitch.

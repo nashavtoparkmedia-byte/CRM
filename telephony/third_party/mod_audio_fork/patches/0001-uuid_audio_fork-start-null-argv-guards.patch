@@ -1,0 +1,34 @@
+mod_audio_fork: guard NULL argv dereferences on the uuid_audio_fork start path.
+
+1. "uuid_audio_fork <uuid> start <url> <mix>" (no sampling-rate token) called strcmp(argv[4])
+   with argv[4] == NULL and crashed FreeSWITCH. The sampling rate is now parsed only when present;
+   the existing default of 8000 is kept. Every invocation with a sampling-rate token is unchanged.
+2. The usage guard compared argv[1] case-sensitively while dispatch uses strcasecmp, so "START"
+   with fewer than 4 tokens bypassed the guard and dereferenced a NULL URL/mix. The guard now uses
+   strcasecmp as well; such commands return -USAGE.
+
+Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork.
+Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
+--- a/mod_audio_fork.c
++++ b/mod_audio_fork.c
+@@ -175,7 +175,7 @@
+ 
+ 
+ 	if (zstr(cmd) || argc < 2 ||
+-		(0 == strcmp(argv[1], "start") && argc < 4)) {
++		(0 == strcasecmp(argv[1], "start") && argc < 4)) {
+ 
+ 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error with command %s %s %s.\n", cmd, argv[0], argv[1]);
+ 		stream->write_function(stream, "-USAGE: %s\n", FORK_API_SYNTAX);
+@@ -253,7 +253,10 @@
+           switch_core_session_rwunlock(lsession);
+           goto done;
+         }
+-        if (0 == strcmp(argv[4], "16k")) {
++        if (argc < 5) {
++          /* no sampling-rate token: keep the default of 8000 set above */
++        }
++        else if (0 == strcmp(argv[4], "16k")) {
+           sampling = 16000;
+         }
+         else if (0 == strcmp(argv[4], "8k")) {

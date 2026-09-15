@@ -133,7 +133,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
-| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | FreeSWITCH (хост) | **C** — доступ к исходящим звонкам, реальные деньги |
+| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | Контейнер `crm-freeswitch`: `MEGAFON_SIP_PASSWORD` читается при старте (`vars.xml` exec-set → `megafon.xml`); образ не запускается при пустом значении или заглушке. Через общий `env_file` переменная видна также gravity-mvp, audio-bridge и tg-bot. Логин пока задан в `megafon.xml`. | **C** — доступ к исходящим звонкам, реальные деньги |
 | `ESL_PASSWORD` (FreeSWITCH Event Socket Library) | tg-bot / audio-bridge | H |
 | coturn shared secret | TURN-relay | H |
 
@@ -221,7 +221,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | WhatsApp/MAX/Yandex Fleet сессии | "Ротация" = повторная привязка через QR-код / SMS. Делать в окно низкой нагрузки. |
 | `ANTHROPIC_API_KEY` | Сгенерировать новый в консоли Anthropic, потом отозвать старый (не наоборот — будет downtime). |
 | **age PRIVATE key** | **Никогда не ротируется планово.** Только если есть подозрение что украли. Ротация = расшифровать все бэкапы старым ключом, перешифровать новым публичным. Долгая операция. |
-| SIP `MEGAFON_SIP_PASSWORD` | Через личный кабинет МультиФон. Менять в окно когда нет звонков. |
+| SIP `MEGAFON_SIP_PASSWORD` | Через личный кабинет МультиФон, в окно когда нет звонков. Новое значение: только `A-Za-z0-9._~+=/@%,-`, минимум 8 символов, **без двоеточия** (sofia-sip обрезает пароль по `:`). Обновить `.env.production`, затем `docker compose ... up -d --force-recreate freeswitch` (restart не перечитывает env). Проверка обязательна вручную: `docker inspect crm-freeswitch` — `State.Status=running`, `Restarting=false`, `RestartCount` не растёт, `Health=healthy`; `fs_cli ... -x "sofia status gateway megafon"` — `REGED`. `scripts/deploy.sh` не ловит контейнер в цикле перезапуска. Перед recreate сравнить `/etc/freeswitch` работающего контейнера с образом (`docker diff crm-freeswitch`), иначе ручные правки внутри контейнера будут потеряны. **Значение, ранее закоммиченное в git (публичный репозиторий), скомпрометировано: его нужно ротировать до боевого использования; удаление из HEAD не является ротацией.** Развёрнутый конфиг с подставленным паролем пишется в `freeswitch.xml.fsxml` в томе `crm_freeswitch_logs`. |
 | S3 Access/Secret Keys | Создать новую пару в Selectel, обновить rclone config, прогнать тестовый бэкап, отозвать старую пару. |
 
 ---
