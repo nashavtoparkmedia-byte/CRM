@@ -326,9 +326,8 @@ describe('exact ContactIdentity reachability persistence', () => {
       await expect(prepareOpen('identity-a')).resolves.toMatchObject({ status: 'ready' })
     })
 
-    // Person level only. The collided WhatsApp conversation itself is quarantined
-    // for outbound by Messaging (outbound-conversation-identity-runtime.test.ts);
-    // here neither of the Contact's identities may be disabled by that fact.
+    // Person level only: neither of the Contact's identities may be disabled by a
+    // transport fact. The collided inbound event itself is refused at ingress.
     test('a WhatsApp transport mismatch disables neither that identity nor the same Contact\'s Telegram identity', async () => {
       const telegramRow = identities.get('identity-a')!
       telegramRow.reachabilityStatus = 'confirmed'

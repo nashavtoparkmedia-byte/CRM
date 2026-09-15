@@ -131,11 +131,13 @@ describe('transport-only collision classification', () => {
       reason: 'provider_account_mismatch',
       details: { ...maxAccountMismatch.details, existingChatKind: 'group', incomingChatKind: 'private' },
     })).toBe(false)
-    // MAX: a chat kind outside the recorded vocabulary cannot prove anything.
+    // MAX: a chat kind outside the recorded vocabulary cannot prove anything. The
+    // incoming kind is 'unknown', so no concrete-mismatch rule could reject it:
+    // only the vocabulary check does.
     expect(isProvenTransportOnlyChannelCollisionV1({
       channel: 'max',
       reason: 'provider_account_mismatch',
-      details: { ...maxAccountMismatch.details, existingChatKind: 'channel' },
+      details: { ...maxAccountMismatch.details, existingChatKind: 'channel', incomingChatKind: 'unknown' },
     })).toBe(false)
     // Control: the same record with consistent kinds is transport-only.
     expect(isProvenTransportOnlyChannelCollisionV1({

@@ -143,10 +143,10 @@ async function readExactBinding(
   // Provider account is not compared against the identity and its absence is
   // not a rejection: that stamp describes the person's first observed transport,
   // not which route may carry this conversation. Route safety is enforced where
-  // the route is actually used: the outbound port quarantines a WhatsApp route
-  // whose bound slot ingress contradicted, outbound preparation checks the bound
-  // transport, and the Telegram and MAX transports attest the live account at
-  // send time.
+  // the route is actually used: outbound preparation checks the bound transport
+  // and the exact target, and the tg-bot and MAX transports check the live
+  // account at send time. WhatsApp sends attest no account (see
+  // docs/design/provider-account-identity-v1.md).
   if (conversation.contactId === null || conversation.contactIdentityId === null) return null
   assertExactOwnership(conversation, input)
   return toConversation(conversation, input)

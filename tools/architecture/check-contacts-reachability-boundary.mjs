@@ -127,21 +127,102 @@ assert.equal(blocks(probeCollision('peer_identity_mismatch', { incomingPeerId: '
 assert.equal(blocks({ ...botTransportOnly, identityId: 'another-identity' }), false, 'an entry about another identity does not block this one')
 assert.equal(blocks({ ...botTransportOnly, identityId: 'another-identity', details: { ...botTransportOnly.details, reason: 'peer_identity_mismatch' } }), false, 'a genuine conflict about another identity does not block this one')
 
+// The MAX and WhatsApp branches carry their own proof rules: an account reason
+// can mask a MAX sender or chat-kind contradiction, and a label is never enough
+// unless the recorded values express it.
+const channelBlocks = (identity, reason, details) => evidenceState.hasPersonBlockingIdentityConflictV1({
+    identityConflicts: [{
+        identityId: identity.id,
+        conflictType: 'channel_identity_collision',
+        source: 'channel-ingress',
+        status: 'open',
+        details: { ...details, channel: identity.channel, reason, externalUserId: identity.externalId },
+    }],
+}, identity)
+const maxIdentity = { id: 'identity-max', channel: 'max', externalId: 'sender-42' }
+const maxTransportOnly = {
+    incomingProviderAccountId: 'max-account-b', existingProviderAccountId: 'max-account-a',
+    incomingSenderId: 'sender-42', existingSenderId: 'sender-42', incomingChatKind: 'private', existingChatKind: 'private',
+}
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', maxTransportOnly), false, 'a proven MAX account-only collision must not disable the person')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, existingSenderId: 'sender-99' }), true, 'a MAX account reason masking a sender contradiction must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, existingSenderId: null }), true, 'a MAX account reason masking missing sender proof must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, incomingChatKind: 'group' }), true, 'a MAX account reason masking group traffic must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, existingChatKind: 'group' }), true, 'a MAX account reason masking a concrete kind contradiction must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, existingChatKind: 'channel', incomingChatKind: 'unknown' }), true, 'a MAX kind outside the recorded vocabulary must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_mismatch', { ...maxTransportOnly, existingProviderAccountId: 'max-account-b' }), true, 'a MAX mismatch label whose accounts agree must block')
+assert.equal(channelBlocks(maxIdentity, 'provider_account_unproven', { ...maxTransportOnly, existingProviderAccountId: null }), false, 'a proven MAX unstamped-account collision must not disable the person')
+const whatsappIdentity = { id: 'identity-wa', channel: 'whatsapp', externalId: '79990001122@c.us' }
+assert.equal(channelBlocks(whatsappIdentity, 'transport_mismatch', { incomingConnectionId: 'slot-b', existingConnectionId: 'slot-a' }), false, 'a proven WhatsApp slot collision must not disable the person')
+assert.equal(channelBlocks(whatsappIdentity, 'transport_mismatch', { incomingConnectionId: 'slot-a', existingConnectionId: 'slot-a' }), true, 'a WhatsApp mismatch label whose slots agree must block')
+assert.equal(channelBlocks(whatsappIdentity, 'transport_unbound', { incomingConnectionId: 'slot-a', existingConnectionId: 'slot-b' }), true, 'a WhatsApp unbound label with a stored slot must block')
+assert.equal(channelBlocks(probeIdentity, 'transport_connection_mismatch', { ...botTransportOnly.details, existingConnectionId: botTransportOnly.details.incomingConnectionId }), true, 'a Telegram mismatch label whose connections agree must block')
+
+// The vocabulary is exact: every transport reason any writer ever raised is
+// transport-class on its own channel, and every person reason the current writers
+// raise is not, on any channel.
+const transportReasons = {
+    telegram: ['transport_connection_mismatch', 'transport_connection_unproven', 'provider_account_mismatch', 'provider_account_unproven'],
+    whatsapp: ['transport_mismatch', 'transport_unbound'],
+    max: ['provider_account_mismatch', 'provider_account_unproven'],
+}
+const personReasons = [
+    'channel_mismatch', 'conversation_key_mismatch', 'peer_identity_mismatch', 'chat_kind_mismatch',
+    'message_chat_mismatch', 'sender_identity_mismatch', 'sender_identity_unproven',
+]
+for (const channel of ['telegram', 'whatsapp', 'max']) {
+    for (const reason of [...new Set([...Object.values(transportReasons).flat(), ...personReasons])]) {
+        assert.equal(
+            evidenceState.isTransportCollisionReasonV1(channel, reason),
+            transportReasons[channel].includes(reason),
+            `${channel} ${reason} transport classification`,
+        )
+    }
+}
+
 // Contacts refuses to record any transport-class reason as a person conflict,
-// whatever the caller, so a writer regression cannot reopen the person lockout.
+// whatever the caller. The writer is executed with its ownership transaction
+// stubbed: a transport reason must be refused before the transaction opens, and a
+// person reason must reach it.
 const conflictWriterSource = read('gravity-mvp/src/modules/contacts/public/v1/channel-identity-conflict.ts')
-assert.match(conflictWriterSource, /function validate\(input: MarkChannelIdentityConflictInputV1\): void \{[\s\S]*?if \(isTransportCollisionReasonV1\(input\.channel, input\.reason\)\) \{\n\s+throw new TypeError\('transport collision is not a person identity conflict'\)/)
-assert.match(conflictWriterSource, /export async function markChannelIdentityConflictV1\([\s\S]*?\{\n\s+validate\(input\)/)
-for (const [channel, reason] of [
-    ['telegram', 'transport_connection_mismatch'], ['telegram', 'transport_connection_unproven'],
-    ['telegram', 'provider_account_mismatch'], ['telegram', 'provider_account_unproven'],
-    ['whatsapp', 'transport_mismatch'], ['whatsapp', 'transport_unbound'],
-    ['max', 'provider_account_mismatch'], ['max', 'provider_account_unproven'],
-]) assert.equal(evidenceState.isTransportCollisionReasonV1(channel, reason), true, `${channel} ${reason} is a transport reason`)
-for (const [channel, reason] of [
-    ['telegram', 'peer_identity_mismatch'], ['telegram', 'chat_kind_mismatch'], ['max', 'sender_identity_mismatch'],
-    ['max', 'sender_identity_unproven'], ['max', 'chat_kind_mismatch'], ['max', 'message_chat_mismatch'],
-]) assert.equal(evidenceState.isTransportCollisionReasonV1(channel, reason), false, `${channel} ${reason} is a person reason`)
+const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+const evidenceStateUrl = moduleUrl(ts.transpileModule(evidenceStateSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText)
+const ownershipStubUrl = moduleUrl([
+    "export const runContactOwnershipTransaction = async () => { throw new Error('OWNERSHIP_TRANSACTION_REACHED') }",
+    'export const lockContactOwnershipRows = async () => ({})',
+    'export const assertContactOwnershipPostconditions = async () => undefined',
+].join('\n'))
+const conflictWriterJs = ts.transpileModule(conflictWriterSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText
+const conflictWriterImports = [...conflictWriterJs.matchAll(/from '([^']+)'/g)].map((match) => match[1]).sort()
+assert.deepEqual(conflictWriterImports, ['../../internal/contact-ownership-coordinator', './contact-evidence-state'], 'the conflict writer gained an unreviewed runtime import')
+const conflictWriter = await import(moduleUrl(conflictWriterJs
+    .replace("from '../../internal/contact-ownership-coordinator'", `from '${ownershipStubUrl}'`)
+    .replace("from './contact-evidence-state'", `from '${evidenceStateUrl}'`)))
+const writerOutcome = async (channel, reason) => {
+    try {
+        await conflictWriter.markChannelIdentityConflictV1({
+            contactId: 'contact-probe', identityId: 'identity-probe', channel, reason,
+            evidenceRoot: `channel-collision:${channel}:probe:${reason}`, details: {},
+        })
+        return 'RESOLVED'
+    } catch (error) {
+        return error?.message
+    }
+}
+for (const [channel, reasons] of Object.entries(transportReasons)) {
+    for (const reason of reasons) {
+        assert.equal(await writerOutcome(channel, reason), 'transport collision is not a person identity conflict', `the writer must refuse ${channel} ${reason}`)
+    }
+}
+for (const channel of ['telegram', 'max']) {
+    for (const reason of personReasons) {
+        assert.equal(await writerOutcome(channel, reason), 'OWNERSHIP_TRANSACTION_REACHED', `the writer must record ${channel} ${reason}`)
+    }
+}
 
 const profileDrawerSource = read(profileDrawerPath)
 assert.match(profileDrawerSource, /identityId: identity\.id/)

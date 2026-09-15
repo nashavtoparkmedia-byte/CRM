@@ -72,22 +72,28 @@ block the person, while a genuine identity conflict stays fail-closed.**
    de-duplicated). They no longer write a Contacts person conflict for a transport or account
    reason. WhatsApp group conversations have never carried a transport check, and M1 does not add
    one.
-2. **The collided route fails closed, and only that route.** Inbound is refused at ingress. For
-   outbound, the Messaging port every provider mutation goes through
-   (`prepareOutboundConversationV1`) refuses a WhatsApp conversation whose audit records a
-   `transport_mismatch` against its bound slot (`CONTACT_CONVERSATION_TRANSPORT_COLLISION`). A
-   WhatsApp connection id names a mutable pairing slot, and sending attests no account, so after
-   the peer was seen on another slot the bound slot can no longer be trusted. Telegram and MAX
-   routes are not quarantined. MTProto compares the live `getMe` account with the bound
-   connection, the tg-bot compares the live bot account, and MAX requires the scraper to echo the
-   route account, so a reply there cannot leave through another company account. The person,
-   and the person's other conversations, are unaffected.
+2. **The collision fails closed on its conversation, not beyond it.** The contradicting inbound
+   event is refused and audited, and the conversation is never claimed or rebound by the other
+   transport. The conversation's own bound route is **not** quarantined for outbound. That is a
+   deliberate decision, recorded as an owner decision in the M1 report:
+   - A collision only shows that the peer was seen on another transport. That is routine once
+     two company numbers or transports share a contact. Syncing a second WhatsApp connection
+     alone would record one for every shared contact with history inside the three-month sync
+     window.
+   - WhatsApp allows one conversation per peer (`Chat.externalChatId` is unique), so blocking
+     the bound route would permanently remove the person's only WhatsApp route, with no release
+     path.
+   - It would not catch the real hazard either: re-pairing the bound slot itself to another
+     number records no collision at all.
+
+   The person and the person's other conversations are unaffected either way.
 3. **Contacts refuses transport reasons.** `markChannelIdentityConflictV1` rejects every
    transport-class reason, so no caller can record one as a person conflict.
 4. **Masked person-level reasons are not lost.** In the Telegram Bot API, MTProto and MAX
    chains the transport or account comparison runs before the peer, sender and chat-kind
    comparisons. Callers now evaluate those later comparisons explicitly and still record a
-   person conflict with the person-level reason. That includes MAX `sender_identity_unproven`:
+   person conflict with the person-level reason. Direct genuine contradictions are recorded
+   exactly as before M1. The person-level reasons include MAX `sender_identity_unproven`:
    missing sender proof on a person-linked conversation, which is a gap in identity evidence
    rather than a contradiction. It stayed person-level, as it was before M1.
 5. **Readers distinguish, conservatively.** Outbound preparation, reachability recording and
@@ -96,11 +102,12 @@ block the person, while a genuine identity conflict stays fail-closed.**
    (`isProvenTransportOnlyIdentityConflictV1`). Every other open conflict — every other
    type, every person-level reason, and every historical transport entry whose details
    cannot prove that no masked comparison contradicted — keeps blocking. The identity-level
-   `conflictState: 'conflicted'` flag keeps blocking unconditionally. Every other reader of
-   open conflicts is unchanged and still counts any open entry, a proven transport-only
-   historical one included. Those readers are automatic merge policy, driver person
-   confirmation, and the contact card. No transport collision has been written as a person
-   conflict since M1, so this conservatism affects history only.
+   `conflictState: 'conflicted'` flag keeps blocking unconditionally. Two other readers are
+   unchanged and still count any open entry, a proven transport-only historical one included:
+   automatic merge policy and the contact card. Driver person confirmation reads only its own
+   driver-contradiction conflict types and never counted channel collisions. No transport
+   collision has been written as a person conflict since M1, so this conservatism affects
+   history only.
 6. **The identity account stamp no longer gates conversations.** Messaging's contact
    conversation adapter, the platform-shell orchestrator and the Telegram driver-link
    authority no longer compare a conversation's account with the identity's first-writer
@@ -112,9 +119,8 @@ block the person, while a genuine identity conflict stays fail-closed.**
 |---|---|
 | MAX ingress `provider_account_mismatch` / `provider_account_unproven` | MAX chat ids are not proven account-independent; another or unattested account may not append to or silently claim a conversation |
 | Telegram `transport_connection_mismatch`, WhatsApp `transport_mismatch` / `transport_unbound` | an event may not enter a conversation through a transport it is not bound to |
-| Outbound transport binding and requested-transport mismatch | a bound conversation may only send through its bound transport. A legacy Telegram conversation with no binding is routed by the Telegram owner, and only when exactly one active transport exists |
-| Outbound quarantine of a WhatsApp route after `transport_mismatch` | the detected mismatch is not treated as normal on the one route where sending cannot attest the account |
-| Live attestation: Telegram `getMe`, tg-bot account echo, MAX scraper account echo | an unattested or wrong account cannot send |
+| Outbound transport binding and requested-transport mismatch | a bound conversation may only send through its bound transport. The single-carrier fallback for a Telegram conversation with no binding applies only to rows already recorded as private; legacy rows without `chatKind` are refused as not private before it runs |
+| Send-time account checks: tg-bot compares the live bot account with the requested one, MAX requires the scraper to echo the route account, and MTProto sends through the session stored on the connection row whose id is the account's `getMe` user id | a reply through these transports cannot leave from another company account. The MTProto guarantee rests on login keying the session row by account id, and no control pins that |
 | Telegram driver-link route binding (Chat account and connection unchanged under the lock) | the proof conversation cannot be rebound between preparation and write |
 | Reachability check account echo | a check persists only when it ran under the account it names. The contact card still passes the identity's first-writer stamp as that account, so an unstamped identity, or one stamped by another transport, never persists a check result |
 
@@ -134,7 +140,12 @@ block the person, while a genuine identity conflict stays fail-closed.**
    the bot driver actions return `DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED`. The refusal is
    route-level and never a person conflict.
 4. **Deliverability per route**, distinct from the person-level reachability summary.
-5. **A controlled answer for unprovable history**: legacy conversations without transport or
+5. **Account attestation for WhatsApp sends.** A WhatsApp connection id names a pairing slot that
+   can be re-paired to another number, and neither ingress nor sending compares the live
+   `client.info.wid` with the number a conversation was carried by. Until a route records its
+   company account and sends verify it, a reply on a re-paired slot can leave from another
+   company number. This predates M1 and no collision can detect it.
+6. **A controlled answer for unprovable history**: legacy conversations without transport or
    account provenance, and historical conflict entries that cannot be classified, are
    reconciled only by an explicit, audited milestone — never silently unblocked, attributed
    or deleted.
