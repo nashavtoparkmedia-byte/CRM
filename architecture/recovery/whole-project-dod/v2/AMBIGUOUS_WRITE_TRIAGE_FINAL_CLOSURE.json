@@ -4109,7 +4109,7 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/tg-actions.ts:1875:32",
+        "gravity-mvp/src/app/tg-actions.ts:1891:32",
         "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
         "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
@@ -4513,7 +4513,7 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2600:32",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2537:32",
         "analysis_site_signature:490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
         "sql_sha256:50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
