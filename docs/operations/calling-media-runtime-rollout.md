@@ -60,7 +60,8 @@ Nothing here has been executed against production. Each step is an Owner action.
    8 is not strict: the new bridge on the old FreeSWITCH only logs a rejected fork; the old bridge on
    the new FreeSWITCH keeps the old deaf no-early-media behaviour.
 9. Rotate the compromised trunk password (it was committed to the public repository and remains in
-   git history) only after the new image is accepted: set the new value in `.env.production`, run
+   git history and inside 23 sealed evidence archives under
+   `architecture/recovery/control-plane/v2/owner-bootstrap/`) only after the new image is accepted: set the new value in `.env.production`, run
    `... up -d --no-build --no-deps --force-recreate freeswitch` (`restart` does not re-read the
    environment) and repeat the gate. From then on,
    rolling back to an image built before this change breaks trunk registration, because those images
