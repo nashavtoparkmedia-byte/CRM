@@ -26,6 +26,7 @@ import {
 } from '../public/v1/driver-fleet-evidence'
 import { canAdoptUnqualifiedLegacyDriverProfileV1 } from '../public/v1/yandex-fleet-reconciler'
 import { admitFleetReconciliationTransactionV1 } from '../public/v1/legacy-prisma-contact-merge-adapter'
+import { compensationEligibilityFactsFromFleetProfileV1 } from './compensation/compensation-eligibility'
 
 export { RECONCILE_YANDEX_FLEET_COMMAND_V1 }
 export type { ReconcileYandexFleetCommandV1, YandexFleetReconciliationModeV1 }
@@ -195,6 +196,10 @@ async function fetchParkProfiles(
               'hire_date',
               'driver_license',
               'work_rule_id',
+              // Cash-compensation eligibility: the park-SMZ flag and its audit
+              // companion. hire_date above is the park connection date.
+              'is_selfemployed',
+              'employment_type',
             ],
             current_status: ['status', 'status_updated_at'],
             car: [],
@@ -303,7 +308,13 @@ export async function upsertObservation(
           status: 'current',
         }].slice(-50)
       : licenseHistory
+    // A fact Fleet did not state keeps the last observed value instead of
+    // clearing it; eligibility fails closed while it has never been stated.
+    const eligibility = compensationEligibilityFactsFromFleetProfileV1(observation.rawMetadata.driverProfile)
     const data = {
+      ...(eligibility.isSelfEmployed !== null ? { isSelfEmployed: eligibility.isSelfEmployed } : {}),
+      ...(eligibility.employmentType !== null ? { employmentType: eligibility.employmentType } : {}),
+      ...(eligibility.parkHireDate !== null ? { yandexHireDate: eligibility.parkHireDate } : {}),
       externalParkId: observation.externalParkId,
       externalDriverProfileId: observation.externalDriverProfileId,
       parkId,

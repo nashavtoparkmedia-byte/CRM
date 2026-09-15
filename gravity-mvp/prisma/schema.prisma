@@ -1152,6 +1152,16 @@ model Driver {
   hiredAt              DateTime?
   lastOrderAt          DateTime?
   customFields         Json?                @default("{}")
+  /// Yandex driver_profile.is_selfemployed. Authoritative park-SMZ flag.
+  /// Null means the park never stated it; eligibility fails closed on null.
+  isSelfEmployed       Boolean?
+  /// Yandex driver_profile.employment_type. Audit and diagnostics only.
+  /// Observed values: park_employee, selfemployed, individual_entrepreneur.
+  employmentType       String?
+  /// Yandex driver_profile.hire_date: the park connection date.
+  /// Deliberately separate from hiredAt, which carries created_date
+  /// semantics that scoring and the driver views already depend on.
+  yandexHireDate       DateTime?
   primaryYandexId      String?              @unique
   calls                Call[]
   chats                Chat[]
@@ -1180,6 +1190,7 @@ model Driver {
   @@index([externalParkId])
   @@index([externalPersonKey])
   @@index([personResolutionStatus])
+  @@index([yandexHireDate])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
@@ -3539,4 +3550,50 @@ model CompensationAuditEvent {
 
   @@index([subjectType, subjectId, occurredAt, id], map: "CompensationAuditEvent_subject_idx")
   @@index([action, occurredAt], map: "CompensationAuditEvent_action_idx")
+}
+
+/// A completed Yandex cash order, projected from the Fleet API and kept as the
+/// catalogue a driver picks from. Distinct from CompensationVerifiedOrder,
+/// which is the evidence captured at submission time: this row is ingestion,
+/// that row is the monetary record, and neither reinterprets the other.
+model CompensationCashOrder {
+  id                      String   @id
+  provider                String   @db.VarChar(32)
+  externalParkId          String   @db.VarChar(64)
+  externalOrderId         String   @db.VarChar(64)
+  shortOrderIdDisplay     String?  @db.VarChar(32)
+  externalDriverProfileId String   @db.VarChar(64)
+  /// Provider price string kept verbatim, e.g. "335.0000".
+  rawPrice                String   @db.VarChar(32)
+  amountKopecks           Int
+  endedAt                 DateTime @db.Timestamptz(3)
+  observedAt              DateTime @db.Timestamptz(3)
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  /// Provider identity. One external order can exist once per park, so a
+  /// repeated page cannot ingest the same trip twice.
+  @@unique([provider, externalParkId, externalOrderId], map: "CompensationCashOrder_provider_identity_key")
+  @@index([externalParkId, externalDriverProfileId, endedAt], map: "CompensationCashOrder_driver_month_idx")
+}
+
+/// What the Telegram pilot collects around a C1 application: the driver's
+/// confirmation that they contacted Yandex support, and the response they
+/// attached. Kept out of CompensationApplication so the monetary record keeps
+/// exactly the shape C1 froze.
+model CompensationPilotSubmission {
+  id                  String   @id
+  /// One pilot row per C1 application, never many.
+  applicationId       String   @unique(map: "CompensationPilotSubmission_application_key")
+  telegramUserId      String
+  /// The driver said they contacted support, and when they said it.
+  supportContactedAt  DateTime @db.Timestamptz(3)
+  /// Telegram file identifier for the support response. The file itself stays
+  /// with Telegram; only the reference is kept here.
+  attachmentFileId    String
+  attachmentKind      String   @db.VarChar(16)
+  claimedRubles       Int
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([telegramUserId])
 }

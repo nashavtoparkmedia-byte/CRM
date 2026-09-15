@@ -189,6 +189,34 @@
       ]
     },
     {
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "4c3241f3a398706831606c7fd4ec6722b50a4d947addded8f76df98cef6e5d15",
+        "66667dd69a9ba767cf9051151b36a86e30de8e112b5f8c00c07daec9771a30fc",
+        "691ece1e2eadb0e13aa5c06dc5ece93adfc3bf9b207b606dc30bc6206aedd569",
+        "8cdae8b515c6810c3aa6f18a6db0b58fc60fee4722fcb1ea5702bd0f507b2309",
+        "b8773a272506a5cfe22841a63f38fc39df2ad1a29ede551bed1fcb82d07c93e7",
+        "d4a17dec9bbef89a54ae2568812f22c580d9a6ab5579faf26f62c73ac3529cde",
+        "eebc2620e1b827f175cd5ec883700d42922e4f107a1322162fec7c80018de9bd"
+      ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "bac2f72a9867d0b7b662fa47a891135e681c5470554d418fb409f8b9abcb7ce3",
+        "cd221ee0db4ee091aa6fe5918c15dc6f6a4ad338faba64ec405202ee27054cd6",
+        "f17cf0f3e41edfb6a7696be810779e13fc9f1abaf6f23277544fe7486e462dae"
+      ]
+    },
+    {
       "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
       "functional_owner": "task_management",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -2531,6 +2559,186 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "4c3241f3a398706831606c7fd4ec6722b50a4d947addded8f76df98cef6e5d15",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 15,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationCashOrder",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "b8773a272506a5cfe22841a63f38fc39df2ad1a29ede551bed1fcb82d07c93e7",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 38,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationCashOrder",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "d4a17dec9bbef89a54ae2568812f22c580d9a6ab5579faf26f62c73ac3529cde",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 42,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationCashOrder",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "66667dd69a9ba767cf9051151b36a86e30de8e112b5f8c00c07daec9771a30fc",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 51,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Driver",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "8cdae8b515c6810c3aa6f18a6db0b58fc60fee4722fcb1ea5702bd0f507b2309",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 56,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Driver",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "691ece1e2eadb0e13aa5c06dc5ece93adfc3bf9b207b606dc30bc6206aedd569",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 61,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Driver",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "eebc2620e1b827f175cd5ec883700d42922e4f107a1322162fec7c80018de9bd",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "source_sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "line": 63,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Driver",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "f17cf0f3e41edfb6a7696be810779e13fc9f1abaf6f23277544fe7486e462dae",
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "source_sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147",
+      "line": 12,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPilotSubmission",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "cd221ee0db4ee091aa6fe5918c15dc6f6a4ad338faba64ec405202ee27054cd6",
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "source_sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147",
+      "line": 32,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPilotSubmission",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "bac2f72a9867d0b7b662fa47a891135e681c5470554d418fb409f8b9abcb7ce3",
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "source_sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147",
+      "line": 35,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CompensationPilotSubmission",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration for the Telegram cash-compensation pilot. It creates only tables and columns the named context already owns, through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",
