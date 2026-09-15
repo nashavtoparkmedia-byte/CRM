@@ -11,6 +11,10 @@ mod_audio_fork: guard NULL argv dereferences on the uuid_audio_fork start path.
    uninitialised host/path/port, and a negative or overflowing rate sized the frame buffer from a
    negative length (std::bad_alloc through C frames, SIGABRT). start_capture now runs only when
    both are valid; otherwise the command returns -ERR. Valid commands are unchanged.
+4. A websocket URL of MAX_WS_URL_LEN (512) bytes or more is refused before parse_ws_uri: that
+   function copies up to 4608 bytes into its stack buffer and the host into a 512-byte buffer with
+   strncpy, which leaves both unterminated for long input, and runs std::regex over the whole URL.
+   The bridge's URL is about 70 bytes.
 
 Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork.
 Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
@@ -37,8 +41,15 @@ Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
            sampling = 16000;
          }
          else if (0 == strcmp(argv[4], "8k")) {
-@@ -265,10 +268,12 @@
-         if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
+@@ -262,13 +265,18 @@
+ 				else {
+ 					sampling = atoi(argv[4]);
+ 				}
+-        if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
++        if (strlen(argv[2]) >= MAX_WS_URL_LEN) {
++          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "websocket uri longer than %d bytes\n", MAX_WS_URL_LEN - 1);
++        }
++        else if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid websocket uri: %s\n", argv[2]);
          }
 -				else if (sampling % 8000 != 0) {

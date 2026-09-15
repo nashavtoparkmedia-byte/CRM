@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import bz2
+import gzip
 import hashlib
+import io
 import json
+import lzma
 import re
 import subprocess
+import tarfile
 import xml.etree.ElementTree as ET
+import zipfile
 
 
 TELEPHONY = Path(__file__).resolve().parents[1]
@@ -158,6 +164,38 @@ def test_telephony_config_has_no_literal_sip_passwords() -> None:
         "megafon_password must be defined exactly once, from the environment"
 
 
+PREPROCESS_TAG = re.compile(r"<X-PRE-PROCESS\b([^>]*)>", re.I)
+PREPROCESS_COMMENT = re.compile(r"<!--#\s*([A-Za-z-]+)\s+\"?([^=\s\"]+)=([^\"]*?)\"?\s*-->")
+ATTRIBUTE = re.compile(r"([A-Za-z][\w-]*)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
+
+
+def test_raw_preprocessor_directives_define_no_literal_credential() -> None:
+    # FreeSWITCH's preprocessor works on raw lines, so directives inside XML comments and the
+    # <!--#set name=value--> form still run; ElementTree cannot see either.
+    offenders = []
+    megafon = []
+    for path in telephony_config_sources():
+        rel = str(path.relative_to(REPO))
+        text = path.read_text(encoding="utf-8")
+        directives = []
+        for match in PREPROCESS_TAG.finditer(text):
+            attributes = {key.lower(): double if double is not None and double != "" or single == "" else single
+                          for key, double, single in ATTRIBUTE.findall(match.group(1))}
+            key, _, value = (attributes.get("data") or "").partition("=")
+            directives.append((attributes.get("cmd"), key, value))
+        for match in PREPROCESS_COMMENT.finditer(text):
+            directives.append((match.group(1).lower(), match.group(2), match.group(3)))
+        for cmd, key, value in directives:
+            if key.lower() == "megafon_password":
+                megafon.append((rel, cmd, value))
+            if SECRET_NAME.search(key) and key not in NON_CREDENTIAL_GLOBALS:
+                if cmd != "exec-set" or not ENV_EXEC_SET.fullmatch(value):
+                    offenders.append(f"{rel} {cmd} {key}")
+    assert offenders == [], f"preprocessor directives with literal credentials: {offenders}"
+    assert megafon == [("telephony/conf/vars.xml", "exec-set", "sh -c 'echo ${MEGAFON_SIP_PASSWORD}'")], \
+        "megafon_password must be defined exactly once across every preprocessor form"
+
+
 def test_freeswitch_image_refuses_missing_or_placeholder_trunk_password() -> None:
     text = dockerfile_text()
     entrypoints = [line for line in text.splitlines() if line.startswith("ENTRYPOINT")]
@@ -222,19 +260,104 @@ def find_compromised_trunk_password(data: bytes) -> bool:
     return False
 
 
+# Frozen, digest-sealed owner-bootstrap evidence recorded before this change. Their source snapshots and
+# packages embed telephony/conf/vars.xml and megafon.xml with the compromised value. They are listed by
+# exact digest so that any other carrier, or any change to one of these, fails the check. Removing them
+# is an Owner decision; rotating the password is what makes them harmless.
+SEALED_COMPROMISED_CARRIERS = {
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/bundle/payload/yoko-privileged-runtime_2.0.0-7_all.deb": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/bundle/payload/yoko-privileged-runtime_2.0.0-8_all.deb": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/dist/yoko-crm-activation-recovery-7aea2823-v3.tar": "b9a5d5f250e9d2a96ef4199200f1f6db52bdbe5fb9c23d74c45d2cce4bc63df7",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/dist/yoko-privileged-runtime_2.0.0-8_all.deb": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/inputs/source.tar.gz": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/inputs/yoko-privileged-runtime_2.0.0-7_all.deb": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/bundle/payload/yoko-privileged-runtime_2.0.0-8_all.deb": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/bundle/payload/yoko-privileged-runtime_2.0.0-9_all.deb": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/dist/yoko-crm-activation-stabilization-7aea2823-v4.tar": "c7823d66ebabc57df7da4bb54c40ee8d78a05964cb7ac7f63bcf04941f7fc048",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/dist/yoko-privileged-runtime_2.0.0-9_all.deb": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/inputs/source.tar.gz": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/inputs/yoko-privileged-runtime_2.0.0-8_all.deb": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/bundle/payload/yoko-privileged-runtime_2.0.0-6_all.deb": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/bundle/payload/yoko-privileged-runtime_2.0.0-7_all.deb": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/dist/yoko-crm-ledger-reconciliation-bootstrap-af9646f5-v2.tar": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/dist/yoko-privileged-runtime_2.0.0-7_all.deb": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/inputs/source.tar.gz": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/inputs/yoko-privileged-runtime_2.0.0-6_all.deb": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/bundle/payload/yoko-privileged-runtime_2.0.0-6_all.deb": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/dist/yoko-crm-activation-bootstrap-af9646f5-v1.tar": "88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/dist/yoko-privileged-runtime_2.0.0-6_all.deb": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/evidence/rejected-d4c91a5e/yoko-crm-activation-bootstrap-af9646f5-v1.REJECTED.d4c91a5e.tar": "d4c91a5ee2d05850b6e1d6360e9ac2d359ce7c428391d3246f0a037132bf081d",
+    "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/inputs/source.tar.gz": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+}
+ARCHIVE_MEMBER_LIMIT = 256 * 1024 * 1024
+
+
+def _expanded(data: bytes) -> bytes | None:
+    for magic, decompress in ((b"\x1f\x8b", gzip.decompress), (b"\xfd7zXZ", lzma.decompress), (b"BZh", bz2.decompress)):
+        if data.startswith(magic):
+            try:
+                return decompress(data)
+            except Exception:
+                return None
+    return None
+
+
+def _members(data: bytes):
+    if data.startswith(b"!<arch>\n"):
+        offset = 8
+        while offset + 60 <= len(data):
+            size = int(data[offset + 48:offset + 58].decode("ascii", "replace").strip() or 0)
+            yield data[offset + 60:offset + 60 + size]
+            offset += 60 + size + (size % 2)
+    elif len(data) > 512 and data[257:262] == b"ustar":
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+            for member in archive.getmembers():
+                if member.isfile() and member.size <= ARCHIVE_MEMBER_LIMIT:
+                    yield archive.extractfile(member).read()
+    elif data.startswith(b"PK\x03\x04"):
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            for name in archive.namelist():
+                if archive.getinfo(name).file_size <= ARCHIVE_MEMBER_LIMIT:
+                    yield archive.read(name)
+
+
+def carries_compromised_trunk_password(data: bytes, depth: int = 0) -> bool:
+    if find_compromised_trunk_password(data):
+        return True
+    if depth >= 4:
+        return False
+    expanded = _expanded(data)
+    if expanded is not None:
+        return carries_compromised_trunk_password(expanded, depth + 1)
+    try:
+        return any(carries_compromised_trunk_password(member, depth + 1) for member in _members(data))
+    except (tarfile.TarError, zipfile.BadZipFile, ValueError):
+        return False
+
+
 def test_compromised_trunk_password_is_in_no_tracked_file() -> None:
+    # Every tracked file is scanned, binaries included, and archives (gzip, xz, bzip2, tar, zip, deb)
+    # are opened recursively.
     listed = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, check=True).stdout
     offenders = []
     for raw in filter(None, listed.split(b"\0")):
-        path = REPO / raw.decode("utf-8", "surrogateescape")
-        if not path.is_file() or path.stat().st_size > 4_000_000:
+        relative = raw.decode("utf-8", "surrogateescape")
+        path = REPO / relative
+        if not path.is_file():
             continue
         data = path.read_bytes()
-        if b"\0" in data[:8000]:
+        if SEALED_COMPROMISED_CARRIERS.get(relative) == hashlib.sha256(data).hexdigest():
             continue
-        if find_compromised_trunk_password(data):
-            offenders.append(str(path.relative_to(REPO)))
+        if carries_compromised_trunk_password(data):
+            offenders.append(relative)
     assert offenders == [], f"the compromised trunk password is committed in: {offenders}"
+
+
+def test_sealed_carriers_are_exactly_the_known_evidence() -> None:
+    for relative, digest in SEALED_COMPROMISED_CARRIERS.items():
+        path = REPO / relative
+        if path.is_file():
+            assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, f"sealed evidence changed: {relative}"
 
 
 # --- mod_audio_fork image: pinned, provenanced, fail closed -------------------
@@ -317,9 +440,15 @@ def test_dockerfile_keeps_every_fail_closed_check() -> None:
     missing = [index for index, required in enumerate(FAIL_CLOSED_LINES) if required not in lines]
     assert missing == [], f"fail-closed build checks removed (FAIL_CLOSED_LINES indexes): {missing}"
     text = dockerfile_text()
-    assert "|| true" not in text and "|| :" not in text, "a masked exit status defeats fail-closed checks"
+    assert not re.search(r"\|\|\s*(true|:|exit\s+0)\b|\bset\s+\+e\b|\bexit\s+0\b", text), "a masked exit status defeats fail-closed checks"
     compound = [line for line in text.splitlines() if line.startswith("RUN ") and (line.rstrip().endswith("\\") or ";" in line)]
     assert all(line.startswith("RUN set -eu;") for line in compound), "multi-command RUN steps must start with set -eu"
+    position = {required: lines.index(required) for required in FAIL_CLOSED_LINES}
+    order = [lines.index("COPY ./third_party/mod_audio_fork/fs-sdk/ /usr/src/mod_audio_fork/fs-sdk/"),
+             position[FAIL_CLOSED_LINES[3]], position[FAIL_CLOSED_LINES[4]], position[FAIL_CLOSED_LINES[7]],
+             position[FAIL_CLOSED_LINES[10]], position[FAIL_CLOSED_LINES[12]]]
+    assert order == sorted(order), "vendored sources must be verified before patching, compiling and pinning the module"
+    assert lines.index("FROM ${FREESWITCH_RUNTIME} AS final") < position[FAIL_CLOSED_LINES[14]], "the linkage gate must run in the final image"
 
 
 def git_tree_id(entries: dict[str, bytes]) -> str:
@@ -369,11 +498,13 @@ if __name__ == "__main__":
         test_megafon_gateway_password_is_env_backed_reference,
         test_trunk_password_global_comes_from_env_without_fallback,
         test_telephony_config_has_no_literal_sip_passwords,
+        test_raw_preprocessor_directives_define_no_literal_credential,
         test_freeswitch_image_refuses_missing_or_placeholder_trunk_password,
         test_env_example_placeholder_fails_closed,
         test_production_compose_requires_trunk_password,
         test_image_bakes_no_trunk_credential,
         test_compromised_trunk_password_is_in_no_tracked_file,
+        test_sealed_carriers_are_exactly_the_known_evidence,
         test_dockerfile_pins_images_and_preserves_telephony_config,
         test_dockerfile_keeps_every_fail_closed_check,
         test_vendored_module_is_the_archived_software_heritage_directory,

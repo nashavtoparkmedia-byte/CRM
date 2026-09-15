@@ -66,5 +66,6 @@ commit 4415e84c095857629863804e941b9e1c2e9347ef. Statically linked into mod_audi
 FreeSWITCH
 ----------
 The runtime image is safarov/freeswitch pinned by digest (FreeSWITCH 1.10.12). FreeSWITCH is
-licensed under the Mozilla Public License 1.1. Its v1.10.12 source headers are used at build
-time only to compile the module against the runtime's own libfreeswitch.
+licensed under the Mozilla Public License 1.1. Its v1.10.12 source headers are used to compile the
+module against the runtime's own libfreeswitch; inline code from those headers is compiled into
+mod_audio_fork.so.

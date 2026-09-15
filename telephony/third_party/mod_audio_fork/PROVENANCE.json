@@ -102,11 +102,11 @@
   "patches": [
     {
       "path": "patches/0001-uuid_audio_fork-start-null-argv-guards.patch",
-      "sha256": "9bb680aa112a61b76f7b5413af84f1894990653cde5041314974ef1fcb0a6676",
+      "sha256": "b4909c95dd42bc54e22dc29420944653175ee87074f526a474f9e0169ef01b63",
       "applies_to": [
         "mod_audio_fork.c"
       ],
-      "reason": "Start-command argument guards: missing sampling rate (argv[4]); non-lowercase START bypassing the argc<4 usage guard; start_capture no longer runs after an invalid websocket URL or a sampling rate outside positive multiples of 8000 up to 64000."
+      "reason": "Start-command argument guards: missing sampling rate (argv[4]); non-lowercase START bypassing the argc<4 usage guard; start_capture no longer runs after an invalid websocket URL or a sampling rate outside positive multiples of 8000 up to 64000; websocket URLs of 512 bytes or more are refused before parse_ws_uri."
     },
     {
       "path": "patches/0002-playAudio-require-string-audioContentType.patch",
@@ -118,7 +118,7 @@
     },
     {
       "path": "patches/0003-refuse-runtime-unload.patch",
-      "sha256": "63d02df508594bbc75b25509128e9ecfd3ecd448df37f4c67394845fa42db088",
+      "sha256": "5b192d31d421f1352d445ca1300f7495ca7056bac06724883eb29efe74ea2155",
       "applies_to": [
         "mod_audio_fork.c"
       ],
@@ -126,7 +126,7 @@
     }
   ],
   "patched_sha256": {
-    "mod_audio_fork.c": "d0437ad2b9c5a5d85f6ae0b4c85400bd68726441a41a2aeb11972fe89e921994",
+    "mod_audio_fork.c": "6f9fb967b0d104728603af241f011f67d9a101b76b8de47d0a06fd7ca5964232",
     "lws_glue.cpp": "e1071b9f25e188822f2acdf4fee5f7f862d3ef55dc10b3b27fc42032d037bb12"
   },
   "fs_sdk_stubs": [

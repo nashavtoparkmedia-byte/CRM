@@ -27,7 +27,7 @@ ARG FREESWITCH_TREE="957b630df3cf84f0170e4e49164bb4687365aa98"
 ARG LWS_TAG="v4.3.3"
 ARG LWS_COMMIT="4415e84c095857629863804e941b9e1c2e9347ef"
 ARG LWS_TREE="ee0b8e3b1784b9b478931ee262a2500c4e5cf96a"
-ARG MOD_AUDIO_FORK_SO_SHA256="5fcb933bb82caf5fe09d1ce82c345287c7f9f14c5989e8179acde7d5d3072e76"
+ARG MOD_AUDIO_FORK_SO_SHA256="fe867d817e60399362e274b2b6fa9dd86f23a18cfaad413a531110c6a0690f91"
 ARG MOD_AUDIO_FORK_NEEDED="libc.so.6,libcrypto.so.3,libfreeswitch.so.1,libgcc_s.so.1,libspeexdsp.so.1,libssl.so.3,libstdc++.so.6"
 ARG MODULES_CONF_SHA256="39b050b2dac83baeee678319be2dd81279592624bc9fdea882c049a24b7f40df"
 
@@ -120,16 +120,16 @@ f36558bee162411d906d58bf0f00af8b4573ea2c8ab05a506bb2ab10285659a4  upstream/base6
 21e02e35bce3472513baab65cd4813e71e245047cd4cb8604b454babf7cf8f2f  upstream/mod_audio_fork.h
 3a81a4634d0c3b4db645b24a96b866d97d8e8daefaa7a7bf1562852dfeba2cb6  upstream/parser.cpp
 dabe25957d404468426c0570f22fe6106b724a15c366162a1ea59396f862e3aa  upstream/parser.hpp
-9bb680aa112a61b76f7b5413af84f1894990653cde5041314974ef1fcb0a6676  patches/0001-uuid_audio_fork-start-null-argv-guards.patch
+b4909c95dd42bc54e22dc29420944653175ee87074f526a474f9e0169ef01b63  patches/0001-uuid_audio_fork-start-null-argv-guards.patch
 22506ffcfbee2326bbd006fbe2e995fecc977f8d6fcb7da930a9518277d3278e  patches/0002-playAudio-require-string-audioContentType.patch
-63d02df508594bbc75b25509128e9ecfd3ecd448df37f4c67394845fa42db088  patches/0003-refuse-runtime-unload.patch
+5b192d31d421f1352d445ca1300f7495ca7056bac06724883eb29efe74ea2155  patches/0003-refuse-runtime-unload.patch
 557c480fd7f30754e28217d923cc70c4bb8cad723591fd8ee9401d38e5e0d6e6  fs-sdk/freeswitch.pc
 68be44f1bfc982ea55277b4aa433ab8dbd4dd674cf3573faf1dbb5a5959363fa  fs-sdk/modules.conf
 f72b1db67d36babd298d28fc2208b160337baed86334e8c7b44f449555d8cd6c  fs-sdk/sofia-sip-ua.pc
 75de7bb00b720a5b02aa9ea14fbc325c40383802edbfe0d9a66d8fd7117767b6  fs-sdk/spandsp.pc
 VENDORED_SHA256
 COPY <<'PATCHED_SHA256' /usr/src/mod_audio_fork.patched.sha256
-d0437ad2b9c5a5d85f6ae0b4c85400bd68726441a41a2aeb11972fe89e921994  mod_audio_fork.c
+6f9fb967b0d104728603af241f011f67d9a101b76b8de47d0a06fd7ca5964232  mod_audio_fork.c
 e1071b9f25e188822f2acdf4fee5f7f862d3ef55dc10b3b27fc42032d037bb12  lws_glue.cpp
 PATCHED_SHA256
 RUN set -eu; cd /usr/src/mod_audio_fork; sha256sum --strict -c /usr/src/mod_audio_fork.sha256

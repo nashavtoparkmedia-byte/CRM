@@ -17,7 +17,7 @@ Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, mo
 after 0001. Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
 --- a/mod_audio_fork.c
 +++ b/mod_audio_fork.c
-@@ -330,7 +330,11 @@
+@@ -333,7 +333,11 @@
  
  	/* indicate that the module should continue to be loaded */
    //mod_running = 1;
