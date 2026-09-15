@@ -180,6 +180,23 @@ for (const channel of ['telegram', 'whatsapp', 'max']) {
     }
 }
 
+// A provider alias names the person globally on its channel. Neither admission
+// nor collision discovery may consult the identity's first-writer account stamp:
+// the admission gate refused every unstamped identity, and the candidate filter
+// hid another Contact that already owns the alias.
+const phoneEvidenceSource = read('gravity-mvp/src/modules/contacts/public/v1/contact-phone-evidence.ts')
+const aliasAttach = phoneEvidenceSource.slice(
+    phoneEvidenceSource.indexOf('export async function attachProviderIdentityAliasV1('),
+    phoneEvidenceSource.indexOf("if (result.status === 'collision') throw new Error('IDENTITY_ALIAS_COLLISION')"),
+)
+assert(aliasAttach.length > 0, 'provider alias attachment capability not found')
+assert.match(aliasAttach, /if \(!identity\n\s+\|\| !identity\.isActive\n\s+\|\| identity\.channel !== command\.channel\) \{\n\s+throw new Error\('IDENTITY_ALIAS_SCOPE_MISMATCH'\)/)
+assert.match(aliasAttach, /const collision = candidates\.find\(candidate => candidate\.contactId !== identity\.contactId\)/)
+assert.match(aliasAttach, /const sameContactPrimary = candidates\.find\(/)
+// The collision entry still records command.providerAccountId as telemetry and uses it
+// to de-duplicate entries; only the identity stamp may not be consulted.
+assert.doesNotMatch(aliasAttach, /identityEvidenceState\([^)]*\)\.providerAccountId|metadata\)?\.providerAccountId\s*(?:!==|===)/)
+
 // Contacts refuses to record any transport-class reason as a person conflict,
 // whatever the caller. The writer is executed with its ownership transaction
 // stubbed: a transport reason must be refused before the transaction opens, and a

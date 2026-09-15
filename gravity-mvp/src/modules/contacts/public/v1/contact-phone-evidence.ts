@@ -296,10 +296,15 @@ export async function attachProviderIdentityAliasV1(command: ProviderIdentityAli
       where: { id: command.identityId },
       select: { id: true, contactId: true, channel: true, isActive: true, metadata: true },
     })
+    // A provider alias names the person on this channel globally, exactly like the
+    // identity's primary external id, which is unique per channel. The identity's
+    // providerAccountId is first-writer telemetry about which transport first saw
+    // the person. It neither admits nor rejects an alias, and it never hides another
+    // Contact's identity that already owns the value.
+    // See docs/design/provider-account-identity-v1.md.
     if (!identity
       || !identity.isActive
-      || identity.channel !== command.channel
-      || identityEvidenceState(identity.metadata).providerAccountId !== command.providerAccountId) {
+      || identity.channel !== command.channel) {
       throw new Error('IDENTITY_ALIAS_SCOPE_MISMATCH')
     }
     const candidates = await transaction.contactIdentity.findMany({
@@ -314,15 +319,12 @@ export async function attachProviderIdentityAliasV1(command: ProviderIdentityAli
       },
       select: { id: true, contactId: true, externalId: true, metadata: true },
     })
-    const scopedCandidates = candidates.filter(candidate => (
-      identityEvidenceState(candidate.metadata).providerAccountId === command.providerAccountId
-    ))
     // Redundant legacy identities on the already-owned Contact must not turn
     // into cross-person conflict, but attaching an alias that is another
     // primary key would make lookup ambiguous. Leave both primaries unchanged;
     // their exact Contact owner is already the same.
-    const collision = scopedCandidates.find(candidate => candidate.contactId !== identity.contactId)
-    const sameContactPrimary = scopedCandidates.find(candidate => (
+    const collision = candidates.find(candidate => candidate.contactId !== identity.contactId)
+    const sameContactPrimary = candidates.find(candidate => (
       candidate.contactId === identity.contactId && candidate.externalId === command.aliasValue
     ))
     if (collision) {

@@ -108,10 +108,17 @@ block the person, while a genuine identity conflict stays fail-closed.**
    driver-contradiction conflict types and never counted channel collisions. No transport
    collision has been written as a person conflict since M1, so this conservatism affects
    history only.
-6. **The identity account stamp no longer gates conversations.** Messaging's contact
-   conversation adapter, the platform-shell orchestrator and the Telegram driver-link
-   authority no longer compare a conversation's account with the identity's first-writer
-   stamp, and a missing stamp is no longer a rejection.
+6. **The identity account stamp no longer gates conversations or identity evidence.**
+   Messaging's contact conversation adapter, the platform-shell orchestrator and the Telegram
+   driver-link authority no longer compare a conversation's account with the identity's
+   first-writer stamp, and a missing stamp is no longer a rejection. Contacts' provider-alias
+   attachment (`attachProviderIdentityAliasV1`) no longer refuses an alias because the
+   identity's stamp differs or is absent. That gate refused every production WhatsApp
+   identity, all of them unstamped, and so silently skipped the conversation link,
+   reachability and driver match for LID peers. It also no longer ignores another Contact's
+   identity that owns the alias under a different stamp, which used to hide a genuine
+   cross-person collision. Alias values are global per channel, like the identity's unique
+   primary external id.
 
 ### Account checks that remain, because they are route safety
 

@@ -141,4 +141,84 @@ describe('provider identity alias ownership', () => {
         expect(mocks.contactUpdate).toHaveBeenCalledTimes(2)
         expect(mocks.identityUpdate).toHaveBeenCalledTimes(2)
     })
+
+    describe('the identity account stamp is not person authority', () => {
+        test.each([
+            ['carries no stamp (every production WhatsApp identity)', {}],
+            ['was first stamped by another connection', { providerAccountId: 'wa-account-first-seen' }],
+        ])('attaches a provider-proven alias to an identity that %s', async (_label, stamp) => {
+            mocks.identityFindUnique.mockResolvedValue({
+                ...identity('identity-a', 'contact-a'),
+                metadata: { ...stamp, providerAliasValues: [] },
+            })
+            mocks.identityFindMany.mockResolvedValue([])
+
+            await expect(attachProviderIdentityAliasV1(command)).resolves.toMatchObject({
+                identityId: 'identity-a',
+                aliasValue: 'opaque-peer@lid',
+            })
+            expect(mocks.identityUpdate).toHaveBeenCalledOnce()
+            expect(mocks.identityUpdate).toHaveBeenCalledWith(expect.objectContaining({
+                where: { id: 'identity-a' },
+                data: { metadata: expect.objectContaining({ providerAliasValues: ['opaque-peer@lid'] }) },
+            }))
+            expect(mocks.contactUpdate).not.toHaveBeenCalled()
+        })
+
+        test('an alias owned by another Contact under a different account stamp is still a genuine collision', async () => {
+            // The account difference used to filter this candidate out, hiding a real
+            // cross-person contradiction and attaching the alias to both people.
+            mocks.identityFindUnique.mockResolvedValue(identity('identity-a', 'contact-a'))
+            mocks.identityFindMany.mockResolvedValue([{
+                ...identity('identity-b', 'contact-b'),
+                metadata: { providerAccountId: 'wa-account-other', providerAliasValues: ['opaque-peer@lid'] },
+            }])
+            mocks.contactFindMany.mockResolvedValue([
+                { id: 'contact-a', customFields: {} },
+                { id: 'contact-b', customFields: {} },
+            ])
+
+            await expect(attachProviderIdentityAliasV1(command))
+                .rejects.toThrow('IDENTITY_ALIAS_COLLISION')
+            expect(mocks.contactUpdate).toHaveBeenCalledTimes(2)
+            expect(mocks.identityUpdate).toHaveBeenCalledWith(expect.objectContaining({
+                where: { id: 'identity-b' },
+                data: { metadata: expect.objectContaining({ conflictState: 'conflicted' }) },
+            }))
+            // Neither identity gains the alias: the only updates mark both conflicted.
+            expect(mocks.identityUpdate).toHaveBeenCalledTimes(2)
+            for (const [call] of mocks.identityUpdate.mock.calls) {
+                expect(call.data.metadata.conflictState).toBe('conflicted')
+                expect(call.data.metadata.providerAliases).toBeUndefined()
+            }
+        })
+
+        test('the same Contact\'s redundant primary under another stamp is recognised, not duplicated', async () => {
+            mocks.identityFindUnique.mockResolvedValue(identity('identity-a', 'contact-a'))
+            mocks.identityFindMany.mockResolvedValue([{
+                ...identity('identity-b', 'contact-a'),
+                externalId: command.aliasValue,
+                metadata: { providerAccountId: 'wa-account-other' },
+            }])
+
+            // The already-owned outcome attaches nothing and writes nothing.
+            await expect(attachProviderIdentityAliasV1(command)).resolves.toMatchObject({
+                identityId: 'identity-a',
+                aliasValue: 'opaque-peer@lid',
+            })
+            expect(mocks.identityUpdate).not.toHaveBeenCalled()
+            expect(mocks.contactUpdate).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['an inactive identity', { isActive: false }],
+            ['an identity on another channel', { channel: 'telegram' }],
+        ])('still refuses %s', async (_label, override) => {
+            mocks.identityFindUnique.mockResolvedValue({ ...identity('identity-a', 'contact-a'), ...override })
+
+            await expect(attachProviderIdentityAliasV1(command)).rejects.toThrow('IDENTITY_ALIAS_SCOPE_MISMATCH')
+            expect(mocks.identityFindMany).not.toHaveBeenCalled()
+            expect(mocks.identityUpdate).not.toHaveBeenCalled()
+        })
+    })
 })
