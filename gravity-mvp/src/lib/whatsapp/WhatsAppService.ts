@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { createHash } from 'node:crypto'
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
-import { attachPhoneToIdentityV1, attachProviderIdentityAliasV1, isResolvedChannelContactResultV1, markChannelIdentityConflictV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { attachPhoneToIdentityV1, attachProviderIdentityAliasV1, isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
@@ -14,8 +14,8 @@ import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messag
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchExternalConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { appendConversationIdentityCollisionV1, attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 import { canonicalWhatsAppIdentityExternalIdV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
@@ -199,56 +199,25 @@ function canonicalWaExternalChatId(rawJid: string): string {
     return rawJid
 }
 
-/** One provider-stable identity key shared by live, sync, and import. */
-const CHANNEL_IDENTITY_COLLISION_AUDIT_LIMIT = 20
-
 function metadataRecord(value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' && !Array.isArray(value)
         ? value as Record<string, unknown>
         : {}
 }
 
-function waTransportCollisionEvidenceKey(value: unknown): string | null {
-    const record = metadataRecord(value)
-    if (record.channel !== 'whatsapp' || typeof record.reason !== 'string') return null
-    return JSON.stringify([
-        record.channel,
-        record.reason,
-        record.phase ?? null,
-        record.incomingConnectionId ?? null,
-        record.existingConnectionId ?? null,
-        record.externalChatId ?? null,
-    ])
-}
-
-function appendWaTransportCollisionEvidence(
-    metadata: unknown,
-    evidence: Record<string, unknown>,
-): Record<string, unknown> {
-    const existingMetadata = metadataRecord(metadata)
-    const existingAudit = Array.isArray(existingMetadata.channelIdentityCollisionAudit)
-        ? existingMetadata.channelIdentityCollisionAudit
-        : []
-    const evidenceKey = waTransportCollisionEvidenceKey(evidence)
-    const retained = existingAudit
-        .filter(entry => waTransportCollisionEvidenceKey(entry) !== evidenceKey)
-        .slice(-(CHANNEL_IDENTITY_COLLISION_AUDIT_LIMIT - 1))
-
-    return {
-        ...existingMetadata,
-        channelIdentityCollisionAudit: [
-            ...retained,
-            { ...evidence, observedAt: new Date().toISOString() },
-        ],
-    }
-}
-
+/**
+ * Admits a private conversation only through the connection it is bound to.
+ *
+ * This comparison is about the transport alone: which WhatsApp connection slot
+ * carries the conversation. A mismatch or a missing binding fails this
+ * conversation closed and is recorded in Messaging's conversation audit. It is
+ * deliberately never written to the Contacts person record, so a second or
+ * re-paired connection cannot disable the person on any other route.
+ */
 async function assertPrivateWhatsAppConversationConnectionV1(
     conversation: {
         id?: unknown
         externalChatId?: unknown
-        contactId?: unknown
-        contactIdentityId?: unknown
         metadata?: unknown
     },
     connectionId: string,
@@ -275,52 +244,20 @@ async function assertPrivateWhatsAppConversationConnectionV1(
         ? conversation.externalChatId
         : null
     if (conversationId) {
-        await patchExternalConversationV1({
-            contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+        // Row-locked append that re-reads the Chat metadata, rather than writing
+        // back the snapshot this caller read earlier, so concurrent metadata
+        // updates and concurrent collisions are both preserved.
+        await appendConversationIdentityCollisionV1({
             chatId: conversationId,
-            patch: {
-                metadata: appendWaTransportCollisionEvidence(metadata, {
-                    channel: 'whatsapp',
-                    reason,
-                    phase,
-                    incomingConnectionId,
-                    existingConnectionId: storedConnectionId,
-                    externalChatId,
-                }),
-            },
-        })
-
-        const contactId = typeof conversation.contactId === 'string' && conversation.contactId.trim()
-            ? conversation.contactId
-            : null
-        const identityId = typeof conversation.contactIdentityId === 'string' && conversation.contactIdentityId.trim()
-            ? conversation.contactIdentityId
-            : null
-        if (contactId && identityId) {
-            const evidenceDigest = createHash('sha256')
-                .update(JSON.stringify([
-                    conversationId,
-                    externalChatId,
-                    storedConnectionId,
-                    incomingConnectionId,
-                    phase,
-                    reason,
-                ]))
-                .digest('hex')
-            await markChannelIdentityConflictV1({
-                contactId,
-                identityId,
+            evidence: {
                 channel: 'whatsapp',
                 reason,
-                evidenceRoot: `channel-collision:whatsapp:${conversationId}:${reason}:${evidenceDigest}`,
-                details: {
-                    phase,
-                    externalChatId,
-                    incomingConnectionId,
-                    existingConnectionId: storedConnectionId,
-                },
-            })
-        }
+                phase,
+                incomingConnectionId,
+                existingConnectionId: storedConnectionId,
+                externalChatId,
+            },
+        })
     }
     throw new Error(storedConnectionId
         ? 'CONTACT_CONVERSATION_TRANSPORT_MISMATCH'

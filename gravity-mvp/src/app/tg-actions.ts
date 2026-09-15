@@ -546,6 +546,9 @@ async function rejectTelegramConversationCollision(
         connectionId: string
     },
     reason: string,
+    // The person-level reason, or null when only the transport contradicted. The
+    // conversation still fails closed and is audited either way.
+    personReason: string | null,
 ): Promise<never> {
     const storedMetadata = metadataRecord(chat.metadata)
     const existingProviderAccountId = concreteOpaqueId(storedMetadata.providerAccountId)
@@ -565,14 +568,14 @@ async function rejectTelegramConversationCollision(
         existingConnectionId,
     }
     await appendConversationIdentityCollisionV1({ chatId: chat.id, evidence })
-    if (chat.contactId && chat.contactIdentityId) {
+    if (personReason && chat.contactId && chat.contactIdentityId) {
         try {
             await markChannelIdentityConflictV1({
                 contactId: chat.contactId,
                 identityId: chat.contactIdentityId,
                 channel: 'telegram',
-                reason,
-                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${input.peerId}:${reason}`,
+                reason: personReason,
+                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${input.peerId}:${personReason}`,
                 details: {
                     phase: input.phase,
                     incomingPeerId: input.peerId,
@@ -663,13 +666,26 @@ async function admitTelegramPrivateConversation(input: {
                         ? 'chat_kind_mismatch'
                         : null
     if (reason) {
+        // The transport arm runs before the peer and chat-kind arms, so a
+        // transport reason can hide a genuine "this conversation belongs to
+        // someone else" contradiction. Evaluate those arms explicitly: they still
+        // reach the Contacts person record, while a transport mismatch alone does
+        // not.
+        const personReason = reason === 'transport_connection_mismatch'
+            ? storedPeerId !== null && storedPeerId !== peerId
+                ? 'peer_identity_mismatch'
+                : chat.chatType !== 'private'
+                    || (storedMetadata.chatKind !== undefined && storedMetadata.chatKind !== 'private')
+                    ? 'chat_kind_mismatch'
+                    : null
+            : reason
         await rejectTelegramConversationCollision(chat, {
             phase: input.phase,
             externalChatId,
             peerId,
             providerAccountId,
             connectionId,
-        }, reason)
+        }, reason, personReason)
     }
 
     const contactResult = await resolveChannelContactOperationV1(

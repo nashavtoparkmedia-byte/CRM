@@ -57,10 +57,10 @@ function toConversation(
   conversation: StoredContactConversationV1,
   input: ExactIdentityBindingV1,
 ): ContactConversationV1 {
-  // Provider-account provenance is deferred: it is carried as descriptive
-  // metadata and never admits or rejects a conversation.
-  // See docs/design/provider-account-identity-v1.md.
-  const providerAccountId = storedProviderAccountId(conversation) ?? input.providerAccountId ?? null
+  // The account reported for a conversation is the one its route carries. The
+  // identity's providerAccountId is first-writer telemetry about the person and
+  // is never substituted for it. See docs/design/provider-account-identity-v1.md.
+  const providerAccountId = storedProviderAccountId(conversation)
   return {
     id: conversation.id,
     channel: conversation.channel,
@@ -120,20 +120,6 @@ function assertExactOwnership(
   }
 }
 
-function assertCompatibleProviderAccount(
-  conversation: StoredContactConversationV1,
-  input: ExactIdentityBindingV1,
-): void {
-  const existingProviderAccountId = storedProviderAccountId(conversation)
-  if (
-    input.providerAccountId !== null
-    && existingProviderAccountId !== null
-    && existingProviderAccountId !== input.providerAccountId
-  ) {
-    throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_MISMATCH')
-  }
-}
-
 function uniqueCandidate(
   conversations: StoredContactConversationV1[],
 ): StoredContactConversationV1 | null {
@@ -148,14 +134,18 @@ async function readExactBinding(
 ): Promise<ContactConversationV1 | null> {
   assertExactConversationTarget(conversation, input)
   assertCompatibleOwnership(conversation, input)
-  assertCompatibleProviderAccount(conversation, input)
   // Contacts prepared the identity under CNT1, but that lock is released
   // before Messaging reads the Chat. A cross-owner backfill here cannot
   // atomically prove that the ContactIdentity still belongs to this Contact.
   // Therefore an incomplete legacy binding is read-only and fails closed;
   // only a Chat already carrying the exact owner pair can be returned.
+  //
+  // Provider account is not compared against the identity and its absence is
+  // not a rejection: that stamp describes the person's first observed transport,
+  // not which route may carry this conversation. Route safety is enforced where
+  // the route is actually used, by the bound transport check and send-time
+  // provider attestation in outbound preparation.
   if (conversation.contactId === null || conversation.contactIdentityId === null) return null
-  if (storedProviderAccountId(conversation) === null && input.providerAccountId === null) return null
   assertExactOwnership(conversation, input)
   return toConversation(conversation, input)
 }
@@ -169,15 +159,11 @@ async function findCandidates(input: ExactIdentityBindingV1 & { allowContactFall
   }))
   if (conversation || !input.allowContactFallback) return conversation
 
+  // The identity's providerAccountId never narrows the route search. If one
+  // sender has conversations under two accounts, uniqueCandidate fails closed as
+  // ambiguous instead of silently preferring whichever account saw them first.
   const providerTarget = input.channel === 'max'
-    ? {
-        AND: [
-          { metadata: { path: ['senderId'], equals: input.identityExternalId } },
-          ...(input.providerAccountId === null
-            ? []
-            : [{ metadata: { path: ['providerAccountId'], equals: input.providerAccountId } }]),
-        ],
-      }
+    ? { metadata: { path: ['senderId'], equals: input.identityExternalId } }
     : { externalChatId: { in: input.exactExternalChatIds } }
   conversation = uniqueCandidate(await prisma.chat.findMany({
     where: {
@@ -222,12 +208,7 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
             contactId: input.contactId,
             contactIdentityId: input.contactIdentityId,
             channel: 'max',
-            AND: [
-              { metadata: { path: ['senderId'], equals: input.identityExternalId } },
-              ...(input.providerAccountId === null
-                ? []
-                : [{ metadata: { path: ['providerAccountId'], equals: input.providerAccountId } }]),
-            ],
+            metadata: { path: ['senderId'], equals: input.identityExternalId },
           },
           orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
           take: 2,
@@ -237,7 +218,8 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
     if (conversation) {
       assertExactOwnership(conversation, input)
       const prepared = await readExactBinding(conversation, input)
-      if (!prepared) return { status: 'provider_account_unproven' }
+      // Unreachable after assertExactOwnership; kept as a closed door.
+      if (!prepared) throw new Error('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH')
       if (!prepared.transportConnectionId) return { status: 'transport_unbound' }
       return { status: 'ready', conversation: prepared, isNew: false }
     }
@@ -245,7 +227,6 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
     if (input.channel === 'max' || exactExternalChatIds.length === 0) {
       return { status: 'conversation_target_unproven' }
     }
-    if (input.providerAccountId === null) return { status: 'provider_account_unproven' }
     // No owner capability currently proves a transport for a brand-new Chat.
     // Only an existing channel-owned Chat may authorize outbound routing.
     return { status: 'transport_unbound' }

@@ -234,11 +234,105 @@ describe('serialized manual DriverTelegram authority revalidation', () => {
                 metadata: { providerAccountId: 'telegram-account-1', conflictState: 'clear' },
             },
         }, 'DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'],
+        ['Chat provider account changed', {
+            chat: {
+                ...chat,
+                metadata: { ...chat.metadata, providerAccountId: 'telegram-account-2' },
+            },
+        }, 'DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'],
     ])('rejects when %s after the initial authority proof', async (_label, overrides, error) => {
         await expect(revalidatePreparedManualDriverTelegramLinkAuthorityV1(
             serializedAuthorityClient(overrides) as never,
             { driverId: 'driver-1', telegramId: 42n },
             prepared,
         )).rejects.toThrow(error)
+    })
+
+    function confirmedContactWith(identityConflicts: unknown[]) {
+        return {
+            id: 'contact-1',
+            isArchived: false,
+            mainDriverId: 'driver-1',
+            customFields: {
+                driverConfirmations: [{ status: 'confirmed', representativeDriverId: 'driver-1' }],
+                identityConflicts,
+            },
+        }
+    }
+
+    function ingressCollision(reason: string, details: Record<string, unknown>) {
+        return {
+            otherContactIds: [],
+            identityId: 'identity-42',
+            conflictType: 'channel_identity_collision',
+            evidenceRoot: `channel-collision:telegram:telegram:42:${reason}`,
+            source: 'channel-ingress',
+            details: { ...details, channel: 'telegram', reason, externalUserId: '42' },
+            detectedAt: '2026-09-10T00:00:00.000Z',
+            status: 'open',
+        }
+    }
+
+    test('the identity account stamp is not person authority: a different first-writer account does not reject', async () => {
+        await expect(revalidatePreparedManualDriverTelegramLinkAuthorityV1(
+            serializedAuthorityClient({
+                identity: {
+                    id: 'identity-42', contactId: 'contact-1', channel: 'telegram', externalId: '42',
+                    isActive: true, reachabilityStatus: 'confirmed',
+                    metadata: { providerAccountId: 'telegram-account-first-seen', conflictState: 'clear' },
+                },
+            }) as never,
+            { driverId: 'driver-1', telegramId: 42n },
+            prepared,
+        )).resolves.toBeUndefined()
+    })
+
+    test('a genuine identity conflict still blocks the link', async () => {
+        await expect(revalidatePreparedManualDriverTelegramLinkAuthorityV1(
+            serializedAuthorityClient({
+                contact: confirmedContactWith([
+                    ingressCollision('peer_identity_mismatch', { incomingPeerId: '42', existingPeerId: '99' }),
+                ]),
+            }) as never,
+            { driverId: 'driver-1', telegramId: 42n },
+            prepared,
+        )).rejects.toThrow('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED')
+    })
+
+    test('a proven transport-only collision does not make the person permanently conflicted', async () => {
+        await expect(revalidatePreparedManualDriverTelegramLinkAuthorityV1(
+            serializedAuthorityClient({
+                contact: confirmedContactWith([
+                    ingressCollision('transport_connection_mismatch', {
+                        incomingProviderAccountId: 'telegram-account-1',
+                        existingProviderAccountId: null,
+                        incomingConnectionId: 'telegram-connection-1',
+                        existingConnectionId: '7001',
+                        incomingChatKind: 'private',
+                        existingChatKind: 'private',
+                    }),
+                ]),
+            }) as never,
+            { driverId: 'driver-1', telegramId: 42n },
+            prepared,
+        )).resolves.toBeUndefined()
+    })
+
+    test('a historical transport entry without provable provenance still blocks the link', async () => {
+        await expect(revalidatePreparedManualDriverTelegramLinkAuthorityV1(
+            serializedAuthorityClient({
+                contact: confirmedContactWith([
+                    ingressCollision('transport_connection_mismatch', {
+                        phase: 'inbound',
+                        incomingPeerId: '42',
+                        existingPeerId: '42',
+                        incomingConnectionId: '7002',
+                        existingConnectionId: '7001',
+                    }),
+                ]),
+            }) as never,
+            { driverId: 'driver-1', telegramId: 42n },
+            prepared,
+        )).rejects.toThrow('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED')
     })
 })

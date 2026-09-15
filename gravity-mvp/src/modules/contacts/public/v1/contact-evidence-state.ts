@@ -126,6 +126,154 @@ export function withoutPhoneEvidence(customFields: unknown, phoneIds: readonly s
   return { ...fields, phoneEvidenceByPhoneId: map }
 }
 
+export type ChannelCollisionChannelV1 = 'telegram' | 'whatsapp' | 'max'
+
+export type PersonBlockingIdentityV1 = {
+  id: string
+  channel: string
+  externalId: string
+}
+
+/**
+ * Admission reasons that name a transport, connection or company-account fact
+ * and nothing about the person. Every revision of every channel ingress chain
+ * that ever wrote a `channel_identity_collision` is covered, including reasons
+ * the current callers no longer raise, so historical records classify too.
+ */
+const TRANSPORT_COLLISION_REASONS_V1: Readonly<Record<ChannelCollisionChannelV1, ReadonlySet<string>>> = Object.freeze({
+  telegram: new Set([
+    'transport_connection_mismatch',
+    'transport_connection_unproven',
+    'provider_account_mismatch',
+    'provider_account_unproven',
+  ]),
+  whatsapp: new Set(['transport_mismatch', 'transport_unbound']),
+  max: new Set(['provider_account_mismatch', 'provider_account_unproven']),
+})
+
+const COLLISION_CHAT_KINDS_V1 = new Set(['private', 'group', 'unknown'])
+
+function isCollisionChannel(value: unknown): value is ChannelCollisionChannelV1 {
+  return value === 'telegram' || value === 'whatsapp' || value === 'max'
+}
+
+function presentId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function absentId(value: unknown): boolean {
+  return value === null || value === undefined
+}
+
+/** The recorded values actually express this reason, not merely its label. */
+function recordsTransportReason(
+  details: Record<string, unknown>,
+  reason: string,
+  field: 'ProviderAccountId' | 'ConnectionId',
+): boolean {
+  const incoming = details[`incoming${field}`]
+  const existing = details[`existing${field}`]
+  if (reason.endsWith('_mismatch')) return presentId(incoming) && presentId(existing) && incoming !== existing
+  return presentId(incoming) && absentId(existing)
+}
+
+export function isTransportCollisionReasonV1(channel: unknown, reason: unknown): boolean {
+  return isCollisionChannel(channel)
+    && typeof reason === 'string'
+    && TRANSPORT_COLLISION_REASONS_V1[channel].has(reason)
+}
+
+/**
+ * Proves, from a recorded collision alone, that it concerned only a transport.
+ *
+ * The reason label is not enough. In the Telegram MTProto and MAX admission
+ * chains the transport comparison runs BEFORE the peer or sender comparison, so
+ * a transport reason can hide a genuine "this conversation belongs to someone
+ * else" contradiction. A record is transport-only only when its own details show
+ * that every person or conversation-shape comparison that a transport reason can
+ * mask did not contradict. Anything that cannot be proven stays person-blocking.
+ */
+export function isProvenTransportOnlyChannelCollisionV1(input: {
+  channel: unknown
+  reason: unknown
+  details: unknown
+}): boolean {
+  if (!isTransportCollisionReasonV1(input.channel, input.reason)) return false
+  const channel = input.channel as ChannelCollisionChannelV1
+  const reason = input.reason as string
+  const details = jsonRecord(input.details)
+
+  if (channel === 'whatsapp') {
+    // The WhatsApp chain compares only the stored and incoming connection.
+    return recordsTransportReason(details, reason, 'ConnectionId')
+  }
+
+  const field = reason.startsWith('provider_account_') ? 'ProviderAccountId' : 'ConnectionId'
+  if (!recordsTransportReason(details, reason, field)) return false
+
+  if (channel === 'telegram') {
+    // Only the MTProto admission records peer ids. Its peer comparison and its
+    // chat-kind comparison both follow the transport arm, and the chat kind is
+    // never recorded, so an MTProto transport record cannot be proven clean.
+    if (Object.prototype.hasOwnProperty.call(details, 'incomingPeerId')) return false
+    // The Bot API chain checks the conversation key before the transport arm and
+    // has no peer comparison; only the chat kind follows, and it is recorded.
+    return presentId(details.incomingChatKind)
+      && (details.incomingChatKind === 'private' || details.incomingChatKind === 'group')
+      && details.existingChatKind === details.incomingChatKind
+  }
+
+  // MAX: chat kind and sender identity both follow the provider-account arm.
+  const incomingChatKind = details.incomingChatKind
+  const existingChatKind = details.existingChatKind
+  if (!COLLISION_CHAT_KINDS_V1.has(String(incomingChatKind)) || !COLLISION_CHAT_KINDS_V1.has(String(existingChatKind))) {
+    return false
+  }
+  const concreteKindMismatch = existingChatKind !== 'unknown'
+    && incomingChatKind !== 'unknown'
+    && existingChatKind !== incomingChatKind
+  if (concreteKindMismatch || incomingChatKind === 'group') return false
+  return presentId(details.incomingSenderId)
+    && presentId(details.existingSenderId)
+    && details.incomingSenderId === details.existingSenderId
+}
+
+/** A persisted conflict entry that is a proven transport-only ingress collision on this exact identity. */
+export function isProvenTransportOnlyIdentityConflictV1(
+  conflict: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const record = jsonRecord(conflict)
+  if (record.conflictType !== 'channel_identity_collision' || record.source !== 'channel-ingress') return false
+  if (record.identityId !== identity.id) return false
+  const details = jsonRecord(record.details)
+  if (details.channel !== identity.channel || details.externalUserId !== identity.externalId) return false
+  return isProvenTransportOnlyChannelCollisionV1({
+    channel: details.channel,
+    reason: details.reason,
+    details,
+  })
+}
+
+/**
+ * Whether an open conflict on this identity blocks person-level operations.
+ * Every open conflict blocks except a proven transport-only ingress collision:
+ * a transport problem fails its own conversation closed and never disables the
+ * person. Unclassifiable historical entries keep blocking.
+ */
+export function hasPersonBlockingIdentityConflictV1(
+  customFields: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const conflicts = jsonRecord(customFields).identityConflicts
+  return Array.isArray(conflicts) && conflicts.some(item => {
+    const conflict = jsonRecord(item)
+    return conflict.status === 'open'
+      && conflict.identityId === identity.id
+      && !isProvenTransportOnlyIdentityConflictV1(conflict, identity)
+  })
+}
+
 // providerAccountMatches was deliberately REMOVED, not merely left uncalled.
 // Comparing a stored provider-account stamp to an inbound one was an
 // authorization boundary with no authority behind it: every available value

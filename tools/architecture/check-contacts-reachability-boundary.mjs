@@ -20,7 +20,7 @@ const exactCapabilities = [
     'recordExactProviderReachability',
 ]
 
-assert.equal(sha256(read(implementationPath)), '7e1d5e57aa744a748b5c6f6e56067bbfa93e30ea5884b73d57a4d5dc6ada19af')
+assert.equal(sha256(read(implementationPath)), 'a3935cadbcdcd743814b8dd08c01cefcf2947a1ca830beba3f35b1c32dd79970')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''
@@ -75,6 +75,17 @@ for (const preservedRejection of [
 ]) {
     assert.match(implementationSource, new RegExp(`reason: '${preservedRejection}'`))
 }
+
+// A transport collision is not a person conflict (M1). The open-conflict deny is
+// delegated to the Contacts classifier, which exempts only a collision its own
+// details prove transport-only, and the identity-level conflict flag still denies
+// unconditionally. A local predicate that ignores or re-derives the distinction
+// would reopen either the person lockout or the fail-open.
+assert.match(implementationSource, /identityEvidenceState\(identity\.metadata\)\.conflictState === 'conflicted'\n\s+\|\| hasPersonBlockingIdentityConflictV1\(identity\.contact\.customFields, identity\)/)
+assert.doesNotMatch(implementationSource, /identityConflicts|isProvenTransportOnly|conflict\.status === 'open'/)
+const evidenceStateSource = read('gravity-mvp/src/modules/contacts/public/v1/contact-evidence-state.ts')
+assert.match(evidenceStateSource, /export function hasPersonBlockingIdentityConflictV1\(/)
+assert.match(evidenceStateSource, /record\.conflictType !== 'channel_identity_collision' \|\| record\.source !== 'channel-ingress'/)
 
 const profileDrawerSource = read(profileDrawerPath)
 assert.match(profileDrawerSource, /identityId: identity\.id/)

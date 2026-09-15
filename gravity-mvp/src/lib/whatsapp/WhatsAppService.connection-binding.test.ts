@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
     ensureConversationContactLink: vi.fn(),
     linkMatchedDriver: vi.fn(),
     patchChannelConversation: vi.fn(),
-    patchExternalConversation: vi.fn(),
+    appendConversationIdentityCollision: vi.fn(),
     patchHistoryImportJob: vi.fn(),
     patchMessageDelivery: vi.fn(),
     upsertChannelConversation: vi.fn(),
@@ -154,7 +154,7 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     ensureConversationContactLinkV1: mocks.ensureConversationContactLink,
     linkMatchedDriverToConversationCapabilityV1: Symbol('link-matched-driver'),
     patchChannelConversationV1: mocks.patchChannelConversation,
-    patchExternalConversationV1: mocks.patchExternalConversation,
+    appendConversationIdentityCollisionV1: mocks.appendConversationIdentityCollision,
     patchHistoryImportJobV1: mocks.patchHistoryImportJob,
     patchMessageDeliveryV1: mocks.patchMessageDelivery,
     upsertChannelConversationV1: mocks.upsertChannelConversation,
@@ -285,41 +285,23 @@ function expectTransportCollisionPersisted(
     incomingConnectionId: string,
     existingConnectionId: string | null = STORED_CONNECTION_ID,
 ) {
-    expect(mocks.patchExternalConversation).toHaveBeenCalledOnce()
-    expect(mocks.patchExternalConversation).toHaveBeenCalledWith({
-        contract: 'messaging.PatchExternalConversationCommand.v1',
+    // Observable and durable on the Messaging-owned conversation...
+    expect(mocks.appendConversationIdentityCollision).toHaveBeenCalledOnce()
+    expect(mocks.appendConversationIdentityCollision).toHaveBeenCalledWith({
         chatId: 'chat-owned-by-connection-a',
-        patch: {
-            metadata: expect.objectContaining({
-                ...(existingConnectionId ? { connectionId: existingConnectionId } : {}),
-                channelIdentityCollisionAudit: [expect.objectContaining({
-                    channel: 'whatsapp',
-                    reason: existingConnectionId ? 'transport_mismatch' : 'transport_unbound',
-                    phase,
-                    incomingConnectionId,
-                    existingConnectionId,
-                    externalChatId: CANONICAL_EXTERNAL_ID,
-                    observedAt: expect.any(String),
-                })],
-            }),
-        },
-    })
-    expect(mocks.markChannelIdentityConflict).toHaveBeenCalledOnce()
-    expect(mocks.markChannelIdentityConflict).toHaveBeenCalledWith({
-        contactId: 'contact-a',
-        identityId: 'identity-a',
-        channel: 'whatsapp',
-        reason: existingConnectionId ? 'transport_mismatch' : 'transport_unbound',
-        evidenceRoot: expect.stringMatching(
-            new RegExp(`^channel-collision:whatsapp:chat-owned-by-connection-a:${existingConnectionId ? 'transport_mismatch' : 'transport_unbound'}:[a-f0-9]{64}$`),
-        ),
-        details: {
+        evidence: {
+            channel: 'whatsapp',
+            reason: existingConnectionId ? 'transport_mismatch' : 'transport_unbound',
             phase,
-            externalChatId: CANONICAL_EXTERNAL_ID,
             incomingConnectionId,
             existingConnectionId,
+            externalChatId: CANONICAL_EXTERNAL_ID,
         },
     })
+    // ...and never a Contacts person conflict, even though the Chat is linked to
+    // a Contact and ContactIdentity: a second or unbound connection is a route
+    // fact, not a fact about who the person is.
+    expect(mocks.markChannelIdentityConflict).not.toHaveBeenCalled()
 }
 
 describe('WhatsApp private conversation connection ownership', () => {
@@ -390,6 +372,7 @@ describe('WhatsApp private conversation connection ownership', () => {
         }))
         mocks.ensureConversationContactLink.mockResolvedValue({ linked: true })
         mocks.markChannelIdentityConflict.mockResolvedValue(undefined)
+        mocks.appendConversationIdentityCollision.mockResolvedValue(undefined)
         mocks.recordExactProviderReachability.mockResolvedValue({
             outcome: 'updated',
             identityId: 'identity-1',

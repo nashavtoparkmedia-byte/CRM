@@ -340,18 +340,21 @@ export async function POST(request: Request) {
     const persistMaxIdentityCollision = async (
       existingChat: Chat,
       evidence: MaxIdentityCollisionEvidence,
+      // The person-level reason, or null when only the provider account
+      // contradicted. The conversation still fails closed and is audited.
+      personReason: string | null,
     ) => {
       await appendConversationIdentityCollisionV1({
         chatId: existingChat.id,
         evidence,
       })
-      if (existingChat.contactId && existingChat.contactIdentityId) {
+      if (personReason && existingChat.contactId && existingChat.contactIdentityId) {
         await markChannelIdentityConflictV1({
           contactId: existingChat.contactId,
           identityId: existingChat.contactIdentityId,
           channel: 'max',
-          reason: evidence.reason,
-          evidenceRoot: `channel-collision:max:${existingChat.externalChatId}:${evidence.incomingProviderAccountId}:${evidence.reason}`,
+          reason: personReason,
+          evidenceRoot: `channel-collision:max:${existingChat.externalChatId}:${evidence.incomingProviderAccountId}:${personReason}`,
           details: {
             incomingProviderAccountId: evidence.incomingProviderAccountId,
             existingProviderAccountId: evidence.existingProviderAccountId,
@@ -426,6 +429,14 @@ export async function POST(request: Request) {
         ?? chatKindCollisionReason
         ?? senderCollisionReason
       if (collisionReason) {
+        // The provider-account arm runs before the chat-kind and sender arms, so
+        // an account reason can hide a genuine person contradiction. Those arms
+        // still reach the Contacts person record; an account mismatch alone only
+        // fails this conversation closed, because MAX chat ids are not yet proven
+        // to be account-independent.
+        const personReason = providerCollisionReason && collisionReason === providerCollisionReason
+          ? chatKindCollisionReason ?? senderCollisionReason
+          : collisionReason
         await persistMaxIdentityCollision(existingChat, {
           channel: 'max',
           reason: collisionReason,
@@ -438,7 +449,7 @@ export async function POST(request: Request) {
           hasPersonOwnership,
           externalChatId,
           existingExternalChatId: existingChat.externalChatId,
-        })
+        }, personReason)
         maxRuntimeTrace('webhook.skipped', {
           providerMessageId: externalIdString,
           chatId: String(chatId),

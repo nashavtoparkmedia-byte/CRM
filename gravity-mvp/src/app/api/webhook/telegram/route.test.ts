@@ -265,7 +265,9 @@ describe('Telegram webhook account and transport admission', () => {
     expectNoPersonOrMessageMutation()
   })
 
-  test('records durable Chat evidence for a real cross-transport claim on a linked identity', async () => {
+  test('fails a Bot API vs MTProto transport claim closed on the conversation without touching person authority', async () => {
+    // The stored connection is another transport (for example the MTProto account)
+    // and this event arrives through the Bot API connection.
     const existing = chat({
       chatKind: 'private',
       connectionId: 'telegram-connection-a',
@@ -278,17 +280,49 @@ describe('Telegram webhook account and transport admission', () => {
     const response = await POST(request())
 
     expect(response.status).toBe(409)
-    expect(mocks.appendCollision.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.markIdentityConflict.mock.invocationCallOrder[0])
+    await expect(response.json()).resolves.toEqual({ error: 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION' })
+    // Observable on the conversation...
+    expect(mocks.appendCollision).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      evidence: expect.objectContaining({
+        channel: 'telegram',
+        reason: 'transport_connection_mismatch',
+        incomingConnectionId: 'telegram-connection-b',
+        existingConnectionId: 'telegram-connection-a',
+      }),
+    })
+    // ...and never a Contacts person conflict.
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoPersonOrMessageMutation()
+  })
+
+  test('still records a person conflict when a transport mismatch hides a chat-kind contradiction', async () => {
+    const existing = chat({
+      chatKind: 'group',
+      connectionId: 'telegram-connection-a',
+    }, {
+      chatType: 'group',
+      contactId: 'contact-a',
+      contactIdentityId: 'identity-a',
+    })
+    mocks.upsertConversation.mockResolvedValue({ conversation: existing })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION' })
+    expect(mocks.appendCollision).toHaveBeenCalledWith(expect.objectContaining({
+      evidence: expect.objectContaining({ reason: 'transport_connection_mismatch' }),
+    }))
     expect(mocks.markIdentityConflict).toHaveBeenCalledWith({
       contactId: 'contact-a',
       identityId: 'identity-a',
       channel: 'telegram',
-      reason: 'transport_connection_mismatch',
-      evidenceRoot: expect.stringContaining('channel-collision:telegram:telegram:42:'),
+      reason: 'chat_kind_mismatch',
+      evidenceRoot: expect.stringMatching(/^channel-collision:telegram:telegram:42:.*:chat_kind_mismatch$/),
       details: expect.objectContaining({
-        incomingConnectionId: 'telegram-connection-b',
-        existingConnectionId: 'telegram-connection-a',
+        incomingChatKind: 'private',
+        existingChatKind: 'group',
       }),
     })
     expectNoPersonOrMessageMutation()

@@ -104,23 +104,24 @@ const defaultOwnerApisV1: ContactConversationOwnerApisV1 = {
     openFallbackContactConversationV1,
 }
 
+/**
+ * The conversation must be exactly this contact's, on this identity and channel.
+ * Its provider account is a property of the route, not of the person, so it is
+ * never compared with the identity's first-writer account stamp; a present
+ * route account must still be a concrete value.
+ */
 function assertExactConversationBinding(
     conversation: ContactConversationV1,
     expected: {
         contactId: string
         contactIdentityId: string
         channel: PlatformContactConversationChannelV1
-        providerAccountId: string | null
     },
 ): void {
     if (
         conversation.contactId !== expected.contactId
         || conversation.contactIdentityId !== expected.contactIdentityId
         || conversation.channel !== expected.channel
-        || (
-            expected.providerAccountId !== null
-            && conversation.providerAccountId !== expected.providerAccountId
-        )
         || (conversation.providerAccountId !== null && conversation.providerAccountId.trim() === '')
     ) {
         throw new Error('CONTACT_CONVERSATION_BINDING_MISMATCH')
@@ -206,7 +207,6 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
                 contactId: input.contactId,
                 contactIdentityId: prepared.identity.id,
                 channel: input.channel,
-                providerAccountId: prepared.identity.providerAccountId,
             })
             if (!linked.conversation.transportConnectionId) {
                 return { status: 'transport_unbound' }
@@ -253,7 +253,6 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             contactId: input.contactId,
             contactIdentityId: prepared.identity.id,
             channel: input.channel,
-            providerAccountId: prepared.identity.providerAccountId,
         })
         if (!opened.conversation.transportConnectionId) {
             return { status: 'transport_unbound' }

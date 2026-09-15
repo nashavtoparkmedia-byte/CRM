@@ -296,12 +296,32 @@ describe('Platform contact-conversation orchestration', () => {
         )
     })
 
+    test('does not reject the exact conversation because its route account differs from the identity stamp', async () => {
+        const calls: string[] = []
+        const owners = ownerApis(calls, {
+            linked: { ...conversation, providerAccountId: 'telegram-account-a' },
+        })
+        const orchestrator = createContactConversationOrchestratorV1(owners)
+
+        // The route account is a property of the conversation, not of the person.
+        // Send-time outbound preparation still binds the actual transport.
+        await expect(orchestrator.openContactConversationForContactV1({
+            contactId: 'contact-1',
+            channel: 'telegram',
+            identityId: 'identity-1',
+            phoneId: null,
+        })).resolves.toMatchObject({
+            status: 'ready',
+            conversation: expect.objectContaining({ providerAccountId: 'telegram-account-a' }),
+        })
+    })
+
     test.each([
         { contactIdentityId: 'identity-2' },
         { channel: 'max' as const },
         { contactId: null },
         { contactIdentityId: null },
-        { providerAccountId: 'telegram-account-a' },
+        { providerAccountId: '   ' },
     ])('fails closed when Messaging returns a conversation outside the exact identity binding: %j', async (mismatch) => {
         const calls: string[] = []
         const owners = ownerApis(calls, { linked: { ...conversation, ...mismatch } })

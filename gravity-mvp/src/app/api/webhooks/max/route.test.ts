@@ -225,7 +225,7 @@ describe('MAX webhook provider-account admission', () => {
     expectNoInboundMutation()
   })
 
-  test('rejects a live-shaped Chat owned by another concrete MAX account before mutation', async () => {
+  test('fails a Chat owned by another concrete MAX account closed without invalidating the Contact', async () => {
     mocks.chatFindUnique.mockResolvedValue(existingChat({
       senderId: 'max-sender-42',
       providerAccountId: 'max-account-a',
@@ -234,6 +234,8 @@ describe('MAX webhook provider-account admission', () => {
 
     const response = await POST(request())
 
+    // The conversation/route guard is unchanged: MAX chat ids are not proven to
+    // be account-independent, so another account may not append to this Chat.
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' })
     expect(mocks.shadowComplete).toHaveBeenCalledWith({
@@ -241,19 +243,51 @@ describe('MAX webhook provider-account admission', () => {
       reason: 'provider_account_mismatch',
     })
     expectCollisionEvidence('provider_account_mismatch')
-    expect(mocks.appendCollision.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.markIdentityConflict.mock.invocationCallOrder[0])
+    // Same sender, different company account: no person conflict is written.
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoInboundMutation()
+  })
+
+  test('still records a person conflict when an account mismatch hides a sender contradiction', async () => {
+    mocks.chatFindUnique.mockResolvedValue(existingChat({
+      senderId: 'other-max-sender',
+      providerAccountId: 'max-account-a',
+      connectionId: 'max_scraper',
+    }))
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' })
+    expectCollisionEvidence('provider_account_mismatch')
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
     expect(mocks.markIdentityConflict).toHaveBeenCalledWith({
       contactId: 'contact-a',
       identityId: 'identity-a',
       channel: 'max',
-      reason: 'provider_account_mismatch',
-      evidenceRoot: expect.stringContaining('channel-collision:max:'),
+      reason: 'sender_identity_mismatch',
+      evidenceRoot: expect.stringMatching(/^channel-collision:max:max-conversation-900:max-account-b:sender_identity_mismatch$/),
       details: expect.objectContaining({
-        incomingProviderAccountId: 'max-account-b',
-        existingProviderAccountId: 'max-account-a',
+        incomingSenderId: 'max-sender-42',
+        existingSenderId: 'other-max-sender',
       }),
     })
+    expectNoInboundMutation()
+  })
+
+  test('fails an unstamped legacy Chat closed without a person conflict when the sender is proven', async () => {
+    mocks.chatFindUnique.mockResolvedValue(existingChat({
+      senderId: 'max-sender-42',
+      connectionId: 'max_scraper',
+    }))
+
+    const response = await POST(request())
+
+    // No silent attribution of a legacy conversation to the live account.
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expectCollisionEvidence('provider_account_unproven')
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
     expectNoInboundMutation()
   })
 
@@ -316,6 +350,13 @@ describe('MAX webhook provider-account admission', () => {
       reason: 'provider_account_unproven',
     })
     expectCollisionEvidence('provider_account_unproven')
+    // The account gap alone is not a person fact, but this linked Chat also has
+    // no stored sender, so the sender arm the account arm pre-empts cannot be
+    // proven: that identity-evidence gap stays person-level and fail-closed.
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+    expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+      reason: 'sender_identity_unproven',
+    }))
     expectNoInboundMutation()
   })
 

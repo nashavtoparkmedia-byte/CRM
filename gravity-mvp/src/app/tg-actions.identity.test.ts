@@ -340,7 +340,7 @@ describe('GramJS private conversation identity admission', () => {
         expect(importSource).not.toMatch(/telegramConnection\.findMany|conns\[0\]/)
     })
 
-    test('live inbound records and rejects a cross-transport Chat before Contact or message writes', async () => {
+    test('live inbound fails a cross-transport Chat closed without making the linked person conflicted', async () => {
         const connectionId = `telegram-account-incoming-${connectionSequence}`
         const providerAccountId = '7002'
         const handler = await initializeListener(connectionId, providerAccountId)
@@ -375,9 +375,49 @@ describe('GramJS private conversation identity admission', () => {
                 incomingConnectionId: connectionId,
             }),
         })
-        expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+        // Same peer, different transport: a route fact, not a person conflict.
+        expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
         expect(mocks.resolveContact).not.toHaveBeenCalled()
         expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+        expect(mocks.createMessage).not.toHaveBeenCalled()
+    })
+
+    test('live inbound still records a person conflict when a transport mismatch hides a peer contradiction', async () => {
+        const connectionId = `telegram-account-hidden-peer-${connectionSequence}`
+        const providerAccountId = '7006'
+        const handler = await initializeListener(connectionId, providerAccountId)
+        mocks.upsertConversation.mockResolvedValueOnce({
+            conversation: {
+                id: 'chat-owned-by-other-peer',
+                channel: 'telegram',
+                externalChatId: 'telegram:42',
+                chatType: 'private',
+                contactId: 'contact-other',
+                contactIdentityId: 'identity-other',
+                driverId: null,
+                metadata: {
+                    chatKind: 'private',
+                    // The stored peer contradicts the conversation key: this row
+                    // belongs to somebody else. The transport arm fires first.
+                    peerId: '99',
+                    connectionId: 'telegram-account-other',
+                },
+            },
+        })
+
+        await handler({ message: inboundMessage('42') })
+
+        expect(mocks.appendCollision).toHaveBeenCalledWith(expect.objectContaining({
+            evidence: expect.objectContaining({ reason: 'transport_connection_mismatch' }),
+        }))
+        expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+        expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+            contactId: 'contact-other',
+            identityId: 'identity-other',
+            reason: 'peer_identity_mismatch',
+            evidenceRoot: expect.stringMatching(/:peer_identity_mismatch$/),
+        }))
+        expect(mocks.resolveContact).not.toHaveBeenCalled()
         expect(mocks.createMessage).not.toHaveBeenCalled()
     })
 
