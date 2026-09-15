@@ -87,6 +87,62 @@ const evidenceStateSource = read('gravity-mvp/src/modules/contacts/public/v1/con
 assert.match(evidenceStateSource, /export function hasPersonBlockingIdentityConflictV1\(/)
 assert.match(evidenceStateSource, /record\.conflictType !== 'channel_identity_collision' \|\| record\.source !== 'channel-ingress'/)
 
+// The classifier is executed, not pattern-matched, so a body that stops blocking
+// genuine conflicts, or starts blocking proven transport-only ones, cannot pass.
+const { default: ts } = await import('../../gravity-mvp/node_modules/typescript/lib/typescript.js')
+const evidenceState = await import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(evidenceStateSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText).toString('base64')}`)
+const probeIdentity = { id: 'identity-probe', channel: 'telegram', externalId: '42' }
+const probeCollision = (reason, details, overrides = {}) => ({
+    identityId: probeIdentity.id,
+    conflictType: 'channel_identity_collision',
+    source: 'channel-ingress',
+    status: 'open',
+    details: { ...details, channel: probeIdentity.channel, reason, externalUserId: probeIdentity.externalId },
+    ...overrides,
+})
+const botTransportOnly = probeCollision('transport_connection_mismatch', {
+    incomingConnectionId: 'driver-bot-primary',
+    existingConnectionId: '7001',
+    incomingChatKind: 'private',
+    existingChatKind: 'private',
+})
+const blocks = (...conflicts) => evidenceState.hasPersonBlockingIdentityConflictV1({ identityConflicts: conflicts }, probeIdentity)
+assert.equal(blocks(botTransportOnly), false, 'a proven transport-only collision must not disable the person')
+assert.equal(blocks(probeCollision('peer_identity_mismatch', { incomingPeerId: '42', existingPeerId: '99' })), true, 'a genuine person conflict must block')
+assert.equal(blocks(botTransportOnly, probeCollision('chat_kind_mismatch', { incomingChatKind: 'private', existingChatKind: 'group' })), true, 'a genuine conflict beside a transport-only one must block')
+assert.equal(blocks(probeCollision('transport_connection_mismatch', { ...botTransportOnly.details, existingChatKind: 'group' })), true, 'a transport reason masking a chat-kind contradiction must block')
+assert.equal(blocks(probeCollision('transport_connection_mismatch', {
+    incomingPeerId: '42', existingPeerId: '42', incomingConnectionId: '7002', existingConnectionId: '7001',
+})), true, 'an unprovable historical MTProto transport entry must block')
+assert.equal(blocks(probeCollision('transport_connection_mismatch', {
+    ...botTransportOnly.details, incomingPeerId: '42', existingPeerId: '42',
+})), true, 'an MTProto-shaped entry stays unprovable even when chat kinds are present')
+assert.equal(blocks({ ...botTransportOnly, conflictType: 'manual_identity_conflict' }), true, 'another conflict type must block')
+assert.equal(blocks({ ...botTransportOnly, source: 'manual-review' }), true, 'a collision from another origin must block')
+assert.equal(blocks({ ...botTransportOnly, details: { ...botTransportOnly.details, externalUserId: '99' } }), true, 'a transport record naming another peer must block')
+assert.equal(blocks({ ...botTransportOnly, details: { ...botTransportOnly.details, channel: 'max' } }), true, 'a transport record from another channel must block')
+assert.equal(blocks(probeCollision('peer_identity_mismatch', { incomingPeerId: '42', existingPeerId: '99' }, { status: 'resolved' })), false, 'a resolved genuine entry is not open')
+assert.equal(blocks({ ...botTransportOnly, identityId: 'another-identity' }), false, 'an entry about another identity does not block this one')
+assert.equal(blocks({ ...botTransportOnly, identityId: 'another-identity', details: { ...botTransportOnly.details, reason: 'peer_identity_mismatch' } }), false, 'a genuine conflict about another identity does not block this one')
+
+// Contacts refuses to record any transport-class reason as a person conflict,
+// whatever the caller, so a writer regression cannot reopen the person lockout.
+const conflictWriterSource = read('gravity-mvp/src/modules/contacts/public/v1/channel-identity-conflict.ts')
+assert.match(conflictWriterSource, /function validate\(input: MarkChannelIdentityConflictInputV1\): void \{[\s\S]*?if \(isTransportCollisionReasonV1\(input\.channel, input\.reason\)\) \{\n\s+throw new TypeError\('transport collision is not a person identity conflict'\)/)
+assert.match(conflictWriterSource, /export async function markChannelIdentityConflictV1\([\s\S]*?\{\n\s+validate\(input\)/)
+for (const [channel, reason] of [
+    ['telegram', 'transport_connection_mismatch'], ['telegram', 'transport_connection_unproven'],
+    ['telegram', 'provider_account_mismatch'], ['telegram', 'provider_account_unproven'],
+    ['whatsapp', 'transport_mismatch'], ['whatsapp', 'transport_unbound'],
+    ['max', 'provider_account_mismatch'], ['max', 'provider_account_unproven'],
+]) assert.equal(evidenceState.isTransportCollisionReasonV1(channel, reason), true, `${channel} ${reason} is a transport reason`)
+for (const [channel, reason] of [
+    ['telegram', 'peer_identity_mismatch'], ['telegram', 'chat_kind_mismatch'], ['max', 'sender_identity_mismatch'],
+    ['max', 'sender_identity_unproven'], ['max', 'chat_kind_mismatch'], ['max', 'message_chat_mismatch'],
+]) assert.equal(evidenceState.isTransportCollisionReasonV1(channel, reason), false, `${channel} ${reason} is a person reason`)
+
 const profileDrawerSource = read(profileDrawerPath)
 assert.match(profileDrawerSource, /identityId: identity\.id/)
 assert.match(profileDrawerSource, /contactId: contact\.id/)

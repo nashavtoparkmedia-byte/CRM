@@ -152,6 +152,56 @@ assertCheck(
         && !messagingAdapter.includes('prisma.chat.create('),
     'Messaging can claim or fabricate a conversation whose owner, target or transport differs, or lets the identity account stamp scope, reject or stand in for a route account',
 )
+// Without the identity-stamp filter, only the two-row read plus the ambiguity
+// refusal stops one sender's conversations under two company accounts from
+// silently resolving to whichever route saw them first. Every conversation read
+// must stay a uniqueCandidate over at most two rows.
+const conversationReads = messagingAdapter.match(/await prisma\.chat\.findMany\(/g)?.length ?? 0
+assertCheck(
+    'every Messaging contact-conversation read is an ambiguity-refusing two-row unique-candidate read',
+    conversationReads === 4
+        && (messagingAdapter.match(/uniqueCandidate\(await prisma\.chat\.findMany\(\{/g)?.length ?? 0) === conversationReads
+        && (messagingAdapter.match(/\n\s+take: 2,\n/g)?.length ?? 0) === conversationReads
+        && /if \(unique\.length > 1\) throw new Error\('CONTACT_CONVERSATION_AMBIGUOUS'\)/.test(messagingAdapter),
+    'a conversation read can return one of several routes without refusing the ambiguity',
+)
+
+// The collided route itself must fail closed. A WhatsApp connection id names a
+// mutable pairing slot and sending attests no account, so once ingress observed
+// the peer on another slot, the Messaging outbound port every provider mutation
+// uses must refuse that conversation, and only that one. The predicate is
+// executed, not pattern-matched, so an always-false body cannot pass.
+const outboundPortPath = 'gravity-mvp/src/modules/messaging/public/v1/outbound-conversation-identity-runtime.ts'
+const outboundPort = read(outboundPortPath)
+const { default: ts } = await import('../../gravity-mvp/node_modules/typescript/lib/typescript.js')
+const outboundPortModule = await import(`data:text/javascript;base64,${Buffer.from(ts.transpileModule(outboundPort, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText).toString('base64')}`)
+const whatsappConversation = (audit, connectionId = 'slot-x') => ({
+    channel: 'whatsapp',
+    metadata: { connectionId, channelIdentityCollisionAudit: audit },
+})
+const slotMismatch = { channel: 'whatsapp', reason: 'transport_mismatch', incomingConnectionId: 'slot-y', existingConnectionId: 'slot-x' }
+const quarantined = (chat) => outboundPortModule.isOutboundRouteQuarantinedV1(chat)
+let quarantineBeforePreparer = false
+try {
+    outboundPortModule.registerOutboundConversationPreparerV1(async () => { throw new Error('PREPARER_REACHED') })
+    await outboundPortModule.prepareOutboundConversationV1(whatsappConversation([slotMismatch]))
+} catch (error) {
+    quarantineBeforePreparer = error?.message === 'CONTACT_CONVERSATION_TRANSPORT_COLLISION'
+}
+assertCheck(
+    'a detected WhatsApp slot mismatch quarantines exactly its own route at the Messaging outbound port',
+    quarantineBeforePreparer
+        && quarantined(whatsappConversation([slotMismatch])) === true
+        && quarantined(whatsappConversation([{ ...slotMismatch, existingConnectionId: undefined }])) === true
+        && quarantined(whatsappConversation([slotMismatch], 'slot-y')) === false
+        && quarantined(whatsappConversation([{ ...slotMismatch, reason: 'transport_unbound', existingConnectionId: null }])) === false
+        && quarantined(whatsappConversation([])) === false
+        && quarantined({ channel: 'telegram', metadata: { connectionId: 'slot-x', channelIdentityCollisionAudit: [{ ...slotMismatch, channel: 'telegram', reason: 'transport_connection_mismatch' }] } }) === false
+        && quarantined({ channel: 'max', metadata: { connectionId: 'max_scraper', channelIdentityCollisionAudit: [{ channel: 'max', reason: 'provider_account_mismatch' }] } }) === false,
+    'a WhatsApp route whose bound slot was contradicted can still send, or an unrelated route is refused',
+)
 assertCheck(
     'orchestration remains sequential and non-transactional',
     !/Promise\.all|\$transaction|\bcatch\s*\(|\bfor\s*\(|\bwhile\s*\(/.test(orchestrator)
