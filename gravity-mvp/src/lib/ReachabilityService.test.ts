@@ -326,7 +326,10 @@ describe('exact ContactIdentity reachability persistence', () => {
       await expect(prepareOpen('identity-a')).resolves.toMatchObject({ status: 'ready' })
     })
 
-    test('a transport mismatch on one route does not block a correct other route of the same Contact', async () => {
+    // Person level only. The collided WhatsApp conversation itself is quarantined
+    // for outbound by Messaging (outbound-conversation-identity-runtime.test.ts);
+    // here neither of the Contact's identities may be disabled by that fact.
+    test('a WhatsApp transport mismatch disables neither that identity nor the same Contact\'s Telegram identity', async () => {
       const telegramRow = identities.get('identity-a')!
       telegramRow.reachabilityStatus = 'confirmed'
       const whatsappRow: IdentityRow = {
