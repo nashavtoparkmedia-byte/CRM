@@ -342,6 +342,9 @@ class CallSession {
     }
 
     _emitTranscriptItem(role, content) {
+        // After 'ended' the finalize payload already references transcriptItems;
+        // nothing spoken or heard later belongs to this call's record.
+        if (this.state === 'ended') return
         const ordinal = ++this.transcriptOrdinal
         const receipt = {
             messageId: `audio-bridge-transcript:v1:${this.callUuid}:${ordinal}`,
@@ -442,6 +445,9 @@ class CallSession {
     }
 
     async _onSttFinal(text) {
+        // STT can deliver a final after stop(): no transcript item, no
+        // onUserSpoke 'active' state and no new turn for an ended call.
+        if (this.state === 'ended') return
         const trimmed = text.trim()
         if (!trimmed) return
 
@@ -599,6 +605,9 @@ class CallSession {
             this._setState('listening')
             return
         }
+        // The call may have ended while the model was thinking: do not record,
+        // speak or act on (save_lead_data, end_call) a reply nobody will hear.
+        if (this.state === 'ended') return
 
         if (result.kind === 'empty') {
             this._setState('listening')
@@ -712,6 +721,9 @@ class CallSession {
         let estimatedPlaybackMs = 0
         try {
             const wav = await tts.synthesize(text)
+            // Synthesis can outlast the call: never hand audio for an ended
+            // session to FreeSWITCH.
+            if (this.state === 'ended') return
             // broadcastWav() is fire-and-forget on the FS side
             // (uuid_broadcast doesn't block until playback completes).
             // It returns the estimated playback duration parsed from the

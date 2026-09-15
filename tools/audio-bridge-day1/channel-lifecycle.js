@@ -36,7 +36,14 @@
  *
  * The answer actions — mark answered, flush queued playback, start exactly one
  * uuid_audio_fork — run once per channel, on whichever event first establishes
- * both facts.
+ * both facts. The CRM session is bound once per channel, on its first PARK.
+ *
+ * Bounded waits: a channel parked before answer (early media) must be answered
+ * within preAnswerTimeoutMs (default 90 s, above FreeSWITCH's 60 s originate
+ * timeout). If neither the answer nor the hangup arrives — for example because
+ * the event socket reconnected and lost them — the channel is released exactly
+ * as on hangup: queued playback resolves with 0, the session stops and finalizes,
+ * and later events for the channel are ignored.
  *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
@@ -50,6 +57,7 @@
 
 const TRIGGER_EVENTS = new Set(['CHANNEL_PARK', 'CHANNEL_ANSWER', 'CHANNEL_HANGUP_COMPLETE'])
 const DEFAULT_DEAD_CHANNEL_TTL_MS = 10 * 60 * 1000
+const DEFAULT_PRE_ANSWER_TIMEOUT_MS = 90 * 1000
 const FORK_MIX_TYPES = new Set(['mono', 'mixed', 'stereo'])
 const CHANNEL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -101,13 +109,41 @@ function createChannelLifecycle({
     getSession,
     log = console.log,
     logError = console.error,
+    onForkFailure = () => {},
     deadChannelTtlMs = DEFAULT_DEAD_CHANNEL_TTL_MS,
+    preAnswerTimeoutMs = DEFAULT_PRE_ANSWER_TIMEOUT_MS,
     setTimer = setTimeout,
+    clearTimer = clearTimeout,
 }) {
+    // A misconfigured mix type would make every call deaf; refuse to start instead.
+    if (!FORK_MIX_TYPES.has(mixType)) {
+        throw new Error(`invalid audio fork mix type "${mixType}" (expected mono, mixed or stereo)`)
+    }
     const answeredChannels = new Set()   // the answered fact has been seen
     const forkedChannels = new Set()     // uuid_audio_fork start issued (exactly-once guard)
+    const boundChannels = new Set()      // CRM session bind requested (once per channel)
     const deadChannels = new Set()       // past CHANNEL_HANGUP_COMPLETE; reaped after the TTL
     const pendingBroadcasts = new Map()  // uuid -> [{ file, durMs, resolve }]
+    const preAnswerTimers = new Map()    // uuid -> timer armed by a pre-answer PARK
+
+    function clearPreAnswerTimer(uuid) {
+        const timer = preAnswerTimers.get(uuid)
+        if (timer === undefined) return
+        preAnswerTimers.delete(uuid)
+        try { clearTimer(timer) } catch {}
+    }
+
+    function armPreAnswerTimer(uuid) {
+        if (preAnswerTimers.has(uuid) || answeredChannels.has(uuid)) return
+        const timer = setTimer(() => {
+            preAnswerTimers.delete(uuid)
+            if (answeredChannels.has(uuid) || deadChannels.has(uuid)) return
+            logError(`[esl] ${uuid} not answered within ${preAnswerTimeoutMs} ms of CHANNEL_PARK -> releasing the channel`)
+            releaseChannel(uuid, 'pre-answer timeout')
+        }, preAnswerTimeoutMs)
+        if (timer && typeof timer.unref === 'function') timer.unref()
+        preAnswerTimers.set(uuid, timer)
+    }
 
     function flushPendingBroadcasts(uuid) {
         const queued = pendingBroadcasts.get(uuid)
@@ -137,7 +173,8 @@ function createChannelLifecycle({
         forkedChannels.add(uuid)
         const cmd = buildAudioForkCommand(uuid, forkWsUrl, mixType)
         if (!cmd) {
-            logError(`[esl] auto-fork REFUSED for ${uuid}: invalid channel uuid or mix type "${mixType}"`)
+            logError(`[esl] auto-fork REFUSED for ${uuid}: invalid channel uuid`)
+            notifyForkFailure(uuid, 'refused')
             return
         }
         log(`[esl] auto-forking audio for ${uuid} (ext ${ext}, mix=${mixType}, via ${via})`)
@@ -146,14 +183,26 @@ function createChannelLifecycle({
         Promise.resolve(reply)
             .then(out => {
                 const text = String(out).trim()
-                if (text.startsWith('+OK')) log(`[esl] auto-fork ${uuid}: ${text}`)
-                else logError(`[esl] auto-fork REJECTED for ${uuid}: ${text.slice(0, 120)}`)
+                if (text.startsWith('+OK')) {
+                    log(`[esl] auto-fork ${uuid}: ${text}`)
+                    return
+                }
+                logError(`[esl] auto-fork REJECTED for ${uuid}: ${text.slice(0, 120)}`)
+                notifyForkFailure(uuid, 'rejected')
             })
-            .catch(err => logError(`[esl] auto-fork FAILED for ${uuid}: ${err.message}`))
+            .catch(err => {
+                logError(`[esl] auto-fork FAILED for ${uuid}: ${err.message}`)
+                notifyForkFailure(uuid, 'failed')
+            })
+    }
+
+    function notifyForkFailure(uuid, reason) {
+        try { onForkFailure(uuid, reason) } catch (err) { logError(`[esl] fork failure hook threw for ${uuid}: ${err.message}`) }
     }
 
     function onAnswerFact(uuid, ext, via) {
         if (deadChannels.has(uuid)) return
+        clearPreAnswerTimer(uuid)
         if (!answeredChannels.has(uuid)) {
             answeredChannels.add(uuid)
             flushPendingBroadcasts(uuid)
@@ -161,16 +210,18 @@ function createChannelLifecycle({
         startFork(uuid, ext, via)
     }
 
-    function onHangupComplete(uuid) {
+    function releaseChannel(uuid, cause) {
+        clearPreAnswerTimer(uuid)
         const queued = pendingBroadcasts.get(uuid)
         if (queued && queued.length) {
-            log(`[esl] CHANNEL_HANGUP_COMPLETE ${uuid} -> dropping ${queued.length} unplayed broadcast(s)`)
+            log(`[esl] ${cause} ${uuid} -> dropping ${queued.length} unplayed broadcast(s)`)
             // durMs=0 lets an awaiting _speak() fall through its mute-window math.
             for (const item of queued) { try { item.resolve(0) } catch {} }
         }
         pendingBroadcasts.delete(uuid)
         answeredChannels.delete(uuid)
         forkedChannels.delete(uuid)
+        boundChannels.delete(uuid)
         if (!deadChannels.has(uuid)) {
             deadChannels.add(uuid)
             const timer = setTimer(() => deadChannels.delete(uuid), deadChannelTtlMs)
@@ -197,7 +248,7 @@ function createChannelLifecycle({
             headers['Caller-Destination-Number'],
         ].filter(Boolean)
         const matched = autoForkExtensions.find(ext => dialedExts.includes(ext))
-        const knownUuid = answeredChannels.has(uuid) || forkedChannels.has(uuid)
+        const knownUuid = answeredChannels.has(uuid) || forkedChannels.has(uuid) || boundChannels.has(uuid)
             || pendingBroadcasts.has(uuid) || deadChannels.has(uuid) || Boolean(getSession(uuid))
         // Channels that are neither ours nor already tracked never create state.
         if (!matched && !knownUuid) return
@@ -206,7 +257,7 @@ function createChannelLifecycle({
         log(`[esl] ${eventName} uuid=${uuid} dialed=[${dialedExts.join(',')}] matched=${matched ?? 'none'} answerState=${answerState ?? '?'}`)
 
         if (eventName === 'CHANNEL_HANGUP_COMPLETE') {
-            onHangupComplete(uuid)
+            releaseChannel(uuid, 'CHANNEL_HANGUP_COMPLETE')
             return
         }
         if (deadChannels.has(uuid)) {
@@ -217,10 +268,16 @@ function createChannelLifecycle({
         }
         const ext = matched ?? 'known'
         if (eventName === 'CHANNEL_PARK') {
-            let bind
-            try { bind = ensureSession(uuid, () => deadChannels.has(uuid)) } catch (err) { bind = Promise.reject(err) }
-            Promise.resolve(bind).catch(err => logError(`[esl] session bind failed for ${uuid}: ${err.message}`))
+            if (boundChannels.has(uuid)) {
+                log(`[esl] CHANNEL_PARK repeated for ${uuid}: session bind already requested`)
+            } else {
+                boundChannels.add(uuid)
+                let bind
+                try { bind = ensureSession(uuid, () => deadChannels.has(uuid)) } catch (err) { bind = Promise.reject(err) }
+                Promise.resolve(bind).catch(err => logError(`[esl] session bind failed for ${uuid}: ${err.message}`))
+            }
             if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK')
+            else armPreAnswerTimer(uuid)
             return
         }
         // CHANNEL_ANSWER: either matched (built after the transfer) or a channel
@@ -263,8 +320,10 @@ function createChannelLifecycle({
         snapshot: () => ({
             answered: [...answeredChannels],
             forked: [...forkedChannels],
+            bound: [...boundChannels],
             dead: [...deadChannels],
             pending: [...pendingBroadcasts.keys()],
+            preAnswerTimers: [...preAnswerTimers.keys()],
         }),
     }
 }
@@ -275,4 +334,5 @@ module.exports = {
     parseEslEventHeaders,
     buildAudioForkCommand,
     DEFAULT_DEAD_CHANNEL_TTL_MS,
+    DEFAULT_PRE_ANSWER_TIMEOUT_MS,
 }

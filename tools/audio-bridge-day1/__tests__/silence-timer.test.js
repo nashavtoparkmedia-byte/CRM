@@ -35,6 +35,8 @@ const mockState = {
     llmReturn: { kind: 'text', content: '(stub bot reply)' },
     // Captures of every LLM call so tests can assert what the bot saw.
     llmCalls: [],
+    // Optional promise that tts.synthesize awaits before returning.
+    synthGate: null,
 }
 
 function stub(relPath, exports) {
@@ -53,7 +55,10 @@ stub('../stt-router', {
 stub('../tts-router', {
     enabled: () => true,
     // Minimal WAV header — broadcastWav doesn't inspect it.
-    synthesize: async () => Buffer.alloc(44),
+    synthesize: async () => {
+        if (mockState.synthGate) await mockState.synthGate
+        return Buffer.alloc(44)
+    },
 })
 
 stub('../llm-client', {
@@ -104,6 +109,7 @@ function makeSession(overrides = {}) {
 function resetMocks() {
     mockState.llmReturn = { kind: 'text', content: '(stub bot reply)' }
     mockState.llmCalls = []
+    mockState.synthGate = null
 }
 
 // ---- Acceptance #1: listening arms the silence timer ----------------------
@@ -346,4 +352,60 @@ test('a turn whose LLM reply arrives after stop() does not synthesise speech', a
     assert.equal(s.state, 'ended')
     assert.equal(events.finalize.length, 1)
     assert.equal(s.silenceTimer, null)
+    assert.deepEqual(events.transcript, [], 'the late reply is not recorded as spoken')
+    assert.deepEqual(events.finalize[0].transcriptItems, [], 'the finalized transcript stays unchanged')
+})
+
+test('a tool call whose LLM reply arrives after stop() is not applied', async (t) => {
+    resetMocks()
+    let releaseLlm = null
+    mockState.llmReturn = new Promise(resolve => {
+        releaseLlm = () => resolve({ kind: 'function', name: 'save_lead_data', args: { field: 'city', value: 'late' }, callId: 'c1' })
+    })
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    const turn = s._doTurn(false)
+    s.stop()
+    releaseLlm()
+    await turn
+
+    assert.deepEqual(s.leadData, {}, 'lead data is not changed after stop()')
+    assert.equal(events.finalize.length, 1)
+})
+
+test('synthesis that finishes after stop() is never broadcast', async (t) => {
+    resetMocks()
+    let releaseSynth = null
+    mockState.synthGate = new Promise(resolve => { releaseSynth = resolve })
+    let broadcasts = 0
+    const { s, events, cleanup } = makeSession({
+        broadcastWav: async () => { broadcasts++; return 1000 },
+    })
+    t.after(cleanup)
+
+    const speaking = s._speak('Здравствуйте')
+    s.stop()
+    releaseSynth()
+    await speaking
+
+    assert.equal(broadcasts, 0, 'no playback handed to FreeSWITCH after stop()')
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1)
+})
+
+test('an STT final delivered after stop() records nothing and starts no turn', async (t) => {
+    resetMocks()
+    let spoke = 0
+    const { s, events, cleanup } = makeSession({ onUserSpoke: () => { spoke++ } })
+    t.after(cleanup)
+
+    s._setState('listening')
+    s.stop()
+    await s._onSttFinal('алло, да, слушаю')
+
+    assert.deepEqual(events.transcript, [], 'no user transcript item after stop()')
+    assert.equal(spoke, 0, 'onUserSpoke does not fire after stop()')
+    assert.equal(mockState.llmCalls.length, 0, 'no LLM turn after stop()')
+    assert.equal(events.finalize.length, 1)
 })

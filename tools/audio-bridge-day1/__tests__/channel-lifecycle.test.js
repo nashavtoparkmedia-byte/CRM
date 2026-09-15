@@ -24,6 +24,7 @@ const {
     parseEslEventHeaders,
     buildAudioForkCommand,
     DEFAULT_DEAD_CHANNEL_TTL_MS,
+    DEFAULT_PRE_ANSWER_TIMEOUT_MS,
 } = require('../channel-lifecycle')
 
 const EARLY_MEDIA_CAPTURE = [
@@ -58,7 +59,7 @@ const FORK_URL = 'ws://127.0.0.1:3030/audio'
 // ---- Helpers --------------------------------------------------------------
 
 function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}) {
-    const calls = { esl: [], ensure: [] }
+    const calls = { esl: [], ensure: [], forkFailures: [] }
     const logs = { info: [], error: [] }
     const timers = []
     const sessions = new Map()
@@ -71,11 +72,14 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}
         getSession: uuid => sessions.get(uuid),
         log: msg => logs.info.push(msg),
         logError: msg => logs.error.push(msg),
-        setTimer: (fn, ms) => { timers.push({ fn, ms }); return { unref() {} } },
+        onForkFailure: (uuid, reason) => calls.forkFailures.push({ uuid, reason }),
+        setTimer: (fn, ms) => { const t = { fn, ms, cleared: false, unref() {} }; timers.push(t); return t },
+        clearTimer: t => { t.cleared = true },
     })
     const forks = () => calls.esl.filter(c => c.startsWith('uuid_audio_fork '))
     const broadcasts = () => calls.esl.filter(c => c.startsWith('uuid_broadcast '))
-    return { lifecycle, calls, logs, timers, sessions, forks, broadcasts }
+    const liveTimers = ms => timers.filter(t => t.ms === ms && !t.cleared)
+    return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts }
 }
 
 function ev(name, uuid, dest, answerState) {
@@ -117,7 +121,7 @@ test('early media capture: exactly one fork, on CHANNEL_ANSWER, after the queued
     assert.equal(h.calls.ensure[0].uuid, EARLY_A)
     assert.ok(h.logs.info.some(l => l.includes(`auto-forking audio for ${EARLY_A}`) && l.includes('via CHANNEL_ANSWER')))
     assert.equal(h.forks().some(c => c.includes(EARLY_B)), false, 'callee leg never forked')
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], dead: [EARLY_A], pending: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [EARLY_A], pending: [], preAnswerTimers: [] })
 })
 
 test('no early media capture: exactly one fork, on the already-answered CHANNEL_PARK', async () => {
@@ -126,7 +130,7 @@ test('no early media capture: exactly one fork, on the already-answered CHANNEL_
         h.lifecycle.handleEvent(e)
         if (e['Event-Name'] === 'CHANNEL_ANSWER' && e['Unique-ID'] === NOEARLY_A) {
             // The answer is emitted before the transfer: it must not create any state.
-            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], dead: [], pending: [] })
+            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [], pending: [], preAnswerTimers: [] })
             assert.equal(h.calls.esl.length, 0)
             assert.equal(h.calls.ensure.length, 0)
         }
@@ -212,14 +216,25 @@ test('invalid channel uuid or mix type is refused locally and never sent', async
     assert.equal(buildAudioForkCommand(`${X} stop`, FORK_URL, 'mono'), null)
     assert.equal(buildAudioForkCommand(X, FORK_URL, 'quad'), null)
     assert.equal(buildAudioForkCommand(X, FORK_URL, ''), null)
-    const h = harness({ mixType: 'quad' })
-    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    const bad = 'not-a-uuid'
+    const h = harness()
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', bad, '9999', 'answered'))
     await tick()
     assert.equal(h.forks().length, 0)
     assert.equal(h.logs.error.filter(l => l.includes('auto-fork REFUSED')).length, 1)
-    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', bad, '9999', 'answered'))
     await tick()
     assert.equal(h.logs.error.filter(l => l.includes('auto-fork REFUSED')).length, 1, 'refusal is not retried')
+    assert.deepEqual(h.calls.forkFailures, [{ uuid: bad, reason: 'refused' }])
+})
+
+test('a misconfigured mix type stops the bridge from starting instead of making every call deaf', () => {
+    for (const mixType of ['quad', '', 'MONO']) {
+        assert.throws(() => harness({ mixType }), /invalid audio fork mix type/)
+    }
+    for (const mixType of ['mono', 'mixed', 'stereo']) {
+        assert.doesNotThrow(() => harness({ mixType }))
+    }
 })
 
 test('a rejected or failed fork is logged once and not retried', async () => {
@@ -230,6 +245,7 @@ test('a rejected or failed fork is logged once and not retried', async () => {
     await tick()
     assert.equal(rejected.forks().length, 1)
     assert.equal(rejected.logs.error.filter(l => l.includes('auto-fork REJECTED')).length, 1)
+    assert.deepEqual(rejected.calls.forkFailures, [{ uuid: X, reason: 'rejected' }], 'the failure is reported once')
 
     const failed = harness({ eslReply: async () => { throw new Error('ESL timeout') } })
     failed.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
@@ -238,6 +254,7 @@ test('a rejected or failed fork is logged once and not retried', async () => {
     await tick()
     assert.equal(failed.forks().length, 1)
     assert.equal(failed.logs.error.filter(l => l.includes('auto-fork FAILED')).length, 1)
+    assert.deepEqual(failed.calls.forkFailures, [{ uuid: X, reason: 'failed' }], 'the failure is reported once')
 })
 
 // ---- Hangup and cleanup -----------------------------------------------------
@@ -253,7 +270,7 @@ test('an unanswered call that hangs up: queued playback resolves 0, session stop
     assert.equal(session.stopCount, 1)
     assert.equal(h.forks().length, 0)
     assert.equal(h.broadcasts().length, 0)
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], dead: [X], pending: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [X], pending: [], preAnswerTimers: [] })
     assert.equal(await h.lifecycle.playOrQueue(X, '/tts/late.wav', 700), null, 'late playback is dropped')
     assert.equal(h.calls.esl.length, 0)
 })
@@ -274,13 +291,66 @@ test('dead channels are reaped after the TTL', () => {
     const h = harness()
     h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
     h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
-    assert.equal(h.timers.length, 1)
-    assert.equal(h.timers[0].ms, DEFAULT_DEAD_CHANNEL_TTL_MS)
+    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 0, 'the pre-answer timer is cleared on hangup')
+    const reapers = h.liveTimers(DEFAULT_DEAD_CHANNEL_TTL_MS)
+    assert.equal(reapers.length, 1)
     assert.ok(h.lifecycle.isDead(X))
-    h.timers[0].fn()
+    reapers[0].fn()
     assert.equal(h.lifecycle.isDead(X), false)
     h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
-    assert.equal(h.timers.length, 2)
+    assert.equal(h.timers.filter(t => t.ms === DEFAULT_DEAD_CHANNEL_TTL_MS).length, 2)
+})
+
+test('a repeated PARK binds the CRM session only once per channel', async () => {
+    const h = harness()
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    await tick()
+    assert.equal(h.calls.ensure.length, 1, 'one bind for the channel')
+    assert.equal(h.forks().length, 1)
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    assert.deepEqual(h.lifecycle.snapshot().bound, [], 'the bind mark is released on hangup')
+})
+
+test('a channel parked before answer is released when neither answer nor hangup arrives in time', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    const queued = h.lifecycle.playOrQueue(X, '/tts/greeting.wav', 1200)
+    const timers = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
+    assert.equal(timers.length, 1, 'one bounded pre-answer wait')
+    assert.ok(DEFAULT_PRE_ANSWER_TIMEOUT_MS > 60_000, 'longer than the FreeSWITCH originate timeout')
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 1, 'a repeated PARK does not add a second wait')
+
+    timers[0].fn()
+    assert.equal(await queued, 0, 'queued playback resolves 0')
+    assert.equal(session.stopCount, 1, 'the session is stopped and finalizes')
+    assert.ok(h.lifecycle.isDead(X))
+    assert.ok(h.logs.error.some(l => l.includes('not answered within')))
+
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    await tick()
+    assert.equal(h.forks().length, 0, 'a late answer after the release neither forks')
+    assert.equal(h.broadcasts().length, 0, 'nor plays')
+})
+
+test('answer before the pre-answer deadline cancels the wait', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    const [timer] = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    await tick()
+    assert.equal(timer.cleared, true)
+    assert.equal(h.forks().length, 1)
+    timer.fn()
+    assert.equal(session.stopCount, 0, 'a stale timer callback does not release an answered channel')
+    assert.equal(h.lifecycle.isDead(X), false)
 })
 
 test('the bind sees a hangup that happens while it awaits the CRM', () => {

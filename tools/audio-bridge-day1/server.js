@@ -130,7 +130,7 @@ const AUTO_FORK_EXTENSIONS = (process.env.AUTO_FORK_EXTENSIONS ?? '9999,9998')
 // and never the outbound side that uuid_broadcast writes our TTS into, so STT
 // cannot hear the bot (verified in scripts/test_mod_audio_fork.js, issue #20).
 // `mixed` delivers no frames while the leg's write side is silent. Override via
-// BRIDGE_FORK_MIX only if a regression appears.
+// BRIDGE_FORK_MIX only if a regression appears; an invalid value stops startup.
 const lifecycle = createChannelLifecycle({
     autoForkExtensions: AUTO_FORK_EXTENSIONS,
     forkWsUrl: FORK_WS_URL,
@@ -138,6 +138,7 @@ const lifecycle = createChannelLifecycle({
     eslApi: command => eslApi(command),
     ensureSession: (callUuid, isChannelDead) => ensureSessionForCall(callUuid, isChannelDead),
     getSession: callUuid => sessions.get(callUuid),
+    onForkFailure: (callUuid, reason) => opsLog('error', 'ai_call_audio_fork_failed', { callUuid, reason }),
 })
 
 // ── HTTP server: serves WAV for uuid_broadcast + control endpoints ─────────────
