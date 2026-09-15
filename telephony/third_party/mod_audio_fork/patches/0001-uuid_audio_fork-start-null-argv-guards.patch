@@ -6,6 +6,11 @@ mod_audio_fork: guard NULL argv dereferences on the uuid_audio_fork start path.
 2. The usage guard compared argv[1] case-sensitively while dispatch uses strcasecmp, so "START"
    with fewer than 4 tokens bypassed the guard and dereferenced a NULL URL/mix. The guard now uses
    strcasecmp as well; such commands return -USAGE.
+3. A start command whose URL failed to parse, or whose sampling rate was not a positive multiple of
+   8000 up to 64000, was logged as invalid and then started anyway: start_capture ran with an
+   uninitialised host/path/port, and a negative or overflowing rate sized the frame buffer from a
+   negative length (std::bad_alloc through C frames, SIGABRT). start_capture now runs only when
+   both are valid; otherwise the command returns -ERR. Valid commands are unchanged.
 
 Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork.
 Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
@@ -32,3 +37,19 @@ Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
            sampling = 16000;
          }
          else if (0 == strcmp(argv[4], "8k")) {
+@@ -265,10 +268,12 @@
+         if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
+           switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid websocket uri: %s\n", argv[2]);
+         }
+-				else if (sampling % 8000 != 0) {
+-          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid sample rate: %s\n", argv[4]);					
++				else if (sampling <= 0 || sampling > 64000 || sampling % 8000 != 0) {
++          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid sample rate: %d\n", sampling);
+ 				}
+-        status = start_capture(lsession, flags, host, port, path, sampling, sslFlags, bugname, metadata);
++        else {
++          status = start_capture(lsession, flags, host, port, path, sampling, sslFlags, bugname, metadata);
++        }
+ 			}
+       else {
+         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_fork cmd: %s\n", argv[1]);

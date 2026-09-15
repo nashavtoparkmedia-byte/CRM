@@ -102,11 +102,11 @@
   "patches": [
     {
       "path": "patches/0001-uuid_audio_fork-start-null-argv-guards.patch",
-      "sha256": "cabfda8fde905ad1f83de610f2c00948208c93253145b28d35497db5358b89d2",
+      "sha256": "9bb680aa112a61b76f7b5413af84f1894990653cde5041314974ef1fcb0a6676",
       "applies_to": [
         "mod_audio_fork.c"
       ],
-      "reason": "NULL argv guards on the start path: missing sampling rate (argv[4]) and non-lowercase START bypassing the argc<4 usage guard."
+      "reason": "Start-command argument guards: missing sampling rate (argv[4]); non-lowercase START bypassing the argc<4 usage guard; start_capture no longer runs after an invalid websocket URL or a sampling rate outside positive multiples of 8000 up to 64000."
     },
     {
       "path": "patches/0002-playAudio-require-string-audioContentType.patch",
@@ -115,10 +115,18 @@
         "lws_glue.cpp"
       ],
       "reason": "Ignore playAudio messages whose data lacks a string audioContentType instead of strcmp(NULL)."
+    },
+    {
+      "path": "patches/0003-refuse-runtime-unload.patch",
+      "sha256": "63d02df508594bbc75b25509128e9ecfd3ecd448df37f4c67394845fa42db088",
+      "applies_to": [
+        "mod_audio_fork.c"
+      ],
+      "reason": "The load function returns SWITCH_STATUS_NOUNLOAD so FreeSWITCH never runs AudioPipe::deinitialize(), which destroys libwebsockets contexts under running service threads (heap corruption and abort on unload, reload or graceful shutdown)."
     }
   ],
   "patched_sha256": {
-    "mod_audio_fork.c": "8d74fd221f44b133c49f979d97a3553a1f2b13a1ca71f1839633ed061caa84d4",
+    "mod_audio_fork.c": "d0437ad2b9c5a5d85f6ae0b4c85400bd68726441a41a2aeb11972fe89e921994",
     "lws_glue.cpp": "e1071b9f25e188822f2acdf4fee5f7f862d3ef55dc10b3b27fc42032d037bb12"
   },
   "fs_sdk_stubs": [
@@ -177,12 +185,15 @@
       "component": "base64.hpp",
       "spdx": "Zlib",
       "file": "upstream/base64.hpp",
-      "copyright": "Copyright (C) 2004-2008 René Nyffenegger (licence text in file header)"
+      "copyright": "Copyright (C) 2004-2008 René Nyffenegger; single-header repackaging by Peter Thorson (2012). Licence text reproduced in NOTICE."
     },
     {
       "component": "libwebsockets 4.3.3",
       "spdx": "MIT",
-      "notes": "Some bundled sources are BSD-3-Clause, BSD-2-Clause or CC0; the upstream LICENSE is installed in the image."
+      "notes": "Bundled sources under other permissive licences are listed in the upstream LICENSE; only lib/misc/sha-1.c (BSD-3-Clause) is compiled into this build.",
+      "copyright": "Copyright (C) 2010 - 2020 Andy Green <andy@warmcat.com> (source headers)",
+      "file": "LICENSE.libwebsockets (installed in the image from the tree-verified source)",
+      "license_file_sha256": "2b5dd8030691f3d1870a040f085c37e45d9ab9c684a7f1284f5f379c1e829b28"
     }
   ]
 }

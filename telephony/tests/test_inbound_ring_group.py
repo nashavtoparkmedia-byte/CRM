@@ -121,19 +121,41 @@ def test_trunk_password_global_comes_from_env_without_fallback() -> None:
     assert data == TRUNK_EXEC_SET, "megafon_password must read MEGAFON_SIP_PASSWORD with no fallback"
 
 
+SECRET_NAME = re.compile(r"pass|secret", re.I)
+# vm-password is the 3-digit voicemail PIN of an extension, not a credential for the trunk or ESL.
+NON_CREDENTIAL_PARAMS = {"vm-password"}
+# default_password is FreeSWITCH's stock vanilla value; no directory user or gateway uses it.
+NON_CREDENTIAL_GLOBALS = {"default_password"}
+# Other credentials (manager extensions, ESL) are env-backed with a placeholder fallback; the trunk
+# password has no fallback, which test_trunk_password_global_comes_from_env_without_fallback pins.
+ENV_EXEC_SET = re.compile(r"sh -c 'echo \$\{[A-Z][A-Z0-9_]*(:-[^}']*)?\}'")
+
+
+def telephony_config_sources() -> list[Path]:
+    return sorted((TELEPHONY / "conf").rglob("*.xml")) + sorted((REPO / "tools/fs-config").glob("*.xml"))
+
+
 def test_telephony_config_has_no_literal_sip_passwords() -> None:
+    # Parsed, so attribute order, quoting style and extra attributes cannot hide a literal.
     offenders = []
-    sources = sorted((TELEPHONY / "conf").rglob("*.xml")) + sorted((REPO / "tools/fs-config").glob("*.xml"))
-    for path in sources:
-        text = path.read_text(encoding="utf-8")
+    megafon_definitions = []
+    for path in telephony_config_sources():
         rel = path.relative_to(REPO)
-        for value in re.findall(r'<param\s+name="password"\s+value="([^"]*)"', text):
-            if not VARIABLE_REFERENCE.fullmatch(value):
-                offenders.append(f"{rel} param password")
-        for cmd, key in re.findall(r'<X-PRE-PROCESS\s+cmd="([^"]+)"\s+data="([A-Za-z0-9_]*password[A-Za-z0-9_]*)=', text, re.I):
-            if key != "default_password" and cmd != "exec-set":
-                offenders.append(f"{rel} X-PRE-PROCESS {key}")
-    assert offenders == [], f"literal SIP credentials in tracked telephony config: {offenders}"
+        for element in ET.parse(path).getroot().iter():
+            name = element.get("name") or ""
+            if SECRET_NAME.search(name) and name not in NON_CREDENTIAL_PARAMS:
+                if not VARIABLE_REFERENCE.fullmatch(element.get("value") or ""):
+                    offenders.append(f"{rel} <{element.tag} name={name}>")
+            if element.tag == "X-PRE-PROCESS":
+                key, _, value = (element.get("data") or "").partition("=")
+                if key == "megafon_password":
+                    megafon_definitions.append((str(rel), element.get("cmd"), value))
+                if SECRET_NAME.search(key) and key not in NON_CREDENTIAL_GLOBALS:
+                    if element.get("cmd") != "exec-set" or not ENV_EXEC_SET.fullmatch(value):
+                        offenders.append(f"{rel} X-PRE-PROCESS {key}")
+    assert offenders == [], f"literal credentials in tracked telephony config: {offenders}"
+    assert megafon_definitions == [("telephony/conf/vars.xml", "exec-set", "sh -c 'echo ${MEGAFON_SIP_PASSWORD}'")], \
+        "megafon_password must be defined exactly once, from the environment"
 
 
 def test_freeswitch_image_refuses_missing_or_placeholder_trunk_password() -> None:
@@ -145,14 +167,15 @@ def test_freeswitch_image_refuses_missing_or_placeholder_trunk_password() -> Non
     assert "set -x" not in script
     rejected = [None, "", "__FILL_LATER__", "__from_megafon_personal_cabinet__", "replace-with-megafon-sip-login",
                 "changeme101", "short7x", "has space1", 'quo"te1234', "star*12345", "-nabcdefgh", "dollar$1234",
-                "amp&12345", "lt<123456", "colon:12345", "SPIKE-REDACTED-value"]
+                "amp&12345", "lt<123456", "colon:12345", "SPIKE-REDACTED-value", "~/abcdefgh", "~abcdefgh1",
+                "pct%41abcdef", "back\\slash12", "semi;colon1", "hash#123456"]
     for index, candidate in enumerate(rejected):
         result = run_trunk_guard(candidate)
         assert result.returncode == 64, f"rejected case #{index} must exit 64"
         assert result.stdout == "", f"rejected case #{index} must print nothing on stdout"
         if candidate:
             assert candidate not in result.stderr, f"rejected case #{index} must not echo the value"
-    for index, candidate in enumerate(["dummyIsolated0001", "q9Zx/+Kf=Lm2@a%b,c.d~e-f_g"]):
+    for index, candidate in enumerate(["dummyIsolated0001", "q9Zx/+Kf=Lm2@ab,c.d~e-f_g"]):
         assert run_trunk_guard(candidate).returncode == 0, f"accepted case #{index} must pass"
 
 
@@ -166,6 +189,52 @@ def test_env_example_placeholder_fails_closed() -> None:
 def test_production_compose_requires_trunk_password() -> None:
     compose = (REPO / "deploy/docker-compose.production.yml").read_text(encoding="utf-8")
     assert "MEGAFON_SIP_PASSWORD: ${MEGAFON_SIP_PASSWORD:?" in compose
+    dev_compose = (TELEPHONY / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD:?" in dev_compose
+
+
+def test_image_bakes_no_trunk_credential() -> None:
+    offenders = [line for line in dockerfile_text().splitlines()
+                 if re.match(r"\s*(ENV|ARG|LABEL)\b", line) and re.search(r"MEGAFON|megafon_password", line)]
+    assert offenders == [], "the trunk credential must only reach the container at run time"
+
+
+# The Megafon trunk password that was committed before this change is compromised. This check looks
+# for it in every tracked text file without storing it: a 16-bit salted SHA-256 prefilter selects
+# candidates and a salted scrypt digest confirms them. Messages carry paths only.
+LEAK_SALT = b"yoko-crm-megafon-trunk-leak-denylist-v1"
+LEAK_LENGTH = 8
+LEAK_PREFILTER = "bef6"
+LEAK_CONFIRM = "8151601e0964874d11b78ba978cdd98eac1c650e7eccb943f5d9e83577689cce"
+
+
+def _leak_confirmed(window: bytes) -> bool:
+    return hashlib.scrypt(window, salt=LEAK_SALT, n=2**15, r=8, p=1, maxmem=64 * 1024 * 1024, dklen=32).hex() == LEAK_CONFIRM
+
+
+def find_compromised_trunk_password(data: bytes) -> bool:
+    for match in re.finditer(rb"(?<![A-Za-z0-9])[A-Za-z0-9]{%d,%d}(?![A-Za-z0-9])" % (LEAK_LENGTH, LEAK_LENGTH + 16), data):
+        run = match.group(0)
+        for start in range(len(run) - LEAK_LENGTH + 1):
+            window = run[start:start + LEAK_LENGTH]
+            if hashlib.sha256(LEAK_SALT + window).hexdigest()[:4] == LEAK_PREFILTER and _leak_confirmed(window):
+                return True
+    return False
+
+
+def test_compromised_trunk_password_is_in_no_tracked_file() -> None:
+    listed = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, check=True).stdout
+    offenders = []
+    for raw in filter(None, listed.split(b"\0")):
+        path = REPO / raw.decode("utf-8", "surrogateescape")
+        if not path.is_file() or path.stat().st_size > 4_000_000:
+            continue
+        data = path.read_bytes()
+        if b"\0" in data[:8000]:
+            continue
+        if find_compromised_trunk_password(data):
+            offenders.append(str(path.relative_to(REPO)))
+    assert offenders == [], f"the compromised trunk password is committed in: {offenders}"
 
 
 # --- mod_audio_fork image: pinned, provenanced, fail closed -------------------
@@ -190,11 +259,29 @@ def git_blob_id(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
+def dockerfile_arg(text: str, name: str) -> str:
+    values = re.findall(rf'^ARG {name}="([^"]*)"$', text, re.M)
+    assert len(values) == 1, f"ARG {name} must be defined exactly once with a value"
+    return values[0]
+
+
 def test_dockerfile_pins_images_and_preserves_telephony_config() -> None:
     text = dockerfile_text()
     assert ":latest" not in text, "release images must be pinned by digest"
-    for base in re.findall(r'^ARG (?:FREESWITCH_RUNTIME|DEBIAN_BUILDER)="([^"]+)"', text, re.M):
-        assert re.fullmatch(r"[a-z0-9./-]+@sha256:[0-9a-f]{64}", base), f"unpinned base image arg: {base.split('@')[0]}"
+    froms = [line for line in text.splitlines() if line.startswith("FROM")]
+    assert froms == ["FROM ${FREESWITCH_RUNTIME} AS runtime-base", "FROM ${DEBIAN_BUILDER} AS builder",
+                     "FROM ${FREESWITCH_RUNTIME} AS final"], "every stage must start from a digest-pinned ARG"
+    provenance = json.loads((VENDOR / "PROVENANCE.json").read_text(encoding="utf-8"))
+    for arg, recorded in (("FREESWITCH_RUNTIME", provenance["images"]["runtime"]),
+                          ("DEBIAN_BUILDER", provenance["images"]["builder"])):
+        base = dockerfile_arg(text, arg)
+        assert re.fullmatch(r"[a-z0-9./-]+@sha256:[0-9a-f]{64}", base), f"unpinned base image arg: {arg}"
+        assert base == recorded, f"ARG {arg} must equal PROVENANCE.json images"
+    assert dockerfile_arg(text, "DEBIAN_SNAPSHOT") == provenance["images"]["debian_snapshot"]
+    for prefix, key in (("FREESWITCH", "freeswitch_source"), ("LWS", "libwebsockets")):
+        dependency = provenance["build_dependencies"][key]
+        for field in ("tag", "commit", "tree"):
+            assert dockerfile_arg(text, f"{prefix}_{field.upper()}") == dependency[field], f"ARG {prefix}_{field.upper()} drift"
     for relative in ORIGINAL_CONFIG_COPIES + ["conf/dialplan/default/99_audio_fork_test.xml"]:
         target = "/usr/share/freeswitch/conf/vanilla/" + relative.removeprefix("conf/")
         assert f"COPY ./{relative} {target}" in text, f"missing COPY for {relative}"
@@ -203,6 +290,54 @@ def test_dockerfile_pins_images_and_preserves_telephony_config() -> None:
     for arg in ("MOD_AUDIO_FORK_SO_SHA256", "MODULES_CONF_SHA256"):
         value = re.search(rf'^ARG {arg}="([^"]*)"', text, re.M).group(1)
         assert re.fullmatch(r"[0-9a-f]{64}", value), f"{arg} must be pinned"
+
+
+FAIL_CLOSED_LINES = [
+    "printf 'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/%s bookworm main\\n' \"$DEBIAN_SNAPSHOT\" > /etc/apt/sources.list; \\",
+    "test \"$(git -C \"$dir\" rev-parse 'FETCH_HEAD^{commit}')\" = \"$commit\"; \\",
+    "test \"$(git -C \"$dir\" rev-parse 'FETCH_HEAD^{tree}')\" = \"$tree\"; \\",
+    "RUN set -eu; cd /usr/src/mod_audio_fork; sha256sum --strict -c /usr/src/mod_audio_fork.sha256",
+    "patch -p1 --forward --fuzz=0 --batch < ../patches/0001-uuid_audio_fork-start-null-argv-guards.patch; \\",
+    "patch -p1 --forward --fuzz=0 --batch < ../patches/0002-playAudio-require-string-audioContentType.patch; \\",
+    "patch -p1 --forward --fuzz=0 --batch < ../patches/0003-refuse-runtime-unload.patch; \\",
+    "sha256sum --strict -c /usr/src/mod_audio_fork.patched.sha256; \\",
+    "-Wl,--no-undefined -Wl,-z,defs -Wl,-z,now -Wl,-z,relro -Wl,--exclude-libs,ALL; \\",
+    "nm -D --defined-only /out/mod_audio_fork.so | grep -q ' D mod_audio_fork_module_interface$'; \\",
+    "test \"$actual_so\" = \"$MOD_AUDIO_FORK_SO_SHA256\"; \\",
+    "test \"$actual_needed\" = \"$MOD_AUDIO_FORK_NEEDED\"; \\",
+    "test \"$actual_conf\" = \"$MODULES_CONF_SHA256\"",
+    "test \"$(sha256sum /usr/lib/freeswitch/mod/mod_audio_fork.so | cut -d' ' -f1)\" = \"$MOD_AUDIO_FORK_SO_SHA256\"; \\",
+    "linkage=\"$(LD_TRACE_LOADED_OBJECTS=1 LD_WARN=yes LD_BIND_NOW=yes /lib64/ld-linux-x86-64.so.2 /usr/lib/freeswitch/mod/mod_audio_fork.so 2>&1)\"; \\",
+    "if printf '%s\\n' \"$linkage\" | grep -Eq 'not found|undefined symbol'; then printf '%s\\n' \"$linkage\"; exit 1; fi",
+]
+
+
+def test_dockerfile_keeps_every_fail_closed_check() -> None:
+    lines = [line.strip() for line in dockerfile_text().splitlines()]
+    missing = [index for index, required in enumerate(FAIL_CLOSED_LINES) if required not in lines]
+    assert missing == [], f"fail-closed build checks removed (FAIL_CLOSED_LINES indexes): {missing}"
+    text = dockerfile_text()
+    assert "|| true" not in text and "|| :" not in text, "a masked exit status defeats fail-closed checks"
+    compound = [line for line in text.splitlines() if line.startswith("RUN ") and (line.rstrip().endswith("\\") or ";" in line)]
+    assert all(line.startswith("RUN set -eu;") for line in compound), "multi-command RUN steps must start with set -eu"
+
+
+def git_tree_id(entries: dict[str, bytes]) -> str:
+    body = b"".join(b"100644 " + name.encode() + b"\0" + bytes.fromhex(git_blob_id(data))
+                    for name, data in sorted(entries.items(), key=lambda item: item[0].encode()))
+    return hashlib.sha1(b"tree %d\0" % len(body) + body).hexdigest()
+
+
+def test_vendored_module_is_the_archived_software_heritage_directory() -> None:
+    provenance = json.loads((VENDOR / "PROVENANCE.json").read_text(encoding="utf-8"))
+    module_files = {path.name: path.read_bytes() for path in (VENDOR / "upstream").iterdir()
+                    if path.is_file() and path.name != "LICENSE.drachtio-freeswitch-modules"}
+    assert len(module_files) == 12
+    # External anchors, independent of the hashes recorded in this repository.
+    assert git_tree_id(module_files) == "057788a171657382b245c329fd8aaa31202f5f76"
+    assert provenance["upstream"]["archive"]["module_directory"] == "swh:1:dir:057788a171657382b245c329fd8aaa31202f5f76"
+    root_license = (VENDOR / "upstream/LICENSE.drachtio-freeswitch-modules").read_bytes()
+    assert git_blob_id(root_license) == "9b7d7fd89664ad92898b3b00bb9409932a2335a5"
 
 
 def test_vendored_mod_audio_fork_matches_provenance_and_dockerfile_pins() -> None:
@@ -237,7 +372,11 @@ if __name__ == "__main__":
         test_freeswitch_image_refuses_missing_or_placeholder_trunk_password,
         test_env_example_placeholder_fails_closed,
         test_production_compose_requires_trunk_password,
+        test_image_bakes_no_trunk_credential,
+        test_compromised_trunk_password_is_in_no_tracked_file,
         test_dockerfile_pins_images_and_preserves_telephony_config,
+        test_dockerfile_keeps_every_fail_closed_check,
+        test_vendored_module_is_the_archived_software_heritage_directory,
         test_vendored_mod_audio_fork_matches_provenance_and_dockerfile_pins,
     ]
     for test in tests:
