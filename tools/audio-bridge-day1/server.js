@@ -139,6 +139,9 @@ const lifecycle = createChannelLifecycle({
     ensureSession: (callUuid, isChannelDead) => ensureSessionForCall(callUuid, isChannelDead),
     getSession: callUuid => sessions.get(callUuid),
     onForkFailure: (callUuid, reason) => opsLog('error', 'ai_call_audio_fork_failed', { callUuid, reason }),
+    // Interval for re-checking a channel parked before answer; the default (90 s) is the
+    // production value, the variable exists so the isolated runtime probe can exercise it.
+    preAnswerTimeoutMs: Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) > 0 ? Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) : undefined,
 })
 
 // ── HTTP server: serves WAV for uuid_broadcast + control endpoints ─────────────

@@ -73,12 +73,17 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}
         log: msg => logs.info.push(msg),
         logError: msg => logs.error.push(msg),
         onForkFailure: (uuid, reason) => calls.forkFailures.push({ uuid, reason }),
-        setTimer: (fn, ms) => { const t = { fn, ms, cleared: false, unref() {} }; timers.push(t); return t },
+        setTimer: (fn, ms) => {
+            const t = { ms, cleared: false, fired: false, unref() {} }
+            t.fn = () => { t.fired = true; fn() }
+            timers.push(t)
+            return t
+        },
         clearTimer: t => { t.cleared = true },
     })
     const forks = () => calls.esl.filter(c => c.startsWith('uuid_audio_fork '))
     const broadcasts = () => calls.esl.filter(c => c.startsWith('uuid_broadcast '))
-    const liveTimers = ms => timers.filter(t => t.ms === ms && !t.cleared)
+    const liveTimers = ms => timers.filter(t => t.ms === ms && !t.cleared && !t.fired)
     return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts }
 }
 
@@ -314,28 +319,83 @@ test('a repeated PARK binds the CRM session only once per channel', async () => 
     assert.deepEqual(h.lifecycle.snapshot().bound, [], 'the bind mark is released on hangup')
 })
 
-test('a channel parked before answer is released when neither answer nor hangup arrives in time', async () => {
-    const h = harness()
+function dumpReply(state) {
+    return async cmd => (cmd.startsWith('uuid_dump ') ? (state === null ? '-ERR No such channel!' : `Event-Name: CHANNEL_DATA\nAnswer-State: ${state}\nUnique-ID: ${X}\n`) : '+OK')
+}
+
+test('an unanswered channel that FreeSWITCH no longer has is released when its hangup event was lost', async () => {
+    const h = harness({ eslReply: dumpReply(null) })
     const session = fakeSession()
     h.sessions.set(X, session)
     h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
     const queued = h.lifecycle.playOrQueue(X, '/tts/greeting.wav', 1200)
     const timers = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
-    assert.equal(timers.length, 1, 'one bounded pre-answer wait')
-    assert.ok(DEFAULT_PRE_ANSWER_TIMEOUT_MS > 60_000, 'longer than the FreeSWITCH originate timeout')
+    assert.equal(timers.length, 1, 'one pending answer-state check')
     h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
-    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 1, 'a repeated PARK does not add a second wait')
+    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 1, 'a repeated PARK does not add a second check')
 
     timers[0].fn()
+    await tick()
+    assert.deepEqual(h.calls.esl, [`uuid_dump ${X}`], 'FreeSWITCH is asked, nothing else is sent')
     assert.equal(await queued, 0, 'queued playback resolves 0')
     assert.equal(session.stopCount, 1, 'the session is stopped and finalizes')
     assert.ok(h.lifecycle.isDead(X))
-    assert.ok(h.logs.error.some(l => l.includes('not answered within')))
 
     h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
     await tick()
     assert.equal(h.forks().length, 0, 'a late answer after the release neither forks')
     assert.equal(h.broadcasts().length, 0, 'nor plays')
+})
+
+test('a channel still ringing past the check interval keeps waiting, however long it rings', async () => {
+    const h = harness({ eslReply: dumpReply('early') })
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    const queued = h.lifecycle.playOrQueue(X, '/tts/greeting.wav', 1200)
+    for (let round = 0; round < 3; round++) {
+        const [timer] = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
+        assert.ok(timer, `check ${round + 1} is armed`)
+        timer.fn()
+        await tick()
+    }
+    assert.equal(session.stopCount, 0, 'a ringing call is never released')
+    assert.equal(h.lifecycle.isDead(X), false)
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    assert.equal(await queued, 1200, 'the greeting plays when the callee finally answers')
+    await tick()
+    assert.equal(h.forks().length, 1, 'and the call is forked once')
+    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 0, 'no check remains after answer')
+})
+
+test('an answered channel whose CHANNEL_ANSWER was lost gets its answer actions from the check', async () => {
+    const h = harness({ eslReply: dumpReply('answered') })
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    const queued = h.lifecycle.playOrQueue(X, '/tts/greeting.wav', 1200)
+    h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)[0].fn()
+    await tick()
+    assert.equal(await queued, 1200, 'the queued greeting is flushed')
+    await tick()
+    assert.equal(h.forks().length, 1, 'exactly one fork')
+    assert.ok(h.logs.info.some(l => l.includes(`auto-forking audio for ${X}`) && l.includes('via uuid_dump')))
+    assert.equal(session.stopCount, 0)
+    assert.equal(h.lifecycle.isDead(X), false)
+})
+
+test('a failed answer-state check neither releases nor forks and is retried', async () => {
+    const h = harness({ eslReply: async cmd => { if (cmd.startsWith('uuid_dump ')) throw new Error('ESL timeout'); return '+OK' } })
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)[0].fn()
+    await tick()
+    await tick()
+    assert.equal(session.stopCount, 0)
+    assert.equal(h.forks().length, 0)
+    assert.equal(h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS).length, 1, 'the check is re-armed')
+    assert.ok(h.logs.error.some(l => l.includes('answer-state check failed')))
 })
 
 test('answer before the pre-answer deadline cancels the wait', async () => {

@@ -38,12 +38,13 @@
  * uuid_audio_fork — run once per channel, on whichever event first establishes
  * both facts. The CRM session is bound once per channel, on its first PARK.
  *
- * Bounded waits: a channel parked before answer (early media) must be answered
- * within preAnswerTimeoutMs (default 90 s, above FreeSWITCH's 60 s originate
- * timeout). If neither the answer nor the hangup arrives — for example because
- * the event socket reconnected and lost them — the channel is released exactly
- * as on hangup: queued playback resolves with 0, the session stops and finalizes,
- * and later events for the channel are ignored.
+ * Lost events: a channel parked before answer (early media) is re-checked with
+ * FreeSWITCH every preAnswerTimeoutMs (default 90 s) until it is answered or hung
+ * up, because an event-socket reconnect can lose either event. FreeSWITCH's own
+ * state decides: a channel that no longer exists is released exactly as on
+ * hangup (queued playback resolves 0, the session stops and finalizes, later
+ * events are ignored); a channel that is already answered gets its answer
+ * actions; a channel still ringing keeps waiting, however long the far end rings.
  *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
@@ -134,15 +135,53 @@ function createChannelLifecycle({
     }
 
     function armPreAnswerTimer(uuid) {
-        if (preAnswerTimers.has(uuid) || answeredChannels.has(uuid)) return
+        if (preAnswerTimers.has(uuid) || answeredChannels.has(uuid) || deadChannels.has(uuid)) return
         const timer = setTimer(() => {
             preAnswerTimers.delete(uuid)
             if (answeredChannels.has(uuid) || deadChannels.has(uuid)) return
-            logError(`[esl] ${uuid} not answered within ${preAnswerTimeoutMs} ms of CHANNEL_PARK -> releasing the channel`)
-            releaseChannel(uuid, 'pre-answer timeout')
+            reconcileUnansweredChannel(uuid)
         }, preAnswerTimeoutMs)
         if (timer && typeof timer.unref === 'function') timer.unref()
         preAnswerTimers.set(uuid, timer)
+    }
+
+    // No CHANNEL_ANSWER or CHANNEL_HANGUP_COMPLETE within preAnswerTimeoutMs of a
+    // pre-answer PARK: ask FreeSWITCH instead of guessing.
+    function reconcileUnansweredChannel(uuid) {
+        if (!CHANNEL_UUID_PATTERN.test(String(uuid))) {
+            logError(`[esl] ${uuid} is not a channel uuid FreeSWITCH can be asked about -> releasing`)
+            releaseChannel(uuid, 'unverifiable channel')
+            return
+        }
+        let reply
+        try { reply = eslApi(`uuid_dump ${uuid}`) } catch (err) { reply = Promise.reject(err) }
+        Promise.resolve(reply)
+            .then(out => {
+                if (answeredChannels.has(uuid) || deadChannels.has(uuid)) return
+                const text = String(out)
+                const answerState = parseEslEventHeaders(text)['Answer-State']
+                if (answerState === 'answered') {
+                    logError(`[esl] ${uuid} is answered but its CHANNEL_ANSWER was not delivered -> running answer actions`)
+                    onAnswerFact(uuid, 'known', 'uuid_dump')
+                    return
+                }
+                if (answerState) {
+                    log(`[esl] ${uuid} still ${answerState} ${preAnswerTimeoutMs} ms after CHANNEL_PARK -> waiting`)
+                    armPreAnswerTimer(uuid)
+                    return
+                }
+                if (text.trim().startsWith('-ERR')) {
+                    logError(`[esl] ${uuid} no longer exists and its CHANNEL_HANGUP_COMPLETE was not delivered -> releasing`)
+                    releaseChannel(uuid, 'channel gone')
+                    return
+                }
+                logError(`[esl] ${uuid} unreadable uuid_dump reply -> waiting`)
+                armPreAnswerTimer(uuid)
+            })
+            .catch(err => {
+                logError(`[esl] ${uuid} answer-state check failed: ${err.message} -> waiting`)
+                armPreAnswerTimer(uuid)
+            })
     }
 
     function flushPendingBroadcasts(uuid) {
