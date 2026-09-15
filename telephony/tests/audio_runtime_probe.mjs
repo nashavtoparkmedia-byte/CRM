@@ -2,8 +2,9 @@
 // Isolated audio-runtime probe for the CRM FreeSWITCH image and the AI audio bridge.
 //
 // Proves, against real containers and without any provider, trunk or phone:
-//   S. the probe network is internal, has no host address (isolated gateway mode) and no container
-//      on it can reach a host address, the internet or DNS — checked before FreeSWITCH starts;
+//   S. the probe network is internal, has no host address (isolated gateway mode), containers run
+//      without IPv6 and no container can reach a host address, the internet or DNS — checked
+//      before FreeSWITCH starts;
 //   D. the image refuses to start without a real MEGAFON_SIP_PASSWORD;
 //   A. the image runs FreeSWITCH 1.10.12 with mod_audio_fork loaded, uuid_audio_fork registered,
 //      extensions 9999/9998 installed, existing telephony modules loaded, the module opens no
@@ -17,16 +18,21 @@
 //      forks exactly once, after answer, and delivers the callee's own audio to the bound CallSession
 //      whether or not the callee sends early media — including a fast answer, a late CRM bind, a
 //      rejected call, a hangup while the CRM bind is in flight, an answer after the originating
-//      client gave up (as the CRM does after 10 s) and concurrent calls — alongside record_session,
-//      with one finalize per call and full cleanup;
-//   N. (with --baseline-bridge-dir) the previous bridge never forks the no-early-media call.
+//      client gave up (as the CRM does after 10 s), a callee that rings past the bridge's
+//      answer-state check and concurrent calls — alongside record_session, with one finalize per
+//      call and full cleanup;
+//   N. (with --baseline-bridge-dir) the previous bridge never forks the no-early-media call;
+//   Z. FreeSWITCH never restarted, and stopping the container ends it without an abort.
 //
 // Safety: every container is named probe-art-<run>-* and attached only to a fresh internal network
 // in isolated gateway mode, so containers have no route to the host or anywhere else. No port is
 // published and DNS points at an unroutable resolver. The host talks to FreeSWITCH only through a
 // driver container on that network, over `docker exec` stdin/stdout. The ESL and trunk passwords are
 // random per run, reach containers through 0600 env files that are deleted at teardown, and are
-// never printed. No production image is started and no other container is inspected or modified.
+// never printed. Images are never pulled. FreeSWITCH runs only from the candidate image; the bridge
+// image (default crm/audio-bridge:latest) supplies only the Node runtime and its node_modules — the
+// bridge code under test and the probe are mounted read-only from the tree and no credential is
+// baked into it. No other container is inspected or modified.
 //
 // Usage (needs Docker):
 //   node telephony/tests/audio_runtime_probe.mjs --image <candidate> --out <dir outside the repo>
@@ -50,6 +56,8 @@ const MODE = process.env.PROBE_MODE ?? 'run'
 const PROBE_PATH = fileURLToPath(import.meta.url)
 const REPO_ROOT = path.resolve(path.dirname(PROBE_PATH), '../..')
 const CANDIDATE_TONES = [425, 440, 700, 880, 1234]
+// Shorter than every other case's ring (at most 3.6 s) and far shorter than C10's 15 s ring.
+const PRE_ANSWER_CHECK_MS = 5000
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // ---- PCM analysis (shared by sink and STT stub) ------------------------------------------------
@@ -340,7 +348,11 @@ async function runDriver() {
                 connections.delete(msg.conn)
                 reply(true, 'closed')
             } else if (msg.op === 'reach') {
-                reply(true, await reachability(msg.targets ?? [], msg.hostnames ?? []))
+                const result = await reachability(msg.targets ?? [], msg.hostnames ?? [])
+                let inet6 = ''
+                try { inet6 = fs.readFileSync('/proc/net/if_inet6', 'utf8') } catch {}
+                result.ipv6_non_loopback_addresses = inet6.split('\n').filter(line => line.trim() && !/\slo$/.test(line.trim())).length
+                reply(true, result)
             } else {
                 throw new Error(`unknown op ${msg.op}`)
             }
@@ -387,7 +399,10 @@ class Driver {
             else waiter.reject(new Error(msg.value))
         })
         this.proc.stderr.on('data', data => { this.stderr = `${this.stderr}${data}`.slice(-4000) })
+        this.proc.stdin.on('error', () => {})
+        this.exited = false
         this.proc.on('exit', () => {
+            this.exited = true
             for (const waiter of this.waiters.values()) { clearTimeout(waiter.timer); waiter.reject(new Error('probe driver exited')) }
             this.waiters.clear()
         })
@@ -395,6 +410,7 @@ class Driver {
 
     request(op, payload = {}, timeoutMs = 30000) {
         return new Promise((resolve, reject) => {
+            if (this.exited) { reject(new Error('probe driver exited')); return }
             const id = ++this.seq
             const timer = setTimeout(() => { this.waiters.delete(id); reject(new Error(`driver ${op} timed out after ${timeoutMs} ms`)) }, timeoutMs)
             this.waiters.set(id, { resolve, reject, timer })
@@ -508,6 +524,14 @@ const CALLEE_DIALPLAN = `<include>
     <action application="playback" data="tone_stream://%(9000,0,1234)"/>
     <action application="hangup"/>
   </condition></extension>
+  <extension name="probe_callee_long_ringing_early_media"><condition field="destination_number" expression="^5563$">
+    <action application="unset" data="execute_on_answer"/>
+    <action application="pre_answer"/>
+    <action application="playback" data="tone_stream://%(400,200,425);loops=25"/>
+    <action application="answer"/>
+    <action application="playback" data="tone_stream://%(9000,0,1234)"/>
+    <action application="hangup"/>
+  </condition></extension>
   <extension name="probe_callee_no_early_media_880"><condition field="destination_number" expression="^5561$">
     <action application="unset" data="execute_on_answer"/>
     <action application="sleep" data="1500"/>
@@ -547,6 +571,7 @@ async function runProbe() {
     const eslPassword = crypto.randomBytes(24).toString('hex')
     const trunkPassword = `probe${crypto.randomBytes(12).toString('hex')}`
     const secretDir = fs.mkdtempSync(path.join(out, '.probe-secrets-'))
+    process.once('exit', () => fs.rmSync(secretDir, { recursive: true, force: true }))
     fs.chmodSync(secretDir, 0o700)
     const envFile = (name, entries) => {
         const file = path.join(secretDir, name)
@@ -566,11 +591,13 @@ async function runProbe() {
         git_dirty_paths: spawnSync('git', ['status', '--porcelain'], { cwd: REPO_ROOT, encoding: 'utf8' }).stdout.split('\n').filter(Boolean).length,
         candidate_image: args.image,
         candidate_image_id: docker(['image', 'inspect', args.image, '--format', '{{.Id}}'], { allowFail: true }),
+        candidate_layers_sha256: crypto.createHash('sha256').update(docker(['image', 'inspect', args.image, '--format', '{{json .RootFS.Layers}}'], { allowFail: true }) ?? '').digest('hex'),
         bridge_image: args.bridgeImage,
         bridge_image_id: docker(['image', 'inspect', args.bridgeImage, '--format', '{{.Id}}'], { allowFail: true }),
         bridge_dir_files: bridgeFiles(args.bridgeDir),
         baseline_bridge_dir_files: args.baselineBridgeDir ? bridgeFiles(args.baselineBridgeDir) : null,
     }
+    if (!provenance.candidate_image_id || !provenance.bridge_image_id) throw new Error('candidate and bridge images must exist locally (images are never pulled)')
     const check = (id, name, pass, detail = '') => {
         results.push({ id, name, pass: Boolean(pass), detail })
         console.log(`${pass ? 'PASS' : 'FAIL'} ${id} ${name}${detail ? ` — ${detail}` : ''}`)
@@ -589,12 +616,20 @@ async function runProbe() {
         docker(['network', 'rm', network], { allowFail: true })
     }
     const onSignal = signal => { console.log(`probe interrupted by ${signal}; tearing down`); teardown(); process.exit(130) }
-    process.once('SIGINT', onSignal)
-    process.once('SIGTERM', onSignal)
+    for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, onSignal)
+    const onFatal = err => {
+        console.log(`probe crashed: ${err?.message ?? err}; tearing down`)
+        try { fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ run, provenance, results, crashed: String(err?.message ?? err) }, null, 1)) } catch {}
+        teardown()
+        process.exit(70)
+    }
+    process.once('uncaughtException', onFatal)
+    process.once('unhandledRejection', onFatal)
 
     const runContainer = (name, extra) => {
         created.push(name)
-        docker(['run', '-d', '--name', name, '--label', 'io.yoko.probe=audio-runtime', '--network', network, '--dns', '127.0.0.254', ...extra])
+        docker(['run', '-d', '--pull=never', '--name', name, '--label', 'io.yoko.probe=audio-runtime', '--network', network, '--dns', '127.0.0.254',
+            '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1', '--sysctl', 'net.ipv6.conf.default.disable_ipv6=1', ...extra])
     }
     const fsName = `${prefix}-fs`
 
@@ -611,9 +646,13 @@ async function runProbe() {
         const ip = { fs: `${base}.10`, control: `${base}.11`, sink: `${base}.20`, bridge: `${base}.30`, driver: `${base}.40` }
         const netInfo = JSON.parse(docker(['network', 'inspect', network]))[0]
         const bridgeIface = `br-${netInfo.Id.slice(0, 12)}`
-        const hostAddr = spawnSync('ip', ['-4', '-o', 'addr', 'show', 'dev', bridgeIface], { encoding: 'utf8' }).stdout.trim()
-        provenance.network = { subnet, internal: netInfo.Internal, options: netInfo.Options, host_ipv4_on_bridge: hostAddr !== '' }
-        const isolated = netInfo.Internal === true && netInfo.Options?.['com.docker.network.bridge.gateway_mode_ipv4'] === 'isolated' && hostAddr === ''
+        // The interface must be visible to this process; otherwise the address check proves nothing.
+        const linkVisible = spawnSync('ip', ['link', 'show', 'dev', bridgeIface], { encoding: 'utf8' }).status === 0
+        const addr4 = spawnSync('ip', ['-4', '-o', 'addr', 'show', 'dev', bridgeIface], { encoding: 'utf8' })
+        const hostAddr = addr4.status === 0 ? addr4.stdout.trim() : null
+        provenance.network = { subnet, internal: netInfo.Internal, enable_ipv6: netInfo.EnableIPv6, options: netInfo.Options, bridge_visible: linkVisible, host_ipv4_on_bridge: hostAddr !== '' }
+        const isolated = netInfo.Internal === true && netInfo.EnableIPv6 !== true && linkVisible && hostAddr === ''
+            && netInfo.Options?.['com.docker.network.bridge.gateway_mode_ipv4'] === 'isolated'
         check('S1', 'probe network is internal with no host address (isolated gateway)', isolated, `${subnet} ${bridgeIface}`)
         if (!isolated) throw new Error('refusing to continue without an isolated network')
 
@@ -626,7 +665,7 @@ async function runProbe() {
         const reach = await driver.request('reach', { targets: [...gateway, ...offSubnet], hostnames: [...hostnames, 'example.com'] }, 60000)
         const unreachable = code => ['ENETUNREACH', 'EHOSTUNREACH', 'TIMEOUT'].includes(code)
         const reachOk = Object.values(reach).every(v => v !== 'CONNECTED' && v !== 'RESOLVED')
-            && offSubnet.every(t => unreachable(reach[t])) && hostnames.length > 0
+            && offSubnet.every(t => unreachable(reach[t])) && hostnames.length > 0 && reach.ipv6_non_loopback_addresses === 0
         provenance.reachability = reach
         check('S2', 'no probe container can reach the host, the internet or the trunk hostname', reachOk,
             Object.entries(reach).map(([k, v]) => `${k}=${v}`).join(' '))
@@ -867,6 +906,7 @@ async function runProbe() {
                 ['big', `${sinkUrl}?label=big mono 2147480000 big`],
                 ['zero', `${sinkUrl}?label=zero mono abc zero`],
                 ['badurl', 'not-a-url mono 8000 badurl'],
+                ['longurl', `ws://${ip.sink}:8080/audio?pad=${'x'.repeat(600)} mono 8000 longurl`],
             ]
             const replies = []
             for (const [tag, rest] of invalid) replies.push([tag, await esl.api(`uuid_audio_fork ${b} start ${rest}`)])
@@ -885,6 +925,14 @@ async function runProbe() {
         if (args.baselineBridgeDir) await runLifecycle({ ...shared_, bridgeDir: args.baselineBridgeDir, idPrefix: 'N', negativeControl: true })
         check('Z1', 'FreeSWITCH never restarted during the probe', await alive())
         await esl.close()
+        const stopStarted = Date.now()
+        docker(['stop', '-t', '20', fsName])
+        const stopped = JSON.parse(docker(['inspect', fsName]))[0].State
+        const tail = dockerLogs(fsName).split('\n').slice(-200).join('\n')
+        const aborted = /Aborted|core dumped|Segmentation fault|double free|corrupted/i.test(tail)
+        check('Z2', 'stopping the FreeSWITCH container ends it without an abort or crash',
+            stopped.Status === 'exited' && !stopped.OOMKilled && [0, 143].includes(stopped.ExitCode) && !aborted,
+            `exit=${stopped.ExitCode} in ${Date.now() - stopStarted} ms aborted=${aborted}`)
     } catch (err) {
         check('X', 'probe aborted', false, err.message)
     } finally {
@@ -913,6 +961,7 @@ async function runLifecycle(ctx) {
         '-e', `FS_ESL_HOST=${ip.fs}`, '-e', 'FS_ESL_PORT=8021',
         '-e', 'AUDIO_BRIDGE_PORT=3030', '-e', `BRIDGE_LAN_IP=${ip.bridge}`,
         '-e', 'BRIDGE_AUDIO_DIR=/shared/tts', '-e', 'BRIDGE_AUDIO_DIR_FS=/shared/tts', '-e', 'CRM_BASE_URL=http://127.0.0.254:9',
+        '-e', `BRIDGE_PRE_ANSWER_CHECK_MS=${PRE_ANSWER_CHECK_MS}`,
         '--entrypoint', 'node', args.bridgeImage, '--import', '/probe/probe.mjs', '/app/server.js'])
     let subscribed = false
     for (let i = 0; i < 40 && !subscribed; i++) {
@@ -1031,6 +1080,10 @@ async function runLifecycle(ctx) {
         await lifecycleCase(`${idPrefix}9`, 'answer after the originating client gave up at 10 s (as the CRM does): one fork, audio reaches the session', 5560, { bind: true, abandonAfterMs: 10000 },
             { observeAfterMs: 6000, check: r => r.reply === 'ABANDONED' && r.originateMs >= 9500 && common(r)
                 && r.order.startsWith('ANSWER(5560,answered) PARK(9999,answered)') })
+        await lifecycleCase(`${idPrefix}10`, 'a callee ringing past the answer-state check is re-checked, not released, and forks once on answer', 5563, { bind: true },
+            { observeAfterMs: 22000, check: r => r.reply.startsWith('+OK') && common(r) && r.order.startsWith('PARK(9999,early) ANSWER(9999,answered)')
+                && (bridgeLog().match(new RegExp(`${r.x} still early`, 'g')) ?? []).length >= 2 && !bridgeLog().includes(`${r.x} no longer exists`)
+                && forkLines(r.x)[0].includes('via CHANNEL_ANSWER') })
         {
             const plan = [[5556, 1234], [5561, 880], [5562, 440]]
             const calls = await Promise.all(plan.map(([callee]) => originate(callee, { bind: true })))
