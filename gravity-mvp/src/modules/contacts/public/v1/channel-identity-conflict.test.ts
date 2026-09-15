@@ -119,6 +119,138 @@ describe('Contacts-owned channel identity conflict', () => {
     expect(mocks.identityUpdate).not.toHaveBeenCalled()
   })
 
+  const maxRouteRegimeSenderMismatch = {
+    incomingProviderAccountId: 'max-account-b',
+    existingProviderAccountId: 'max-account-b',
+    incomingSenderId: 'max-sender-42',
+    existingSenderId: 'max-sender-99',
+    incomingChatKind: 'private',
+    existingChatKind: 'private',
+  }
+
+  test.each([
+    ['absent sender proof', 'sender_identity_unproven', { ...maxRouteRegimeSenderMismatch, existingSenderId: null }],
+    ['absent sender proof on a stamped private conversation', 'sender_identity_unproven', maxRouteRegimeSenderMismatch],
+    ['a legacy unstamped last-writer sender', 'sender_identity_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingProviderAccountId: null, existingChatKind: 'unknown',
+    }],
+    ['a legacy label-stamped sender without a chat kind', 'sender_identity_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingProviderAccountId: 'canary-operator-label', existingChatKind: 'unknown',
+    }],
+    ['no recorded details', 'sender_identity_mismatch', {}],
+    ['another account\'s stamped private sender', 'sender_identity_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingProviderAccountId: 'max-account-a',
+    }],
+    ['placeholder accounts', 'sender_identity_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingProviderAccountId: 'legacy', incomingProviderAccountId: 'legacy',
+    }],
+    ['the company account as the stored sender', 'sender_identity_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingSenderId: 'max-account-b',
+    }],
+    ['group traffic into a never-proven private kind', 'chat_kind_mismatch', {
+      ...maxRouteRegimeSenderMismatch, existingChatKind: 'unknown', incomingChatKind: 'group',
+    }],
+    ['a global message key collision', 'message_chat_mismatch', maxRouteRegimeSenderMismatch],
+    ['a cross-channel conversation key collision', 'channel_mismatch', maxRouteRegimeSenderMismatch],
+  ] as const)('refuses to record a MAX conflict built on %s', async (_label, reason, details) => {
+    await expect(markChannelIdentityConflictV1({ ...input, channel: 'max', reason, details }))
+      .rejects.toThrow('collision evidence does not prove a person identity conflict')
+
+    expect(mocks.runOwnership).not.toHaveBeenCalled()
+    expect(mocks.contactUpdate).not.toHaveBeenCalled()
+    expect(mocks.identityUpdate).not.toHaveBeenCalled()
+  })
+
+  test('still records group traffic into a proven private MAX conversation', async () => {
+    mocks.identityFind.mockResolvedValue({
+      id: 'identity-1',
+      contactId: 'contact-1',
+      channel: 'max',
+      externalId: 'max-sender-42',
+      isActive: true,
+      metadata: {},
+    })
+
+    await markChannelIdentityConflictV1({
+      ...input,
+      channel: 'max',
+      reason: 'chat_kind_mismatch',
+      evidenceRoot: 'channel-collision:max:max-conversation-900:max-account-b:chat_kind_mismatch',
+      details: { ...maxRouteRegimeSenderMismatch, existingSenderId: 'max-sender-42', incomingChatKind: 'group' },
+    })
+
+    expect(mocks.contactUpdate).toHaveBeenCalledOnce()
+  })
+
+  test('still records a MAX sender contradiction of proven private peer evidence', async () => {
+    mocks.identityFind.mockResolvedValue({
+      id: 'identity-1',
+      contactId: 'contact-1',
+      channel: 'max',
+      externalId: 'max-sender-99',
+      isActive: true,
+      metadata: {},
+    })
+
+    await markChannelIdentityConflictV1({
+      ...input,
+      channel: 'max',
+      reason: 'sender_identity_mismatch',
+      evidenceRoot: 'channel-collision:max:max-conversation-900:max-account-b:sender_identity_mismatch',
+      details: maxRouteRegimeSenderMismatch,
+    })
+
+    expect(mocks.contactUpdate).toHaveBeenCalledOnce()
+    expect(mocks.contactUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        customFields: expect.objectContaining({
+          identityConflicts: [expect.objectContaining({
+            status: 'open',
+            details: expect.objectContaining({ channel: 'max', reason: 'sender_identity_mismatch' }),
+          })],
+        }),
+      },
+    }))
+  })
+
+  test('a duplicate proven MAX contradiction does not append a second person conflict', async () => {
+    const evidenceRoot = 'channel-collision:max:max-conversation-900:max-account-b:sender_identity_mismatch'
+    mocks.identityFind.mockResolvedValue({
+      id: 'identity-1',
+      contactId: 'contact-1',
+      channel: 'max',
+      externalId: 'max-sender-99',
+      isActive: true,
+      metadata: {},
+    })
+    mocks.contactFind.mockResolvedValue({
+      id: 'contact-1',
+      isArchived: false,
+      customFields: {
+        identityConflicts: [{
+          identityId: 'identity-1',
+          conflictType: 'channel_identity_collision',
+          evidenceRoot,
+          source: 'channel-ingress',
+          details: { channel: 'max', reason: 'sender_identity_mismatch', externalUserId: 'max-sender-99' },
+          status: 'open',
+        }],
+      },
+    })
+
+    await markChannelIdentityConflictV1({
+      ...input,
+      channel: 'max',
+      reason: 'sender_identity_mismatch',
+      evidenceRoot,
+      details: maxRouteRegimeSenderMismatch,
+    })
+
+    expect(mocks.contactUpdate).not.toHaveBeenCalled()
+    expect(mocks.identityUpdate).not.toHaveBeenCalled()
+    expect(mocks.assertPostconditions).toHaveBeenCalledOnce()
+  })
+
   test('rejects a stale Contact/Identity pair without mutation', async () => {
     mocks.identityFind.mockResolvedValue({
       id: 'identity-1',

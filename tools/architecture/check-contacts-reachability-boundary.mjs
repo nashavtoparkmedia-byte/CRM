@@ -180,6 +180,102 @@ for (const channel of ['telegram', 'whatsapp', 'max']) {
     }
 }
 
+// M2-0: route or admission uncertainty on MAX is not a fact about the person.
+// Stored MAX conversation facts are peer evidence only when the admission chain
+// wrote them for the same concrete account with a private kind. One Contacts
+// classifier decides it for the ingress and for the writer. Executed: a body that
+// lets legacy or another account's stored facts through, or that stops recording
+// a contradiction of proven private peer evidence, fails.
+assert.match(evidenceStateSource, /export function isPersonIdentityCollisionEvidenceV1\(/)
+assert.equal(typeof evidenceState.isPersonIdentityCollisionEvidenceV1, 'function', 'the Contacts person-evidence classifier is missing')
+const maxProvenPrivate = {
+    incomingProviderAccountId: 'max-account-b', existingProviderAccountId: 'max-account-b',
+    incomingSenderId: 'sender-42', existingSenderId: 'sender-99', incomingChatKind: 'private', existingChatKind: 'private',
+}
+// [reason, details, person evidence?] — the exact MAX vocabulary the classifier must reproduce.
+const maxEvidenceTable = [
+    ['sender_identity_mismatch', maxProvenPrivate, true],
+    ['chat_kind_mismatch', { ...maxProvenPrivate, existingSenderId: 'sender-42', incomingChatKind: 'group' }, true],
+    ['sender_identity_unproven', {}, false],
+    ['sender_identity_unproven', maxProvenPrivate, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: null, existingChatKind: 'unknown' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: 'canary-operator-label', existingChatKind: 'unknown' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingChatKind: 'unknown' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingChatKind: 'group' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: 'max-account-a' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: 'legacy', incomingProviderAccountId: 'legacy' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: 'max-default', incomingProviderAccountId: 'max-default' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingProviderAccountId: '  ', incomingProviderAccountId: '  ' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingSenderId: null }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, incomingSenderId: ' ' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, incomingSenderId: 'sender-99' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, existingSenderId: 'max-account-b' }, false],
+    ['sender_identity_mismatch', { ...maxProvenPrivate, incomingSenderId: 'max-account-b' }, false],
+    ['sender_identity_mismatch', {}, false],
+    ['chat_kind_mismatch', { ...maxProvenPrivate, existingChatKind: 'unknown', incomingChatKind: 'group' }, false],
+    ['chat_kind_mismatch', { ...maxProvenPrivate, existingProviderAccountId: null, existingChatKind: 'unknown', incomingChatKind: 'group' }, false],
+    ['chat_kind_mismatch', { ...maxProvenPrivate, existingProviderAccountId: 'max-account-a', incomingChatKind: 'group' }, false],
+    ['chat_kind_mismatch', { ...maxProvenPrivate, existingChatKind: 'group', incomingChatKind: 'private' }, false],
+    ['chat_kind_mismatch', {}, false],
+    ['message_chat_mismatch', maxProvenPrivate, false],
+    ['channel_mismatch', maxProvenPrivate, false],
+    ['conversation_key_mismatch', maxProvenPrivate, false],
+    ['peer_identity_mismatch', maxProvenPrivate, false],
+    ['provider_account_mismatch', maxProvenPrivate, false],
+    ['provider_account_unproven', maxProvenPrivate, false],
+]
+const personEvidence = (channel, reason, details) => evidenceState.isPersonIdentityCollisionEvidenceV1({ channel, reason, details })
+for (const [reason, details, expected] of maxEvidenceTable) {
+    assert.equal(personEvidence('max', reason, details), expected, `max ${reason} person evidence for ${JSON.stringify(details)}`)
+}
+for (const details of [null, [], 'details']) {
+    assert.equal(personEvidence('max', 'sender_identity_mismatch', details), false, 'unrecorded MAX details must never be person evidence')
+}
+assert.equal(personEvidence('sms', 'chat_kind_mismatch', {}), false, 'an unknown channel must never be person evidence')
+assert.equal(personEvidence('max', null, maxProvenPrivate), false, 'a missing reason must never be person evidence')
+for (const [channel, reasons] of Object.entries(transportReasons)) {
+    for (const reason of reasons) {
+        assert.equal(personEvidence(channel, reason, maxProvenPrivate), false, `${channel} ${reason} must never be person evidence`)
+    }
+}
+for (const channel of ['telegram', 'whatsapp']) {
+    for (const reason of personReasons) {
+        assert.equal(personEvidence(channel, reason, {}), true, `${channel} ${reason} must stay person evidence`)
+    }
+}
+// The reader is deliberately unchanged: an open MAX entry written before M2-0 still blocks.
+for (const reason of ['sender_identity_unproven', 'sender_identity_mismatch', 'message_chat_mismatch']) {
+    assert.equal(channelBlocks(maxIdentity, reason, { ...maxProvenPrivate, existingProviderAccountId: null, existingChatKind: 'unknown' }), true, `a historical MAX ${reason} entry must still block`)
+}
+
+// The MAX ingress hands its exact recorded values to that classifier before the
+// writer, passes the writer the same values, offers no candidate for a deletion,
+// and keeps no evidence taxonomy of its own. It reaches the classifier through the
+// Contacts barrel, and its tests wire the real classifier into that barrel mock.
+const maxIngressSource = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
+const maxCollisionPersistence = maxIngressSource.slice(
+    maxIngressSource.indexOf('const persistMaxIdentityCollision'),
+    maxIngressSource.indexOf('const rejectExistingChatCollision'),
+)
+assert.match(maxIngressSource, /import \{\n  isPersonIdentityCollisionEvidenceV1,\n  markChannelIdentityConflictV1,\n  startMaxContactResolutionShadowV1,\n  type LegacyContactResolutionOutcome,\n\} from '@\/modules\/contacts\/public\/v1'\n/)
+assert.doesNotMatch(maxIngressSource, /(?:function|const|let)\s+isPersonIdentityCollisionEvidenceV1\b|contacts\/public\/v1\/contact-evidence-state/, 'the MAX ingress must use the Contacts barrel classifier')
+assert.match(read('gravity-mvp/src/modules/contacts/public/v1/index.ts'), /\nexport \{ isPersonIdentityCollisionEvidenceV1 \} from '\.\/contact-evidence-state'\n/)
+assert.match(read('gravity-mvp/src/app/api/webhooks/max/route.test.ts'), /isPersonIdentityCollisionEvidenceV1: \(\n\s+await vi\.importActual<typeof import\('@\/modules\/contacts\/public\/v1\/contact-evidence-state'\)>\(\n\s+'@\/modules\/contacts\/public\/v1\/contact-evidence-state',\n\s+\)\n\s+\)\.isPersonIdentityCollisionEvidenceV1,/, 'MAX ingress tests must execute the real classifier')
+assert.match(maxCollisionPersistence, /const conflictDetails = \{\n\s+incomingProviderAccountId: evidence\.incomingProviderAccountId,\n\s+existingProviderAccountId: evidence\.existingProviderAccountId,\n\s+incomingSenderId: evidence\.incomingSenderId,\n\s+existingSenderId: evidence\.existingSenderId,\n\s+incomingChatKind: evidence\.incomingChatKind,\n\s+existingChatKind: evidence\.existingChatKind,\n\s+\}/)
+assert.match(maxCollisionPersistence, /\n\s+if \(\n\s+personReason\n\s+&& existingChat\.contactId\n\s+&& existingChat\.contactIdentityId\n\s+&& isPersonIdentityCollisionEvidenceV1\(\{ channel: 'max', reason: personReason, details: conflictDetails \}\)\n\s+\) \{\n\s+await markChannelIdentityConflictV1\(\{/)
+assert.match(maxCollisionPersistence, /reason: personReason,\n\s+evidenceRoot: [^\n]+\n\s+details: conflictDetails,\n\s+\}\)/)
+assert.equal(maxCollisionPersistence.match(/markChannelIdentityConflictV1\(/g)?.length, 1, 'the MAX ingress gained an ungated person-conflict write')
+assert.match(maxIngressSource, /const existingProviderAccountId = concreteProviderAccountId\(existingMetadata\)\n/)
+assert.match(maxIngressSource, /const existingChatKind = existingMetadata\.chatKind === 'private' \|\| existingMetadata\.chatKind === 'group'\n\s+\? existingMetadata\.chatKind\n\s+: 'unknown'\n/)
+assert.match(maxIngressSource, /const personReason = deleted \|\| isOutgoing\n\s+\? null\n\s+: providerCollisionReason && collisionReason === providerCollisionReason\n/)
+// The classifier's proof rests on how this chain writes the facts it later reads:
+// the stored kind and sender are written together, from the same admitted event.
+assert.match(maxIngressSource, /\.\.\.\(peerSenderIdString\s+\? \{ senderId: peerSenderIdString \}\s+: \{\}\),\n[\s\S]{0,200}?chatKind: maxChatKind,\n\s+providerAccountId: maxProviderAccountId,\n/)
+assert.match(maxIngressSource, /\.\.\.\(peerSenderIdString\s+\? \{ senderId: peerSenderIdString \}\s+: \{\}\),\n[\s\S]{0,240}?chatKind: maxChatKind,\n\s+providerAccountId: maxProviderAccountId,\n\s+connectionId: existingMetadata\.connectionId \|\| 'max_scraper',\n/)
+assert.doesNotMatch(maxIngressSource, /chatKind: 'private'|chatKind: existingChatKind|senderId: existingSenderId/, 'the MAX ingress must not fabricate the facts the classifier treats as proof')
+assert.equal(maxIngressSource.match(/persistMaxIdentityCollision\(/g)?.length, 1, 'the MAX ingress gained another collision persistence path')
+assert.doesNotMatch(maxIngressSource, /personReason\s*[!=]==|new Set\(\[[^\]]*_mismatch'|(?:_mismatch|_unproven)'\s*\]\.includes/, 'the MAX ingress re-derives person evidence locally')
+
 // A provider alias names the person globally on its channel. Neither admission
 // nor collision discovery may consult the identity's first-writer account stamp:
 // the admission gate refused every unstamped identity, and the candidate filter
@@ -219,11 +315,11 @@ assert.deepEqual(conflictWriterImports, ['../../internal/contact-ownership-coord
 const conflictWriter = await import(moduleUrl(conflictWriterJs
     .replace("from '../../internal/contact-ownership-coordinator'", `from '${ownershipStubUrl}'`)
     .replace("from './contact-evidence-state'", `from '${evidenceStateUrl}'`)))
-const writerOutcome = async (channel, reason) => {
+const writerOutcome = async (channel, reason, details = {}) => {
     try {
         await conflictWriter.markChannelIdentityConflictV1({
             contactId: 'contact-probe', identityId: 'identity-probe', channel, reason,
-            evidenceRoot: `channel-collision:${channel}:probe:${reason}`, details: {},
+            evidenceRoot: `channel-collision:${channel}:probe:${reason}`, details,
         })
         return 'RESOLVED'
     } catch (error) {
@@ -235,11 +331,23 @@ for (const [channel, reasons] of Object.entries(transportReasons)) {
         assert.equal(await writerOutcome(channel, reason), 'transport collision is not a person identity conflict', `the writer must refuse ${channel} ${reason}`)
     }
 }
-for (const channel of ['telegram', 'max']) {
-    for (const reason of personReasons) {
-        assert.equal(await writerOutcome(channel, reason), 'OWNERSHIP_TRANSACTION_REACHED', `the writer must record ${channel} ${reason}`)
-    }
+for (const reason of personReasons) {
+    assert.equal(await writerOutcome('telegram', reason), 'OWNERSHIP_TRANSACTION_REACHED', `the writer must record telegram ${reason}`)
 }
+// The writer holds no taxonomy of its own: for every recorded MAX shape it refuses
+// or records exactly as the executed classifier decides.
+const unprovenPersonRefusal = 'collision evidence does not prove a person identity conflict'
+for (const [reason, details, expected] of maxEvidenceTable) {
+    assert.equal(
+        await writerOutcome('max', reason, details),
+        evidenceState.isTransportCollisionReasonV1('max', reason)
+            ? 'transport collision is not a person identity conflict'
+            : expected ? 'OWNERSHIP_TRANSACTION_REACHED' : unprovenPersonRefusal,
+        `the writer must follow the classifier for max ${reason} ${JSON.stringify(details)}`,
+    )
+}
+assert.match(conflictWriterSource, /\n\s+if \(!isPersonIdentityCollisionEvidenceV1\(input\)\) \{\n\s+throw new TypeError\('collision evidence does not prove a person identity conflict'\)\n\s+\}\n\}/)
+assert.doesNotMatch(conflictWriterSource, /sender_identity_|chat_kind_mismatch|message_chat_mismatch|existingChatKind|existingSenderId|existingProviderAccountId/, 'the conflict writer re-derives person evidence locally')
 
 const profileDrawerSource = read(profileDrawerPath)
 assert.match(profileDrawerSource, /identityId: identity\.id/)

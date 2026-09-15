@@ -4,6 +4,7 @@ import {
   contactAutomationState,
   hasPersonBlockingIdentityConflictV1,
   identityEvidenceState,
+  isPersonIdentityCollisionEvidenceV1,
   isProvenTransportOnlyChannelCollisionV1,
   isProvenTransportOnlyIdentityConflictV1,
   isTransportCollisionReasonV1,
@@ -186,6 +187,121 @@ describe('transport-only collision classification', () => {
   })
 })
 
+describe('person identity collision evidence', () => {
+  // The exact details the MAX admission chain records: the conversation was
+  // stamped with a concrete account and a private kind together with its sender.
+  const routeRegimeSenderMismatch = {
+    incomingProviderAccountId: 'max-account-b',
+    existingProviderAccountId: 'max-account-b',
+    incomingSenderId: 'sender-42',
+    existingSenderId: 'sender-99',
+    incomingChatKind: 'private',
+    existingChatKind: 'private',
+  }
+  const maxEvidence = (reason: string, details: Record<string, unknown>) => (
+    isPersonIdentityCollisionEvidenceV1({ channel: 'max', reason, details })
+  )
+
+  test('absent MAX sender proof is never evidence about the person, whatever was recorded', () => {
+    for (const details of [
+      {},
+      { ...routeRegimeSenderMismatch, existingSenderId: null },
+      { ...routeRegimeSenderMismatch, incomingSenderId: null },
+      // Even a fully stamped private conversation: absence of proof contradicts nothing.
+      routeRegimeSenderMismatch,
+    ]) {
+      expect(maxEvidence('sender_identity_unproven', details)).toBe(false)
+    }
+  })
+
+  test('a MAX sender mismatch against a legacy last-writer sender is not evidence about the person', () => {
+    // Legacy rows carry no chat kind and no concrete account: the shared company
+    // sender and the stale sender shapes measured on production conversations.
+    expect(maxEvidence('sender_identity_mismatch', {
+      ...routeRegimeSenderMismatch,
+      existingProviderAccountId: null,
+      existingChatKind: 'unknown',
+    })).toBe(false)
+    // A concrete canary label without a stored chat kind is still a legacy row.
+    expect(maxEvidence('sender_identity_mismatch', {
+      ...routeRegimeSenderMismatch,
+      existingProviderAccountId: 'canary-operator-label',
+      existingChatKind: 'unknown',
+    })).toBe(false)
+    // Each proof term is required on its own.
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, existingProviderAccountId: null })).toBe(false)
+    for (const placeholder of ['', '  ', 'legacy', 'max-default', ' legacy ']) {
+      expect(maxEvidence('sender_identity_mismatch', {
+        ...routeRegimeSenderMismatch, existingProviderAccountId: placeholder, incomingProviderAccountId: placeholder,
+      })).toBe(false)
+    }
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, incomingProviderAccountId: null })).toBe(false)
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, existingChatKind: 'unknown' })).toBe(false)
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, existingChatKind: 'group' })).toBe(false)
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, existingSenderId: null })).toBe(false)
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, incomingSenderId: '' })).toBe(false)
+    // A mismatch label whose recorded senders agree expresses nothing.
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, incomingSenderId: 'sender-99' })).toBe(false)
+    // The company account's own id on either side is an account echo, not a peer.
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, existingSenderId: 'max-account-b' })).toBe(false)
+    expect(maxEvidence('sender_identity_mismatch', { ...routeRegimeSenderMismatch, incomingSenderId: ' max-account-b' })).toBe(false)
+    for (const details of [null, [], 'details']) {
+      expect(isPersonIdentityCollisionEvidenceV1({ channel: 'max', reason: 'sender_identity_mismatch', details })).toBe(false)
+    }
+  })
+
+  test('another company account\'s stored facts are route uncertainty, not evidence about the person', () => {
+    // MAX chat ids are not proven account-independent, so an account arm that
+    // pre-empts a sender or kind contradiction hides no fact about the person.
+    const otherAccount = { ...routeRegimeSenderMismatch, existingProviderAccountId: 'max-account-a' }
+    expect(maxEvidence('sender_identity_mismatch', otherAccount)).toBe(false)
+    expect(maxEvidence('chat_kind_mismatch', { ...otherAccount, existingSenderId: 'sender-42', incomingChatKind: 'group' })).toBe(false)
+  })
+
+  test('a MAX contradiction of proven private peer evidence on the same account stays a person conflict', () => {
+    expect(maxEvidence('sender_identity_mismatch', routeRegimeSenderMismatch)).toBe(true)
+    expect(maxEvidence('chat_kind_mismatch', { ...routeRegimeSenderMismatch, incomingChatKind: 'group' })).toBe(true)
+  })
+
+  test('MAX conversation-shape and key collisions are person evidence only against a proven private conversation', () => {
+    // Ownership from a legacy link, or a cold-cache unknown kind, proves no private conversation.
+    expect(maxEvidence('chat_kind_mismatch', { ...routeRegimeSenderMismatch, existingChatKind: 'unknown', incomingChatKind: 'group' })).toBe(false)
+    expect(maxEvidence('chat_kind_mismatch', {
+      ...routeRegimeSenderMismatch, existingProviderAccountId: null, existingChatKind: 'unknown', incomingChatKind: 'group',
+    })).toBe(false)
+    // A stored group receiving private traffic contradicts the room, not a person.
+    expect(maxEvidence('chat_kind_mismatch', { ...routeRegimeSenderMismatch, existingChatKind: 'group', incomingChatKind: 'private' })).toBe(false)
+    expect(maxEvidence('chat_kind_mismatch', { ...routeRegimeSenderMismatch, incomingChatKind: 'unknown' })).toBe(false)
+    // Global message and conversation key collisions never describe the person.
+    for (const reason of ['message_chat_mismatch', 'channel_mismatch', 'conversation_key_mismatch', 'peer_identity_mismatch']) {
+      expect(maxEvidence(reason, routeRegimeSenderMismatch)).toBe(false)
+      expect(maxEvidence(reason, {})).toBe(false)
+    }
+  })
+
+  test('transport reasons stay outside the person record and other channels are unchanged', () => {
+    for (const [channel, reasons] of Object.entries({
+      telegram: ['transport_connection_mismatch', 'transport_connection_unproven', 'provider_account_mismatch', 'provider_account_unproven'],
+      whatsapp: ['transport_mismatch', 'transport_unbound'],
+      max: ['provider_account_mismatch', 'provider_account_unproven'],
+    })) {
+      for (const reason of reasons) {
+        expect(isPersonIdentityCollisionEvidenceV1({ channel, reason, details: routeRegimeSenderMismatch })).toBe(false)
+      }
+    }
+    for (const channel of ['telegram', 'whatsapp']) {
+      for (const reason of [
+        'channel_mismatch', 'conversation_key_mismatch', 'peer_identity_mismatch', 'peer_identity_unproven',
+        'chat_kind_mismatch', 'message_chat_mismatch', 'sender_identity_mismatch', 'sender_identity_unproven',
+      ]) {
+        expect(isPersonIdentityCollisionEvidenceV1({ channel, reason, details: {} })).toBe(true)
+      }
+    }
+    expect(isPersonIdentityCollisionEvidenceV1({ channel: 'avito', reason: 'chat_kind_mismatch', details: {} })).toBe(false)
+    expect(isPersonIdentityCollisionEvidenceV1({ channel: 'max', reason: null, details: {} })).toBe(false)
+  })
+})
+
 describe('person-blocking identity conflicts', () => {
   test('a proven transport-only collision does not block the person', () => {
     expect(hasPersonBlockingIdentityConflictV1({ identityConflicts: [whatsappSecondConnection] }, WHATSAPP_IDENTITY)).toBe(false)
@@ -198,6 +314,19 @@ describe('person-blocking identity conflicts', () => {
       expect(hasPersonBlockingIdentityConflictV1({
         identityConflicts: [{ identityId: WHATSAPP_IDENTITY.id, conflictType, status: 'open', source: 'contact-resolution' }],
       }, WHATSAPP_IDENTITY)).toBe(true)
+    }
+  })
+
+  test('open MAX sender entries recorded before the writer refused them still block: the reader is unchanged', () => {
+    // M2-0 stops new writes only. Releasing historical entries is a separate,
+    // deliberate decision; production held no such entries when M2-0 was measured.
+    for (const reason of ['sender_identity_unproven', 'sender_identity_mismatch', 'message_chat_mismatch']) {
+      expect(hasPersonBlockingIdentityConflictV1({
+        identityConflicts: [ingressCollision(MAX_IDENTITY, reason, {
+          incomingProviderAccountId: 'max-account-b', existingProviderAccountId: null,
+          incomingSenderId: 'sender-42', existingSenderId: null, incomingChatKind: 'private', existingChatKind: 'unknown',
+        })],
+      }, MAX_IDENTITY)).toBe(true)
     }
   })
 

@@ -93,9 +93,31 @@ block the person, while a genuine identity conflict stays fail-closed.**
    chains the transport or account comparison runs before the peer, sender and chat-kind
    comparisons. Callers now evaluate those later comparisons explicitly and still record a
    person conflict with the person-level reason. Direct genuine contradictions are recorded
-   exactly as before M1. The person-level reasons include MAX `sender_identity_unproven`:
-   missing sender proof on a person-linked conversation, which is a gap in identity evidence
-   rather than a contradiction. It stayed person-level, as it was before M1.
+   exactly as before M1.
+
+   M2-0 narrowed this for MAX. `isPersonIdentityCollisionEvidenceV1` in Contacts is the one
+   classifier, and both the MAX ingress gate and the writer use it. On MAX the stored
+   conversation facts count as peer evidence only when three things hold together: the
+   admission chain wrote them, it did so for the same concrete account that observed the
+   event, and the chat kind is `private`. Earlier writers never stored a chat kind. Their
+   sender and Contact link were last-writer values. Another account's chat id may name a
+   different dialog.
+
+   So on MAX only two cases are person conflicts: a sender contradicting proven private peer
+   evidence, and group traffic into a proven private conversation. The following are route or
+   admission uncertainty, and they fail only the conversation closed with a Messaging audit:
+   `sender_identity_unproven`, a mismatch against legacy or other-account facts, a key collision
+   (`message_chat_mismatch`, `channel_mismatch`), a sender equal to the company account, any
+   deletion, and any outgoing echo, which names our own account as sender and therefore carries
+   no peer evidence. Readers are unchanged, so an entry written before M2-0 still blocks.
+   Production held none when M2-0 was measured.
+
+   Known limitation, accepted for M2-0 and pinned by test. The proof is last-writer state: the
+   ingress rewrites `metadata.chatKind` from every admitted event, so an event the scraper
+   classified `unknown` (a cold chat cache) downgrades a stored `private` conversation. While a
+   conversation sits at `unknown`, a genuine same-account sender contradiction is refused and
+   audited but records no person conflict. The durable fix is to stop the patch from downgrading
+   a stored concrete chat kind, which is a chatKind write change and outside M2-0.
 5. **Readers distinguish, conservatively.** Outbound preparation, reachability recording and
    the Telegram driver link ignore only an open `channel_identity_collision` entry that its
    own recorded details prove to be transport-only
