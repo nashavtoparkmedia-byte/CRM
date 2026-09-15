@@ -39,20 +39,42 @@ export interface MaxChannelDeliveryV1 {
     deleteMessage(input: MaxTransportBindingV1 & { chatId: string, messageId: string }): Promise<void>
 }
 
-let whatsappDelivery: WhatsAppChannelDeliveryV1 | null = null
-let telegramDelivery: TelegramChannelDeliveryV1 | null = null
-let maxDelivery: MaxChannelDeliveryV1 | null = null
+interface ChannelDeliveryRegistryV1 {
+    whatsapp: WhatsAppChannelDeliveryV1 | null
+    telegram: TelegramChannelDeliveryV1 | null
+    max: MaxChannelDeliveryV1 | null
+}
+
+/**
+ * Next.js can load this module more than once in a single server process, one
+ * copy per chunk. Module-scoped slots would then leave the copy that
+ * instrumentation registered into populated while every other copy stays empty,
+ * so sends fail as "not registered" in a process that is otherwise healthy.
+ * A Symbol.for key resolves to the same symbol in every copy, which gives one
+ * process-wide registry.
+ */
+const CHANNEL_DELIVERY_REGISTRY_SLOT = Symbol.for('yoko.messaging.channel-delivery-registry.v1')
+
+function registry(): ChannelDeliveryRegistryV1 {
+    const host = globalThis as typeof globalThis & {
+        [CHANNEL_DELIVERY_REGISTRY_SLOT]?: ChannelDeliveryRegistryV1
+    }
+    if (!host[CHANNEL_DELIVERY_REGISTRY_SLOT]) {
+        host[CHANNEL_DELIVERY_REGISTRY_SLOT] = { whatsapp: null, telegram: null, max: null }
+    }
+    return host[CHANNEL_DELIVERY_REGISTRY_SLOT]
+}
 
 export function registerWhatsAppChannelDeliveryV1(capability: WhatsAppChannelDeliveryV1): void {
-    whatsappDelivery = capability
+    registry().whatsapp = capability
 }
 
 export function registerTelegramChannelDeliveryV1(capability: TelegramChannelDeliveryV1): void {
-    telegramDelivery = capability
+    registry().telegram = capability
 }
 
 export function registerMaxChannelDeliveryV1(capability: MaxChannelDeliveryV1): void {
-    maxDelivery = capability
+    registry().max = capability
 }
 
 function required<T>(capability: T | null, channel: string): T {
@@ -61,13 +83,13 @@ function required<T>(capability: T | null, channel: string): T {
 }
 
 export function getWhatsAppChannelDeliveryV1(): WhatsAppChannelDeliveryV1 {
-    return required(whatsappDelivery, 'WhatsApp')
+    return required(registry().whatsapp, 'WhatsApp')
 }
 
 export function getTelegramChannelDeliveryV1(): TelegramChannelDeliveryV1 {
-    return required(telegramDelivery, 'Telegram')
+    return required(registry().telegram, 'Telegram')
 }
 
 export function getMaxChannelDeliveryV1(): MaxChannelDeliveryV1 {
-    return required(maxDelivery, 'MAX')
+    return required(registry().max, 'MAX')
 }
