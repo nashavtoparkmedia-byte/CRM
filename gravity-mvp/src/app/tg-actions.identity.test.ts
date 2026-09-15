@@ -782,6 +782,46 @@ describe('GramJS private conversation identity admission', () => {
         expect(mocks.appendCollision).toHaveBeenCalledWith(expect.objectContaining({
             evidence: expect.objectContaining({ reason: 'peer_identity_mismatch' }),
         }))
+        // Same transport, so nothing masks it: a genuine "this conversation is
+        // somebody else's" contradiction must still disable the linked person.
+        expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+        expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+            contactId: 'contact-x',
+            identityId: 'identity-x',
+            channel: 'telegram',
+            reason: 'peer_identity_mismatch',
+            evidenceRoot: expect.stringMatching(/:peer_identity_mismatch$/),
+        }))
+        expect(mocks.resolveContact).not.toHaveBeenCalled()
+        expect(mocks.createMessage).not.toHaveBeenCalled()
+    })
+
+    test('live inbound still records a person conflict when a transport mismatch hides a chat-kind contradiction', async () => {
+        const connectionId = `telegram-account-hidden-kind-${connectionSequence}`
+        const handler = await initializeListener(connectionId, '7012')
+        mocks.upsertConversation.mockResolvedValueOnce({
+            conversation: {
+                id: 'chat-stored-as-group', channel: 'telegram', externalChatId: 'telegram:42',
+                chatType: 'group', contactId: 'contact-y', contactIdentityId: 'identity-y',
+                driverId: null,
+                // Same peer, but the stored row is not a private conversation, and
+                // the transport arm fires before the chat-kind arm.
+                metadata: { chatKind: 'group', peerId: '42', connectionId: 'telegram-account-other' },
+            },
+        })
+
+        await handler({ message: inboundMessage('42') })
+
+        expect(mocks.appendCollision).toHaveBeenCalledWith(expect.objectContaining({
+            evidence: expect.objectContaining({ reason: 'transport_connection_mismatch' }),
+        }))
+        expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+        expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+            contactId: 'contact-y',
+            identityId: 'identity-y',
+            reason: 'chat_kind_mismatch',
+            evidenceRoot: expect.stringMatching(/:chat_kind_mismatch$/),
+        }))
         expect(mocks.resolveContact).not.toHaveBeenCalled()
         expect(mocks.createMessage).not.toHaveBeenCalled()
     })

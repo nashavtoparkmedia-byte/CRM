@@ -350,6 +350,31 @@ describe('Telegram webhook account and transport admission', () => {
     expectNoPersonOrMessageMutation()
   })
 
+  test('records a person conflict for a direct chat-kind contradiction on a person-owned Chat', async () => {
+    // Same transport, so nothing masks it: the genuine contradiction reaches
+    // the linked person exactly as before M1.
+    const existing = chat({
+      chatKind: 'group',
+      providerAccountId: 'telegram-bot-b',
+      connectionId: 'telegram-connection-b',
+    }, { chatType: 'group', contactId: 'contact-a', contactIdentityId: 'identity-a' })
+    mocks.upsertConversation.mockResolvedValue({ conversation: existing })
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'TELEGRAM_CHAT_KIND_COLLISION' })
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+    expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-a',
+      identityId: 'identity-a',
+      channel: 'telegram',
+      reason: 'chat_kind_mismatch',
+      evidenceRoot: expect.stringMatching(/:chat_kind_mismatch$/),
+    }))
+    expectNoPersonOrMessageMutation()
+  })
+
   test('rejects an unsigned message before Chat admission', async () => {
     const response = await POST(request({}, 'wrong-secret'))
 

@@ -396,6 +396,15 @@ describe('MAX webhook provider-account admission', () => {
       reason: 'sender_identity_mismatch',
     })
     expectCollisionEvidence('sender_identity_mismatch')
+    // Same account, so nothing masks it: the linked person is disabled.
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+    expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-a',
+      identityId: 'identity-a',
+      channel: 'max',
+      reason: 'sender_identity_mismatch',
+      evidenceRoot: expect.stringMatching(/:sender_identity_mismatch$/),
+    }))
     expectNoInboundMutation()
   })
 
@@ -415,6 +424,37 @@ describe('MAX webhook provider-account admission', () => {
       reason: 'sender_identity_unproven',
     })
     expectCollisionEvidence('sender_identity_unproven')
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+    expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-a',
+      identityId: 'identity-a',
+      reason: 'sender_identity_unproven',
+    }))
+    expectNoInboundMutation()
+  })
+
+  test('still records a person conflict when an account mismatch hides a chat-kind contradiction', async () => {
+    mocks.chatFindUnique.mockResolvedValue(existingChat({
+      senderId: 'max-sender-42',
+      chatKind: 'private',
+      providerAccountId: 'max-account-a',
+      connectionId: 'max_scraper',
+    }))
+
+    // A person-owned private conversation receiving a group event, from another
+    // company account: the account arm fires first and must not hide the kind.
+    const response = await POST(request({ chatKind: 'group' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' })
+    expectCollisionEvidence('provider_account_mismatch')
+    expect(mocks.markIdentityConflict).toHaveBeenCalledOnce()
+    expect(mocks.markIdentityConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-a',
+      identityId: 'identity-a',
+      reason: 'chat_kind_mismatch',
+      evidenceRoot: expect.stringMatching(/:chat_kind_mismatch$/),
+    }))
     expectNoInboundMutation()
   })
 

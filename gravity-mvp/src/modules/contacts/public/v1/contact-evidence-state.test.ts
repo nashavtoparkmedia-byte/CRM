@@ -125,6 +125,24 @@ describe('transport-only collision classification', () => {
       reason: 'provider_account_mismatch',
       details: { ...maxAccountMismatch.details, incomingChatKind: 'group' },
     })).toBe(false)
+    // MAX: private traffic into a conversation stored as a concrete group room.
+    expect(isProvenTransportOnlyChannelCollisionV1({
+      channel: 'max',
+      reason: 'provider_account_mismatch',
+      details: { ...maxAccountMismatch.details, existingChatKind: 'group', incomingChatKind: 'private' },
+    })).toBe(false)
+    // MAX: a chat kind outside the recorded vocabulary cannot prove anything.
+    expect(isProvenTransportOnlyChannelCollisionV1({
+      channel: 'max',
+      reason: 'provider_account_mismatch',
+      details: { ...maxAccountMismatch.details, existingChatKind: 'channel' },
+    })).toBe(false)
+    // Control: the same record with consistent kinds is transport-only.
+    expect(isProvenTransportOnlyChannelCollisionV1({
+      channel: 'max',
+      reason: 'provider_account_mismatch',
+      details: { ...maxAccountMismatch.details, existingChatKind: 'private', incomingChatKind: 'private' },
+    })).toBe(true)
     // Telegram Bot API: the transport arm pre-empted a chat-kind contradiction.
     expect(isProvenTransportOnlyChannelCollisionV1({
       channel: 'telegram',
