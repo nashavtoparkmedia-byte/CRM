@@ -1,0 +1,66 @@
+mod_audio_fork: guard NULL argv dereferences on the uuid_audio_fork start path.
+
+1. "uuid_audio_fork <uuid> start <url> <mix>" (no sampling-rate token) called strcmp(argv[4])
+   with argv[4] == NULL and crashed FreeSWITCH. The sampling rate is now parsed only when present;
+   the existing default of 8000 is kept. Every invocation with a sampling-rate token is unchanged.
+2. The usage guard compared argv[1] case-sensitively while dispatch uses strcasecmp, so "START"
+   with fewer than 4 tokens bypassed the guard and dereferenced a NULL URL/mix. The guard now uses
+   strcasecmp as well; such commands return -USAGE.
+3. A start command whose URL failed to parse, or whose sampling rate was not a positive multiple of
+   8000 up to 64000, was logged as invalid and then started anyway: start_capture ran with an
+   uninitialised host/path/port, and a negative or overflowing rate sized the frame buffer from a
+   negative length (std::bad_alloc through C frames, SIGABRT). start_capture now runs only when
+   both are valid; otherwise the command returns -ERR. Valid commands are unchanged.
+4. A websocket URL of MAX_WS_URL_LEN (512) bytes or more is refused before parse_ws_uri: that
+   function copies up to 4608 bytes into its stack buffer and the host into a 512-byte buffer with
+   strncpy, which leaves both unterminated for long input, and runs std::regex over the whole URL.
+   The bridge's URL is about 70 bytes.
+
+Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork.
+Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
+--- a/mod_audio_fork.c
++++ b/mod_audio_fork.c
+@@ -175,7 +175,7 @@
+ 
+ 
+ 	if (zstr(cmd) || argc < 2 ||
+-		(0 == strcmp(argv[1], "start") && argc < 4)) {
++		(0 == strcasecmp(argv[1], "start") && argc < 4)) {
+ 
+ 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error with command %s %s %s.\n", cmd, argv[0], argv[1]);
+ 		stream->write_function(stream, "-USAGE: %s\n", FORK_API_SYNTAX);
+@@ -253,7 +253,10 @@
+           switch_core_session_rwunlock(lsession);
+           goto done;
+         }
+-        if (0 == strcmp(argv[4], "16k")) {
++        if (argc < 5) {
++          /* no sampling-rate token: keep the default of 8000 set above */
++        }
++        else if (0 == strcmp(argv[4], "16k")) {
+           sampling = 16000;
+         }
+         else if (0 == strcmp(argv[4], "8k")) {
+@@ -262,13 +265,18 @@
+ 				else {
+ 					sampling = atoi(argv[4]);
+ 				}
+-        if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
++        if (strlen(argv[2]) >= MAX_WS_URL_LEN) {
++          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "websocket uri longer than %d bytes\n", MAX_WS_URL_LEN - 1);
++        }
++        else if (!parse_ws_uri(channel, argv[2], &host[0], &path[0], &port, &sslFlags)) {
+           switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid websocket uri: %s\n", argv[2]);
+         }
+-				else if (sampling % 8000 != 0) {
+-          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid sample rate: %s\n", argv[4]);					
++				else if (sampling <= 0 || sampling > 64000 || sampling % 8000 != 0) {
++          switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid sample rate: %d\n", sampling);
+ 				}
+-        status = start_capture(lsession, flags, host, port, path, sampling, sslFlags, bugname, metadata);
++        else {
++          status = start_capture(lsession, flags, host, port, path, sampling, sslFlags, bugname, metadata);
++        }
+ 			}
+       else {
+         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_fork cmd: %s\n", argv[1]);

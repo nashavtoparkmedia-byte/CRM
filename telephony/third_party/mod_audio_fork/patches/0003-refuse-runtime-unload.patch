@@ -1,0 +1,32 @@
+mod_audio_fork: refuse runtime unload.
+
+"unload mod_audio_fork" (and "reload mod_audio_fork", or a graceful "fsctl shutdown") runs
+mod_audio_fork_shutdown -> fork_cleanup -> AudioPipe::deinitialize(), which calls
+lws_context_destroy() on every libwebsockets context from the FreeSWITCH thread while the detached
+service threads are still inside lws_service() on those contexts; FreeSWITCH then dlcloses the module
+under the running threads. Reproduced on FreeSWITCH 1.10.12: "malloc(): unsorted double linked list
+corrupted", abort, every call dropped.
+
+The load function now returns SWITCH_STATUS_NOUNLOAD, which FreeSWITCH treats as a successful load
+(a critical load still succeeds) and records as a permanent module: "unload"/"reload" answer
+"Module is not unloadable" and process shutdown skips the module's teardown. Loading, the API and
+every call path are unchanged. Upgrading the module still means restarting FreeSWITCH, which the
+container image requires anyway.
+
+Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork,
+after 0001. Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
+--- a/mod_audio_fork.c
++++ b/mod_audio_fork.c
+@@ -333,7 +333,11 @@
+ 
+ 	/* indicate that the module should continue to be loaded */
+   //mod_running = 1;
+-	return SWITCH_STATUS_SUCCESS;
++	/* Loaded for the life of the process: AudioPipe::deinitialize() destroys the libwebsockets
++	   contexts while the detached service threads still run lws_service() on them, which corrupts
++	   the heap and aborts FreeSWITCH. NOUNLOAD makes "unload"/"reload" refuse and skips that
++	   teardown at shutdown. */
++	return SWITCH_STATUS_NOUNLOAD;
+ }
+ 
+ /*

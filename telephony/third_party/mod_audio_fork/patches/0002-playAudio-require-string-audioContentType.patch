@@ -1,0 +1,23 @@
+mod_audio_fork: ignore playAudio messages without a string audioContentType.
+
+A playAudio text message from the WebSocket peer whose data object lacks a string audioContentType
+reached strcmp(NULL) on the libwebsockets service thread and crashed FreeSWITCH. Such messages are
+now logged at ERROR and ignored: no temp file, no playout entry, no play_audio event. Messages that
+carry a string audioContentType, and messages without data, follow the original path unchanged.
+
+Against drachtio-freeswitch-modules 88e1465908a89bed5c95d336aa53a3899bb5abb5, modules/mod_audio_fork.
+Apply from the module directory: patch -p1 --forward --fuzz=0 --batch
+--- a/lws_glue.cpp
++++ b/lws_glue.cpp
+@@ -39,7 +39,10 @@
+       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "(%u) processIncomingMessage - received %s message\n", tech_pvt->id, type.c_str());
+       cJSON* jsonData = cJSON_GetObjectItem(json, "data");
+       if (0 == type.compare("playAudio")) {
+-        if (jsonData) {
++        if (jsonData && NULL == cJSON_GetObjectCstr(jsonData, "audioContentType")) {
++          switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "(%u) processIncomingMessage - playAudio request has no string audioContentType, ignoring\n", tech_pvt->id);
++        }
++        else if (jsonData) {
+           // dont send actual audio bytes in event message
+           cJSON* jsonFile = NULL;
+           cJSON* jsonAudio = cJSON_DetachItemFromObject(jsonData, "audioContent");

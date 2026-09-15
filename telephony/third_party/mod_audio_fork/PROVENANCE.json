@@ -1,0 +1,199 @@
+{
+  "schema": "yoko.crm.third-party-provenance.v1",
+  "component": "mod_audio_fork",
+  "purpose": "FreeSWITCH uuid_audio_fork API used by tools/audio-bridge-day1/server.js to stream call audio to the AI audio bridge.",
+  "upstream": {
+    "repository": "https://github.com/drachtio/drachtio-freeswitch-modules",
+    "repository_status": "deleted from GitHub; the successor https://github.com/jambonz/freeswitch-modules is also unavailable",
+    "commit": "88e1465908a89bed5c95d336aa53a3899bb5abb5",
+    "module_path": "modules/mod_audio_fork",
+    "archive": {
+      "provider": "Software Heritage",
+      "origin": "https://github.com/drachtio/drachtio-freeswitch-modules",
+      "visit_date": "2024-06-10",
+      "snapshot": "swh:1:snp:b5d379ed1bd4786cf811e7359c1ba639bfdad15a",
+      "revision": "swh:1:rev:88e1465908a89bed5c95d336aa53a3899bb5abb5",
+      "root_directory": "swh:1:dir:b43b143c0d1fc33a2371f09e3f288c493df94a0c",
+      "module_directory": "swh:1:dir:057788a171657382b245c329fd8aaa31202f5f76"
+    },
+    "verification": "Every vendored upstream file was downloaded from the archive by sha1_git and its git blob id equals the archived blob id.",
+    "note": "The repository's own telephony/setup-mod-audio-fork.sh built from a mirror whose main is the same commit; that mirror post-dates the archive visit and is not an independent source."
+  },
+  "files": [
+    {
+      "path": "upstream/LICENSE",
+      "upstream_path": "modules/mod_audio_fork/LICENSE",
+      "git_blob": "282ebd95401cf8399e6896f7eb6281843eb32c11",
+      "sha256": "eba2946f0b39634dee761e3f20fa85651f27247e37e12ee8c029bc286c090919"
+    },
+    {
+      "path": "upstream/LICENSE.drachtio-freeswitch-modules",
+      "upstream_path": "LICENSE",
+      "git_blob": "9b7d7fd89664ad92898b3b00bb9409932a2335a5",
+      "sha256": "ae1b6459b7c8a4776ec185cec2611a6cced36aa1ec535c4e0d335d46d93245a8"
+    },
+    {
+      "path": "upstream/Makefile.am",
+      "upstream_path": "modules/mod_audio_fork/Makefile.am",
+      "git_blob": "2ba32ed3904a25fcba5da1a2c8419e32bf6089a6",
+      "sha256": "e3e7670abe457224fcc686f26dc7454b6a728878266109450bd7c1dfec995217"
+    },
+    {
+      "path": "upstream/README.md",
+      "upstream_path": "modules/mod_audio_fork/README.md",
+      "git_blob": "af308a4694ad4375d57ac8cb1a4c90d10e985338",
+      "sha256": "3a4414bcf5eec1d3b2e8e43efc4ec160a12d5696af8760f14afa27f37a683af8"
+    },
+    {
+      "path": "upstream/audio_pipe.cpp",
+      "upstream_path": "modules/mod_audio_fork/audio_pipe.cpp",
+      "git_blob": "329c3272a6ee109fbdcf1042831f76c8e65e580b",
+      "sha256": "95376badc1f66a0e2cfb33e7ebd6b55966cb0b2a1412f21697f2c1d342b36f0d"
+    },
+    {
+      "path": "upstream/audio_pipe.hpp",
+      "upstream_path": "modules/mod_audio_fork/audio_pipe.hpp",
+      "git_blob": "52f1dd6b21ff5105b137c893b430efaebe14e887",
+      "sha256": "92647697d455c20652ca8c78161320c01e802901fa815050346764f099191e0b"
+    },
+    {
+      "path": "upstream/base64.hpp",
+      "upstream_path": "modules/mod_audio_fork/base64.hpp",
+      "git_blob": "9cb5380eb2ddaffc3b1e2a2dc6d2ab4deaea5829",
+      "sha256": "f36558bee162411d906d58bf0f00af8b4573ea2c8ab05a506bb2ab10285659a4"
+    },
+    {
+      "path": "upstream/lws_glue.cpp",
+      "upstream_path": "modules/mod_audio_fork/lws_glue.cpp",
+      "git_blob": "d0da9f5e389b71864dfafce5580af64ce21420fa",
+      "sha256": "0a7f26a4fb6be0e3e876f8cf78fc49dd123b013d6304c2242090e1c279b4e14a"
+    },
+    {
+      "path": "upstream/lws_glue.h",
+      "upstream_path": "modules/mod_audio_fork/lws_glue.h",
+      "git_blob": "b95897a6b14d72ebf4beed3c3ef5ec7729f2508b",
+      "sha256": "1dec87ae9a8cff85da756dbb11adf2324d87a2b2757ccb1e678510e8614a54eb"
+    },
+    {
+      "path": "upstream/mod_audio_fork.c",
+      "upstream_path": "modules/mod_audio_fork/mod_audio_fork.c",
+      "git_blob": "326ec1655a254e96adf2137bf971e16ef2575630",
+      "sha256": "36c048649a07d0e86356ca7620130572fdb94c1c88ab6f77ff5c3751b8ae0475"
+    },
+    {
+      "path": "upstream/mod_audio_fork.h",
+      "upstream_path": "modules/mod_audio_fork/mod_audio_fork.h",
+      "git_blob": "6e356cef92d25ca2a591964ebf8db05c96c98b6f",
+      "sha256": "21e02e35bce3472513baab65cd4813e71e245047cd4cb8604b454babf7cf8f2f"
+    },
+    {
+      "path": "upstream/parser.cpp",
+      "upstream_path": "modules/mod_audio_fork/parser.cpp",
+      "git_blob": "36145689c4225a5f91b2a6c8e3d251aa844159fd",
+      "sha256": "3a81a4634d0c3b4db645b24a96b866d97d8e8daefaa7a7bf1562852dfeba2cb6"
+    },
+    {
+      "path": "upstream/parser.hpp",
+      "upstream_path": "modules/mod_audio_fork/parser.hpp",
+      "git_blob": "2dc8ee30103d508da1fba89eafb8f2bac6e86edd",
+      "sha256": "dabe25957d404468426c0570f22fe6106b724a15c366162a1ea59396f862e3aa"
+    }
+  ],
+  "patches": [
+    {
+      "path": "patches/0001-uuid_audio_fork-start-null-argv-guards.patch",
+      "sha256": "b4909c95dd42bc54e22dc29420944653175ee87074f526a474f9e0169ef01b63",
+      "applies_to": [
+        "mod_audio_fork.c"
+      ],
+      "reason": "Start-command argument guards: missing sampling rate (argv[4]); non-lowercase START bypassing the argc<4 usage guard; start_capture no longer runs after an invalid websocket URL or a sampling rate outside positive multiples of 8000 up to 64000; websocket URLs of 512 bytes or more are refused before parse_ws_uri."
+    },
+    {
+      "path": "patches/0002-playAudio-require-string-audioContentType.patch",
+      "sha256": "22506ffcfbee2326bbd006fbe2e995fecc977f8d6fcb7da930a9518277d3278e",
+      "applies_to": [
+        "lws_glue.cpp"
+      ],
+      "reason": "Ignore playAudio messages whose data lacks a string audioContentType instead of strcmp(NULL)."
+    },
+    {
+      "path": "patches/0003-refuse-runtime-unload.patch",
+      "sha256": "5b192d31d421f1352d445ca1300f7495ca7056bac06724883eb29efe74ea2155",
+      "applies_to": [
+        "mod_audio_fork.c"
+      ],
+      "reason": "The load function returns SWITCH_STATUS_NOUNLOAD so FreeSWITCH never runs AudioPipe::deinitialize(), which destroys libwebsockets contexts under running service threads (heap corruption and abort on unload, reload or graceful shutdown)."
+    }
+  ],
+  "patched_sha256": {
+    "mod_audio_fork.c": "6f9fb967b0d104728603af241f011f67d9a101b76b8de47d0a06fd7ca5964232",
+    "lws_glue.cpp": "e1071b9f25e188822f2acdf4fee5f7f862d3ef55dc10b3b27fc42032d037bb12"
+  },
+  "fs_sdk_stubs": [
+    {
+      "path": "fs-sdk/freeswitch.pc",
+      "sha256": "557c480fd7f30754e28217d923cc70c4bb8cad723591fd8ee9401d38e5e0d6e6"
+    },
+    {
+      "path": "fs-sdk/modules.conf",
+      "sha256": "68be44f1bfc982ea55277b4aa433ab8dbd4dd674cf3573faf1dbb5a5959363fa"
+    },
+    {
+      "path": "fs-sdk/sofia-sip-ua.pc",
+      "sha256": "f72b1db67d36babd298d28fc2208b160337baed86334e8c7b44f449555d8cd6c"
+    },
+    {
+      "path": "fs-sdk/spandsp.pc",
+      "sha256": "75de7bb00b720a5b02aa9ea14fbc325c40383802edbfe0d9a66d8fd7117767b6"
+    }
+  ],
+  "build_dependencies": {
+    "freeswitch_source": {
+      "repository": "https://github.com/signalwire/freeswitch.git",
+      "tag": "v1.10.12",
+      "commit": "a88d069d6ffb74df797bcaf001f7e63181c07a09",
+      "tree": "957b630df3cf84f0170e4e49164bb4687365aa98",
+      "use": "configure-only header generation; the module links against the runtime image's own libfreeswitch.so.1.0.0"
+    },
+    "libwebsockets": {
+      "repository": "https://github.com/warmcat/libwebsockets.git",
+      "tag": "v4.3.3",
+      "commit": "4415e84c095857629863804e941b9e1c2e9347ef",
+      "tree": "ee0b8e3b1784b9b478931ee262a2500c4e5cf96a",
+      "use": "static, position-independent, linked into mod_audio_fork.so"
+    }
+  },
+  "images": {
+    "runtime": "safarov/freeswitch@sha256:b31c743f4c911a19687c61e3214968f2a24f93f9d3d667cc26284192e158ffc6",
+    "builder": "debian@sha256:63a496b5d3b99214b39f5ed70eb71a61e590a77979c79cbee4faf991f8c0783e",
+    "debian_snapshot": "20260713T000000Z"
+  },
+  "licenses": [
+    {
+      "component": "mod_audio_fork module",
+      "spdx": "MIT",
+      "file": "upstream/LICENSE",
+      "copyright": "Copyright 2023, Drachtio Communications Services, LLC"
+    },
+    {
+      "component": "drachtio-freeswitch-modules repository",
+      "spdx": "MIT",
+      "file": "upstream/LICENSE.drachtio-freeswitch-modules",
+      "copyright": "Copyright (c) 2021 Dave Horton"
+    },
+    {
+      "component": "base64.hpp",
+      "spdx": "Zlib",
+      "file": "upstream/base64.hpp",
+      "copyright": "Copyright (C) 2004-2008 René Nyffenegger; single-header repackaging by Peter Thorson (2012). Licence text reproduced in NOTICE."
+    },
+    {
+      "component": "libwebsockets 4.3.3",
+      "spdx": "MIT",
+      "notes": "Bundled sources under other permissive licences are listed in the upstream LICENSE; only lib/misc/sha-1.c (BSD-3-Clause) is compiled into this build.",
+      "copyright": "Copyright (C) 2010 - 2020 Andy Green <andy@warmcat.com> (source headers)",
+      "file": "LICENSE.libwebsockets (installed in the image from the tree-verified source)",
+      "license_file_sha256": "2b5dd8030691f3d1870a040f085c37e45d9ab9c684a7f1284f5f379c1e829b28"
+    }
+  ]
+}

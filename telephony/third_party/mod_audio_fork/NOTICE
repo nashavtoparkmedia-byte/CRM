@@ -1,0 +1,71 @@
+Third-party notices for the CRM FreeSWITCH image (crm/freeswitch)
+==================================================================
+
+In the image, the licence files named below are installed in
+/usr/share/doc/crm-telephony/mod_audio_fork/ together with this NOTICE and PROVENANCE.json.
+
+mod_audio_fork
+--------------
+Source: drachtio-freeswitch-modules, commit 88e1465908a89bed5c95d336aa53a3899bb5abb5,
+path modules/mod_audio_fork, retrieved from the Software Heritage archive
+(swh:1:rev:88e1465908a89bed5c95d336aa53a3899bb5abb5, module directory
+swh:1:dir:057788a171657382b245c329fd8aaa31202f5f76).
+Modified: three local patches guard the uuid_audio_fork start command against missing or invalid
+arguments, ignore playAudio messages without a string audioContentType, and keep the module loaded
+for the life of the process (runtime unload corrupted the heap). Each change is
+described in PROVENANCE.json ("patches"); the patch files live in the CRM repository under
+telephony/third_party/mod_audio_fork/patches/.
+
+  MIT License, Copyright 2023, Drachtio Communications Services, LLC
+  (full text: LICENSE)
+
+  MIT License, Copyright (c) 2021 Dave Horton
+  (repository licence, full text: LICENSE.drachtio-freeswitch-modules)
+
+base64.hpp (compiled into mod_audio_fork.so)
+--------------------------------------------
+base64.hpp is a repackaging of the base64.cpp and base64.h files into a single header suitable
+for use as a header only library. This conversion was done by Peter Thorson
+(webmaster@zaphoyd.com) in 2012. All modifications to the code are redistributed under the same
+license as the original, which is listed below.
+
+  base64.cpp and base64.h
+
+  Copyright (C) 2004-2008 René Nyffenegger
+
+  This source code is provided 'as-is', without any express or implied
+  warranty. In no event will the author be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this source code must not be misrepresented; you must not
+     claim that you wrote the original source code. If you use this source code
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original source code.
+
+  3. This notice may not be removed or altered from any source distribution.
+
+  René Nyffenegger rene.nyffenegger@adp-gmbh.ch
+
+libwebsockets
+-------------
+Source: https://github.com/warmcat/libwebsockets tag v4.3.3,
+commit 4415e84c095857629863804e941b9e1c2e9347ef. Statically linked into mod_audio_fork.so.
+
+  MIT License, Copyright (C) 2010 - 2020 Andy Green <andy@warmcat.com>
+  (as stated in the libwebsockets source headers). Some bundled sources keep a BSD-3-Clause,
+  BSD-2-Clause, Zlib, Apache-2.0 or CC0 licence as listed in the upstream LICENSE file; of those,
+  only lib/misc/sha-1.c (BSD-3-Clause) is compiled into this build. Full text: LICENSE.libwebsockets
+
+FreeSWITCH
+----------
+The runtime image is safarov/freeswitch pinned by digest (FreeSWITCH 1.10.12). FreeSWITCH is
+licensed under the Mozilla Public License 1.1. Its v1.10.12 source headers are used to compile the
+module against the runtime's own libfreeswitch; inline code from those headers is compiled into
+mod_audio_fork.so.
