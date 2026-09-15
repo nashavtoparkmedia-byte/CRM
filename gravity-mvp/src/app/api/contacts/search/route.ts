@@ -123,51 +123,15 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Find additional chats linked via Driver (same phone number)
-    // Contact.chats only includes chats with matching contactId,
-    // but TG/other chats may be linked via driverId (same phone → same Driver)
-    const contactPhones = new Map<string, string[]>() // contactId → phones
-    for (const c of contacts) {
-      const phones = c.phones.map(p => p.phone.replace(/\D/g, ''))
-      if (phones.length > 0) contactPhones.set(c.id, phones)
-    }
-
-    // Batch: find chats via driverId where driver.phone matches contact phones
-    const allPhones = [...new Set([...contactPhones.values()].flat())]
-    const driverChats = allPhones.length > 0
-      ? await prisma.chat.findMany({
-          where: {
-            driver: { phone: { in: allPhones.map(p => p.startsWith('7') ? `+${p}` : `+7${p}`) } },
-            chatType: 'private',
-          },
-          select: { id: true, channel: true, driverId: true, driver: { select: { phone: true } } },
-        })
-      : []
-
-    // Map driver chats to contacts by phone
-    const driverChatsByPhone = new Map<string, typeof driverChats>()
-    for (const dc of driverChats) {
-      const normPhone = dc.driver?.phone?.replace(/\D/g, '') || ''
-      if (!driverChatsByPhone.has(normPhone)) driverChatsByPhone.set(normPhone, [])
-      driverChatsByPhone.get(normPhone)!.push(dc)
-    }
-
     // Build hasChat map per contact
     const formatted = contacts.map(c => {
-      // Direct chats (via contactId)
+      // A selectable chat is person-bound only by its exact Contact relation.
+      // Phone-equal Driver chats are deliberately excluded: shared/disputed
+      // phones must never route an operator to another person's conversation.
       const hasChat = c.chats.reduce((acc, ch) => {
         if (!acc[ch.channel]) acc[ch.channel] = ch.id
         return acc
       }, {} as Record<string, string>)
-
-      // Additional chats via driver phone
-      const phones = contactPhones.get(c.id) || []
-      for (const phone of phones) {
-        const extraChats = driverChatsByPhone.get(phone) || []
-        for (const dc of extraChats) {
-          if (!hasChat[dc.channel]) hasChat[dc.channel] = dc.id
-        }
-      }
 
       return {
         id: c.id,

@@ -135,6 +135,22 @@ describe('driver Telegram link Platform orchestration', () => {
         expect(invalid.order).toEqual(['log:Failed to link telegram driver:'])
     })
 
+    it('maps missing authority without notification or revalidation', async () => {
+        const failure = new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED')
+        const current = fixture({ saveError: failure })
+
+        await expect(current.orchestrator.saveDriverTelegramLink({
+            driverId: 'driver-1',
+            telegramId: '42',
+            driverName: 'Driver One',
+        })).resolves.toEqual({
+            success: false,
+            error: 'Нужны подтверждённые контакт, личный Telegram-чат и основной водитель',
+        })
+        expect(current.owners.notifyManualDriverTelegramLinkV1).not.toHaveBeenCalled()
+        expect(current.delivery.revalidateDriver).not.toHaveBeenCalled()
+    })
+
     it('keeps revalidation failure visible after the persisted save', async () => {
         const failure = new Error('revalidate down')
         const current = fixture({ revalidateError: failure })
@@ -164,6 +180,18 @@ describe('driver Telegram link Platform orchestration', () => {
         expect(current.delivery.logError).not.toHaveBeenCalled()
         expect(current.delivery.revalidateDriver).not.toHaveBeenCalled()
         expect(current.order).toEqual(['remove-owner'])
+    })
+
+    it('maps an unauthorized delete with zero revalidation', async () => {
+        const failure = new Error('DRIVER_TELEGRAM_EXACT_PRIVATE_CHAT_REQUIRED')
+        const current = fixture({ removeError: failure })
+
+        await expect(current.orchestrator.removeDriverTelegramLink('driver-1'))
+            .resolves.toEqual({
+                success: false,
+                error: 'Нужны подтверждённые контакт, личный Telegram-чат и основной водитель',
+            })
+        expect(current.delivery.revalidateDriver).not.toHaveBeenCalled()
     })
 
     it('logs and maps other remove and post-delete revalidation failures', async () => {

@@ -51,6 +51,10 @@ export { createDeleteConversationsByChannelHandlerV1 } from './delete-conversati
 export { createLinkMatchedDriverToConversationHandlerV1 } from './link-matched-driver-to-conversation-handler'
 export type { MatchedDriverConversationLinkPersistencePortV1 } from './link-matched-driver-to-conversation-handler'
 export {
+    appendConversationIdentityCollisionV1,
+    type ConversationIdentityCollisionEvidenceV1,
+} from './conversation-identity-collision'
+export {
     cancelImportJob,
     createImportJob,
     deleteImportJob,
@@ -63,6 +67,14 @@ export {
     recoverStuckMessagingDeliveriesV1,
     retryEligibleMessagingDeliveriesV1,
 } from './delivery-recovery-operations'
+export {
+    prepareOutboundConversationV1,
+    registerOutboundConversationPreparerV1,
+    type OutboundConversationChannelV1,
+    type OutboundConversationPreparerV1,
+    type OutboundConversationSnapshotV1,
+    type PreparedOutboundConversationV1,
+} from './outbound-conversation-identity-runtime'
 export {
     attachBinaryMessageMediaV1,
     attachMessageMediaV1,

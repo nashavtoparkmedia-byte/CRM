@@ -2,7 +2,7 @@ import { runYandexSync } from '@/lib/yandexSync'
 
 export type ScheduledYandexSyncResultV1 = {
   ok: boolean
-  reason?: 'already_running' | 'cooldown' | 'error'
+  reason?: 'already_running' | 'cooldown' | 'error' | 'lease_lost'
   cooldownRemainingMs?: number
   errorMessage?: string
   driversUpdated?: number

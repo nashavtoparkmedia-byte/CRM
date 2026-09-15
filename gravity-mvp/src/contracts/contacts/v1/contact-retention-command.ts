@@ -11,6 +11,18 @@ export interface DeleteContactForRetentionResultV1 {
   completed: true
 }
 
+export const CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1 = 'CONTACT_RETENTION_ELIGIBILITY_CHANGED' as const
+
+/** The candidate became ineligible after preflight but before admitted deletion. */
+export class ContactRetentionEligibilityChangedError extends Error {
+  readonly code = CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1
+
+  constructor(message = 'Contact is no longer eligible for retention deletion') {
+    super(message)
+    this.name = 'ContactRetentionEligibilityChangedError'
+  }
+}
+
 export class DeleteContactForRetentionCommandValidationError extends Error {
   readonly code: 'INVALID_CONTRACT' | 'UNSUPPORTED_CONTRACT_VERSION'
 
