@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "5c826321943cdbdd43dfa73d9cd68ad351b5197c89b3c469f77f7d0f8f1ada5e"
+    "decision_registry_sha256": "b1dcc9bc9c87fa8528f2c3041912bb6b17542150a998443285f08cbfb0eff104"
   },
   "amendments": [
     {
@@ -311,58 +311,31 @@
       }
     },
     {
-      "amendment_id": "calling-audio-runtime-hardening-20260915",
+      "amendment_id": "c2-cash-compensation-pilot-main-integration-20260915",
       "reviewed_at": "2026-09-15T00:00:00Z",
-      "reviewed_by": "CALLING_MEDIA_RUNTIME_REMEDIATION_EXECUTOR_REVIEW_20260915",
-      "role": "EXECUTOR_REVIEW_WITH_INDEPENDENT_CRITIC",
-      "authorization": "OWNER_TASK_CALLING_MEDIA_RUNTIME_REMEDIATION_20260915",
-      "predecessor_review": {
-        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
-        "role": "SOL_HIGH_INTERNAL_REVIEW",
-        "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the accepted composition of main at 016669a1 and reviews only the three surfaces added by the Calling media-runtime remediation."
-      },
-      "reason": "The Calling media-runtime remediation (branch calling/audio-runtime-hardening, integrated with main at 016669a1) adds three tracked executable surfaces, all owned by the calling context: the bridge's per-channel lifecycle module, its unit tests and the isolated FreeSWITCH runtime probe. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the merged tree: 2501 + 3 = 2504 surfaces, context-owned 1292 -> 1295, governed exclusions 1209 unchanged.",
+      "reviewed_by": "C2_CASH_COMPENSATION_PILOT_INTEGRATION_REVIEW_20260915",
+      "role": "CANDIDATE_INTEGRATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_PR96_SINGLE_MAIN_INTEGRATION",
+      "reason": "The Telegram cash-compensation pilot branch integrates accepted main 016669a1, whose composed ownership authority stands at 2,501 tracked executable surfaces. The integrated tree measures 2,527 surfaces with the repository tracked-surface inventory, 26 more than that authority, all of them Telegram cash-compensation pilot surfaces. The nine Telegram identity repair surfaces the pilot branch had carried were removed during the integration because PR #81 superseded them, so they are not part of this denominator. This amendment moves only the denominator and rebinds the source fingerprint of an already reviewed assignment whose ownership semantics are unchanged; the three new pilot assignments live in the reviewed decisions registry.",
       "predecessor": {
         "tracked_executable_surfaces": 2501,
         "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
         "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
       },
       "current": {
-        "tracked_executable_surfaces": 2504,
-        "tracked_inventory_sha256": "e964ff21cf71fd41a46dc994d6bddc4f7addf5238380de708d6408f16dd1d63b",
-        "coverage_sha256": "1aba450da56c6b9c5be925ff326355a1a445e49a7797aac88e670fa5a0dd6e8f"
+        "tracked_executable_surfaces": 2527,
+        "tracked_inventory_sha256": "e3cd83d3a4c827127efe40116bc9027cba50c404e550235f0539f31a445cf2ca",
+        "coverage_sha256": "5fae6b44c9637ed522eb34a888fdaa067e1b3a2f1a73e882abba33cd7b2c8867"
       },
-      "unassigned_tracked_surfaces": [
+      "source_hash_rebinds": [
         {
-          "path": "telephony/tests/audio_runtime_probe.mjs",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
-        },
-        {
-          "path": "tools/audio-bridge-day1/__tests__/channel-lifecycle.test.js",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
-        },
-        {
-          "path": "tools/audio-bridge-day1/channel-lifecycle.js",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "91228a9e7e2178298539eac5c0a58ad88b944da87cc523ab186d4cb703dde7c4",
+          "current_source_sha256": "df190c41cabcb6bcf83aa4c6b8234d75e151fae968b9d3676e5e44ec28df2f2c",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook gains the compensation_section and compensation_submit actions and extracts the current Telegram Driver authority check into one shared resolver; every existing action keeps the same authority gate, status codes and responses, and the path keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner."
         }
-      ],
-      "invariants": {
-        "assignments_added": 0,
-        "assignments_removed": 0,
-        "assignments_semantically_changed": 0,
-        "exact_inventory_transitions_changed": 0,
-        "lifecycle_changes": 0,
-        "functional_owner_changes": 0,
-        "governed_exclusion_changes": 0,
-        "rationale_changes": 0
-      }
+      ]
     }
   ]
 }

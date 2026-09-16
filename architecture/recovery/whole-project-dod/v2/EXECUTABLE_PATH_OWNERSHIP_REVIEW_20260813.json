@@ -20,7 +20,8 @@
       "decision": "APPROVED_SOURCE_HASH_ONLY_REBIND",
       "rationale": "The sole Uint8Array response-body wrapper preserves response bytes, headers, range behavior, authorization, storage capability, lifecycle, legacy runtime owner, and exact-runtime inventory membership. No path, authority, write, or ownership transition occurs."
     },
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, the two exact native Codex Stage 0 skill metadata files under repository_operations ownership, three bounded MAX outbound test surfaces under the existing gravity_root exclusion and gravity_application_operations owner, nine intentional Telegram driver-link source/test surfaces introduced together at commit 50d786e6711d7ad5d53da00f361a32e7f470821c, and twenty-three intentional AI call campaign product surfaces introduced by PR #79. The campaign set is exactly twenty-two Calling-owned application, contract, route, UI, adapter, and test surfaces under existing Calling owned-path selectors plus one source-only MIGRATION surface under the existing gravity_schema exclusion and gravity_application_operations owner. The complete Stage A set additionally adds exactly fourteen tracked executable surfaces: one content-specific CI workflow under ci_workflow, twelve release builder/verifier/test surfaces under architecture_recovery, and one authoritative control under architecture_controls; the eleven operational surfaces have exact lifecycle classifications and the three tests retain TEST lifecycle. The combined current-main integration plus this bounded recording-route regression adds thirty-eight disjoint tracked executable surfaces relative to the accepted base; the added route test has TEST lifecycle under the existing gravity_root exclusion and gravity_application_operations owner. The controlled-real-call gate adds exactly twelve tracked TypeScript source/test surfaces under existing Calling owned-path selectors; all remain Calling-owned application or TEST surfaces and create no exact-runtime or exact-path exclusion transition. Stage B adds exactly fourteen tracked executable surfaces under architecture_recovery: eight bounded build, capture, seal, verify, install, package-hook, wrapper, and activation-profile operational surfaces; four TEST surfaces; and two byte-identical Runtime core/predecessor modules in the exact runtime inventory. The exact-runtime transition binds those two current source paths and hashes without changing their trusted bytes or granting ownership, credential, database-write, arbitrary-command, or provider authority. All reviewed surfaces retain their Git modes and existing owner selectors, add no exact-runtime or exact-path inventory transition, and grant no production migration, billing, deployment, production mutation, provider activation, or real-call execution authority. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, the two exact native Codex Stage 0 skill metadata files under repository_operations ownership, three bounded MAX outbound test surfaces under the existing gravity_root exclusion and gravity_application_operations owner, nine intentional Telegram driver-link source/test surfaces introduced together at commit 50d786e6711d7ad5d53da00f361a32e7f470821c, and twenty-three intentional AI call campaign product surfaces introduced by PR #79. The campaign set is exactly twenty-two Calling-owned application, contract, route, UI, adapter, and test surfaces under existing Calling owned-path selectors plus one source-only MIGRATION surface under the existing gravity_schema exclusion and gravity_application_operations owner. The complete Stage A set additionally adds exactly fourteen tracked executable surfaces: one content-specific CI workflow under ci_workflow, twelve release builder/verifier/test surfaces under architecture_recovery, and one authoritative control under architecture_controls; the eleven operational surfaces have exact lifecycle classifications and the three tests retain TEST lifecycle. The combined current-main integration plus this bounded recording-route regression adds thirty-eight disjoint tracked executable surfaces relative to the accepted base; the added route test has TEST lifecycle under the existing gravity_root exclusion and gravity_application_operations owner. The controlled-real-call gate adds exactly twelve tracked TypeScript source/test surfaces under existing Calling owned-path selectors; all remain Calling-owned application or TEST surfaces and create no exact-runtime or exact-path exclusion transition. Stage B adds exactly fourteen tracked executable surfaces under architecture_recovery: eight bounded build, capture, seal, verify, install, package-hook, wrapper, and activation-profile operational surfaces; four TEST surfaces; and two byte-identical Runtime core/predecessor modules in the exact runtime inventory. The exact-runtime transition binds those two current source paths and hashes without changing their trusted bytes or granting ownership, credential, database-write, arbitrary-command, or provider authority. All reviewed surfaces retain their Git modes and existing owner selectors, add no exact-runtime or exact-path inventory transition, and grant no production migration, billing, deployment, production mutation, provider activation, or real-call execution authority. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance.",
+    "cash_compensation_pilot_integration_decision": "The Telegram cash-compensation pilot (PR #96) integrated onto main 016669a1 adds exactly three explicit exact-runtime assignments for its manager surfaces under gravity_runtime_remainder and legacy_gravity_runtime, with no lifecycle, functional-owner or governed-exclusion change. Its remaining tracked surfaces are owned by the fleet_operations context path selectors, two source-only migrations under gravity_schema, and bot surfaces under their existing selectors. The integration retires the superseded C2 Telegram identity repair surfaces before they were ever accepted. It grants no production migration, deployment, provider or payout authority."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
@@ -85,7 +86,7 @@
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
-      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities.",
+      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability.",
       "previous_inventory": {
         "path_count": 242,
         "path_sha256": "9865049dfe3569e41ef7e3669c820a185e7dc1582614ba6fdf13af88a90657b8"
@@ -335,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 247,
-        "path_sha256": "b1e4d2a6685836d59e046d75dbf4411044dde69dd17023543c78711347a9ea10"
+        "path_count": 250,
+        "path_sha256": "2b8a27fbaa69a178a5edf8fe0063dbacc87b957c1ee4904f733a278341eb7135"
       }
     },
     {
@@ -2265,6 +2266,36 @@
       "source_sha256": "aaeae2b674ddfcd39373dd6dd9dcab0436b527af525ba160b59a9d8cc7d01a84",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current Gravity runtime path, application lifecycle, finite legacy runtime owner, governed exclusion, and source hash as one indivisible assignment; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/page.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "77c960816bcc122ca76ef30b20fe53bd20b2b3c74602be911c477409ea698954",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/actions.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "db8f94ff7737a133a25b7ceae26d2b984d00eff8e77a6efe872ec29f80a9d87c",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/CompensationApplicationList.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "fa787632130a4599e9d403d79afff5ee007d5386ab0795dc1b3a0caec0af8f07",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
     },
     {
       "path": "gravity-mvp/src/app/control/attention/page.tsx",

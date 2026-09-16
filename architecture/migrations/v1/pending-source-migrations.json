@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "9c2ce0f306d65272360765effae9ceaf44ef27207d359e74983658b4acb8b478",
-    "size": 158960,
+    "sha256": "745c11cc1b913f2e883d361baefbd973ca91cf8d26b59a986dabf4ccefbe2f87",
+    "size": 161925,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -68,6 +68,53 @@
           "CompensationReconciliationTask",
           "CompensationSettlement",
           "CompensationVerifiedOrder"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260913183000_add_compensation_cash_order",
+      "path": "gravity-mvp/prisma/migrations/20260913183000_add_compensation_cash_order/migration.sql",
+      "sha256": "102a419eb8d4c51f99c2785ae11554e426cece57c33f0bf9074e1d6d64c2c4d4",
+      "size": 3548,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationCashOrder"
+        ],
+        "columns": [
+          {
+            "table": "Driver",
+            "column": "employmentType"
+          },
+          {
+            "table": "Driver",
+            "column": "isSelfEmployed"
+          },
+          {
+            "table": "Driver",
+            "column": "yandexHireDate"
+          }
+        ],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260913190000_add_compensation_pilot_submission",
+      "path": "gravity-mvp/prisma/migrations/20260913190000_add_compensation_pilot_submission/migration.sql",
+      "sha256": "2bcb89d57d94532d59667833918beb09a1c3f0e8bfd07b89c53a587927388147",
+      "size": 1812,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-migrations.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationPilotSubmission"
         ],
         "columns": [],
         "forbidden_indexes": []
