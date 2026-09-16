@@ -38,6 +38,33 @@ The exact named volume `crm_max_user_data` must remain mounted read-write at
 replace it. Other service semantics are digest-bound before activation and
 must remain unchanged after activation and rollback.
 
+## Release environment addition
+
+Activation may add exactly one environment variable name,
+`MAX_SCRAPER_WEBHOOK_SECRET`, and only to `gravity-mvp` and `max-web-scraper`.
+The name, the two services, and the two source paths are sealed constants in
+the profile code and in `profile.v1.json` (`release_environment`); nothing is
+read from runtime input and there is no list to extend.
+
+- The value is never written to the shared `/opt/crm/.env.production`, so no
+  other Compose service can receive it. The generated activation overlay
+  attaches one fixed source per service:
+  `/var/lib/crm/release-staging/messaging-be6b8eb8/{gravity-mvp,max-web-scraper}.env`.
+- Each source must be root-owned `0600` below a non-caller-writable chain and
+  contain exactly `MAX_SCRAPER_WEBHOOK_SECRET=<64 lowercase hex>` plus a
+  newline. Both must carry identical material. Preflight binds a digest of
+  both sources into state; activation refuses before Compose if they changed.
+  No fault or state record carries the value.
+- The rendered activation projection must equal the base projection except for
+  the image, the Gravity command, and that one name with the bound value.
+  Unrelated services must render identically.
+- The target postcheck expects each pair container's environment names to be
+  the predecessor's names plus exactly that one name, which must not already
+  be present. Any other added, removed or renamed variable still fails closed.
+- Rollback never reads or attaches these sources, and its postcheck still
+  requires the unchanged predecessor semantic. The predecessor images do not
+  reference the variable, so they are recreated exactly as they ran before.
+
 ## Large artifact admission
 
 The 4.8 GB Stage A image archives are deliberately not duplicated inside the

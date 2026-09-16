@@ -162,6 +162,18 @@ def main() -> None:
         or profile.get("artifact_admission", {}).get("receipt_sha256") != expected_generated["artifact-admission.v1.json"]
         or profile.get("database", {}).get("mutation_authorized") is not False
         or any(profile.get("negative_properties", {}).values())
+        or profile.get("release_environment") != {
+            "name": "MAX_SCRAPER_WEBHOOK_SECRET",
+            "sources": {
+                "gravity-mvp": "/var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env",
+                "max-web-scraper": "/var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env",
+            },
+            "source_mode": "0600",
+            "value_format": "lowercase-hex-64",
+            "identical_across_services": True,
+            "attached_by": "release-activate",
+            "attached_on_rollback": False,
+        }
     ):
         raise ValueError("generated profile contract mismatch")
     if args.phase in {"package-output", "release"}:

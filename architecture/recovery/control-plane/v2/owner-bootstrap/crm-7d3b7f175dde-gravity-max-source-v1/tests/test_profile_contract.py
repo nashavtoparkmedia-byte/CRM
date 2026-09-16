@@ -57,10 +57,14 @@ class ProfileContractTests(unittest.TestCase):
             },
         }
 
-    def projection(self, image: str, service: str, command: list[str], compose_hash: str) -> dict[str, object]:
+    def projection(
+        self, image: str, service: str, command: list[str], compose_hash: str,
+        environment_names: list[str] | None = None,
+    ) -> dict[str, object]:
         semantic = {
             "image_id": image,
             "command": command,
+            "environment_names": environment_names if environment_names is not None else ["NODE_ENV", "PATH"],
             "compose_labels": {
                 "com.docker.compose.config-hash": compose_hash,
                 "com.docker.compose.project": "crm",
@@ -131,8 +135,9 @@ class ProfileContractTests(unittest.TestCase):
 
     def test_target_postcheck_preserves_volume_database_and_unrelated_services(self) -> None:
         profile = self.profile()
-        gravity = self.projection("new-gravity", "gravity-mvp", ["npm", "run", "start"], "g" * 64)
-        maximum = self.projection("new-max", "max-web-scraper", ["node", "index.js"], "m" * 64)
+        released = ["MAX_SCRAPER_WEBHOOK_SECRET", "NODE_ENV", "PATH"]
+        gravity = self.projection("new-gravity", "gravity-mvp", ["npm", "run", "start"], "g" * 64, released)
+        maximum = self.projection("new-max", "max-web-scraper", ["node", "index.js"], "m" * 64, released)
         state = {
             "environment_sha256": "e" * 64,
             "gravity_semantic": self.projection("old-gravity", "gravity-mvp", ["sh", "-c", "migrate && start"], "o" * 64)["semantic"],

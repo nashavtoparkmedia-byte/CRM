@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -12,7 +13,8 @@ import subprocess
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from types import MappingProxyType
+from typing import Any, Iterator, Mapping
 
 
 PROFILE_ID = "crm-7d3b7f175dde-gravity-max-source-v1"
@@ -38,6 +40,31 @@ TARGET_GRAVITY = "yoko/crm-gravity-mvp:7d3b7f175dde-7867840d7da7ee371039e414a9f2
 TARGET_MAX = "yoko/crm-max-scraper:7d3b7f175dde-7867840d7da7ee371039e414a9f25c566a8eca36-coordinated-v1"
 ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
 ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9"
+
+# The one environment variable name this release is allowed to add, and the only two services it
+# may be added to. Everything here is a sealed constant: nothing is read from runtime input, there
+# is no list to extend, and every other environment difference still fails closed.
+#
+# The value never enters the shared production env file. Activation attaches one fixed root-only
+# source per service through the generated overlay, so no other Compose service can receive it.
+# Rollback never reads these sources and never attaches them, so the predecessor images -- which
+# do not reference this variable -- are recreated with exactly their original environment.
+RELEASE_ENVIRONMENT_NAME = "MAX_SCRAPER_WEBHOOK_SECRET"
+RELEASE_ENVIRONMENT_SOURCES: Mapping[str, str] = MappingProxyType({
+    "gravity-mvp": "/var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env",
+    "max-web-scraper": "/var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env",
+})
+RELEASE_ENVIRONMENT_VALUE = re.compile(rb"[0-9a-f]{64}")
+RELEASE_ENVIRONMENT_SOURCE_MAXIMUM = 256
+RELEASE_ENVIRONMENT_CONTRACT = MappingProxyType({
+    "name": RELEASE_ENVIRONMENT_NAME,
+    "sources": dict(RELEASE_ENVIRONMENT_SOURCES),
+    "source_mode": "0600",
+    "value_format": "lowercase-hex-64",
+    "identical_across_services": True,
+    "attached_by": "release-activate",
+    "attached_on_rollback": False,
+})
 
 
 def _canonical(value: Any) -> bytes:
@@ -87,7 +114,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
     required = {
         "schema", "profile_id", "host", "runtime_abi", "package_version",
         "accepted_application", "stage_a", "artifact_admission", "deployment",
-        "predecessor", "target", "database", "limits",
+        "predecessor", "target", "database", "limits", "release_environment",
         "enabled_zero_argument_profiles", "disabled_profiles", "negative_properties",
     }
     _exact_dict(core, profile, required, "ACTIVATION_PROFILE_INVALID")
@@ -108,6 +135,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         ]
         or set(profile["disabled_profiles"]) != {"config-activate", "database-migrate"}
         or any(profile["negative_properties"].values())
+        or profile["release_environment"] != dict(RELEASE_ENVIRONMENT_CONTRACT)
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     stage_a = _exact_dict(
@@ -731,17 +759,131 @@ def _validate_compose_inputs(core: Any, profile: dict[str, Any], state: dict[str
         raise core.RuntimeFault("PRODUCTION_ENVIRONMENT_IDENTITY_DRIFT", 74)
 
 
+def _release_environment(core: Any) -> dict[str, Any]:
+    """Read and bind the sealed release environment sources for activation only.
+
+    Each source must be a fixed root-owned 0600 regular file below a non-caller-writable chain,
+    containing exactly one line that assigns the one admitted name a lowercase 64-hex value, and
+    both services must receive identical material. The value is returned only for the in-memory
+    projection comparison; no fault raised here carries it, and callers persist only the digest.
+    """
+    values: dict[str, bytes] = {}
+    digests: dict[str, str] = {}
+    for service, path in sorted(RELEASE_ENVIRONMENT_SOURCES.items()):
+        try:
+            expected = _fixed_production_file(core, path, 0o600, RELEASE_ENVIRONMENT_SOURCE_MAXIMUM)
+        except (core.RuntimeFault, OSError) as exc:
+            raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": service}) from exc
+        try:
+            fd = os.open(core.mapped(path), os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        except OSError as exc:
+            raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": service}) from exc
+        try:
+            opened = os.fstat(fd)
+            if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+                raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": service})
+            raw = os.read(fd, RELEASE_ENVIRONMENT_SOURCE_MAXIMUM + 1)
+        finally:
+            os.close(fd)
+        prefix = RELEASE_ENVIRONMENT_NAME.encode("ascii") + b"="
+        value = raw[len(prefix):-1] if raw.startswith(prefix) and raw.endswith(b"\n") else b""
+        if (
+            len(raw) > RELEASE_ENVIRONMENT_SOURCE_MAXIMUM
+            or raw.count(b"\n") != 1
+            or RELEASE_ENVIRONMENT_VALUE.fullmatch(value) is None
+        ):
+            raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_INVALID", 74, {"service": service})
+        values[service] = value
+        digests[service] = hashlib.sha256(raw).hexdigest()
+    first, second = (values[service] for service in sorted(values))
+    if not hmac.compare_digest(first, second):
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_MATERIAL_MISMATCH", 74)
+    return {"sha256": _digest(digests), "value": first.decode("ascii")}
+
+
+def _validate_release_environment(core: Any, state: dict[str, Any]) -> dict[str, Any]:
+    release = _release_environment(core)
+    if not SHA256.fullmatch(str(state.get("release_environment_sha256", ""))) or not hmac.compare_digest(
+        release["sha256"], state["release_environment_sha256"]
+    ):
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_IDENTITY_DRIFT", 74)
+    return release
+
+
+def _environment_names(core: Any, semantic: Any, code: str) -> list[str]:
+    names = semantic.get("environment_names") if isinstance(semantic, dict) else None
+    if (
+        not isinstance(names, list)
+        or any(not isinstance(name, str) or not name for name in names)
+        or names != sorted(set(names))
+    ):
+        raise core.RuntimeFault(code, 74)
+    return names
+
+
+def _expected_pair_semantic(core: Any, service: str, predecessor: dict[str, Any], *, target: bool) -> dict[str, Any]:
+    """The exact runtime semantic a pair container must show after a release transition.
+
+    Rollback expects the predecessor semantic unchanged. Activation expects the predecessor
+    semantic plus exactly the one sealed environment name, and only for the two admitted
+    services; the name must not already be present. Any other added, removed or renamed
+    environment variable therefore still differs from the expectation and fails closed.
+    """
+    if not target:
+        return predecessor
+    if service not in RELEASE_ENVIRONMENT_SOURCES:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
+    names = _environment_names(core, predecessor, "RELEASE_ENVIRONMENT_PREDECESSOR_INVALID")
+    if RELEASE_ENVIRONMENT_NAME in names:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
+    return {**predecessor, "environment_names": sorted([*names, RELEASE_ENVIRONMENT_NAME])}
+
+
+def _admit_release_environment_projection(
+    core: Any, service: str, original: dict[str, Any], actual: dict[str, Any], value: str
+) -> None:
+    """Remove exactly the admitted release variable from one candidate service projection.
+
+    The caller then requires the remainder to equal the base projection byte for byte, so this
+    admits the one name with the one bound value and nothing else.
+    """
+    if service not in RELEASE_ENVIRONMENT_SOURCES:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
+    base = original.get("environment", {})
+    candidate = actual.get("environment", {})
+    if not isinstance(base, dict) or not isinstance(candidate, dict):
+        raise core.RuntimeFault("PAIR_COMPOSE_PROJECTION_DRIFT", 74)
+    if RELEASE_ENVIRONMENT_NAME in base:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
+    supplied = candidate.get(RELEASE_ENVIRONMENT_NAME)
+    if not isinstance(supplied, str) or not hmac.compare_digest(supplied.encode("utf-8"), value.encode("ascii")):
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_PROJECTION_DRIFT", 74, {"service": service})
+    remainder = {key: item for key, item in candidate.items() if key != RELEASE_ENVIRONMENT_NAME}
+    if "environment" in original:
+        actual["environment"] = remainder
+    elif remainder:
+        raise core.RuntimeFault("PAIR_COMPOSE_PROJECTION_DRIFT", 74)
+    else:
+        actual.pop("environment", None)
+
+
 def _compose_overlay(gravity: str, maximum: str, *, activate: bool) -> bytes:
-    if (gravity, maximum) not in {(TARGET_GRAVITY, TARGET_MAX), (ROLLBACK_GRAVITY, ROLLBACK_MAX)}:
+    if (gravity, maximum) != ((TARGET_GRAVITY, TARGET_MAX) if activate else (ROLLBACK_GRAVITY, ROLLBACK_MAX)):
         raise RuntimeError("IMAGE_REFERENCE_INVALID")
     command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
+
+    def environment(service: str) -> str:
+        return f"    env_file:\n      - {RELEASE_ENVIRONMENT_SOURCES[service]}\n" if activate else ""
+
     return (
         "services:\n"
         "  gravity-mvp:\n"
         f"    image: {gravity}\n"
         f"{command}"
+        f"{environment('gravity-mvp')}"
         "  max-web-scraper:\n"
         f"    image: {maximum}\n"
+        f"{environment('max-web-scraper')}"
     ).encode("ascii")
 
 
@@ -779,6 +921,7 @@ def _validate_projection(core: Any, profile: dict[str, Any], overlay: str, *, ac
     changed = {"gravity-mvp", "max-web-scraper"}
     if _canonical({key: value for key, value in base["services"].items() if key not in changed}) != _canonical({key: value for key, value in candidate["services"].items() if key not in changed}):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
+    release_value = _release_environment(core)["value"] if activate else None
     expected = {
         "gravity-mvp": TARGET_GRAVITY if activate else ROLLBACK_GRAVITY,
         "max-web-scraper": TARGET_MAX if activate else ROLLBACK_MAX,
@@ -789,6 +932,8 @@ def _validate_projection(core: Any, profile: dict[str, Any], overlay: str, *, ac
         if actual.get("image") != expected[name]:
             raise core.RuntimeFault("PAIR_COMPOSE_IMAGE_DRIFT", 74)
         actual["image"] = original.get("image")
+        if release_value is not None:
+            _admit_release_environment_projection(core, name, original, actual, release_value)
         if activate and name == "gravity-mvp":
             if actual.get("command") != ["npm", "run", "start"]:
                 raise core.RuntimeFault("GRAVITY_SAFE_COMMAND_DRIFT", 74)
@@ -965,6 +1110,10 @@ def _predecessor_identity(
         ):
             raise core.RuntimeFault(f"{name}_PREDECESSOR_IDENTITY_DRIFT", 74)
     _max_volume_exact(core, profile, maximum)
+    # Refuse before anything is loaded if the predecessors already carry the release name or their
+    # environment projection is unusable: the activation expectation could not then be exact.
+    _expected_pair_semantic(core, "gravity-mvp", gravity["semantic"], target=True)
+    _expected_pair_semantic(core, "max-web-scraper", maximum["semantic"], target=True)
     database = _database_status(core, profile)
     if database["state"] != "EXACT":
         raise core.RuntimeFault("DATABASE_PREDECESSOR_IDENTITY_DRIFT", 74)
@@ -1014,6 +1163,10 @@ def _log_evidence(core: Any, path: str, captured_at: str) -> dict[str, Any]:
 
 def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str, *, activate: bool) -> None:
     _validate_compose_inputs(core, profile, state)
+    if activate:
+        # Only activation attaches the release environment, so only activation depends on it.
+        # A rollback must stay possible even if these sources were removed after a failure.
+        _validate_release_environment(core, state)
     _validate_projection(core, profile, overlay, activate=activate)
     log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
@@ -1058,9 +1211,12 @@ def _postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state
     if kind != expected:
         raise core.RuntimeFault("PAIR_POSTCHECK_IDENTITY_DRIFT", 74)
     _max_volume_exact(core, profile, maximum)
-    if _preserved_semantic(gravity["semantic"]) != _preserved_semantic(state["gravity_semantic"]):
+    target = expected == "TARGET_PAIR"
+    expected_gravity = _expected_pair_semantic(core, "gravity-mvp", state["gravity_semantic"], target=target)
+    expected_max = _expected_pair_semantic(core, "max-web-scraper", state["max_semantic"], target=target)
+    if _preserved_semantic(gravity["semantic"]) != _preserved_semantic(expected_gravity):
         raise core.RuntimeFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", 74)
-    if _preserved_semantic(maximum["semantic"]) != _preserved_semantic(state["max_semantic"]):
+    if _preserved_semantic(maximum["semantic"]) != _preserved_semantic(expected_max):
         raise core.RuntimeFault("MAX_RUNTIME_SEMANTIC_DRIFT", 74)
     if expected == "TARGET_PAIR":
         if gravity["semantic"].get("command") != ["npm", "run", "start"] or maximum["semantic"].get("command") != state["max_semantic"].get("command"):
@@ -1171,6 +1327,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
         if pair_state != "PREDECESSOR_PAIR":
             raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74)
         identity = _predecessor_identity(core, policy, profile, state)
+        release_environment = _release_environment(core)
         receipt = _artifact_receipt(core, profile)
         for name in sorted(receipt["files"]):
             _artifact_path(core, profile, name, hash_content=True)
@@ -1205,6 +1362,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             "phase": "PREFLIGHTED",
             "preflight_at": core.now(),
             "environment_sha256": identity["environment_sha256"],
+            "release_environment_sha256": release_environment["sha256"],
             "gravity_semantic": identity["gravity_semantic"],
             "max_semantic": identity["max_semantic"],
             "unrelated_semantic_fingerprint_sha256": identity["unrelated_semantic_fingerprint_sha256"],

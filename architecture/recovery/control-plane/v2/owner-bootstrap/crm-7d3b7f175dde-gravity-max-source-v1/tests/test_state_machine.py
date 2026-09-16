@@ -304,6 +304,7 @@ class StateMachineTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_read_state", return_value={"schema": self.runtime.STATE_SCHEMA, "profile_id": self.runtime.PROFILE_ID, "phase": "UNINITIALIZED"}),
             mock.patch.object(self.runtime, "_pair", return_value=self.pair("old-g", "old-m")),
             mock.patch.object(self.runtime, "_predecessor_identity", return_value=identity),
+            mock.patch.object(self.runtime, "_release_environment", return_value={"sha256": "s" * 64, "value": "a" * 64}),
             mock.patch.object(self.runtime, "_artifact_receipt", return_value=receipt),
             mock.patch.object(self.runtime, "_artifact_path") as artifact_path,
             mock.patch.object(self.runtime, "_image_inspect", return_value=None),
@@ -500,6 +501,7 @@ class ReleaseCapacityTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_read_state", return_value={"phase": "ROLLED_BACK"}),
             mock.patch.object(self.runtime, "_pair", return_value=({"image_id": "old-g"}, {"image_id": "old-m"})),
             mock.patch.object(self.runtime, "_predecessor_identity", return_value={}),
+            mock.patch.object(self.runtime, "_release_environment", return_value={"sha256": "s" * 64, "value": "a" * 64}),
             mock.patch.object(self.runtime, "_artifact_receipt", return_value={"files": {}}),
             # Both target images already present -> nothing to load, so nothing is pending.
             mock.patch.object(self.runtime, "_image_inspect", return_value={"Id": "present"}),
@@ -541,6 +543,7 @@ class ReleaseCapacityTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_read_state", return_value={"phase": "UNINITIALIZED"}),
             mock.patch.object(self.runtime, "_pair", return_value=({"image_id": "old-g"}, {"image_id": "old-m"})),
             mock.patch.object(self.runtime, "_predecessor_identity", return_value={}),
+            mock.patch.object(self.runtime, "_release_environment", return_value={"sha256": "s" * 64, "value": "a" * 64}),
             mock.patch.object(self.runtime, "_artifact_receipt", return_value={"files": {}}),
             mock.patch.object(self.runtime, "_image_inspect", return_value=None),
             mock.patch.object(self.runtime, "_load_target", side_effect=[{"Id": "new-g"}, {"Id": "new-m"}]),
@@ -579,6 +582,7 @@ class ReleaseCapacityTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_read_state", return_value={"phase": "UNINITIALIZED"}),
             mock.patch.object(self.runtime, "_pair", return_value=({"image_id": "old-g"}, {"image_id": "old-m"})),
             mock.patch.object(self.runtime, "_predecessor_identity", return_value={}),
+            mock.patch.object(self.runtime, "_release_environment", return_value={"sha256": "s" * 64, "value": "a" * 64}),
             mock.patch.object(self.runtime, "_artifact_receipt", return_value={"files": {}}),
             mock.patch.object(self.runtime, "_image_inspect", return_value=None),
             mock.patch.object(
@@ -631,7 +635,7 @@ class PredecessorRetryTests(unittest.TestCase):
             "running": True,
             "health": "healthy",
             "restart_count": 0,
-            "semantic": {"name": container_id},
+            "semantic": {"name": container_id, "environment_names": ["NODE_ENV", "PATH"]},
         }
         record.update(overrides)
         return record
