@@ -1,9 +1,10 @@
-# Provider account identity — model and M1 status (v1)
+# Provider account identity — model, M1 and M2A1 status (v1)
 
-**Status: PERSON / TRANSPORT SEPARATION ACCEPTED. M1 IMPLEMENTED. Provider-account
-entities and account-scoped routes remain DEFERRED.** This note records the model the
-repository now enforces, what M1 changed, and what a later milestone must still provide.
-It is not an implementation plan for tables, migrations or backfills.
+**Status: PERSON / TRANSPORT SEPARATION ACCEPTED. M1 IMPLEMENTED. COMPANY ACCOUNT MODEL
+ACCEPTED (M2A1). WHATSAPP ACCOUNT FOUNDATION PERSISTED BUT INERT (M2A1-S1). Runtime account
+attestation, account-scoped routes and live transport fencing remain DEFERRED.** This note
+records the model the repository now enforces, what M1 and M2A1-S1 changed, and what a later
+milestone must still provide. It is not an implementation plan for backfills or runtime wiring.
 
 ## The model
 
@@ -153,11 +154,81 @@ block the person, while a genuine identity conflict stays fail-closed.**
 | Telegram driver-link route binding (Chat account and connection unchanged under the lock) | the proof conversation cannot be rebound between preparation and write |
 | Reachability check account echo | a check persists only when it ran under the account it names. The contact card still passes the identity's first-writer stamp as that account, so an unstamped identity, or one stamped by another transport, never persists a check result |
 
+## Company accounts (M2A1)
+
+M2A1 accepted the target model for company accounts and their transports. Its first slice,
+S1, persists the WhatsApp foundation with its database invariants and nothing that uses it.
+
+### Accepted model
+
+- **An account is not a transport, and not a person.** A company account is the provider
+  account as the provider identifies it. A transport is a runtime way to act as that account:
+  a WhatsApp slot and its pairing, an MTProto session, a bot process, a MAX web session.
+  Neither `Contact` nor `ChannelIdentity` has a relation to an account, in either direction.
+  Business modules must never target a slot id, provider account id, connection id or JID.
+- **Each channel owns its own account model.** There is no generic provider-account table.
+  WhatsApp Channel owns the WhatsApp account, its keys, bindings, attestation and trust, and
+  the capability lease foundation. Telegram and MAX get their own models in later slices.
+- **One account may have several transports.** Exclusivity is decided per capability, not per
+  account: `inbound`, `outbound` and `history_import` each have at most one lease holder per
+  account. The earlier "one account, one live transport" rule is not accepted.
+- **Lifecycle and trust are separate axes.** Lifecycle is operator intent, stored on the
+  account. Trust is attestation, stored on each transport binding. Stale is never stored: a
+  binding is stale once its `attestedUntil` is at or before the database clock.
+- **A WhatsApp account is identified by its provider key set, `{PN user, LID user}`,** in exact
+  provider form with no `+7` or other phone normalization. An account is created only with both
+  keys, a key belongs to one account forever, and a partial attestation never creates or extends
+  an identity. Re-pairing a slot opens a new binding on a new generation. It cannot redefine the
+  identity an older binding attested.
+- **Lifecycle:** `pending_approval → active | rejected`, `active → disabled`,
+  `disabled → active | retired`, `rejected → pending_approval`. `disabled` is the reversible
+  temporary shutdown and may repeat. `retired` is terminal (owner decision OD2), and a retired
+  account's provider keys stay reserved.
+- **Pause, disable and delete history are three different actions.** Pausing message
+  processing changes no lifecycle, trust or identity. Disabling or disconnecting an account
+  deletes no chats, messages, contacts, channel identities, historical evidence or account
+  identity: the same account can be re-enabled, and history sync stays available after it
+  reconnects. Deleting history is a separate action and is not part of M2A1.
+- **History import is its own capability.** Its modes stay: only new messages, available
+  history, last N days. Reconnecting the same account imports what is available and fills gaps
+  without duplicates; a repeated import is idempotent and keeps existing history. A slot paired
+  to a different WhatsApp account never attaches that history to the previous account.
+- **Live transport fencing is not part of S1.** The per-transport `TransportLease` is deferred.
+  No runtime acquires a capability lease, so S1 fences no live WhatsApp transport.
+
+### What S1 persists and enforces
+
+S1 adds four tables owned by WhatsApp Channel through one expand-only migration. No existing
+table, row, route or code path changes, and nothing in the runtime reads or writes the new
+tables.
+
+| Table | Holds | Database invariants |
+|---|---|---|
+| `WhatsAppAccount` | opaque account id, kind, lifecycle with its version, time, actor and reason | identity immutable; only the transitions above, `retired` terminal; created only with the complete key set; activation needs both keys; cannot leave `active` while a lease is held; cannot retire while a binding is open |
+| `WhatsAppAccountKey` | one PN or LID value in exact provider form | one owner forever; one PN and one LID per account; never updated |
+| `WhatsAppTransportBinding` | slot locator (no foreign key, so slot delete paths are unchanged), generation, per-slot sequence, trust state, attestation origin, attested and claimed key, attesting instance, operator confirmation, attestation window, close reason | account, slot, generation and sequence immutable; one open binding per slot; history only advances; trust `pending → verified, mismatched, revoked or closed` and `verified → mismatched, revoked or closed`, with closed rows frozen; `verified` needs an attested key owned by the same account and an attestation window; a `transport_asserted` binding needs operator confirmation of its claimed key; the window only moves forward and spans at most one hour; a binding cannot close or leave `verified` while it holds a lease |
+| `WhatsAppCapabilityLease` | epoch, version, holder binding and instance, state, heartbeat, lease end, quarantine end, last release | acquire, renew and takeover need an active account and an open, verified, fresh binding of that account; the first acquisition is epoch 1; each write advances version by one; epoch stays or advances by one; the holder is fixed within an epoch; a released epoch is never revived; takeover only after release or expiry and after the quarantine; a release the holder does not declare quarantines the old lease window; lease length is capped per capability (outbound 1 minute, inbound 2 minutes, history import 5 minutes) and outbound is capped at the holder's attestation window |
+
+No row of the four tables can be removed and none of them can be truncated. Times come from
+the database clock. Every trigger that reads across tables locks the account row first, so the
+writer lock order is: account, then leases by capability, then bindings. A holder declares
+itself for a release through the transaction-local setting `yoko.whatsapp_lease_holder`.
+
+`WhatsAppAccountKey` records no first attesting binding, and the binding trigger does not look
+up the slot in `WhatsAppConnection`. The binding's composite foreign key to the key it attested
+already records provenance, and reading the credential-bearing slot table would tie the inert
+foundation to credential governance.
+
+The isolated PostgreSQL suite
+`gravity-mvp/src/modules/whatsapp-channel/internal/company-account/whatsapp-account-foundation.postgres.test.ts`
+proves each rule, including two-connection races run in both orders.
+
 ## What a later milestone must still provide
 
-1. **Provider-authoritative account records** owned by each channel context, persisted at
-   attestation and immutable; re-pairing, token rotation or session replacement changes the
-   transport, never the account.
+1. **Provider-authoritative account records** owned by each channel context, whose identity
+   is immutable while lifecycle and trust change; re-pairing, token rotation or session
+   replacement changes the transport, never the account. WhatsApp has the persisted
+   foundation (M2A1-S1) but no attestation writer yet. Telegram and MAX have neither.
 2. **An explicit conversation route** in Messaging, keyed by account, replacing the
    first-writer `Chat.metadata.connectionId` / `providerAccountId` stamps and the globally
    unique `Chat.externalChatId`. The dormant account-scoped MAX route tables are the
@@ -173,7 +244,8 @@ block the person, while a genuine identity conflict stays fail-closed.**
    can be re-paired to another number, and neither ingress nor sending compares the live
    `client.info.wid` with the number a conversation was carried by. Until a route records its
    company account and sends verify it, a reply on a re-paired slot can leave from another
-   company number. This predates M1 and no collision can detect it.
+   company number. This predates M1 and no collision can detect it. M2A1-S1 does not change
+   it: the account tables exist, but no send path reads them.
 6. **A controlled answer for unprovable history**: legacy conversations without transport or
    account provenance, and historical conflict entries that cannot be classified, are
    reconciled only by an explicit, audited milestone — never silently unblocked, attributed

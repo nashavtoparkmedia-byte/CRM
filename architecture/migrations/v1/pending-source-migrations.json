@@ -9,13 +9,14 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "9c2ce0f306d65272360765effae9ceaf44ef27207d359e74983658b4acb8b478",
-    "size": 158960,
+    "sha256": "226f97a24d5076017a37391a68ab45b616eb046083d3776f48a3428e43f51a5b",
+    "size": 164537,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
-    "fleet_operations"
+    "fleet_operations",
+    "whatsapp_channel"
   ],
   "migrations": [
     {
@@ -68,6 +69,26 @@
           "CompensationReconciliationTask",
           "CompensationSettlement",
           "CompensationVerifiedOrder"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260916120000_add_whatsapp_account_foundation",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "size": 28759,
+      "owner_context": "whatsapp_channel",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/whatsapp-channel/internal/company-account/whatsapp-account-foundation.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "WhatsAppAccount",
+          "WhatsAppAccountKey",
+          "WhatsAppCapabilityLease",
+          "WhatsAppTransportBinding"
         ],
         "columns": [],
         "forbidden_indexes": []
