@@ -336,6 +336,24 @@
           "review_rationale": "The driver-bot webhook gains the compensation_section and compensation_submit actions and extracts the current Telegram Driver authority check into one shared resolver; every existing action keeps the same authority gate, status codes and responses, and the path keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner."
         }
       ]
+    },
+    {
+      "amendment_id": "cash-order-ingestion-runtime-pr1-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "CASH_ORDER_INGESTION_PR1_OWNERSHIP_REVIEW_20260916",
+      "role": "CANDIDATE_SURFACE_ADDITION_REVIEW",
+      "authorization": "MAIN_ORCHESTRATOR_AUTHORIZED_CASH_INGESTION_PR1",
+      "reason": "Cash-order ingestion PR1 adds 22 tracked executable surfaces on top of the 2,527-surface authority: one expand-only Prisma migration classified MIGRATION_ONLY through the reviewed noncanonical migration decisions, and 21 TypeScript files under gravity-mvp/src/modules/fleet-operations (the ingestion composition root, runtime, authority, source, writer adapter and their tests), all inside paths fleet_operations already owns. The measured tree has 2,549 surfaces, the exact-inventory drift against the current coverage is empty, and no existing surface changes lifecycle, owner or exclusion, so this amendment moves only the denominator.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2527,
+        "tracked_inventory_sha256": "e3cd83d3a4c827127efe40116bc9027cba50c404e550235f0539f31a445cf2ca",
+        "coverage_sha256": "5fae6b44c9637ed522eb34a888fdaa067e1b3a2f1a73e882abba33cd7b2c8867"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2549,
+        "tracked_inventory_sha256": "7b6d8673c4e3a31880a83c378e8554482970f14c5b7cb7f6bcc3ef839b939427",
+        "coverage_sha256": "42ada95e7b1089132b390f1219f8d5925c708e140eaab2397763d9c92b719883"
+      }
     }
   ]
 }
