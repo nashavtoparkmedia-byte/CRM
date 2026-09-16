@@ -21,7 +21,7 @@ services:
     environment:
       # Megafon SIP trunk credentials (from .env)
       - MEGAFON_SIP_USERNAME=${MEGAFON_SIP_USERNAME}
-      - MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD}
+      - MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD:?MEGAFON_SIP_PASSWORD required}
       # ESL password — read by event_socket.conf.xml
       - ESL_PASSWORD=${ESL_PASSWORD:-ClueCon}
       # Manager extension passwords (Linphone + browser WebRTC)

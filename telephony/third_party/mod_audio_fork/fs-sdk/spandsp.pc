@@ -1,0 +1,10 @@
+prefix=/nonexistent
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: spandsp
+Description: configure-only stub; not linked into mod_audio_stream
+Version: 3.0.0
+Libs:
+Cflags:
