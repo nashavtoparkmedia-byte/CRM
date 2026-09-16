@@ -183,6 +183,66 @@ export function isTransportCollisionReasonV1(channel: unknown, reason: unknown):
     && TRANSPORT_COLLISION_REASONS_V1[channel].has(reason)
 }
 
+/** Values the MAX admission chain treats as "no account", mirrored so the writer can refuse them itself. */
+const MAX_ACCOUNT_PLACEHOLDERS_V1: ReadonlySet<string> = new Set(['legacy', 'max-default'])
+
+function concreteMaxAccountId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized !== '' && !MAX_ACCOUNT_PLACEHOLDERS_V1.has(normalized) ? normalized : null
+}
+
+/**
+ * Whether a channel ingress collision, as recorded, contradicts the person, so
+ * that Contacts may record it as a person conflict.
+ *
+ * A transport, connection or company-account reason never does. On MAX the
+ * collision compares the event with facts stored on the conversation, and those
+ * facts are evidence about the peer only when the exact admission chain wrote
+ * them for the same company account that observed the event: a concrete stored
+ * account equal to the incoming one, and a stored `private` chat kind, which the
+ * chain writes together with the sender. Earlier writers never stored a chat
+ * kind, their sender is whoever wrote last (even the company account's own
+ * outbound echo), and their Contact link was re-pointed on every event. Another
+ * account's stored facts say nothing about this event either, because MAX chat
+ * ids are not proven to be account-independent. So, on MAX, only these are
+ * person evidence:
+ * - `sender_identity_mismatch`: two concrete, different senders against proven
+ *   private peer evidence, neither of them the company account itself;
+ * - `chat_kind_mismatch`: group traffic into a proven private conversation.
+ * Everything else is route or admission uncertainty and never reaches the person:
+ * `sender_identity_unproven` (absent proof is not a contradiction),
+ * `message_chat_mismatch` and `channel_mismatch` (global message or conversation
+ * key collisions), and any reason the chain does not raise. Messaging still
+ * fails the conversation closed and audits it. Other channels are unchanged.
+ */
+export function isPersonIdentityCollisionEvidenceV1(input: {
+  channel: unknown
+  reason: unknown
+  details: unknown
+}): boolean {
+  if (!isCollisionChannel(input.channel) || typeof input.reason !== 'string') return false
+  if (isTransportCollisionReasonV1(input.channel, input.reason)) return false
+  if (input.channel !== 'max') return true
+
+  const details = jsonRecord(input.details)
+  const account = concreteMaxAccountId(details.existingProviderAccountId)
+  const provenPrivateConversation = account !== null
+    && account === concreteMaxAccountId(details.incomingProviderAccountId)
+    && details.existingChatKind === 'private'
+  if (!provenPrivateConversation) return false
+
+  if (input.reason === 'sender_identity_mismatch') {
+    return presentId(details.existingSenderId)
+      && presentId(details.incomingSenderId)
+      && details.existingSenderId !== details.incomingSenderId
+      && details.existingSenderId.trim() !== account
+      && details.incomingSenderId.trim() !== account
+  }
+  if (input.reason === 'chat_kind_mismatch') return details.incomingChatKind === 'group'
+  return false
+}
+
 /**
  * Proves, from a recorded collision alone, that it concerned only a transport.
  *

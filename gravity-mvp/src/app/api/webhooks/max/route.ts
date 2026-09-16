@@ -7,6 +7,7 @@ import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/mess
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
+  isPersonIdentityCollisionEvidenceV1,
   markChannelIdentityConflictV1,
   startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
@@ -340,29 +341,39 @@ export async function POST(request: Request) {
     const persistMaxIdentityCollision = async (
       existingChat: Chat,
       evidence: MaxIdentityCollisionEvidence,
-      // The person-level reason, or null when only the provider account
-      // contradicted. The conversation still fails closed and is audited.
+      // The person candidate reason, or null when there is none. The
+      // conversation fails closed and is audited either way.
       personReason: string | null,
     ) => {
       await appendConversationIdentityCollisionV1({
         chatId: existingChat.id,
         evidence,
       })
-      if (personReason && existingChat.contactId && existingChat.contactIdentityId) {
+      const conflictDetails = {
+        incomingProviderAccountId: evidence.incomingProviderAccountId,
+        existingProviderAccountId: evidence.existingProviderAccountId,
+        incomingSenderId: evidence.incomingSenderId,
+        existingSenderId: evidence.existingSenderId,
+        incomingChatKind: evidence.incomingChatKind,
+        existingChatKind: evidence.existingChatKind,
+      }
+      // Contacts decides whether this reason, with exactly these recorded values,
+      // is a fact about the person. Absent sender proof, stored facts from a
+      // legacy writer or another account, and global key collisions fail only
+      // this conversation closed, audited above, and never reach the person.
+      if (
+        personReason
+        && existingChat.contactId
+        && existingChat.contactIdentityId
+        && isPersonIdentityCollisionEvidenceV1({ channel: 'max', reason: personReason, details: conflictDetails })
+      ) {
         await markChannelIdentityConflictV1({
           contactId: existingChat.contactId,
           identityId: existingChat.contactIdentityId,
           channel: 'max',
           reason: personReason,
           evidenceRoot: `channel-collision:max:${existingChat.externalChatId}:${evidence.incomingProviderAccountId}:${personReason}`,
-          details: {
-            incomingProviderAccountId: evidence.incomingProviderAccountId,
-            existingProviderAccountId: evidence.existingProviderAccountId,
-            incomingSenderId: evidence.incomingSenderId,
-            existingSenderId: evidence.existingSenderId,
-            incomingChatKind: evidence.incomingChatKind,
-            existingChatKind: evidence.existingChatKind,
-          },
+          details: conflictDetails,
         })
       }
     }
@@ -430,13 +441,17 @@ export async function POST(request: Request) {
         ?? senderCollisionReason
       if (collisionReason) {
         // The provider-account arm runs before the chat-kind and sender arms, so
-        // an account reason can hide a genuine person contradiction. Those arms
-        // still reach the Contacts person record; an account mismatch alone only
-        // fails this conversation closed, because MAX chat ids are not yet proven
-        // to be account-independent.
-        const personReason = providerCollisionReason && collisionReason === providerCollisionReason
-          ? chatKindCollisionReason ?? senderCollisionReason
-          : collisionReason
+        // the arm it hides is still offered as the person candidate. Whether a
+        // candidate is a fact about the person is decided in
+        // persistMaxIdentityCollision by the Contacts classifier. Two events
+        // observe no person at all and offer no candidate: a deletion, which only
+        // re-checks stored values, and one of our own outgoing echoes, which by
+        // the same rule that nulls its peer sender carries no peer evidence.
+        const personReason = deleted || isOutgoing
+          ? null
+          : providerCollisionReason && collisionReason === providerCollisionReason
+            ? chatKindCollisionReason ?? senderCollisionReason
+            : collisionReason
         await persistMaxIdentityCollision(existingChat, {
           channel: 'max',
           reason: collisionReason,

@@ -4,7 +4,7 @@ import {
   lockContactOwnershipRows,
   runContactOwnershipTransaction,
 } from '../../internal/contact-ownership-coordinator'
-import { isTransportCollisionReasonV1 } from './contact-evidence-state'
+import { isPersonIdentityCollisionEvidenceV1, isTransportCollisionReasonV1 } from './contact-evidence-state'
 
 export type MarkChannelIdentityConflictInputV1 = {
   contactId: string
@@ -41,6 +41,13 @@ function validate(input: MarkChannelIdentityConflictInputV1): void {
   // caller. Callers escalate only a person or conversation-shape reason.
   if (isTransportCollisionReasonV1(input.channel, input.reason)) {
     throw new TypeError('transport collision is not a person identity conflict')
+  }
+  // Route or admission uncertainty (absent sender proof, legacy stored facts,
+  // another account's conversation, a global key collision) also fails only its
+  // own conversation closed. Contacts refuses anything its classifier does not
+  // prove to be about the person.
+  if (!isPersonIdentityCollisionEvidenceV1(input)) {
+    throw new TypeError('collision evidence does not prove a person identity conflict')
   }
 }
 

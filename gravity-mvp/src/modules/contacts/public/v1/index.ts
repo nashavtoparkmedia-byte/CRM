@@ -105,6 +105,7 @@ export {
     markChannelIdentityConflictV1,
     type MarkChannelIdentityConflictInputV1,
 } from './channel-identity-conflict'
+export { isPersonIdentityCollisionEvidenceV1 } from './contact-evidence-state'
 export type {
     ManualPhoneEvidenceCommandV1,
     ManualPhoneEvidenceResultV1,
