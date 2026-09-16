@@ -1,14 +1,14 @@
-# Runtime 2.0.0-16 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-17 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
 
-- application commit `7d3b7f175ddebc7db3a9a3fbced24957f1be7c16`;
-- coordinated profile `crm-7d3b7f175dde-gravity-max-source-v1`;
-- Stage A builder `7867840d7da7ee371039e414a9f25c566a8eca36`;
-- hosted artifact run `34687594677`, artifact `10296346283`;
-- Gravity image `sha256:f6732139285613d808fced423b8dff91a0ffcab6497012a995e7270b6d686e0a`;
-- MAX scraper image `sha256:8ccce836055fae5e9dfe0ef5bc9f0bc7f33b949331d84bef1b749b1c5df4a325`.
+- application commit `be6b8eb82d8c074e82a3be0cd53db26137e984be`;
+- coordinated profile `crm-be6b8eb82d8c-gravity-max-source-v1`;
+- Stage A builder `0f1a213b2b1f0a8e322fd597aa4575829c6e26fc`;
+- hosted artifact run `35135070179`, artifact `10462154988`;
+- Gravity image `sha256:cde1748c8f305b2d491ca6ec0879fd91556ae454417f54ff49c8e3a4d9bfb6b6`;
+- MAX scraper image `sha256:c31dcae8783f89d348e3f3261cdd23acad955b66f19994f2b0c96e1ab7147e30`.
 
 It does not rebuild application images and does not authorize an arbitrary
 revision, image, service, path, Docker command, shell, database migration, or
@@ -17,7 +17,7 @@ zero-argument `database-status`, `release-preflight`, `release-activate`, and
 `rollback` operations plus the existing read-only `predecessor-observe`.
 
 The trusted Runtime core, predecessor observer, base policy, and sudoers file
-are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-15,
+are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-16,
 the installed predecessor, is the exact direct control-plane rollback and is not
 modified by this builder.
 
@@ -83,9 +83,9 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
-The installer also requires the already-installed 2.0.0-15 DEB at its exact
+The installer also requires the already-installed 2.0.0-16 DEB at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`4ef91178abffd61981d60a661c3b0cb0c2dc3b423b29d994fff33309aec8b246`.
+`0cdbc6777804a4f5f098089a94ad8fc88a13af50a10649479541e1491e2b9e48`.
 Any successor installation failure restores that exact package automatically.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
@@ -93,4 +93,4 @@ start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and
 the authenticated Stage A handoff. Independent configured reviewers must bind
 the final commit/tree, package, seal, bootstrap, Stage A artifact, and the
-2.0.0-15 rollback before installation.
+2.0.0-16 rollback before installation.

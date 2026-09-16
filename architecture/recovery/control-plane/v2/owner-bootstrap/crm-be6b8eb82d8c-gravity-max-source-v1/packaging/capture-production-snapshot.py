@@ -12,9 +12,9 @@ from typing import Any
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # The snapshot describes the runtime that is installed right now, which is still
-# 2.0.0-15 under its own profile. This must not follow the successor's id or the
+# 2.0.0-16 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
-EXPECTED_PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
+EXPECTED_PROFILE = "crm-7d3b7f175dde-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
@@ -100,7 +100,7 @@ def main() -> None:
     postgres = records["docker-inspect:crm.container.postgres"]["evidence"]
     database = records["database-status"]["evidence"]
     provenance = records["docker-provenance"]["evidence"]
-    if version.get("package_version") != "2.0.0-15" or version.get("activation_profile") != EXPECTED_PROFILE:
+    if version.get("package_version") != "2.0.0-16" or version.get("activation_profile") != EXPECTED_PROFILE:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
@@ -121,12 +121,18 @@ def main() -> None:
             raise ValueError(f"{label} predecessor mismatch")
     if maximum.get("mounts") != [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}]:
         raise ValueError("MAX persistent volume mismatch")
+    # The installed 2.0.0-16 profile was sealed against 62 applied migrations. Production has since
+    # applied exactly one more, 20260831120000_add_ai_call_campaign_product, so that profile reports
+    # its own baseline as DRIFTED. The successor seals the 63-row ledger instead, and pins it exactly:
+    # the count, the ledger digest (re-derived read-only from the database, independently of this
+    # runtime) and the database identity. Any other ledger still refuses the capture.
     if (
         database.get("profile_id") != EXPECTED_PROFILE
         or database.get("read_only") is not True
         or database.get("secret_values_emitted") is not False
-        or database.get("state") != "EXACT"
-        or database.get("applied_migration_count") != 62
+        or database.get("state") not in {"EXACT", "DRIFTED"}
+        or database.get("applied_migration_count") != 63
+        or database.get("migration_rows_sha256") != "78de9c8e61312c0a28669eeedba76f3626d2c41e7df3ae6bf9f2c1270c51b27c"
         or database.get("database_identity_sha256") != "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
     ):
         raise ValueError("database predecessor mismatch")

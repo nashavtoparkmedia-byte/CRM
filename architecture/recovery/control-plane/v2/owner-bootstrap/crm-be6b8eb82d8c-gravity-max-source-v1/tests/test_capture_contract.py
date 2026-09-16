@@ -59,7 +59,7 @@ class CaptureContractTests(unittest.TestCase):
                 seal.reopen_generated_review_for_cleanup(generated)
 
     def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/runtime-v15-seal-2e94dac1/yoko-privileged-runtime_2.0.0-15_all.deb")
+        path = Path("/opt/codex-work/runtime-v16-rebind/architecture/recovery/control-plane/v2/owner-bootstrap/" "crm-7d3b7f175dde-gravity-max-source-v1/dist/yoko-privileged-runtime_2.0.0-16_all.deb")
         self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
 
     def test_capture_plan_is_finite_and_read_only(self) -> None:
@@ -95,8 +95,8 @@ class CaptureContractTests(unittest.TestCase):
     def test_sealer_accepts_only_fresh_exact_predecessor_snapshot(self) -> None:
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
         sealing = {
-            "runtime_package_version": "2.0.0-15",
-            "runtime_profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
+            "runtime_package_version": "2.0.0-16",
+            "runtime_profile_id": "crm-7d3b7f175dde-gravity-max-source-v1",
             "audit_record_count": 47,
             "audit_last_digest": "a" * 64,
             "predecessor_release_critical_identity_sha256": "b" * 64,
@@ -110,8 +110,8 @@ class CaptureContractTests(unittest.TestCase):
             "postgres_container_id": "p",
             "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
-            "applied_migration_count": 62,
-            "migration_rows_sha256": "8eea7d25be2cc6b5fcee97bace2abf2ed1e15d183ea9f58d3c6f191d644fd9b6",
+            "applied_migration_count": 63,
+            "migration_rows_sha256": "78de9c8e61312c0a28669eeedba76f3626d2c41e7df3ae6bf9f2c1270c51b27c",
             "unrelated_semantic_fingerprint_sha256": "e" * 64,
         }
         value = {
