@@ -52,6 +52,14 @@ if (T.ADMISSION_FLOOR_MS !== T.WRITE_DB_OP_MS + T.FINISH_RESERVE_MS + T.MARGIN_M
     throw new Error('cash-order ingestion timing constants are inconsistent')
 }
 
+/** When the scheduler runs ticks: every interval, the first one after a delay. */
+export function cashOrderIngestionTickScheduleV1(): { intervalMs: number; firstRunDelayMs: number } {
+    return {
+        intervalMs: CASH_ORDER_INGESTION_TIMING_V1.TICK_INTERVAL_MS,
+        firstRunDelayMs: CASH_ORDER_INGESTION_TIMING_V1.FIRST_TICK_DELAY_MS,
+    }
+}
+
 export interface MonotonicClockV1 {
     /** Milliseconds on a clock that never steps backwards. */
     nowMs(): number

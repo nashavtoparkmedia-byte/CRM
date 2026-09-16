@@ -13,7 +13,7 @@
 
 import { randomUUID } from 'node:crypto'
 
-import { CASH_ORDER_INGESTION_TIMING_V1 } from '../internal/compensation/cash-order-ingestion-budget'
+import { cashOrderIngestionTickScheduleV1 } from '../internal/compensation/cash-order-ingestion-budget'
 import {
     parseCashOrderIngestionConfigV1,
     parseCashOrderIngestionModeV1,
@@ -27,33 +27,28 @@ import { legacyPrismaCashOrderIngestionStoreV1 } from '../internal/compensation/
 import { loadYandexCashOrderCredentialsV1 } from '../internal/compensation/yandex-cash-order-credentials'
 import { createYandexCashOrderPageFetcherV1 } from '../internal/compensation/yandex-cash-order-source'
 
-let runtime: CashOrderIngestionRuntimeV1 | null = null
-
-function ingestionRuntime(): CashOrderIngestionRuntimeV1 {
-    if (runtime === null) {
-        runtime = new CashOrderIngestionRuntimeV1(
-            parseCashOrderIngestionConfigV1({
-                mode: process.env.YOKO_CASH_ORDER_INGESTION_MODE,
-                parks: process.env.YOKO_CASH_COMPENSATION_PARKS,
-            }),
-            {
-                store: legacyPrismaCashOrderIngestionStoreV1,
-                loadCredentials: loadYandexCashOrderCredentialsV1,
-                fetchPage: createYandexCashOrderPageFetcherV1(),
-                clock: { nowMs: () => performance.now() },
-                wallNowMs: () => Date.now(),
-                sleep: (durationMs) => new Promise((resolve) => {
-                    setTimeout(resolve, durationMs).unref?.()
-                }),
-                random: Math.random,
-                newToken: () => randomUUID(),
-                // Fields are codes and park ids only; never a body or a credential.
-                log: (level, event, fields) => console[level](JSON.stringify({ event, ...fields })),
-            },
-        )
-    }
-    return runtime
-}
+// Built once at load, with no I/O: the store, credential source and provider
+// client are only used when a tick or a targeted request runs.
+const runtime = new CashOrderIngestionRuntimeV1(
+    parseCashOrderIngestionConfigV1({
+        mode: process.env.YOKO_CASH_ORDER_INGESTION_MODE,
+        parks: process.env.YOKO_CASH_COMPENSATION_PARKS,
+    }),
+    {
+        store: legacyPrismaCashOrderIngestionStoreV1,
+        loadCredentials: loadYandexCashOrderCredentialsV1,
+        fetchPage: createYandexCashOrderPageFetcherV1(),
+        clock: { nowMs: () => performance.now() },
+        wallNowMs: () => Date.now(),
+        sleep: (durationMs) => new Promise((resolve) => {
+            setTimeout(resolve, durationMs).unref?.()
+        }),
+        random: Math.random,
+        newToken: () => randomUUID(),
+        // Fields are codes and park ids only; never a body or a credential.
+        log: (level, event, fields) => console[level](JSON.stringify({ event, ...fields })),
+    },
+)
 
 export interface CashOrderIngestionScheduleV1 {
     enabled: boolean
@@ -64,10 +59,11 @@ export interface CashOrderIngestionScheduleV1 {
 /** Whether the scheduler should register at all. Mode off registers nothing. */
 export function cashOrderIngestionScheduleV1(): CashOrderIngestionScheduleV1 {
     const mode = parseCashOrderIngestionModeV1(process.env.YOKO_CASH_ORDER_INGESTION_MODE)
+    const tick = cashOrderIngestionTickScheduleV1()
     return {
         enabled: mode !== 'off',
-        intervalMs: CASH_ORDER_INGESTION_TIMING_V1.TICK_INTERVAL_MS,
-        firstRunDelayMs: CASH_ORDER_INGESTION_TIMING_V1.FIRST_TICK_DELAY_MS,
+        intervalMs: tick.intervalMs,
+        firstRunDelayMs: tick.firstRunDelayMs,
     }
 }
 
@@ -88,7 +84,7 @@ export interface ScheduledCashOrderIngestionResultV1 {
  * codes when the tick has any job error, so the operational job records it.
  */
 export async function runScheduledCashOrderIngestionV1(): Promise<ScheduledCashOrderIngestionResultV1> {
-    const result = await ingestionRuntime().runTick()
+    const result = await runtime.runTick()
     if (result.errors.length > 0) {
         throw new Error(`cash_order_ingestion_failed: ${result.errors.slice(0, 12).join(', ')}`)
     }
@@ -112,7 +108,7 @@ export interface CashOrderRefreshRequestV1 {
 
 /** Schedules one hot refresh of an enabled park. Never waits for the provider. */
 export async function requestCashOrderHotRefreshV1(externalParkId: string): Promise<CashOrderRefreshRequestV1> {
-    const outcome = await ingestionRuntime().requestHotRefresh(externalParkId)
+    const outcome = await runtime.requestHotRefresh(externalParkId)
     return outcome.status === 'not_scheduled'
         ? { status: 'not_scheduled', reason: outcome.reason }
         : { status: outcome.status, reason: null }
@@ -128,7 +124,7 @@ export async function requestCashOrderDayConfirmationV1(input: {
     dayKey: string
     order?: { externalOrderId: string; providerBookedAt: Date | null }
 }): Promise<CashOrderRefreshRequestV1> {
-    const outcome = await ingestionRuntime().requestDayConfirmation({
+    const outcome = await runtime.requestDayConfirmation({
         externalParkId: input.externalParkId,
         dayKey: input.dayKey,
         order: input.order === undefined
@@ -159,7 +155,7 @@ export function readCashOrderOrderConfirmationV1(input: {
     dayKey: string
     externalOrderId: string
 }): CashOrderOrderConfirmationDtoV1 {
-    const snapshot = ingestionRuntime().readDayConfirmation(input.externalParkId, input.dayKey)
+    const snapshot = runtime.readDayConfirmation(input.externalParkId, input.dayKey)
     const confirmation = cashOrderConfirmationForOrderV1(snapshot, input.externalOrderId)
     switch (confirmation.state) {
         case 'confirmed':

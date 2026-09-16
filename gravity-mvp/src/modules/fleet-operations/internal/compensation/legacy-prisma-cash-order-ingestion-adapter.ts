@@ -3,9 +3,9 @@
  *
  * Every statement is a literal with a fixed parameter count; page-sized sets
  * travel as array parameters through UNNEST, never as SQL built from values.
- * Every transaction bounds itself with SET LOCAL before its first real
- * statement, so a lock wait or a slow statement fails the operation instead of
- * outliving the run budget:
+ * Every transaction bounds itself with SET LOCAL (a session setting, not a
+ * write) before its first real statement, so a lock wait or a slow statement
+ * fails the operation instead of outliving the run budget:
  *
  *   short operation  maxWait 2 s, timeout 2 s, statement 1.5 s, lock 0.5 s
  *   page write       maxWait 2 s, timeout 5 s, statement 3 s,   lock 1 s
@@ -31,16 +31,16 @@ type Transaction = Prisma.TransactionClient
 
 async function shortOperation<T>(work: (transaction: Transaction) => Promise<T>): Promise<T> {
     return prisma.$transaction(async (transaction) => {
-        await transaction.$executeRawUnsafe(`SET LOCAL statement_timeout = '1500ms'`)
-        await transaction.$executeRawUnsafe(`SET LOCAL lock_timeout = '500ms'`)
+        await transaction.$queryRawUnsafe(`SET LOCAL statement_timeout = '1500ms'`)
+        await transaction.$queryRawUnsafe(`SET LOCAL lock_timeout = '500ms'`)
         return work(transaction)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 2_000, timeout: 2_000 })
 }
 
 async function writeOperation<T>(work: (transaction: Transaction) => Promise<T>): Promise<T> {
     return prisma.$transaction(async (transaction) => {
-        await transaction.$executeRawUnsafe(`SET LOCAL statement_timeout = '3000ms'`)
-        await transaction.$executeRawUnsafe(`SET LOCAL lock_timeout = '1000ms'`)
+        await transaction.$queryRawUnsafe(`SET LOCAL statement_timeout = '3000ms'`)
+        await transaction.$queryRawUnsafe(`SET LOCAL lock_timeout = '1000ms'`)
         return work(transaction)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, maxWait: 2_000, timeout: 5_000 })
 }

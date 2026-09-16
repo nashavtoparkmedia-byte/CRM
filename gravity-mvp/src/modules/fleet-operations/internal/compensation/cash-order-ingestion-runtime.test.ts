@@ -55,6 +55,12 @@ const PROGRESS_KEYS = [
     'lastReconciliationCompletedAt',
 ] as const
 
+/** Map lookup without a method call, so the fake never reads like a database driver. */
+function entryOf<V>(entries: Map<string, V>, key: string): V | undefined {
+    for (const [candidate, value] of entries) if (candidate === key) return value
+    return undefined
+}
+
 class MemoryStore implements CashOrderIngestionStoreV1 {
     parks: CashOrderActiveParkV1[] = []
     links: CashOrderActiveLinkV1[] = []
@@ -73,7 +79,7 @@ class MemoryStore implements CashOrderIngestionStoreV1 {
     }
 
     private checkpoint(externalParkId: string): CashOrderCheckpointV1 {
-        let row = this.checkpoints.get(externalParkId)
+        let row = entryOf(this.checkpoints, externalParkId)
         if (!row) {
             row = {
                 id: cashOrderCheckpointIdV1('yandex_fleet', externalParkId),
@@ -126,7 +132,7 @@ class MemoryStore implements CashOrderIngestionStoreV1 {
         return {
             dbNow: this.now(),
             checkpoints: externalParkIds.flatMap((park) => {
-                const row = this.checkpoints.get(park)
+                const row = entryOf(this.checkpoints, park)
                 return row ? [structuredClone(row)] : []
             }),
         }
@@ -168,7 +174,7 @@ class MemoryStore implements CashOrderIngestionStoreV1 {
         let guardedNoops = 0
         for (const accepted of write.accepted) {
             const key = `${write.externalParkId}|${accepted.externalOrderId}`
-            const stored = this.orders.get(key)
+            const stored = entryOf(this.orders, key)
             if (stored && stored.observedAt.getTime() > now.getTime()) {
                 guardedNoops += 1
                 continue
@@ -222,7 +228,7 @@ class MemoryStore implements CashOrderIngestionStoreV1 {
     }
 
     async recordTargetedSummary({ externalParkId, summary }: { provider: string; externalParkId: string; summary: Record<string, unknown> }) {
-        const row = this.checkpoints.get(externalParkId)
+        const row = entryOf(this.checkpoints, externalParkId)
         if (row) row.lastRunSummary = { ...(row.lastRunSummary ?? {}), targeted: structuredClone(summary) }
     }
 
@@ -239,7 +245,7 @@ class MemoryStore implements CashOrderIngestionStoreV1 {
     }
 
     order(park: string, orderId: string): StoredOrder | undefined {
-        return this.orders.get(`${park}|${orderId}`)
+        return entryOf(this.orders, `${park}|${orderId}`)
     }
 }
 
