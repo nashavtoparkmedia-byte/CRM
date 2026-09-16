@@ -76,6 +76,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | `TELEGRAM_WEBHOOK_SECRET` | проверка заголовка `X-Telegram-Bot-Api-Secret-Token` для Telegram webhook | **C** |
 | `ADMIN_IDS` (список Telegram ID админов) | tg-bot | M — это не секрет, но не публикуем |
 | `BOT_CRM_SECRET` | tg-bot ↔ gravity-mvp (межсервисная авторизация) | **C** |
+| `CRM_TELEGRAM_CONNECTION_ID` | стабильная общая привязка рабочего Bot API транспорта в tg-bot и gravity-mvp | M |
 
 ### 2.3 WhatsApp
 
@@ -92,6 +93,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
 | `MAX_SCRAPER_PHONE` | gravity-mvp + max-web-scraper | M — это номер, не секрет; но в репо не пихаем |
+| `MAX_SCRAPER_WEBHOOK_SECRET` | max-web-scraper → gravity-mvp | **C** — обязательный shared secret для MAX webhook-ов; без него ingress fail-closed |
 | Сессионные cookies web.max.ru | max-web-scraper (профиль Playwright) | **C** — доступ к рабочему аккаунту |
 
 ### 2.5 Yandex Fleet (скрапер парка)
@@ -133,7 +135,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
-| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | FreeSWITCH (хост) | **C** — доступ к исходящим звонкам, реальные деньги |
+| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | Контейнер `crm-freeswitch`: `MEGAFON_SIP_PASSWORD` читается при старте (`vars.xml` exec-set → `megafon.xml`); образ не запускается при пустом значении или заглушке. Значение хранится в `.env.production`, который через общий `env_file` получают ещё семь сервисов: audio-bridge, gravity-mvp, tg-bot, tg-bot-frontend, yandex-fleet-scraper-api, yandex-fleet-scraper-worker, max-web-scraper. gravity-mvp в режиме env отдаёт значение ролям «Администратор» и «Руководитель» через `GET /api/settings/telephony-connection?reveal=1`. Доступ к ESL (`ESL_PASSWORD`) равносилен доступу к паролю транка (`global_getvar megafon_password`). Логин пока задан в `megafon.xml`. | **C** — доступ к исходящим звонкам, реальные деньги |
 | `ESL_PASSWORD` (FreeSWITCH Event Socket Library) | tg-bot / audio-bridge | H |
 | coturn shared secret | TURN-relay | H |
 
@@ -221,7 +223,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | WhatsApp/MAX/Yandex Fleet сессии | "Ротация" = повторная привязка через QR-код / SMS. Делать в окно низкой нагрузки. |
 | `ANTHROPIC_API_KEY` | Сгенерировать новый в консоли Anthropic, потом отозвать старый (не наоборот — будет downtime). |
 | **age PRIVATE key** | **Никогда не ротируется планово.** Только если есть подозрение что украли. Ротация = расшифровать все бэкапы старым ключом, перешифровать новым публичным. Долгая операция. |
-| SIP `MEGAFON_SIP_PASSWORD` | Через личный кабинет МультиФон. Менять в окно когда нет звонков. |
+| SIP `MEGAFON_SIP_PASSWORD` | **Значение, ранее закоммиченное в git (публичный репозиторий), скомпрометировано и до выката этого образа используется работающим FreeSWITCH: ротировать как можно скорее. Удаление из HEAD не является ротацией: значение остаётся в истории git и внутри 23 запечатанных артефактов evidence в дереве репозитория (`architecture/recovery/control-plane/v2/owner-bootstrap/*`: `inputs/source.tar.gz`, пакеты `yoko-privileged-runtime_*.deb`, бандлы `dist/*.tar`). Их удаление — решение Owner; обезвреживает значение только ротация.** Ротация — через личный кабинет МультиФон, в окно когда нет звонков. Новое значение: только `A-Za-z0-9._~+=/@,-`, минимум 8 символов, не начинается с `-` или `~` (`scripts/deploy.sh` читает `.env.production` через `set -a; .`, и bash подставляет ведущую `~`), **без двоеточия** (sofia-sip обрезает пароль по `:`) и без `%`. Обновить `.env.production`, затем `docker compose ... up -d --no-deps --force-recreate freeswitch` (restart не перечитывает env). Проверка обязательна вручную и **только форматированными командами**: `docker inspect -f '{{.State.Status}} restarting={{.State.Restarting}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}' crm-freeswitch` — `running`, `restarting=false`, `restarts` не растёт, `health=healthy`; `fs_cli ... -x "sofia status gateway megafon"` — `REGED`; `fs_cli ... -x "module_exists mod_audio_fork"` — `true`. Не запускать `docker inspect crm-freeswitch` без `-f`, `docker compose config`, `fs_cli -x "global_getvar"`, `xml_locate` или `eval $${megafon_password}`: они печатают пароль (в том числе в тикеты и логи агентов). `scripts/deploy.sh` не ловит контейнер в цикле перезапуска. Перед recreate сравнить `/etc/freeswitch` работающего контейнера с образом (`docker diff crm-freeswitch`; томов на `/etc/freeswitch` нет — конфиг копируется из образа при старте нового контейнера), иначе ручные правки внутри контейнера будут потеряны. Развёрнутый конфиг с подставленным паролем пишется в `freeswitch.xml.fsxml` в томе `crm_freeswitch_logs`. Первый выкат образа с `mod_audio_fork`: прежний FreeSWITCH не читал `MEGAFON_SIP_PASSWORD`, поэтому до recreate проверить (не печатая значение), что значение в `.env.production` проходит проверку образа и совпадает с действующим паролем — иначе цикл перезапусков (exit 64) или отказ регистрации. Образы, собранные до этого изменения, содержат старый пароль в конфиге: после ротации откат на них ломает регистрацию, после приёмки их нужно удалить. Порядок выката — `docs/operations/calling-media-runtime-rollout.md`. |
 | S3 Access/Secret Keys | Создать новую пару в Selectel, обновить rclone config, прогнать тестовый бэкап, отозвать старую пару. |
 
 ---

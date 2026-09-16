@@ -1,6 +1,6 @@
 "use server"
 
-import { getMaxConnections, sendMaxMessage } from '@/app/max-actions'
+import { getMaxConnections } from '@/app/max-actions'
 
 export interface MaxDriverMessageOptionsV1 {
   connectionId?: string
@@ -14,9 +14,9 @@ export async function listMaxDriverDeliveryConnectionsV1() {
 
 /** MAX-owned façade for the exact manager-to-driver send shape. */
 export async function sendMaxDriverMessageV1(
-  phone: string,
-  message: string,
-  options?: MaxDriverMessageOptionsV1,
+  _phone: string,
+  _message: string,
+  _options?: MaxDriverMessageOptionsV1,
 ) {
-  return sendMaxMessage(phone, message, options)
+  throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
 }

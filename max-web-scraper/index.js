@@ -26,6 +26,7 @@ const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
+const { deriveMaxChatKind }        = require('./lib/ChatKind')
 const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
 
@@ -33,6 +34,9 @@ const QRCode                       = require('qrcode')
 
 const PORT            = process.env.PORT            || 3005
 const CRM_WEBHOOK_URL = process.env.CRM_WEBHOOK_URL || 'http://localhost:3000/api/webhooks/max'
+const MAX_SCRAPER_WEBHOOK_SECRET = typeof process.env.MAX_SCRAPER_WEBHOOK_SECRET === 'string'
+  ? process.env.MAX_SCRAPER_WEBHOOK_SECRET.trim()
+  : ''
 const MAX_URL         = 'https://web.max.ru/'
 const USER_DATA_DIR        = path.join(__dirname, 'user_data')
 const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
@@ -790,13 +794,104 @@ async function processSendQueue() {
   isSending = false
 }
 
+function normalizeExactMaxProviderAccountId(value) {
+  if (value == null || !['string', 'number'].includes(typeof value)) return null
+  const normalized = String(value).trim()
+  if (!normalized || normalized === 'legacy' || normalized === 'max-default') return null
+  return normalized
+}
+
+function liveAuthenticatedMaxProviderAccountId() {
+  if (!transport?.isAuthenticated?.()) return null
+  return normalizeExactMaxProviderAccountId(transport._myUserId)
+}
+
+function requireLiveMaxProviderAccount(req, res) {
+  const requestedProviderAccountId = normalizeExactMaxProviderAccountId(req.body?.providerAccountId)
+  if (!requestedProviderAccountId) {
+    res.status(400).json({
+      error: 'Exact providerAccountId is required',
+      code: 'MAX_PROVIDER_ACCOUNT_REQUIRED',
+    })
+    return null
+  }
+
+  const providerAccountId = liveAuthenticatedMaxProviderAccountId()
+  if (!isReady || !providerAccountId) {
+    res.status(503).json({
+      error: 'MAX authenticated provider account is not ready',
+      code: 'MAX_PROVIDER_ACCOUNT_UNPROVEN',
+    })
+    return null
+  }
+  if (requestedProviderAccountId !== providerAccountId) {
+    res.status(409).json({
+      error: 'Requested MAX provider account does not match the authenticated session',
+      code: 'MAX_PROVIDER_ACCOUNT_MISMATCH',
+    })
+    return null
+  }
+  return providerAccountId
+}
+
+function maxScraperWebhookHeaders(headers = {}) {
+  if (!MAX_SCRAPER_WEBHOOK_SECRET) {
+    throw new Error('MAX_SCRAPER_WEBHOOK_SECRET_UNCONFIGURED')
+  }
+  return {
+    ...headers,
+    'X-Max-Scraper-Webhook-Secret': MAX_SCRAPER_WEBHOOK_SECRET,
+  }
+}
+
+function forwardMaxReactionWebhook(url, payload) {
+  try {
+    const providerAccountId = liveAuthenticatedMaxProviderAccountId()
+    if (!providerAccountId) throw new Error('MAX_PROVIDER_ACCOUNT_UNPROVEN')
+    if (payload.providerAccountId != null) {
+      const claimedProviderAccountId = normalizeExactMaxProviderAccountId(payload.providerAccountId)
+      if (!claimedProviderAccountId || claimedProviderAccountId !== providerAccountId) {
+        throw new Error('MAX_PROVIDER_ACCOUNT_MISMATCH')
+      }
+    }
+    return fetch(url, {
+      method: 'POST',
+      headers: maxScraperWebhookHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ ...payload, providerAccountId }),
+    })
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
 // ─── CRM webhook forward ─────────────────────────────────────────────────────
 
 async function forwardToWebhook(payload) {
+  const providerAccountId = liveAuthenticatedMaxProviderAccountId()
+  if (!providerAccountId) {
+    throw new Error('MAX_PROVIDER_ACCOUNT_UNPROVEN')
+  }
+  for (const claimedAccountId of [payload.accountId, payload.providerAccountId]) {
+    if (claimedAccountId == null) continue
+    const normalizedClaim = normalizeExactMaxProviderAccountId(claimedAccountId)
+    if (!normalizedClaim || normalizedClaim !== providerAccountId) {
+      throw new Error('MAX_PROVIDER_ACCOUNT_MISMATCH')
+    }
+  }
+  const normalizedChatId = payload.chatId != null ? normalizeMaxChatId(payload.chatId) : payload.chatId
+  const providerChatModels = [...new Set([
+    payload.chatId,
+    payload.rawChatId,
+    normalizedChatId,
+  ].filter(value => value != null).map(String))]
+    .map(id => chatCache.get(id))
+    .filter(Boolean)
   const normalizedPayload = {
     ...payload,
-    chatId: payload.chatId != null ? normalizeMaxChatId(payload.chatId) : payload.chatId,
+    accountId: providerAccountId,
+    chatId: normalizedChatId,
     rawChatId: payload.rawChatId || payload.chatId,
+    chatKind: deriveMaxChatKind(...providerChatModels),
   }
   trackImportedMessage(normalizedPayload.chatId, normalizedPayload.timestamp)
   const url  = new URL(CRM_WEBHOOK_URL)
@@ -809,7 +904,8 @@ async function forwardToWebhook(payload) {
     path:     url.pathname + url.search,
     method:   'POST',
     headers: {
-      'Content-Type':   'application/json',
+      ...maxScraperWebhookHeaders(),
+      'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(body),
     },
   }
@@ -5439,11 +5535,8 @@ async function init() {
         counters,
         opcode: 155,
       })
-      fetch(reactionUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ externalMsgId, counters }),
-      }).catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
+      forwardMaxReactionWebhook(reactionUrl, { externalMsgId, counters })
+        .catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
     }
     // Opcode 135 — chat update push; содержит lastReaction + lastReactedMessageId
     // В реальности opcode 155 не приходит при реакции другого пользователя — только 135.
@@ -5477,11 +5570,8 @@ async function init() {
               counters,
               opcode: 180,
             })
-            fetch(reactionUrl, {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ externalMsgId, counters }),
-            }).catch(e => console.error('[App] opcode180 reaction sync error:', e.message))
+            forwardMaxReactionWebhook(reactionUrl, { externalMsgId, counters })
+              .catch(e => console.error('[App] opcode180 reaction sync error:', e.message))
           }
         } else {
           appendDebugJson('max_reactions_unparsed.jsonl', data.payload)
@@ -5505,11 +5595,8 @@ async function init() {
           reaction: emoji,
           opcode: 135,
         })
-        fetch(reactionUrl, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ externalMsgId, emoji, isRemove: false }),
-        }).catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
+        forwardMaxReactionWebhook(reactionUrl, { externalMsgId, emoji, isRemove: false })
+          .catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
       } else {
         console.log(`[App] opcode135 skip own-reaction echo: msgId=${externalMsgId}`)
       }
@@ -5531,11 +5618,8 @@ async function init() {
             if (sentKeys.has(key)) continue
             sentKeys.add(key)
             console.log(`[App] opcode${data.opcode} reaction deep: msgId=${externalMsgId} event=${JSON.stringify(event).slice(0, 200)}`)
-            fetch(reactionUrl, {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify(event),
-            }).catch(e => console.error(`[App] opcode${data.opcode} reaction deep sync error:`, e.message))
+            forwardMaxReactionWebhook(reactionUrl, event)
+              .catch(e => console.error(`[App] opcode${data.opcode} reaction deep sync error:`, e.message))
           }
         } else if (data.opcode === 135 || data.opcode === 180) {
           appendDebugJson('max_reactions_unparsed.jsonl', data.payload)
@@ -5589,10 +5673,10 @@ async function init() {
     if (!msgId) return
     const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
     try {
-      const res = await fetch(reactionUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ externalMsgId: String(msgId), emoji, isRemove }),
+      const res = await forwardMaxReactionWebhook(reactionUrl, {
+        externalMsgId: String(msgId),
+        emoji,
+        isRemove,
       })
       if (!res.ok) console.warn(`[App] sentReaction sync HTTP ${res.status}`)
       else console.log(`[App] sentReaction sync: msgId=${msgId} emoji=${emoji} remove=${isRemove}`)
@@ -5742,15 +5826,8 @@ app.post('/check-reachability', async (req, res) => {
     })
   }
 
-  if (!isReady) {
-    return res.status(503).json({
-      status: 'checking',
-      reachable: null,
-      confirmed: false,
-      retryable: true,
-      error: 'MAX scraper is not ready',
-    })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
 
   try {
     const fromStore = contactStore ? contactStore.findByPhone(digits) : null
@@ -5761,6 +5838,7 @@ app.post('/check-reachability', async (req, res) => {
         confirmed: true,
         retryable: false,
         chatId: String(fromStore),
+        providerAccountId,
         source: 'contactStore',
       })
     }
@@ -5782,6 +5860,7 @@ app.post('/check-reachability', async (req, res) => {
         confirmed: true,
         retryable: false,
         chatId: String(liveId),
+        providerAccountId,
         source: 'live_lookup',
       })
     }
@@ -5792,6 +5871,7 @@ app.post('/check-reachability', async (req, res) => {
       confirmed: false,
       retryable: false,
       error: 'MAX account not found',
+      providerAccountId,
     })
   } catch (e) {
     return res.status(503).json({
@@ -5800,11 +5880,19 @@ app.post('/check-reachability', async (req, res) => {
       confirmed: false,
       retryable: true,
       error: e.message,
+      providerAccountId,
     })
   }
 })
 
 // Debug: показывает состояние contactStore + живой resolve для диагностики
+// Debug transport and DOM routes used to expose or mutate live provider state
+// from caller-selected identities. They are permanently retired before any
+// legacy handler below can run.
+app.use('/debug', (_req, res) => {
+  res.status(404).json({ error: 'NOT_FOUND' })
+})
+
 // GET /debug/resolve?phone=79126787532
 app.get('/debug/resolve', async (req, res) => {
   const { phone } = req.query
@@ -5935,9 +6023,8 @@ app.post('/send-message', async (req, res) => {
   }
   // Normalize: если передан phone без chatId — используем его как chatId (будет резолвится как телефон)
   if (!chatId && phone) chatId = phone
-  if (!isReady) {
-    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
   const crmOutboundDomGuard = rememberCrmOutboundText(message, chatId, uiChatId, phone)
 
   // Detect if chatId looks like a phone number (10-11 digits).
@@ -5985,9 +6072,32 @@ app.post('/send-message', async (req, res) => {
         } else {
           console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
         }
+        // Every success response echoes the live account this request was checked
+        // against above; Gravity rejects a send result without it as
+        // MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH and records a delivered message as failed.
+        //
+        // The compose box was observed to clear of the exact typed text. Bound to the
+        // CRM's clientMessageId, that is the same action proof the direct-UI and
+        // UI-fallback paths report. Answering 'send_requested' left the message 'sent'
+        // with no provider id, so recovery marked it failed and retryable after five
+        // minutes and the retry job sent the contact a second copy. Without a
+        // clientMessageId there is nothing to bind a proof to, so keep the weaker answer.
+        if (clientMessageId) {
+          const proven = uiTextDeliveredResult(
+            liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
+            clientMessageId,
+          )
+          return res.json({
+            success: true,
+            chatId: liveId,
+            providerAccountId,
+            ...proven,
+          })
+        }
         return res.json({
           success: true,
           chatId: liveId,
+          providerAccountId,
           externalId: null,
           deliveryConfirmed: false,
           deliveryStatus: 'send_requested',
@@ -6098,7 +6208,7 @@ app.post('/send-message', async (req, res) => {
       }
       rememberKnownChatId(returnChatId)
       if (uiChatId) rememberKnownChatId(uiChatId)
-      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
+      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, providerAccountId, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
     } catch (e) {
       if (echoRawHandler) {
         const idx = transport._rawHandlers.indexOf(echoRawHandler)
@@ -6124,7 +6234,7 @@ app.post('/send-message', async (req, res) => {
     if (sendResult.success === false || sendResult.error) {
       throw new Error(sendResult.error || 'MAX text delivery failed')
     }
-    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
+    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, providerAccountId, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
   } catch (e) {
     const isMaxErr = e.maxError
     console.error(`[Send] sendText failed: ${e.message}`)
@@ -6142,9 +6252,8 @@ app.post('/send-reaction', async (req, res) => {
   if (!remove && !emoji) {
     return res.status(400).json({ error: 'emoji is required unless remove=true' })
   }
-  if (!isReady) {
-    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
   if (/^max-(dom|recovered)-/.test(String(messageId)) || /-recovered$/.test(String(messageId))) {
     return res.status(409).json({
       error: 'Message has no real MAX id yet; wait for history sync and retry',
@@ -6159,7 +6268,7 @@ app.post('/send-reaction', async (req, res) => {
       // Помечаем как нашу собственную реакцию чтобы opcode 135 echo не дублировал обновление
       result = await sendReaction(transport, Number(chatId), messageId, emoji)
     }
-    res.json({ success: true, ...result })
+    res.json({ success: true, ...result, providerAccountId })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -6173,9 +6282,8 @@ app.post('/delete-message', async (req, res) => {
   if (!chatId || !messageId) {
     return res.status(400).json({ error: 'chatId and messageId required' })
   }
-  if (!isReady) {
-    return res.status(503).json({ error: 'Not ready' })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
   try {
     // Opcode 66 = DELETE_MESSAGE. Confirmed from web.max.ru bundle:
     // yield*r(66,{...revertId(chatId), messageIds:[id,...], forMe:!forAll})
@@ -6186,7 +6294,7 @@ app.post('/delete-message', async (req, res) => {
       forMe:      false,
     }, { waitResponse: true })
     console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`, JSON.stringify(result).slice(0, 100))
-    res.json({ success: true })
+    res.json({ success: true, providerAccountId })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
     res.status(500).json({ error: e.message })
@@ -6200,9 +6308,8 @@ app.post('/send-image', async (req, res) => {
   if (!chatId || !base64 || !filename || !mimeType) {
     return res.status(400).json({ error: 'chatId, base64, filename, mimeType are required' })
   }
-  if (!isReady) {
-    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
   try {
     const fileBuffer = decodeBase64Payload(base64)
     const externalId = await enqueueSend(async () => {
@@ -6241,7 +6348,7 @@ app.post('/send-image', async (req, res) => {
       }
     })
     const delivery = normalizeMediaSendResult(externalId)
-    res.json({ success: true, ...delivery })
+    res.json({ success: true, ...delivery, providerAccountId })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -6254,9 +6361,8 @@ app.post('/send-media', async (req, res) => {
   if (!chatId || !base64 || !filename || !mimeType || !mediaType) {
     return res.status(400).json({ error: 'chatId, base64, filename, mimeType, mediaType are required' })
   }
-  if (!isReady) {
-    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
-  }
+  const providerAccountId = requireLiveMaxProviderAccount(req, res)
+  if (providerAccountId === null) return
   try {
     const fileBuffer = decodeBase64Payload(base64)
     const cid = Number(chatId)
@@ -6313,7 +6419,7 @@ app.post('/send-media', async (req, res) => {
     })
 
     const delivery = normalizeMediaSendResult(externalId)
-    res.json({ success: true, ...delivery })
+    res.json({ success: true, ...delivery, providerAccountId })
   } catch (e) {
     console.error('[send-media] Error:', e.message)
     res.status(500).json({ error: e.message })

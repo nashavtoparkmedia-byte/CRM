@@ -124,11 +124,12 @@ assertCheck(
     'direct foreign Prisma ManagerTask update remains',
 )
 
-const maxContactConsumer = source('gravity-mvp/src/app/api/webhook/max/sync-names/route.ts')
+const maxContactConsumer = source('gravity-mvp/src/app/api/webhooks/max/route.ts')
 assertCheck(
-    'representative MAX consumer uses ResolveContactCommand.v1',
-    maxContactConsumer.includes('RESOLVE_CONTACT_COMMAND_V1')
-        && maxContactConsumer.includes('resolveContactV1({'),
+    'representative MAX consumer uses the Contacts public resolution capability',
+    maxContactConsumer.includes('resolveChannelContactOperationV1(')
+        && maxContactConsumer.includes("'max',")
+        && maxContactConsumer.includes('providerAccountId: maxProviderAccountId'),
     'versioned contact-resolution command invocation is absent',
 )
 assertCheck(
@@ -149,7 +150,7 @@ const scoringConsumer=source('gravity-mvp/src/app/settings/scoring/actions.ts')
 assertCheck('Configuration consumer uses UpdateScoringThresholdsCommand.v1',scoringConsumer.includes('UPDATE_SCORING_THRESHOLDS_COMMAND_V1')&&scoringConsumer.includes('updateScoringThresholdsV1({'),'Fleet scoring command absent')
 assertCheck('foreign ScoringThreshold upsert removed',!/prisma\.scoringThreshold\.upsert/.test(scoringConsumer),'direct ScoringThreshold upsert remains')
 const manualLinkConsumer=source('gravity-mvp/src/app/messages/link-chat-actions.ts')
-assertCheck('Messaging manual-link consumer uses SetContactDisplayNameCommand.v1',manualLinkConsumer.includes('SET_CONTACT_DISPLAY_NAME_COMMAND_V1')&&manualLinkConsumer.includes('setContactDisplayNameV1({'),'Contacts display-name command absent')
+assertCheck('Messaging manual-link consumer requires exact Contact and identity ownership',manualLinkConsumer.includes('ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1')&&manualLinkConsumer.includes('ensureConversationContactLinkV1({')&&manualLinkConsumer.includes('chat.contactIdentity.contactId !== chat.contactId'),'exact Contact identity guard absent')
 assertCheck('foreign manual-link Contact update removed',!/prisma\.contact\.update/.test(manualLinkConsumer),'direct manual-link Contact update remains')
 const contactMergeFacade=source('gravity-mvp/src/lib/ContactMergeService.ts')
 assertCheck('Contacts merge facade uses MergeContactsCommand.v1',contactMergeFacade.includes('MERGE_CONTACTS_COMMAND_V1')&&contactMergeFacade.includes('mergeContactsV1({'),'Contacts merge owner command absent')

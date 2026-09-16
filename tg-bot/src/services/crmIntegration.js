@@ -4,6 +4,45 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
 
+function concreteProviderId(value) {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const normalized = String(value).trim();
+    return normalized && normalized !== 'legacy' && normalized !== 'telegram-default'
+        ? normalized
+        : null;
+}
+
+function extractTelegramProviderEvidence(ctx) {
+    // ctx.botInfo is populated by Telegraf from the live authenticated bot.
+    // A configured account ID is not provider evidence and must never replace it.
+    const providerAccountId = concreteProviderId(ctx.botInfo?.id);
+    const providerUpdateId = concreteProviderId(ctx.update?.update_id);
+    const providerMessageId = concreteProviderId(
+        ctx.message?.message_id ?? ctx.callbackQuery?.message?.message_id,
+    );
+    const callbackQueryId = concreteProviderId(ctx.callbackQuery?.id);
+    // update_id is unique within one live Bot API account and stable across
+    // our delivery retries. Message IDs are only chat-local and one message
+    // may produce several distinct callback updates.
+    const providerEventId = providerUpdateId ? `update:${providerUpdateId}` : null;
+    if (!providerAccountId || !providerUpdateId || !providerEventId) return null;
+
+    const providerUnixSeconds = Number(
+        ctx.message?.date ?? ctx.callbackQuery?.message?.date,
+    );
+    const observedAt = Number.isInteger(providerUnixSeconds) && providerUnixSeconds > 0
+        ? new Date(providerUnixSeconds * 1000).toISOString()
+        : null;
+    return {
+        providerAccountId,
+        providerUpdateId,
+        providerMessageId,
+        callbackQueryId,
+        providerEventId,
+        observedAt,
+    };
+}
+
 /**
  * Service to forward incoming Telegram events to the CRM system's Webhook.
  */
@@ -26,9 +65,10 @@ class CrmIntegrationService {
                 const username = ctx.from?.username;
 
                 // Group chat metadata (for CRM group/private routing)
-                const chatId    = ctx.message?.chat?.id;
-                const chatType  = ctx.message?.chat?.type;
-                const chatTitle = ctx.message?.chat?.title || null;
+                const providerChat = ctx.message?.chat || ctx.callbackQuery?.message?.chat || ctx.chat;
+                const chatId    = providerChat?.id;
+                const chatType  = providerChat?.type;
+                const chatTitle = providerChat?.title || null;
                 const firstName = ctx.from?.first_name || null;
                 const lastName  = ctx.from?.last_name || null;
 
@@ -114,12 +154,26 @@ class CrmIntegrationService {
 
                 if (!telegramId || !text) return resolve();
 
+                const providerEvidence = extractTelegramProviderEvidence(ctx);
+                const connectionId = String(process.env.CRM_TELEGRAM_CONNECTION_ID || process.env.TELEGRAM_CONNECTION_ID || '').trim();
+                const signature = String(process.env.BOT_CRM_SECRET || '').trim();
+                if (!providerEvidence || !connectionId || !signature) {
+                    logger.error('[CRM IN] Refusing unbound webhook: live bot/update evidence, CRM Telegram connection, and BOT_CRM_SECRET are required');
+                    return resolve();
+                }
+
                 const payload = {
+                    providerAccountId: providerEvidence.providerAccountId,
+                    connectionId: connectionId,
+                    providerEventId: providerEvidence.providerEventId,
+                    providerUpdateId: providerEvidence.providerUpdateId,
+                    providerMessageId: providerEvidence.providerMessageId,
+                    callbackQueryId: providerEvidence.callbackQueryId,
                     telegramId: telegramId.toString(),
                     text: text,
                     direction: direction,
                     username: username || null,
-                    timestamp: new Date().toISOString(),
+                    timestamp: providerEvidence.observedAt || new Date().toISOString(),
                     chatId: chatId?.toString() || null,
                     chatType: chatType || null,
                     chatTitle: chatTitle,
@@ -137,7 +191,8 @@ class CrmIntegrationService {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(data)
+                        'Content-Length': Buffer.byteLength(data),
+                        'x-bot-signature': signature
                     }
                 };
 
@@ -191,3 +246,9 @@ class CrmIntegrationService {
 }
 
 module.exports = new CrmIntegrationService();
+module.exports.CrmIntegrationService = CrmIntegrationService;
+module.exports.extractTelegramProviderEvidence = extractTelegramProviderEvidence;
+// The Telegram webhook origin normalisation now lives in its own unit-tested
+// module. The former name stays exported so the identity ingress-evidence test
+// keeps asserting the same behaviour against the single implementation.
+module.exports.normalizeCrmTelegramWebhookUrl = resolveCrmWebhookUrl;

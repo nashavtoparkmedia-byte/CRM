@@ -8,7 +8,7 @@ describe('MAX reaction delivery capability', () => {
         expect(isRealMaxMessageIdV1('d301abcdef0123')).toBe(true)
         expect(isRealMaxMessageIdV1('max-dom-123')).toBe(false)
         await expect(sendMaxReactionDeliveryV1(
-            { chatId: '42', messageId: 'max-dom-123', emoji: '👍', remove: false },
+            { chatId: '42', messageId: 'max-dom-123', emoji: '👍', remove: false, providerAccountId: 'live-account-a' },
             { fetchImpl: fetchImpl as typeof fetch },
         )).rejects.toThrow('real MAX message id')
         expect(fetchImpl).not.toHaveBeenCalled()
@@ -18,11 +18,23 @@ describe('MAX reaction delivery capability', () => {
         const fetchImpl = vi.fn().mockResolvedValue({
             ok: true,
             status: 200,
-            json: async () => ({ status: 'send_requested' }),
+            json: async () => ({ status: 'send_requested', providerAccountId: 'live-account-a' }),
         })
         await expect(sendMaxReactionDeliveryV1(
-            { chatId: '42', messageId: 'd301abcdef0123', emoji: '👍', remove: false },
+            { chatId: '42', messageId: 'd301abcdef0123', emoji: '👍', remove: false, providerAccountId: 'live-account-a' },
             { endpoint: 'http://max.local/send-reaction', fetchImpl: fetchImpl as typeof fetch },
         )).resolves.toEqual({ reactionConfirmed: false, status: 'send_requested' })
+    })
+
+    it('rejects a reaction acknowledgement from another live account', async () => {
+        const fetchImpl = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({ providerAccountId: 'live-account-b' }),
+        })
+        await expect(sendMaxReactionDeliveryV1(
+            { chatId: '42', messageId: 'd301abcdef0123', emoji: '👍', remove: false, providerAccountId: 'live-account-a' },
+            { endpoint: 'http://max.local/send-reaction', fetchImpl: fetchImpl as typeof fetch },
+        )).rejects.toThrow('MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH')
     })
 })

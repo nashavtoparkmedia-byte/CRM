@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { resolveContactLineageV1 } from '@/modules/contacts/public/v1'
 
 /**
  * GET /api/calls?driverId=&contactId=&managerId=&limit=
@@ -18,7 +19,11 @@ export async function GET(req: NextRequest) {
 
         const where: Record<string, unknown> = { isSimulation: false }
         if (driverId) where.driverId = driverId
-        if (contactId) where.contactId = contactId
+        if (contactId) {
+            const lineage = await resolveContactLineageV1(contactId)
+            if (!lineage) return NextResponse.json({ calls: [] })
+            where.contactId = { in: lineage.contactIds }
+        }
         if (managerId) where.managerId = managerId
 
         const calls = await prisma.call.findMany({

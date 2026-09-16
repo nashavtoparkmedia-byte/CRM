@@ -23,7 +23,27 @@ check('profile swap precedes scraper call', consumer.indexOf('profile swap detec
 check('scraper request mapping retained', ['kind,', 'driverYandexId: effectiveYandexId', 'parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID', "reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null)"].every(value => consumer.includes(value)), 'scraper mapping drift')
 check('scraper failure audit retained', consumer.includes("status: 'FAILED'") && consumer.includes('errorMessage: `scraper unreachable: ${e.message}`') && consumer.includes("error: 'SCRAPER_DOWN'"), 'failure mapping drift')
 check('pending audit and response retained', consumer.includes("status: 'PENDING'") && consumer.includes('scraperTaskId,') && consumer.includes('actionId: action.id') && consumer.includes('taskId: scraperTaskId'), 'pending mapping drift')
-check('poll fetch and guard retained', consumer.includes('if (!taskId)') && consumer.includes('fetch(`${SCRAPER_URL}/api/driver-actions/${taskId}`)') && consumer.includes("scraperState.status !== 'PENDING'"), 'poll flow drift')
+// The poll handler is scoped before assertion because the bot authority guard
+// is called from every handler in this route; an unscoped ordering check would
+// match an earlier handler and prove nothing about the poll flow.
+const pollStart = consumer.indexOf('async function handlePollDriverAction(')
+const pollNext = consumer.indexOf('\nasync function ', pollStart + 1)
+const poll = pollStart < 0 ? '' : consumer.slice(pollStart, pollNext < 0 ? undefined : pollNext)
+const pollFetch = 'fetch(`${SCRAPER_URL}/api/driver-actions/${taskId}`)'
+const pollAuthority = 'requireCurrentBotDriverAuthority(payload, {'
+// The poll endpoint no longer accepts a bare task id from an unidentified
+// caller: it requires the Telegram identity, resolves the linked driver and
+// clears the current bot driver authority before it reaches the scraper.
+check(
+    'poll fetch and guard retained',
+    poll.includes('if (!taskId || !telegramId)')
+        && poll.includes("error: 'NOT_LINKED'")
+        && poll.includes(pollFetch)
+        && poll.includes("scraperState.status !== 'PENDING'")
+        && poll.includes(pollAuthority)
+        && poll.indexOf(pollAuthority) < poll.indexOf(pollFetch),
+    'poll flow drift',
+)
 check('mirror mapping and best effort retained', consumer.includes('MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1') && consumer.includes('result: scraperState.result ?? undefined') && consumer.includes('shortOrderId: scraperState.result?.shortOrderId ?? undefined') && consumer.includes('orderId: scraperState.result?.orderLongId ?? undefined') && consumer.includes('completedAt: new Date()') && consumer.includes('}).catch(() => {})'), 'mirror drift')
 check('command amendment exact', JSON.stringify(amendment.amendments[0]?.add_commands) === JSON.stringify(['RecordDriverActionCommand.v1', 'MirrorDriverActionResultCommand.v1']), 'amendment drift')
 check('Platform Fleet dependency pre-approved', platform.allowed_dependencies.some(item => item.context === 'fleet_operations' && item.surface === 'fleet_operations.public'), 'approved dependency absent')

@@ -4,10 +4,16 @@ import {
     readOperationalWhatsAppRuntimeConnectionV1,
 } from '@/infrastructure/whatsapp/operational-capabilities'
 import { prisma } from '@/lib/prisma'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 // Diagnostic endpoint — reports WhatsApp connection state. Baileys edition.
 // Query: ?connId=<id> for detail, no query for list.
 export async function GET(req: NextRequest) {
+    // Debug surface: same signed integration-admin session that guards the
+    // WhatsApp/Telegram connection admin actions this endpoint can drive.
+    if (!await getIntegrationAdminPrincipal()) {
+        return NextResponse.json({ success: false, error: 'DEBUG_ENDPOINT_FORBIDDEN' }, { status: 403 })
+    }
     const connId = req.nextUrl.searchParams.get('connId')
     if (!connId) {
         const conns = await prisma.whatsAppConnection.findMany({

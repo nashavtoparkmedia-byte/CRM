@@ -1,0 +1,437 @@
+{
+  "schema": "yoko.crm.reviewed-executable-path-ownership-amendments.v1",
+  "version": 1,
+  "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
+  "base": {
+    "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
+    "decision_registry_sha256": "b1dcc9bc9c87fa8528f2c3041912bb6b17542150a998443285f08cbfb0eff104"
+  },
+  "amendments": [
+    {
+      "amendment_id": "pr81-main-integration-authority-composition-20260914",
+      "amendment_kind": "ACCEPTED_AUTHORITY_MERGE_COMPOSITION",
+      "reviewed_at": "2026-09-14T00:00:00Z",
+      "reviewed_by": "OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260911",
+      "role": "PRODUCT_OWNER_AUTHORIZED_REVIEW",
+      "authorization": "PRODUCT_OWNER_AUTHORIZED_MAIN_INTEGRATION_OWNERSHIP_AUTHORITY_COMPOSITION",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this composition. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "This amendment composes two already accepted executable ownership authorities rather than reviewing surfaces. The upstream authority is current main at 99d61f7b, whose accepted reviewed denominator is 2,363 tracked executable surfaces and which carries the AI Calls pre-release production parity of PR #95. The merged authority is the identity candidate at bb20e614, whose accepted amendment had already reached 2,429 tracked executable surfaces and whose per-surface decisions are carried verbatim below. Integrating the two accepted trees yields the exact merged denominator recorded in this amendment's current triple, 2,501 tracked executable surfaces, measured by running the repository's own tracked-surface inventory over the merged tree rather than inferred from either published artifact. Relative to the accepted identity current state the integration adds the tracked surfaces contributed by accepted main; relative to the accepted main current state the arithmetic difference is the already accepted identity-branch work. This reviewer re-examined neither set surface by surface and does not claim to have reviewed either.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2363,
+        "tracked_inventory_sha256": "d93955919fa0efb26dae592cdbe39bc13c57e84ff64d19d40cf0d9c4e04edf4e",
+        "coverage_sha256": "755019ddc700a26657acf48381963697b12e35e99395cf9be194ebeb63e9e62f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2501,
+        "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
+        "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
+      },
+      "authority_composition": {
+        "review_decision": "APPROVED_ACCEPTED_AUTHORITY_MERGE_COMPOSITION",
+        "claims_primary_surface_review": false,
+        "composition_scope": "This reviewer examined the composition of two accepted ownership authorities and the exact incremental merge delta between them. It did not perform, and does not claim, any primary per-surface ownership review of the surfaces already accepted by either input authority. Every per-surface decision continues to derive from the input that accepted it: the historical internal review of 2026-08-13 for the reviewed assignments and exact-inventory transitions, accepted current main for its own reviewed authority, and the accepted identity amendment carried verbatim below for the Stage 0 surfaces.",
+        "accepted_authority_inputs": [
+          {
+            "authority": "UPSTREAM_MAIN",
+            "commit": "99d61f7b6724b0b6b5530150d4108f9050797239",
+            "accepted_evidence_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
+            "accepted_evidence_sha256": "15d445861439ba9af794e1b183ab0e1d824e35f08b50f6bec5e8aaafabdf97f7",
+            "acceptance_note": "Accepted upstream ownership authority as published on main at 99d61f7b, the merge of PR #95. Its reviewed decision narrative and its exact-runtime inventory transition are preserved verbatim in the merged decision registry, and its current denominator triple is the immutable anchor this composition extends.",
+            "current": {
+              "tracked_executable_surfaces": 2363,
+              "tracked_inventory_sha256": "d93955919fa0efb26dae592cdbe39bc13c57e84ff64d19d40cf0d9c4e04edf4e",
+              "coverage_sha256": "755019ddc700a26657acf48381963697b12e35e99395cf9be194ebeb63e9e62f"
+            }
+          },
+          {
+            "authority": "IDENTITY_CANDIDATE",
+            "commit": "bb20e614a5a48fc69615376a151725120cb24703",
+            "accepted_evidence_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+            "accepted_evidence_sha256": "37d652bf5fdc3de3d4dc47e7bfe2734d49d9b474197f29d942e7fed80e17647f",
+            "acceptance_note": "Accepted identity-branch ownership authority as published on PR #81 before this integration. Its accepted amendment is carried verbatim below so that its reviewer, decisions, rebinds and unassigned-surface findings keep their original force instead of being restated by this composition.",
+            "current": {
+              "tracked_executable_surfaces": 2429,
+              "tracked_inventory_sha256": "f0c03af0b23da239365d8cb178b57630e52c32579c7166b4c24b67420a1140ba",
+              "coverage_sha256": "ff07837fef18f8f2eab01cf967b945465f951c26a3adee8ee7049db8875b9868"
+            },
+            "accepted_amendment": {
+              "amendment_id": "pr81-stage0-fleet-check-admin-guard-20260909",
+              "reviewed_at": "2026-09-09T23:30:00Z",
+              "reviewed_by": "OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260909",
+              "role": "PRODUCT_OWNER_AUTHORIZED_REVIEW",
+              "authorization": "PRODUCT_OWNER_AUTHORIZED_EXECUTABLE_OWNERSHIP_REVIEW_EXTENSION",
+              "predecessor_review": {
+                "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+                "role": "SOL_HIGH_INTERNAL_REVIEW",
+                "immutable": true,
+                "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+              },
+              "reason": "The accepted Stage 0 admin guard on the fleet-check confirmation follow-up added one negative-authorization test surface and changed the exact bytes of the route it guards, and this repair added one pure amendment-resolution helper. The reviewed denominator therefore moves forward by exactly two surfaces.",
+              "predecessor": {
+                "tracked_executable_surfaces": 2427,
+                "tracked_inventory_sha256": "84ba22dafc66e908d4ad42b2755725d5bc5d0cab83df21bc1d2f15481b4d4559",
+                "coverage_sha256": "0503150a7da81b86e91e6e757e26563ac97660259958a915ec416877e9a84f3e"
+              },
+              "current": {
+                "tracked_executable_surfaces": 2429,
+                "tracked_inventory_sha256": "f0c03af0b23da239365d8cb178b57630e52c32579c7166b4c24b67420a1140ba",
+                "coverage_sha256": "ff07837fef18f8f2eab01cf967b945465f951c26a3adee8ee7049db8875b9868"
+              },
+              "unassigned_tracked_surfaces": [
+                {
+                  "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.test.ts",
+                  "lifecycle": "TEST",
+                  "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+                  "review_rationale": "Route test files in this cohort are intentionally unassigned. Every tracked TEST-lifecycle surface under gravity-mvp/src/app carries no ownership assignment in the reviewed decision registry, including the four closest homologous route and route-test pairs whose runtime halves are assigned to gravity_runtime_remainder. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, identically to its already accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory."
+                },
+                {
+                  "path": "tools/architecture/reviewed-ownership-amendments.mjs",
+                  "lifecycle": "OPERATIONAL_SCRIPT",
+                  "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+                  "review_rationale": "The pure amendment-resolution helper is an architecture control-plane surface classified OPERATIONAL_SCRIPT in the lifecycle registry alongside its tools/architecture siblings, under functional owner architecture_governance. Like every other tracked surface under tools/architecture it carries no explicit executable ownership assignment in the reviewed decision registry, resolves into the architecture_controls governed exclusion, and that exclusion holds no exact path inventory, so no reviewed exact-inventory transition is created."
+                }
+              ],
+              "source_hash_rebinds": [
+                {
+                  "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.ts",
+                  "previous_source_sha256": "a88c5ce3df895330f9b30f1665727a0598aaf577d8c2cf5d99e6ceaf255ba403",
+                  "current_source_sha256": "4341248793dccfd45123bd012cb638764e510d593e7735272c2fd1199126e6d7",
+                  "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+                  "review_rationale": "The Stage 0 admin guard changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and rationale are all carried forward from the predecessor review unchanged; only the exact source fingerprint moves."
+                }
+              ],
+              "invariants": {
+                "assignments_added": 0,
+                "assignments_removed": 0,
+                "assignments_semantically_changed": 0,
+                "exact_inventory_transitions_changed": 0,
+                "lifecycle_changes": 0,
+                "functional_owner_changes": 0,
+                "governed_exclusion_changes": 0,
+                "rationale_changes": 0
+              }
+            }
+          }
+        ],
+        "merge_delta": {
+          "net_surfaces_relative_to_identity_current": 72,
+          "net_surfaces_relative_to_upstream_main_current": 138,
+          "surface_movement": {
+            "relative_to_identity_current": {
+              "added": 72,
+              "retired": 0
+            },
+            "relative_to_upstream_main_current": {
+              "added": 139,
+              "retired": 1
+            }
+          },
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+        },
+        "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/calls/sip-credentials/route.ts",
+          "previous_source_sha256": "b53b75410c24b689aa4d42c99d3ca47b4f2c9f51dbea87078754154855ad2d3f",
+          "current_source_sha256": "23c206f6dbb447196ab6d8262ef39347f68a68eece9137730dc0582a55b27fc7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #87 changed only the bytes of this already assigned runtime surface while adding the mobile shell lane. The path appears in no lifecycle registry entry on either side, so its classification still comes solely from the identity-side assignment: lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "3925ec93c6f46d93442c988fda53c96a1d6c93b6fb6fcabd8add9a75cff7212b",
+          "current_source_sha256": "e0d6cdbe7846edec5c5d22b4f94558bbd32bf1c0c2bbb651175effe58b9361ce",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #87 changed only the bytes of this already assigned runtime surface while routing the mobile shell lane. The path appears in no lifecycle registry entry on either side, so its classification still comes solely from the identity-side assignment, and every semantic ownership field is carried forward unchanged; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+          "previous_source_sha256": "bbe2880412ea021499b40ef18e4a43df707930a6af91e7cb09faf79159b4db70",
+          "current_source_sha256": "be441926e967718fa1030bffdbc82fe907f552f7d3e2f0f6db2739bd27094e7b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
+          "previous_source_sha256": "127528cb28deab019e9b541d6011ab7f0970bf63d69764338670ac467b655d2a",
+          "current_source_sha256": "16785a7e62181ff22e703100bdfccaa05cb963144e97626981023ced70eee9da",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/attachments/[id]/route.ts",
+          "previous_source_sha256": "162b2ec92073ca82db4d2ad9877881cee2d50450fd7cf9dca2a0b3eb27079866",
+          "current_source_sha256": "27e28057a3eac5e0ddf46cb779b0d05e41b09d9ff376e769a7e80b79595fb134",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main moved the Content-Disposition helper into its owning Messaging context, changing only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/calls/[id]/route.ts",
+          "previous_source_sha256": "daea80cc29fbb94b5bf8154a7ab9550fad64421da4d470b931bd0d545ae1d5dc",
+          "current_source_sha256": "28d09c62c863dd642a0ab12c402e72c64236672d0b4181a73fce0b62756246ab",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/find-message/route.ts",
+          "previous_source_sha256": "53abb2c514ab579ab20c25906296f2d722146ddeae651f6e1b903fac1d4c1ceb",
+          "current_source_sha256": "ebdf92a812f4a6a3db5744f0ee3cad587e6d36183f08d424c6f2924dfcde0129",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
+          "previous_source_sha256": "8fadce79a46f238eb8268ec24f727c07a7f242af12fb1458fb91cbb9e534a1a4",
+          "current_source_sha256": "a6204d16c3495a86586f61092f7eb7de433a2b55c6ce8a05b9a9a61d70bb6658",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
+          "previous_source_sha256": "93c80eb07e7e1c443418f82cf4f7d8d877664aae9e4cf98e3aaebf79d5419b77",
+          "current_source_sha256": "90fe7247e4ab20cc9242546db1bb8ea2d5211744db32f5490cfc557ea20a6828",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/list-all-chats/route.ts",
+          "previous_source_sha256": "fcf0c0b4d89a0cb1684251723d13d5e34b3836d9afecb2beefb64c8eb97c0d26",
+          "current_source_sha256": "c54f24d999b53fd535ef797e5024fa903665a66a186f785e4887bcb9b32833dd",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/route.ts",
+          "previous_source_sha256": "b8e00a6ef135d0c31e038eca216d25c4d070352eaf944c42f2c91c0f7f110001",
+          "current_source_sha256": "66288a0cf5ca6920e6f5a9b86e5f7c9e0dddeb62eaa909f5dc255a5caaf47253",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
+          "previous_source_sha256": "e25f5309d35e263f6c2e92832b24774714352d618c91ecdeb59741c19a81be39",
+          "current_source_sha256": "97aa562f5e05b1ffd0a21f7b813dca21c181f3848c70f95d6c0fe14cc6fc459e",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
+          "previous_source_sha256": "697aaf95d1dcdc7c49e3a1045b95011d01a4f70e11a6776aee730c8c2ebbbd32",
+          "current_source_sha256": "8df95860180c526a5b5400d7e2767f8fa84071a2f572430deec8eb4732d471d4",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
+          "previous_source_sha256": "153598dad6a6a6555a57c953f0eff6a9286e11bf7f1e00b500bcf735d25cd5d6",
+          "current_source_sha256": "9f76462729b286cb72d3cd3b499419138521220aa9c3934749ec8e5986854476",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface gained the repository's existing signed integration-admin authorization check, closing an unauthenticated reachability defect on the debug surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/delete/route.ts",
+          "previous_source_sha256": "6bad1afe9bfdfe275368e88b5a302af31971d0a346998dfd0e626f7ab34fad29",
+          "current_source_sha256": "d6b593694e283829700057db9dd5a9e50eb27327e59935b7620d49437cbef935",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/reaction/route.ts",
+          "previous_source_sha256": "4e1ad1c573a7a26c3156acf7e88e41d7fcfffee473a7560e1f126ea924a15c4f",
+          "current_source_sha256": "a88e9e7ae2759309370653139bbcd46d92c3c71b58a9af2a62164215b6366cb2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-image/route.ts",
+          "previous_source_sha256": "fa3dd6a2fe0e3199bd09f3c66ed6e911ad0ec68910c518ab14318f362dde7cd3",
+          "current_source_sha256": "0d0c2ae49b1e876bd25c4456645c7b83f77edcf49fdfde3aa97c8d3dd0ed7c9c",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-media/route.ts",
+          "previous_source_sha256": "bbff06c722bf495241f3c192d502a2c13e60398e6f21b34e6cd49742a0eac3f2",
+          "current_source_sha256": "fd793a7d5d44316863df3475cb95495b90258f6016302ac2a9cf54d0a5641562",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "previous_source_sha256": "405c8edb00dbf461fb0cff7e1f8899da43fc9c912b34d07174e4bdb3bd94fdb2",
+          "current_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface had the provider-account arms removed from its ingress collision ladder, because provider-account isolation is deferred and those arms had no satisfiable production carrier. The contradiction arms it keeps are unchanged. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/calls/[id]/CallDetailClient.tsx",
+          "previous_source_sha256": "a9b257b3e9a6439a44327e117d147a1c71fc5e47dc6043440186176eff263891",
+          "current_source_sha256": "61bba3382a6d122fffd76e8d0697267b98fe5de960670c173968014dd141272d",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/calls/[id]/page.tsx",
+          "previous_source_sha256": "206b4aa98d1116cff6816e2f69ea53ea007e180c0eca2fffd0ecaaf5dd2269b8",
+          "current_source_sha256": "a02aefcfb78dde022fba2485d33dddaa0dd57670540e14259bce930f0c479332",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Accepted main PR #83 changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and reviewed rationale are all carried forward unchanged from the accepted identity-side assignment; only the exact source fingerprint moves to the bytes accepted on main."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "96a19db6a7d8c9d3266c951370fd405ccc1e5ba069e44547b9ec262d6809d832",
+          "current_source_sha256": "9b8174b6dad9a8fde1289c7f85ffb8c5ac757a41ca616e1c98a8601e69498a4a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface carries the signed admin guard accepted earlier on this branch; the merged decision registry records accepted main's bytes for it, so the fingerprint is rebound to the merged tree. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/lib/ReachabilityService.ts",
+          "previous_source_sha256": "a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd",
+          "current_source_sha256": "7e1d5e57aa744a748b5c6f6e56067bbfa93e30ea5884b73d57a4d5dc6ada19af",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This already assigned runtime surface had its provider-account admission gates removed while every reachability invariant it enforces was preserved, and the two rejection reasons those gates alone could raise were then dropped from the result union so no consumer can branch on an outcome that can no longer occur. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
+    },
+    {
+      "amendment_id": "c2-cash-compensation-pilot-main-integration-20260915",
+      "reviewed_at": "2026-09-15T00:00:00Z",
+      "reviewed_by": "C2_CASH_COMPENSATION_PILOT_INTEGRATION_REVIEW_20260915",
+      "role": "CANDIDATE_INTEGRATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_PR96_SINGLE_MAIN_INTEGRATION",
+      "reason": "The Telegram cash-compensation pilot branch integrates accepted main 016669a1, whose composed ownership authority stands at 2,501 tracked executable surfaces. The integrated tree measures 2,527 surfaces with the repository tracked-surface inventory, 26 more than that authority, all of them Telegram cash-compensation pilot surfaces. The nine Telegram identity repair surfaces the pilot branch had carried were removed during the integration because PR #81 superseded them, so they are not part of this denominator. This amendment moves only the denominator and rebinds the source fingerprint of an already reviewed assignment whose ownership semantics are unchanged; the three new pilot assignments live in the reviewed decisions registry.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2501,
+        "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
+        "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2527,
+        "tracked_inventory_sha256": "e3cd83d3a4c827127efe40116bc9027cba50c404e550235f0539f31a445cf2ca",
+        "coverage_sha256": "5fae6b44c9637ed522eb34a888fdaa067e1b3a2f1a73e882abba33cd7b2c8867"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "91228a9e7e2178298539eac5c0a58ad88b944da87cc523ab186d4cb703dde7c4",
+          "current_source_sha256": "df190c41cabcb6bcf83aa4c6b8234d75e151fae968b9d3676e5e44ec28df2f2c",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook gains the compensation_section and compensation_submit actions and extracts the current Telegram Driver authority check into one shared resolver; every existing action keeps the same authority gate, status codes and responses, and the path keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner."
+        }
+      ]
+    },
+    {
+      "amendment_id": "calling-audio-runtime-hardening-main-4abc73f2-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "CALLING_MEDIA_RUNTIME_REMEDIATION_EXECUTOR_REVIEW_20260915",
+      "role": "EXECUTOR_REVIEW_WITH_INDEPENDENT_CRITIC",
+      "authorization": "OWNER_TASK_CALLING_MEDIA_RUNTIME_REMEDIATION_20260915",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the accepted chain published on main at 4abc73f2 and reviews only the three surfaces added by the Calling media-runtime remediation."
+      },
+      "reason": "Re-anchors the Calling media-runtime remediation review (amendment calling-audio-runtime-hardening-20260915, which extended the composition at 2,501 surfaces) onto the accepted chain published on main at 4abc73f2, whose C2 cash-compensation pilot integration moved the reviewed denominator to 2,527. The reviewed surfaces are unchanged: the three tracked executable surfaces the remediation adds, all owned by the calling context (tools/audio-bridge-day1/channel-lifecycle.js, its unit test, and telephony/tests/audio_runtime_probe.mjs). It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the reconciled tree: 2,527 + 3 = 2,530 surfaces, context-owned 1,313 -> 1,316, governed exclusions 1,214 unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2527,
+        "tracked_inventory_sha256": "e3cd83d3a4c827127efe40116bc9027cba50c404e550235f0539f31a445cf2ca",
+        "coverage_sha256": "5fae6b44c9637ed522eb34a888fdaa067e1b3a2f1a73e882abba33cd7b2c8867"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2530,
+        "tracked_inventory_sha256": "260e4cc390217010e817cb7b5074a988365a47c94d9874d19951cc9fc99c68d5",
+        "coverage_sha256": "b80814905e9ed37dde4a1968fed0ea2dfffe79bf8a9eb77b82c52823c4ca926b"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "telephony/tests/audio_runtime_probe.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/__tests__/channel-lifecycle.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/channel-lifecycle.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "android-acceptance-harness-main-e014ad5f-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "ANDROID_ACCEPTANCE_HARNESS_EXECUTOR_REVIEW_20260916",
+      "role": "SPECULATIVE_RECONCILIATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_SPECULATIVE_RECONCILIATION_AUTHORIZED_20260916",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain published on main at e014ad5f, whose tail is the Calling media-runtime remediation (amendment calling-audio-runtime-hardening-main-4abc73f2-20260916), and reviews only the one surface the Android acceptance harness adds."
+      },
+      "reason": "Records the single tracked executable surface the Android acceptance harness adds, .github/workflows/android-acceptance-e2e.yml, on top of the chain published on main at e014ad5f, whose Calling media-runtime remediation tail stands at 2,530 surfaces. The surface falls under the existing ci_workflow governed exclusion by its .github path prefix, owned by platform_engineering, and carries a reviewed TEST/TEST_SUPPORT lifecycle classification with production_capability NONE in the lifecycle surface registry. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the reconciled tree: 2,531 surfaces, context-owned 1,316 unchanged, governed exclusions 1,214 -> 1,215.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2530,
+        "tracked_inventory_sha256": "260e4cc390217010e817cb7b5074a988365a47c94d9874d19951cc9fc99c68d5",
+        "coverage_sha256": "b80814905e9ed37dde4a1968fed0ea2dfffe79bf8a9eb77b82c52823c4ca926b"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2531,
+        "tracked_inventory_sha256": "6c6c7554e8418f07739e9ee6b2ea6fb81db76f0d95e612507d214d8b5132f5dd",
+        "coverage_sha256": "6744efc38023e55793bb49de05a3bdcac47147e6025f12badc48be00e6377055"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": ".github/workflows/android-acceptance-e2e.yml",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under .github/, which the existing ci_workflow governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its TEST lifecycle comes from the reviewed lifecycle surface registry entry."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    }
+  ]
+}

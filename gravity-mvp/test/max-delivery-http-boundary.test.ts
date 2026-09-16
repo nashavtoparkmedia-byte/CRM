@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
     messageFindUnique: vi.fn(),
     messageFindFirst: vi.fn(),
     messageCreate: vi.fn(),
     messageUpdate: vi.fn(),
+    messageUpdateMany: vi.fn(),
     onOutboundMessage: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ vi.mock('@/lib/prisma', () => ({
             findFirst: mocks.messageFindFirst,
             create: mocks.messageCreate,
             update: mocks.messageUpdate,
+            updateMany: mocks.messageUpdateMany,
         },
     },
 }))
@@ -56,8 +58,10 @@ vi.mock('@/modules/contacts/public/v1/contact-display-policy', () => ({
 import { registerMaxMessagingDeliveryCapabilityV1 } from '../src/modules/max-channel/public/v1/messaging-delivery-capability'
 import { getMaxChannelDeliveryV1 } from '../src/modules/messaging/public/v1/channel-delivery-runtime'
 import { MessageService } from '../src/lib/MessageService'
+import { registerOutboundConversationPreparerV1 } from '../src/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 const providerId = 'd3010000000000000001'
+const providerAccountId = 'max-account-42'
 const failurePayloads: Array<[string, Record<string, unknown>]> = [
     ['success:false', { success: false }],
     ['failed:true', { success: true, failed: true }],
@@ -78,23 +82,44 @@ async function sendThroughRealHttpBoundary() {
     return getMaxChannelDeliveryV1().sendText({
         target: '902454841098',
         content: 'Bounded repair',
-        options: { isPersonal: true, clientMessageId: 'cmid-http-boundary' },
+        options: {
+            providerAccountId,
+            isPersonal: true,
+            clientMessageId: 'cmid-http-boundary',
+        },
     })
 }
 
 describe('MAX HTTP 2xx delivery boundary', () => {
+    let unregisterOutboundPreparer: (() => void) | undefined
+
     beforeEach(() => {
         vi.clearAllMocks()
         vi.unstubAllGlobals()
         mocks.messageFindFirst.mockResolvedValue(null)
         mocks.messageUpdate.mockResolvedValue({ id: 'message-http-retry' })
+        mocks.messageUpdateMany.mockResolvedValue({ count: 1 })
         mocks.onOutboundMessage.mockResolvedValue(undefined)
         registerMaxMessagingDeliveryCapabilityV1()
+        unregisterOutboundPreparer = registerOutboundConversationPreparerV1(async () => ({
+            chatId: 'chat-max',
+            channel: 'max',
+            contactId: 'contact-max',
+            contactIdentityId: 'identity-max',
+            providerAccountId,
+            connectionId: 'max_scraper',
+            identityTarget: 'max-sender-42',
+            target: '902454841098',
+            isMaxPersonal: true,
+        }))
     })
+
+    afterEach(() => unregisterOutboundPreparer?.())
 
     it('preserves a consistent real d301 delivery through max-actions and the capability', async () => {
         mockHttpPayload({
             success: true,
+            providerAccountId,
             externalId: providerId,
             deliveryConfirmed: true,
             deliveryStatus: 'delivered',
@@ -110,6 +135,7 @@ describe('MAX HTTP 2xx delivery boundary', () => {
     it.each(failurePayloads)('rejects %s before contradictory delivered metadata can win', async (_label, failure) => {
         mockHttpPayload({
             ...failure,
+            providerAccountId,
             externalId: providerId,
             deliveryConfirmed: true,
             deliveryStatus: 'delivered',
@@ -126,6 +152,7 @@ describe('MAX HTTP 2xx delivery boundary', () => {
             content: 'Retry through real boundary',
             clientMessageId: 'cmid-http-retry',
             status: 'failed',
+            updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
                 retryAttempt: 0,
@@ -142,6 +169,7 @@ describe('MAX HTTP 2xx delivery boundary', () => {
         mockHttpPayload({
             success: true,
             failure: true,
+            providerAccountId,
             externalId: providerId,
             deliveryConfirmed: true,
             deliveryStatus: 'delivered',
@@ -153,8 +181,8 @@ describe('MAX HTTP 2xx delivery boundary', () => {
         })
 
         expect(mocks.messageCreate).not.toHaveBeenCalled()
-        expect(mocks.messageUpdate.mock.calls.at(-1)?.[0]).toMatchObject({
-            where: { id: 'message-http-retry' },
+        expect(mocks.messageUpdateMany.mock.calls.at(-1)?.[0]).toMatchObject({
+            where: expect.objectContaining({ id: 'message-http-retry', status: 'sent' }),
             data: {
                 status: 'failed',
                 externalId: undefined,

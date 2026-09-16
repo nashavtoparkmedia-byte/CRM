@@ -13,7 +13,10 @@
        Hardcoding them caused REGISTER 403 (red SIP dot) and ESL auth failures
        on the VPS, where the real passwords live in env, not in this file. -->
   <X-PRE-PROCESS cmd="set" data="megafon_username=79221853150"/>
-  <X-PRE-PROCESS cmd="set" data="megafon_password=QktspvGj"/>
+  <!-- Trunk password: container environment MEGAFON_SIP_PASSWORD only, no fallback.
+       The image entrypoint refuses a missing or placeholder value. Without that guard an
+       empty result would leave megafon_password unset and sofia would skip the gateway. -->
+  <X-PRE-PROCESS cmd="exec-set" data="megafon_password=sh -c 'echo ${MEGAFON_SIP_PASSWORD}'"/>
   <X-PRE-PROCESS cmd="set" data="megafon_proxy=sbc.megafon.ru"/>
   <X-PRE-PROCESS cmd="set" data="megafon_realm=multifon.ru"/>
 

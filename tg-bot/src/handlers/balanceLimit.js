@@ -2,6 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
 const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
@@ -69,7 +70,10 @@ const limitManagementScene = new Scenes.WizardScene(
     async (ctx) => {
         await ctx.reply('⏳ Проверяю ваш профиль...', Markup.removeKeyboard());
 
-        const result = await callCRM('check_link', { telegramId: String(ctx.from.id) });
+        const result = await callCRM('check_link', {
+            telegramId: String(ctx.from.id),
+            ...exactTelegramActionBinding(ctx)
+        });
 
         // CRM unreachable
         if (result.status === 0 || result.status === 504) {
@@ -142,7 +146,8 @@ const limitManagementScene = new Scenes.WizardScene(
 
         const result = await callCRM('change_limit', {
             telegramId: String(ctx.from.id),
-            limitValue: limitValue
+            limitValue: limitValue,
+            ...exactTelegramActionBinding(ctx)
         });
 
         if (result.status === 0 || result.status === 504) {

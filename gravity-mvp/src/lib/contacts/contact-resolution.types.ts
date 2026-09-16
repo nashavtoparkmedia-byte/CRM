@@ -1,4 +1,4 @@
-export type ContactResolutionChannel = 'max' | 'telegram' | 'whatsapp'
+export type ContactResolutionChannel = 'max' | 'telegram' | 'whatsapp' | 'phone' | 'avito'
 
 export type PhoneEvidenceSource =
   | 'provider_profile'
@@ -15,6 +15,11 @@ export type ResolutionWarning =
   | 'global_chat_key'
   | 'global_message_key'
   | 'phone_verification_model_limited'
+  | 'phone_lifecycle_ineligible'
+  | 'phone_trust_ineligible'
+  | 'phone_stale'
+  | 'phone_shared'
+  | 'phone_disputed'
   | 'phone_not_trusted_for_automatic_resolution'
   | 'invalid_normalized_phone'
   | 'merge_depth_exceeded'
@@ -39,6 +44,14 @@ export interface ResolutionContact {
   isArchived: boolean
 }
 
+export interface ResolutionPhoneClaim {
+  contact: ResolutionContact
+  lifecycle: 'current' | 'superseded' | 'removed' | 'unknown'
+  trust: 'provider_bound' | 'manually_verified' | 'source_asserted' | 'claimed' | 'unknown'
+  freshness: 'fresh' | 'stale' | 'unknown'
+  resolutionState: 'unique' | 'shared' | 'disputed' | 'unknown'
+}
+
 export interface ContactMergeEdge {
   mergedId: string
   survivor: ResolutionContact
@@ -51,9 +64,10 @@ export interface ContactMergeEdge {
 export interface ContactResolutionRepository {
   findIdentity(
     channel: ContactResolutionChannel,
+    providerAccountId: string,
     externalUserId: string,
   ): Promise<ResolutionContact | null>
-  findActivePhoneOwners(normalizedPhone: string): Promise<ResolutionContact[]>
+  findActivePhoneClaims(normalizedPhone: string): Promise<ResolutionPhoneClaim[]>
   findMergesFromContact(contactId: string): Promise<ContactMergeEdge[]>
 }
 
@@ -94,7 +108,9 @@ export type ContactResolutionResult =
       warnings: ResolutionWarning[]
     }
   | { status: 'skipped_group'; warnings: ResolutionWarning[] }
+  | { status: 'unknown_kind_limited'; warnings: ResolutionWarning[] }
   | { status: 'untrusted_phone'; warnings: ResolutionWarning[] }
+  | { status: 'ineligible_phone'; warnings: ResolutionWarning[] }
   | { status: 'invalid_input'; warnings: ResolutionWarning[] }
   | {
       status: 'merge_cycle'

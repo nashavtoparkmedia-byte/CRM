@@ -226,9 +226,14 @@ check(
     consumer.indexOf('// 6. Old ApiLog') < consumer.indexOf('// 7. Archived contacts'),
   'sequential event phase order drift',
 )
+// Exactly one outer catch, which logs the exact event and payload keys and does
+// not rethrow. The narrowed `unknown` catch is the ratified shape; a non-Error
+// throw now logs String(err) instead of undefined, so nothing is swallowed.
 check(
   'outer error policy retained',
-  consumer.includes("opsLog('error', 'retention_cleanup_error', { error: err.message, dryRun })"),
+  (consumer.match(/\} catch \(err: unknown\) \{/gu) || []).length === 1
+    && consumer.includes('const message = err instanceof Error ? err.message : String(err)')
+    && (consumer.match(/opsLog\('error', 'retention_cleanup_error', \{ error: message, dryRun \}\)/gu) || []).length === 1,
   'runAll error policy drift',
 )
 check(

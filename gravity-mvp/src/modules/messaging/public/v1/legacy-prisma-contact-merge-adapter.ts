@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import type { AutomatedMergeRecoveryOwnerRepositoryV1 } from '@/modules/contacts/public/v1/automated-contact-merge-recovery'
 
 /**
  * Owner-controlled transactional capability used by contact merge workflows.
@@ -8,6 +9,7 @@ import type { Prisma } from '@prisma/client'
  */
 export function makeMessagingContactMergeRepositories(transaction: Prisma.TransactionClient) {
   return {
+    recovery: makeMessagingAutomatedMergeRecoveryRepositoryV1(transaction),
     async remapChatsToIdentity(oldIdentityId: string, newIdentityId: string) {
       await transaction.chat.updateMany({
         where: { contactIdentityId: oldIdentityId },
@@ -34,6 +36,55 @@ export function makeMessagingContactMergeRepositories(transaction: Prisma.Transa
         where: { contactId, driverId: null },
         data: { driverId },
       })
+    },
+  }
+}
+
+export function makeMessagingAutomatedMergeRecoveryRepositoryV1(
+  transaction: Prisma.TransactionClient,
+): AutomatedMergeRecoveryOwnerRepositoryV1 {
+  return {
+    async canRestore(plan) {
+      const plannedChatIds = new Set(plan.chatIds)
+      const sourceIdentityIds = new Set(plan.identityIds)
+      if (plannedChatIds.size !== plan.chatIds.length
+        || sourceIdentityIds.size !== plan.identityIds.length) return false
+      const archivedContactChatCount = await transaction.chat.count({
+        where: { contactId: plan.mergedId },
+      })
+      if (archivedContactChatCount !== 0) return false
+      if (plannedChatIds.size === 0 && sourceIdentityIds.size === 0) return true
+      const chats = await transaction.chat.findMany({
+        where: {
+          OR: [
+            ...(plannedChatIds.size > 0 ? [{ id: { in: [...plannedChatIds] } }] : []),
+            ...(sourceIdentityIds.size > 0
+              ? [{ contactIdentityId: { in: [...sourceIdentityIds] } }]
+              : []),
+          ],
+        },
+        select: { id: true, contactId: true, contactIdentityId: true },
+      })
+      const currentById = new Map(chats.map(chat => [chat.id, chat]))
+      for (const chatId of plannedChatIds) {
+        const chat = currentById.get(chatId)
+        if (!chat) return false
+        if (chat.contactId !== plan.survivorId) return false
+        if (chat.contactIdentityId !== null && !sourceIdentityIds.has(chat.contactIdentityId)) return false
+      }
+      return chats.every(chat => (
+        !chat.contactIdentityId
+        || !sourceIdentityIds.has(chat.contactIdentityId)
+        || (chat.contactId === plan.survivorId && plannedChatIds.has(chat.id))
+      ))
+    },
+    async restore(plan) {
+      if (plan.chatIds.length === 0) return
+      const result = await transaction.chat.updateMany({
+        where: { id: { in: plan.chatIds }, contactId: plan.survivorId },
+        data: { contactId: plan.mergedId },
+      })
+      if (result.count !== plan.chatIds.length) throw new Error('MESSAGING_RECOVERY_STATE_CHANGED')
     },
   }
 }
