@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CASH-COMPENSATION-TELEGRAM-PILOT",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:CompensationCashOrder",
+        "gravity-mvp/prisma/schema.prisma:CompensationPilotSubmission"
+      ]
+    }
+  ]
+}

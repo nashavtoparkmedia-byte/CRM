@@ -7,6 +7,7 @@ import {
     prepareManualDriverTelegramLinkAuthorityV1,
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
+    type PreparedManualDriverTelegramLinkAuthorityV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
@@ -17,7 +18,12 @@ import {
 } from '@/contracts/messaging/v1'
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { mirrorDriverActionResultV1, recordDriverActionV1 } from '@/modules/fleet-operations/public/v1'
+import {
+    compensationPilotSectionV1,
+    compensationPilotSubmitV1,
+    mirrorDriverActionResultV1,
+    recordDriverActionV1,
+} from '@/modules/fleet-operations/public/v1'
 
 export async function POST(request: Request) {
     try {
@@ -54,6 +60,10 @@ export async function POST(request: Request) {
                 return await handleSetActivePark(payload)
             case 'get_park_info':
                 return await handleGetParkInfo(payload)
+            case 'compensation_section':
+                return await handleCompensationSection(payload)
+            case 'compensation_submit':
+                return await handleCompensationSubmit(payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -63,10 +73,15 @@ export async function POST(request: Request) {
     }
 }
 
-async function requireCurrentBotDriverAuthority(
+/**
+ * The one implementation of current Telegram Driver authority for bot actions.
+ * Returns the prepared proof, or null when the exact chat, transport binding or
+ * confirmed Driver person cannot be proven right now.
+ */
+async function resolveCurrentBotDriverAuthority(
     payload: unknown,
     input: { driverId: string; telegramId: bigint },
-): Promise<NextResponse | null> {
+): Promise<PreparedManualDriverTelegramLinkAuthorityV1 | null> {
     const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {}
@@ -76,12 +91,7 @@ async function requireCurrentBotDriverAuthority(
     const connectionId = typeof record.connectionId === 'string'
         ? record.connectionId.trim()
         : ''
-    if (!providerAccountId || !connectionId) {
-        return NextResponse.json({
-            error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
-        }, { status: 409 })
-    }
-
+    if (!providerAccountId || !connectionId) return null
     try {
         const authority = await prepareManualDriverTelegramLinkAuthorityV1(input)
         if (
@@ -91,16 +101,24 @@ async function requireCurrentBotDriverAuthority(
         ) {
             throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
         }
-        return null
+        return authority
     } catch (error: unknown) {
         console.warn(
             '[driver-bot] Current Telegram Driver authority rejected:',
             error instanceof Error ? error.message : String(error),
         )
-        return NextResponse.json({
-            error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
-        }, { status: 409 })
+        return null
     }
+}
+
+async function requireCurrentBotDriverAuthority(
+    payload: unknown,
+    input: { driverId: string; telegramId: bigint },
+): Promise<NextResponse | null> {
+    if (await resolveCurrentBotDriverAuthority(payload, input)) return null
+    return NextResponse.json({
+        error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
+    }, { status: 409 })
 }
 
 // Check if a Telegram user is linked to a driver
@@ -309,6 +327,149 @@ async function findCarById(connection: any, carId: string) {
         if (total === null && cars.length < PAGE) break // last page (no total field)
     }
     return null
+}
+
+// ── Cash compensation pilot ────────────────────────────────────────────────
+// The bot renders; every rule lives behind compensationPilotSectionV1 and
+// compensationPilotSubmitV1, so the two surfaces cannot drift apart. The person
+// is proven here through current Telegram Driver authority, the same gate as
+// every other bot Driver action; this block never creates or changes a link.
+
+function serializeCompensationApplication(application: {
+    applicationId: string
+    status: string
+    shortOrderIdDisplay: string | null
+    amountKopecks: number
+    submittedAt: Date
+    rejectionReason: string | null
+}) {
+    return {
+        applicationId: application.applicationId,
+        status: application.status,
+        shortOrderId: application.shortOrderIdDisplay,
+        amountKopecks: application.amountKopecks,
+        submittedAt: application.submittedAt.toISOString(),
+        rejectionReason: application.rejectionReason,
+    }
+}
+
+type CompensationPersonProof =
+    | { proven: true; telegramUserId: string; driverId: string; contactId: string }
+    | { proven: false; response: NextResponse | null }
+
+async function proveCompensationTelegramPerson(payload: any): Promise<CompensationPersonProof> {
+    const telegramUserId = typeof payload?.telegramId === 'string' || typeof payload?.telegramId === 'number'
+        ? String(payload.telegramId)
+        : ''
+    if (!/^\d+$/u.test(telegramUserId) || /^0+$/u.test(telegramUserId)) {
+        return {
+            proven: false,
+            response: NextResponse.json({ error: 'Missing telegramId' }, { status: 400 }),
+        }
+    }
+    const telegramId = BigInt(telegramUserId)
+    const mapping = await prisma.driverTelegram.findFirst({
+        where: { telegramId },
+        select: { driverId: true },
+    })
+    // No manager link yet: the in-band refusal, not an authority failure.
+    if (!mapping || !mapping.driverId) return { proven: false, response: null }
+
+    const authority = await resolveCurrentBotDriverAuthority(payload, {
+        driverId: mapping.driverId,
+        telegramId,
+    })
+    if (!authority) {
+        return {
+            proven: false,
+            response: NextResponse.json({
+                error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
+            }, { status: 409 }),
+        }
+    }
+    return {
+        proven: true,
+        // The canonical decimal form authority proved, never the raw payload.
+        telegramUserId: telegramId.toString(),
+        driverId: mapping.driverId,
+        contactId: authority.contactId,
+    }
+}
+
+async function handleCompensationSection(payload: any) {
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({
+            available: false,
+            reason: 'identity_not_proven',
+            applications: [],
+        })
+    }
+
+    const view = await compensationPilotSectionV1({
+        telegramUserId: proof.telegramUserId,
+        driverId: proof.driverId,
+        contactId: proof.contactId,
+    })
+    if (!view.available) {
+        return NextResponse.json({
+            available: false,
+            reason: view.reason,
+            applications: view.applications.map(serializeCompensationApplication),
+        })
+    }
+    return NextResponse.json({
+        available: true,
+        monthKey: view.firstMonthKey,
+        remainingBudgetKopecks: view.remainingBudgetKopecks,
+        orders: view.orders.map((order) => ({
+            externalOrderId: order.externalOrderId,
+            shortOrderId: order.shortOrderIdDisplay,
+            amountKopecks: order.amountKopecks,
+            endedAt: order.endedAt.toISOString(),
+        })),
+        applications: view.applications.map(serializeCompensationApplication),
+    })
+}
+
+async function handleCompensationSubmit(payload: any) {
+    const { externalOrderId, claimedRubles, supportConfirmed, attachmentFileId, attachmentKind, idempotencyKey } = payload ?? {}
+    if (!payload?.telegramId || !externalOrderId) {
+        return NextResponse.json({ error: 'Missing telegramId or externalOrderId' }, { status: 400 })
+    }
+    // The bot supplies the key so a retried tap is the same logical submit.
+    if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '') {
+        return NextResponse.json({ error: 'Missing idempotencyKey' }, { status: 400 })
+    }
+
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({ submitted: false, refusal: 'identity_not_proven' })
+    }
+
+    const outcome = await compensationPilotSubmitV1({
+        telegramUserId: proof.telegramUserId,
+        driverId: proof.driverId,
+        contactId: proof.contactId,
+        externalOrderId: String(externalOrderId),
+        // A non-numeric amount becomes NaN, which the gate refuses as not whole
+        // rubles rather than coercing it into something plausible.
+        claimedRubles: Number(claimedRubles),
+        supportConfirmed: supportConfirmed === true,
+        attachmentFileId: attachmentFileId ? String(attachmentFileId) : null,
+        attachmentKind: attachmentKind ? String(attachmentKind) : null,
+        idempotencyKey,
+    })
+
+    if (!outcome.submitted) {
+        return NextResponse.json({ submitted: false, refusal: outcome.refusal })
+    }
+    return NextResponse.json({
+        submitted: true,
+        applicationId: outcome.applicationId,
+        amountKopecks: outcome.amountKopecks,
+        status: outcome.status,
+    })
 }
 
 // Handle a phone submitted through the driver bot. Generic bot ingress is a

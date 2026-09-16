@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
     recordDriverAction: vi.fn(),
     authorizeDriverTelegram: vi.fn(),
     providerFetch: vi.fn(),
+    compensationPilotSection: vi.fn(),
+    compensationPilotSubmit: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -53,6 +55,8 @@ vi.mock('@/modules/messaging/public/v1', () => ({
 }))
 
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
+    compensationPilotSectionV1: mocks.compensationPilotSection,
+    compensationPilotSubmitV1: mocks.compensationPilotSubmit,
     mirrorDriverActionResultV1: mocks.mirrorDriverActionResult,
     recordDriverActionV1: mocks.recordDriverAction,
 }))
@@ -225,6 +229,16 @@ describe('driver-bot current Telegram authority', () => {
         ['get_order_price', { telegramId: '123456' }],
         ['poll_driver_action', { telegramId: '123456', taskId: 'task-1' }],
         ['set_active_park', { telegramId: '123456', parkId: 'park-1' }],
+        ['compensation_section', { telegramId: '123456' }],
+        ['compensation_submit', {
+            telegramId: '123456',
+            externalOrderId: 'order-1',
+            claimedRubles: 300,
+            supportConfirmed: true,
+            attachmentFileId: 'file-1',
+            attachmentKind: 'photo',
+            idempotencyKey: 'submit-key-1',
+        }],
     ] as const
 
     beforeEach(() => {
@@ -261,6 +275,8 @@ describe('driver-bot current Telegram authority', () => {
             expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
             expect(mocks.recordDriverAction).not.toHaveBeenCalled()
             expect(mocks.providerFetch).not.toHaveBeenCalled()
+            expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+            expect(mocks.compensationPilotSubmit).not.toHaveBeenCalled()
         },
     )
 
@@ -287,6 +303,8 @@ describe('driver-bot current Telegram authority', () => {
             expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
             expect(mocks.recordDriverAction).not.toHaveBeenCalled()
             expect(mocks.providerFetch).not.toHaveBeenCalled()
+            expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+            expect(mocks.compensationPilotSubmit).not.toHaveBeenCalled()
         },
     )
 
@@ -308,5 +326,148 @@ describe('driver-bot current Telegram authority', () => {
         expect(response.status).toBe(409)
         expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+})
+
+describe('driver-bot cash compensation pilot', () => {
+    const binding = { providerAccountId: 'telegram-bot-1', connectionId: 'telegram-connection-1' }
+    const submitPayload = {
+        telegramId: '123456',
+        externalOrderId: 'order-1',
+        claimedRubles: 300,
+        supportConfirmed: true,
+        attachmentFileId: 'file-1',
+        attachmentKind: 'photo',
+        idempotencyKey: 'submit-key-1',
+        ...binding,
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1' })
+        mocks.authorizeDriverTelegram.mockResolvedValue({
+            chatId: 'chat-1',
+            contactId: 'contact-1',
+            contactIdentityId: 'identity-1',
+            providerAccountId: 'telegram-bot-1',
+            connectionId: 'telegram-connection-1',
+            target: '123456',
+            identityTarget: '123456',
+        })
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    function expectNoIdentityWrites() {
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
+        expect(mocks.recordBotUserProfile).not.toHaveBeenCalled()
+        expect(mocks.recordPendingBotLinkRequest).not.toHaveBeenCalled()
+        expect(mocks.findDriver).not.toHaveBeenCalled()
+        expect(mocks.findDriverByYandex).not.toHaveBeenCalled()
+        expect(mocks.listYandexConnectionMetadata).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    }
+
+    test('hands the section the person Telegram authority proved, not a phone or a caller id', async () => {
+        mocks.compensationPilotSection.mockResolvedValue({
+            available: false,
+            reason: 'not_self_employed',
+            applications: [],
+        })
+
+        const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+            available: false,
+            reason: 'not_self_employed',
+            applications: [],
+        })
+        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({ driverId: 'driver-1', telegramId: 123456n })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({
+            telegramUserId: '123456',
+            driverId: 'driver-1',
+            contactId: 'contact-1',
+        })
+        expectNoIdentityWrites()
+    })
+
+    test('answers an account with no manager link in band, without asking authority or the pilot', async () => {
+        mocks.findDriverTelegramFirst.mockResolvedValue(null)
+
+        const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+            available: false,
+            reason: 'identity_not_proven',
+            applications: [],
+        })
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+        expectNoIdentityWrites()
+    })
+
+    test('submits with the proven person and the driver evidence', async () => {
+        mocks.compensationPilotSubmit.mockResolvedValue({
+            submitted: true,
+            applicationId: 'application-1',
+            amountKopecks: 30_000,
+            status: 'created',
+        })
+
+        const response = await POST(actionRequest('compensation_submit', submitPayload))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({
+            submitted: true,
+            applicationId: 'application-1',
+            amountKopecks: 30_000,
+            status: 'created',
+        })
+        expect(mocks.compensationPilotSubmit).toHaveBeenCalledWith({
+            telegramUserId: '123456',
+            driverId: 'driver-1',
+            contactId: 'contact-1',
+            externalOrderId: 'order-1',
+            claimedRubles: 300,
+            supportConfirmed: true,
+            attachmentFileId: 'file-1',
+            attachmentKind: 'photo',
+            idempotencyKey: 'submit-key-1',
+        })
+        expectNoIdentityWrites()
+    })
+
+    test('records the Telegram id in the canonical form authority proved', async () => {
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'not_self_employed', applications: [] })
+
+        await POST(actionRequest('compensation_section', { telegramId: '000123456', ...binding }))
+
+        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({ driverId: 'driver-1', telegramId: 123456n })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({
+            telegramUserId: '123456',
+            driverId: 'driver-1',
+            contactId: 'contact-1',
+        })
+    })
+
+    test('refuses a submit with no idempotency key before reading any identity', async () => {
+        const response = await POST(actionRequest('compensation_submit', { ...submitPayload, idempotencyKey: '' }))
+
+        expect(response.status).toBe(400)
+        expect(mocks.findDriverTelegramFirst).not.toHaveBeenCalled()
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotSubmit).not.toHaveBeenCalled()
+    })
+
+    test('refuses a Telegram id that is not a positive integer', async () => {
+        for (const telegramId of ['0', '12ab', '-5']) {
+            const response = await POST(actionRequest('compensation_section', { telegramId, ...binding }))
+            expect(response.status).toBe(400)
+        }
+        expect(mocks.findDriverTelegramFirst).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
     })
 })

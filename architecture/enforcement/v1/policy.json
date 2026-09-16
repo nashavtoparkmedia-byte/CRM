@@ -139,7 +139,8 @@
     "architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json",
     "architecture/isolation/calling/ai-agent-config-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/channel-delivery-runtime-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/compensation-pilot-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
