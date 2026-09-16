@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "be6b8eb82d8c074e82a3be0cd53db26137e984be"
-BUILDER_COMMIT = "c52daa83da5837c2da9bd0006be8bcfd677f8437"
+BUILDER_COMMIT = "4b5692cdabc54a6835e736ddb21028be3ba14acf"
 BUILDER_BASE_COMMIT = "be6b8eb82d8c074e82a3be0cd53db26137e984be"
 PROFILE = "crm-be6b8eb82d8c-gravity-max-source-v1"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
