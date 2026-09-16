@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CONTACT-IDENTITY-M2A1-S1-WHATSAPP-ACCOUNT-FOUNDATION",
+  "amendments": [
+    {
+      "context": "whatsapp_channel",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:WhatsAppAccount",
+        "gravity-mvp/prisma/schema.prisma:WhatsAppAccountKey",
+        "gravity-mvp/prisma/schema.prisma:WhatsAppTransportBinding",
+        "gravity-mvp/prisma/schema.prisma:WhatsAppCapabilityLease"
+      ],
+      "reason": "WhatsApp Channel owns the WhatsApp company account, its provider key set, its transport binding attestation and trust history, and the capability lease foundation. These models are an inert expand-only foundation with no runtime writer or reader, carry no credential or session value and no relation to Contacts; they are pending source state and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}

@@ -28,16 +28,6 @@
       ]
     },
     {
-      "path": "gravity-mvp/scripts/baseline-vps.sh",
-      "functional_owner": "production_migration_authority",
-      "production_reachability": "CONFIRMED_MANUAL_BASELINE",
-      "lifecycle_evidence_status": "REVIEWED_PRODUCTION_MIGRATION_BASELINE",
-      "rationale": "Explicit operator baseline records reviewed production migrations as applied without becoming a runtime writer.",
-      "expected_site_signatures": [
-        "fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52"
-      ]
-    },
-    {
       "path": "gravity-mvp/add_partial_index.sql",
       "functional_owner": "task_management",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -189,6 +179,58 @@
       ]
     },
     {
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "125df93803a4baa4efb12335a4c0bcc99a1559572017a92a246535686a82a75c",
+        "1b6832a365971950ceaf2b908277304a64a0f286a7d7420970606931a42a0282",
+        "1b95edd131237fc835094a1b883770124908789272c5f1ccc8f84bc6ed8b1210",
+        "1fad0cbdbb2956031200b4e5fadab5d78e4b183a16456644c80688edea8b36c4",
+        "28350ecb5a2c4fa700f8bf6fcd3f66a8495984467c3f14cbd7e88b6b3e28829e",
+        "367277967de42fb6d6ad37100ed905e92d50baa8d16b6b180b7b975764c23c1f",
+        "46800a6e9bdd41b9d7914b715b98fa1aa01c7ae6dfb97932a6c57ed8a6d680d5",
+        "4efd8ded953bf8a63eebf0501a425d9df81381326e68945b14475c56889b177b",
+        "4fd1b4d1db9385511f1c999121ff89537d5e8b0f2d74d1d193a1f8936bc884cd",
+        "5018e7a8df5da90e268dbaad26ad7ddfe93b8658724589017e0f4421c2afe012",
+        "5a55b93777fce0b90af365825b3abaa52daa1869c065f24bba945e705752adde",
+        "61e84808e413b673dec4f50a7cd38034a2cd69bb4f88b2c6d11f47fb0f9499a5",
+        "681d3f3331e130dec6c30ef4e60e0a70db16353a1ae070bb6f062dc5aa35478f",
+        "68a481d79d2b06d6cdc047474cf5e4ad4a5559ae0f7ec410b4f1ca6b443f019b",
+        "6c653024512a8147501db7931f709d5e9268c3bfb48323a87e04b74161cdf732",
+        "6e7a5fa94ff911edbe88e4eb98e21beaf7be64e5628bd19a08261a4a49aa23bf",
+        "71022cbb7112cbe503ab5c886c4d7b9400ae99886e177c130712d19075024c42",
+        "7bd8031062ed468542c8b1b896520ca493655bbff22445d0f3e774b464f66ea7",
+        "7d5016e97a867f960054e62215f9ec1014385ab786412fae060e278afb05b9a9",
+        "7f686f3cbe06c7baa752148be0667a562949c3caaa3f8d3c8f3a42a0f845db7f",
+        "87c18afa882ae0984f306065ed52d465348cc7e9a65fed060b0c632169e9c525",
+        "8b839b39f94411057df9c465d45d3cde58b47297afee81788a70d7940eccdc42",
+        "9299a4d2cc278acfe2845d7a2df4fce68baa393790b9cc4728461ea0e2f0f71e",
+        "98599c71c8bc88753404372ed67018929b73d39a393611c457a73336ec6f187a",
+        "9ce43c15edd548a60c985c1f6c683b95a0caf6a7b6d8212e799296f74190d98b",
+        "a5bef60516ce292fe20ae0bc3a424573a4412eb753dc9863e012352e4b955787",
+        "aab6cf9f0fb572f8c8545955c1d8f3484050499b7c2a1e2cf0182501d292c033",
+        "ab60f9b33716bcdb1cd377ec840bf7c392eb0beae86484192ffb1c87b3286234",
+        "abefd939cf6548960c2aa45262f7b31af7f359136135ed2d16117e3dfed503b4",
+        "b56edae49b63bbb4421abd82543137bacb8394d515e854838048fd50990f07d3",
+        "b62943725eff79382fb8d26e84a431c7e3b5d19b78d8c3b2f71a17c9e999fb02",
+        "bfae06f31b610dacf80a3e5f92854b14cdb2d396d7b7e025733c9864c6f116ac",
+        "ca67f34faef51031e5d5cc1a4a82b2dfa5de830d42e262e81f2b71094a16b912",
+        "d12a5a4392b9c2eb8d6f5e3e4b1733dcf9ae0f28862151bfe25c355817e5ef9c",
+        "d2fa0dcf51fd63aaa8f210f346ca2f36da2dfd629dce93ab0f19a212906b0482",
+        "d78258b0c3b85d7ec0074ca3351149c4d6800a9115ebc362c7c6a492b72fc3a0",
+        "da6d8c188fa218c15a3a9463f09b34aeb1473de0c66825ea62aabe9670396dc8",
+        "dddc184a4e8b5e6f0360b363f92922beadb014d73672f54b74e2cef36e9be654",
+        "e1f7576671436f4be6cdd77a16af5c158ba4a9da6c0459a508f438fac4343535",
+        "f5125886e529f938cd4ae931da18a1584195565ba50781bf0bda7027937d206d",
+        "f6756210dcdcf3981c227527652702d116a425792fd27dddfc32594fa87e02fd",
+        "fea8ea3280ce0b3582c4d368a751638ac209dde6177d1f7c0aa9fc7a58651032",
+        "fee05209bb7b6c0c781a61021c80a371880fb50bfa9991484337d93ecb32b053"
+      ]
+    },
+    {
       "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
       "functional_owner": "task_management",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -207,6 +249,16 @@
       "rationale": "Explicit one-shot script backfills only task scenario data under operator invocation.",
       "expected_site_signatures": [
         "a962a2fdac7c3c993837f0ab130fe1e13c36b876fd6d34a8e56d617da6e56f9f"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/baseline-vps.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_BASELINE",
+      "lifecycle_evidence_status": "REVIEWED_PRODUCTION_MIGRATION_BASELINE",
+      "rationale": "Explicit operator baseline records reviewed production migrations as applied without becoming a runtime writer.",
+      "expected_site_signatures": [
+        "fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52"
       ]
     },
     {
@@ -251,6 +303,16 @@
       ]
     },
     {
+      "path": "scripts/deploy.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND",
+      "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
+      "expected_site_signatures": [
+        "b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189"
+      ]
+    },
+    {
       "path": "scripts/migrate-data-apply.sh",
       "functional_owner": "production_migration_authority",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -262,16 +324,6 @@
         "205d1ceadc0dd197bc21ad52b4c11aa252cd7d0146debd06a3a1e592daaaad74",
         "2d375d50425d4ebfcdae9f253de9d7512072f7448c5dd653b31beeb32fc885a1",
         "6e58a444585e3d01ab32d1aff7b7c249b80fc07b86d9a9963a418869ae18e6d2"
-      ]
-    },
-    {
-      "path": "scripts/deploy.sh",
-      "functional_owner": "production_migration_authority",
-      "production_reachability": "CONFIRMED_MANUAL_DEPLOYMENT",
-      "lifecycle_evidence_status": "REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND",
-      "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
-      "expected_site_signatures": [
-        "b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189"
       ]
     },
     {
@@ -2531,6 +2583,780 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "681d3f3331e130dec6c30ef4e60e0a70db16353a1ae070bb6f062dc5aa35478f",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 31,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccount",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7f686f3cbe06c7baa752148be0667a562949c3caaa3f8d3c8f3a42a0f845db7f",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 45,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccountKey",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "fea8ea3280ce0b3582c4d368a751638ac209dde6177d1f7c0aa9fc7a58651032",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 55,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "9ce43c15edd548a60c985c1f6c683b95a0caf6a7b6d8212e799296f74190d98b",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 81,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "4fd1b4d1db9385511f1c999121ff89537d5e8b0f2d74d1d193a1f8936bc884cd",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 98,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccountKey",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "9299a4d2cc278acfe2845d7a2df4fce68baa393790b9cc4728461ea0e2f0f71e",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 101,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccountKey",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "71022cbb7112cbe503ab5c886c4d7b9400ae99886e177c130712d19075024c42",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 104,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "98599c71c8bc88753404372ed67018929b73d39a393611c457a73336ec6f187a",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 107,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ab60f9b33716bcdb1cd377ec840bf7c392eb0beae86484192ffb1c87b3286234",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 110,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "68a481d79d2b06d6cdc047474cf5e4ad4a5559ae0f7ec410b4f1ca6b443f019b",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 113,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "d2fa0dcf51fd63aaa8f210f346ca2f36da2dfd629dce93ab0f19a212906b0482",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 116,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccountKey",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "61e84808e413b673dec4f50a7cd38034a2cd69bb4f88b2c6d11f47fb0f9499a5",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 119,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "a5bef60516ce292fe20ae0bc3a424573a4412eb753dc9863e012352e4b955787",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 122,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "b56edae49b63bbb4421abd82543137bacb8394d515e854838048fd50990f07d3",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 125,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "b62943725eff79382fb8d26e84a431c7e3b5d19b78d8c3b2f71a17c9e999fb02",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 128,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "aab6cf9f0fb572f8c8545955c1d8f3484050499b7c2a1e2cf0182501d292c033",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 132,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccount",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "6e7a5fa94ff911edbe88e4eb98e21beaf7be64e5628bd19a08261a4a49aa23bf",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 139,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccount",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ca67f34faef51031e5d5cc1a4a82b2dfa5de830d42e262e81f2b71094a16b912",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 150,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppAccountKey",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "dddc184a4e8b5e6f0360b363f92922beadb014d73672f54b74e2cef36e9be654",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 157,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1b6832a365971950ceaf2b908277304a64a0f286a7d7420970606931a42a0282",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 173,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "e1f7576671436f4be6cdd77a16af5c158ba4a9da6c0459a508f438fac4343535",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 186,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "5a55b93777fce0b90af365825b3abaa52daa1869c065f24bba945e705752adde",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 207,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "bfae06f31b610dacf80a3e5f92854b14cdb2d396d7b7e025733c9864c6f116ac",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 230,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "8b839b39f94411057df9c465d45d3cde58b47297afee81788a70d7940eccdc42",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 240,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppCapabilityLease",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "fee05209bb7b6c0c781a61021c80a371880fb50bfa9991484337d93ecb32b053",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 251,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "WhatsAppTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "d12a5a4392b9c2eb8d6f5e3e4b1733dcf9ae0f28862151bfe25c355817e5ef9c",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 256,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_account_foundation_truncate_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7bd8031062ed468542c8b1b896520ca493655bbff22445d0f3e774b464f66ea7",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 263,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppAccount_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "367277967de42fb6d6ad37100ed905e92d50baa8d16b6b180b7b975764c23c1f",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 264,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table."
+    },
+    {
+      "site_signature": "f5125886e529f938cd4ae931da18a1584195565ba50781bf0bda7027937d206d",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 267,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppAccountKey_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "46800a6e9bdd41b9d7914b715b98fa1aa01c7ae6dfb97932a6c57ed8a6d680d5",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 268,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table."
+    },
+    {
+      "site_signature": "4efd8ded953bf8a63eebf0501a425d9df81381326e68945b14475c56889b177b",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 271,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppTransportBinding_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "da6d8c188fa218c15a3a9463f09b34aeb1473de0c66825ea62aabe9670396dc8",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 272,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table."
+    },
+    {
+      "site_signature": "6c653024512a8147501db7931f709d5e9268c3bfb48323a87e04b74161cdf732",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 275,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppCapabilityLease_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "d78258b0c3b85d7ec0074ca3351149c4d6800a9115ebc362c7c6a492b72fc3a0",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 276,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table."
+    },
+    {
+      "site_signature": "87c18afa882ae0984f306065ed52d465348cc7e9a65fed060b0c632169e9c525",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 282,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_account_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "abefd939cf6548960c2aa45262f7b31af7f359136135ed2d16117e3dfed503b4",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 352,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppAccount_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "7d5016e97a867f960054e62215f9ec1014385ab786412fae060e278afb05b9a9",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 359,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_account_key_set_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "28350ecb5a2c4fa700f8bf6fcd3f66a8495984467c3f14cbd7e88b6b3e28829e",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 383,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_account_key_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "125df93803a4baa4efb12335a4c0bcc99a1559572017a92a246535686a82a75c",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 394,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppAccountKey_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1b95edd131237fc835094a1b883770124908789272c5f1ccc8f84bc6ed8b1210",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 403,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_transport_binding_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "5018e7a8df5da90e268dbaad26ad7ddfe93b8658724589017e0f4421c2afe012",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 526,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppTransportBinding_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1fad0cbdbb2956031200b4e5fadab5d78e4b183a16456644c80688edea8b36c4",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 541,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "whatsapp_capability_lease_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "f6756210dcdcf3981c227527652702d116a425792fd27dddfc32594fa87e02fd",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
+      "line": 648,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "whatsapp_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "WhatsAppCapabilityLease_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",

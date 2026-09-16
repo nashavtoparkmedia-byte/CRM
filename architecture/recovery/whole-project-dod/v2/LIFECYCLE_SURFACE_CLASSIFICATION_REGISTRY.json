@@ -4,10 +4,10 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 711,
+    "total_entries": 712,
     "test": 35,
     "dead_historical": 92,
-    "migration_only": 81,
+    "migration_only": 82,
     "active_operational": 498,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
@@ -2192,6 +2192,16 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "whatsapp_channel",
+      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8"
     },
     {
       "path": "gravity-mvp/query_driver.sql",
