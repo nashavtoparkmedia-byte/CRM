@@ -50,11 +50,14 @@ read from runtime input and there is no list to extend.
   other Compose service can receive it. The generated activation overlay
   attaches one fixed source per service:
   `/var/lib/crm/release-staging/messaging-be6b8eb8/{gravity-mvp,max-web-scraper}.env`.
-- Each source must be root-owned `0600` below a non-caller-writable chain and
-  contain exactly `MAX_SCRAPER_WEBHOOK_SECRET=<64 lowercase hex>` plus a
-  newline. Both must carry identical material. Preflight binds a digest of
-  both sources into state; activation refuses before Compose if they changed.
-  No fault or state record carries the value.
+- The source directory must be root-owned `0700` with every ancestor
+  root-owned and not group- or other-writable. Each source must be a
+  single-link root-owned `0600` file containing exactly
+  `MAX_SCRAPER_WEBHOOK_SECRET=<64 lowercase hex>` plus a newline, and both must
+  carry identical material. Preflight reads them once and binds a digest into
+  state; activation refuses before its intent write, and again at the Compose
+  boundary, if they changed. The render is compared with that bound value, not
+  a fresh read. No fault or state record carries the value.
 - The rendered activation projection must equal the base projection except for
   the image, the Gravity command, and that one name with the bound value.
   Unrelated services must render identically.

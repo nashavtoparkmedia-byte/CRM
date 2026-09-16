@@ -50,9 +50,10 @@ ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33
 # Rollback never reads these sources and never attaches them, so the predecessor images -- which
 # do not reference this variable -- are recreated with exactly their original environment.
 RELEASE_ENVIRONMENT_NAME = "MAX_SCRAPER_WEBHOOK_SECRET"
+RELEASE_ENVIRONMENT_DIRECTORY = "/var/lib/crm/release-staging/messaging-be6b8eb8"
 RELEASE_ENVIRONMENT_SOURCES: Mapping[str, str] = MappingProxyType({
-    "gravity-mvp": "/var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env",
-    "max-web-scraper": "/var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env",
+    "gravity-mvp": RELEASE_ENVIRONMENT_DIRECTORY + "/gravity-mvp.env",
+    "max-web-scraper": RELEASE_ENVIRONMENT_DIRECTORY + "/max-web-scraper.env",
 })
 RELEASE_ENVIRONMENT_VALUE = re.compile(rb"[0-9a-f]{64}")
 RELEASE_ENVIRONMENT_SOURCE_MAXIMUM = 256
@@ -769,7 +770,15 @@ def _release_environment(core: Any) -> dict[str, Any]:
     """
     values: dict[str, bytes] = {}
     digests: dict[str, str] = {}
+    try:
+        # Root-owned 0700 directory whose every ancestor is root-owned and not group/other
+        # writable: no non-root principal can replace a source between validation and Compose.
+        core.secure_directory(RELEASE_ENVIRONMENT_DIRECTORY, 0o700)
+    except (core.RuntimeFault, OSError) as exc:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": "directory"}) from exc
     for service, path in sorted(RELEASE_ENVIRONMENT_SOURCES.items()):
+        if os.path.dirname(path) != RELEASE_ENVIRONMENT_DIRECTORY:
+            raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": service})
         try:
             expected = _fixed_production_file(core, path, 0o600, RELEASE_ENVIRONMENT_SOURCE_MAXIMUM)
         except (core.RuntimeFault, OSError) as exc:
@@ -909,7 +918,9 @@ def _compose_config(core: Any, args: list[str]) -> dict[str, Any]:
     return value
 
 
-def _validate_projection(core: Any, profile: dict[str, Any], overlay: str, *, activate: bool) -> None:
+def _validate_projection(
+    core: Any, profile: dict[str, Any], overlay: str, *, activate: bool, release_value: str | None = None
+) -> None:
     base = _compose_config(core, _compose_args(profile))
     candidate = _compose_config(core, _compose_args(profile, overlay))
     if set(base) != set(candidate) or set(base["services"]) != set(candidate["services"]):
@@ -921,7 +932,10 @@ def _validate_projection(core: Any, profile: dict[str, Any], overlay: str, *, ac
     changed = {"gravity-mvp", "max-web-scraper"}
     if _canonical({key: value for key, value in base["services"].items() if key not in changed}) != _canonical({key: value for key, value in candidate["services"].items() if key not in changed}):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
-    release_value = _release_environment(core)["value"] if activate else None
+    # Activation compares the render against the value already bound to the preflight digest;
+    # rollback takes no release value at all.
+    if activate != isinstance(release_value, str) or (activate and RELEASE_ENVIRONMENT_VALUE.fullmatch(release_value.encode("ascii", "replace")) is None):
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_BINDING_INVALID", 78)
     expected = {
         "gravity-mvp": TARGET_GRAVITY if activate else ROLLBACK_GRAVITY,
         "max-web-scraper": TARGET_MAX if activate else ROLLBACK_MAX,
@@ -968,10 +982,10 @@ def _compose_hash(core: Any, profile: dict[str, Any], overlay: str, service: str
     return parts[1]
 
 
-def _derive_compose_domains(core: Any, profile: dict[str, Any]) -> dict[str, str]:
+def _derive_compose_domains(core: Any, profile: dict[str, Any], release_value: str) -> dict[str, str]:
     _write_fixed_file(core, ACTIVATE_OVERLAY, _compose_overlay(TARGET_GRAVITY, TARGET_MAX, activate=True), 0o400)
     _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_GRAVITY, ROLLBACK_MAX, activate=False), 0o400)
-    _validate_projection(core, profile, ACTIVATE_OVERLAY, activate=True)
+    _validate_projection(core, profile, ACTIVATE_OVERLAY, activate=True, release_value=release_value)
     _validate_projection(core, profile, ROLLBACK_OVERLAY, activate=False)
     return {
         "target_gravity_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "gravity-mvp"),
@@ -1163,11 +1177,12 @@ def _log_evidence(core: Any, path: str, captured_at: str) -> dict[str, Any]:
 
 def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str, *, activate: bool) -> None:
     _validate_compose_inputs(core, profile, state)
+    release_value = None
     if activate:
         # Only activation attaches the release environment, so only activation depends on it.
         # A rollback must stay possible even if these sources were removed after a failure.
-        _validate_release_environment(core, state)
-    _validate_projection(core, profile, overlay, activate=activate)
+        release_value = _validate_release_environment(core, state)["value"]
+    _validate_projection(core, profile, overlay, activate=activate, release_value=release_value)
     log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
@@ -1355,7 +1370,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
         storage = _storage_guard(core, profile, [], "post_load")
         _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
         _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
-        domains = _derive_compose_domains(core, profile)
+        domains = _derive_compose_domains(core, profile, release_environment["value"])
         next_state = {
             "schema": STATE_SCHEMA,
             "profile_id": PROFILE_ID,
@@ -1527,6 +1542,9 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
         _validate_compose_inputs(core, profile, state)
         _validate_target_image(core, profile["target"]["gravity"], TARGET_GRAVITY, "gravity")
         _validate_target_image(core, profile["target"]["max_scraper"], TARGET_MAX, "max")
+        # A removed or changed release source is refused here, before the intent write, so it costs
+        # no Compose transaction and no automatic rollback. _compose_up re-checks it at the boundary.
+        _validate_release_environment(core, state)
         before = state
         if state.get("phase") == "PREFLIGHTED":
             state = {**state, "phase": "ACTIVATION_INTENT", "activation_intent_at": core.now()}
