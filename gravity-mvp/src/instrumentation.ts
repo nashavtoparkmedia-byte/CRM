@@ -372,6 +372,26 @@ export async function register() {
         }, 60 * 60 * 1000)  // every hour
         registerOperationalIntervalV1(yandexSyncInterval)
 
+        // Cash-order ingestion for compensation-enabled parks. Fleet owns the
+        // work and decides whether it is enabled; mode off (the default)
+        // registers nothing here.
+        try {
+            const { cashOrderIngestionScheduleV1 } = await import('@/modules/fleet-operations/public/v1')
+            const cashOrderSchedule = cashOrderIngestionScheduleV1()
+            if (cashOrderSchedule.enabled) {
+                const runCashOrderIngestion = async () => {
+                    await runOperationalJobV1('compensation_cash_order_ingestion', async () => {
+                        const { runScheduledCashOrderIngestionV1 } = await import('@/modules/fleet-operations/public/v1')
+                        return await runScheduledCashOrderIngestionV1()
+                    })
+                }
+                setTimeout(runCashOrderIngestion, cashOrderSchedule.firstRunDelayMs)
+                registerOperationalIntervalV1(setInterval(runCashOrderIngestion, cashOrderSchedule.intervalMs))
+            }
+        } catch (err: any) {
+            opsLog('error', 'cash_order_ingestion_schedule_failed', { operation: 'startup', error: err.message })
+        }
+
         opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
     }, 5000) // 5 second delay after server start
