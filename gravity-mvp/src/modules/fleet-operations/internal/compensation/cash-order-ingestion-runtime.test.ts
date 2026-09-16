@@ -903,6 +903,18 @@ describe('targeted day confirmation', () => {
         expect(fleet.requests).toHaveLength(30)
     })
 
+    it('ends lease_busy 180 s after a slice first queued while another process holds the lease', async () => {
+        const { runtime, store, fleet } = world('write', [YOKO])
+        await store.acquireLease({ provider: 'yandex_fleet', externalParkId: YOKO, token: 'other-process' })
+        ;(store.checkpoints.get(YOKO) as CashOrderCheckpointV1).leaseExpiresAt = new Date(Date.now() + HOUR)
+        const started = performance.now()
+        const snapshot = await confirm(runtime, { externalOrderId: 'o1', providerBookedAt: null })
+        expect(snapshot?.outcome).toBe('failed:lease_busy')
+        expect(performance.now() - started).toBeLessThan(200_000)
+        expect(fleet.requests).toEqual([])
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'o1')).toMatchObject({ state: 'failed', code: 'lease_busy' })
+    })
+
     it('reports a record whose run never ends as lost after 6 min', async () => {
         const { runtime, store } = world('write', [YOKO])
         const release = await runtime.requestDayConfirmation({ externalParkId: YOKO, dayKey: DAY })

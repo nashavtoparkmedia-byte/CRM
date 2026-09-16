@@ -1095,6 +1095,10 @@ export class CashOrderIngestionRuntimeV1 {
         const deadlineMs = record.registeredAtMs + L.DAY_DEADLINE_MS
         let park: AuthorizedParkV1 | null = null
         let setupAtMs = Number.NEGATIVE_INFINITY
+        // When the current slice first queued. It survives lease retries, so a
+        // slice that never gets the lease ends lease_busy 180 s after it first
+        // asked, not 180 s after its latest attempt.
+        let sliceQueuedAtMs: number | null = null
         try {
             for (;;) {
                 if (this.ports.clock.nowMs() >= deadlineMs) {
@@ -1136,19 +1140,20 @@ export class CashOrderIngestionRuntimeV1 {
                     return
                 }
 
-                const queuedAtMs = this.ports.clock.nowMs()
-                const tenure = await this.acquireTargetedTenure(record.externalParkId, queuedAtMs, deadlineMs)
+                sliceQueuedAtMs ??= this.ports.clock.nowMs()
+                const tenure = await this.acquireTargetedTenure(record.externalParkId, sliceQueuedAtMs, deadlineMs)
                 if ('failure' in tenure) {
                     record.outcome = tenure.failure === 'deadline' ? 'incomplete' : 'failed:lease_busy'
                     return
                 }
-                let step: 'continue' | 'stop'
+                let step: 'continue' | 'lease_wait' | 'stop'
                 try {
                     step = await this.runDayTenure(record, park, work, tenure, deadlineMs)
                 } finally {
                     tenure.release()
                 }
                 if (step === 'stop') return
+                if (step === 'continue') sliceQueuedAtMs = null
             }
         } catch {
             record.outcome = 'failed:internal_error'
@@ -1172,12 +1177,17 @@ export class CashOrderIngestionRuntimeV1 {
         work: { kind: 'narrow'; externalOrderId: string; window: BookingWindowV1 } | { kind: 'fallback'; window: BookingWindowV1 },
         tenure: { budget: CashOrderBudgetV1; leaseRetryUntilMs: number },
         deadlineMs: number,
-    ): Promise<'continue' | 'stop'> {
+    ): Promise<'continue' | 'lease_wait' | 'stop'> {
         const token = this.ports.newToken()
         const acquisition = await this.acquireParkLease(park, token, tenure.budget, tenure.leaseRetryUntilMs)
         if (acquisition === null || !acquisition.acquired) {
             const now = this.ports.clock.nowMs()
-            if (now < tenure.leaseRetryUntilMs) return 'continue'
+            if (now < tenure.leaseRetryUntilMs) {
+                // Always let time pass before the next attempt, so a retry
+                // window shorter than one retry step cannot spin.
+                await this.ports.sleep(Math.min(L.LEASE_RETRY_MS, tenure.leaseRetryUntilMs - now))
+                return 'lease_wait'
+            }
             record.outcome = now >= deadlineMs ? 'incomplete' : 'failed:lease_busy'
             return 'stop'
         }
