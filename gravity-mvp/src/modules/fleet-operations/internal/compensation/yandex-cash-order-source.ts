@@ -156,6 +156,8 @@ export const RECONCILIATION_REQUEST_PROFILE_V1: CashOrderRequestProfileV1 = Obje
 
 export interface CashOrderRequestStatsV1 {
     attempts: number
+    /** Every 429 response, retried or not. */
+    http429: number
     retries429: number
     retries5xx: number
     timeouts: number
@@ -163,7 +165,7 @@ export interface CashOrderRequestStatsV1 {
 }
 
 export function emptyCashOrderRequestStatsV1(): CashOrderRequestStatsV1 {
-    return { attempts: 0, retries429: 0, retries5xx: 0, timeouts: 0, shortenedAborts: 0 }
+    return { attempts: 0, http429: 0, retries429: 0, retries5xx: 0, timeouts: 0, shortenedAborts: 0 }
 }
 
 export type CashOrderRequestOutcomeV1 =
@@ -243,6 +245,7 @@ export async function requestCashOrderPageV1(
         } else if (response.kind === 'malformed') {
             lastFailure = { code: 'provider_response_malformed', httpStatus: null }
         } else if (response.status === 429 || response.status === 503) {
+            if (response.status === 429) runner.stats.http429 += 1
             const code = response.status === 429 ? 'provider_rate_limited' : 'provider_unavailable'
             lastFailure = { code, httpStatus: response.status }
             const retryAfter = parseRetryAfterSecondsV1(response.retryAfter, runner.wallNowMs())

@@ -130,6 +130,28 @@ export function compensationDaysInMonthV1(month: CompensationCalendarMonthV1): n
     return new Date(Date.UTC(month.year, month.month, 0)).getUTCDate()
 }
 
+/** Business day of a `YYYY-MM-DD` key, rejecting keys that are not real calendar days. */
+export function parseCompensationBusinessDayKeyV1(key: string): CompensationCalendarDayV1 {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
+    if (match === null) throw new RangeError(`invalid compensation business day key: ${key}`)
+    const day = { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) }
+    if (day.month < 1 || day.month > 12 || day.day < 1 || day.day > compensationDaysInMonthV1(day)) {
+        throw new RangeError(`invalid compensation business day key: ${key}`)
+    }
+    return day
+}
+
+/** Instant at which a business day begins (local midnight). */
+export function compensationDayStartInstantV1(day: CompensationCalendarDayV1): Date {
+    return businessWallClockToInstant(day.year, day.month, day.day)
+}
+
+/** Instant at which a business day ends, exclusive: the next day's start. */
+export function compensationDayEndInstantV1(day: CompensationCalendarDayV1): Date {
+    const next = new Date(Date.UTC(day.year, day.month - 1, day.day + 1))
+    return businessWallClockToInstant(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate())
+}
+
 /** Instant at which a business month begins (local midnight of the 1st). */
 export function compensationMonthStartInstantV1(month: CompensationCalendarMonthV1): Date {
     return businessWallClockToInstant(month.year, month.month, 1)

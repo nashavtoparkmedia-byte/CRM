@@ -94,6 +94,10 @@ function toCheckpoint(row: Record<string, unknown>): CashOrderCheckpointV1 {
 }
 
 export const legacyPrismaCashOrderIngestionStoreV1: CashOrderIngestionStoreV1 = {
+    async readDatabaseNow() {
+        return shortOperation(databaseNow)
+    },
+
     async readAuthoritySnapshot() {
         return shortOperation(async (transaction) => {
             const parks = await transaction.park.findMany({

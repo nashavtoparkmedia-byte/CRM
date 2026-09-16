@@ -118,6 +118,7 @@ export interface CashOrderBackgroundFinishV1 {
 }
 
 export interface CashOrderIngestionStoreV1 {
+    readDatabaseNow(): Promise<Date>
     /** Active parks and active links, metadata only, with the database time. */
     readAuthoritySnapshot(): Promise<{ dbNow: Date; snapshot: CashOrderAuthoritySnapshotV1 }>
     readCheckpoints(provider: string, externalParkIds: readonly string[]): Promise<{ dbNow: Date; checkpoints: CashOrderCheckpointV1[] }>
