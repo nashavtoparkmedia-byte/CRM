@@ -336,6 +336,60 @@
           "review_rationale": "The driver-bot webhook gains the compensation_section and compensation_submit actions and extracts the current Telegram Driver authority check into one shared resolver; every existing action keeps the same authority gate, status codes and responses, and the path keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner."
         }
       ]
+    },
+    {
+      "amendment_id": "calling-audio-runtime-hardening-main-4abc73f2-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "CALLING_MEDIA_RUNTIME_REMEDIATION_EXECUTOR_REVIEW_20260915",
+      "role": "EXECUTOR_REVIEW_WITH_INDEPENDENT_CRITIC",
+      "authorization": "OWNER_TASK_CALLING_MEDIA_RUNTIME_REMEDIATION_20260915",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the accepted chain published on main at 4abc73f2 and reviews only the three surfaces added by the Calling media-runtime remediation."
+      },
+      "reason": "Re-anchors the Calling media-runtime remediation review (amendment calling-audio-runtime-hardening-20260915, which extended the composition at 2,501 surfaces) onto the accepted chain published on main at 4abc73f2, whose C2 cash-compensation pilot integration moved the reviewed denominator to 2,527. The reviewed surfaces are unchanged: the three tracked executable surfaces the remediation adds, all owned by the calling context (tools/audio-bridge-day1/channel-lifecycle.js, its unit test, and telephony/tests/audio_runtime_probe.mjs). It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the reconciled tree: 2,527 + 3 = 2,530 surfaces, context-owned 1,313 -> 1,316, governed exclusions 1,214 unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2527,
+        "tracked_inventory_sha256": "e3cd83d3a4c827127efe40116bc9027cba50c404e550235f0539f31a445cf2ca",
+        "coverage_sha256": "5fae6b44c9637ed522eb34a888fdaa067e1b3a2f1a73e882abba33cd7b2c8867"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2530,
+        "tracked_inventory_sha256": "260e4cc390217010e817cb7b5074a988365a47c94d9874d19951cc9fc99c68d5",
+        "coverage_sha256": "b80814905e9ed37dde4a1968fed0ea2dfffe79bf8a9eb77b82c52823c4ca926b"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "telephony/tests/audio_runtime_probe.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/__tests__/channel-lifecycle.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/audio-bridge-day1/channel-lifecycle.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the calling bounded context owns (telephony/ or tools/audio-bridge-day1/ in architecture/contexts/v1/manifests/calling.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
