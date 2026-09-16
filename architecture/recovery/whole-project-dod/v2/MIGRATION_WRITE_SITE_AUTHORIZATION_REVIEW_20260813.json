@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "9452524617b57be62e1bc73d7f0057be27969b35743d3dafd0ee0305b8eaf14d",
-    "reviewed_path_count": 21,
+    "source_sha256": "f072eba9f2d4262b1b8fc41898cc9b1ac5e35d9b7f1510003016224db0b20c0f",
+    "reviewed_path_count": 22,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 900,
-    "sorted_site_signatures_sha256": "728a85fdb6e6632bf8f307763a67d30364d3ee82f652cac55d18852fed993793"
+    "non_test_migration_only_sites": 904,
+    "sorted_site_signatures_sha256": "6236a8b870cad9a5ffdc7e6d1fe565294f5ecdfd896e7f53ce4b2767f0e5fdde"
   },
   "authorizations": [
     {
@@ -6064,6 +6064,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.2b1abe002eccdbba",
+      "site_signature": "2b1abe002eccdbbaae79eeb6263aa2e5eba7bd231ba4f8852d1e628dffec588c",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+        "source_sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+        "line": 61,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CompensationCashOrderIngestionCheckpoint",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+          "site_signature:2b1abe002eccdbbaae79eeb6263aa2e5eba7bd231ba4f8852d1e628dffec588c",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql:61:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.2b2efea9810c934e",
       "site_signature": "2b2efea9810c934eda1951c36c935b0f2ea5fd9f53780070bdd2349eacdf92d1",
       "status": "APPROVED",
@@ -7641,6 +7680,45 @@
         "canonical_ordinal": 51,
         "artifact_sha256": "eea7bd6d591b60fe1ac71bd1a77e1e9c82a48d41b99f8b338efa55f65f561f26",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726225737_add_max_dispatch_ledger/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.39272fa7245a6e7b",
+      "site_signature": "39272fa7245a6e7bc6747f1da493152449c651374d3c103f89214831924babe1",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+        "source_sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+        "line": 13,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CompensationCashOrder",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+          "site_signature:39272fa7245a6e7bc6747f1da493152449c651374d3c103f89214831924babe1",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql:13:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -22868,6 +22946,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.ae0fa9c3d2b8a6cd",
+      "site_signature": "ae0fa9c3d2b8a6cdfaa43c026db3127fa5129790ac61189d321fb3feb967b457",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+        "source_sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+        "line": 24,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CompensationCashOrderIngestionCheckpoint",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+          "site_signature:ae0fa9c3d2b8a6cdfaa43c026db3127fa5129790ac61189d321fb3feb967b457",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql:24:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.fleet_operations.ae6f828c6595b691",
       "site_signature": "ae6f828c6595b691f8a54892c858e2b99f9a5da504dc65daf8a3ee5f4afd3435",
       "status": "APPROVED",
@@ -29151,6 +29268,45 @@
         "canonical_ordinal": 1,
         "artifact_sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
         "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.e67524a2c11422c3",
+      "site_signature": "e67524a2c11422c3ae3f17ef13b73682fa21e8d40ccc778f9226b4000499c444",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+        "source_sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+        "line": 19,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CompensationCashOrder",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+          "site_signature:e67524a2c11422c3ae3f17ef13b73682fa21e8d40ccc778f9226b4000499c444",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql:19:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
