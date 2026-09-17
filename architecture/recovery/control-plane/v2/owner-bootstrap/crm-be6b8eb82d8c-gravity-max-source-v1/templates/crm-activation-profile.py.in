@@ -1740,7 +1740,11 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                 if refusal is not None:
                     failed_state["automatic_rollback_refusal"] = refusal
                 _write_state(core, failed_state)
-                _audit(core, invocation, state, "target_postcheck_failed", failed_state)
+                _audit(
+                    core, invocation, state,
+                    "target_postcheck_failed" if refusal is None else "target_postcheck_failed_rollback_refused_calling_b2",
+                    failed_state,
+                )
                 if refusal is not None:
                     raise core.RuntimeFault(
                         "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED",

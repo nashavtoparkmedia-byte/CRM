@@ -86,9 +86,14 @@ decision.
   commit. It also refuses while the application, profile id or package
   version is still that of the Messaging-only Runtime 2.0.0-17
   (`be6b8eb8`, `crm-be6b8eb82d8c-gravity-max-source-v1`, `2.0.0-17`).
-  `verify-sealed-inputs.py` refuses the same identities in every phase, so
-  `build-package.sh` cannot package them either. Those identities are split
-  literals, so a mechanical rename during rebinding cannot rewrite the guard.
+  In every phase, before any other check, `verify-sealed-inputs.py` requires
+  the sealed inputs and the generated profile to declare the same application
+  commit, profile id and package version, and refuses the 2.0.0-17 ones. Its
+  later checks still pin the profile and package to the builder's own
+  constants, so `build-package.sh`, which runs it before and after packaging,
+  cannot package this builder until those constants are rebound. The unbound
+  identities are split literals, so a mechanical rename during rebinding
+  cannot rewrite the guard.
   The source path uses the sealed profile id as its release id, so it follows
   that binding and a source staged under the current id is not accepted after
   it:
@@ -136,8 +141,11 @@ decision.
     `release-preflight`, which never writes on a failed re-check, as the
     status probe.
 - Disarming is a separate authorized action and is not part of this profile.
-  An armed activation therefore has no automatic rollback: activate with both
-  kill switches `false`, and arm only under a separately authorized procedure.
+  The profile has no arming step either: the kill switches take the values
+  staged for an activation. An activation staged with either switch `true`
+  therefore has no automatic rollback. Stage both `false` unless the Owner has
+  separately authorized an armed activation and the disarm that must follow
+  it.
 
 ## Large artifact admission
 

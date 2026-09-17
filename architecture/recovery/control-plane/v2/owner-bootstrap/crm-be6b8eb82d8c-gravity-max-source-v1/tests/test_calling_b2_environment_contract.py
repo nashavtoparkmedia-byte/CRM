@@ -347,29 +347,41 @@ class SealedContractTests(CallingBase):
     def test_package_verifier_refuses_every_phase_until_rebound(self) -> None:
         verifier = load_module("yoko_calling_b2_verifier_tests", "packaging/verify-sealed-inputs.py")
         successor = {"accepted_application": {"commit": "f" * 40}, "profile_id": "crm-ffffffffffff-gravity-max-source-v1", "package_version": "2.0.0-18"}
-        verifier.assert_calling_b2_bound(successor)
+        verifier.assert_calling_b2_bound(successor, copy.deepcopy(successor))
         v17 = verifier.CALLING_B2_UNBOUND_IDENTITIES
-        for label, sealed in {
-            "v17 application": {**successor, "accepted_application": {"commit": v17["application_commit"]}},
-            "v17 profile id": {**successor, "profile_id": v17["profile_id"]},
-            "v17 package version": {**successor, "package_version": v17["package_version"]},
-            "no application": {key: value for key, value in successor.items() if key != "accepted_application"},
-        }.items():
+        old = {"accepted_application": {"commit": v17["application_commit"]}, "profile_id": v17["profile_id"], "package_version": v17["package_version"]}
+        cases = {
+            "v17 application": ({**successor, "accepted_application": {"commit": v17["application_commit"]}},) * 2,
+            "v17 profile id": ({**successor, "profile_id": v17["profile_id"]},) * 2,
+            "v17 package version": ({**successor, "package_version": v17["package_version"]},) * 2,
+            "identity omitted from both": ({"schema": "x"}, {"schema": "x"}),
+            "application omitted from both": ({key: value for key, value in successor.items() if key != "accepted_application"},) * 2,
+            "empty strings": ({"accepted_application": {"commit": ""}, "profile_id": "", "package_version": ""},) * 2,
+            "profile still v17": (successor, old),
+            "sealed inputs disagree with profile": (successor, {**successor, "package_version": "2.0.0-19"}),
+            "profile not an object": (successor, ["not", "a", "profile"]),
+        }
+        for label, (sealed, profile) in cases.items():
             with self.subTest(refusal=label):
                 with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
-                    verifier.assert_calling_b2_bound(sealed)
-        current = {"schema": "yoko.crm.coordinated-runtime-sealed-inputs.v1", "accepted_application": {"commit": v17["application_commit"]},
-                   "profile_id": v17["profile_id"], "package_version": v17["package_version"]}
-        for phase in ("package", "package-output", "release"):
-            with self.subTest(phase=phase):
-                with (
-                    mock.patch.object(sys, "argv", ["verify-sealed-inputs.py", "--phase", phase]),
-                    mock.patch.object(verifier, "load", return_value=current),
-                    mock.patch.object(verifier, "git", side_effect=AssertionError("verifier continued past the binding")) as git,
-                ):
-                    with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
-                        verifier.main()
-                git.assert_not_called()
+                    verifier.assert_calling_b2_bound(sealed, profile)
+        schema = {"schema": "yoko.crm.coordinated-runtime-sealed-inputs.v1"}
+        for label, sealed, profile in (
+            ("current builder", {**schema, **old}, old),
+            ("hand-made inputs omitting the identity", schema, old),
+            ("successor inputs over a v17 profile", {**schema, **successor}, old),
+        ):
+            for phase in ("package", "package-output", "release"):
+                with self.subTest(case=label, phase=phase):
+                    documents = {"sealed-inputs.v1.json": sealed, "profile.v1.json": profile}
+                    with (
+                        mock.patch.object(sys, "argv", ["verify-sealed-inputs.py", "--phase", phase]),
+                        mock.patch.object(verifier, "load", side_effect=lambda path: documents[Path(path).name]),
+                        mock.patch.object(verifier, "git", side_effect=AssertionError("verifier continued past the binding")) as git,
+                    ):
+                        with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
+                            verifier.main()
+                    git.assert_not_called()
 
 class SourceTests(unittest.TestCase):
     """Uses the real Runtime core in its test-root mode, so ownership and mode checks are real."""
@@ -1095,6 +1107,7 @@ class ActivationFlowTests(CallingBase):
         def projection(_core, _profile, _overlay, *, activate, release_value=None, calling_values=None):
             projections.append((activate, dict(calling_values) if calling_values is not None else None))
 
+        self.audits = audits
         with (
             mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
             mock.patch.object(self.runtime, "_read_state", return_value={**self.state, "phase": phase}),
@@ -1166,6 +1179,7 @@ class ActivationFlowTests(CallingBase):
         self.assertEqual(failure.details["activation_failure"]["code"], "GRAVITY_RUNTIME_SEMANTIC_DRIFT")
         self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_INTENT", "ACTIVATION_FAILED"])
         self.assertEqual(writes[-1]["automatic_rollback_refusal"], refusal)
+        self.assertEqual([audit[3] for audit in self.audits], ["intent", "failed_rollback_refused_calling_b2"])
         self.assertEqual(len(composed), 1)
         self.assertEqual([item[0] for item in projections], [True])
 
@@ -1179,6 +1193,7 @@ class ActivationFlowTests(CallingBase):
         self.assertEqual(failure.code, "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED")
         self.assertEqual(failure.details["rollback_refusal"]["details"], {"armed_kill_switches": [LIVE]})
         self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED"])
+        self.assertEqual([audit[3] for audit in self.audits], ["target_postcheck_failed_rollback_refused_calling_b2"])
         self.assertEqual(composed, [])
 
     def test_recheck_of_an_armed_activated_release_only_reports_and_keeps_its_state(self) -> None:
@@ -1206,6 +1221,7 @@ class ActivationFlowTests(CallingBase):
         self.assertEqual(failure.code, "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK")
         self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED", "ROLLBACK_INTENT", "ROLLED_BACK"])
         self.assertNotIn("automatic_rollback_refusal", writes[0])
+        self.assertEqual(self.audits[0][3], "target_postcheck_failed")
         self.assertEqual(len(composed), 1)
         self.assertIn(self.runtime.ROLLBACK_OVERLAY, composed[0])
 

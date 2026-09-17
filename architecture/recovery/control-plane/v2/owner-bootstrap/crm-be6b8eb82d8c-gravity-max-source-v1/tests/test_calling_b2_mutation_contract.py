@@ -185,8 +185,23 @@ MUTANTS = (
     ),
     (
         "verifier-accepts-unbound-capability", "packaging/verify-sealed-inputs.py",
-        "    assert_calling_b2_bound(sealed)\n",
+        '    assert_calling_b2_bound(sealed, load(GENERATED / "profile.v1.json"))\n',
         "",
+    ),
+    (
+        "verifier-ignores-generated-profile-identity", "packaging/verify-sealed-inputs.py",
+        "        declared[0] != declared[1]\n        or any(",
+        "        any(",
+    ),
+    (
+        "verifier-accepts-omitted-identity", "packaging/verify-sealed-inputs.py",
+        "        or any(not isinstance(value, str) or not value for value in declared[0])\n",
+        "",
+    ),
+    (
+        "target-recovery-refusal-audited-as-plain-failure", PROFILE,
+        '"target_postcheck_failed" if refusal is None else "target_postcheck_failed_rollback_refused_calling_b2",',
+        '"target_postcheck_failed",',
     ),
     (
         "automatic-rollback-intent-despite-armed-guard", PROFILE,
@@ -195,8 +210,8 @@ MUTANTS = (
     ),
     (
         "target-recovery-rollback-intent-despite-armed-guard", PROFILE,
-        '                _audit(core, invocation, state, "target_postcheck_failed", failed_state)\n                if refusal is not None:\n',
-        '                _audit(core, invocation, state, "target_postcheck_failed", failed_state)\n                if False:\n',
+        "                    failed_state,\n                )\n                if refusal is not None:\n",
+        "                    failed_state,\n                )\n                if False:\n",
     ),
     (
         "armed-activated-recheck-downgrades-state", PROFILE,

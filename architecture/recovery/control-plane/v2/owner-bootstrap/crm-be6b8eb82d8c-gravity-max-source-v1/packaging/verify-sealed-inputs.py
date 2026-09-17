@@ -118,13 +118,26 @@ def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
     return residual
 
 
-def assert_calling_b2_bound(sealed: dict[str, Any]) -> None:
-    application = sealed.get("accepted_application")
+def assert_calling_b2_bound(sealed: dict[str, Any], profile: Any) -> None:
+    """Refuse unless the sealed inputs and the generated profile declare one identical successor identity.
+
+    Each of application commit, profile id and package version must be present in both documents,
+    agree between them, and differ from the Messaging-only Runtime 2.0.0-17 identity.
+    """
+    declared = []
+    for document in (sealed, profile):
+        document = document if isinstance(document, dict) else {}
+        application = document.get("accepted_application")
+        declared.append((
+            application.get("commit") if isinstance(application, dict) else None,
+            document.get("profile_id"),
+            document.get("package_version"),
+        ))
+    unbound = tuple(CALLING_B2_UNBOUND_IDENTITIES[key] for key in ("application_commit", "profile_id", "package_version"))
     if (
-        not isinstance(application, dict)
-        or application.get("commit") == CALLING_B2_UNBOUND_IDENTITIES["application_commit"]
-        or sealed.get("profile_id") == CALLING_B2_UNBOUND_IDENTITIES["profile_id"]
-        or sealed.get("package_version") == CALLING_B2_UNBOUND_IDENTITIES["package_version"]
+        declared[0] != declared[1]
+        or any(not isinstance(value, str) or not value for value in declared[0])
+        or any(value == old for value, old in zip(declared[0], unbound))
     ):
         raise ValueError("Calling B2 capability is not bound to an exact successor application")
 
@@ -136,7 +149,8 @@ def main() -> None:
     sealed = load(GENERATED / "sealed-inputs.v1.json")
     if sealed.get("schema") != "yoko.crm.coordinated-runtime-sealed-inputs.v1":
         raise ValueError("sealed input schema mismatch")
-    assert_calling_b2_bound(sealed)
+    # Refusal only: the profile's own digest is verified below, before anything else trusts it.
+    assert_calling_b2_bound(sealed, load(GENERATED / "profile.v1.json"))
     builder = sealed.get("runtime_builder")
     if not isinstance(builder, dict):
         raise ValueError("runtime builder binding missing")
