@@ -49,7 +49,7 @@
       "capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push",
       "status": "APPROVED",
       "approved": true,
-      "source": { "path": "deploy/docker-compose.production.yml", "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34", "entrypoint": "yandex-fleet-scraper production container command", "site_signatures": ["c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27"] },
+      "source": { "path": "deploy/docker-compose.production.yml", "source_sha256": "06520d68a83134479578d59293fd340219ecc7df27d4af76d8322994c1f295cb", "entrypoint": "yandex-fleet-scraper production container command", "site_signatures": ["dbe7bfe87476ebbd73448415c7d6553a310424465820ff02a5d21c650b365793"] },
       "lifecycle": "MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
       "lifecycle_evidence": "Production compose applies the checked scraper schema before starting the API.",
