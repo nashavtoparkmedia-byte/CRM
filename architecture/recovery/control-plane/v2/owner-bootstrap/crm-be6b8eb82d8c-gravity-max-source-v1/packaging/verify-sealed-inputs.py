@@ -20,6 +20,14 @@ REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"
 REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")
 REVIEW_VERDICTS = frozenset({"PASS", "PASS_WITH_LOW_FINDINGS"})
 RESIDUAL_SEVERITIES = frozenset({"LOW", "INFO"})
+# The Messaging-only release the Calling B2 capability extends. Every phase refuses generated inputs
+# still carrying any of these identities, so a package built from this builder cannot exist until it is
+# rebound to an exact successor application. Split so a mechanical rename cannot rewrite the guard.
+CALLING_B2_UNBOUND_IDENTITIES = {
+    "application_commit": "be6b8eb82d8c" "074e82a3be0cd53db26137e984be",
+    "profile_id": "crm-be6b8eb82d8c" "-gravity-max-source-v1",
+    "package_version": "2.0.0" "-17",
+}
 
 
 def duplicate_safe(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -110,6 +118,17 @@ def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
     return residual
 
 
+def assert_calling_b2_bound(sealed: dict[str, Any]) -> None:
+    application = sealed.get("accepted_application")
+    if (
+        not isinstance(application, dict)
+        or application.get("commit") == CALLING_B2_UNBOUND_IDENTITIES["application_commit"]
+        or sealed.get("profile_id") == CALLING_B2_UNBOUND_IDENTITIES["profile_id"]
+        or sealed.get("package_version") == CALLING_B2_UNBOUND_IDENTITIES["package_version"]
+    ):
+        raise ValueError("Calling B2 capability is not bound to an exact successor application")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase", choices=("package", "package-output", "release"), required=True)
@@ -117,6 +136,7 @@ def main() -> None:
     sealed = load(GENERATED / "sealed-inputs.v1.json")
     if sealed.get("schema") != "yoko.crm.coordinated-runtime-sealed-inputs.v1":
         raise ValueError("sealed input schema mismatch")
+    assert_calling_b2_bound(sealed)
     builder = sealed.get("runtime_builder")
     if not isinstance(builder, dict):
         raise ValueError("runtime builder binding missing")

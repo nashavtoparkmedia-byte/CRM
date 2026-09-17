@@ -299,20 +299,77 @@ class SealedContractTests(CallingBase):
                 mutate(profile)
                 self.assertFault("ACTIVATION_PROFILE_INVALID", self.load, profile)
 
-    def test_sealer_refuses_before_any_output_until_bound_to_the_exact_application(self) -> None:
+    def test_sealer_refuses_before_any_output_until_bound_to_an_exact_successor(self) -> None:
         sealer = load_module("yoko_calling_b2_sealer_tests", "packaging/seal-release.py")
         self.assertIsNone(sealer.CALLING_B2_APPLICATION_COMMIT)
+        self.assertEqual(sealer.CALLING_B2_UNBOUND_IDENTITIES, {
+            "application_commit": "be6b8eb82d8c074e82a3be0cd53db26137e984be",
+            "profile_id": "crm-be6b8eb82d8c-gravity-max-source-v1",
+            "package_version": "2.0.0-17",
+        })
         with mock.patch.object(sealer.argparse, "ArgumentParser", side_effect=AssertionError("sealer read its inputs")) as parser:
             with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
                 sealer.main()
         parser.assert_not_called()
-        with (
-            mock.patch.object(sealer, "CALLING_B2_APPLICATION_COMMIT", sealer.APPLICATION_COMMIT),
-            mock.patch.object(sealer.argparse, "ArgumentParser", side_effect=RuntimeError("bound: inputs are read")),
-        ):
-            with self.assertRaisesRegex(RuntimeError, "bound: inputs are read"):
-                sealer.main()
+        successor = "f" * 40
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "packaging").mkdir()
 
+            def attempt(*, calling=successor, application=successor, profile_id="crm-ffffffffffff-gravity-max-source-v1", control="Version: 2.0.0-18\n"):
+                (root / "packaging/control").write_text("Package: yoko-privileged-runtime\n" + control, encoding="ascii")
+                with (
+                    mock.patch.object(sealer, "ROOT", root),
+                    mock.patch.object(sealer, "CALLING_B2_APPLICATION_COMMIT", calling),
+                    mock.patch.object(sealer, "APPLICATION_COMMIT", application),
+                    mock.patch.object(sealer, "PROFILE_ID", profile_id),
+                    mock.patch.object(sealer.argparse, "ArgumentParser", side_effect=RuntimeError("bound: inputs are read")),
+                ):
+                    sealer.main()
+
+            with self.assertRaisesRegex(RuntimeError, "bound: inputs are read"):
+                attempt()
+            v17 = sealer.CALLING_B2_UNBOUND_IDENTITIES
+            refusals = {
+                "unbound": dict(calling=None),
+                "different commit": dict(calling="e" * 40),
+                "v17 application": dict(calling=v17["application_commit"], application=v17["application_commit"]),
+                "v17 profile id": dict(profile_id=v17["profile_id"]),
+                "v17 package version": dict(control="Version: 2.0.0-17\n"),
+                "no package version": dict(control=""),
+                "two package versions": dict(control="Version: 2.0.0-18\nVersion: 2.0.0-19\n"),
+            }
+            for label, arguments in refusals.items():
+                with self.subTest(refusal=label):
+                    with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
+                        attempt(**arguments)
+
+    def test_package_verifier_refuses_every_phase_until_rebound(self) -> None:
+        verifier = load_module("yoko_calling_b2_verifier_tests", "packaging/verify-sealed-inputs.py")
+        successor = {"accepted_application": {"commit": "f" * 40}, "profile_id": "crm-ffffffffffff-gravity-max-source-v1", "package_version": "2.0.0-18"}
+        verifier.assert_calling_b2_bound(successor)
+        v17 = verifier.CALLING_B2_UNBOUND_IDENTITIES
+        for label, sealed in {
+            "v17 application": {**successor, "accepted_application": {"commit": v17["application_commit"]}},
+            "v17 profile id": {**successor, "profile_id": v17["profile_id"]},
+            "v17 package version": {**successor, "package_version": v17["package_version"]},
+            "no application": {key: value for key, value in successor.items() if key != "accepted_application"},
+        }.items():
+            with self.subTest(refusal=label):
+                with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
+                    verifier.assert_calling_b2_bound(sealed)
+        current = {"schema": "yoko.crm.coordinated-runtime-sealed-inputs.v1", "accepted_application": {"commit": v17["application_commit"]},
+                   "profile_id": v17["profile_id"], "package_version": v17["package_version"]}
+        for phase in ("package", "package-output", "release"):
+            with self.subTest(phase=phase):
+                with (
+                    mock.patch.object(sys, "argv", ["verify-sealed-inputs.py", "--phase", phase]),
+                    mock.patch.object(verifier, "load", return_value=current),
+                    mock.patch.object(verifier, "git", side_effect=AssertionError("verifier continued past the binding")) as git,
+                ):
+                    with self.assertRaisesRegex(ValueError, "Calling B2 capability is not bound"):
+                        verifier.main()
+                git.assert_not_called()
 
 class SourceTests(unittest.TestCase):
     """Uses the real Runtime core in its test-root mode, so ownership and mode checks are real."""
@@ -1023,7 +1080,7 @@ class ActivationFlowTests(CallingBase):
         self.directory.cleanup()
         super().tearDown()
 
-    def activate(self, *, pair_sequence, wait_sequence, raw_environment=None):
+    def activate(self, *, pair_sequence, wait_sequence, raw_environment=None, phase="PREFLIGHTED"):
         writes: list[dict[str, object]] = []
         audits: list[tuple[object, ...]] = []
         composed: list[list[str]] = []
@@ -1040,7 +1097,7 @@ class ActivationFlowTests(CallingBase):
 
         with (
             mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
-            mock.patch.object(self.runtime, "_read_state", return_value=dict(self.state)),
+            mock.patch.object(self.runtime, "_read_state", return_value={**self.state, "phase": phase}),
             mock.patch.object(self.runtime, "_pair", side_effect=lambda *_: next(pairs)),
             mock.patch.object(self.runtime, "_wait_pair", side_effect=lambda *_: next(waits)),
             mock.patch.object(self.runtime, "_raw_container", side_effect=lambda _core, _name: raw_gravity(self.target_pair()[0], raw_environment or disarmed_environment())),
@@ -1095,19 +1152,62 @@ class ActivationFlowTests(CallingBase):
         self.assertEqual(projections[1], (False, None))
         self.assertIn(self.runtime.ROLLBACK_OVERLAY, composed[1])
 
-    def test_failed_activation_with_an_armed_gravity_is_not_rolled_back(self) -> None:
+    def test_failed_activation_with_an_armed_gravity_is_refused_before_any_rollback_intent(self) -> None:
         drifted = self.target_pair(gravity_names=sorted([*GRAVITY_TARGET_NAMES, "FOO_SECRET"]))
         result, failure, writes, composed, projections = self.activate(
-            pair_sequence=[self.predecessor_pair(), drifted, drifted],
+            pair_sequence=[self.predecessor_pair(), drifted],
             wait_sequence=[drifted],
             raw_environment=[f"{LIVE}=true", f"{GATE}=true", f"AI_CALL_CONTROLLED_OPERATOR_TOKEN={TOKEN_MARKER}"],
         )
         self.assertIsNone(result)
-        self.assertEqual(failure.code, "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED")
-        self.assertEqual(failure.details["rollback_failure"], {"code": "CALLING_B2_KILL_SWITCH_ARMED", "details": {"armed_kill_switches": [GATE, LIVE]}})
-        self.assertEqual(writes[-1]["phase"], "ROLLBACK_FAILED")
+        refusal = {"code": "CALLING_B2_KILL_SWITCH_ARMED", "details": {"armed_kill_switches": [GATE, LIVE]}}
+        self.assertEqual(failure.code, "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED")
+        self.assertEqual(failure.details["rollback_refusal"], refusal)
+        self.assertEqual(failure.details["activation_failure"]["code"], "GRAVITY_RUNTIME_SEMANTIC_DRIFT")
+        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_INTENT", "ACTIVATION_FAILED"])
+        self.assertEqual(writes[-1]["automatic_rollback_refusal"], refusal)
         self.assertEqual(len(composed), 1)
         self.assertEqual([item[0] for item in projections], [True])
+
+    def test_target_recovery_with_an_armed_gravity_is_refused_before_any_rollback_intent(self) -> None:
+        drifted = self.target_pair(gravity_names=sorted([*GRAVITY_TARGET_NAMES, "FOO_SECRET"]))
+        result, failure, writes, composed, _ = self.activate(
+            pair_sequence=[self.target_pair()], wait_sequence=[drifted],
+            raw_environment=[f"{LIVE}=true", f"{GATE}=false"], phase="ACTIVATION_INTENT",
+        )
+        self.assertIsNone(result)
+        self.assertEqual(failure.code, "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED")
+        self.assertEqual(failure.details["rollback_refusal"]["details"], {"armed_kill_switches": [LIVE]})
+        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED"])
+        self.assertEqual(composed, [])
+
+    def test_recheck_of_an_armed_activated_release_only_reports_and_keeps_its_state(self) -> None:
+        drifted = self.target_pair(gravity_names=sorted([*GRAVITY_TARGET_NAMES, "FOO_SECRET"]))
+        for label, environment, code in (
+            ("armed", [f"{GATE}=true"], "CALLING_B2_KILL_SWITCH_ARMED"),
+            ("unproven", [LIVE], "CALLING_B2_KILL_SWITCH_STATE_UNPROVEN"),
+        ):
+            with self.subTest(case=label):
+                result, failure, writes, composed, _ = self.activate(
+                    pair_sequence=[self.target_pair()], wait_sequence=[drifted], raw_environment=environment, phase="ACTIVATED",
+                )
+                self.assertIsNone(result)
+                self.assertEqual(failure.code, "ACTIVATED_POSTCHECK_FAILED_ROLLBACK_REFUSED")
+                self.assertEqual(failure.details["rollback_refusal"]["code"], code)
+                self.assertEqual(failure.details["activation_failure"]["code"], "GRAVITY_RUNTIME_SEMANTIC_DRIFT")
+                self.assertEqual((writes, composed), ([], []))
+
+    def test_recheck_of_a_disarmed_activated_release_keeps_the_existing_automatic_rollback(self) -> None:
+        drifted = self.target_pair(gravity_names=sorted([*GRAVITY_TARGET_NAMES, "FOO_SECRET"]))
+        result, failure, writes, composed, _ = self.activate(
+            pair_sequence=[self.target_pair(), drifted], wait_sequence=[drifted, self.predecessor_pair()], phase="ACTIVATED",
+        )
+        self.assertIsNone(result)
+        self.assertEqual(failure.code, "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK")
+        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED", "ROLLBACK_INTENT", "ROLLED_BACK"])
+        self.assertNotIn("automatic_rollback_refusal", writes[0])
+        self.assertEqual(len(composed), 1)
+        self.assertIn(self.runtime.ROLLBACK_OVERLAY, composed[0])
 
     def test_preflight_binds_the_calling_digest_and_refuses_an_invalid_source_before_loading(self) -> None:
         bound = self.runtime._calling_b2_environment(self.core)

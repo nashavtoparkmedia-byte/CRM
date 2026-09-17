@@ -170,8 +170,38 @@ MUTANTS = (
     ),
     (
         "sealer-accepts-unbound-capability", "packaging/seal-release.py",
-        "    if CALLING_B2_APPLICATION_COMMIT != APPLICATION_COMMIT:\n",
-        "    if False:\n",
+        "    assert_calling_b2_bound()\n    parser = argparse.ArgumentParser()\n",
+        "    parser = argparse.ArgumentParser()\n",
+    ),
+    (
+        "sealer-accepts-v17-application", "packaging/seal-release.py",
+        '        or APPLICATION_COMMIT == CALLING_B2_UNBOUND_IDENTITIES["application_commit"]\n',
+        "",
+    ),
+    (
+        "sealer-accepts-v17-package-version", "packaging/seal-release.py",
+        '        or versions[0] == CALLING_B2_UNBOUND_IDENTITIES["package_version"]\n',
+        "",
+    ),
+    (
+        "verifier-accepts-unbound-capability", "packaging/verify-sealed-inputs.py",
+        "    assert_calling_b2_bound(sealed)\n",
+        "",
+    ),
+    (
+        "automatic-rollback-intent-despite-armed-guard", PROFILE,
+        '            if refusal is not None:\n                _audit(core, invocation, state, "failed_rollback_refused_calling_b2", failed_state)\n',
+        '            if False:\n                _audit(core, invocation, state, "failed_rollback_refused_calling_b2", failed_state)\n',
+    ),
+    (
+        "target-recovery-rollback-intent-despite-armed-guard", PROFILE,
+        '                _audit(core, invocation, state, "target_postcheck_failed", failed_state)\n                if refusal is not None:\n',
+        '                _audit(core, invocation, state, "target_postcheck_failed", failed_state)\n                if False:\n',
+    ),
+    (
+        "armed-activated-recheck-downgrades-state", PROFILE,
+        '                if refusal is not None and state.get("phase") == "ACTIVATED":\n',
+        '                if False:\n',
     ),
 )
 

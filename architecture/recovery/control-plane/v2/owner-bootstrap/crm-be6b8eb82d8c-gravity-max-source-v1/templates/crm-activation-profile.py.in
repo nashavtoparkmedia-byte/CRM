@@ -977,6 +977,20 @@ def _assert_calling_b2_disarmed(core: Any, gravity: Any) -> None:
         raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_ARMED", 77, {"armed_kill_switches": armed})
 
 
+def _calling_b2_rollback_refusal(core: Any, gravity: Any) -> dict[str, Any] | None:
+    """Decide, before any rollback intent is written, whether the Calling guard forbids a rollback.
+
+    Returns the refusal's bounded fault identity (codes and switch names only), or None when the
+    Gravity container is proven disarmed. An automatic rollback that would be refused is then
+    reported as refused, rather than recorded as a rollback that was attempted and failed.
+    """
+    try:
+        _assert_calling_b2_disarmed(core, gravity)
+    except Exception as refusal:
+        return _activation_failure(core, refusal)
+    return None
+
+
 def _environment_names(core: Any, semantic: Any, code: str) -> list[str]:
     names = semantic.get("environment_names") if isinstance(semantic, dict) else None
     if (
@@ -1708,14 +1722,31 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                 post = _postcheck(core, policy, profile, state, "TARGET_PAIR")
             except Exception as failure:
                 activation = _activation_failure(core, failure)
+                refusal = _calling_b2_rollback_refusal(core, gravity)
+                if refusal is not None and state.get("phase") == "ACTIVATED":
+                    # A re-check of an already activated release cannot roll back while Calling is armed,
+                    # so it only reports: the confirmed release state is left exactly as found.
+                    raise core.RuntimeFault(
+                        "ACTIVATED_POSTCHECK_FAILED_ROLLBACK_REFUSED",
+                        74,
+                        {"activation_failure": activation, "rollback_refusal": refusal},
+                    )
                 failed_state = {
                     **state,
                     "phase": "ACTIVATION_FAILED",
                     "activation_failure": activation,
                     "activation_failed_at": core.now(),
                 }
+                if refusal is not None:
+                    failed_state["automatic_rollback_refusal"] = refusal
                 _write_state(core, failed_state)
                 _audit(core, invocation, state, "target_postcheck_failed", failed_state)
+                if refusal is not None:
+                    raise core.RuntimeFault(
+                        "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED",
+                        74,
+                        {"activation_failure": activation, "rollback_refusal": refusal},
+                    )
                 try:
                     rollback, mutated, rollback_state = _rollback_with_fencing(
                         core,
@@ -1784,6 +1815,8 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             activation_diagnostics = _log_evidence(core, ACTIVATE_COMPOSE_LOG, core.now())
             current_gravity, current_max = _pair(core, policy, profile)
             current_kind, current_vector = _classify(profile, current_gravity, current_max)
+            # Decided before any rollback intent: an armed or unproven Calling kill switch forbids it.
+            refusal = None if current_kind == "UNKNOWN" else _calling_b2_rollback_refusal(core, current_gravity)
             failed_state = {
                 **state,
                 "phase": "ACTIVATION_FAILED",
@@ -1791,10 +1824,19 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                 "activation_failed_at": core.now(),
                 "activation_diagnostics": activation_diagnostics,
             }
+            if refusal is not None:
+                failed_state["automatic_rollback_refusal"] = refusal
             _write_state(core, failed_state)
             if current_kind == "UNKNOWN":
                 _audit(core, invocation, state, "failed_unknown_fail_closed", failed_state)
                 raise core.RuntimeFault("ACTIVATION_FAILED_UNKNOWN_STATE_NOT_OVERWRITTEN", 74, {"activation_failure": activation, "vector": list(current_vector)})
+            if refusal is not None:
+                _audit(core, invocation, state, "failed_rollback_refused_calling_b2", failed_state)
+                raise core.RuntimeFault(
+                    "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED",
+                    74,
+                    {"activation_failure": activation, "rollback_refusal": refusal},
+                )
             try:
                 rollback, mutated, rollback_state = _rollback_with_fencing(
                     core,

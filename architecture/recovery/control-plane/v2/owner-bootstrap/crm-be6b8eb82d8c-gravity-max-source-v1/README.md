@@ -83,8 +83,15 @@ decision.
 - The capability is implemented ahead of its release. `seal-release.py`
   refuses to seal until this builder is rebound to the exact combined
   application that carries it and `CALLING_B2_APPLICATION_COMMIT` names that
-  commit. The source path uses the sealed profile id as its release id, so it
-  follows that binding:
+  commit. It also refuses while the application, profile id or package
+  version is still that of the Messaging-only Runtime 2.0.0-17
+  (`be6b8eb8`, `crm-be6b8eb82d8c-gravity-max-source-v1`, `2.0.0-17`).
+  `verify-sealed-inputs.py` refuses the same identities in every phase, so
+  `build-package.sh` cannot package them either. Those identities are split
+  literals, so a mechanical rename during rebinding cannot rewrite the guard.
+  The source path uses the sealed profile id as its release id, so it follows
+  that binding and a source staged under the current id is not accepted after
+  it:
   `/var/lib/crm/release-staging/calling-b2/<profile id>/gravity-mvp.env`.
 - The source directory must be root-owned `0700` below a root-owned,
   non-group/other-writable and non-caller-writable chain. The source must be a
@@ -110,16 +117,27 @@ decision.
   must not gain any of them.
 - Rollback never reads or attaches the Calling source. Its postcheck refuses a
   Gravity container that carries any of these names.
-- Every rollback transaction is refused with `CALLING_B2_KILL_SWITCH_ARMED`
-  while the live Gravity container has either kill switch armed. This covers
-  the operator verb, mixed-state recovery and the automatic rollback after a
-  failed activation. The guard reads the environment the classified container
-  was created with, bound to its container id; it never reads the staging file.
-  A switch counts as disarmed only when it is absent or exactly `false`. Any
+- Every rollback is refused while the live Gravity container has either kill
+  switch armed. The guard reads the environment the classified container was
+  created with, bound to its container id; it never reads the staging file. A
+  switch counts as disarmed only when it is absent or exactly `false`. Any
   other value, a repeated or near-miss name, or an unreadable environment is
-  treated as armed or unproven. The operator verb and mixed recovery refuse
-  before any intent is written. Disarming is a separate authorized action and
-  is not part of this profile.
+  treated as armed or unproven. Every path decides this before any rollback
+  intent is written, and `_rollback_pair` checks it again at the transaction:
+  - the operator verb and mixed-state recovery raise the guard fault and leave
+    the state untouched;
+  - a failed activation, or a failed target recovery from
+    `ACTIVATION_INTENT`, records `ACTIVATION_FAILED` with
+    `automatic_rollback_refusal` and raises
+    `ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED`;
+  - a failed re-check of an already `ACTIVATED` release raises
+    `ACTIVATED_POSTCHECK_FAILED_ROLLBACK_REFUSED` and writes nothing. When
+    disarmed, that re-check keeps the existing automatic rollback, so use
+    `release-preflight`, which never writes on a failed re-check, as the
+    status probe.
+- Disarming is a separate authorized action and is not part of this profile.
+  An armed activation therefore has no automatic rollback: activate with both
+  kill switches `false`, and arm only under a separately authorized procedure.
 
 ## Large artifact admission
 
