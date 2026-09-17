@@ -73,7 +73,7 @@
     {
       "context": "whatsapp_channel",
       "path": "architecture/contexts/v1/manifests/whatsapp_channel.json",
-      "sha256": "c3c453553e19fb9ee5a119538651034cfdb2ab54115e8833e9c221da2e918c0a"
+      "sha256": "c5b810a02f6d8f86962017500581894ce47e3b053b0110f1b39296a1a7f96c6f"
     },
     {
       "context": "work_management",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "1734b0b9a2a1497a83e54eb973f6fb2566eaf214684187a921e2ce7b97b533fe"
+      "sha256": "a9b53f11dc2247e68c3a2227064ced2882d0691f490d1283d1f135619cbc159e"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "519d641e071d202786604e4422bacdc67f86ff57afb6b253e3fd049ffaded3fa"
+      "sha256": "6e10c748719288d7e7636e8c99821d285cb8b91e0958d3e64d61d8c82e9e0cf6"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "18abbb5cf70ec198c5d8c7d438a81cd682af262a0783780f4d5e2317d4dd9d7e"
+      "sha256": "9a085f06ab5223f71955d640c56acdb5581c2b15a29b18512fe2e33cd2e23f7f"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
