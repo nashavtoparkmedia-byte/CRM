@@ -4,8 +4,8 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 718,
-    "test": 36,
+    "total_entries": 719,
+    "test": 37,
     "dead_historical": 92,
     "migration_only": 84,
     "active_operational": 501,
@@ -38,6 +38,16 @@
       "rationale": "Active read-only architecture contract workflow; the reviewed source declares contents: read and no database, provider, production, or secret input. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
       "functional_owner": "platform_engineering"
+    },
+    {
+      "path": ".github/workflows/android-acceptance-e2e.yml",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "functional_owner": "platform_engineering",
+      "source_sha256": "ee1120d4985120d23ff08f120e12af1fb90cfd59dfcc5ba41b4d7fe96179af40",
+      "rationale": "Android shell end-to-end acceptance harness. Test-support infrastructure: it exists only to prove the shell on a real Android system and has no production path. Every service it touches is created and destroyed inside the job - a disposable PostgreSQL from the workflow's own services block on 127.0.0.1:55432, the committed migrations applied to it, and synthetic conversations seeded from android/tools/acceptance-seed.sql, which is classified TEST/TEST_SUPPORT in this same registry. The two credential accesses the analyzer reports as ambiguous are exactly those two steps, flagged sql_not_statically_available because the statements live in a file and inside Prisma rather than inline; both target that disposable database only and are reviewed as DISPOSABLE_ACCEPTANCE_DATABASE_SETUP in credential-unknown-access-resolution.json. The CRM runs under env -i with an allowlist of exactly PATH, HOME, NODE_ENV, DATABASE_URL, MOBILE_ACCESS_USER and MOBILE_ACCESS_PASS, so no provider, bot, telephony, TURN or production credential exists in the process and every outbound transport is inert by construction. The literal values it carries - the acceptance database user and password, the mobile access passphrase, and the signing keystore password - are test-only constants for services that exist for the length of one job; none is a repository secret and none authenticates to anything outside the runner. APK signing uses a keystore generated per run by keytool and discarded with the runner, so no real signing key is present. It declares contents: read, touches no production host, registry or deployment path, and is not part of the authoritative control catalogue. source_sha256 pins this classification to the exact reviewed workflow bytes. Lifecycle classification grants no database, credential, provider or deployment authority.",
+      "classification_artifact": "docs/mobile/ANDROID_ACCEPTANCE_E2E.md"
     },
     {
       "path": ".github/workflows/architecture-enforcement.yml",
