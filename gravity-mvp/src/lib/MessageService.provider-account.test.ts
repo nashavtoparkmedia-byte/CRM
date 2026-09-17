@@ -765,4 +765,132 @@ describe('MessageService conversation transport routing', () => {
             connectionId: undefined,
         }))
     })
+
+    // Production smoke, 2026-09-17 05:25:33Z: a reply in a private MAX
+    // conversation failed with CONTACT_CONVERSATION_NOT_PRIVATE before any
+    // Message row or MAX send. send() loads the Chat through a Prisma `select`
+    // that omitted chatType; the fixtures above return whole objects, so they
+    // could not see it. Here the row is persisted and findUnique answers the
+    // way Prisma does: only the selected fields come back.
+    describe('persisted conversation kind reaching outbound preparation', () => {
+        const persistedChats = new Map<string, Record<string, unknown>>()
+        const preparedSnapshots: Record<string, unknown>[] = []
+
+        function project(row: Record<string, unknown>, select: Record<string, unknown>): Record<string, unknown> {
+            return Object.fromEntries(Object.entries(select).flatMap(([field, selection]) => {
+                if (selection === true) return [[field, row[field]]]
+                const nested = (selection as { select?: Record<string, unknown> } | undefined)?.select
+                if (!nested) return []
+                const relation = row[field] as Record<string, unknown> | null | undefined
+                return [[field, relation ? project(relation, nested) : null]]
+            }))
+        }
+
+        // Shaped as the webhooks persist them: MAX leaves Chat.chatType to its
+        // column default and records the provider kind in metadata.chatKind;
+        // Telegram writes both from the same provider kind.
+        function persistChat(channel: 'max' | 'telegram', chatType: string, chatKind: string) {
+            const row: Record<string, unknown> = channel === 'max'
+                ? {
+                    ...chat('max', {
+                        providerAccountId: 'max-default',
+                        connectionId: 'max_scraper',
+                        senderId: 'max-sender-42',
+                        chatKind,
+                    }),
+                    externalChatId: 'max-conversation-900',
+                    chatType,
+                }
+                : {
+                    ...chat('telegram', {
+                        providerAccountId: PROVIDER_ACCOUNT,
+                        connectionId: TRANSPORT_CONNECTION,
+                        chatKind,
+                    }),
+                    chatType,
+                }
+            persistedChats.set(String(row.id), row)
+            return row
+        }
+
+        beforeEach(() => {
+            persistedChats.clear()
+            preparedSnapshots.length = 0
+            mocks.chatFindUnique.mockImplementation(async (
+                { where, select }: { where: { id: string }; select: Record<string, unknown> },
+            ) => {
+                const row = persistedChats.get(where.id)
+                return row ? project(row, select) : null
+            })
+            // Record exactly what Messaging hands the real Platform Shell preparer.
+            unregisterOutboundPreparer?.()
+            unregisterOutboundPreparer = registerOutboundConversationPreparerV1(async (snapshot, requestedConnectionId) => {
+                preparedSnapshots.push({ ...snapshot })
+                return preparePlatformOutboundConversationV1(snapshot, requestedConnectionId)
+            })
+        })
+
+        afterEach(() => {
+            mocks.chatFindUnique.mockReset()
+        })
+
+        test.each(['max', 'telegram'] as const)(
+            'sends in a private %s conversation using the persisted chatType',
+            async channel => {
+                const row = persistChat(channel, 'private', 'private')
+
+                await expect(MessageService.send('chat-1', 'hello', channel)).resolves.toMatchObject({
+                    success: true,
+                    status: 'delivered',
+                })
+
+                const [{ select }] = mocks.chatFindUnique.mock.calls[0]
+                expect(preparedSnapshots).toHaveLength(1)
+                expect(Object.keys(preparedSnapshots[0]).sort()).toEqual(Object.keys(select).sort())
+                expect(preparedSnapshots[0].chatType).toBe(row.chatType)
+                expect(mocks.messageCreate).toHaveBeenCalledTimes(1)
+                if (channel === 'max') {
+                    expect(mocks.maxAssertTransportBinding).toHaveBeenCalledWith({
+                        providerAccountId: 'max-default',
+                        connectionId: 'max_scraper',
+                        isPersonal: true,
+                    })
+                    expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+                    expect(mocks.maxSendText).toHaveBeenCalledWith(expect.objectContaining({
+                        target: 'max-conversation-900',
+                    }))
+                } else {
+                    expect(mocks.telegramSendText).toHaveBeenCalledTimes(1)
+                    expect(mocks.telegramSendText).toHaveBeenCalledWith(expect.objectContaining({
+                        target: 'opaque-user-42',
+                        connectionId: TRANSPORT_CONNECTION,
+                    }))
+                }
+            },
+        )
+
+        test.each([
+            ['max', 'group conversation as persisted', 'private', 'group'],
+            ['max', 'conversation whose persisted chatType alone is non-private', 'group', 'private'],
+            ['telegram', 'group conversation as persisted', 'group', 'group'],
+            ['telegram', 'conversation whose persisted chatType alone is non-private', 'group', 'private'],
+        ] as const)('fails closed for a %s %s before any Message or transport', async (
+            channel,
+            _label,
+            chatType,
+            chatKind,
+        ) => {
+            persistChat(channel, chatType, chatKind)
+
+            await expect(MessageService.send('chat-1', 'hello', channel))
+                .rejects.toThrow('CONTACT_CONVERSATION_NOT_PRIVATE')
+
+            expect(preparedSnapshots).toHaveLength(1)
+            expect(preparedSnapshots[0].chatType).toBe(chatType)
+            expect(mocks.messageCreate).not.toHaveBeenCalled()
+            expect(mocks.maxAssertTransportBinding).not.toHaveBeenCalled()
+            expect(mocks.maxSendText).not.toHaveBeenCalled()
+            expect(mocks.telegramSendText).not.toHaveBeenCalled()
+        })
+    })
 })

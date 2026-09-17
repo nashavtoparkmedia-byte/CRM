@@ -479,6 +479,7 @@ export class MessageService {
                 id: true, 
                 channel: true, 
                 externalChatId: true,
+                chatType: true,
                 metadata: true,
                 contactId: true,
                 contactIdentityId: true,
