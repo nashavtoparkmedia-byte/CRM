@@ -1,11 +1,14 @@
 package ru.yokoone.crm.shell
 
 import android.content.Intent
+import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -193,7 +196,109 @@ class LoginAcceptanceTest {
         screenshot("04-conversation-list")
     }
 
+    /**
+     * Read-only: open a conversation, read its history, go back, open another.
+     *
+     * Every list row previews its conversation's last message, so the history
+     * texts are already on screen while the list is showing. Finding them
+     * proves nothing until the list is gone. So each open is first proven by
+     * two facts that only an open conversation produces: the back control
+     * exists, and the MAX row, which belongs to neither conversation, has left
+     * the tree.
+     */
+    @Test
+    fun test05_openConversationReadHistoryBackAndSwitchConversation() {
+        signIn(correctPassword)
+        for (name in listOf(TG_CHAT, WA_CHAT, MAX_CHAT)) {
+            assertTrue(
+                "the conversation list never showed $name; on screen: ${visibleText()}",
+                device.wait(Until.hasObject(By.textContains(name)), MESSENGER_TIMEOUT),
+            )
+        }
+
+        openConversation(TG_CHAT)
+        assertHistoryShows(TG_CHAT, TG_INBOUND, TG_OUTBOUND)
+        screenshot("05a-telegram-history")
+
+        val back = backControl()
+        assertNotNull("no «$BACK_TO_LIST» control in the open conversation; tree: ${treeShape(300)}", back)
+        back!!.click()
+        assertTrue(
+            "back did not return to the conversation list; on screen: ${visibleText()}",
+            waitUntil(ACTION_TIMEOUT) {
+                backControl() == null &&
+                    device.hasObject(By.textContains(WA_CHAT)) &&
+                    device.hasObject(By.textContains(MAX_CHAT))
+            },
+        )
+        screenshot("05b-back-to-list")
+
+        openConversation(WA_CHAT)
+        assertHistoryShows(WA_CHAT, WA_INBOUND)
+        assertTelegramHistoryAbsent("as soon as WhatsApp opened")
+
+        // A late answer to the Telegram request, or the next poll, would land
+        // after the first look. Look again once that window has passed.
+        SystemClock.sleep(SETTLE_MS)
+        assertTrue(
+            "WhatsApp history disappeared after settling; on screen: ${visibleText()}",
+            device.hasObject(By.textContains(WA_INBOUND)),
+        )
+        assertTelegramHistoryAbsent("after settling")
+        screenshot("05c-whatsapp-history")
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
+
+    /** Tap a list row and wait until the conversation, not the list, is on screen. */
+    private fun openConversation(name: String) {
+        val row = device.wait(Until.findObject(By.textContains(name)), ACTION_TIMEOUT)
+        assertNotNull("conversation row $name not found; on screen: ${visibleText()}", row)
+        row!!.click()
+        assertTrue(
+            "$name did not open: the back control never appeared or the list stayed on screen; " +
+                "on screen: ${visibleText()}; tree: ${treeShape(300)}",
+            waitUntil(MESSENGER_TIMEOUT) {
+                backControl() != null && !device.hasObject(By.textContains(MAX_CHAT))
+            },
+        )
+    }
+
+    private fun assertHistoryShows(name: String, vararg texts: String) {
+        for (text in texts) {
+            assertTrue(
+                "history of $name does not show «$text»; on screen: ${visibleText()}",
+                device.wait(Until.hasObject(By.textContains(text)), MESSENGER_TIMEOUT),
+            )
+        }
+    }
+
+    private fun assertTelegramHistoryAbsent(moment: String) {
+        for (text in listOf(TG_INBOUND, TG_OUTBOUND)) {
+            assertFalse(
+                "Telegram history «$text» is still shown in WhatsApp $moment; on screen: ${visibleText()}",
+                device.hasObject(By.textContains(text)),
+            )
+        }
+    }
+
+    /**
+     * The header's back arrow is an icon button named by aria-label. Chromium
+     * has published such a name as content description in some versions and
+     * as text in others, and a selector that guesses wrong would make the
+     * "back control is gone" check pass vacuously. So either form counts.
+     */
+    private fun backControl(): UiObject2? =
+        device.findObject(By.desc(BACK_TO_LIST)) ?: device.findObject(By.text(BACK_TO_LIST))
+
+    private fun waitUntil(timeoutMs: Long, condition: () -> Boolean): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (true) {
+            if (condition()) return true
+            if (SystemClock.uptimeMillis() >= deadline) return false
+            SystemClock.sleep(POLL_MS)
+        }
+    }
 
     /**
      * Fill and submit the sign-in form.
@@ -347,5 +452,16 @@ class LoginAcceptanceTest {
         const val LAUNCH_TIMEOUT = 60_000L
         const val ACTION_TIMEOUT = 20_000L
         const val MESSENGER_TIMEOUT = 45_000L
+        const val SETTLE_MS = 2_000L
+        const val POLL_MS = 250L
+
+        /** The synthetic fixture from android/tools/acceptance-seed.sql. */
+        const val TG_CHAT = "Тест · Telegram"
+        const val WA_CHAT = "Тест · WhatsApp"
+        const val MAX_CHAT = "Тест · MAX"
+        const val TG_INBOUND = "Здравствуйте, это тестовый диалог Telegram."
+        const val TG_OUTBOUND = "Это тестовый ответ оператора."
+        const val WA_INBOUND = "Тестовое сообщение WhatsApp."
+        const val BACK_TO_LIST = "Назад к списку"
     }
 }
