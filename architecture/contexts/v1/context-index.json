@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "44e17f3409d8306e408394790c405cee4ee8092665713ec40b9023d81c260e84"
+      "sha256": "c5c3cd47604c0f1fb91b988dc41c11bff0836def0d0a626723769fea12be87e3"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "1ba71607288058184995d21f18e57d637f49e41b7ffc70a53fa03816ab382965"
+      "sha256": "69abaf1df5030ce0a29eb1c96b580245021ed612298bbd0f63729c21eaff8766"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",

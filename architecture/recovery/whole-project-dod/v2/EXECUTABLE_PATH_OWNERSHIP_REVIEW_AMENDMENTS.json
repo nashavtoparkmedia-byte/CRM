@@ -390,6 +390,48 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "android-acceptance-harness-main-e014ad5f-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "ANDROID_ACCEPTANCE_HARNESS_EXECUTOR_REVIEW_20260916",
+      "role": "SPECULATIVE_RECONCILIATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_SPECULATIVE_RECONCILIATION_AUTHORIZED_20260916",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain published on main at e014ad5f, whose tail is the Calling media-runtime remediation (amendment calling-audio-runtime-hardening-main-4abc73f2-20260916), and reviews only the one surface the Android acceptance harness adds."
+      },
+      "reason": "Records the single tracked executable surface the Android acceptance harness adds, .github/workflows/android-acceptance-e2e.yml, on top of the chain published on main at e014ad5f, whose Calling media-runtime remediation tail stands at 2,530 surfaces. The surface falls under the existing ci_workflow governed exclusion by its .github path prefix, owned by platform_engineering, and carries a reviewed TEST/TEST_SUPPORT lifecycle classification with production_capability NONE in the lifecycle surface registry. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the reconciled tree: 2,531 surfaces, context-owned 1,316 unchanged, governed exclusions 1,214 -> 1,215.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2530,
+        "tracked_inventory_sha256": "260e4cc390217010e817cb7b5074a988365a47c94d9874d19951cc9fc99c68d5",
+        "coverage_sha256": "b80814905e9ed37dde4a1968fed0ea2dfffe79bf8a9eb77b82c52823c4ca926b"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2531,
+        "tracked_inventory_sha256": "6c6c7554e8418f07739e9ee6b2ea6fb81db76f0d95e612507d214d8b5132f5dd",
+        "coverage_sha256": "6744efc38023e55793bb49de05a3bdcac47147e6025f12badc48be00e6377055"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": ".github/workflows/android-acceptance-e2e.yml",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under .github/, which the existing ci_workflow governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its TEST lifecycle comes from the reviewed lifecycle surface registry entry."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

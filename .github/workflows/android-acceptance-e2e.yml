@@ -1,0 +1,725 @@
+name: Android acceptance E2E
+
+# Runs the Android shell against a disposable CRM on a GitHub-hosted Linux
+# runner with a hardware-accelerated emulator. Nothing here touches the
+# production VPS, production data, or any provider credential.
+#
+# This is NOT the authoritative architecture workflow and must never become a
+# substitute for it. It proves one thing the authoritative suite cannot: that
+# the shell behaves correctly on a real Android system.
+#
+# The successful-login test was written to describe the promised behaviour while
+# the device still showed a client-side exception, so it stayed red on purpose.
+# That defect is fixed and the assertions were never loosened, so the test is now
+# expected to go green and a red result means a real regression.
+
+# Trigger contract. Permanent, and deliberately free of any tool's branch
+# naming — an earlier draft keyed on `codex/**`, which would have tied a
+# permanent harness to temporary branch names.
+#
+# push:
+#   epic/android-messenger    the Android integration branch: every integrated
+#                             state gets a full acceptance result
+#   android-acceptance/**     a namespace for candidate-anchored acceptance
+#                             trees. Used to prove an exact product candidate
+#                             before it integrates, and to prove this harness
+#                             itself. A suite that never runs on the tree
+#                             carrying it is one nobody has tested.
+#
+# pull_request, targeting the epic only, with NO path filter. Every feature
+# branch therefore gets a full acceptance result BEFORE it integrates, which is
+# the gap a push-only contract leaves. The filter is omitted on purpose: the
+# defect this suite was built around — a refused Server Action turning every
+# messenger page load into HTTP 500 — lived in gravity-mvp, not android/. A
+# filter narrow enough to look cheap is one that misses the class of bug this
+# exists to catch, and inside the epic every change is Android work.
+#
+# Pull requests to main are deliberately NOT covered. Charging every unrelated
+# CRM pull request a ten-minute emulator job is not a trade worth making, and
+# the only PR that should reach main from this work is the epic, whose tree a
+# push to epic/android-messenger has already proven.
+#
+# workflow_dispatch re-runs an existing tree without a new commit.
+on:
+  push:
+    branches:
+      - 'epic/android-messenger'
+      - 'android-acceptance/**'
+  pull_request:
+    branches:
+      - 'epic/android-messenger'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-acceptance:
+    # Pinned, never ubuntu-latest. The floating label is exactly how this job
+    # became a lottery: run #1 found a writable /dev/kvm and run #2 did not.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: acceptance
+          POSTGRES_PASSWORD: acceptance
+          POSTGRES_DB: acceptance
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Loopback on the runner, and loopback ON THE DEVICE too, via adb reverse.
+      #
+      # 10.0.2.2 — the host alias in Android's user-mode network stack — is the
+      # obvious choice and it does not work here. The mobile session cookie is
+      # issued with Secure whenever NODE_ENV is production, and a browser stores
+      # a Secure cookie only over HTTPS or on a trustworthy origin. 127.0.0.1 is
+      # trustworthy; 10.0.2.2 over plain HTTP is not. Against the host alias the
+      # cookie is silently dropped, no session is established, and a correct
+      # password lands back on the sign-in form with no error — which is exactly
+      # what runs #21 to #24 showed.
+      #
+      # The physical handset reaches the stand over `adb reverse` at 127.0.0.1,
+      # so this makes the emulator lane match the lane that already works
+      # instead of weakening the cookie.
+      DATABASE_URL: postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public
+      MOBILE_ACCESS_USER: acceptance
+      MOBILE_ACCESS_PASS: yoko acceptance passphrase
+      EMULATOR_ORIGIN: http://127.0.0.1:3002
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # /dev/kvm on a GitHub-hosted runner is root:kvm 0660 and the `runner`
+      # user is not in the kvm group (actions/runner-images#8542), so this rule
+      # is not optional — without it the emulator silently drops to software
+      # emulation and then times out with no stated cause.
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+
+      # A silent fallback to software emulation is what makes a run
+      # unreproducible: it looks like a slow boot and reports as a timeout. This
+      # step refuses to continue without hardware acceleration, so the outcome
+      # is either a real acceptance result or a legible infrastructure failure,
+      # never a guess.
+      - name: Assert hardware acceleration is actually available
+        run: |
+          {
+            echo "### Runner"
+            echo '```'
+            echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
+            nproc; free -m | head -2; df -h / | tail -1
+            ls -l /dev/kvm 2>&1
+            echo "cpu virtualization flags: $(grep -Ec '(vmx|svm)' /proc/cpuinfo)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -l /dev/kvm
+          test -c /dev/kvm || { echo "::error::/dev/kvm is missing on this runner"; exit 1; }
+          test -w /dev/kvm || { echo "::error::/dev/kvm is not writable by $(id -un)"; exit 1; }
+          echo "KVM present and writable"
+
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.20.2
+
+      - name: Install CRM dependencies
+        run: npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
+
+      - name: Generate the Prisma client
+        run: npm run --prefix gravity-mvp gen
+
+      - name: Apply committed migrations to the disposable database
+        run: npx --prefix gravity-mvp prisma migrate deploy --schema gravity-mvp/prisma/schema.prisma
+
+      - name: Seed synthetic conversations
+        run: |
+          PGPASSWORD=acceptance psql -h 127.0.0.1 -p 55432 -U acceptance -d acceptance \
+            -v ON_ERROR_STOP=1 -f android/tools/acceptance-seed.sql
+
+      - name: Build the CRM
+        env:
+          NODE_ENV: production
+        run: npm run --prefix gravity-mvp build
+
+      - name: Start the CRM with no provider credentials
+        run: |
+          # env -i so nothing from the runner environment can reach the app.
+          # No Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN value exists
+          # here, so every outbound transport is inert by construction.
+          cd gravity-mvp
+          nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production \
+            DATABASE_URL="$DATABASE_URL" \
+            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
+            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3002/login/mobile && exit 0
+            sleep 2
+          done
+          echo "CRM did not become reachable"; cat "$RUNNER_TEMP/crm.log"; exit 1
+
+      - name: Confirm the shell lane fails closed before any test runs
+        run: |
+          set -e
+          UA='Mozilla/5.0 (Linux; Android 14) YokoShell/1'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" http://127.0.0.1:3002/api/messages)
+          [ "$code" = "401" ] || { echo "shell API expected 401, got $code"; exit 1; }
+          echo "shell lane closed as expected"
+
+      # An unsigned APK cannot be installed — the emulator answers
+      # INSTALL_PARSE_FAILED_NO_CERTIFICATES — and a runner has no release
+      # keystore. The build already reads one from a properties file named by
+      # YOKO_SHELL_KEYSTORE_PROPERTIES, so a throwaway keystore generated here
+      # satisfies it without changing a single Android source file. That keeps
+      # this branch's android/ tree byte-identical to the PR candidate's, which
+      # is the point: the suite must test the candidate, not a variant of it.
+      #
+      # The key lives for the length of the job, is never committed, and signs
+      # nothing that leaves the runner.
+      - name: Generate an ephemeral signing key for this run
+        run: |
+          set -e
+          KS="$RUNNER_TEMP/acceptance.jks"
+          keytool -genkeypair -v -keystore "$KS" -storetype JKS \
+            -alias acceptance -keyalg RSA -keysize 2048 -validity 1 \
+            -storepass acceptance -keypass acceptance \
+            -dname "CN=YOKO acceptance, OU=CI, O=YOKO, L=-, S=-, C=RU" > /dev/null
+          printf 'storeFile=%s\nstorePassword=acceptance\nkeyAlias=acceptance\nkeyPassword=acceptance\n' \
+            "$KS" > "$RUNNER_TEMP/keystore.properties"
+          echo "YOKO_SHELL_KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+          echo "ephemeral keystore ready"
+
+      - name: Build the acceptance APK and the test APK
+        run: |
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:assembleAcceptance :app:assembleAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" \
+            -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      # 14 GB of SSD has to hold node_modules, a Next.js build, the Android SDK,
+      # a system image and two APKs.
+      - name: Reclaim disk before the system image lands
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
+          df -h / | tail -1
+
+      # Run #5 died here without saying so. `avdmanager create avd` prints
+      # "Error: Package path is not valid" on stdout and still EXITS 0, so
+      # `set -e` did not catch it, the step reported success, and the emulator
+      # then failed with "Unknown AVD name [ci]". Every stage is now verified by
+      # its observable result rather than by an exit code, and each failure
+      # explains itself through an annotation.
+      - name: Install the emulator and the system image, and verify each step
+        run: |
+          set -e
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+          IMAGE="system-images;android-34;google_apis;x86_64"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+
+          announce() { echo "::error::$1"; }
+          dump() { while IFS= read -r l; do echo "::error::$2: ${l}"; done; }
+
+          yes | "$SDK/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$SDK/sdkmanager" "platform-tools" "platforms;android-34" "emulator" "$IMAGE" \
+            > "$RUNNER_TEMP/sdkmanager.log" 2>&1 \
+            || { announce "sdkmanager failed"; tail -20 "$RUNNER_TEMP/sdkmanager.log" | dump x sdkmanager; exit 1; }
+
+          # The package has to be on disk where avdmanager will look for it.
+          IMAGE_DIR="$ANDROID_HOME/system-images/android-34/google_apis/x86_64"
+          if [ ! -d "$IMAGE_DIR" ]; then
+            announce "the system image is not at $IMAGE_DIR after sdkmanager reported success"
+            ls -la "$ANDROID_HOME/system-images" 2>&1 | dump x system-images
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            exit 1
+          fi
+          echo "system image present: $(ls "$IMAGE_DIR" | tr '\n' ' ')"
+
+          # Exit 0 is "KVM installed and usable"; exit 3 would mean the CPU
+          # exposes no vmx/svm at all, which no udev rule can repair.
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+
+          echo no | "$SDK/avdmanager" create avd -n ci -k "$IMAGE" --force \
+            > "$RUNNER_TEMP/avdmanager.log" 2>&1 || true
+          cat "$RUNNER_TEMP/avdmanager.log"
+
+          # avdmanager's exit code is not evidence. The AVD file is.
+          if [ ! -f "$ANDROID_AVD_HOME/ci.ini" ]; then
+            announce "avdmanager did not create ci.ini, and its exit code did not say so"
+            tail -20 "$RUNNER_TEMP/avdmanager.log" | dump x avdmanager
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            ls -la "$ANDROID_AVD_HOME" 2>&1 | dump x avd-home
+            exit 1
+          fi
+
+          # And the emulator has to agree that it can see it.
+          "$ANDROID_HOME/emulator/emulator" -list-avds > "$RUNNER_TEMP/avds.txt" 2>&1
+          cat "$RUNNER_TEMP/avds.txt"
+          grep -qx "ci" "$RUNNER_TEMP/avds.txt" || {
+            announce "the emulator does not list the AVD that avdmanager just created"
+            cat "$RUNNER_TEMP/avds.txt" | dump x list-avds
+            exit 1
+          }
+          echo "AVD ci created and visible to the emulator"
+
+      # Driven directly rather than through a third-party action, for one
+      # reason: the action's diagnostics live in the step log, and a step log
+      # needs an authenticated download. Here the emulator writes a file this
+      # job owns, and the failure path republishes it as annotations, which are
+      # public. Acceleration is asserted above, so -accel on is unconditional:
+      # a silent fall back to software emulation reads as a slow boot and
+      # reports as a timeout, which is precisely the ambiguity to avoid.
+      - name: Start an emulator
+        timeout-minutes: 20
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect -accel on -camera-back none -camera-front none \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+
+          give_up() {
+            echo "::error::emulator: $1"
+            # Annotations are the only channel a plain API read can see, so the
+            # decisive log lines go there, not only into the artifact.
+            grep -iE "error|panic|cannot|unable|refus|denied|not supported|unsupported|no such|failed|invalid" \
+              "$RUNNER_TEMP/emulator.log" 2>/dev/null | head -6 | while read -r l; do
+                echo "::error::emulator.log: ${l}"
+              done
+            tail -8 "$RUNNER_TEMP/emulator.log" 2>/dev/null | while read -r l; do
+              echo "::error::emulator.log tail: ${l}"
+            done
+            echo "::error::adb devices: $(timeout 30 "$ADB" devices -l 2>&1 | tr '\n' '~')"
+            exit 1
+          }
+
+          timeout 300 "$ADB" wait-for-device || give_up "no device appeared within 5 minutes"
+
+          # Booted means the package manager is up, not just the kernel.
+          state=""
+          for _ in $(seq 1 300); do
+            kill -0 "$emulator_pid" 2>/dev/null || give_up "the emulator process exited during boot"
+            state=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$state" = "1" ] && break
+            sleep 3
+          done
+          [ "$state" = "1" ] || give_up "the emulator did not report boot_completed within 15 minutes"
+
+          # The input service registers after boot_completed, so unlocking
+          # immediately races it (ReactiveCircus/android-emulator-runner#489).
+          "$ADB" wait-for-device shell 'while [ -z "$(service list | grep -w input)" ]; do sleep 1; done' || true
+          # Give the device a loopback route to the stand, the same way the
+          # physical handset gets one. Without this the origin above is
+          # unreachable from inside the emulator.
+          "$ADB" reverse tcp:3002 tcp:3002
+          echo "reverse: $("$ADB" reverse --list)"
+
+          "$ADB" shell input keyevent 82 || true
+          "$ADB" shell settings put global window_animation_scale 0 || true
+          "$ADB" shell settings put global transition_animation_scale 0 || true
+          "$ADB" shell settings put global animator_duration_scale 0 || true
+          echo "emulator booted"
+
+      # A targeted experiment, ahead of the suite. Run #11 showed the shell
+      # loading its login page (GET /login/mobile 200) while the accessibility
+      # tree held 31 nodes, zero of them a WebView — but that dump was taken
+      # after the run, with the launcher in front, so it could not say whether
+      # the WebView ever publishes its content at all. This launches the app,
+      # leaves it in the foreground, and dumps the tree while it is there.
+      # A WebView exposes its content to the accessibility tree only while an
+      # accessibility client is attached, which is the thing being measured.
+      - name: Probe whether the WebView reaches the accessibility tree
+        if: always()
+        timeout-minutes: 8
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          APK=$(ls app/build/outputs/apk/acceptance/*.apk 2>/dev/null | head -1)
+          echo "apk: $APK"
+          # -g grants the runtime permissions at install time, so the probe
+          # sees the shell rather than the notification-permission dialog.
+          timeout 180 "$ADB" install -r -t -g "$APK" 2>&1 | tail -3
+          timeout 60 "$ADB" shell settings put secure accessibility_enabled 1
+          # The probe must not race the emulator's network bring-up: an app
+          # launched before 10.0.2.2 is routable shows its own offline screen,
+          # which would read as a product defect and is not one.
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
+          for _ in $(seq 1 20); do
+            timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' \
+              http://127.0.0.1:3002/login/mobile 2>/dev/null | grep -q 200 && break
+            sleep 3
+          done
+          echo "device reachability: $(timeout 20 "$ADB" shell curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/login/mobile 2>&1)"
+          timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" 2>&1 | tail -3
+          sleep 25
+          echo "foreground: $(timeout 30 "$ADB" shell dumpsys window 2>/dev/null | grep -m1 -i 'mCurrentFocus\|mFocusedApp')"
+          # Dump twice. The first dump is what attaches an accessibility client
+          # in the first place, and a WebView does not backfill a tree it
+          # rendered before one existed. The second dump is the one that says
+          # whether its content ever reaches the tree.
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/probe0.xml > /dev/null 2>&1
+          sleep 10
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/probe.xml > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/probe.xml "$RUNNER_TEMP/probe-hierarchy.xml" > /dev/null 2>&1
+          if [ -s "$RUNNER_TEMP/probe-hierarchy.xml" ]; then
+            n=$(grep -o "<node" "$RUNNER_TEMP/probe-hierarchy.xml" | wc -l)
+            w=$(grep -c "WebView" "$RUNNER_TEMP/probe-hierarchy.xml")
+            t=$(grep -c "Вход в мобильное приложение" "$RUNNER_TEMP/probe-hierarchy.xml")
+            echo "::notice::probe: ${n} nodes, WebView=${w}, sign-in text=${t}, pkg-in-tree=$(grep -c "$PKG" "$RUNNER_TEMP/probe-hierarchy.xml")"
+            grep -oE 'text="[^"]{2,50}"' "$RUNNER_TEMP/probe-hierarchy.xml" | sort -u | head -4 | while read -r l; do
+              echo "::notice::probe text: ${l}"
+            done
+          else
+            echo "::notice::probe: uiautomator dump produced nothing"
+          fi
+          exit 0
+        working-directory: android
+
+      # Each scenario runs in its OWN instrumentation invocation, with the
+      # app's data cleared in between.
+      #
+      # Doing it inside a single Gradle run is not possible: the instrumentation
+      # is attached to the target package, so `pm clear` or `am force-stop` on
+      # it tears the run down — runs #26 and #27 each executed one test and
+      # died. But between invocations those commands are safe, and the result
+      # is stronger than shared-run isolation: every scenario starts on a
+      # genuinely fresh install with no session, no cookies and no permissions.
+      #
+      # Gradle still builds and installs; only the running is done by hand, so
+      # that each result can be read and published separately.
+      - name: Install the app and the instrumentation
+        timeout-minutes: 15
+        run: |
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:installAcceptance :app:installAcceptanceAndroidTest \
+            -PyokoTestOrigin="$EMULATOR_ORIGIN" -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      - name: Run each acceptance scenario on a fresh install
+        id: tests
+        timeout-minutes: 30
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.LoginAcceptanceTest
+          LOG="$RUNNER_TEMP/gradle-connected.log"
+          : > "$LOG"
+          failed=0
+
+          for t in \
+            test01_wrongPasswordKeepsTheFormAndExplainsWhy \
+            test02_correctPasswordAfterRejectionOpensTheMessenger \
+            test03_directCorrectLoginOpensTheMessenger \
+            test04_allThreeSeededConversationsAreListed
+          do
+            out="$RUNNER_TEMP/scenario-$t.log"
+            echo "===== $t =====" | tee -a "$LOG"
+            timeout 60 "$ADB" shell pm clear "$PKG" >> "$LOG" 2>&1
+            timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >> "$LOG" 2>&1
+            timeout 30 "$ADB" reverse tcp:3002 tcp:3002 >> "$LOG" 2>&1
+            timeout 60 "$ADB" logcat -c
+            timeout 600 "$ADB" shell am instrument -w -r \
+              -e class "$CLASS#$t" "$RUNNER" 2>&1 | tee -a "$LOG" > "$out"
+
+            # Score on a POSITIVE result, in THIS scenario's own output.
+            #
+            # Searching for "FAILURES!!!" and treating its absence as a pass is
+            # what the rest of this file exists to avoid: a killed `timeout`, an
+            # INSTRUMENTATION_FAILED, or an app process crash
+            # (shortMsg=Process crashed., INSTRUMENTATION_CODE: 0) all print no
+            # such line, and every one of them would have scored as a pass. The
+            # crash case is the one this suite exists to catch.
+            if grep -q "OK (1 test)" "$out"; then
+              echo "SCENARIO OK: $t" | tee -a "$LOG"
+            else
+              echo "SCENARIO DID NOT REPORT OK: $t" | tee -a "$LOG"
+              failed=1
+            fi
+
+            # Keep this scenario's evidence before the next pm clear and the
+            # next logcat -c take it away. The full buffer is kept as well as
+            # the filtered one, because the crash gate needs FATAL EXCEPTION
+            # lines that a YokoShellDiag filter would drop.
+            timeout 60 "$ADB" shell run-as "$PKG" cat files/diagnostics.log \
+              >> "$RUNNER_TEMP/shell-diagnostics-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E \
+              >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time \
+              >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null
+          done
+
+          # Every scenario in the list must have reported. A loop that silently
+          # ran three of four would otherwise pass.
+          ran=$(grep -c '^SCENARIO OK: ' "$LOG")
+          if [ "$ran" -ne 4 ]; then
+            echo "only $ran of 4 scenarios reported OK" | tee -a "$LOG"
+            failed=1
+          fi
+
+          echo "scenarios failed: $failed" | tee -a "$LOG"
+          exit $failed
+
+      # This step is why runs #1, #2 and #3 uploaded nothing. Every adb call
+      # here BLOCKS when no device is present: `adb logcat` waits for one
+      # indefinitely. With the emulator step failing, collection then consumed
+      # the rest of the job budget and the job died on its 60-minute timeout
+      # before the upload step ever ran, so the evidence was destroyed by the
+      # act of trying to collect it. Every adb call is now bounded, and the
+      # step itself has a ceiling well under the job's.
+      - name: Collect logcat, screenshots and the shell's own diagnostics
+        if: always()
+        timeout-minutes: 6
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/artifacts"; mkdir -p "$OUT"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+
+          # Host-side evidence first: it exists whether or not a device ever did.
+          cp "$RUNNER_TEMP/crm.log" "$OUT/crm-server.log" 2>/dev/null
+          cp "$RUNNER_TEMP/emulator.log" "$OUT/emulator.log" 2>/dev/null
+          cp "$RUNNER_TEMP/gradle-connected.log" "$OUT/gradle-connected.log" 2>/dev/null
+          cp "$RUNNER_TEMP/avdmanager.log" "$OUT/avdmanager.log" 2>/dev/null
+          # No JUnit XML is produced: the scenarios run through `am instrument`,
+          # not through Gradle's connected-test task. The per-scenario logs in
+          # $RUNNER_TEMP are the record.
+          cp "$RUNNER_TEMP"/scenario-*.log "$OUT/" 2>/dev/null
+          sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
+
+          # Runner-side facts that explain an emulator that never came up.
+          {
+            echo "## runner"
+            ls -l /dev/kvm 2>&1
+            echo "cpuinfo virtualization flags: $(grep -c -E 'vmx|svm' /proc/cpuinfo)"
+            nproc
+            free -m
+            echo "## emulator accel-check"
+            timeout 60 "$ANDROID_HOME/emulator/emulator" -accel-check 2>&1
+            echo "## emulator -list-avds"
+            timeout 60 "$ANDROID_HOME/emulator/emulator" -list-avds 2>&1
+            echo "## installed packages"
+            ls "$ANDROID_HOME/system-images/android-34/google_apis/" 2>&1
+          } > "$OUT/runner-environment.txt" 2>&1
+
+          # Device-side evidence, every call bounded.
+          timeout 30 "$ADB" devices -l > "$OUT/adb-devices.txt" 2>&1
+          # What UI Automator can actually see. A WebView publishes its content
+          # to the accessibility tree only when an accessibility client is
+          # attached, so an assertion that cannot find on-screen text needs this
+          # to tell "the text is not there" from "the tree is empty".
+          timeout 60 "$ADB" shell uiautomator dump /sdcard/window.xml > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/window.xml "$OUT/ui-hierarchy.xml" > /dev/null 2>&1
+          timeout 60 "$ADB" shell screencap -p /sdcard/final-screen.png > /dev/null 2>&1
+          timeout 60 "$ADB" pull /sdcard/final-screen.png "$OUT/final-screen.png" > /dev/null 2>&1
+          timeout 30 "$ADB" shell settings get secure enabled_accessibility_services \
+            > "$OUT/accessibility.txt" 2>&1
+          # Accumulated across every scenario. A single dump at the end would
+          # only ever hold the last one, because logcat is cleared before each.
+          cat "$RUNNER_TEMP/logcat-full-all.log" > "$OUT/logcat-full.log" 2>/dev/null
+          timeout 60 "$ADB" logcat -d -v time >> "$OUT/logcat-full.log" 2>&1
+          cat "$RUNNER_TEMP/logcat-shell-all.log" > "$OUT/logcat-shell-diagnostics.log" 2>/dev/null
+          timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E >> "$OUT/logcat-shell-diagnostics.log" 2>&1
+          # APPEND. This used to be a truncating redirect placed after the
+          # accumulated copy, which threw away three scenarios of evidence.
+          cat "$RUNNER_TEMP/shell-diagnostics-all.log" > "$OUT/shell-diagnostics-file.log" 2>/dev/null
+          timeout 60 "$ADB" shell run-as ru.yokoone.crm.shell.acceptance cat files/diagnostics.log \
+            >> "$OUT/shell-diagnostics-file.log" 2>/dev/null
+          # The instrumentation writes into its OWN external directory, not the
+          # app-under-test's: scoped storage forbids the latter. Both are pulled
+          # so nothing is lost if a capture ever lands on the other side.
+          timeout 120 "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance.test/files/screenshots \
+            "$OUT/screenshots" 2>/dev/null
+          timeout 120 "$ADB" pull /sdcard/Android/data/ru.yokoone.crm.shell.acceptance/files/screenshots \
+            "$OUT/screenshots-app" 2>/dev/null
+          echo "pulled captures: $(find "$OUT/screenshots" "$OUT/screenshots-app" -type f 2>/dev/null | wc -l)"
+
+          echo "collected:"; ls -R "$OUT" | head -60
+        working-directory: android
+
+      # Artifacts are only downloadable by someone signed in to GitHub, so a
+      # failed run is opaque to anyone reading the API. This step republishes
+      # the decisive lines as the job summary and as annotations, both of which
+      # are public on a public repository. It never fails the run.
+      - name: Publish the failure evidence where it can be read without a download
+        if: always()
+        timeout-minutes: 3
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/artifacts"
+          {
+            echo "## Runner environment"
+            echo '```'
+            cat "$OUT/runner-environment.txt" 2>/dev/null
+            echo '```'
+            echo "## adb devices"
+            echo '```'
+            cat "$OUT/adb-devices.txt" 2>/dev/null
+            echo '```'
+            echo "## emulator.log (last 120 lines)"
+            echo '```'
+            tail -120 "$OUT/emulator.log" 2>/dev/null
+            echo '```'
+            echo "## shell diagnostics (last 60 lines)"
+            echo '```'
+            tail -60 "$OUT/shell-diagnostics-file.log" 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Errors have their own budget of ten, separate from notices. Runs #13
+          # and #14 published none of this because an earlier rewrite of the
+          # notice budget deleted these emitters along with it.
+          # Ten error slots, and Gradle's last six lines are its own boilerplate
+          # footer -- "BUILD FAILED", "Run with --scan". Run #15 spent the whole
+          # budget on that and dropped the lines that say what failed. Grep for
+          # the meaningful lines instead of taking a blind tail.
+          started=$(grep -c '^===== ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          okd=$(grep -c '^SCENARIO OK: ' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          bad=$(grep -c 'SCENARIO DID NOT REPORT OK' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
+          line="scenarios: ${started} started, ${okd} reported OK, ${bad} did not"
+          # A green run must not carry a red annotation.
+          if [ "$bad" -eq 0 ] && [ "$okd" -eq 4 ]; then
+            echo "::notice::${line}"
+          else
+            echo "::error::${line}"
+          fi
+          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 4 scenarios" \
+            "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
+              echo "::error::gradle: $(printf '%s' "$l" | head -c 500)"
+            done
+
+          # Annotations survive independently of the summary and are listed by
+          # the check-runs API, so the cause is readable from a plain GET.
+          # GitHub caps annotations at TEN per level per step and drops the
+          # rest silently, so this budget is allocated explicitly. Run #10 lost
+          # its accessibility-tree summary to four lines of Redis noise, which
+          # is exactly the failure mode being guarded against here.
+          #
+          # 1-4: what UI Automator can see. This is the open question.
+          if [ -s "$OUT/ui-hierarchy.xml" ]; then
+            nodes=$(grep -o "<node" "$OUT/ui-hierarchy.xml" | wc -l)
+            webviews=$(grep -c "android.webkit.WebView" "$OUT/ui-hierarchy.xml" 2>/dev/null || true)
+            signin=$(grep -c "Вход в мобильное приложение" "$OUT/ui-hierarchy.xml" 2>/dev/null || true)
+            echo "::notice::ui tree: ${nodes} nodes, WebView nodes=${webviews:-0}, sign-in text present=${signin:-0}"
+            grep -oE 'text="[^"]{3,60}"' "$OUT/ui-hierarchy.xml" 2>/dev/null | sort -u | head -3 | while read -r l; do
+              echo "::notice::ui text: ${l}"
+            done
+          else
+            echo "::notice::ui tree: uiautomator dump produced nothing"
+            echo "::notice::accessibility services: $(head -c 150 "$OUT/accessibility.txt" 2>/dev/null | tr '\n' ' ')"
+          fi
+
+          # 5-9: the shell's own view, and specifically the sign-in POST. The
+          # tests now fail on "no readable rejection message after a wrong
+          # password" and on the messenger not opening, so what that POST
+          # returned is the whole question. GET lines are plentiful and say
+          # nothing, hence the filter.
+          #
+          # The CRM's own log is not used here: Next.js does not log requests,
+          # and the stand has no request-logging proxy in front of it, so the
+          # shell's YOKO_NET lines are the only record of method, path and
+          # status on this side.
+          grep -E "YOKO_NET (done|fail) POST|YOKO_NET fail|YOKO_PAGE_ERROR" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null | tail -4 | while read -r l; do
+              echo "::notice::shell: $(echo "$l" | sed -e 's/.*console | //' | head -c 200)"
+            done
+          # The per-failure hierarchies, captured by the test at the moment it
+          # failed. These are the only dumps taken while the screen under test
+          # was still up, so they are what says whether the expected text was
+          # absent from the screen or only from the accessibility tree.
+          for f in $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.xml' 2>/dev/null); do
+            [ -e "$f" ] || continue
+            echo "::notice::$(basename "$f" .xml): nodes=$(grep -o '<node' "$f" | wc -l) $(grep -oE 'Тест · [A-Za-z]+|Неверный логин или пароль|Вход в мобильное приложение|Нет связи с CRM|Application error' "$f" | sort -u | head -3 | tr '\n' ' ')"
+          done
+          echo "::notice::failure captures: $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.png' 2>/dev/null | wc -l) screenshots, $(find "$OUT/screenshots" "$OUT/screenshots-app" -name 'FAIL-*.xml' 2>/dev/null | wc -l) hierarchies"
+
+          # 10: the device itself.
+          echo "::notice::adb devices: $(head -c 160 "$OUT/adb-devices.txt" 2>/dev/null | tr '\n' '~')"
+          exit 0
+
+      - name: Fail on any uncaught JavaScript error or Android crash
+        if: always()
+        run: |
+          OUT="$RUNNER_TEMP/artifacts"
+          status=0
+          if grep -q "YOKO_PAGE_ERROR" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
+            echo "::error::uncaught JavaScript error in the shell"
+            grep "YOKO_PAGE_ERROR" "$OUT/logcat-shell-diagnostics.log" | head -20
+            status=1
+          fi
+          if grep -q "FATAL EXCEPTION" "$OUT/logcat-full.log" 2>/dev/null; then
+            # Only ours. Other packages on the image are not this suite's problem.
+            if grep -A 3 "FATAL EXCEPTION" "$OUT/logcat-full.log" | grep -q "ru.yokoone.crm.shell"; then
+              echo "::error::Android crash in the shell"
+              grep -A 12 "FATAL EXCEPTION" "$OUT/logcat-full.log" | head -30
+              status=1
+            fi
+          fi
+          if ! grep -q "YOKO_NATIVE_OK" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null; then
+            echo "::error::the shell's own diagnostics never reported; the run proves nothing"
+            status=1
+          fi
+
+          # The defect this whole stage turns on: a refused AI-intern read used
+          # to throw out of a Server Action, so every messenger page load
+          # answered HTTP 500. No UI assertion can see that — the broken and the
+          # fixed page render identically, because the component catches — so it
+          # has to be asserted here, against the shell's own record of what it
+          # fetched.
+          msg=$(grep -c "YOKO_NET done POST /messages status=200" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          bad=$(grep -cE "YOKO_NET done POST /messages status=5[0-9][0-9]" \
+            "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          echo "::notice::messenger Server Action: ${msg} answered 200, ${bad} answered 5xx"
+          if [ "$bad" -ne 0 ]; then
+            echo "::error::POST /messages answered 5xx ${bad} time(s); the AI-intern refusal is throwing again"
+            grep -E "YOKO_NET done POST /messages status=5" "$OUT/logcat-shell-diagnostics.log" | head -5
+            status=1
+          fi
+          if [ "$msg" -eq 0 ]; then
+            echo "::error::no POST /messages was observed at all, so the messenger was never exercised"
+            status=1
+          fi
+
+          # A sign-in that is accepted redirects; one that is refused does not.
+          # Seeing both proves the suite drove the real journey rather than one
+          # half of it.
+          ok=$(grep -c "YOKO_NET done POST /login/mobile status=303" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          rej=$(grep -c "YOKO_NET done POST /login/mobile status=200" "$OUT/logcat-shell-diagnostics.log" 2>/dev/null || echo 0)
+          echo "::notice::sign-in: ${ok} accepted (303), ${rej} refused (200)"
+          if [ "$ok" -eq 0 ] || [ "$rej" -eq 0 ]; then
+            echo "::error::expected both an accepted and a refused sign-in; saw ${ok} accepted and ${rej} refused"
+            status=1
+          fi
+
+          exit $status
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-acceptance-artifacts
+          path: ${{ runner.temp }}/artifacts
+          if-no-files-found: warn
+          retention-days: 14
