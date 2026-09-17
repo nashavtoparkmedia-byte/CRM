@@ -316,6 +316,35 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a1-s1-whatsapp-account-foundation-20260916",
+      "reviewed_at": "2026-09-16T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A1_S1_CANDIDATE_OWNERSHIP_REVIEW_20260916",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A1_S1_WHATSAPP_ACCOUNT_FOUNDATION_IMPLEMENTATION",
+      "reason": "M2A1-S1 adds exactly two tracked executable surfaces and changes no existing one. gravity-mvp/src/modules/whatsapp-channel/internal/company-account/whatsapp-account-foundation.postgres.test.ts sits under the whatsapp_channel owned path and is context owned by the existing manifest selection. gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql falls under the existing gravity_schema prefix exclusion, whose migration authority and write controls govern it. Neither path belongs to an exact inventory, so no exact-inventory transition, assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes; only the denominator moves from 2501 to 2503.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2501,
+        "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
+        "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2503,
+        "tracked_inventory_sha256": "70cb043044c7980aeb2f4964145acc04000fe3286692e5745779f20ac8b1eddc",
+        "coverage_sha256": "cc39724ba2cdff5af18255555534add33c6d724dea6aeb0fafc3396519a3de3c"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 2
+      }
     }
   ]
 }

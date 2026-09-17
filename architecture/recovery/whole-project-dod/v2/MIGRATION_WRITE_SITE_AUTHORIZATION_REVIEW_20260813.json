@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "1ecd4f61cf5478e610bae33461c48ccd45c91d5c113957a82643124696f3984d",
-    "reviewed_path_count": 19,
+    "source_sha256": "f49cbc67ce0e1e62f8ee124b2294610c0133a06b256fe805734c7d5be8585262",
+    "reviewed_path_count": 20,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 890,
-    "sorted_site_signatures_sha256": "141d697651ae1e516fc78e1d7e47c5e0f31f1342a156fb473f32e5d15d6d9e46"
+    "non_test_migration_only_sites": 939,
+    "sorted_site_signatures_sha256": "ca7371dbe2e91d9050f5a062675d58b0eabad1c0b94ee22fa07d7675a643ee1c"
   },
   "authorizations": [
     {
@@ -1207,6 +1207,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.08961f45309d55e4",
+      "site_signature": "08961f45309d55e40128add8ca6a23c5d5d337ba98867ac9fb7a71ff3f544bbf",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 507,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_account_key_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:08961f45309d55e40128add8ca6a23c5d5d337ba98867ac9fb7a71ff3f544bbf",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:507:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.08acea81092e16ea",
       "site_signature": "08acea81092e16ea810c4ecb4775c9a7f308e01837580f751945a004132cbe14",
       "status": "APPROVED",
@@ -1624,6 +1663,45 @@
         "canonical_ordinal": 52,
         "artifact_sha256": "030bcc6a2d0c96e9d5fcb59c62ef29e885c45fe538c2cc80b3ab514279fa87ec",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727053744_add_max_provider_confirmation_matcher/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.0d7b1a2e6d516272",
+      "site_signature": "0d7b1a2e6d516272b0b2b164bf15f37443c01e3a948fd801cf25a60252f7d9dc",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 376,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppCapabilityLease_truncate_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:0d7b1a2e6d516272b0b2b164bf15f37443c01e3a948fd801cf25a60252f7d9dc",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:376:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -2231,6 +2309,45 @@
         "canonical_ordinal": 50,
         "artifact_sha256": "25b8d26123d83173243fcec4a8a66d9fb6aa2622603e164b06720c2ea1b37c2b",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726215715_add_max_per_chat_outbound_actor/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.11946720530639c3",
+      "site_signature": "11946720530639c356bbd2fddadda7e51a48659038485ef43e42f322e36b24a4",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 171,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccountKey",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:11946720530639c356bbd2fddadda7e51a48659038485ef43e42f322e36b24a4",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:171:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -4916,6 +5033,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.20c0e4af727b3522",
+      "site_signature": "20c0e4af727b3522f7bdc9944ae8288f38c3fe56342ab703bf2202ccf3b891d5",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 68,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:20c0e4af727b3522f7bdc9944ae8288f38c3fe56342ab703bf2202ccf3b891d5",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:68:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.20c2d9b41b25fb92",
       "site_signature": "20c2d9b41b25fb920c8665205b702ca9749de9f5b6ae782b90a89210943bf252",
       "status": "APPROVED",
@@ -5805,6 +5961,45 @@
           "source_sha256:524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
           "site_signature:28f4ac1c35a5782ba60e2abee82838eac0c20e359ba7a19e3a3ca10532993c77",
           "source_coordinate:gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql:260:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.2938aa37e81ee84f",
+      "site_signature": "2938aa37e81ee84fd0294d75623cc853163eea3b0189721c465e37e0e52ab441",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 128,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:2938aa37e81ee84fd0294d75623cc853163eea3b0189721c465e37e0e52ab441",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:128:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]
@@ -7753,6 +7948,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.398d8282f226ae75",
+      "site_signature": "398d8282f226ae75316c3a7f54e5e952670bb7f96fb1b9f6216325be190d5d6a",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 275,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:398d8282f226ae75316c3a7f54e5e952670bb7f96fb1b9f6216325be190d5d6a",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:275:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.3a3ca4acd2d290c8",
       "site_signature": "3a3ca4acd2d290c8f7fa668a490753aa7341b61889129dd3c6f5e6b86e6c0607",
       "status": "APPROVED",
@@ -7785,6 +8019,45 @@
         "canonical_ordinal": 52,
         "artifact_sha256": "030bcc6a2d0c96e9d5fcb59c62ef29e885c45fe538c2cc80b3ab514279fa87ec",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727053744_add_max_provider_confirmation_matcher/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.3a55fd6bb3656621",
+      "site_signature": "3a55fd6bb36566212f0d77b2a7b2f41f4a75c28af41c24534e82b72d1bf84b36",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 308,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:3a55fd6bb36566212f0d77b2a7b2f41f4a75c28af41c24534e82b72d1bf84b36",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:308:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -9574,6 +9847,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.46346b08ed63f6d9",
+      "site_signature": "46346b08ed63f6d9eb23730709a98be31fc2771ad4bd49a456766487eaf2e981",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 357,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_account_foundation_truncate_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:46346b08ed63f6d9eb23730709a98be31fc2771ad4bd49a456766487eaf2e981",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:357:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.463c0198abac47c5",
       "site_signature": "463c0198abac47c5758321dd789b160dc3769f650c82e8057fb11aca3b92ae61",
       "status": "APPROVED",
@@ -9746,6 +10058,45 @@
         "canonical_ordinal": 47,
         "artifact_sha256": "880b6add9c6c4cc567dc0a68ad9736770fc8a71097f5f480583ac2aec4398ade",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726162043_add_max_raw_transport_journal/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.4815af2363170f35",
+      "site_signature": "4815af2363170f359dceb9abec598bd7bd1b5eb59690e8da7f2b0d99f5e067f0",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 369,
+        "column": 8,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "ON",
+            "operation": "TRUNCATE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:4815af2363170f359dceb9abec598bd7bd1b5eb59690e8da7f2b0d99f5e067f0",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:369:8",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -10671,6 +11022,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.4fe173e929933604",
+      "site_signature": "4fe173e92993360479d5fa038fdd2b3218f23fa6753884efa3d5aab5663bff1e",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 58,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccountKey",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:4fe173e92993360479d5fa038fdd2b3218f23fa6753884efa3d5aab5663bff1e",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:58:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.4fe4266f0cc7a215",
       "site_signature": "4fe4266f0cc7a21517fb66a68094d2b57302a4e501a04fa526f4e1950e891595",
       "status": "APPROVED",
@@ -11088,6 +11478,45 @@
         "canonical_ordinal": 15,
         "artifact_sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
         "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.540e4e8275d152a4",
+      "site_signature": "540e4e8275d152a4b6a518e7e351e9983f242ea54477bd61e264f862751955a9",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 373,
+        "column": 8,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "ON",
+            "operation": "TRUNCATE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:540e4e8275d152a4b6a518e7e351e9983f242ea54477bd61e264f862751955a9",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:373:8",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -11550,6 +11979,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.57770b07c29bd761",
+      "site_signature": "57770b07c29bd7617d3f98b2a1da666fe33138b5b492b50564183747b6e345d0",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 531,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppAccountKey_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:57770b07c29bd7617d3f98b2a1da666fe33138b5b492b50564183747b6e345d0",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:531:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.telegram_channel.5787ed7b15de992c",
       "site_signature": "5787ed7b15de992ca2e2f4f53d8251203d6213ec783a4e1ea3516ddd136b0f0c",
       "status": "APPROVED",
@@ -11904,6 +12372,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.5a5799aa01106fdd",
+      "site_signature": "5a5799aa01106fdd5f3f53d61cc092a2d479d5cf78c06f5f3d51bf00d24b3a1e",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 217,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:5a5799aa01106fdd5f3f53d61cc092a2d479d5cf78c06f5f3d51bf00d24b3a1e",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:217:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.5a6bc9855cff42e9",
       "site_signature": "5a6bc9855cff42e9cf226f39549b2185896418d89eec583e2d4edb89b2cb4e61",
       "status": "APPROVED",
@@ -12076,6 +12583,45 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.5b835a2e22c2a4c4",
+      "site_signature": "5b835a2e22c2a4c4694b87853290f707c222aefac896ac315fbdaaabd677cdce",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 368,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppAccountKey_truncate_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:5b835a2e22c2a4c4694b87853290f707c222aefac896ac315fbdaaabd677cdce",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:368:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -13417,6 +13963,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.65f1102a63ee7b4e",
+      "site_signature": "65f1102a63ee7b4ed3b841fc8839c97ebd20aec2527815e6db414d61b01dba40",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 383,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_account_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:65f1102a63ee7b4ed3b841fc8839c97ebd20aec2527815e6db414d61b01dba40",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:383:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.660ba31e2a1e38ee",
       "site_signature": "660ba31e2a1e38ee207513e9e92ab785be6692c49b884963807418723d459895",
       "status": "APPROVED",
@@ -14160,6 +14745,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.6baa6a5926d5737e",
+      "site_signature": "6baa6a5926d5737ec33afdfd02e8f767d19f89c88706496d58c82b05b638c730",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 377,
+        "column": 8,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "ON",
+            "operation": "TRUNCATE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:6baa6a5926d5737ec33afdfd02e8f767d19f89c88706496d58c82b05b638c730",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:377:8",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.fleet_operations.6c1706c854b09b98",
       "site_signature": "6c1706c854b09b985c53f710268a3c58398c790dffb0a679af076831414cef39",
       "status": "APPROVED",
@@ -14266,6 +14890,84 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.6d22816854a78f51",
+      "site_signature": "6d22816854a78f51e764162300c1482c097aab77b6972b03d7a4d8a9ccbea5a9",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 749,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppTransportBinding_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:6d22816854a78f51e764162300c1482c097aab77b6972b03d7a4d8a9ccbea5a9",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:749:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.6de45ec154d5ec0f",
+      "site_signature": "6de45ec154d5ec0f7ea727ec51c8117e9c62ec3ed298c2751609de847c0c7b1d",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 122,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:6de45ec154d5ec0f7ea727ec51c8117e9c62ec3ed298c2751609de847c0c7b1d",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:122:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -15304,6 +16006,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.7707bf1a71e87bde",
+      "site_signature": "7707bf1a71e87bdebae448ad98924fb2b79384646c03f7b25dc044650627fa13",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 196,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:7707bf1a71e87bdebae448ad98924fb2b79384646c03f7b25dc044650627fa13",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:196:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.77318a1288c6173c",
       "site_signature": "77318a1288c6173cccc8cf6effbbc6bf931fa09455881e7f42e77061d41ab519",
       "status": "APPROVED",
@@ -15998,6 +16739,45 @@
         "canonical_ordinal": 17,
         "artifact_sha256": "466fb7545f0793cb3261244cfff052937735fd473d80ecd40fccaddcc0c1ac8f",
         "repository_capture": "gravity-mvp/prisma/migrations/20260426000000_add_avito_module/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.7a5997a479a44ade",
+      "site_signature": "7a5997a479a44ade5c0b01ee0f0d600cef967d4ade4c49521f29f2a910571ff1",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 318,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:7a5997a479a44ade5c0b01ee0f0d600cef967d4ade4c49521f29f2a910571ff1",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:318:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -16787,6 +17567,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.80d6ba1d0641efe9",
+      "site_signature": "80d6ba1d0641efe9d55c7cf0d7526c9620c86d0a06d2402c19ae76e3c7e49ebb",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 96,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:80d6ba1d0641efe9d55c7cf0d7526c9620c86d0a06d2402c19ae76e3c7e49ebb",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:96:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.80db8cdcd8a893c1",
       "site_signature": "80db8cdcd8a893c196eba6369334774f4a0205bef1808c3f5a8519334e44e05b",
       "status": "APPROVED",
@@ -16819,6 +17638,45 @@
         "canonical_ordinal": 52,
         "artifact_sha256": "030bcc6a2d0c96e9d5fcb59c62ef29e885c45fe538c2cc80b3ab514279fa87ec",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727053744_add_max_provider_confirmation_matcher/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.811b29d3f879b998",
+      "site_signature": "811b29d3f879b9984cc970b1c9326ccd974cb993177f9bf16c458655f29e4ec4",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 222,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:811b29d3f879b9984cc970b1c9326ccd974cb993177f9bf16c458655f29e4ec4",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:222:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -17211,6 +18069,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.842cef7a6e019478",
+      "site_signature": "842cef7a6e019478499501d6800f6035aa6f060451cfc0feb7eb59ffedfdefaf",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 134,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccountKey",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:842cef7a6e019478499501d6800f6035aa6f060451cfc0feb7eb59ffedfdefaf",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:134:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.842ddec003ad3547",
       "site_signature": "842ddec003ad3547b59fd6acf29b0bf82fdd544802fe32ef477dce5d1e8b337d",
       "status": "APPROVED",
@@ -17313,6 +18210,45 @@
         "canonical_ordinal": 29,
         "artifact_sha256": "fc60f4bee3b2394eefa5e0bc5c5711cfebc2336f6e1a254d657937ec1658c93c",
         "repository_capture": "gravity-mvp/prisma/migrations/20260520210100_add_temporary_contact_phones/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.84b924883f583ec9",
+      "site_signature": "84b924883f583ec999020e1505d2b07b8fb0e44f2b527337037c71a90ae3430b",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 125,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:84b924883f583ec999020e1505d2b07b8fb0e44f2b527337037c71a90ae3430b",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:125:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -18884,6 +19820,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.8fd72164e579b0e1",
+      "site_signature": "8fd72164e579b0e17dd60085f1d861cdc48355bda23e133928d27c9c80f1e357",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 137,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:8fd72164e579b0e17dd60085f1d861cdc48355bda23e133928d27c9c80f1e357",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:137:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.9001b577d66da752",
       "site_signature": "9001b577d66da752712ae501c311abf1f03ea9cf6a76225e8938e583612570ec",
       "status": "APPROVED",
@@ -18916,6 +19891,45 @@
         "canonical_ordinal": 49,
         "artifact_sha256": "bdb122ef18c366c9201cb3a6bbe40bcea0696348c1721742f91ea9843014ab26",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726205437_add_max_inbound_normalization/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.90c37d8bf01c1e5d",
+      "site_signature": "90c37d8bf01c1e5db01871cb154ea024a33a22d860f851f88a2068d5ac2109fb",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 364,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppAccount_truncate_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:90c37d8bf01c1e5db01871cb154ea024a33a22d860f851f88a2068d5ac2109fb",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:364:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -19406,6 +20420,45 @@
         "canonical_ordinal": 52,
         "artifact_sha256": "030bcc6a2d0c96e9d5fcb59c62ef29e885c45fe538c2cc80b3ab514279fa87ec",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727053744_add_max_provider_confirmation_matcher/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.9437f4e4707f4fbb",
+      "site_signature": "9437f4e4707f4fbbab0e53cdcd9ff3b9e04bd58e31f8889567a14e2696fdec7f",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 149,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:9437f4e4707f4fbbab0e53cdcd9ff3b9e04bd58e31f8889567a14e2696fdec7f",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:149:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -20117,6 +21170,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.9a55fa2a811033a8",
+      "site_signature": "9a55fa2a811033a87cc03ab300be64cdc00b25748c4857afa0fc145ce85fe67b",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 160,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccount",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:9a55fa2a811033a87cc03ab300be64cdc00b25748c4857afa0fc145ce85fe67b",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:160:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.9a5d24b703e93318",
       "site_signature": "9a5d24b703e933185c05bb987139dcca6e34dd953d25e70d4b1c2c5812a15fff",
       "status": "APPROVED",
@@ -20254,6 +21346,45 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.9c04c3c25c398f3e",
+      "site_signature": "9c04c3c25c398f3ee1127567c75ed3215e128ffad0a6695806779e17fd0d78c9",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 153,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccount",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:9c04c3c25c398f3ee1127567c75ed3215e128ffad0a6695806779e17fd0d78c9",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:153:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -21502,6 +22633,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.a4dff269c9db11f6",
+      "site_signature": "a4dff269c9db11f68de7fc7b0a14fc356c8ac791396b11b2838f67e930b1ff81",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 365,
+        "column": 8,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "ON",
+            "operation": "TRUNCATE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:a4dff269c9db11f68de7fc7b0a14fc356c8ac791396b11b2838f67e930b1ff81",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:365:8",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.a4eda7a6ce2dc2ff",
       "site_signature": "a4eda7a6ce2dc2ffbb7e131d8475a175403ede97e08780c2214eda5316de36f8",
       "status": "APPROVED",
@@ -22206,6 +23376,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.a8a940dfb31fa29e",
+      "site_signature": "a8a940dfb31fa29e2e4787d63644cdbd0c0e6d2cfafba00637469e4284d08ec3",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 113,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccountKey",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:a8a940dfb31fa29e2e4787d63644cdbd0c0e6d2cfafba00637469e4284d08ec3",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:113:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.a8dc337fd8be06e8",
       "site_signature": "a8dc337fd8be06e839a9f3954af5328bce1bf4eb9d9908176e42a4c7c57c856f",
       "status": "APPROVED",
@@ -22712,6 +23921,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.ae291a3f09947510",
+      "site_signature": "ae291a3f09947510059feb7fd4a094969f955de8239885500fe4f9f78fdebdc8",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 769,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_capability_lease_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:ae291a3f09947510059feb7fd4a094969f955de8239885500fe4f9f78fdebdc8",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:769:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.fleet_operations.ae6f828c6595b691",
       "site_signature": "ae6f828c6595b691f8a54892c858e2b99f9a5da504dc65daf8a3ee5f4afd3435",
       "status": "APPROVED",
@@ -23004,6 +24252,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.b022bf9717b364d2",
+      "site_signature": "b022bf9717b364d2ef34eb82c496d313fb5fe40a0fab8856c13a918c739ce4f0",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 143,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:b022bf9717b364d2ef34eb82c496d313fb5fe40a0fab8856c13a918c739ce4f0",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:143:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.b0a5905f65de8df5",
       "site_signature": "b0a5905f65de8df51f3a1c8b8ca9564af82840b18566631d0694ae123fc9213e",
       "status": "APPROVED",
@@ -23148,6 +24435,45 @@
           "source_coordinate:tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql:77:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SEPARATE_TG_SQLITE_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.b27086997e34fe28",
+      "site_signature": "b27086997e34fe281d263c13e221d2d10e271538d5826a9b6fc8809e64b26b77",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 283,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:b27086997e34fe281d263c13e221d2d10e271538d5826a9b6fc8809e64b26b77",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:283:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]
       }
     },
@@ -25535,6 +26861,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.c89dad0ab384a79f",
+      "site_signature": "c89dad0ab384a79fd3bb45173a5aca0ccf8ac3066f796022460abbf09bad3b21",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 372,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppTransportBinding_truncate_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:c89dad0ab384a79fd3bb45173a5aca0ccf8ac3066f796022460abbf09bad3b21",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:372:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.c8d60a329a318ae2",
       "site_signature": "c8d60a329a318ae2942c6670e3cfd5778c7b1724030b5027e847fb8b9e306f74",
       "status": "APPROVED",
@@ -26025,6 +27390,84 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.ccee0c08c6cb4d9b",
+      "site_signature": "ccee0c08c6cb4d9b106c0c0f7bb23cfd913c35a40649f685ad68ee38c5cabc56",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 146,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:ccee0c08c6cb4d9b106c0c0f7bb23cfd913c35a40649f685ad68ee38c5cabc56",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:146:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.ce1e2e5f3801a4ad",
+      "site_signature": "ce1e2e5f3801a4ad832656e5c36f2f0a3b984adb18597e6df6cdb79cb269a63b",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 44,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccount",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:ce1e2e5f3801a4ad832656e5c36f2f0a3b984adb18597e6df6cdb79cb269a63b",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:44:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.ce1ef35c55a35da6",
       "site_signature": "ce1ef35c55a35da6b45c781c11ae52f8fc440e563b6f56c1d64dc6a8b9e32ef8",
       "status": "APPROVED",
@@ -26411,6 +27854,45 @@
         "canonical_ordinal": 48,
         "artifact_sha256": "843064e4cf5b537c24571c6357feaf3bd808916ddae1e2cbfd10f40ecb4b6730",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726190658_add_max_route_registry/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.d2adf0eb9a1cf314",
+      "site_signature": "d2adf0eb9a1cf314fbd8ea4b7aba766e10b0eb8d1c5943d3256dd9482d824e26",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 116,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppAccountKey",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:d2adf0eb9a1cf314fbd8ea4b7aba766e10b0eb8d1c5943d3256dd9482d824e26",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:116:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -26835,6 +28317,45 @@
         "canonical_ordinal": 1,
         "artifact_sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
         "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.d5e34bf75dec39b1",
+      "site_signature": "d5e34bf75dec39b10b8940125b2221feea3f2a3a0e526d6f18748f2830877673",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 477,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_account_key_set_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:d5e34bf75dec39b10b8940125b2221feea3f2a3a0e526d6f18748f2830877673",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:477:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -28009,6 +29530,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.df0a6ee8411408c3",
+      "site_signature": "df0a6ee8411408c361875cfb630c3f8dd448eb0602dc648a12b7d2aa5605ddd4",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 329,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:df0a6ee8411408c361875cfb630c3f8dd448eb0602dc648a12b7d2aa5605ddd4",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:329:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.e03b359a4c877942",
       "site_signature": "e03b359a4c8779428bd8ccdb3f1f424c5c040729f9b528a5550c5af3c48035af",
       "status": "APPROVED",
@@ -28041,6 +29601,45 @@
         "canonical_ordinal": 49,
         "artifact_sha256": "bdb122ef18c366c9201cb3a6bbe40bcea0696348c1721742f91ea9843014ab26",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726205437_add_max_inbound_normalization/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.e05e1976b3bc43cd",
+      "site_signature": "e05e1976b3bc43cd6e0a9c59021b6c2d0455d641bcf2fce7a87ae9a87a9c5e3a",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 268,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:e05e1976b3bc43cd6e0a9c59021b6c2d0455d641bcf2fce7a87ae9a87a9c5e3a",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:268:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -28986,6 +30585,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.e7cd7552c2d89aa8",
+      "site_signature": "e7cd7552c2d89aa85a2aa4cd6df0ed5db79935ac288eeade11489eed85f05ddc",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 346,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_account_foundation_resolves",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:e7cd7552c2d89aa85a2aa4cd6df0ed5db79935ac288eeade11489eed85f05ddc",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:346:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.e8360ee15fe04540",
       "site_signature": "e8360ee15fe0454000ff94fe839b9868671dedf2039ece5170c09187c03449cb",
       "status": "APPROVED",
@@ -29228,6 +30866,45 @@
         "canonical_ordinal": 46,
         "artifact_sha256": "03013fdf531f45c3b012c13fa15581be29f6399019f5b1dd308c4f8c407ae7e5",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260717000000_add_driver_telegram_submitted_phone/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.eb8809eba7b84d8c",
+      "site_signature": "eb8809eba7b84d8c94794b3ee193a36d5ba2d1fa8a7705cf98f18542a932704c",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 119,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:eb8809eba7b84d8c94794b3ee193a36d5ba2d1fa8a7705cf98f18542a932704c",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:119:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -30056,6 +31733,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.f1e7a43dc163fe20",
+      "site_signature": "f1e7a43dc163fe203737a51fb0c50c06e95592b108b199a2d8dc5054a5179a3a",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 546,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "whatsapp_transport_binding_guard",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:f1e7a43dc163fe203737a51fb0c50c06e95592b108b199a2d8dc5054a5179a3a",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:546:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.f217c553d6f6efa2",
       "site_signature": "f217c553d6f6efa2682175df62d00ab00571764bfef7175afdc1af3c53552c7c",
       "status": "APPROVED",
@@ -30123,6 +31839,45 @@
         "canonical_ordinal": 23,
         "artifact_sha256": "c2c78efecbf3a506d6512e635a981cd5422ec19dd874a3b3e9a5cd42faf5eb40",
         "repository_capture": "gravity-mvp/prisma/migrations/20260515000000_remove_yandex_pro_channel/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.f27dc663e14391b7",
+      "site_signature": "f27dc663e14391b736bfe9f193a719ea35791f961ea72eb2c0103cf2d0013202",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 178,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:f27dc663e14391b736bfe9f193a719ea35791f961ea72eb2c0103cf2d0013202",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:178:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -30438,6 +32193,45 @@
         "canonical_ordinal": 17,
         "artifact_sha256": "466fb7545f0793cb3261244cfff052937735fd473d80ecd40fccaddcc0c1ac8f",
         "repository_capture": "gravity-mvp/prisma/migrations/20260426000000_add_avito_module/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.f5e02b8711cbdb91",
+      "site_signature": "f5e02b8711cbdb915625e7e01367b9c0a98d1d76eb94fbe1ace993520bbd0ffe",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 470,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppAccount_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:f5e02b8711cbdb915625e7e01367b9c0a98d1d76eb94fbe1ace993520bbd0ffe",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:470:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -30878,6 +32672,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.f946fb1ed38af10e",
+      "site_signature": "f946fb1ed38af10e4e0ef64dd29295d09798e40ad5a23738c2ba540063b76096",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 902,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "WhatsAppCapabilityLease_guard",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:f946fb1ed38af10e4e0ef64dd29295d09798e40ad5a23738c2ba540063b76096",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:902:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.f990fcf1a50e7e62",
       "site_signature": "f990fcf1a50e7e62470155e989ae1a8c4d1ebd785e1212d55bb8dcf35e620808",
       "status": "APPROVED",
@@ -30910,6 +32743,45 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.f9f5f7f5759e89df",
+      "site_signature": "f9f5f7f5759e89df59f4065c3b3c7e2481110088dcedbd52a3ddc3af572b13b1",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 131,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppCapabilityLease",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:f9f5f7f5759e89df59f4065c3b3c7e2481110088dcedbd52a3ddc3af572b13b1",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:131:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -31133,6 +33005,45 @@
         "canonical_ordinal": 57,
         "artifact_sha256": "ef2df9ac72e1cec7d9ce00cc81e5e13eaf35161d0cfd20c379e82cec24cf4b0c",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260805073000_add_bot_user_registry/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.whatsapp_channel.fba247daf8247539",
+      "site_signature": "fba247daf824753973403cfd3c56e626aa01e681ac183ddd96fccc82adabd87e",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
+        "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+        "line": 140,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "whatsapp_channel",
+      "target": {
+        "data_owner": "whatsapp_channel",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "WhatsAppTransportBinding",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+          "site_signature:fba247daf824753973403cfd3c56e626aa01e681ac183ddd96fccc82adabd87e",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql:140:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {

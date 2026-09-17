@@ -964,6 +964,111 @@ model WhatsAppChatRoster {
   @@index([connectionId, newestMsgTs])
 }
 
+/// WhatsApp company account (M2A1-S1 foundation). Owned by whatsapp_channel.
+/// A logical provider account, never a runtime slot: `accountId` is an opaque
+/// internal id and the provider identity is owned by WhatsAppAccountKey; bindings
+/// carry attested values bound to those keys by foreign keys.
+/// Identity is immutable, lifecycle is operator intent. There is deliberately
+/// no relation to Contact, ChannelIdentity or WhatsAppConnection. Lifecycle,
+/// retirement and lease guards are PostgreSQL triggers in the migration.
+/// Inert: nothing in the runtime reads or writes these tables yet.
+model WhatsAppAccount {
+  accountId          String                     @id @db.VarChar(64)
+  accountKind        String                     @db.VarChar(32)
+  lifecycle          String                     @db.VarChar(32)
+  lifecycleVersion   Int
+  lifecycleChangedAt DateTime                   @default(now()) @db.Timestamptz(3)
+  lifecycleChangedBy String                     @db.VarChar(128)
+  lifecycleReason    String                     @db.VarChar(256)
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  keys               WhatsAppAccountKey[]
+  bindings           WhatsAppTransportBinding[]
+  capabilityLeases   WhatsAppCapabilityLease[]
+}
+
+/// Provider-issued WhatsApp identity key in exact provider form (PN user or
+/// LID user, no +7 or other phone normalization). A key belongs to exactly one
+/// account forever: rows are never updated, re-pointed or deleted.
+model WhatsAppAccountKey {
+  keyKind          String                     @db.VarChar(32)
+  keyValue         String                     @db.VarChar(128)
+  accountId        String                     @db.VarChar(64)
+  firstAttestedAt  DateTime                   @default(now()) @db.Timestamptz(3)
+  account          WhatsAppAccount            @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
+  pnAttestations   WhatsAppTransportBinding[] @relation("WhatsAppBindingAttestedPn")
+  lidAttestations  WhatsAppTransportBinding[] @relation("WhatsAppBindingAttestedLid")
+
+  @@id([keyKind, keyValue])
+  @@unique([accountId, keyKind])
+  @@unique([keyKind, keyValue, accountId])
+}
+
+/// Attested association of one runtime transport generation with one account.
+/// `transportRef` is a locator (the WhatsAppConnection slot id) with no foreign
+/// key, so existing slot delete paths are unchanged. Rows are history: a
+/// re-pair or a different account opens a new binding on a strictly newer
+/// generation and never re-points an old one. The attestation evidence is the
+/// complete provider key set: `attestedPnValue` and `attestedLidValue`, each
+/// bound by its own composite foreign key to the key of that fixed kind owned
+/// by the same account. A verified binding needs both. Trust is separate from
+/// account lifecycle; stale is derived from `attestedUntil`, never stored.
+model WhatsAppTransportBinding {
+  bindingId           String                    @id @db.VarChar(64)
+  transportKind       String                    @db.VarChar(32)
+  transportRef        String                    @db.VarChar(128)
+  transportGeneration BigInt
+  accountId           String                    @db.VarChar(64)
+  bindingSeq          Int
+  trustState          String                    @db.VarChar(16)
+  attestationOrigin   String                    @db.VarChar(32)
+  attestedPnKind      String                    @default("whatsapp_pn_user") @db.VarChar(32)
+  attestedPnValue     String?                   @db.VarChar(128)
+  attestedLidKind     String                    @default("whatsapp_lid_user") @db.VarChar(32)
+  attestedLidValue    String?                   @db.VarChar(128)
+  claimedPnValue      String?                   @db.VarChar(128)
+  claimedLidValue     String?                   @db.VarChar(128)
+  attestingInstanceId String                    @db.VarChar(128)
+  operatorConfirmedAt DateTime?                 @db.Timestamptz(3)
+  operatorConfirmedBy String?                   @db.VarChar(128)
+  openedAt            DateTime                  @default(now()) @db.Timestamptz(3)
+  lastAttestedAt      DateTime?                 @db.Timestamptz(3)
+  attestedUntil       DateTime?                 @db.Timestamptz(3)
+  closedAt            DateTime?                 @db.Timestamptz(3)
+  closeReason         String?                   @db.VarChar(32)
+  account             WhatsAppAccount           @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedPnKey       WhatsAppAccountKey?       @relation("WhatsAppBindingAttestedPn", fields: [attestedPnKind, attestedPnValue, accountId], references: [keyKind, keyValue, accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedLidKey      WhatsAppAccountKey?       @relation("WhatsAppBindingAttestedLid", fields: [attestedLidKind, attestedLidValue, accountId], references: [keyKind, keyValue, accountId], onDelete: Restrict, onUpdate: NoAction)
+  heldCapabilityLeases WhatsAppCapabilityLease[]
+
+  @@unique([bindingId, accountId])
+  @@unique([transportKind, transportRef, bindingSeq])
+  @@unique([transportKind, transportRef, transportGeneration])
+  @@index([accountId])
+}
+
+/// Exclusive capability lease per account and capability (inbound, outbound,
+/// history_import). Foundation only: no runtime acquires it and it does not
+/// fence any live WhatsApp transport. Epoch, holder, expiry and quarantine
+/// rules run on the database clock inside PostgreSQL triggers.
+model WhatsAppCapabilityLease {
+  accountId        String                   @db.VarChar(64)
+  capability       String                   @db.VarChar(32)
+  epoch            BigInt
+  version          BigInt
+  holderBindingId  String                   @db.VarChar(64)
+  holderInstanceId String                   @db.VarChar(128)
+  state            String                   @db.VarChar(16)
+  heartbeatAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  leaseUntil       DateTime                 @db.Timestamptz(3)
+  fenceUntil       DateTime                 @default(now()) @db.Timestamptz(3)
+  lastReleasedAt   DateTime?                @db.Timestamptz(3)
+  account          WhatsAppAccount          @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
+  holderBinding    WhatsAppTransportBinding @relation(fields: [holderBindingId, accountId], references: [bindingId, accountId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([accountId, capability])
+  @@index([holderBindingId])
+}
+
 model DriverTelegram {
   id            String   @id @default(cuid())
   driverId      String   @unique

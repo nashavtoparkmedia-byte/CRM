@@ -2,13 +2,13 @@
   "derivation": {
     "kind": "architecture-enforcement-observed-cross-context-imports",
     "policy_path": "architecture/enforcement/v1/policy.json",
-    "policy_sha256": "df002ac53c5383cfee3f21c3f792a75b46eb2dd7034b231d89b8c3e3bfc2c8e2"
+    "policy_sha256": "c97fa371911bab440ba4ba5eabcfc41151f9a31497a391c0d28206f0d88f0ea5"
   },
   "observed": {
     "architecture_findings": 0,
     "cross_context_imports": 903,
     "cross_context_imports_sha256": "0a5656ecf466ed33192e42773d0f333536d2305a94e2a213fcd0c1d18eaeb6aa",
-    "scanned_files": 1569
+    "scanned_files": 1570
   },
   "public_surface_migrations": [],
   "relationship_projection": {
