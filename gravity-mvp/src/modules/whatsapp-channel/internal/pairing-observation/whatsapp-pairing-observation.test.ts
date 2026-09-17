@@ -178,7 +178,35 @@ describe('readWhatsAppPairingObservationV1', () => {
     it('reports a missing WhatsApp Web module loader as unavailable', async () => {
         scope.require = undefined
         const read = await readWhatsAppPairingObservationV1(clientWith(async (pageFunction) => pageFunction()), noTimers)
-        expect(classifyWhatsAppPairingObservationV1(read).flags).toMatchObject({ outcome: 'unavailable', reasonClass: 'module_unavailable' })
+        expect(classifyWhatsAppPairingObservationV1(read).flags).toMatchObject({
+            outcome: 'unavailable',
+            reasonClass: 'module_unavailable',
+            socketStateClass: 'unknown',
+            hasSynced: null,
+        })
+    })
+
+    it('does not report a synced page as unsynced when a key getter is missing', async () => {
+        const getters = installPage()
+        const loader = scope.require as (name: string) => unknown
+        scope.require = (name: string) => (name === 'WAWebUserPrefsMeUser'
+            ? { getMaybeMePnUser: getters.getMaybeMePnUser }
+            : loader(name))
+        const read = await readWhatsAppPairingObservationV1(clientWith(async (pageFunction) => pageFunction()), noTimers)
+        expect(getters.getMaybeMePnUser).not.toHaveBeenCalled()
+        expect(classifyWhatsAppPairingObservationV1(read).flags).toEqual({
+            outcome: 'unavailable',
+            reasonClass: 'module_unavailable',
+            socketStateClass: 'unknown',
+            hasSynced: null,
+            pnPresent: null,
+            pnShapeValid: null,
+            lidPresent: null,
+            lidShapeValid: null,
+            pnDiffersFromLid: null,
+            infoWidMatchesPn: null,
+            waWebVersion: WA_WEB_VERSION,
+        })
     })
 
     it('reports a missing or closed page as unavailable without evaluating', async () => {

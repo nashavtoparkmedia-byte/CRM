@@ -117,6 +117,18 @@ export function pairingObservationImporters(files) {
     .sort()
 }
 
+// Catches what the import graph cannot: a re-export consumed through another file, or a
+// module load built from a template literal. Only this module's own names are matched.
+const PAIRING_OBSERVATION_NAME = /pairing-observation|WhatsAppPairing|WHATSAPP_PAIRING_|observeWhatsAppPairing/u
+
+export function pairingObservationMentions(files) {
+  return files
+    .filter(([relative]) => !relative.startsWith(`${MODULE_DIR}/`))
+    .filter(([, source]) => PAIRING_OBSERVATION_NAME.test(source))
+    .map(([relative]) => relative)
+    .sort()
+}
+
 export function assertModuleSource(relative, source) {
   const allowed = ALLOWED_MODULE_DEPENDENCIES.get(relative)
   assert(allowed, `unexpected pairing observation source: ${relative}`)
@@ -166,8 +178,8 @@ function frozenPayloadKeys(relative, source) {
 
 export function assertTelemetryContract(source) {
   const fields = stringArrayConstant(TELEMETRY, source, 'WHATSAPP_PAIRING_TELEMETRY_FIELDS_V1')
-  assert.deepEqual(fields, TELEMETRY_FIELDS, 'telemetry allowlist changed')
   for (const field of fields) assert.doesNotMatch(field, IDENTIFIER_FIELD, `telemetry field names an identifier: ${field}`)
+  assert.deepEqual(fields, TELEMETRY_FIELDS, 'telemetry allowlist changed')
   assert.deepEqual(frozenPayloadKeys(TELEMETRY, source), TELEMETRY_FIELDS, 'telemetry payload does not match the allowlist')
 }
 
@@ -195,6 +207,7 @@ export function assertServiceHooks(source) {
   const calls = [...source.matchAll(/observeWhatsAppPairingV1\(\{ \.\.\.pairingObservationSource, event: '(\w+)'/gu)].map((match) => match[1])
   assert.deepEqual(calls, LIFECYCLE_EVENTS, 'pairing observation is called once from each approved lifecycle handler only')
   assert.equal([...source.matchAll(/observeWhatsAppPairingV1\(/gu)].length, LIFECYCLE_EVENTS.length)
+  assert.equal([...source.matchAll(/\bobserveWhatsAppPairingV1\b/gu)].length, LIFECYCLE_EVENTS.length + 1, 'WhatsAppService must not re-export or alias the pairing observer')
   assert.doesNotMatch(source, /(?:await|return|=|\.then)\s*observeWhatsAppPairingV1\(/u, 'the observer result must never be awaited or used')
   assert.match(source, /isCurrentInstance: \(\) => instanceIds\.get\(connectionId\) === instanceId && clients\.get\(connectionId\) === client,/u)
 
@@ -245,6 +258,7 @@ for (const importer of importers) {
   assert.doesNotMatch(importer, /\/modules\/(?:contacts|messaging)\//u)
   assert.doesNotMatch(importer, /\/public\//u)
 }
+assert.deepEqual(pairingObservationMentions(files), [...APPROVED_IMPORTERS].sort(), 'only the WhatsApp runtime may name pairing observation')
 
 for (const relative of [OBSERVATION, TELEMETRY, OBSERVER]) assertModuleSource(relative, read(relative))
 assert.match(withoutComments(OBSERVER, read(OBSERVER)), /createHmac\('sha256', deps\.comparisonKey\)/u)
@@ -269,32 +283,77 @@ const probes = {
   public_relative_importer: () => pairingObservationImporters([
     ['gravity-mvp/src/modules/whatsapp-channel/public/v1/probe.ts', "export { classifyWhatsAppPairingObservationV1 } from '../../internal/pairing-observation/whatsapp-pairing-observation'\n"],
   ]).length === 1,
+  reexport_consumer: () => pairingObservationMentions([
+    ['gravity-mvp/src/app/settings/integrations/whatsapp/probe.ts', "import { observeWhatsAppPairingV1 } from '@/lib/whatsapp/WhatsAppService'\n"],
+  ]).length === 1,
+  template_literal_import: () => pairingObservationMentions([
+    ['gravity-mvp/src/lib/whatsapp/probe.ts', 'export const load = (name: string) => import(`@/modules/whatsapp-channel/internal/pairing-observation/${name}`)\n'],
+  ]).length === 1,
 }
 for (const [name, probe] of Object.entries(probes)) assert.equal(probe(), true, `negative probe did not detect: ${name}`)
 
-const rejected = {
-  prisma_dependency: () => assertModuleSource(OBSERVER, `${read(OBSERVER)}\nimport { prisma } from '@/lib/prisma'\n`),
-  foundation_model: () => assertModuleSource(OBSERVATION, `${read(OBSERVATION)}\nexport const probe = 'WhatsAppTransportBinding'.length\nconst model = prisma.whatsAppTransportBinding\n`),
-  console_side_channel: () => assertModuleSource(OBSERVER, `${read(OBSERVER)}\nconsole.log('probe')\n`),
-  identifier_field: () => assertTelemetryContract(read(TELEMETRY).replace("'durationMs',\n] as const", "'durationMs',\n    'pnUser',\n] as const")),
-  unlisted_payload_field: () => assertTelemetryContract(read(TELEMETRY).replace('durationMs: count(', 'lidUser: input.waWebVersion,\n        durationMs: count(')),
-  raw_emit: () => assertObserverEmission(`${read(OBSERVER)}\nfunction probe(deps) { deps.emit('wa_pairing_observation', { pn: 'x' }) }\n`),
-  awaited_hook: () => assertServiceHooks(read(SERVICE).replace("observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })", "await observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })")),
-  hook_before_existing_work: () => {
-    const source = read(SERVICE)
-      .replace("            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })\n", '')
-      .replace('            registry.setReady(connectionId, instanceId)\n', "            registry.setReady(connectionId, instanceId)\n            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })\n")
-    assertServiceHooks(source)
-  },
-  extra_lifecycle_hook: () => assertServiceHooks(read(SERVICE).replace("clearPendingWhatsAppQr(connectionId, instanceId)\n            opsLog('error', 'wa_auth_failure'", "clearPendingWhatsAppQr(connectionId, instanceId)\n            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'auth_failure' })\n            opsLog('error', 'wa_auth_failure'")),
-  public_surface: () => assertNoPublicSurface(
-    [['gravity-mvp/src/modules/whatsapp-channel/public/v1/probe.ts', "export type { WhatsAppPairingObservationFlagsV1 } from '../../internal/pairing-observation/whatsapp-pairing-observation'\n"]],
-    JSON.parse(read('architecture/contexts/v1/manifests/whatsapp_channel.json')),
-    JSON.parse(read('architecture/contracts/v1/registry.json')),
-  ),
+// Each probe must be refused by the rule it names, not by an earlier unrelated assertion.
+const changed = (source, from, to) => {
+  assert(source.includes(from), `negative probe anchor is missing: ${from}`)
+  return source.replace(from, to)
 }
-for (const [name, probe] of Object.entries(rejected)) {
-  assert.throws(probe, `negative probe was not rejected: ${name}`)
+const observerImport = "import { observeWhatsAppPairingV1 } from '@/modules/whatsapp-channel/internal/pairing-observation/whatsapp-pairing-observer'\n"
+const rejected = {
+  prisma_dependency: [
+    () => assertModuleSource(OBSERVER, `${read(OBSERVER)}\nimport { prisma } from '@/lib/prisma'\n`),
+    /pairing observation dependency is not allowed: .* -> @\/lib\/prisma/u,
+  ],
+  foundation_model: [
+    () => assertModuleSource(OBSERVATION, `${read(OBSERVATION)}\nexport const probe = 'WhatsAppTransportBinding'.length\nconst model = prisma.whatsAppTransportBinding\n`),
+    /must not touch the database or foundation models/u,
+  ],
+  console_side_channel: [
+    () => assertModuleSource(OBSERVER, `${read(OBSERVER)}\nconsole.log('probe')\n`),
+    /must not write outside the telemetry contract/u,
+  ],
+  identifier_field: [
+    () => assertTelemetryContract(changed(read(TELEMETRY), "'durationMs',\n] as const", "'durationMs',\n    'pnUser',\n] as const")),
+    /telemetry field names an identifier: pnUser/u,
+  ],
+  unlisted_payload_field: [
+    () => assertTelemetryContract(changed(read(TELEMETRY), 'durationMs: count(', 'lidUser: input.waWebVersion,\n        durationMs: count(')),
+    /telemetry payload does not match the allowlist/u,
+  ],
+  raw_emit: [
+    () => assertObserverEmission(`${read(OBSERVER)}\nfunction probe(deps) { deps.emit('wa_pairing_observation', { pn: 'x' }) }\n`),
+    /observer may log only the built telemetry payload/u,
+  ],
+  awaited_hook: [
+    () => assertServiceHooks(changed(read(SERVICE), "observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })", "await observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })")),
+    /the observer result must never be awaited or used/u,
+  ],
+  hook_before_existing_work: [
+    () => assertServiceHooks(changed(
+      changed(read(SERVICE), "            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })\n", ''),
+      '            registry.setReady(connectionId, instanceId)\n',
+      "            registry.setReady(connectionId, instanceId)\n            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })\n",
+    )),
+    /ready observation must run after the existing ready handling/u,
+  ],
+  extra_lifecycle_hook: [
+    () => assertServiceHooks(changed(read(SERVICE), "clearPendingWhatsAppQr(connectionId, instanceId)\n            opsLog('error', 'wa_auth_failure'", "clearPendingWhatsAppQr(connectionId, instanceId)\n            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'auth_failure' })\n            opsLog('error', 'wa_auth_failure'")),
+    /called once from each approved lifecycle handler only/u,
+  ],
+  service_reexport: [
+    () => assertServiceHooks(changed(read(SERVICE), observerImport, `${observerImport}export { observeWhatsAppPairingV1 }\n`)),
+    /WhatsAppService must not re-export or alias the pairing observer/u,
+  ],
+  public_surface: [
+    () => assertNoPublicSurface(
+      [['gravity-mvp/src/modules/whatsapp-channel/public/v1/probe.ts', "export type { WhatsAppPairingObservationFlagsV1 } from '../../internal/pairing-observation/whatsapp-pairing-observation'\n"]],
+      JSON.parse(read('architecture/contexts/v1/manifests/whatsapp_channel.json')),
+      JSON.parse(read('architecture/contracts/v1/registry.json')),
+    ),
+    /public API must not expose pairing observation/u,
+  ],
+}
+for (const [name, [probe, reason]] of Object.entries(rejected)) {
+  assert.throws(probe, reason, `negative probe was not rejected for its own rule: ${name}`)
 }
 
 process.stdout.write(`${JSON.stringify({

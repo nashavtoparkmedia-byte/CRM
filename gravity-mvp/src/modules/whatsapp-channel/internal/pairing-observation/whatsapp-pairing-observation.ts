@@ -308,7 +308,8 @@ export function classifyWhatsAppPairingObservationV1(read: WhatsAppPairingPageRe
         hasSynced: state.hasSynced,
         waWebVersion: state.waWebVersion,
     }
-    if (!state.moduleAvailable) return notEvaluated('unavailable', 'module_unavailable', common)
+    // Without the modules the socket was never read, so its state and sync flag stay not evaluated.
+    if (!state.moduleAvailable) return notEvaluated('unavailable', 'module_unavailable', { waWebVersion: state.waWebVersion })
     if (state.socketState !== 'CONNECTED' || !state.hasSynced) return notEvaluated('gated', 'none', common)
 
     const pnPresent = state.pn !== null || state.pnReadFailed
