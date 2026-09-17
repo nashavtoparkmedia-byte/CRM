@@ -345,6 +345,35 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 2
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a1-s2-whatsapp-pairing-observation-20260917",
+      "reviewed_at": "2026-09-17T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A1_S2_CANDIDATE_OWNERSHIP_REVIEW_20260917",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A1_S2_A0_WHATSAPP_PAIRING_OBSERVATION_IMPLEMENTATION",
+      "reason": "M2A1-S2 adds exactly six tracked executable surfaces and changes no existing ownership. The three observation sources and their test under gravity-mvp/src/modules/whatsapp-channel/internal/pairing-observation, and gravity-mvp/src/lib/whatsapp/WhatsAppService.pairing-observation.test.ts, sit under whatsapp_channel owned paths and are context owned by the existing manifest selection. tools/architecture/check-whatsapp-pairing-observation-boundary.mjs falls under the existing architecture_controls prefix exclusion and is classified in the lifecycle surface registry. No path belongs to an exact inventory, so no exact-inventory transition, assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes; only the denominator moves from 2503 to 2509.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2503,
+        "tracked_inventory_sha256": "70cb043044c7980aeb2f4964145acc04000fe3286692e5745779f20ac8b1eddc",
+        "coverage_sha256": "cc39724ba2cdff5af18255555534add33c6d724dea6aeb0fafc3396519a3de3c"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2509,
+        "tracked_inventory_sha256": "5a7a5c2ddcf26333f80702a276cb25dcaa6000d739b98af291853d577324778f",
+        "coverage_sha256": "8b33642f26cb3f65c2ace5311253dd39396f06708e46fa6fa1d9018ef660aab8"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 6
+      }
     }
   ]
 }
