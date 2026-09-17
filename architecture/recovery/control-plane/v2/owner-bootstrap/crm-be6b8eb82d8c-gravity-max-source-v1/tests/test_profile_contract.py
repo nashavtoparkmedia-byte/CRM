@@ -136,7 +136,8 @@ class ProfileContractTests(unittest.TestCase):
     def test_target_postcheck_preserves_volume_database_and_unrelated_services(self) -> None:
         profile = self.profile()
         released = ["MAX_SCRAPER_WEBHOOK_SECRET", "NODE_ENV", "PATH"]
-        gravity = self.projection("new-gravity", "gravity-mvp", ["npm", "run", "start"], "g" * 64, released)
+        gravity_released = sorted([*released, *self.runtime.CALLING_B2_ENVIRONMENT_NAMES])
+        gravity = self.projection("new-gravity", "gravity-mvp", ["npm", "run", "start"], "g" * 64, gravity_released)
         maximum = self.projection("new-max", "max-web-scraper", ["node", "index.js"], "m" * 64, released)
         state = {
             "environment_sha256": "e" * 64,

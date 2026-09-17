@@ -67,6 +67,60 @@ RELEASE_ENVIRONMENT_CONTRACT = MappingProxyType({
     "attached_on_rollback": False,
 })
 
+# Calling B2: the closed set of environment names the controlled real AI call reads, admitted for
+# gravity-mvp only. Like the Messaging name above, every part of it is a sealed constant: no name,
+# service or path is read from runtime input, and widening the set needs a new Owner/Calling
+# decision and a new sealed profile.
+#
+# Every name is mandatory, because the application's controlled-call readiness fails closed on each
+# of them and its runbook requires every value to be supplied explicitly. The two kill switches are
+# admitted only as the exact strings `true` or `false`: the application arms on exactly `true`, and
+# the repository example disarms with `false`, so no ambiguous spelling can reach a container.
+#
+# Activation attaches one fixed root-only source to gravity-mvp through the generated overlay; the
+# shared production env file is never involved. Rollback never reads or attaches the source, and is
+# refused while the live Gravity container has either kill switch armed.
+CALLING_B2_SERVICE = "gravity-mvp"
+CALLING_B2_ENVIRONMENT_NAMES = (
+    "AI_CALL_CONTROLLED_DESTINATION_E164",
+    "AI_CALL_CONTROLLED_OPERATOR_TOKEN",
+    "AI_CALL_CONTROLLED_REAL_CALL_ENABLED",
+    "AI_CALL_CONTROLLED_REQUEST_ID",
+    "AI_CALL_DIAL_STRING_TEMPLATE",
+    "AI_CALL_LIVE_MODE",
+    "AI_CALL_PARK_EXT",
+    "AI_CALL_STT_PROVIDER",
+    "AI_CALL_TELEPHONY_PROVIDER",
+    "AI_CALL_TTS_PROVIDER",
+    "AUDIO_BRIDGE_HEALTH_URL",
+    "MEGAFON_NUMBER",
+)
+CALLING_B2_KILL_SWITCHES = ("AI_CALL_CONTROLLED_REAL_CALL_ENABLED", "AI_CALL_LIVE_MODE")
+CALLING_B2_KILL_SWITCH_VALUES = ("false", "true")
+CALLING_B2_DISARMED_VALUE = "false"
+# The release id is the sealed profile id, so the source path moves with the exact application binding.
+CALLING_B2_ENVIRONMENT_DIRECTORY = "/var/lib/crm/release-staging/calling-b2/" + PROFILE_ID
+CALLING_B2_ENVIRONMENT_SOURCE = CALLING_B2_ENVIRONMENT_DIRECTORY + "/gravity-mvp.env"
+CALLING_B2_ENVIRONMENT_SOURCE_MAXIMUM = 4096
+# Exactly one `NAME='value'` assignment per line. Compose reads a single-quoted env_file value
+# literally -- no interpolation, comment or whitespace handling -- so the `${number}` in the dial
+# template arrives intact. Values are 1-256 bytes of printable ASCII without whitespace, quotes,
+# backslash or backtick, so nothing inside the quotes can change how Compose splits the line.
+CALLING_B2_ENVIRONMENT_LINE = re.compile(rb"([A-Z][A-Z0-9_]{0,127})='([!#-&(-\[\]-_a-~]{1,256})'")
+CALLING_B2_ENVIRONMENT_CONTRACT = MappingProxyType({
+    "names": list(CALLING_B2_ENVIRONMENT_NAMES),
+    "services": [CALLING_B2_SERVICE],
+    "source": CALLING_B2_ENVIRONMENT_SOURCE,
+    "source_mode": "0600",
+    "source_format": "single-quoted-assignment-per-line",
+    "all_names_required": True,
+    "kill_switches": list(CALLING_B2_KILL_SWITCHES),
+    "kill_switch_values": list(CALLING_B2_KILL_SWITCH_VALUES),
+    "attached_by": "release-activate",
+    "attached_on_rollback": False,
+    "rollback_requires_disarmed_kill_switches": True,
+})
+
 
 def _canonical(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
@@ -115,7 +169,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
     required = {
         "schema", "profile_id", "host", "runtime_abi", "package_version",
         "accepted_application", "stage_a", "artifact_admission", "deployment",
-        "predecessor", "target", "database", "limits", "release_environment",
+        "predecessor", "target", "database", "limits", "release_environment", "calling_b2_environment",
         "enabled_zero_argument_profiles", "disabled_profiles", "negative_properties",
     }
     _exact_dict(core, profile, required, "ACTIVATION_PROFILE_INVALID")
@@ -137,6 +191,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or set(profile["disabled_profiles"]) != {"config-activate", "database-migrate"}
         or any(profile["negative_properties"].values())
         or profile["release_environment"] != dict(RELEASE_ENVIRONMENT_CONTRACT)
+        or profile["calling_b2_environment"] != dict(CALLING_B2_ENVIRONMENT_CONTRACT)
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     stage_a = _exact_dict(
@@ -819,6 +874,109 @@ def _validate_release_environment(core: Any, state: dict[str, Any]) -> dict[str,
     return release
 
 
+def _calling_b2_environment(core: Any) -> dict[str, Any]:
+    """Read and bind the sealed Calling B2 source for activation only.
+
+    The source must be a fixed root-owned 0600 single-link regular file in a root-owned 0700
+    directory whose ancestors are root-owned and not group/other writable, and it must assign every
+    admitted name exactly once. Unknown, duplicate and missing names are refused, and so is any kill
+    switch value other than `true` or `false`. The values are returned only for the in-memory
+    projection comparison. Faults carry a reason and admitted names, never a value or an unadmitted
+    name, and callers persist only the digest.
+    """
+    try:
+        core.secure_directory(CALLING_B2_ENVIRONMENT_DIRECTORY, 0o700)
+    except (core.RuntimeFault, OSError) as exc:
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_SOURCE_UNSAFE", 74, {"source": "directory"}) from exc
+    try:
+        expected = _fixed_production_file(core, CALLING_B2_ENVIRONMENT_SOURCE, 0o600, CALLING_B2_ENVIRONMENT_SOURCE_MAXIMUM)
+        fd = os.open(core.mapped(CALLING_B2_ENVIRONMENT_SOURCE), os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except (core.RuntimeFault, OSError) as exc:
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_SOURCE_UNSAFE", 74, {"source": "file"}) from exc
+    try:
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+            raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_SOURCE_UNSAFE", 74, {"source": "file"})
+        raw = b""
+        while len(raw) <= CALLING_B2_ENVIRONMENT_SOURCE_MAXIMUM:
+            chunk = os.read(fd, CALLING_B2_ENVIRONMENT_SOURCE_MAXIMUM + 1 - len(raw))
+            if not chunk:
+                break
+            raw += chunk
+    finally:
+        os.close(fd)
+
+    def invalid(reason: str, **admitted: Any) -> Exception:
+        return core.RuntimeFault("CALLING_B2_ENVIRONMENT_SOURCE_INVALID", 74, {"reason": reason, **admitted})
+
+    if len(raw) > CALLING_B2_ENVIRONMENT_SOURCE_MAXIMUM:
+        raise invalid("SIZE")
+    if not raw.endswith(b"\n"):
+        raise invalid("SYNTAX")
+    values: dict[str, str] = {}
+    for line in raw[:-1].split(b"\n"):
+        match = CALLING_B2_ENVIRONMENT_LINE.fullmatch(line)
+        if match is None:
+            raise invalid("SYNTAX")
+        name = match.group(1).decode("ascii")
+        if name not in CALLING_B2_ENVIRONMENT_NAMES:
+            raise invalid("UNKNOWN_NAME")
+        if name in values:
+            raise invalid("DUPLICATE_NAME", name=name)
+        values[name] = match.group(2).decode("ascii")
+    missing = [name for name in CALLING_B2_ENVIRONMENT_NAMES if name not in values]
+    if missing:
+        raise invalid("MISSING_NAME", names=missing)
+    for name in CALLING_B2_KILL_SWITCHES:
+        if values[name] not in CALLING_B2_KILL_SWITCH_VALUES:
+            raise invalid("KILL_SWITCH_VALUE", name=name)
+    return {"sha256": hashlib.sha256(raw).hexdigest(), "values": values}
+
+
+def _validate_calling_b2_environment(core: Any, state: dict[str, Any]) -> dict[str, Any]:
+    calling = _calling_b2_environment(core)
+    if not SHA256.fullmatch(str(state.get("calling_b2_environment_sha256", ""))) or not hmac.compare_digest(
+        calling["sha256"], state["calling_b2_environment_sha256"]
+    ):
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_IDENTITY_DRIFT", 74)
+    return calling
+
+
+def _assert_calling_b2_disarmed(core: Any, gravity: Any) -> None:
+    """Refuse a rollback while the live Gravity container has either Calling kill switch armed.
+
+    This reads the environment the classified Gravity container was actually created with, bound to
+    its container id, and never the staging source, which a rollback must not depend on. The
+    application arms a switch only on the exact string `true`; this guard is stricter. A switch
+    counts as disarmed only when it is absent or exactly `false`. Any other value, a repeated or
+    near-miss name, or an environment that cannot be read is treated as armed or unproven. Faults
+    carry switch names, never values.
+    """
+    name = gravity.get("name") if isinstance(gravity, dict) else None
+    container_id = gravity.get("container_id") if isinstance(gravity, dict) else None
+    if not isinstance(name, str) or not name or not isinstance(container_id, str) or not container_id:
+        raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_STATE_UNPROVEN", 74)
+    try:
+        raw = _raw_container(core, name)
+    except Exception as exc:
+        raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_STATE_UNPROVEN", 74) from exc
+    config = raw.get("Config")
+    environment = config.get("Env") if isinstance(config, dict) else None
+    if raw.get("Id") != container_id or not isinstance(environment, list):
+        raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_STATE_UNPROVEN", 74)
+    observed: dict[str, list[str | None]] = {switch: [] for switch in CALLING_B2_KILL_SWITCHES}
+    for item in environment:
+        if not isinstance(item, str) or "=" not in item or "\x00" in item:
+            raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_STATE_UNPROVEN", 74)
+        key, value = item.split("=", 1)
+        normalized = key.strip().upper()
+        if normalized in observed:
+            observed[normalized].append(value if key == normalized else None)
+    armed = [switch for switch, values in observed.items() if values not in ([], [CALLING_B2_DISARMED_VALUE])]
+    if armed:
+        raise core.RuntimeFault("CALLING_B2_KILL_SWITCH_ARMED", 77, {"armed_kill_switches": armed})
+
+
 def _environment_names(core: Any, semantic: Any, code: str) -> list[str]:
     names = semantic.get("environment_names") if isinstance(semantic, dict) else None
     if (
@@ -830,44 +988,70 @@ def _environment_names(core: Any, semantic: Any, code: str) -> list[str]:
     return names
 
 
+def _admitted_release_names(core: Any, service: str) -> tuple[str, ...]:
+    """Every environment name activation may add to one pair service: sealed, never widened."""
+    if service not in RELEASE_ENVIRONMENT_SOURCES:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
+    if service == CALLING_B2_SERVICE:
+        return (RELEASE_ENVIRONMENT_NAME, *CALLING_B2_ENVIRONMENT_NAMES)
+    return (RELEASE_ENVIRONMENT_NAME,)
+
+
 def _expected_pair_semantic(core: Any, service: str, predecessor: dict[str, Any], *, target: bool) -> dict[str, Any]:
     """The exact runtime semantic a pair container must show after a release transition.
 
     Rollback expects the predecessor semantic unchanged. Activation expects the predecessor
-    semantic plus exactly the one sealed environment name, and only for the two admitted
-    services; the name must not already be present. Any other added, removed or renamed
-    environment variable therefore still differs from the expectation and fails closed.
+    semantic plus exactly the sealed names admitted for that service: the Messaging name for
+    both pair services, and the Calling B2 names for gravity-mvp only. None may already be
+    present. Any other added, removed or renamed environment variable therefore still differs
+    from the expectation and fails closed.
     """
     if not target:
         return predecessor
-    if service not in RELEASE_ENVIRONMENT_SOURCES:
-        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
+    admitted = _admitted_release_names(core, service)
     names = _environment_names(core, predecessor, "RELEASE_ENVIRONMENT_PREDECESSOR_INVALID")
     if RELEASE_ENVIRONMENT_NAME in names:
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
-    return {**predecessor, "environment_names": sorted([*names, RELEASE_ENVIRONMENT_NAME])}
+    if any(name in names for name in admitted):
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
+    return {**predecessor, "environment_names": sorted([*names, *admitted])}
 
 
 def _admit_release_environment_projection(
-    core: Any, service: str, original: dict[str, Any], actual: dict[str, Any], value: str
+    core: Any,
+    service: str,
+    original: dict[str, Any],
+    actual: dict[str, Any],
+    value: str,
+    calling_values: Mapping[str, str] | None = None,
 ) -> None:
-    """Remove exactly the admitted release variable from one candidate service projection.
+    """Remove exactly the admitted release variables from one candidate service projection.
 
     The caller then requires the remainder to equal the base projection byte for byte, so this
-    admits the one name with the one bound value and nothing else.
+    admits only the sealed names for that service, each with its one bound value, and nothing else.
     """
-    if service not in RELEASE_ENVIRONMENT_SOURCES:
-        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
+    admitted = _admitted_release_names(core, service)
     base = original.get("environment", {})
     candidate = actual.get("environment", {})
     if not isinstance(base, dict) or not isinstance(candidate, dict):
         raise core.RuntimeFault("PAIR_COMPOSE_PROJECTION_DRIFT", 74)
     if RELEASE_ENVIRONMENT_NAME in base:
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
-    supplied = candidate.get(RELEASE_ENVIRONMENT_NAME)
-    if not isinstance(supplied, str) or not hmac.compare_digest(supplied.encode("utf-8"), value.encode("ascii")):
-        raise core.RuntimeFault("RELEASE_ENVIRONMENT_PROJECTION_DRIFT", 74, {"service": service})
-    remainder = {key: item for key, item in candidate.items() if key != RELEASE_ENVIRONMENT_NAME}
+    if any(name in base for name in admitted):
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
+    for name in admitted:
+        messaging = name == RELEASE_ENVIRONMENT_NAME
+        bound = value if messaging else (calling_values.get(name) if isinstance(calling_values, Mapping) else None)
+        if not isinstance(bound, str):
+            raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_BINDING_INVALID", 78, {"service": service})
+        # Compose writes a literal `$` in a resolved value as `$$` in its config output, and reads it
+        # back the same way, so the render of a bound value is exactly that escape of it.
+        rendered = bound.replace("$", "$$")
+        supplied = candidate.get(name)
+        if not isinstance(supplied, str) or not hmac.compare_digest(supplied.encode("utf-8"), rendered.encode("ascii")):
+            code = "RELEASE_ENVIRONMENT_PROJECTION_DRIFT" if messaging else "CALLING_B2_ENVIRONMENT_PROJECTION_DRIFT"
+            raise core.RuntimeFault(code, 74, {"service": service})
+    remainder = {key: item for key, item in candidate.items() if key not in admitted}
     if "environment" in original:
         actual["environment"] = remainder
     elif remainder:
@@ -882,7 +1066,12 @@ def _compose_overlay(gravity: str, maximum: str, *, activate: bool) -> bytes:
     command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
 
     def environment(service: str) -> str:
-        return f"    env_file:\n      - {RELEASE_ENVIRONMENT_SOURCES[service]}\n" if activate else ""
+        if not activate:
+            return ""
+        sources = [RELEASE_ENVIRONMENT_SOURCES[service]]
+        if service == CALLING_B2_SERVICE:
+            sources.append(CALLING_B2_ENVIRONMENT_SOURCE)
+        return "    env_file:\n" + "".join(f"      - {source}\n" for source in sources)
 
     return (
         "services:\n"
@@ -919,7 +1108,13 @@ def _compose_config(core: Any, args: list[str]) -> dict[str, Any]:
 
 
 def _validate_projection(
-    core: Any, profile: dict[str, Any], overlay: str, *, activate: bool, release_value: str | None = None
+    core: Any,
+    profile: dict[str, Any],
+    overlay: str,
+    *,
+    activate: bool,
+    release_value: str | None = None,
+    calling_values: Mapping[str, str] | None = None,
 ) -> None:
     base = _compose_config(core, _compose_args(profile))
     candidate = _compose_config(core, _compose_args(profile, overlay))
@@ -932,10 +1127,12 @@ def _validate_projection(
     changed = {"gravity-mvp", "max-web-scraper"}
     if _canonical({key: value for key, value in base["services"].items() if key not in changed}) != _canonical({key: value for key, value in candidate["services"].items() if key not in changed}):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
-    # Activation compares the render against the value already bound to the preflight digest;
+    # Activation compares the render against the values already bound to the preflight digests;
     # rollback takes no release value at all.
     if activate != isinstance(release_value, str) or (activate and RELEASE_ENVIRONMENT_VALUE.fullmatch(release_value.encode("ascii", "replace")) is None):
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_BINDING_INVALID", 78)
+    if activate != isinstance(calling_values, Mapping) or (activate and sorted(calling_values) != list(CALLING_B2_ENVIRONMENT_NAMES)):
+        raise core.RuntimeFault("CALLING_B2_ENVIRONMENT_BINDING_INVALID", 78)
     expected = {
         "gravity-mvp": TARGET_GRAVITY if activate else ROLLBACK_GRAVITY,
         "max-web-scraper": TARGET_MAX if activate else ROLLBACK_MAX,
@@ -947,7 +1144,7 @@ def _validate_projection(
             raise core.RuntimeFault("PAIR_COMPOSE_IMAGE_DRIFT", 74)
         actual["image"] = original.get("image")
         if release_value is not None:
-            _admit_release_environment_projection(core, name, original, actual, release_value)
+            _admit_release_environment_projection(core, name, original, actual, release_value, calling_values)
         if activate and name == "gravity-mvp":
             if actual.get("command") != ["npm", "run", "start"]:
                 raise core.RuntimeFault("GRAVITY_SAFE_COMMAND_DRIFT", 74)
@@ -982,10 +1179,14 @@ def _compose_hash(core: Any, profile: dict[str, Any], overlay: str, service: str
     return parts[1]
 
 
-def _derive_compose_domains(core: Any, profile: dict[str, Any], release_value: str) -> dict[str, str]:
+def _derive_compose_domains(
+    core: Any, profile: dict[str, Any], release_value: str, calling_values: Mapping[str, str]
+) -> dict[str, str]:
     _write_fixed_file(core, ACTIVATE_OVERLAY, _compose_overlay(TARGET_GRAVITY, TARGET_MAX, activate=True), 0o400)
     _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_GRAVITY, ROLLBACK_MAX, activate=False), 0o400)
-    _validate_projection(core, profile, ACTIVATE_OVERLAY, activate=True, release_value=release_value)
+    _validate_projection(
+        core, profile, ACTIVATE_OVERLAY, activate=True, release_value=release_value, calling_values=calling_values
+    )
     _validate_projection(core, profile, ROLLBACK_OVERLAY, activate=False)
     return {
         "target_gravity_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "gravity-mvp"),
@@ -1178,11 +1379,15 @@ def _log_evidence(core: Any, path: str, captured_at: str) -> dict[str, Any]:
 def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str, *, activate: bool) -> None:
     _validate_compose_inputs(core, profile, state)
     release_value = None
+    calling_values = None
     if activate:
         # Only activation attaches the release environment, so only activation depends on it.
         # A rollback must stay possible even if these sources were removed after a failure.
         release_value = _validate_release_environment(core, state)["value"]
-    _validate_projection(core, profile, overlay, activate=activate, release_value=release_value)
+        calling_values = _validate_calling_b2_environment(core, state)["values"]
+    _validate_projection(
+        core, profile, overlay, activate=activate, release_value=release_value, calling_values=calling_values
+    )
     log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
@@ -1227,6 +1432,12 @@ def _postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state
         raise core.RuntimeFault("PAIR_POSTCHECK_IDENTITY_DRIFT", 74)
     _max_volume_exact(core, profile, maximum)
     target = expected == "TARGET_PAIR"
+    if not target and any(
+        name in _environment_names(core, gravity.get("semantic"), "GRAVITY_RUNTIME_SEMANTIC_DRIFT")
+        for name in CALLING_B2_ENVIRONMENT_NAMES
+    ):
+        # Rollback Gravity must run with the exact predecessor environment and no Calling B2 name.
+        raise core.RuntimeFault("ROLLBACK_CALLING_B2_ENVIRONMENT_PRESENT", 74)
     expected_gravity = _expected_pair_semantic(core, "gravity-mvp", state["gravity_semantic"], target=target)
     expected_max = _expected_pair_semantic(core, "max-web-scraper", state["max_semantic"], target=target)
     if _preserved_semantic(gravity["semantic"]) != _preserved_semantic(expected_gravity):
@@ -1304,6 +1515,9 @@ def _rollback_pair(core: Any, policy: dict[str, Any], profile: dict[str, Any], s
     kind, vector = _classify(profile, gravity, maximum)
     if kind == "UNKNOWN":
         raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+    # Every rollback transaction, automatic or requested, first proves Calling is disarmed on the
+    # Gravity container it is about to replace.
+    _assert_calling_b2_disarmed(core, gravity)
     mutated = kind != "PREDECESSOR_PAIR"
     if mutated:
         _assert_rollback_material(core, profile)
@@ -1326,6 +1540,8 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
         if pair_state == "MIXED_KNOWN":
             if state.get("phase") == "UNINITIALIZED":
                 raise core.RuntimeFault("MIXED_PAIR_WITHOUT_PREFLIGHT_AUTHORITY", 74)
+            # Refused before any intent is written, so an armed state is left exactly as found.
+            _assert_calling_b2_disarmed(core, gravity)
             rollback, mutated, rollback_state = _rollback_with_fencing(
                 core,
                 policy,
@@ -1343,6 +1559,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74)
         identity = _predecessor_identity(core, policy, profile, state)
         release_environment = _release_environment(core)
+        calling_environment = _calling_b2_environment(core)
         receipt = _artifact_receipt(core, profile)
         for name in sorted(receipt["files"]):
             _artifact_path(core, profile, name, hash_content=True)
@@ -1370,7 +1587,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
         storage = _storage_guard(core, profile, [], "post_load")
         _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
         _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
-        domains = _derive_compose_domains(core, profile, release_environment["value"])
+        domains = _derive_compose_domains(core, profile, release_environment["value"], calling_environment["values"])
         next_state = {
             "schema": STATE_SCHEMA,
             "profile_id": PROFILE_ID,
@@ -1378,6 +1595,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             "preflight_at": core.now(),
             "environment_sha256": identity["environment_sha256"],
             "release_environment_sha256": release_environment["sha256"],
+            "calling_b2_environment_sha256": calling_environment["sha256"],
             "gravity_semantic": identity["gravity_semantic"],
             "max_semantic": identity["max_semantic"],
             "unrelated_semantic_fingerprint_sha256": identity["unrelated_semantic_fingerprint_sha256"],
@@ -1524,6 +1742,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             _audit(core, invocation, state, "recovered_ok", next_state)
             return {"profile_id": PROFILE_ID, "status": "ACTIVATED_RECOVERED" if state.get("phase") == "ACTIVATION_INTENT" else "ALREADY_ACTIVATED", "postcheck": post, "production_mutated": False}
         if pair_state == "MIXED_KNOWN":
+            _assert_calling_b2_disarmed(core, gravity)
             rollback, mutated, rollback_state = _rollback_with_fencing(
                 core,
                 policy,
@@ -1545,6 +1764,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
         # A removed or changed release source is refused here, before the intent write, so it costs
         # no Compose transaction and no automatic rollback. _compose_up re-checks it at the boundary.
         _validate_release_environment(core, state)
+        _validate_calling_b2_environment(core, state)
         before = state
         if state.get("phase") == "PREFLIGHTED":
             state = {**state, "phase": "ACTIVATION_INTENT", "activation_intent_at": core.now()}
@@ -1605,6 +1825,9 @@ def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invoca
         pair_state, vector = _classify(profile, gravity, maximum)
         if pair_state == "UNKNOWN":
             raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+        # An armed Calling kill switch refuses the rollback before its intent is written, so the
+        # release state is left exactly as found until a separate disarm is authorized.
+        _assert_calling_b2_disarmed(core, gravity)
         post, mutated, rollback_state = _rollback_with_fencing(
             core,
             policy,

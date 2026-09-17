@@ -29,6 +29,19 @@ SECRET = "0123456789abcdef" * 4
 OTHER_SECRET = "fedcba9876543210" * 4
 PREDECESSOR_NAMES = ["DATABASE_URL", "NODE_ENV", "PATH"]
 RELEASED_NAMES = sorted([*PREDECESSOR_NAMES, NAME])
+# Gravity also receives the sealed Calling B2 names; their own contract is
+# test_calling_b2_environment_contract.py. Here they are only carried so the Messaging
+# assertions keep describing the complete Gravity expectation.
+CALLING_NAMES = [
+    "AI_CALL_CONTROLLED_DESTINATION_E164", "AI_CALL_CONTROLLED_OPERATOR_TOKEN", "AI_CALL_CONTROLLED_REAL_CALL_ENABLED",
+    "AI_CALL_CONTROLLED_REQUEST_ID", "AI_CALL_DIAL_STRING_TEMPLATE", "AI_CALL_LIVE_MODE", "AI_CALL_PARK_EXT",
+    "AI_CALL_STT_PROVIDER", "AI_CALL_TELEPHONY_PROVIDER", "AI_CALL_TTS_PROVIDER", "AUDIO_BRIDGE_HEALTH_URL", "MEGAFON_NUMBER",
+]
+CALLING_VALUES = {name: "calling-fixture-" + str(index) for index, name in enumerate(CALLING_NAMES)}
+CALLING_VALUES["AI_CALL_LIVE_MODE"] = "false"
+CALLING_VALUES["AI_CALL_CONTROLLED_REAL_CALL_ENABLED"] = "false"
+CALLING_SOURCE = "".join(f"{name}='{value}'\n" for name, value in CALLING_VALUES.items())
+GRAVITY_RELEASED_NAMES = sorted([*RELEASED_NAMES, *CALLING_NAMES])
 MIGRATION_COMMAND = ["sh", "-c", "npx prisma migrate deploy && npm run start"]
 
 
@@ -124,7 +137,7 @@ class ReleaseEnvironmentBase(unittest.TestCase):
     def target_pair(self, *, gravity_names=None, max_names=None, gravity_command=None):
         return (
             container("new-gravity", "gravity-mvp", gravity_command or ["npm", "run", "start"],
-                      RELEASED_NAMES if gravity_names is None else gravity_names, "g" * 64),
+                      GRAVITY_RELEASED_NAMES if gravity_names is None else gravity_names, "g" * 64),
             container("new-max", "max-web-scraper", ["node", "index.js"],
                       RELEASED_NAMES if max_names is None else max_names, "m" * 64),
         )
@@ -144,6 +157,7 @@ class ReleaseEnvironmentBase(unittest.TestCase):
             mock.patch.object(self.runtime, "_database_status", return_value={"state": "EXACT"}),
             mock.patch.object(self.runtime, "_unrelated_fingerprint", return_value="u" * 64),
             mock.patch.object(self.runtime, "_release_environment", side_effect=AssertionError("postcheck must not read release sources")),
+            mock.patch.object(self.runtime, "_calling_b2_environment", side_effect=AssertionError("postcheck must not read the Calling source")),
         ):
             return self.runtime._postcheck(self.core, {}, self.profile, self.state, expected)
 
@@ -159,7 +173,7 @@ class ReleaseEnvironmentBase(unittest.TestCase):
 class ActivationSemanticTests(ReleaseEnvironmentBase):
     def test_gravity_addition_of_the_sealed_name_is_accepted(self) -> None:
         expected = self.runtime._expected_pair_semantic(self.core, "gravity-mvp", self.state["gravity_semantic"], target=True)
-        self.assertEqual(expected["environment_names"], RELEASED_NAMES)
+        self.assertEqual(expected["environment_names"], GRAVITY_RELEASED_NAMES)
         gravity, _ = self.target_pair()
         self.assertEqual(
             self.runtime._preserved_semantic(gravity["semantic"]), self.runtime._preserved_semantic(expected)
@@ -189,7 +203,7 @@ class ActivationSemanticTests(ReleaseEnvironmentBase):
         self.assertNotIn("tg-bot", self.runtime.RELEASE_ENVIRONMENT_SOURCES)
 
     def test_arbitrary_foo_secret_for_gravity_is_rejected(self) -> None:
-        for names in (sorted([*RELEASED_NAMES, "FOO_SECRET"]), sorted([*PREDECESSOR_NAMES, "FOO_SECRET"])):
+        for names in (sorted([*GRAVITY_RELEASED_NAMES, "FOO_SECRET"]), sorted([*PREDECESSOR_NAMES, "FOO_SECRET"])):
             with self.subTest(names=names):
                 self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=names), "TARGET_PAIR")
 
@@ -199,16 +213,22 @@ class ActivationSemanticTests(ReleaseEnvironmentBase):
 
     def test_removal_of_an_existing_name_is_rejected(self) -> None:
         removed = [name for name in RELEASED_NAMES if name != "DATABASE_URL"]
-        self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=removed), "TARGET_PAIR")
+        gravity_removed = [name for name in GRAVITY_RELEASED_NAMES if name != "DATABASE_URL"]
+        self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=gravity_removed), "TARGET_PAIR")
         self.assertFault("MAX_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(max_names=removed), "TARGET_PAIR")
 
     def test_change_of_the_unrelated_environment_set_is_rejected(self) -> None:
         swapped = sorted([name for name in RELEASED_NAMES if name != "PATH"] + ["LD_PRELOAD"])
+        gravity_swapped = sorted([name for name in GRAVITY_RELEASED_NAMES if name != "PATH"] + ["LD_PRELOAD"])
         self.assertFault("MAX_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(max_names=swapped), "TARGET_PAIR")
-        self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=swapped), "TARGET_PAIR")
+        self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=gravity_swapped), "TARGET_PAIR")
 
     def test_missing_the_sealed_name_after_activation_is_rejected(self) -> None:
         self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(gravity_names=PREDECESSOR_NAMES), "TARGET_PAIR")
+        self.assertFault(
+            "GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck,
+            self.target_pair(gravity_names=sorted([*PREDECESSOR_NAMES, *CALLING_NAMES])), "TARGET_PAIR",
+        )
         self.assertFault("MAX_RUNTIME_SEMANTIC_DRIFT", self.postcheck, self.target_pair(max_names=PREDECESSOR_NAMES), "TARGET_PAIR")
 
     def test_release_name_reaching_any_other_running_service_is_rejected(self) -> None:
@@ -295,6 +315,9 @@ class RollbackInvariantTests(ReleaseEnvironmentBase):
                 mock.patch.object(self.runtime, "_unrelated_fingerprint", return_value="u" * 64),
                 mock.patch.object(self.runtime, "_release_environment", side_effect=AssertionError("rollback read a release source")) as release,
                 mock.patch.object(self.runtime, "_validate_release_environment", side_effect=AssertionError("rollback validated a release source")),
+                mock.patch.object(self.runtime, "_calling_b2_environment", side_effect=AssertionError("rollback read the Calling source")),
+                mock.patch.object(self.runtime, "_validate_calling_b2_environment", side_effect=AssertionError("rollback validated the Calling source")),
+                mock.patch.object(self.runtime, "_assert_calling_b2_disarmed"),
             ):
                 post, mutated = self.runtime._rollback_pair(core, {}, self.profile, self.state)
         self.assertEqual(len(composed), 1)
@@ -348,6 +371,7 @@ class ProjectionTests(ReleaseEnvironmentBase):
         candidate["services"]["gravity-mvp"]["image"] = self.runtime.TARGET_GRAVITY
         candidate["services"]["gravity-mvp"]["command"] = ["npm", "run", "start"]
         candidate["services"]["gravity-mvp"]["environment"][NAME] = SECRET
+        candidate["services"]["gravity-mvp"]["environment"].update(CALLING_VALUES)
         candidate["services"]["max-web-scraper"]["image"] = self.runtime.TARGET_MAX
         candidate["services"]["max-web-scraper"]["environment"][NAME] = SECRET
         return base, candidate
@@ -359,6 +383,7 @@ class ProjectionTests(ReleaseEnvironmentBase):
         ):
             self.runtime._validate_projection(
                 self.core, self.profile, "/overlay", activate=activate, release_value=value if activate else None,
+                calling_values=CALLING_VALUES if activate else None,
             )
         return release
 
@@ -431,6 +456,7 @@ class OverlayAndProfileTests(ReleaseEnvironmentBase):
             re.findall(r"^      - (.+)$", overlay, re.MULTILINE),
             [
                 "/var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env",
+                self.runtime.CALLING_B2_ENVIRONMENT_SOURCE,
                 "/var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env",
             ],
         )
@@ -697,7 +723,7 @@ class ReleaseActivateEndToEndTests(ReleaseEnvironmentBase):
             composed.append(list(args))
             return SimpleNamespace(stdout=b"", returncode=0)
 
-        def projection(_core, _profile, overlay, *, activate, release_value=None):
+        def projection(_core, _profile, overlay, *, activate, release_value=None, calling_values=None):
             projections.append((activate, release_value))
 
         with (
@@ -709,6 +735,9 @@ class ReleaseActivateEndToEndTests(ReleaseEnvironmentBase):
             mock.patch.object(self.runtime, "_validate_target_image"),
             mock.patch.object(self.runtime, "_validate_release_environment", side_effect=release) as validated,
             mock.patch.object(self.runtime, "_release_environment", side_effect=AssertionError("unbound source read")),
+            mock.patch.object(self.runtime, "_validate_calling_b2_environment", return_value={"sha256": "c" * 64, "values": dict(CALLING_VALUES)}),
+            mock.patch.object(self.runtime, "_calling_b2_environment", side_effect=AssertionError("unbound Calling source read")),
+            mock.patch.object(self.runtime, "_assert_calling_b2_disarmed"),
             mock.patch.object(self.runtime, "_validate_projection", side_effect=projection),
             mock.patch.object(self.runtime, "_run", side_effect=run),
             mock.patch.object(self.runtime, "_database_status", return_value={"state": "EXACT"}),
@@ -792,6 +821,9 @@ class ReleaseActivateEndToEndTests(ReleaseEnvironmentBase):
             mock.patch.object(self.runtime, "_validate_projection"),
             mock.patch.object(self.runtime, "_validate_release_environment", side_effect=missing) as validated,
             mock.patch.object(self.runtime, "_release_environment", side_effect=missing) as read,
+            mock.patch.object(self.runtime, "_calling_b2_environment", side_effect=missing),
+            mock.patch.object(self.runtime, "_validate_calling_b2_environment", side_effect=missing),
+            mock.patch.object(self.runtime, "_assert_calling_b2_disarmed"),
             mock.patch.object(self.runtime, "_run", return_value=SimpleNamespace(stdout=b"", returncode=0)),
             mock.patch.object(self.runtime, "_database_status", return_value={"state": "EXACT"}),
             mock.patch.object(self.runtime, "_unrelated_fingerprint", return_value="u" * 64),
@@ -843,6 +875,8 @@ class RealComposeRenderTests(unittest.TestCase):
         self.sources = {service: str(self.release / f"{service}.env") for service in ("gravity-mvp", "max-web-scraper")}
         for path in self.sources.values():
             Path(path).write_text(f"{NAME}={SECRET}\n", encoding="ascii")
+        self.calling_source = self.release / "calling-gravity-mvp.env"
+        self.calling_source.write_text(CALLING_SOURCE, encoding="ascii")
         self.profile = {"deployment": {
             "compose_path": str(root / "deploy/docker-compose.production.yml"),
             "environment_path": str(self.environment),
@@ -856,8 +890,11 @@ class RealComposeRenderTests(unittest.TestCase):
         self.root = root
         self.patch = mock.patch.object(self.runtime, "RELEASE_ENVIRONMENT_SOURCES", self.sources)
         self.patch.start()
+        self.calling_patch = mock.patch.object(self.runtime, "CALLING_B2_ENVIRONMENT_SOURCE", str(self.calling_source))
+        self.calling_patch.start()
 
     def tearDown(self) -> None:
+        self.calling_patch.stop()
         self.patch.stop()
         self.directory.cleanup()
 
@@ -869,7 +906,9 @@ class RealComposeRenderTests(unittest.TestCase):
 
     def test_real_render_adds_the_name_to_exactly_the_two_services(self) -> None:
         activate = self.overlay(True)
-        self.runtime._validate_projection(self.core, self.profile, activate, activate=True, release_value=SECRET)
+        self.runtime._validate_projection(
+            self.core, self.profile, activate, activate=True, release_value=SECRET, calling_values=CALLING_VALUES,
+        )
         rollback = self.overlay(False)
         self.runtime._validate_projection(self.core, self.profile, rollback, activate=False)
         base = self.runtime._compose_config(self.core, self.runtime._compose_args(self.profile))
@@ -878,7 +917,8 @@ class RealComposeRenderTests(unittest.TestCase):
         for service in ("gravity-mvp", "max-web-scraper", "tg-bot"):
             added = set(rendered["services"][service].get("environment", {})) - set(base["services"][service].get("environment", {}))
             removed = set(base["services"][service].get("environment", {})) - set(rendered["services"][service].get("environment", {}))
-            self.assertEqual(added, {NAME} if service != "tg-bot" else set())
+            expected_added = {NAME, *CALLING_NAMES} if service == "gravity-mvp" else {NAME} if service != "tg-bot" else set()
+            self.assertEqual(added, expected_added)
             self.assertEqual(removed, set())
             self.assertNotIn(NAME, restored["services"][service].get("environment", {}))
         self.assertEqual(rendered["services"]["gravity-mvp"]["command"], ["npm", "run", "start"])
@@ -892,18 +932,24 @@ class RealComposeRenderTests(unittest.TestCase):
     def test_real_render_rejects_tg_bot_receiving_the_source(self) -> None:
         activate = self.overlay(True, f"  tg-bot:\n    env_file:\n      - {self.sources['gravity-mvp']}\n")
         with self.assertRaises(RuntimeFault) as raised:
-            self.runtime._validate_projection(self.core, self.profile, activate, activate=True, release_value=SECRET)
+            self.runtime._validate_projection(
+                self.core, self.profile, activate, activate=True, release_value=SECRET, calling_values=CALLING_VALUES,
+            )
         self.assertEqual(raised.exception.code, "UNRELATED_COMPOSE_SERVICE_DRIFT")
 
     def test_real_render_rejects_a_source_that_injects_another_variable(self) -> None:
         Path(self.sources["gravity-mvp"]).write_text(f"{NAME}={SECRET}\nNODE_OPTIONS=--require=/tmp/x.js\n", encoding="ascii")
         with self.assertRaises(RuntimeFault) as raised:
-            self.runtime._validate_projection(self.core, self.profile, self.overlay(True), activate=True, release_value=SECRET)
+            self.runtime._validate_projection(
+                self.core, self.profile, self.overlay(True), activate=True, release_value=SECRET, calling_values=CALLING_VALUES,
+            )
         self.assertEqual(raised.exception.code, "PAIR_COMPOSE_PROJECTION_DRIFT")
 
     def test_real_render_rejects_a_value_other_than_the_bound_one(self) -> None:
         with self.assertRaises(RuntimeFault) as raised:
-            self.runtime._validate_projection(self.core, self.profile, self.overlay(True), activate=True, release_value=OTHER_SECRET)
+            self.runtime._validate_projection(
+                self.core, self.profile, self.overlay(True), activate=True, release_value=OTHER_SECRET, calling_values=CALLING_VALUES,
+            )
         self.assertEqual(raised.exception.code, "RELEASE_ENVIRONMENT_PROJECTION_DRIFT")
         self.assertNotIn(SECRET, repr(raised.exception.details))
 

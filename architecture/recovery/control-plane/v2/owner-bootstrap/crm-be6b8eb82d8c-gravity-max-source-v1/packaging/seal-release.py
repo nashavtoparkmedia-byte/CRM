@@ -29,6 +29,10 @@ ROLLBACK_VERSION = "2.0.0-16"
 ROLLBACK_SHA = "0cdbc6777804a4f5f098089a94ad8fc88a13af50a10649479541e1491e2b9e48"
 ROLLBACK_SEAL_SHA = "d8da69b9a6e184855f17277a9c575d98afde6d17f446b2833fb35f4fe92165e2"
 EPOCH = 1788307200
+# The Calling B2 environment capability is implemented ahead of its release. It may only be sealed
+# after this builder is rebound to the exact combined application that carries it, and that binding
+# names the same commit here. Until then this stays None and sealing is refused before any output.
+CALLING_B2_APPLICATION_COMMIT: str | None = None
 ARTIFACT_FILES = {
     "authoritative-ci-execution.json": {"sha256": "2ae74f5b16ae8403df6a3babf000d6f62dc3316fa49ac4aeb588a312a0ee6b5f", "bytes": 5590},
     "coordinated-release-manifest.json": {"sha256": "d0d83c1272f48f937d2cc298bd07081f253d85bf3b7dcfbe2d26e69805b42625", "bytes": 3046},
@@ -446,6 +450,8 @@ def reopen_generated_review_for_cleanup(directory: Path) -> None:
 
 
 def main() -> None:
+    if CALLING_B2_APPLICATION_COMMIT != APPLICATION_COMMIT:
+        raise ValueError("Calling B2 capability is not bound to the exact sealed application")
     parser = argparse.ArgumentParser()
     parser.add_argument("--builder-repo", required=True, type=Path)
     parser.add_argument("--application-source", required=True, type=Path)

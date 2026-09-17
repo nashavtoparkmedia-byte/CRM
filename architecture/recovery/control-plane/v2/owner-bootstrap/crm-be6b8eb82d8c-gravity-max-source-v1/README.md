@@ -68,6 +68,59 @@ read from runtime input and there is no list to extend.
   requires the unchanged predecessor semantic. The predecessor images do not
   reference the variable, so they are recreated exactly as they ran before.
 
+## Calling B2 environment addition
+
+Activation also adds exactly these twelve names, and only to `gravity-mvp`:
+`AI_CALL_CONTROLLED_DESTINATION_E164`, `AI_CALL_CONTROLLED_OPERATOR_TOKEN`,
+`AI_CALL_CONTROLLED_REAL_CALL_ENABLED`, `AI_CALL_CONTROLLED_REQUEST_ID`,
+`AI_CALL_DIAL_STRING_TEMPLATE`, `AI_CALL_LIVE_MODE`, `AI_CALL_PARK_EXT`,
+`AI_CALL_STT_PROVIDER`, `AI_CALL_TELEPHONY_PROVIDER`, `AI_CALL_TTS_PROVIDER`,
+`AUDIO_BRIDGE_HEALTH_URL`, `MEGAFON_NUMBER`. This is a closed Owner allowlist,
+sealed in the profile code and in `profile.v1.json` (`calling_b2_environment`).
+Nothing is read from runtime input, and widening it needs a new Owner/Calling
+decision.
+
+- The capability is implemented ahead of its release. `seal-release.py`
+  refuses to seal until this builder is rebound to the exact combined
+  application that carries it and `CALLING_B2_APPLICATION_COMMIT` names that
+  commit. The source path uses the sealed profile id as its release id, so it
+  follows that binding:
+  `/var/lib/crm/release-staging/calling-b2/<profile id>/gravity-mvp.env`.
+- The source directory must be root-owned `0700` below a root-owned,
+  non-group/other-writable and non-caller-writable chain. The source must be a
+  single-link root-owned `0600` file of at most 4096 bytes, with one
+  `NAME='value'` line per name. Compose reads single-quoted values literally, so
+  the dial template's `${number}` arrives intact. Values are 1-256 bytes of
+  printable ASCII without whitespace, quotes, backslash or backtick. Unknown,
+  duplicate and missing names are refused.
+- Every name is mandatory: the application's controlled-call readiness fails
+  closed on each one, and its runbook requires every value to be supplied. The
+  two kill switches, `AI_CALL_LIVE_MODE` and
+  `AI_CALL_CONTROLLED_REAL_CALL_ENABLED`, are admitted only as exactly `true` or
+  `false`. The application arms on exactly `true`, and the repository example
+  disarms with `false`. No other value is validated here; the application owns
+  that.
+- Preflight binds the source digest into state. Activation refuses before its
+  intent write, and again at the Compose boundary, if the source changed. The
+  render must equal the base projection plus these names with the bound
+  values; Compose's config output writes a literal `$` as `$$`. Faults carry
+  reasons and admitted names only, never a value.
+- The target postcheck expects Gravity's names to be the predecessor's plus
+  the Messaging name plus exactly these twelve. MAX and every other service
+  must not gain any of them.
+- Rollback never reads or attaches the Calling source. Its postcheck refuses a
+  Gravity container that carries any of these names.
+- Every rollback transaction is refused with `CALLING_B2_KILL_SWITCH_ARMED`
+  while the live Gravity container has either kill switch armed. This covers
+  the operator verb, mixed-state recovery and the automatic rollback after a
+  failed activation. The guard reads the environment the classified container
+  was created with, bound to its container id; it never reads the staging file.
+  A switch counts as disarmed only when it is absent or exactly `false`. Any
+  other value, a repeated or near-miss name, or an unreadable environment is
+  treated as armed or unproven. The operator verb and mixed recovery refuse
+  before any intent is written. Disarming is a separate authorized action and
+  is not part of this profile.
+
 ## Large artifact admission
 
 The 4.8 GB Stage A image archives are deliberately not duplicated inside the

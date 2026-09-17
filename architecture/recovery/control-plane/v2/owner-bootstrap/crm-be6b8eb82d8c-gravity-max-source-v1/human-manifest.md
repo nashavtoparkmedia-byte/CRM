@@ -11,7 +11,9 @@ Required before installation:
    mixed/unknown recovery, rollback, volume preservation, and DB non-mutation;
 4. independent architecture, security, reliability, diff, MAX build-semantic,
    and Runtime reviews with no residual HIGH/MEDIUM finding;
-5. exact release seal and bootstrap identity.
+5. exact release seal and bootstrap identity;
+6. rebinding of the Calling B2 environment capability to the exact combined
+   application that carries it (the sealer refuses until then).
 
 The accepted MAX application behavior and Contact/CNT1 ownership are outside
 this builder and must remain byte-identical to accepted application commit
