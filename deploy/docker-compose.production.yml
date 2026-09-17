@@ -207,6 +207,8 @@ services:
       AUDIO_BRIDGE_PORT: 3030
       # FreeSWITCH runs on the host and reaches this loopback-published port.
       BRIDGE_LAN_IP: 127.0.0.1
+      BRIDGE_AUDIO_DIR: /tmp/ai-call-tts
+      BRIDGE_AUDIO_DIR_FS: "http://(nohead=true)127.0.0.1:3030/play"
       # ESL — bridge подключается к FreeSWITCH по ESL для подписки на события
       # FS runs host-network — use host.docker.internal to reach it from bridge containers.
       FS_ESL_HOST: host.docker.internal

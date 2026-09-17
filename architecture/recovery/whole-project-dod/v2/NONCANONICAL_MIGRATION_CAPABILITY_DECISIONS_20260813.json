@@ -14,7 +14,7 @@
       "lifecycle_evidence_status": "REVIEWED_DEPLOYMENT_SCHEMA_COMMAND",
       "rationale": "Production compose executes the Yandex fleet Prisma schema command during deployment, so its database write is migration-only rather than application runtime.",
       "expected_site_signatures": [
-        "c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27"
+        "dbe7bfe87476ebbd73448415c7d6553a310424465820ff02a5d21c650b365793"
       ]
     },
     {
@@ -374,10 +374,10 @@
       "review_rationale": "Explicit one-shot script creates and indexes only scenario_field_settings under operator invocation."
     },
     {
-      "site_signature": "c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27",
+      "site_signature": "dbe7bfe87476ebbd73448415c7d6553a310424465820ff02a5d21c650b365793",
       "path": "deploy/docker-compose.production.yml",
-      "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34",
-      "line": 487,
+      "source_sha256": "06520d68a83134479578d59293fd340219ecc7df27d4af76d8322994c1f295cb",
+      "line": 489,
       "column": 54,
       "method": "mixed-script-command:prisma db push",
       "functional_owner": "fleet_operations",

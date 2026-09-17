@@ -1203,7 +1203,7 @@
       "rationale": "Production compose executes the Yandex fleet Prisma schema command during deployment, so its database write is migration-only rather than application runtime.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
-      "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34"
+      "source_sha256": "06520d68a83134479578d59293fd340219ecc7df27d4af76d8322994c1f295cb"
     },
     {
       "path": "gravity-mvp/add_partial_index.sql",
