@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "226f97a24d5076017a37391a68ab45b616eb046083d3776f48a3428e43f51a5b",
-    "size": 164537,
+    "sha256": "d03cf3ed4b0ca3553834801dbc005af542dd92b5fe8259cdb733b5c4a052778d",
+    "size": 165515,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -77,8 +77,8 @@
     {
       "name": "20260916120000_add_whatsapp_account_foundation",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
-      "sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8",
-      "size": 28759,
+      "sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
+      "size": 45037,
       "owner_context": "whatsapp_channel",
       "classification": "EXPAND_ONLY",
       "production_application": false,

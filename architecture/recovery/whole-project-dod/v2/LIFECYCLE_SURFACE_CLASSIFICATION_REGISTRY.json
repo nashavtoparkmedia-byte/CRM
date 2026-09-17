@@ -2201,7 +2201,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "whatsapp_channel",
-      "source_sha256": "a6291552a6079449998f6007e0afd9a2b48a230273c2d3a60e831ef31ca5d8c8"
+      "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2"
     },
     {
       "path": "gravity-mvp/query_driver.sql",
