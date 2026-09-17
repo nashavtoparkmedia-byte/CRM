@@ -18,6 +18,7 @@ import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENS
 import { appendConversationIdentityCollisionV1, attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 import { canonicalWhatsAppIdentityExternalIdV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
+import { observeWhatsAppPairingV1 } from '@/modules/whatsapp-channel/internal/pairing-observation/whatsapp-pairing-observer'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -1106,6 +1107,16 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
     clients.set(connectionId, client)
 
+    // M2A1-S2 measurement only: the pairing observer logs outcome classes and never
+    // feeds a runtime decision. It is called last in the qr, ready and disconnected
+    // handlers and returns immediately.
+    const pairingObservationSource = {
+        connectionId,
+        instanceId,
+        client,
+        isCurrentInstance: () => instanceIds.get(connectionId) === instanceId && clients.get(connectionId) === client,
+    }
+
     // Visibility into WA Web internal lifecycle — helps diagnose "Execution context destroyed"
     client.on('loading_screen', (percent, message) => {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
@@ -1128,6 +1139,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             // sessionData is reserved for established server-side session
             // snapshots. QR authorization material is ephemeral process state.
             await safeUpdateConnection(connectionId, { status: 'qr', sessionData: null })
+            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'qr' })
         } catch (err) {
             console.error(`[WA-SERVICE] QR event error for ${connectionId}:`, err)
         }
@@ -1177,6 +1189,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             } else {
                 opsLog('info', 'wa_sync_skipped_already_done', { connectionId, instanceId })
             }
+            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'ready' })
         } catch (err) {
             console.error(`[WA-SERVICE] Ready event error for ${connectionId}:`, err)
         }
@@ -1667,6 +1680,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 registry.setReconnecting(connectionId, instanceId)
                 registry.scheduleReconnect(connectionId, instanceId, () => initializeClient(connectionId))
             }
+            observeWhatsAppPairingV1({ ...pairingObservationSource, event: 'disconnected', disconnectReason: reason })
         } catch (err) {
             console.error(`[WA-SERVICE] Disconnect handler error:`, err)
         }
