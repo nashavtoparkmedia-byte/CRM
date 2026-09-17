@@ -11,7 +11,7 @@ if (records.length !== new Set(ids).size) throw new Error('triage reconciliation
 if (records.length !== 44) throw new Error('current exact ambiguity denominator drift')
 if (records.length !== new Set(signatures).size || records.some((record) => record.record_id !== record.site_signature)) throw new Error('triage reconciliation signature identity drift')
 const signatureDigest = createHash('sha256').update(`${[...signatures].sort().join('\n')}\n`).digest('hex')
-if (signatureDigest !== '4e5477bf4ed4c9a375624ba2d98549db255be276e61130ee2f6260191040b3b6') throw new Error('current exact ambiguity signature digest drift')
+if (signatureDigest !== 'df025bac6c48b9114cb0d3b300f6baa634cd3d441cf57d3741ff029512a11e3a') throw new Error('current exact ambiguity signature digest drift')
 if (document.current_exact_review?.ambiguous_denominator !== records.length || document.current_exact_review?.sorted_site_signatures_sha256 !== signatureDigest) throw new Error('current exact ambiguity review binding drift')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
 const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
@@ -28,9 +28,9 @@ if (counts.RESOLVED_NON_WRITE !== 37 || counts.OWNER_VALID_WRITE !== 3 || counts
 for (const id of [
   '42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af',
   '2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415',
-  'ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5',
-  '0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2',
-  '0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90',
+  '8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10',
+  '86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06',
+  'c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f',
 ]) {
   if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`read-only SQL regression for ${id}`)
 }
