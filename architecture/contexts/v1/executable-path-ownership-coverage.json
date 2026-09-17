@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2318,
-    "tracked_inventory_sha256": "5d593e5b9a4be3bcbe1d7658e9e9d2e7e8fdca65022296d0ffc5ecdd78cf9f84"
+    "tracked_executable_surfaces": 2319,
+    "tracked_inventory_sha256": "fa4de41ccbababee196a9c77f9178873c3df589e26720670b52852c262804425"
   },
   "governed_exclusions": [
     {
@@ -148,7 +148,7 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
       "exact_runtime_inventory": {
         "path_count": 18,
-        "path_sha256": "bd77264e19abd027d4bce20075c40450fba275738f696ec4ff13feab610df97a"
+        "path_sha256": "4d6a36fc989cf879069ee9fef5b3073f523b3c20a2534435115e5bcc0c2a9388"
       }
     },
     {
@@ -281,18 +281,18 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "d0c57e220d4ed0c3399ba377f87481466e419c912b89df41ebc0501d093daf16",
+  "coverage_sha256": "66ff2092b323760e799f100a38dddf3670b1e359689f3c08174df5bb18790b43",
   "summary": {
-    "tracked_executable_surfaces": 2318,
+    "tracked_executable_surfaces": 2319,
     "context_owned_paths": 1162,
-    "governed_exclusion_paths": 1156
+    "governed_exclusion_paths": 1157
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "819cb20b5666f49ac5bc013473808520f77121e252a0edf25eaf7032db73d241",
+    "decision_registry_sha256": "c759344a73aaba35d528410b2f155a62f17434194d9db7e60e72d557a5bfb1de",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
-    "tracked_inventory_sha256": "5d593e5b9a4be3bcbe1d7658e9e9d2e7e8fdca65022296d0ffc5ecdd78cf9f84",
+    "tracked_inventory_sha256": "fa4de41ccbababee196a9c77f9178873c3df589e26720670b52852c262804425",
     "exact_inventory_change_count": 3,
     "reviewed_assignment_count": 47
   }
