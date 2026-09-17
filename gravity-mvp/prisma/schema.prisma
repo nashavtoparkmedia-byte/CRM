@@ -966,7 +966,8 @@ model WhatsAppChatRoster {
 
 /// WhatsApp company account (M2A1-S1 foundation). Owned by whatsapp_channel.
 /// A logical provider account, never a runtime slot: `accountId` is an opaque
-/// internal id and the provider identity lives only in WhatsAppAccountKey.
+/// internal id and the provider identity is owned by WhatsAppAccountKey; bindings
+/// carry attested values bound to those keys by foreign keys.
 /// Identity is immutable, lifecycle is operator intent. There is deliberately
 /// no relation to Contact, ChannelIdentity or WhatsAppConnection. Lifecycle,
 /// retirement and lease guards are PostgreSQL triggers in the migration.
@@ -994,7 +995,8 @@ model WhatsAppAccountKey {
   accountId        String                     @db.VarChar(64)
   firstAttestedAt  DateTime                   @default(now()) @db.Timestamptz(3)
   account          WhatsAppAccount            @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
-  attestedBindings WhatsAppTransportBinding[]
+  pnAttestations   WhatsAppTransportBinding[] @relation("WhatsAppBindingAttestedPn")
+  lidAttestations  WhatsAppTransportBinding[] @relation("WhatsAppBindingAttestedLid")
 
   @@id([keyKind, keyValue])
   @@unique([accountId, keyKind])
@@ -1004,9 +1006,12 @@ model WhatsAppAccountKey {
 /// Attested association of one runtime transport generation with one account.
 /// `transportRef` is a locator (the WhatsAppConnection slot id) with no foreign
 /// key, so existing slot delete paths are unchanged. Rows are history: a
-/// re-pair or a different account opens a new binding and never re-points an
-/// old one. Trust is separate from account lifecycle; stale is derived from
-/// `attestedUntil`, never stored.
+/// re-pair or a different account opens a new binding on a strictly newer
+/// generation and never re-points an old one. The attestation evidence is the
+/// complete provider key set: `attestedPnValue` and `attestedLidValue`, each
+/// bound by its own composite foreign key to the key of that fixed kind owned
+/// by the same account. A verified binding needs both. Trust is separate from
+/// account lifecycle; stale is derived from `attestedUntil`, never stored.
 model WhatsAppTransportBinding {
   bindingId           String                    @id @db.VarChar(64)
   transportKind       String                    @db.VarChar(32)
@@ -1016,10 +1021,12 @@ model WhatsAppTransportBinding {
   bindingSeq          Int
   trustState          String                    @db.VarChar(16)
   attestationOrigin   String                    @db.VarChar(32)
-  attestedKeyKind     String?                   @db.VarChar(32)
-  attestedKeyValue    String?                   @db.VarChar(128)
-  claimedKeyKind      String?                   @db.VarChar(32)
-  claimedKeyValue     String?                   @db.VarChar(128)
+  attestedPnKind      String                    @default("whatsapp_pn_user") @db.VarChar(32)
+  attestedPnValue     String?                   @db.VarChar(128)
+  attestedLidKind     String                    @default("whatsapp_lid_user") @db.VarChar(32)
+  attestedLidValue    String?                   @db.VarChar(128)
+  claimedPnValue      String?                   @db.VarChar(128)
+  claimedLidValue     String?                   @db.VarChar(128)
   attestingInstanceId String                    @db.VarChar(128)
   operatorConfirmedAt DateTime?                 @db.Timestamptz(3)
   operatorConfirmedBy String?                   @db.VarChar(128)
@@ -1029,11 +1036,13 @@ model WhatsAppTransportBinding {
   closedAt            DateTime?                 @db.Timestamptz(3)
   closeReason         String?                   @db.VarChar(32)
   account             WhatsAppAccount           @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
-  attestedKey         WhatsAppAccountKey?       @relation(fields: [attestedKeyKind, attestedKeyValue, accountId], references: [keyKind, keyValue, accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedPnKey       WhatsAppAccountKey?       @relation("WhatsAppBindingAttestedPn", fields: [attestedPnKind, attestedPnValue, accountId], references: [keyKind, keyValue, accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedLidKey      WhatsAppAccountKey?       @relation("WhatsAppBindingAttestedLid", fields: [attestedLidKind, attestedLidValue, accountId], references: [keyKind, keyValue, accountId], onDelete: Restrict, onUpdate: NoAction)
   heldCapabilityLeases WhatsAppCapabilityLease[]
 
   @@unique([bindingId, accountId])
   @@unique([transportKind, transportRef, bindingSeq])
+  @@unique([transportKind, transportRef, transportGeneration])
   @@index([accountId])
 }
 
