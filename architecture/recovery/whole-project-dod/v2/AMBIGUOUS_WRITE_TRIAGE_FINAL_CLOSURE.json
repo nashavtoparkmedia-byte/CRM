@@ -66,11 +66,11 @@
   },
   "records": [
     {
-      "record_id": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
-      "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
-      "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-      "line": 451,
+      "record_id": "8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10",
+      "site_signature": "8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10",
+      "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 480,
       "column": 12,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -93,7 +93,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "ab285db5714cb1895658836a78e044372df8f3eaf8a1ef67a67b35b4998cf1b0",
+      "sql_provenance_sha256": "7ac5400c991e94b1a7fca720cd5e63cba51c081b6d3e69866a50225d3a747757",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -116,11 +116,11 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
-      "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
-      "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-      "line": 480,
+      "record_id": "86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06",
+      "site_signature": "86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06",
+      "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 509,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -150,7 +150,7 @@
         "to_char"
       ],
       "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
-      "sql_provenance_sha256": "ad426303cd425de1ce54cf321cad9ff9427d4d4a584a6338852dce481359533b",
+      "sql_provenance_sha256": "128e7d3c61882b31d277a62610ee2d2615b55b28b065aefa44b2b31349f0420a",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -173,11 +173,11 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
-      "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
-      "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-      "line": 480,
+      "record_id": "c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f",
+      "site_signature": "c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f",
+      "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "line": 509,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -209,7 +209,7 @@
         "to_char"
       ],
       "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
-      "sql_provenance_sha256": "4bf26114de1d7a2e4420ee0d27c496bf0edf6dbc1bbc6a3d55ca7dc1034fecd1",
+      "sql_provenance_sha256": "33322b5a873a49ddf09ab3ae8c985da97fd63329e54980bb613425e446d19e1b",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -2496,20 +2496,20 @@
   "current_exact_review": {
     "ambiguous_denominator": 44,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "4e5477bf4ed4c9a375624ba2d98549db255be276e61130ee2f6260191040b3b6",
+    "sorted_site_signatures_sha256": "df025bac6c48b9114cb0d3b300f6baa634cd3d441cf57d3741ff029512a11e3a",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "non_write_proofs": [
     {
-      "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+      "site_signature": "8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10",
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
-        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-        "line": 451,
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 480,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256": "ab285db5714cb1895658836a78e044372df8f3eaf8a1ef67a67b35b4998cf1b0"
+        "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256": "7ac5400c991e94b1a7fca720cd5e63cba51c081b6d3e69866a50225d3a747757"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2529,24 +2529,24 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:451:12",
-        "analysis_site_signature:ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in:480:12",
+        "analysis_site_signature:8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256:ab285db5714cb1895658836a78e044372df8f3eaf8a1ef67a67b35b4998cf1b0"
+        "source_sha256:bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256:7ac5400c991e94b1a7fca720cd5e63cba51c081b6d3e69866a50225d3a747757"
       ]
     },
     {
-      "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+      "site_signature": "86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06",
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
-        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-        "line": 480,
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 509,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256": "ad426303cd425de1ce54cf321cad9ff9427d4d4a584a6338852dce481359533b"
+        "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256": "128e7d3c61882b31d277a62610ee2d2615b55b28b065aefa44b2b31349f0420a"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2573,24 +2573,24 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:480:14",
-        "analysis_site_signature:0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in:509:14",
+        "analysis_site_signature:86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06",
         "sql_sha256:8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256:ad426303cd425de1ce54cf321cad9ff9427d4d4a584a6338852dce481359533b"
+        "source_sha256:bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256:128e7d3c61882b31d277a62610ee2d2615b55b28b065aefa44b2b31349f0420a"
       ]
     },
     {
-      "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+      "site_signature": "c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f",
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
-        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-        "line": 480,
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+        "line": 509,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256": "4bf26114de1d7a2e4420ee0d27c496bf0edf6dbc1bbc6a3d55ca7dc1034fecd1"
+        "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256": "33322b5a873a49ddf09ab3ae8c985da97fd63329e54980bb613425e446d19e1b"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2619,12 +2619,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in:480:14",
-        "analysis_site_signature:0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in:509:14",
+        "analysis_site_signature:c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f",
         "sql_sha256:372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
-        "sql_provenance_sha256:4bf26114de1d7a2e4420ee0d27c496bf0edf6dbc1bbc6a3d55ca7dc1034fecd1"
+        "source_sha256:bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8",
+        "sql_provenance_sha256:33322b5a873a49ddf09ab3ae8c985da97fd63329e54980bb613425e446d19e1b"
       ]
     },
     {
@@ -4054,5 +4054,59 @@
         "sql_provenance_sha256:67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134"
       ]
     }
-  ]
+  ],
+  "runtime_v17_builder_rename_rebinding": {
+    "status": "EXECUTOR_EXACT_REBIND_COMPLETE",
+    "reviewed_at": "2026-09-17T14:00:00Z",
+    "reviewed_by": "RUNTIME_V17_BASELINE_GOVERNANCE_REPAIR_20260917",
+    "independence": "NOT_INDEPENDENT_ACCEPTANCE",
+    "focused_failure": {
+      "control": "fresh-write-verification",
+      "classification": "STALE_SITE_SIGNATURE_AFTER_BUILDER_DIRECTORY_RENAME"
+    },
+    "source": {
+      "predecessor_file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-be6b8eb82d8c-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "predecessor_source_sha256": "3db1f6c6a5c2a4aebd2e81f08588386d7b9f081c9b80ea6000124c1e637f5ebc",
+      "source_sha256": "bc86bdd8e9067bed49300cbf8d882d345bb3b218995221d073322d16583f29b8"
+    },
+    "fresh_analysis": {
+      "tracked_executable_surfaces": 2319,
+      "discovered_write_sites": 2007,
+      "ambiguous_denominator": 44,
+      "analysis_sha256": "bf0cf61beae43260d13f62f497c0d9aa8779051a76e1aec8579b3a0d506454ae"
+    },
+    "rebound_site_signatures": [
+      {
+        "predecessor_site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
+        "site_signature": "8bcbe751e0150c1de52d0ff40ad91df62472ea433888eefd730d821032944e10",
+        "predecessor_line": 451,
+        "line": 480,
+        "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882"
+      },
+      {
+        "predecessor_site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
+        "site_signature": "86030706e77a25d4265b9e7194abf01d6811447d50fa17664e6b2275e3fd2d06",
+        "predecessor_line": 480,
+        "line": 509,
+        "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7"
+      },
+      {
+        "predecessor_site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
+        "site_signature": "c91e1841d7ff4975eeb583e3079e49efeb455c1f28962bdda1d1f760702a9c2f",
+        "predecessor_line": 480,
+        "line": 509,
+        "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc"
+      }
+    ],
+    "source_context_equivalence": {
+      "emitted_site_count_unchanged": true,
+      "sql_sha256_unchanged": true,
+      "column_unchanged": true,
+      "semantic_projection_unchanged_except_location": true,
+      "database_access_changed": false,
+      "write_semantics_changed": false
+    },
+    "independent_acceptance_conferred": false
+  }
 }
