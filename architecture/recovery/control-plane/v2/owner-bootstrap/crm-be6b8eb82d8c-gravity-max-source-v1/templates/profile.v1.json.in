@@ -99,6 +99,32 @@
     "attached_by": "release-activate",
     "attached_on_rollback": false
   },
+  "calling_b2_environment": {
+    "names": [
+      "AI_CALL_CONTROLLED_DESTINATION_E164",
+      "AI_CALL_CONTROLLED_OPERATOR_TOKEN",
+      "AI_CALL_CONTROLLED_REAL_CALL_ENABLED",
+      "AI_CALL_CONTROLLED_REQUEST_ID",
+      "AI_CALL_DIAL_STRING_TEMPLATE",
+      "AI_CALL_LIVE_MODE",
+      "AI_CALL_PARK_EXT",
+      "AI_CALL_STT_PROVIDER",
+      "AI_CALL_TELEPHONY_PROVIDER",
+      "AI_CALL_TTS_PROVIDER",
+      "AUDIO_BRIDGE_HEALTH_URL",
+      "MEGAFON_NUMBER"
+    ],
+    "services": ["gravity-mvp"],
+    "source": "/var/lib/crm/release-staging/calling-b2/crm-be6b8eb82d8c-gravity-max-source-v1/gravity-mvp.env",
+    "source_mode": "0600",
+    "source_format": "single-quoted-assignment-per-line",
+    "all_names_required": true,
+    "kill_switches": ["AI_CALL_CONTROLLED_REAL_CALL_ENABLED", "AI_CALL_LIVE_MODE"],
+    "kill_switch_values": ["false", "true"],
+    "attached_by": "release-activate",
+    "attached_on_rollback": false,
+    "rollback_requires_disarmed_kill_switches": true
+  },
   "enabled_zero_argument_profiles": [
     "database-status",
     "release-preflight",

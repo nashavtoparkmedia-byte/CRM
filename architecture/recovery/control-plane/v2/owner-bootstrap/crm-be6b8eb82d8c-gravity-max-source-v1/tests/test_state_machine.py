@@ -35,12 +35,30 @@ def load_profile():
     return module
 
 
+def satisfy_calling_b2(test: unittest.TestCase, runtime) -> None:
+    """Drive state-machine transitions with the Calling B2 source bound and its kill switches disarmed.
+
+    The source, projection and rollback kill-switch guard have their own contract in
+    test_calling_b2_environment_contract.py; these transitions only need them satisfied.
+    """
+    bound = {"sha256": "c" * 64, "values": {}}
+    for name, replacement in (
+        ("_calling_b2_environment", mock.Mock(return_value=bound)),
+        ("_validate_calling_b2_environment", mock.Mock(return_value=bound)),
+        ("_assert_calling_b2_disarmed", mock.Mock(return_value=None)),
+    ):
+        patcher = mock.patch.object(runtime, name, replacement)
+        patcher.start()
+        test.addCleanup(patcher.stop)
+
+
 class StateMachineTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.runtime = load_profile()
 
     def setUp(self) -> None:
+        satisfy_calling_b2(self, self.runtime)
         self.core = SimpleNamespace(
             RuntimeFault=RuntimeFault,
             audit_status=lambda: {"state": "VALID"},
@@ -371,6 +389,7 @@ class ReleaseCapacityTests(unittest.TestCase):
         cls.runtime = load_profile()
 
     def setUp(self) -> None:
+        satisfy_calling_b2(self, self.runtime)
         self.core = SimpleNamespace(RuntimeFault=RuntimeFault, mapped=lambda value: Path(value))
         self.profile = {
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
@@ -615,6 +634,7 @@ class PredecessorRetryTests(unittest.TestCase):
         cls.runtime = load_profile()
 
     def setUp(self) -> None:
+        satisfy_calling_b2(self, self.runtime)
         self.core = SimpleNamespace(
             RuntimeFault=RuntimeFault,
             audit_status=lambda: {"state": "VALID"},
@@ -939,6 +959,7 @@ class RollbackImageIdentityTests(unittest.TestCase):
         cls.runtime = load_profile()
 
     def setUp(self) -> None:
+        satisfy_calling_b2(self, self.runtime)
         self.core = SimpleNamespace(RuntimeFault=RuntimeFault)
         self.profile = {
             "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
@@ -994,6 +1015,9 @@ class ActivationDiagnosticsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.runtime = load_profile()
+
+    def setUp(self) -> None:
+        satisfy_calling_b2(self, self.runtime)
 
     def test_activation_and_rollback_logs_are_separate_files(self) -> None:
         self.assertNotEqual(self.runtime.ACTIVATE_COMPOSE_LOG, self.runtime.ROLLBACK_COMPOSE_LOG)

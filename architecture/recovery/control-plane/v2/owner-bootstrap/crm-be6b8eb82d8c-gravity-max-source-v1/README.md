@@ -68,6 +68,85 @@ read from runtime input and there is no list to extend.
   requires the unchanged predecessor semantic. The predecessor images do not
   reference the variable, so they are recreated exactly as they ran before.
 
+## Calling B2 environment addition
+
+Activation also adds exactly these twelve names, and only to `gravity-mvp`:
+`AI_CALL_CONTROLLED_DESTINATION_E164`, `AI_CALL_CONTROLLED_OPERATOR_TOKEN`,
+`AI_CALL_CONTROLLED_REAL_CALL_ENABLED`, `AI_CALL_CONTROLLED_REQUEST_ID`,
+`AI_CALL_DIAL_STRING_TEMPLATE`, `AI_CALL_LIVE_MODE`, `AI_CALL_PARK_EXT`,
+`AI_CALL_STT_PROVIDER`, `AI_CALL_TELEPHONY_PROVIDER`, `AI_CALL_TTS_PROVIDER`,
+`AUDIO_BRIDGE_HEALTH_URL`, `MEGAFON_NUMBER`. This is a closed Owner allowlist,
+sealed in the profile code and in `profile.v1.json` (`calling_b2_environment`).
+Nothing is read from runtime input, and widening it needs a new Owner/Calling
+decision.
+
+- The capability is implemented ahead of its release. `seal-release.py`
+  refuses to seal until this builder is rebound to the exact combined
+  application that carries it and `CALLING_B2_APPLICATION_COMMIT` names that
+  commit. It also refuses while the application, profile id or package
+  version is still that of the Messaging-only Runtime 2.0.0-17
+  (`be6b8eb8`, `crm-be6b8eb82d8c-gravity-max-source-v1`, `2.0.0-17`).
+  In every phase, before any other check, `verify-sealed-inputs.py` requires
+  the sealed inputs and the generated profile to declare the same application
+  commit, profile id and package version, and refuses the 2.0.0-17 ones. Its
+  later checks still pin the profile and package to the builder's own
+  constants, so `build-package.sh`, which runs it before and after packaging,
+  cannot package this builder until those constants are rebound. The unbound
+  identities are split literals, so a mechanical rename during rebinding
+  cannot rewrite the guard.
+  The source path uses the sealed profile id as its release id, so it follows
+  that binding and a source staged under the current id is not accepted after
+  it:
+  `/var/lib/crm/release-staging/calling-b2/<profile id>/gravity-mvp.env`.
+- The source directory must be root-owned `0700` below a root-owned,
+  non-group/other-writable and non-caller-writable chain. The source must be a
+  single-link root-owned `0600` file of at most 4096 bytes, with one
+  `NAME='value'` line per name. Compose reads single-quoted values literally, so
+  the dial template's `${number}` arrives intact. Values are 1-256 bytes of
+  printable ASCII without whitespace, quotes, backslash or backtick. Unknown,
+  duplicate and missing names are refused.
+- Every name is mandatory: the application's controlled-call readiness fails
+  closed on each one, and its runbook requires every value to be supplied. The
+  two kill switches, `AI_CALL_LIVE_MODE` and
+  `AI_CALL_CONTROLLED_REAL_CALL_ENABLED`, are admitted only as exactly `true` or
+  `false`. The application arms on exactly `true`, and the repository example
+  disarms with `false`. No other value is validated here; the application owns
+  that.
+- Preflight binds the source digest into state. Activation refuses before its
+  intent write, and again at the Compose boundary, if the source changed. The
+  render must equal the base projection plus these names with the bound
+  values; Compose's config output writes a literal `$` as `$$`. Faults carry
+  reasons and admitted names only, never a value.
+- The target postcheck expects Gravity's names to be the predecessor's plus
+  the Messaging name plus exactly these twelve. MAX and every other service
+  must not gain any of them.
+- Rollback never reads or attaches the Calling source. Its postcheck refuses a
+  Gravity container that carries any of these names.
+- Every rollback is refused while the live Gravity container has either kill
+  switch armed. The guard reads the environment the classified container was
+  created with, bound to its container id; it never reads the staging file. A
+  switch counts as disarmed only when it is absent or exactly `false`. Any
+  other value, a repeated or near-miss name, or an unreadable environment is
+  treated as armed or unproven. Every path decides this before any rollback
+  intent is written, and `_rollback_pair` checks it again at the transaction:
+  - the operator verb and mixed-state recovery raise the guard fault and leave
+    the state untouched;
+  - a failed activation, or a failed target recovery from
+    `ACTIVATION_INTENT`, records `ACTIVATION_FAILED` with
+    `automatic_rollback_refusal` and raises
+    `ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_REFUSED`;
+  - a failed re-check of an already `ACTIVATED` release raises
+    `ACTIVATED_POSTCHECK_FAILED_ROLLBACK_REFUSED` and writes nothing. When
+    disarmed, that re-check keeps the existing automatic rollback, so use
+    `release-preflight`, which never writes on a failed re-check, as the
+    status probe.
+- Disarming is a separate authorized action and is not part of this profile.
+  The profile has no arming step either: the kill switches take the values
+  staged for an activation. An activation staged with either switch `true`
+  therefore has no automatic rollback. Stage both `false` unless the Owner has
+  separately authorized an armed activation and the disarm that must follow
+  it.
+
 ## Large artifact admission
 
 The 4.8 GB Stage A image archives are deliberately not duplicated inside the

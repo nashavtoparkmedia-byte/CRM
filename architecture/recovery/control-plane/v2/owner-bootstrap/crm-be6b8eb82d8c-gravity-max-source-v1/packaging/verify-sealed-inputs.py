@@ -20,6 +20,14 @@ REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"
 REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")
 REVIEW_VERDICTS = frozenset({"PASS", "PASS_WITH_LOW_FINDINGS"})
 RESIDUAL_SEVERITIES = frozenset({"LOW", "INFO"})
+# The Messaging-only release the Calling B2 capability extends. Every phase refuses generated inputs
+# still carrying any of these identities, so a package built from this builder cannot exist until it is
+# rebound to an exact successor application. Split so a mechanical rename cannot rewrite the guard.
+CALLING_B2_UNBOUND_IDENTITIES = {
+    "application_commit": "be6b8eb82d8c" "074e82a3be0cd53db26137e984be",
+    "profile_id": "crm-be6b8eb82d8c" "-gravity-max-source-v1",
+    "package_version": "2.0.0" "-17",
+}
 
 
 def duplicate_safe(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -110,6 +118,30 @@ def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
     return residual
 
 
+def assert_calling_b2_bound(sealed: dict[str, Any], profile: Any) -> None:
+    """Refuse unless the sealed inputs and the generated profile declare one identical successor identity.
+
+    Each of application commit, profile id and package version must be present in both documents,
+    agree between them, and differ from the Messaging-only Runtime 2.0.0-17 identity.
+    """
+    declared = []
+    for document in (sealed, profile):
+        document = document if isinstance(document, dict) else {}
+        application = document.get("accepted_application")
+        declared.append((
+            application.get("commit") if isinstance(application, dict) else None,
+            document.get("profile_id"),
+            document.get("package_version"),
+        ))
+    unbound = tuple(CALLING_B2_UNBOUND_IDENTITIES[key] for key in ("application_commit", "profile_id", "package_version"))
+    if (
+        declared[0] != declared[1]
+        or any(not isinstance(value, str) or not value for value in declared[0])
+        or any(value == old for value, old in zip(declared[0], unbound))
+    ):
+        raise ValueError("Calling B2 capability is not bound to an exact successor application")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--phase", choices=("package", "package-output", "release"), required=True)
@@ -117,6 +149,8 @@ def main() -> None:
     sealed = load(GENERATED / "sealed-inputs.v1.json")
     if sealed.get("schema") != "yoko.crm.coordinated-runtime-sealed-inputs.v1":
         raise ValueError("sealed input schema mismatch")
+    # Refusal only: the profile's own digest is verified below, before anything else trusts it.
+    assert_calling_b2_bound(sealed, load(GENERATED / "profile.v1.json"))
     builder = sealed.get("runtime_builder")
     if not isinstance(builder, dict):
         raise ValueError("runtime builder binding missing")
@@ -173,6 +207,32 @@ def main() -> None:
             "identical_across_services": True,
             "attached_by": "release-activate",
             "attached_on_rollback": False,
+        }
+        or profile.get("calling_b2_environment") != {
+            "names": [
+                "AI_CALL_CONTROLLED_DESTINATION_E164",
+                "AI_CALL_CONTROLLED_OPERATOR_TOKEN",
+                "AI_CALL_CONTROLLED_REAL_CALL_ENABLED",
+                "AI_CALL_CONTROLLED_REQUEST_ID",
+                "AI_CALL_DIAL_STRING_TEMPLATE",
+                "AI_CALL_LIVE_MODE",
+                "AI_CALL_PARK_EXT",
+                "AI_CALL_STT_PROVIDER",
+                "AI_CALL_TELEPHONY_PROVIDER",
+                "AI_CALL_TTS_PROVIDER",
+                "AUDIO_BRIDGE_HEALTH_URL",
+                "MEGAFON_NUMBER",
+            ],
+            "services": ["gravity-mvp"],
+            "source": "/var/lib/crm/release-staging/calling-b2/crm-be6b8eb82d8c-gravity-max-source-v1/gravity-mvp.env",
+            "source_mode": "0600",
+            "source_format": "single-quoted-assignment-per-line",
+            "all_names_required": True,
+            "kill_switches": ["AI_CALL_CONTROLLED_REAL_CALL_ENABLED", "AI_CALL_LIVE_MODE"],
+            "kill_switch_values": ["false", "true"],
+            "attached_by": "release-activate",
+            "attached_on_rollback": False,
+            "rollback_requires_disarmed_kill_switches": True,
         }
     ):
         raise ValueError("generated profile contract mismatch")
