@@ -396,9 +396,11 @@ export class MessageService {
      * Clean up outbound messages stuck in 'sent' status for longer than maxAgeMinutes.
      * These are messages where OUR OWN send attempt never got acknowledged by
      * the provider (server crash mid-delivery, WA/TG/MAX gateway timeout).
-     * Marks them 'failed' with a metadata.error explaining the reason. MAX
-     * send_requested rows retain their delivery metadata and become retryable;
-     * retrySend then reuses the same Message row.
+     * Marks them 'failed' with a metadata.error explaining the reason. Such a
+     * row may already have reached the recipient — a MAX send_requested row is
+     * one the transport accepted without proof — so its delivery outcome is
+     * recorded as unknown and it is NOT retryable: a blind redelivery could send
+     * the contact a second copy. MAX rows keep their delivery metadata.
      *
      * externalId IS NULL guard: messages that already have an externalId came
      * back confirmed from the provider — they are not stuck. In particular,
@@ -436,7 +438,7 @@ export class MessageService {
             },
             data: {
                 status: 'failed',
-                metadata: { error: recoveryError },
+                metadata: { error: recoveryError, deliveryOutcome: 'unknown' },
             },
         })
         const maxRecoveryResults = await Promise.all(stuckMaxMessages.map(async (message: any) => {
@@ -451,7 +453,8 @@ export class MessageService {
                         ...metadata,
                         error: recoveryError,
                         errorCode: 'TIMEOUT',
-                        retryable: true,
+                        retryable: false,
+                        deliveryOutcome: 'unknown',
                     },
                 },
             })
@@ -479,6 +482,7 @@ export class MessageService {
                 id: true, 
                 channel: true, 
                 externalChatId: true,
+                chatType: true,
                 metadata: true,
                 contactId: true,
                 contactIdentityId: true,
@@ -554,11 +558,11 @@ export class MessageService {
         if (clientMessageId) {
             const existing = await (prisma.message as any).findUnique({
                 where: { clientMessageId },
-                select: { id: true, status: true, chatId: true },
+                select: SEND_STATE_SELECT,
             })
             if (existing) {
                 console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
-                return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, error: null, duplicate: true }
+                return duplicateSendResult(existing, clientMessageId)
             }
         }
 
@@ -576,6 +580,12 @@ export class MessageService {
         const messageId = `msg_${Date.now()}`
         const now = new Date()
 
+        // One intent can reach this point twice — a lost response sent again,
+        // a second tap on a slow network — with both requests past the lookup
+        // above before either row exists. The unique clientMessageId lets only
+        // one row be created; the other request answers with that row and never
+        // dispatches to the provider.
+        const race: { winner: SendStateRow | null } = { winner: null }
         const created = await (prisma.message as any).create({
             data: {
                 id: messageId,
@@ -589,7 +599,17 @@ export class MessageService {
                 type: 'text',
                 ...(quotedMsgId ? { metadata: { quotedMsgId } } : {}),
             }
+        }).catch(async (createErr: unknown) => {
+            race.winner = clientMessageId && isUniqueConstraintViolation(createErr)
+                ? await (prisma.message as any).findUnique({ where: { clientMessageId }, select: SEND_STATE_SELECT })
+                : null
+            if (!race.winner) throw createErr
+            return null
         })
+        if (race.winner && clientMessageId) {
+            console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} was created concurrently as ${race.winner.id}`)
+            return duplicateSendResult(race.winner, clientMessageId)
+        }
 
         // Phase 4 SSE: push outbound to other CRM tabs / operator-on-phone
         // mirror so they see the reply without waiting for a poll tick.
@@ -729,6 +749,8 @@ export class MessageService {
             errorMessage = 'Ошибка доставки'
         }
 
+        const deliveryOutcome = errorMessage ? classifyDeliveryOutcome(errorMessage) : null
+
         // 3. Update status + retry classification
         try {
             const metadata: any = {}
@@ -742,17 +764,18 @@ export class MessageService {
                 metadata.errorSchemaVersion = ERROR_SCHEMA_VERSION
                 const retryable = classifyError(errorMessage)
                 metadata.retryable = retryable
+                metadata.deliveryOutcome = deliveryOutcome
                 metadata.retryAttempt = 0
                 metadata.maxRetries = 3
                 metadata.lastFailedAt = new Date().toISOString()
                 if (retryable) {
                     opsLog('info', 'message_retry_classified', { messageId, chatId, channel, retryable: true, errorCode: metadata.errorCode })
                 } else {
-                    opsLog('info', 'message_retry_terminal', { messageId, chatId, channel, error: errorMessage, errorCode: metadata.errorCode })
+                    opsLog('info', 'message_retry_terminal', { messageId, chatId, channel, error: errorMessage, errorCode: metadata.errorCode, deliveryOutcome })
                 }
             }
 
-            await (prisma.message as any).update({
+            const finalRow = await (prisma.message as any).update({
                 where: { id: messageId },
                 data: {
                     status: deliveryStatus,
@@ -760,6 +783,14 @@ export class MessageService {
                     metadata: Object.keys(metadata).length > 0 ? metadata : undefined
                 }
             })
+            // The row broadcast at creation still reads 'sent'. Pushing the settled
+            // row lets every open view of this conversation reach the final state
+            // without depending on this request's HTTP answer, which may be lost
+            // or may belong to a request that view never made.
+            try {
+                const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
+                if (finalRow) broadcastChatMessage(currentChatId, finalRow)
+            } catch { /* bus must never break send */ }
             const now = new Date()
             await (prisma.chat as any).update({
                 where: { id: currentChatId },
@@ -806,18 +837,28 @@ export class MessageService {
             success: deliveryStatus !== 'failed',
             chatId: currentChatId,
             id: messageId,
+            clientMessageId: clientMessageId || null,
             status: deliveryStatus,
             externalId: deliveryExternalId,
             deliveryConfirmed: maxDeliveryMetadata?.deliveryConfirmed,
             error: errorMessage,
+            ...(deliveryOutcome ? { retryable: deliveryOutcome === 'safe_to_redeliver', deliveryOutcome } : {}),
         }
     }
 
     /**
      * Retry a previously failed message. Reuses same message record (idempotent).
      * Does NOT create a new Message — updates existing one.
+     *
+     * The backoff paces the unattended retry job. An operator who explicitly
+     * asks to retry is answered immediately; every other guard — failed status,
+     * retryable classification, attempt limit, conversation binding and the
+     * failed+updatedAt lease — applies to both.
      */
-    static async retrySend(messageId: string): Promise<{ success: boolean; error?: string }> {
+    static async retrySend(
+        messageId: string,
+        options: { operatorInitiated?: boolean } = {},
+    ): Promise<{ success: boolean; error?: string }> {
         const message = await (prisma.message as any).findUnique({
             where: { id: messageId },
             include: { chat: { include: { driver: true } } },
@@ -835,7 +876,7 @@ export class MessageService {
         // Backoff check: skip if too soon. Delay = min(2^attempt * 30s, 10min)
         const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
         const lastFailed = meta.lastFailedAt ? new Date(meta.lastFailedAt).getTime() : 0
-        if (Date.now() - lastFailed < backoffMs) {
+        if (!options.operatorInitiated && Date.now() - lastFailed < backoffMs) {
             return { success: false, error: 'Backoff not elapsed' }
         }
 
@@ -1019,6 +1060,7 @@ export class MessageService {
         if (deliveryStatus === 'failed') {
             retryMeta.error = errorMessage
             retryMeta.retryable = classifyError(errorMessage || '')
+            retryMeta.deliveryOutcome = classifyDeliveryOutcome(errorMessage || '')
             opsLog('warn', 'message_retry_failed', { messageId, channel: message.channel, retryAttempt: attempt, error: errorMessage || undefined })
         } else {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
@@ -1078,13 +1120,86 @@ export class MessageService {
 
         return { success: deliveryStatus !== 'failed', error: errorMessage || undefined }
     }
+
+    /** The persisted send state of one outbound message, or null when it does not exist. */
+    static async readSendState(messageId: string): Promise<SendStateRow | null> {
+        return (prisma.message as any).findUnique({
+            where: { id: messageId },
+            select: SEND_STATE_SELECT,
+        })
+    }
+}
+
+// ── Send state ───────────────────────────────────────────────────────────
+
+const SEND_STATE_SELECT = {
+    id: true,
+    chatId: true,
+    clientMessageId: true,
+    content: true,
+    direction: true,
+    channel: true,
+    type: true,
+    status: true,
+    externalId: true,
+    sentAt: true,
+    metadata: true,
+} as const
+
+export type SendStateRow = {
+    id: string
+    chatId: string
+    clientMessageId: string | null
+    content: string
+    direction: string
+    channel: string | null
+    type: string
+    status: string
+    externalId: string | null
+    sentAt: Date
+    metadata: unknown
+}
+
+function sendStateMetadata(row: SendStateRow): Record<string, unknown> {
+    return row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+        ? row.metadata as Record<string, unknown>
+        : {}
+}
+
+/** What a caller needs to settle its own copy of a message it did not just send. */
+function canonicalSendState(row: SendStateRow) {
+    const metadata = sendStateMetadata(row)
+    return {
+        status: row.status,
+        externalId: row.externalId ?? null,
+        error: row.status === 'failed' ? (nonEmptyString(metadata.error) ?? 'Ошибка доставки') : null,
+        retryable: row.status === 'failed' && metadata.retryable === true,
+        deliveryOutcome: row.status === 'failed' ? (nonEmptyString(metadata.deliveryOutcome) ?? null) : null,
+    }
+}
+
+/**
+ * The answer to a repeated send intent: the existing canonical row, never a
+ * second dispatch. Carries the row's current state so a client whose first
+ * answer was lost can settle without waiting for a poll.
+ */
+function duplicateSendResult(existing: SendStateRow, clientMessageId: string) {
+    return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, clientMessageId, duplicate: true, ...canonicalSendState(existing) }
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+    return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002')
 }
 
 // ── Error classification ─────────────────────────────────────────────────
 
-// ── Error Taxonomy (v1) ──────────────────────────────────────────────────
+// ── Error Taxonomy (v2) ──────────────────────────────────────────────────
+//
+// v2: `retryable` means SAFE TO REDELIVER, and `deliveryOutcome` records why.
+// v1 treated every transient error as retryable, but a timeout or a reset
+// connection can arrive after the provider already delivered the message.
 
-const ERROR_SCHEMA_VERSION = 1
+const ERROR_SCHEMA_VERSION = 2
 
 type ErrorCode =
     | 'TRANSPORT_UNAVAILABLE'
@@ -1130,15 +1245,50 @@ const TERMINAL_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
     { pattern: 'token is required', code: 'VALIDATION_ERROR' },
 ]
 
-function classifyError(error: string): boolean {
+// Transient failures that prove the provider never received the request: the
+// transport was not connected, or the connection itself was refused. Sending
+// again cannot produce a second copy.
+const NOT_DISPATCHED_PATTERNS = [
+    'no ready whatsapp connection',
+    'client not connected',
+    'client not found',
+    'telegram is not connected',
+    'no active max bot',
+    'econnrefused',
+]
+
+// A success-shaped answer whose proof does not bind to this send: the provider
+// may well have sent the message, but the answer cannot be trusted either way.
+const UNCONFIRMED_DISPATCH_PATTERNS = [
+    'max_provider_account_proof_mismatch',
+]
+
+/**
+ * What a failed provider call allows next, decided by the owner:
+ *   safe_to_redeliver — nothing was dispatched, so redelivery cannot duplicate;
+ *   unknown           — the provider may have delivered and only the answer was
+ *                       lost (timeout, reset, crash, unprovable success), so
+ *                       nothing may resend it blindly;
+ *   terminal          — the provider or the binding rejected the message.
+ */
+export type DeliveryOutcomeV1 = 'safe_to_redeliver' | 'unknown' | 'terminal'
+
+function classifyDeliveryOutcome(error: string): DeliveryOutcomeV1 {
     const lower = error.toLowerCase()
     for (const { pattern } of TERMINAL_PATTERNS) {
-        if (lower.includes(pattern)) return false
+        if (lower.includes(pattern)) return 'terminal'
     }
+    if (NOT_DISPATCHED_PATTERNS.some(pattern => lower.includes(pattern))) return 'safe_to_redeliver'
+    if (UNCONFIRMED_DISPATCH_PATTERNS.some(pattern => lower.includes(pattern))) return 'unknown'
     for (const { pattern } of RETRYABLE_PATTERNS) {
-        if (lower.includes(pattern)) return true
+        if (lower.includes(pattern)) return 'unknown'
     }
-    return false // safe default: terminal
+    return 'terminal' // safe default: never redelivered
+}
+
+/** Retryable means safe to redeliver, not merely transient. */
+function classifyError(error: string): boolean {
+    return classifyDeliveryOutcome(error) === 'safe_to_redeliver'
 }
 
 function getErrorCode(error: string): ErrorCode {
