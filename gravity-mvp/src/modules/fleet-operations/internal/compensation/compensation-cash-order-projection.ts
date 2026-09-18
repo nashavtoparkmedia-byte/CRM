@@ -11,6 +11,11 @@
  *   payment_method      "cash" or "cashless", and null while the order runs
  *   driver_profile.id   the profile the order belongs to
  *
+ * booked_at is also carried, as `providerBookedAt`, but it has no authority:
+ * the provider filters orders by it, so it only lets a later confirmation ask
+ * for this one order precisely. A missing or unparseable value is null and
+ * never changes whether the order is accepted.
+ *
  * The park is deliberately absent from the payload: orders are fetched per
  * park, so the park identity comes from the connection the request went
  * through and is stamped here. The monetary core's own port documents the
@@ -61,6 +66,8 @@ export interface VerifiedCashOrderProjectionV1 {
     amountKopecks: number
     endedAt: Date
     observedAt: Date
+    /** Lookup locator only. Never identity, eligibility or money. */
+    providerBookedAt: Date | null
 }
 
 export type CashOrderProjectionResultV1 =
@@ -71,9 +78,16 @@ function nonEmptyString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() !== '' ? value : null
 }
 
+function optionalInstant(value: unknown): Date | null {
+    const raw = nonEmptyString(value)
+    if (!raw) return null
+    const instant = new Date(raw)
+    return Number.isNaN(instant.getTime()) ? null : instant
+}
+
 /**
  * Projects one raw order. The raw payload never leaves this function: only the
- * six named fields are carried forward, so an upstream error body or anything
+ * named fields are carried forward, so an upstream error body or anything
  * credential-shaped cannot end up stored alongside the money.
  */
 export function projectCashOrderV1(
@@ -135,6 +149,7 @@ export function projectCashOrderV1(
             amountKopecks,
             endedAt,
             observedAt: context.observedAt,
+            providerBookedAt: optionalInstant(order.booked_at),
         },
     }
 }

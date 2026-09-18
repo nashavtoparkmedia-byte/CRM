@@ -60,8 +60,28 @@ describe('accepting a completed cash order', () => {
         expect(Object.keys(result.order).sort()).toEqual([
             'amountKopecks', 'apiConnectionId', 'endedAt', 'externalDriverProfileId',
             'externalOrderId', 'externalParkId', 'observedAt', 'provider',
-            'rawPrice', 'shortOrderIdDisplay',
+            'providerBookedAt', 'rawPrice', 'shortOrderIdDisplay',
         ])
+    })
+
+    it('carries booked_at as the lookup locator', () => {
+        const result = projectCashOrderV1(order(), CONTEXT)
+        expect(result.accepted && result.order.providerBookedAt?.toISOString()).toBe('2026-09-13T15:25:48.753Z')
+    })
+
+    it('accepts an order whose booked_at is absent or unparseable, with a null locator', () => {
+        for (const bookedAt of [undefined, null, '', 'not-a-date', 17]) {
+            const result = projectCashOrderV1(order({ booked_at: bookedAt }), CONTEXT)
+            expect(result.accepted).toBe(true)
+            expect(result.accepted && result.order.providerBookedAt).toBeNull()
+        }
+    })
+
+    it('never lets booked_at change a rejection', () => {
+        expect(projectCashOrderV1(order({ payment_method: 'cashless', booked_at: 'not-a-date' }), CONTEXT))
+            .toMatchObject({ accepted: false, reason: 'not_cash' })
+        expect(projectCashOrderV1(order({ status: 'cancelled', booked_at: null }), CONTEXT))
+            .toMatchObject({ accepted: false, reason: 'not_completed' })
     })
 
     it('never reads the park from the payload', () => {

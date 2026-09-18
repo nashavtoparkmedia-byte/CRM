@@ -466,6 +466,174 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-order-ingestion-runtime-pr1-post-b3-f3501bee-20260917",
+      "reviewed_at": "2026-09-17T00:00:00Z",
+      "reviewed_by": "CASH_ORDER_INGESTION_PR1_POST_B3_RECONCILIATION_REVIEW_20260917",
+      "role": "SPECULATIVE_RECONCILIATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_CASH_POST_B3_SPECULATIVE_RECONCILIATION_AUTHORIZED_20260917",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain of the Calling B3 candidate f3501bee, whose tail is the B3 TTS path amendment calling-b3-tts-http-path-main-02f772ab-20260917, and reviews only the surfaces the cash-order ingestion runtime adds."
+      },
+      "reason": "Re-anchors the cash-order ingestion PR1 review (amendment cash-order-ingestion-runtime-pr1-main-02f772ab-20260917, which extended main 02f772ab from 2,531 to 2,553 surfaces) onto the Calling B3 candidate f3501bee, whose TTS path amendment keeps 2,531 surfaces and moves only the tracked inventory digest through the rebound production compose source hash. The reviewed surfaces are unchanged: the 22 tracked executable surfaces cash-order ingestion adds, 21 TypeScript files in paths fleet_operations owns and the expand-only Prisma migration under the gravity_schema governed exclusion. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the reconciled tree: 2,531 + 22 = 2,553 surfaces, context-owned 1,316 -> 1,337, governed exclusions 1,215 -> 1,216.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2531,
+        "tracked_inventory_sha256": "5064e43b250d5eaf2b842fad90203387ba00d58c849beae4a369c224933e4d72",
+        "coverage_sha256": "6744efc38023e55793bb49de05a3bdcac47147e6025f12badc48be00e6377055"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2553,
+        "tracked_inventory_sha256": "54b3719a9a1c1b7159d941a5748d69bf833102aef5423a6ddacad22038f74d1d",
+        "coverage_sha256": "0f21dbaf49afbb03c870b4deed1729147e3588079f999d9ae1236951eb5da4ff"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle comes from the reviewed lifecycle surface registry entry and the reviewed noncanonical migration decisions."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-order-ingestion-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-budget.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-config.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-runtime.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-slice.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-store.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-windows.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-windows.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-page-classifier.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-page-classifier.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-park-authority.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-park-authority.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-park-tenure-queue.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-ingestion-migration.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-ingestion-runtime.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-ingestion-writer.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-order-ingestion-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/yandex-cash-order-credentials.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/yandex-cash-order-source.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/yandex-cash-order-source.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

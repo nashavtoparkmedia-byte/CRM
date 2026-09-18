@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "745c11cc1b913f2e883d361baefbd973ca91cf8d26b59a986dabf4ccefbe2f87",
-    "size": 161925,
+    "sha256": "442d1acf7b4ea69917e8d39ec2a999d88b8bd4009ff79f1aa2652eb43f3ec210",
+    "size": 164505,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -117,6 +117,32 @@
           "CompensationPilotSubmission"
         ],
         "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260916120000_add_compensation_cash_order_ingestion",
+      "path": "gravity-mvp/prisma/migrations/20260916120000_add_compensation_cash_order_ingestion/migration.sql",
+      "sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c",
+      "size": 3523,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-ingestion-migration.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationCashOrderIngestionCheckpoint"
+        ],
+        "columns": [
+          {
+            "table": "CompensationCashOrder",
+            "column": "providerBookedAt"
+          },
+          {
+            "table": "CompensationCashOrder",
+            "column": "sourceConnectionId"
+          }
+        ],
         "forbidden_indexes": []
       }
     }

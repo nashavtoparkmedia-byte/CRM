@@ -3568,6 +3568,14 @@ model CompensationCashOrder {
   amountKopecks           Int
   endedAt                 DateTime @db.Timestamptz(3)
   observedAt              DateTime @db.Timestamptz(3)
+  /// Connection the latest accepted observation came through. Provenance only:
+  /// no foreign key, so rotating or deleting a credential never touches the
+  /// catalogue.
+  sourceConnectionId      String?
+  /// Yandex booked_at from the latest accepted observation that carried one.
+  /// A lookup locator for targeted confirmation only: never identity,
+  /// eligibility or money.
+  providerBookedAt        DateTime? @db.Timestamptz(3)
   createdAt               DateTime @default(now()) @db.Timestamptz(3)
   updatedAt               DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -3596,4 +3604,42 @@ model CompensationPilotSubmission {
   createdAt           DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([telegramUserId])
+}
+
+/// Per-park progress of cash-order ingestion. One row per provider park.
+///
+/// The lease fences every write: a runner whose token no longer matches writes
+/// nothing. Freshness and reconciliation progress move only inside the page
+/// transaction that durably handled the data they describe, so a crash or a
+/// failed write can only leave them behind, never ahead.
+model CompensationCashOrderIngestionCheckpoint {
+  id                            String    @id
+  provider                      String    @db.VarChar(32)
+  externalParkId                String    @db.VarChar(64)
+  leaseToken                    String?   @db.VarChar(64)
+  leaseExpiresAt                DateTime? @db.Timestamptz(3)
+  /// dry_run | write, for the last background tick.
+  lastRunMode                   String?   @db.VarChar(16)
+  /// running | succeeded | failed, for the last background tick.
+  lastRunStatus                 String?   @db.VarChar(16)
+  lastRunStartedAt              DateTime? @db.Timestamptz(3)
+  lastRunFinishedAt             DateTime? @db.Timestamptz(3)
+  consecutiveFailures           Int       @default(0)
+  lastErrorCode                 String?   @db.VarChar(64)
+  /// Sanitised: status and error code only, never provider bodies or credentials.
+  lastErrorSummary              String?   @db.VarChar(500)
+  lastApiConnectionId           String?
+  lastRunSummary                Json?
+  /// Start of the last completed write-mode hot pass. Display freshness only.
+  lastHotSuccessAt              DateTime? @db.Timestamptz(3)
+  reconciliationPassStartedAt   DateTime? @db.Timestamptz(3)
+  reconciliationFloorBookedAt   DateTime? @db.Timestamptz(3)
+  reconciliationCursorBookedAt  DateTime? @db.Timestamptz(3)
+  lastReconciliationCompletedAt DateTime? @db.Timestamptz(3)
+  providerRetryNotBefore        DateTime? @db.Timestamptz(3)
+  providerRetryConnectionId     String?
+  createdAt                     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([provider, externalParkId], map: "CompensationCashOrderIngestionCheckpoint_park_key")
 }
