@@ -33,7 +33,7 @@ const exactConsumerImports = [
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
 const executableDigests = {
     recoverStuckMessages: '46ef9e2894fcec22222bde690bda0e420b25ca4dc4fee7bbf85b45da254fadb0',
-    retrySend: '9cb91171e6b99642f2feb9b32eacc1d6ce3c27a2c5c68646c7c24484a439326d',
+    retrySend: '20cd7404d12c33bede478e3b893ae0d022bfbc711c0f161aef3a5bbe76b85d97',
     sendReachabilityBlock: 'cee5e85ebaf2c10f76453683d850e645755d9664489d4acbcb1af3b9ba99be76',
 }
 
@@ -725,7 +725,9 @@ function assertMessageServiceRecoveryImplementation(source) {
     const retryBody = retry.body.getText(sourceFile)
     for (const invariant of [
         /message\.status\s*!==\s*['"]failed['"]/,
-        /!meta\.retryable/,
+        // Physical redelivery needs the owner's explicit current-taxonomy proof;
+        // a v1 row marked retryable fails closed (isSafeToRedeliver below).
+        /if\s*\(!isSafeToRedeliver\(meta\)\)\s*return\s*\{\s*success:\s*false,\s*error:\s*['"]Not retryable['"]\s*\}/,
         /attempt\s*>\s*\(meta\.maxRetries\s*\|\|\s*3\)/,
         /Date\.now\(\)\s*-\s*lastFailed\s*<\s*backoffMs/,
         // Only an operator's explicit retry skips the job's pacing backoff.
@@ -752,6 +754,35 @@ function assertMessageServiceRecoveryImplementation(source) {
         /if\s*\(deliveryStatus\s*===\s*['"]delivered['"]\)[\s\S]*const\s+reachabilityResult\s*=\s*await\s+contactReachabilityV1\.recordExactProviderReachability\(\{[\s\S]*identityId:\s*outboundBinding\.contactIdentityId[\s\S]*providerAccountId:\s*outboundBinding\.providerAccountId[\s\S]*providerTargetId:\s*outboundBinding\.identityTarget[\s\S]*reachabilityResult\.outcome\s*===\s*['"]rejected['"][\s\S]*message_reachability_rejected/,
     ]) assert.match(retryBody, invariant, `${implementationPath}: retrySend invariant ${invariant}`)
     assert.doesNotMatch(retryBody, /TelegramConnection|TELEGRAM_BOT_URL|chat\.driver\?\.phone|\.message\.create\s*\(|\.message\.delete(?:Many)?\s*\(/)
+
+    // The one redelivery gate: all three conditions, over the exact metadata,
+    // as a pure exported predicate with no other statement.
+    const safeGates = topLevelFunction(sourceFile, 'isSafeToRedeliver')
+    assert.equal(safeGates.length, 1, `${implementationPath}: exact isSafeToRedeliver gate`)
+    const safeGate = safeGates[0]
+    assert(hasModifier(safeGate, ts.SyntaxKind.ExportKeyword) && !hasModifier(safeGate, ts.SyntaxKind.AsyncKeyword), `${implementationPath}: isSafeToRedeliver must be an exported synchronous predicate`)
+    assert.equal(safeGate.body?.statements.length, 1, `${implementationPath}: isSafeToRedeliver is a single return`)
+    const safeGateReturn = safeGate.body.statements[0]
+    assert(ts.isReturnStatement(safeGateReturn) && safeGateReturn.expression, `${implementationPath}: isSafeToRedeliver returns its condition`)
+    const safeGateConditions = []
+    const collectConjuncts = (node) => {
+        const current = unwrapTransparent(node)
+        if (ts.isBinaryExpression(current) && current.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+            collectConjuncts(current.left)
+            collectConjuncts(current.right)
+        } else safeGateConditions.push(current.getText(sourceFile).replace(/\s+/g, ''))
+    }
+    collectConjuncts(safeGateReturn.expression)
+    assert.deepEqual(safeGateConditions, [
+        'metadata.retryable===true',
+        "metadata.deliveryOutcome==='safe_to_redeliver'",
+        "typeofmetadata.errorSchemaVersion==='number'",
+        'metadata.errorSchemaVersion>=SAFE_REDELIVERY_MIN_SCHEMA_VERSION',
+    ], `${implementationPath}: isSafeToRedeliver must require retryable, safe_to_redeliver and a numeric schema version`)
+    const minimumVersion = topLevelVariable(sourceFile, 'SAFE_REDELIVERY_MIN_SCHEMA_VERSION')
+    assert.equal(minimumVersion.length, 1)
+    assert(ts.isVariableDeclarationList(minimumVersion[0].parent) && (minimumVersion[0].parent.flags & ts.NodeFlags.Const))
+    assert(minimumVersion[0].initializer && ts.isNumericLiteral(minimumVersion[0].initializer) && Number(minimumVersion[0].initializer.text) >= 2, `${implementationPath}: safe redelivery starts at error schema v2`)
 
     const send = messageServiceMethod(sourceFile, 'send')
     const sendReachabilityBlock = exactReachabilityBlock(send, sourceFile)
@@ -981,6 +1012,10 @@ for (const policy of [
     "status = 'failed'",
     "direction = 'outbound'",
     "metadata->>'retryable'",
+    // Only the current taxonomy's explicit safe outcome is ever a candidate.
+    "AND metadata->>'deliveryOutcome' = 'safe_to_redeliver'",
+    "AND CASE WHEN metadata->>'errorSchemaVersion' ~ '^[0-9]+$'",
+    "THEN (metadata->>'errorSchemaVersion')::int ELSE 0 END >= 2",
     "metadata->>'retryAttempt'",
     "metadata->>'maxRetries'",
     "INTERVAL '24 hours'",
@@ -1008,6 +1043,9 @@ for (const changed of [
     implementationSource.replace('prepareOutboundConversationV1(message.chat)', 'unsafePrepareOutboundConversation(message.chat)'),
     implementationSource.replace('providerAccountId: retryMaxBinding.providerAccountId', 'providerAccountId: null'),
     implementationSource.replaceAll("if (deliveryStatus === 'delivered')", "if (deliveryStatus !== 'failed')"),
+    implementationSource.replace("        && metadata.deliveryOutcome === 'safe_to_redeliver'\n", ''),
+    implementationSource.replace("        && typeof metadata.errorSchemaVersion === 'number'\n        && metadata.errorSchemaVersion >= SAFE_REDELIVERY_MIN_SCHEMA_VERSION", ''),
+    implementationSource.replace('const SAFE_REDELIVERY_MIN_SCHEMA_VERSION = 2', 'const SAFE_REDELIVERY_MIN_SCHEMA_VERSION = 1'),
 ]) rejectProbe(implementationSource, changed, assertMessageServiceRecoveryImplementation)
 
 const consumerSource = read(consumerPath)
@@ -1087,12 +1125,12 @@ function assertOperatorRetryImplementation(source) {
     const parameterSymbol = checker.getSymbolAtLocation(parameter.name)
 
     const serviceImports = namedImportsFrom(sourceFile, messageServiceSpecifier)
-    assert.deepEqual(serviceImports.map((element) => `${(element.propertyName ?? element.name).text}:${element.name.text}`), ['MessageService:MessageService'], `${operatorRetryPath}: exact MessageService import`)
+    assert.deepEqual(serviceImports.map((element) => `${(element.propertyName ?? element.name).text}:${element.name.text}`), ['MessageService:MessageService', 'isSafeToRedeliver:isSafeToRedeliver'], `${operatorRetryPath}: exact MessageService import`)
     const serviceSymbol = checker.getSymbolAtLocation(serviceImports[0].name)
     const methods = []
     const retryCalls = []
     visit(sourceFile, (node) => {
-        if (!ts.isIdentifier(node) || node === serviceImports[0].name || checker.getSymbolAtLocation(node) !== serviceSymbol) return
+        if (!ts.isIdentifier(node) || serviceImports.some((element) => element.name === node) || checker.getSymbolAtLocation(node) !== serviceSymbol) return
         assert(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node, `${operatorRetryPath}: indirect MessageService use`)
         const call = node.parent.parent
         assert(ts.isCallExpression(call) && call.expression === node.parent, `${operatorRetryPath}: MessageService method must be called directly`)
@@ -1159,7 +1197,7 @@ const operatorRetryProbes = [
     () => assertOperatorRetryImplementation(operatorRetrySource.replace('MessageService.retrySend(messageId, { operatorInitiated: true })', 'MessageService.retrySend(messageId)')),
     () => assertOperatorRetryImplementation(operatorRetrySource.replace('MessageService.retrySend(messageId, { operatorInitiated: true })', "MessageService.retrySend('other-message', { operatorInitiated: true })")),
     () => assertOperatorRetryImplementation(`${operatorRetrySource}\nexport async function retryEveryFailedMessageV1() { return MessageService.recoverStuckMessages(0) }\n`),
-    () => assertOperatorRetryImplementation(operatorRetrySource.replace("import { MessageService } from '@/lib/MessageService'", "import { MessageService } from '@/lib/MessageService'\nimport { prisma } from '@/lib/prisma'")),
+    () => assertOperatorRetryImplementation(`${operatorRetrySource}\nimport { prisma } from '@/lib/prisma'\nvoid prisma\n`),
     () => assertOperatorRetryConsumer(operatorRetryConsumerSource.replace("'use server'", "'use client'")),
     () => assertOperatorRetryConsumer(operatorRetryConsumerSource.replace('retryFailedOutboundMessageV1(messageId)', "retryFailedOutboundMessageV1('fixed-message')")),
     () => {
@@ -1174,6 +1212,12 @@ const operatorRetryProbes = [
     },
 ]
 for (const probe of operatorRetryProbes) assert.throws(probe, undefined, 'operator retry negative probe must be rejected')
+for (const [label, probeSource, original] of [
+    ['operator false option', operatorRetrySource.replace('{ operatorInitiated: true }', '{ operatorInitiated: false }'), operatorRetrySource],
+    ['operator option removed', operatorRetrySource.replace('MessageService.retrySend(messageId, { operatorInitiated: true })', 'MessageService.retrySend(messageId)'), operatorRetrySource],
+    ['consumer lane', operatorRetryConsumerSource.replace("'use server'", "'use client'"), operatorRetryConsumerSource],
+    ['consumer fixed id', operatorRetryConsumerSource.replace('retryFailedOutboundMessageV1(messageId)', "retryFailedOutboundMessageV1('fixed-message')"), operatorRetryConsumerSource],
+]) assert.notEqual(probeSource, original, `operator retry probe must alter its source: ${label}`)
 
 rejectProbe(
     consumerSource,
@@ -1333,7 +1377,7 @@ process.stdout.write(`${JSON.stringify({
     negative_boundary_bypass_probes: 18,
     negative_repository_denominator_probes: 2,
     negative_dead_condition_variants: 4,
-    negative_implementation_invariant_probes: 4,
+    negative_implementation_invariant_probes: 7,
     operator_retry_capabilities: 1,
     operator_retry_consumers: 1,
     negative_operator_retry_probes: operatorRetryProbes.length,
