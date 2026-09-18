@@ -121,6 +121,7 @@ TUPLE_MUTATIONS: list[tuple[str, str, tuple[Any, ...], Any]] = [
     ("proof artifact from other branch", "artifact.json", ("workflow_run", "head_branch"), "main"),
     ("proof artifact from foreign repo", "artifact.json", ("workflow_run", "repository_id"), FOREIGN_REPOSITORY_ID),
     ("proof artifact from fork head", "artifact.json", ("workflow_run", "head_repository_id"), FOREIGN_REPOSITORY_ID),
+    ("proof artifact run is not an object", "artifact.json", ("workflow_run",), None),
     # source execution proof
     ("proof outcome failed", contract.SOURCE_PROOF, ("outcome",), "FAIL"),
     ("proof for other commit", contract.SOURCE_PROOF, ("source", "commit"), contract.BASELINE_COMMIT),
@@ -148,6 +149,8 @@ TUPLE_MUTATIONS: list[tuple[str, str, tuple[Any, ...], Any]] = [
     ("baseline wrong tree", "baseline-run.json", ("head_commit", "tree_id"), contract.APPLICATION_TREE),
     ("baseline fork head", "baseline-run.json", ("head_repository", "fork"), True),
     ("baseline wrong workflow", "baseline-run.json", ("workflow_id",), 1),
+    ("baseline wrong workflow path", "baseline-run.json", ("path",), ".github/workflows/coordinated-gravity-max-be6b8eb8.yml"),
+    ("baseline proof artifact run is not an object", "baseline-artifact.json", ("workflow_run",), []),
     ("baseline architecture job failed", "baseline-jobs.json", ("jobs", 0, "conclusion"), "failure"),
     ("baseline architecture job other id", "baseline-jobs.json", ("jobs", 0, "id"), contract.SOURCE_ARCHITECTURE_JOB_ID),
     ("baseline proof artifact id", "baseline-artifact.json", ("id",), contract.SOURCE_PROOF_ARTIFACT_ID),
@@ -390,6 +393,26 @@ class ApplicationLineageTests(unittest.TestCase):
         ):
             with self.subTest(name), patched(name, value):
                 with self.assertRaisesRegex(contract.ContractError, "lineage mismatch"):
+                    contract.validate_application_source(self.application)
+
+    def test_self_consistent_other_baseline_is_rejected(self) -> None:
+        # A different, internally consistent baseline (its own commit and tree) is
+        # still not the parent of APPLICATION_PARENT, so only the lineage edge can catch it.
+        other_tree = subprocess.check_output(
+            ["git", "-C", str(self.application), "rev-parse", f"{contract.BASELINE_PARENT}^{{tree}}"], text=True,
+        ).strip()
+        with patched("BASELINE_COMMIT", contract.BASELINE_PARENT), patched("BASELINE_TREE", other_tree):
+            with self.assertRaisesRegex(contract.ContractError, "lineage mismatch"):
+                contract.validate_application_source(self.application)
+
+    def test_every_application_identity_member_is_bound(self) -> None:
+        for name, value in (
+            ("APPLICATION_TREE", contract.BASELINE_TREE),
+            ("GRAVITY_SUBTREE", "03175f4baad1563ecf57bbebb9254df12863f07b"),
+            ("MAX_SUBTREE", contract.GRAVITY_SUBTREE),
+        ):
+            with self.subTest(name), patched(name, value):
+                with self.assertRaisesRegex(contract.ContractError, "application source identity mismatch"):
                     contract.validate_application_source(self.application)
 
     def test_other_application_commit_is_rejected(self) -> None:
