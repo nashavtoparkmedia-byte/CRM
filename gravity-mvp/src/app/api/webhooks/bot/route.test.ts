@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
     providerFetch: vi.fn(),
     compensationPilotSection: vi.fn(),
     compensationPilotSubmit: vi.fn(),
+    compensationPilotOrderCheck: vi.fn(),
+    compensationPilotRefresh: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -55,6 +57,8 @@ vi.mock('@/modules/messaging/public/v1', () => ({
 }))
 
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
+    compensationPilotOrderCheckV1: mocks.compensationPilotOrderCheck,
+    compensationPilotRefreshV1: mocks.compensationPilotRefresh,
     compensationPilotSectionV1: mocks.compensationPilotSection,
     compensationPilotSubmitV1: mocks.compensationPilotSubmit,
     mirrorDriverActionResultV1: mocks.mirrorDriverActionResult,
@@ -339,13 +343,20 @@ describe('driver-bot cash compensation pilot', () => {
         attachmentFileId: 'file-1',
         attachmentKind: 'photo',
         idempotencyKey: 'submit-key-1',
+        scopeKey: 'scope-a',
         ...binding,
+    }
+    const proven = {
+        telegramUserId: '123456',
+        driverId: 'driver-1',
+        contactId: 'contact-1',
+        selectedExternalParkId: 'park-a',
     }
 
     beforeEach(() => {
         vi.clearAllMocks()
         process.env.BOT_CRM_SECRET = 'test-bot-secret'
-        mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1' })
+        mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: 'park-a' })
         mocks.authorizeDriverTelegram.mockResolvedValue({
             chatId: 'chat-1',
             contactId: 'contact-1',
@@ -385,11 +396,7 @@ describe('driver-bot cash compensation pilot', () => {
             applications: [],
         })
         expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({ driverId: 'driver-1', telegramId: 123456n })
-        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({
-            telegramUserId: '123456',
-            driverId: 'driver-1',
-            contactId: 'contact-1',
-        })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith(proven, { search: null })
         expectNoIdentityWrites()
     })
 
@@ -427,15 +434,14 @@ describe('driver-bot cash compensation pilot', () => {
             status: 'created',
         })
         expect(mocks.compensationPilotSubmit).toHaveBeenCalledWith({
-            telegramUserId: '123456',
-            driverId: 'driver-1',
-            contactId: 'contact-1',
+            ...proven,
             externalOrderId: 'order-1',
             claimedRubles: 300,
             supportConfirmed: true,
             attachmentFileId: 'file-1',
             attachmentKind: 'photo',
             idempotencyKey: 'submit-key-1',
+            scopeKey: 'scope-a',
         })
         expectNoIdentityWrites()
     })
@@ -446,11 +452,7 @@ describe('driver-bot cash compensation pilot', () => {
         await POST(actionRequest('compensation_section', { telegramId: '000123456', ...binding }))
 
         expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({ driverId: 'driver-1', telegramId: 123456n })
-        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({
-            telegramUserId: '123456',
-            driverId: 'driver-1',
-            contactId: 'contact-1',
-        })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith(proven, { search: null })
     })
 
     test('refuses a submit with no idempotency key before reading any identity', async () => {
@@ -469,5 +471,126 @@ describe('driver-bot cash compensation pilot', () => {
         }
         expect(mocks.findDriverTelegramFirst).not.toHaveBeenCalled()
         expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+    })
+
+    test('takes the selected park from the proven link and ignores any park the bot sends', async () => {
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'catalogue_disabled', applications: [] })
+        mocks.compensationPilotSubmit.mockResolvedValue({ submitted: false, refusal: 'stale_context' })
+        const forged = { parkId: 'park-b', activeParkId: 'park-b', selectedExternalParkId: 'park-b', externalParkId: 'park-b' }
+
+        await POST(actionRequest('compensation_section', { telegramId: '123456', ...forged, ...binding }))
+        await POST(actionRequest('compensation_submit', { ...submitPayload, ...forged }))
+
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith(proven, { search: null })
+        expect(mocks.compensationPilotSubmit).toHaveBeenCalledWith(expect.objectContaining({ selectedExternalParkId: 'park-a' }))
+    })
+
+    test('passes a link with no selected park on as no selection', async () => {
+        mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: null })
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'park_not_selected', applications: [] })
+
+        const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ available: false, reason: 'park_not_selected' })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({ ...proven, selectedExternalParkId: null }, { search: null })
+    })
+
+    test('serializes the scoped list with its status, scope token and search candidates', async () => {
+        const order = {
+            externalOrderId: 'order-1',
+            shortOrderIdDisplay: '4821',
+            amountKopecks: 68_000,
+            endedAt: new Date('2026-09-18T10:42:00.000Z'),
+            dayKey: '2026-09-18',
+            localTime: '15:42',
+            localDate: '18.09',
+            claimed: false,
+        }
+        mocks.compensationPilotSection.mockResolvedValue({
+            available: true,
+            scopeKey: 'scope-a',
+            externalParkId: 'park-a',
+            firstMonthKey: '2026-09',
+            remainingBudgetKopecks: 500_000,
+            catalogueStatus: 'partial',
+            todayKey: '2026-09-18',
+            orders: [order],
+            search: { query: '4821', kind: 'number', truncated: false, matches: [order] },
+            applications: [],
+        })
+
+        const response = await POST(actionRequest('compensation_section', { telegramId: '123456', search: ` 4821${'9'.repeat(60)}`, ...binding }))
+
+        await expect(response.json()).resolves.toEqual({
+            available: true,
+            scopeKey: 'scope-a',
+            monthKey: '2026-09',
+            remainingBudgetKopecks: 500_000,
+            catalogueStatus: 'partial',
+            todayKey: '2026-09-18',
+            orders: [{
+                externalOrderId: 'order-1',
+                shortOrderId: '4821',
+                amountKopecks: 68_000,
+                endedAt: '2026-09-18T10:42:00.000Z',
+                dayKey: '2026-09-18',
+                localTime: '15:42',
+                localDate: '18.09',
+                claimed: false,
+            }],
+            search: { query: '4821', kind: 'number', truncated: false, externalOrderIds: ['order-1'] },
+            applications: [],
+        })
+        const [, options] = mocks.compensationPilotSection.mock.calls[0]
+        expect(options.search).toHaveLength(40)
+        expectNoIdentityWrites()
+    })
+
+    test('checks a chosen order with the scope token the bot echoes, and no provider call of its own', async () => {
+        mocks.compensationPilotOrderCheck.mockResolvedValue({ state: 'checking', refusal: null, order: null })
+
+        const response = await POST(actionRequest('compensation_order_check', {
+            telegramId: '123456', externalOrderId: 'order-1', scopeKey: 'scope-a', retry: true, ...binding,
+        }))
+
+        await expect(response.json()).resolves.toEqual({ state: 'checking', refusal: null, order: null })
+        expect(mocks.compensationPilotOrderCheck).toHaveBeenCalledWith({
+            ...proven, externalOrderId: 'order-1', scopeKey: 'scope-a', retry: true,
+        })
+        expectNoIdentityWrites()
+    })
+
+    test('refuses an order check without an order before reading any identity', async () => {
+        const response = await POST(actionRequest('compensation_order_check', { telegramId: '123456', ...binding }))
+        expect(response.status).toBe(400)
+        expect(mocks.findDriverTelegramFirst).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotOrderCheck).not.toHaveBeenCalled()
+    })
+
+    test('schedules a refresh of the proven link park and returns at once', async () => {
+        mocks.compensationPilotRefresh.mockResolvedValue({ status: 'scheduled', refusal: null })
+
+        const response = await POST(actionRequest('compensation_refresh', { telegramId: '123456', parkId: 'park-b', ...binding }))
+
+        await expect(response.json()).resolves.toEqual({ status: 'scheduled', refusal: null })
+        expect(mocks.compensationPilotRefresh).toHaveBeenCalledWith(proven)
+        expectNoIdentityWrites()
+    })
+
+    test('answers refused chat authority with 409 on every compensation action, reaching no service', async () => {
+        mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'))
+        const requests = [
+            actionRequest('compensation_section', { telegramId: '123456', ...binding }),
+            actionRequest('compensation_order_check', { telegramId: '123456', externalOrderId: 'order-1', scopeKey: 'scope-a', ...binding }),
+            actionRequest('compensation_refresh', { telegramId: '123456', ...binding }),
+            actionRequest('compensation_submit', submitPayload),
+        ]
+        for (const request of requests) {
+            expect((await POST(request)).status).toBe(409)
+        }
+        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotOrderCheck).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotRefresh).not.toHaveBeenCalled()
+        expect(mocks.compensationPilotSubmit).not.toHaveBeenCalled()
     })
 })

@@ -19,6 +19,8 @@ import {
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
 import {
+    compensationPilotOrderCheckV1,
+    compensationPilotRefreshV1,
     compensationPilotSectionV1,
     compensationPilotSubmitV1,
     mirrorDriverActionResultV1,
@@ -64,6 +66,10 @@ export async function POST(request: Request) {
                 return await handleCompensationSection(payload)
             case 'compensation_submit':
                 return await handleCompensationSubmit(payload)
+            case 'compensation_order_check':
+                return await handleCompensationOrderCheck(payload)
+            case 'compensation_refresh':
+                return await handleCompensationRefresh(payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -330,10 +336,13 @@ async function findCarById(connection: any, carId: string) {
 }
 
 // ── Cash compensation pilot ────────────────────────────────────────────────
-// The bot renders; every rule lives behind compensationPilotSectionV1 and
-// compensationPilotSubmitV1, so the two surfaces cannot drift apart. The person
-// is proven here through current Telegram Driver authority, the same gate as
-// every other bot Driver action; this block never creates or changes a link.
+// The bot renders; every rule lives behind compensationPilotSectionV1,
+// compensationPilotOrderCheckV1, compensationPilotRefreshV1 and
+// compensationPilotSubmitV1, so the surfaces cannot drift apart. The person is
+// proven here through current Telegram Driver authority, the same gate as every
+// other bot Driver action; this block never creates or changes a link. The
+// selected park is read from that same link in the same request and never
+// taken from the bot, so a list shown for one park cannot be acted on in another.
 
 function serializeCompensationApplication(application: {
     applicationId: string
@@ -353,8 +362,36 @@ function serializeCompensationApplication(application: {
     }
 }
 
+function serializeCompensationOrder(order: {
+    externalOrderId: string
+    shortOrderIdDisplay: string | null
+    amountKopecks: number
+    endedAt: Date
+    dayKey: string
+    localTime: string
+    localDate: string
+    claimed: boolean
+}) {
+    return {
+        externalOrderId: order.externalOrderId,
+        shortOrderId: order.shortOrderIdDisplay,
+        amountKopecks: order.amountKopecks,
+        endedAt: order.endedAt.toISOString(),
+        dayKey: order.dayKey,
+        localTime: order.localTime,
+        localDate: order.localDate,
+        claimed: order.claimed,
+    }
+}
+
 type CompensationPersonProof =
-    | { proven: true; telegramUserId: string; driverId: string; contactId: string }
+    | {
+        proven: true
+        telegramUserId: string
+        driverId: string
+        contactId: string
+        selectedExternalParkId: string | null
+    }
     | { proven: false; response: NextResponse | null }
 
 async function proveCompensationTelegramPerson(payload: any): Promise<CompensationPersonProof> {
@@ -370,7 +407,7 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
     const telegramId = BigInt(telegramUserId)
     const mapping = await prisma.driverTelegram.findFirst({
         where: { telegramId },
-        select: { driverId: true },
+        select: { driverId: true, activeParkId: true },
     })
     // No manager link yet: the in-band refusal, not an authority failure.
     if (!mapping || !mapping.driverId) return { proven: false, response: null }
@@ -393,6 +430,17 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
         telegramUserId: telegramId.toString(),
         driverId: mapping.driverId,
         contactId: authority.contactId,
+        // The link's own selection, read with the proof. The payload has none.
+        selectedExternalParkId: mapping.activeParkId ?? null,
+    }
+}
+
+function compensationProofFields(proof: Extract<CompensationPersonProof, { proven: true }>) {
+    return {
+        telegramUserId: proof.telegramUserId,
+        driverId: proof.driverId,
+        contactId: proof.contactId,
+        selectedExternalParkId: proof.selectedExternalParkId,
     }
 }
 
@@ -406,11 +454,8 @@ async function handleCompensationSection(payload: any) {
         })
     }
 
-    const view = await compensationPilotSectionV1({
-        telegramUserId: proof.telegramUserId,
-        driverId: proof.driverId,
-        contactId: proof.contactId,
-    })
+    const search = typeof payload?.search === 'string' ? payload.search.slice(0, 40) : null
+    const view = await compensationPilotSectionV1(compensationProofFields(proof), { search })
     if (!view.available) {
         return NextResponse.json({
             available: false,
@@ -420,16 +465,56 @@ async function handleCompensationSection(payload: any) {
     }
     return NextResponse.json({
         available: true,
+        scopeKey: view.scopeKey,
         monthKey: view.firstMonthKey,
         remainingBudgetKopecks: view.remainingBudgetKopecks,
-        orders: view.orders.map((order) => ({
-            externalOrderId: order.externalOrderId,
-            shortOrderId: order.shortOrderIdDisplay,
-            amountKopecks: order.amountKopecks,
-            endedAt: order.endedAt.toISOString(),
-        })),
+        catalogueStatus: view.catalogueStatus,
+        todayKey: view.todayKey,
+        orders: view.orders.map(serializeCompensationOrder),
+        search: view.search === null ? null : {
+            query: view.search.query,
+            kind: view.search.kind,
+            truncated: view.search.truncated,
+            externalOrderIds: view.search.matches.map((order) => order.externalOrderId),
+        },
         applications: view.applications.map(serializeCompensationApplication),
     })
+}
+
+async function handleCompensationOrderCheck(payload: any) {
+    const externalOrderId = typeof payload?.externalOrderId === 'string' ? payload.externalOrderId : ''
+    if (!payload?.telegramId || !externalOrderId) {
+        return NextResponse.json({ error: 'Missing telegramId or externalOrderId' }, { status: 400 })
+    }
+
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({ state: 'refused', refusal: 'identity_not_proven', order: null })
+    }
+
+    const check = await compensationPilotOrderCheckV1({
+        ...compensationProofFields(proof),
+        externalOrderId,
+        // Echoed from the list the bot showed; the service compares it with the
+        // scope it rebuilds now.
+        scopeKey: typeof payload?.scopeKey === 'string' ? payload.scopeKey : '',
+        retry: payload?.retry === true,
+    })
+    return NextResponse.json({
+        state: check.state,
+        refusal: check.refusal,
+        order: check.order === null ? null : serializeCompensationOrder(check.order),
+    })
+}
+
+async function handleCompensationRefresh(payload: any) {
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({ status: 'refused', refusal: 'identity_not_proven' })
+    }
+
+    const outcome = await compensationPilotRefreshV1(compensationProofFields(proof))
+    return NextResponse.json({ status: outcome.status, refusal: outcome.refusal })
 }
 
 async function handleCompensationSubmit(payload: any) {
@@ -448,9 +533,7 @@ async function handleCompensationSubmit(payload: any) {
     }
 
     const outcome = await compensationPilotSubmitV1({
-        telegramUserId: proof.telegramUserId,
-        driverId: proof.driverId,
-        contactId: proof.contactId,
+        ...compensationProofFields(proof),
         externalOrderId: String(externalOrderId),
         // A non-numeric amount becomes NaN, which the gate refuses as not whole
         // rubles rather than coercing it into something plausible.
@@ -459,6 +542,7 @@ async function handleCompensationSubmit(payload: any) {
         attachmentFileId: attachmentFileId ? String(attachmentFileId) : null,
         attachmentKind: attachmentKind ? String(attachmentKind) : null,
         idempotencyKey,
+        scopeKey: typeof payload?.scopeKey === 'string' ? payload.scopeKey : '',
     })
 
     if (!outcome.submitted) {
