@@ -174,7 +174,8 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
     async findCashOrders({ externalParkId, externalDriverProfileId }) {
         const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
             `SELECT "id","provider","externalParkId","externalOrderId","shortOrderIdDisplay",
-                    "externalDriverProfileId","rawPrice","amountKopecks","endedAt"
+                    "externalDriverProfileId","rawPrice","amountKopecks","endedAt",
+                    "observedAt","providerBookedAt"
              FROM "CompensationCashOrder"
              WHERE "externalParkId" = $1 AND "externalDriverProfileId" = $2
              ORDER BY "endedAt" DESC`,
@@ -190,6 +191,8 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
             rawPrice: String(row.rawPrice),
             amountKopecks: Number(row.amountKopecks),
             endedAt: new Date(row.endedAt as string),
+            observedAt: new Date(row.observedAt as string),
+            providerBookedAt: row.providerBookedAt === null ? null : new Date(row.providerBookedAt as string),
         }))
     },
 
@@ -261,7 +264,9 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
                     shortOrderIdDisplay: input.order.shortOrderIdDisplay,
                     rawPrice: input.order.rawPrice,
                     endedAt: input.order.endedAt,
-                    verifiedAt: input.submittedAt,
+                    // When Yandex last confirmed the order, not when the driver
+                    // pressed submit: the gate only lets a recent one through.
+                    verifiedAt: input.order.observedAt,
                 },
                 claimedRubles: input.claimedRubles,
                 submittedAt: input.submittedAt,
