@@ -152,7 +152,17 @@ const CHAT = {
     },
 }
 
+// A second private MAX conversation, for a key reused across conversations.
+const CHAT_B = {
+    ...CHAT,
+    id: 'chat-max-other',
+    externalChatId: 'max:acceptance-000000000006',
+}
+
 const DELIVERED = { outcome: 'delivered', externalId: null, resolvedChatId: null }
+
+// What the current taxonomy writes for a failure that provably dispatched nothing.
+const SAFE_V2 = { retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 }
 
 function persisted(id: string): Row {
     const row = mocks.store.get(id)
@@ -190,9 +200,11 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
         mocks.cmidLookupsBlind.remaining = 0
         // Honour `select`: a send must load every field the outbound preparer
         // checks, or a private conversation is refused as non-private.
-        mocks.chatFindUnique.mockImplementation(async ({ select }: Row = {}) => (
-            select ? pick(CHAT, select) : clone(CHAT)
-        ))
+        mocks.chatFindUnique.mockImplementation(async ({ where, select }: Row = {}) => {
+            const chat = where?.id === CHAT_B.id ? CHAT_B : where?.id === CHAT.id || where === undefined ? CHAT : null
+            if (!chat) return null
+            return select ? pick(chat, select) : clone(chat)
+        })
         mocks.chatUpdate.mockResolvedValue({ id: CHAT.id })
         mocks.onOutboundMessage.mockResolvedValue(undefined)
         mocks.recordReachability.mockResolvedValue({ outcome: 'updated' })
@@ -276,6 +288,7 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
                 error: 'ECONNREFUSED MAX scraper',
                 retryable: true,
                 deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
             })
             expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
         })
@@ -342,9 +355,76 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
         })
     })
 
+    describe('a clientMessageId is bound to one exact send intent', () => {
+        async function sendOnce(content = 'Bound', quotedMsgId?: string) {
+            mocks.maxSendText.mockResolvedValue(DELIVERED)
+            const first = await MessageService.send(CHAT.id, content, 'max', undefined, 'cmid-bound', quotedMsgId)
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+            return first
+        }
+
+        it('replays the same intent from its row without preparing or dispatching again', async () => {
+            const first = await sendOnce('Bound', 'quoted-1')
+            const prepared = mocks.prepareIdentity.mock.calls.length
+
+            const repeat = await MessageService.send(CHAT.id, 'Bound', 'max', undefined, 'cmid-bound', 'quoted-1')
+
+            expect(repeat).toMatchObject({ duplicate: true, id: first.id, status: 'delivered' })
+            expect(mocks.prepareIdentity.mock.calls.length).toBe(prepared)
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+            expect(mocks.creates).toHaveLength(1)
+        })
+
+        it.each([
+            ['another conversation', () => MessageService.send(CHAT_B.id, 'Bound', 'max', undefined, 'cmid-bound')],
+            ['other text', () => MessageService.send(CHAT.id, 'Bound, but edited', 'max', undefined, 'cmid-bound')],
+            ['another channel', () => MessageService.send(CHAT.id, 'Bound', 'telegram' as never, undefined, 'cmid-bound')],
+            ['a quoted target where there was none', () => MessageService.send(CHAT.id, 'Bound', 'max', undefined, 'cmid-bound', 'quoted-1')],
+        ])('refuses the key reused for %s, with no preparation or dispatch', async (_name, reuse) => {
+            await sendOnce()
+            const prepared = mocks.prepareIdentity.mock.calls.length
+
+            await expect(reuse()).rejects.toThrow('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+
+            expect(mocks.prepareIdentity.mock.calls.length).toBe(prepared)
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+            expect(mocks.creates).toHaveLength(1)
+        })
+
+        it('refuses the key reused with a different quoted target or with none', async () => {
+            await sendOnce('Quoted', 'quoted-1')
+
+            await expect(MessageService.send(CHAT.id, 'Quoted', 'max', undefined, 'cmid-bound', 'quoted-2'))
+                .rejects.toThrow('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+            await expect(MessageService.send(CHAT.id, 'Quoted', 'max', undefined, 'cmid-bound'))
+                .rejects.toThrow('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+        })
+
+        it('a racing request carrying a different intent under the same key fails closed', async () => {
+            mocks.cmidLookupsBlind.remaining = 2
+            let release!: () => void
+            const released = new Promise<void>(resolve => { release = resolve })
+            mocks.maxSendText.mockImplementation(async () => {
+                await released
+                return DELIVERED
+            })
+
+            const winner = MessageService.send(CHAT.id, 'First intent', 'max', undefined, 'cmid-contested')
+            const loser = MessageService.send(CHAT.id, 'Second intent', 'max', undefined, 'cmid-contested')
+            await expect(loser).rejects.toThrow('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+            release()
+
+            await expect(winner).resolves.toMatchObject({ success: true, status: 'delivered', clientMessageId: 'cmid-contested' })
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+            expect(mocks.maxSendText.mock.calls[0][0].content).toBe('First intent')
+            expect(mocks.creates).toHaveLength(1)
+        })
+    })
+
     describe('operator retry of a persisted failure', () => {
         it('retries the same row and clientMessageId at once, while the unattended job still waits', async () => {
-            failedRow('msg-safe', { retryable: true, deliveryOutcome: 'safe_to_redeliver', error: 'ECONNREFUSED' })
+            failedRow('msg-safe', { ...SAFE_V2, error: 'ECONNREFUSED' })
             mocks.maxSendText.mockResolvedValue(DELIVERED)
 
             await expect(MessageService.retrySend('msg-safe')).resolves.toEqual({
@@ -367,6 +447,7 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
                     error: null,
                     retryable: false,
                     deliveryOutcome: null,
+                    errorSchemaVersion: null,
                 },
             })
             expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
@@ -380,7 +461,7 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
         })
 
         it('lets exactly one of two concurrent retries dispatch', async () => {
-            failedRow('msg-concurrent', { retryable: true, deliveryOutcome: 'safe_to_redeliver' })
+            failedRow('msg-concurrent', SAFE_V2)
             let release!: () => void
             const released = new Promise<void>(resolve => { release = resolve })
             mocks.maxSendText.mockImplementation(async () => {
@@ -402,7 +483,7 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
         })
 
         it('reports a retry that fails again with the new classification', async () => {
-            failedRow('msg-again', { retryable: true, deliveryOutcome: 'safe_to_redeliver' })
+            failedRow('msg-again', SAFE_V2)
             mocks.maxSendText.mockRejectedValue(new Error('Timeout: MAX Web reply'))
 
             const result = await retryFailedOutboundMessageV1('msg-again')
@@ -410,16 +491,24 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
             expect(result).toMatchObject({
                 ok: false,
                 error: 'Timeout: MAX Web reply',
-                message: { id: 'msg-again', status: 'failed', retryable: false, deliveryOutcome: 'unknown' },
+                message: { id: 'msg-again', status: 'failed', retryable: false, deliveryOutcome: 'unknown', errorSchemaVersion: 2 },
             })
             expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
         })
 
         it.each([
-            ['an unknown delivery outcome', { retryable: false, deliveryOutcome: 'unknown' }, {}, 'Not retryable'],
-            ['a terminal failure', { retryable: false, deliveryOutcome: 'terminal' }, {}, 'Not retryable'],
-            ['a message that is not failed', { retryable: true }, { status: 'delivered' }, 'Status is delivered, not failed'],
-            ['an exhausted attempt limit', { retryable: true, retryAttempt: 3 }, {}, 'Max retries exceeded'],
+            // Rows written by the v1 taxonomy, which called every transient error
+            // retryable, carry no proof that nothing was dispatched.
+            ['a v1 row marked retryable with no outcome or schema version', { retryable: true, errorCode: 'TIMEOUT' }, {}, 'Not retryable'],
+            ['a v1 row marked retryable with schema version 1', { retryable: true, errorCode: 'TIMEOUT', errorSchemaVersion: 1 }, {}, 'Not retryable'],
+            ['a safe outcome without a schema version', { retryable: true, deliveryOutcome: 'safe_to_redeliver' }, {}, 'Not retryable'],
+            ['a safe outcome with a non-numeric schema version', { retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: '2' }, {}, 'Not retryable'],
+            ['a safe outcome not marked retryable', { ...SAFE_V2, retryable: false }, {}, 'Not retryable'],
+            ['an unknown delivery outcome', { retryable: false, deliveryOutcome: 'unknown', errorSchemaVersion: 2 }, {}, 'Not retryable'],
+            ['an unknown outcome even if marked retryable', { retryable: true, deliveryOutcome: 'unknown', errorSchemaVersion: 2 }, {}, 'Not retryable'],
+            ['a terminal failure', { retryable: false, deliveryOutcome: 'terminal', errorSchemaVersion: 2 }, {}, 'Not retryable'],
+            ['a message that is not failed', SAFE_V2, { status: 'delivered' }, 'Status is delivered, not failed'],
+            ['an exhausted attempt limit', { ...SAFE_V2, retryAttempt: 3 }, {}, 'Max retries exceeded'],
         ])('refuses %s without dispatching', async (_name, metadata, overrides, error) => {
             failedRow('msg-refused', metadata, overrides)
 
@@ -428,6 +517,23 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
             expect(result).toMatchObject({ ok: false, error, message: { id: 'msg-refused' } })
             expect(mocks.maxSendText).not.toHaveBeenCalled()
             expect(mocks.creates).toHaveLength(0)
+        })
+
+        it('the unattended job refuses a v1 retryable row too, before any backoff or dispatch', async () => {
+            failedRow('msg-legacy', { retryable: true, errorCode: 'TIMEOUT', lastFailedAt: '2020-01-01T00:00:00.000Z' })
+
+            await expect(MessageService.retrySend('msg-legacy')).resolves.toEqual({ success: false, error: 'Not retryable' })
+            await expect(MessageService.retrySend('msg-legacy', { operatorInitiated: true })).resolves.toEqual({ success: false, error: 'Not retryable' })
+            expect(mocks.maxSendText).not.toHaveBeenCalled()
+            expect(persisted('msg-legacy')).toMatchObject({ status: 'failed', metadata: { retryAttempt: 0 } })
+        })
+
+        it('reports a v1 retryable row as not retryable to the UI', async () => {
+            failedRow('msg-legacy-dto', { retryable: true, errorCode: 'TIMEOUT', error: 'Timeout' })
+
+            const result = await retryFailedOutboundMessageV1('msg-legacy-dto')
+
+            expect(result).toMatchObject({ ok: false, error: 'Not retryable', message: { status: 'failed', retryable: false, deliveryOutcome: null, errorSchemaVersion: null } })
         })
 
         it.each([[''], ['  msg-safe'], [42], [null]])('refuses a malformed message id %j', async (messageId) => {

@@ -1,4 +1,4 @@
-import { MessageService } from '@/lib/MessageService'
+import { MessageService, isSafeToRedeliver } from '@/lib/MessageService'
 import { broadcastChatMessageV1 } from './message-stream'
 
 export interface OperatorRetriedMessageV1 {
@@ -8,8 +8,10 @@ export interface OperatorRetriedMessageV1 {
     status: string
     externalId: string | null
     error: string | null
+    /** Safe to redeliver under the current taxonomy; false for any v1, unknown or terminal row. */
     retryable: boolean
     deliveryOutcome: string | null
+    errorSchemaVersion: number | null
 }
 
 export type OperatorDeliveryRetryResultV1 = {
@@ -56,8 +58,9 @@ export async function retryFailedOutboundMessageV1(messageId: unknown): Promise<
         status: row.status,
         externalId: row.externalId,
         error: row.status === 'failed' ? optionalString(metadata.error) : null,
-        retryable: row.status === 'failed' && metadata.retryable === true,
+        retryable: row.status === 'failed' && isSafeToRedeliver(metadata),
         deliveryOutcome: row.status === 'failed' ? optionalString(metadata.deliveryOutcome) : null,
+        errorSchemaVersion: row.status === 'failed' && typeof metadata.errorSchemaVersion === 'number' ? metadata.errorSchemaVersion : null,
     }
     // Other open views of this conversation settle on the same row.
     broadcastChatMessageV1(row.chatId, row)

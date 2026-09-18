@@ -365,12 +365,45 @@ describe('failures and retry', () => {
     expect(sendBodies).toHaveLength(1)
   })
 
+  test('a safe failure answered by the owner offers «Повторить» for that persisted row', async () => {
+    const chat = chatId('safe-answer')
+    const retry = vi.fn<RetryPersistedDelivery>(() => new Promise(() => {}))
+    await open(chat, retry)
+    sendReplies.push({ status: 200, body: { success: false, id: 'msg_sa', status: 'failed', error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 } })
+
+    await sendText('Безопасно повторить')
+    fireEvent.click(screen.getByText(RETRY))
+    await settled()
+
+    expect(retry).toHaveBeenCalledWith('msg_sa')
+    expect(sendBodies).toHaveLength(1)
+  })
+
+  test.each([
+    ['a v1 row marked retryable with no outcome', { error: 'Timeout', errorCode: 'TIMEOUT', retryable: true }],
+    ['a v1 row with schema version 1', { error: 'Timeout', errorCode: 'TIMEOUT', retryable: true, errorSchemaVersion: 1 }],
+    ['a safe outcome without a schema version', { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver' }],
+    ['an unknown outcome marked retryable', { error: 'Timeout', retryable: true, deliveryOutcome: 'unknown', errorSchemaVersion: 2 }],
+  ])('a persisted failure that is %s offers no «Повторить»', async (_name, metadata) => {
+    const chat = chatId('legacy')
+    const legacy: Message = {
+      id: 'msg_legacy', clientMessageId: 'cmid-legacy', direction: 'outbound', type: 'text', content: 'Старая ошибка',
+      sentAt: '2026-09-18T08:01:00.000Z', status: 'failed', channel: 'max', metadata,
+    }
+    const retry = vi.fn<RetryPersistedDelivery>()
+    await open(chat, retry, legacy)
+
+    expect(screen.getByText('Старая ошибка')).toBeTruthy()
+    expect(screen.queryByText(RETRY)).toBeNull()
+    expect(retry).not.toHaveBeenCalled()
+  })
+
   test('«Повторить» on a persisted failure retries that message, not a new send', async () => {
     const chat = chatId('persisted')
     const failed: Message = {
       id: 'msg_f', clientMessageId: 'cmid-original', direction: 'outbound', type: 'text', content: 'Сохранённая ошибка',
       sentAt: '2026-09-18T08:01:00.000Z', status: 'failed', channel: 'max',
-      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver' },
+      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 },
     }
     let resolveRetry!: (value: Awaited<ReturnType<RetryPersistedDelivery>>) => void
     const retry = vi.fn<RetryPersistedDelivery>(() => new Promise((resolve) => { resolveRetry = resolve }))
@@ -380,7 +413,7 @@ describe('failures and retry', () => {
     await settled()
     expect(statuses(SENDING)).toHaveLength(1)
 
-    resolveRetry({ ok: true, error: null, message: { id: 'msg_f', status: 'delivered', externalId: null, error: null, retryable: false, deliveryOutcome: null } })
+    resolveRetry({ ok: true, error: null, message: { id: 'msg_f', status: 'delivered', externalId: null, error: null, retryable: false, deliveryOutcome: null, errorSchemaVersion: null } })
     await settled()
 
     expect(retry).toHaveBeenCalledTimes(1)
@@ -395,7 +428,7 @@ describe('failures and retry', () => {
     const failed: Message = {
       id: 'msg_rd', clientMessageId: 'cmid-rd', direction: 'outbound', type: 'text', content: 'Двойной повтор',
       sentAt: '2026-09-18T08:01:00.000Z', status: 'failed', channel: 'max',
-      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver' },
+      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 },
     }
     const retry = vi.fn<RetryPersistedDelivery>(() => new Promise(() => {}))
     await open(chat, retry, failed)
@@ -414,12 +447,12 @@ describe('failures and retry', () => {
     const failed: Message = {
       id: 'msg_rr', clientMessageId: 'cmid-rr', direction: 'outbound', type: 'text', content: 'Отказ',
       sentAt: '2026-09-18T08:01:00.000Z', status: 'failed', channel: 'max',
-      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver' },
+      metadata: { error: 'ECONNREFUSED', retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 },
     }
     const retry = vi.fn<RetryPersistedDelivery>(async () => ({
       ok: false,
       error: 'Timeout: MAX Web reply',
-      message: { id: 'msg_rr', status: 'failed', externalId: null, error: 'Timeout: MAX Web reply', retryable: false, deliveryOutcome: 'unknown' },
+      message: { id: 'msg_rr', status: 'failed', externalId: null, error: 'Timeout: MAX Web reply', retryable: false, deliveryOutcome: 'unknown', errorSchemaVersion: 2 },
     }))
     await open(chat, retry, failed)
 

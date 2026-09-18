@@ -343,6 +343,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -394,6 +396,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -436,6 +440,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -562,6 +568,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2020-01-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -618,6 +626,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',

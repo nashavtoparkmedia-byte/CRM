@@ -6,6 +6,7 @@ import {
     applySendFailure,
     findSendRow,
     isLocalSendFailure,
+    isPersistedSafeToRedeliver,
     mergeCanonicalRow,
     mergeHistorySnapshot,
     updateSendRow,
@@ -137,6 +138,7 @@ export type RetryPersistedDelivery = (messageId: string) => Promise<{
         error: string | null
         retryable: boolean
         deliveryOutcome: string | null
+        errorSchemaVersion: number | null
     } | null
 }>
 
@@ -498,10 +500,11 @@ export function useMessages(
      * «Повторить». Never a new send intent:
      * - an intent whose request got no answer is sent again with its OWN
      *   clientMessageId, so a server that already has it answers with that row;
-     * - a persisted failure the owner marked safe to redeliver is retried as
-     *   that same Message row through the Messaging retry capability.
-     * Anything else — a terminal failure, an unknown delivery outcome — is not
-     * retried at all.
+     * - a persisted failure the owner proved safe to redeliver (current
+     *   taxonomy) is retried as that same Message row through the Messaging
+     *   retry capability.
+     * Anything else — a terminal failure, an unknown delivery outcome, a row
+     * only the v1 taxonomy marked retryable — is not retried at all.
      */
     const retryMessage = async (message: Message) => {
         const retryChatId = chatId
@@ -525,7 +528,7 @@ export function useMessages(
         }
 
         const retryPersisted = options.retryPersistedDelivery
-        if (message.metadata?.retryable !== true || !retryPersisted || retriesInFlight.has(message.id)) return
+        if (!isPersistedSafeToRedeliver(message) || !retryPersisted || retriesInFlight.has(message.id)) return
         retriesInFlight.add(message.id)
         const key = { id: message.id }
         const previous = message
@@ -541,6 +544,7 @@ export function useMessages(
                     error: result.message.error ?? result.error,
                     retryable: result.message.retryable,
                     deliveryOutcome: result.message.deliveryOutcome,
+                    errorSchemaVersion: result.message.errorSchemaVersion,
                 })
                 : { ...previous, metadata: { ...previous.metadata, error: result.error || previous.metadata?.error } }))
         } catch (err) {

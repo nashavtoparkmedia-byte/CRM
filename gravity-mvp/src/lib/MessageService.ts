@@ -504,6 +504,29 @@ export class MessageService {
         const targetChatId = chatId
         const targetChat = chat
 
+        // 1. Idempotency check: a clientMessageId names exactly one send intent.
+        // Replaying that intent answers with its existing row before any outbound
+        // preparation or provider call; the same key carrying a different intent
+        // (another conversation, text, channel or quoted target) fails closed and
+        // never borrows the other intent's row or state.
+        const intent: SendIntentV1 = {
+            chatId: targetChatId,
+            content,
+            channel: channelOverride ?? chat.channel,
+            quotedMsgId: nonEmptyString(quotedMsgId),
+        }
+        if (clientMessageId) {
+            const existing = await (prisma.message as any).findUnique({
+                where: { clientMessageId },
+                select: SEND_STATE_SELECT,
+            })
+            if (existing) {
+                assertSameSendIntent(existing, intent, clientMessageId)
+                console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
+                return duplicateSendResult(existing, clientMessageId)
+            }
+        }
+
         // A channel switch is a distinct identity selection, not a formatting
         // option on an existing conversation. The caller must first open the
         // exact persisted ContactIdentity through the contact-conversation
@@ -554,18 +577,6 @@ export class MessageService {
             profileId
         })
 
-        // 1. Idempotency check: if clientMessageId provided, check for existing message
-        if (clientMessageId) {
-            const existing = await (prisma.message as any).findUnique({
-                where: { clientMessageId },
-                select: SEND_STATE_SELECT,
-            })
-            if (existing) {
-                console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
-                return duplicateSendResult(existing, clientMessageId)
-            }
-        }
-
         const maxBinding = targetChat.channel === 'max'
             ? {
                 capability: getMaxChannelDeliveryV1(),
@@ -607,6 +618,8 @@ export class MessageService {
             return null
         })
         if (race.winner && clientMessageId) {
+            // The row that won is only this request's answer if it is this intent.
+            assertSameSendIntent(race.winner, intent, clientMessageId)
             console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} was created concurrently as ${race.winner.id}`)
             return duplicateSendResult(race.winner, clientMessageId)
         }
@@ -842,7 +855,7 @@ export class MessageService {
             externalId: deliveryExternalId,
             deliveryConfirmed: maxDeliveryMetadata?.deliveryConfirmed,
             error: errorMessage,
-            ...(deliveryOutcome ? { retryable: deliveryOutcome === 'safe_to_redeliver', deliveryOutcome } : {}),
+            ...(deliveryOutcome ? { retryable: deliveryOutcome === 'safe_to_redeliver', deliveryOutcome, errorSchemaVersion: ERROR_SCHEMA_VERSION } : {}),
         }
     }
 
@@ -868,7 +881,11 @@ export class MessageService {
         if (message.status !== 'failed') return { success: false, error: `Status is ${message.status}, not failed` }
 
         const meta = (message.metadata as any) || {}
-        if (!meta.retryable) return { success: false, error: 'Not retryable' }
+        // A physical redelivery needs the owner's explicit proof that nothing was
+        // dispatched. A row the v1 taxonomy marked retryable carries no such
+        // proof - v1 called every transient error retryable, timeouts included -
+        // so it fails closed.
+        if (!isSafeToRedeliver(meta)) return { success: false, error: 'Not retryable' }
 
         const attempt = (meta.retryAttempt || 0) + 1
         if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
@@ -1061,6 +1078,7 @@ export class MessageService {
             retryMeta.error = errorMessage
             retryMeta.retryable = classifyError(errorMessage || '')
             retryMeta.deliveryOutcome = classifyDeliveryOutcome(errorMessage || '')
+            retryMeta.errorSchemaVersion = ERROR_SCHEMA_VERSION
             opsLog('warn', 'message_retry_failed', { messageId, channel: message.channel, retryAttempt: attempt, error: errorMessage || undefined })
         } else {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
@@ -1169,12 +1187,14 @@ function sendStateMetadata(row: SendStateRow): Record<string, unknown> {
 /** What a caller needs to settle its own copy of a message it did not just send. */
 function canonicalSendState(row: SendStateRow) {
     const metadata = sendStateMetadata(row)
+    const failed = row.status === 'failed'
     return {
         status: row.status,
         externalId: row.externalId ?? null,
-        error: row.status === 'failed' ? (nonEmptyString(metadata.error) ?? 'Ошибка доставки') : null,
-        retryable: row.status === 'failed' && metadata.retryable === true,
-        deliveryOutcome: row.status === 'failed' ? (nonEmptyString(metadata.deliveryOutcome) ?? null) : null,
+        error: failed ? (nonEmptyString(metadata.error) ?? 'Ошибка доставки') : null,
+        retryable: failed && isSafeToRedeliver(metadata),
+        deliveryOutcome: failed ? (nonEmptyString(metadata.deliveryOutcome) ?? null) : null,
+        errorSchemaVersion: failed && typeof metadata.errorSchemaVersion === 'number' ? metadata.errorSchemaVersion : null,
     }
 }
 
@@ -1185,6 +1205,32 @@ function canonicalSendState(row: SendStateRow) {
  */
 function duplicateSendResult(existing: SendStateRow, clientMessageId: string) {
     return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, clientMessageId, duplicate: true, ...canonicalSendState(existing) }
+}
+
+/** The logical send a clientMessageId was created for. */
+type SendIntentV1 = {
+    chatId: string
+    content: string
+    channel: string
+    quotedMsgId: string | null
+}
+
+/**
+ * A clientMessageId belongs to exactly one outbound intent. An existing row
+ * answers a repeated request only when it is that intent: the same
+ * conversation, text, channel and quoted target, sent as outbound text.
+ */
+function assertSameSendIntent(existing: SendStateRow, intent: SendIntentV1, clientMessageId: string): void {
+    const sameIntent = existing.chatId === intent.chatId
+        && existing.content === intent.content
+        && existing.channel === intent.channel
+        && nonEmptyString(sendStateMetadata(existing).quotedMsgId) === intent.quotedMsgId
+        && existing.direction === 'outbound'
+        && existing.type === 'text'
+    if (!sameIntent) {
+        opsLog('warn', 'client_message_id_intent_mismatch', { operation: 'send', chatId: intent.chatId, clientMessageId, messageId: existing.id })
+        throw new Error('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+    }
 }
 
 function isUniqueConstraintViolation(error: unknown): boolean {
@@ -1200,6 +1246,22 @@ function isUniqueConstraintViolation(error: unknown): boolean {
 // connection can arrive after the provider already delivered the message.
 
 const ERROR_SCHEMA_VERSION = 2
+
+// The first schema whose `retryable` means safe to redeliver.
+const SAFE_REDELIVERY_MIN_SCHEMA_VERSION = 2
+
+/**
+ * The one gate for a physical redelivery of a persisted row: the current
+ * taxonomy (schema v2 or later) explicitly recorded that nothing was
+ * dispatched. Anything else - a v1 row, a missing outcome, unknown, terminal -
+ * fails closed.
+ */
+export function isSafeToRedeliver(metadata: Record<string, unknown>): boolean {
+    return metadata.retryable === true
+        && metadata.deliveryOutcome === 'safe_to_redeliver'
+        && typeof metadata.errorSchemaVersion === 'number'
+        && metadata.errorSchemaVersion >= SAFE_REDELIVERY_MIN_SCHEMA_VERSION
+}
 
 type ErrorCode =
     | 'TRANSPORT_UNAVAILABLE'

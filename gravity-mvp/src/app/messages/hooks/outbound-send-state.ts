@@ -37,10 +37,24 @@ export function isLocalSendFailure(message: Message): boolean {
     return message.metadata?.localSendError === true
 }
 
-/** «Повторить» may be offered: an unanswered intent, or a failure the owner marked safe to redeliver. */
+/**
+ * The owner recorded, under the current taxonomy (error schema v2+), that
+ * nothing was dispatched. A row the v1 taxonomy marked retryable has no such
+ * proof and is never retried; neither is an unknown or terminal outcome.
+ */
+export function isPersistedSafeToRedeliver(message: Message): boolean {
+    const metadata = message.metadata
+    return message.status === 'failed'
+        && metadata?.retryable === true
+        && metadata?.deliveryOutcome === 'safe_to_redeliver'
+        && typeof metadata?.errorSchemaVersion === 'number'
+        && metadata.errorSchemaVersion >= 2
+}
+
+/** «Повторить» may be offered: an unanswered intent, or a failure the owner proved safe to redeliver. */
 export function canRetryOutbound(message: Message): boolean {
     if (message.direction !== 'outbound' || message.status !== 'failed') return false
-    return isLocalSendFailure(message) || message.metadata?.retryable === true
+    return isLocalSendFailure(message) || isPersistedSafeToRedeliver(message)
 }
 
 /** The owner could not tell whether the provider delivered it; nothing may resend it blindly. */
@@ -121,6 +135,7 @@ export interface SendAnswer {
     error?: string | null
     retryable?: boolean
     deliveryOutcome?: string | null
+    errorSchemaVersion?: number | null
 }
 
 /**
@@ -136,13 +151,14 @@ export function applySendAnswer(current: Message, answer: SendAnswer): Message {
     if (current.status !== 'sending' && !isLocalSendFailure(current) && rank(status) < rank(current.status)) {
         return { ...current, id }
     }
-    const rest = withoutKeys(current.metadata, ['localSendError', 'error', 'retryable', 'deliveryOutcome']) ?? {}
+    const rest = withoutKeys(current.metadata, ['localSendError', 'error', 'retryable', 'deliveryOutcome', 'errorSchemaVersion']) ?? {}
     const metadata = status === 'failed'
         ? {
             ...rest,
             error: answer.error || 'Ошибка доставки',
             retryable: answer.retryable === true,
             ...(answer.deliveryOutcome ? { deliveryOutcome: answer.deliveryOutcome } : {}),
+            ...(typeof answer.errorSchemaVersion === 'number' ? { errorSchemaVersion: answer.errorSchemaVersion } : {}),
         }
         : rest
     return {
