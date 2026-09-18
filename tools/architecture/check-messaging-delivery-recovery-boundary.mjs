@@ -32,10 +32,23 @@ const exactConsumerImports = [
 ]
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
 const executableDigests = {
-    recoverStuckMessages: 'aae8c67e89f6e728c65e95a16f1a49493f19c0c99414f94e8e609926190e6ef2',
-    retrySend: 'f05670671cc7ee2f73d2f051a8c3c00fa987a23d3ae39828f5758eba46385b70',
+    recoverStuckMessages: '46ef9e2894fcec22222bde690bda0e420b25ca4dc4fee7bbf85b45da254fadb0',
+    retrySend: '9cb91171e6b99642f2feb9b32eacc1d6ce3c27a2c5c68646c7c24484a439326d',
     sendReachabilityBlock: 'cee5e85ebaf2c10f76453683d850e645755d9664489d4acbcb1af3b9ba99be76',
 }
+
+// Operator retry of ONE persisted message (Mobile Text Reply v1): «Повторить»
+// on a failure the owner marked safe to redeliver. It is a second capability,
+// closed on its own terms, so DeliveryRecoveryOperations above keeps its closed
+// input and exact surface: one export taking exactly the message id, one direct
+// MessageService.retrySend call carrying the literal operator option (which
+// skips only the job's pacing backoff), a read-back of that row, and exactly
+// one runtime consumer, the Messaging server action behind the button.
+const operatorRetryPath = 'gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.ts'
+const operatorRetryFunction = 'retryFailedOutboundMessageV1'
+const operatorRetrySpecifier = '@/modules/messaging/public/v1/operator-delivery-retry'
+const operatorRetryConsumerPath = 'gravity-mvp/src/app/messages/message-retry-actions.ts'
+const operatorRetryConsumerFunction = 'retryFailedMessageAction'
 
 function hasModifier(node, kind) {
     return node.modifiers?.some((modifier) => modifier.kind === kind) ?? false
@@ -692,9 +705,15 @@ function assertMessageServiceRecoveryImplementation(source) {
         /findMany\(\{[\s\S]*channel:\s*['"]max['"][\s\S]*select:\s*\{\s*id:\s*true,\s*metadata:\s*true\s*\}/,
         /updateMany\(\{[\s\S]*OR:\s*\[\{\s*channel:\s*\{\s*not:\s*['"]max['"]\s*\}/,
         /where:\s*\{\s*\.\.\.stuckWhere,\s*channel:\s*['"]max['"],\s*id:\s*message\.id\s*\}/,
-        /metadata:\s*\{[\s\S]*\.\.\.metadata,[\s\S]*errorCode:\s*['"]TIMEOUT['"],[\s\S]*retryable:\s*true/,
+        // A stuck row may already have reached the recipient (a MAX
+        // send_requested row was accepted without proof), so recovery records
+        // the outcome as unknown and never makes it retryable: nothing may
+        // resend it blindly.
+        /metadata:\s*\{[\s\S]*\.\.\.metadata,[\s\S]*errorCode:\s*['"]TIMEOUT['"],[\s\S]*retryable:\s*false,[\s\S]*deliveryOutcome:\s*['"]unknown['"]/,
+        /metadata:\s*\{\s*error:\s*recoveryError,\s*deliveryOutcome:\s*['"]unknown['"]\s*\}/,
         /return\s+recoveredCount/,
     ]) assert.match(recoverBody, invariant, `${implementationPath}: recoverStuckMessages invariant ${invariant}`)
+    assert.doesNotMatch(recoverBody, /retryable:\s*true/, `${implementationPath}: recovery must never make a stuck row retryable`)
     assert.doesNotMatch(recoverBody, /\.create\s*\(|\.delete(?:Many)?\s*\(|\$executeRaw|\$queryRawUnsafe/)
 
     const retry = messageServiceMethod(sourceFile, 'retrySend')
@@ -709,6 +728,8 @@ function assertMessageServiceRecoveryImplementation(source) {
         /!meta\.retryable/,
         /attempt\s*>\s*\(meta\.maxRetries\s*\|\|\s*3\)/,
         /Date\.now\(\)\s*-\s*lastFailed\s*<\s*backoffMs/,
+        // Only an operator's explicit retry skips the job's pacing backoff.
+        /if\s*\(!options\.operatorInitiated\s*&&\s*Date\.now\(\)\s*-\s*lastFailed\s*<\s*backoffMs\)/,
         /outboundBinding\s*=\s*await\s+prepareOutboundConversationV1\(message\.chat\)/,
         /catch\s*\(error:\s*unknown\)\s*\{[\s\S]*success:\s*false/,
         /outboundBinding\.chatId\s*!==\s*message\.chatId[\s\S]*outboundBinding\.channel\s*!==\s*message\.channel/,
@@ -1022,6 +1043,7 @@ const expectedRepositoryBindings = [
 const expectedRawDeliveryMethods = [
     { file: publicPath, method: 'recoverStuckMessages', kind: 'call' },
     { file: publicPath, method: 'retrySend', kind: 'call' },
+    { file: operatorRetryPath, method: 'retrySend', kind: 'call' },
 ].sort(bindingSort)
 function assertRepositoryWideDenominator(sources = baseRuntimeSources) {
     assert.deepEqual(
@@ -1038,6 +1060,120 @@ function assertRepositoryWideDenominator(sources = baseRuntimeSources) {
 assertRepositoryWideDenominator()
 const runtimeConsumers = [...new Set(expectedConsumerBindings.map(({ file }) => file))]
 assert.deepEqual(runtimeConsumers, [consumerPath])
+
+// ── Operator retry of one persisted message ─────────────────────────────────
+
+function namedImportsFrom(sourceFile, specifier) {
+    return sourceFile.statements.flatMap((statement) => {
+        if (!ts.isImportDeclaration(statement)
+            || !ts.isStringLiteralLike(statement.moduleSpecifier)
+            || statement.moduleSpecifier.text !== specifier) return []
+        const clause = statement.importClause
+        assert(clause && !clause.name && clause.namedBindings && ts.isNamedImports(clause.namedBindings), `${specifier} must be a named import`)
+        return clause.namedBindings.elements.filter((element) => !element.isTypeOnly && !clause.isTypeOnly)
+    })
+}
+
+function assertOperatorRetryImplementation(source) {
+    const { sourceFile, checker } = checkedSource(operatorRetryPath, source)
+    assert.deepEqual(exportedRuntimeValues(source), [operatorRetryFunction], `${operatorRetryPath}: runtime export surface drift`)
+    const functions = topLevelFunction(sourceFile, operatorRetryFunction)
+    assert.equal(functions.length, 1, `${operatorRetryPath}: exact ${operatorRetryFunction}`)
+    const operation = functions[0]
+    assert(hasModifier(operation, ts.SyntaxKind.ExportKeyword) && hasModifier(operation, ts.SyntaxKind.AsyncKeyword), `${operatorRetryPath}: ${operatorRetryFunction} must be an exported async function`)
+    assert.equal(operation.parameters.length, 1, `${operatorRetryPath}: ${operatorRetryFunction} takes exactly the message id`)
+    const parameter = operation.parameters[0]
+    assert(ts.isIdentifier(parameter.name) && parameter.name.text === 'messageId', `${operatorRetryPath}: the one input is messageId`)
+    const parameterSymbol = checker.getSymbolAtLocation(parameter.name)
+
+    const serviceImports = namedImportsFrom(sourceFile, messageServiceSpecifier)
+    assert.deepEqual(serviceImports.map((element) => `${(element.propertyName ?? element.name).text}:${element.name.text}`), ['MessageService:MessageService'], `${operatorRetryPath}: exact MessageService import`)
+    const serviceSymbol = checker.getSymbolAtLocation(serviceImports[0].name)
+    const methods = []
+    const retryCalls = []
+    visit(sourceFile, (node) => {
+        if (!ts.isIdentifier(node) || node === serviceImports[0].name || checker.getSymbolAtLocation(node) !== serviceSymbol) return
+        assert(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node, `${operatorRetryPath}: indirect MessageService use`)
+        const call = node.parent.parent
+        assert(ts.isCallExpression(call) && call.expression === node.parent, `${operatorRetryPath}: MessageService method must be called directly`)
+        methods.push(node.parent.name.text)
+        if (node.parent.name.text === 'retrySend') retryCalls.push(call)
+    })
+    assert.deepEqual(methods.sort(), ['readSendState', 'retrySend'], `${operatorRetryPath}: MessageService methods drift`)
+    assert.equal(retryCalls.length, 1, `${operatorRetryPath}: exactly one retrySend call`)
+    const [retryCall] = retryCalls
+    assert.equal(isSyntacticallyDead(retryCall, checker), false, `${operatorRetryPath}: retrySend call is syntactically dead`)
+    assert(directlyAwaited(retryCall), `${operatorRetryPath}: retrySend call must be awaited`)
+    assert.equal(retryCall.arguments.length, 2, `${operatorRetryPath}: retrySend takes the message id and the operator option`)
+    const [idArgument, optionArgument] = retryCall.arguments.map(unwrapTransparent)
+    assert(ts.isIdentifier(idArgument) && checker.getSymbolAtLocation(idArgument) === parameterSymbol, `${operatorRetryPath}: retrySend must receive the caller's message id unchanged`)
+    assert(ts.isObjectLiteralExpression(optionArgument) && optionArgument.properties.length === 1, `${operatorRetryPath}: retrySend option must be the one literal operator flag`)
+    const [flag] = optionArgument.properties
+    assert(ts.isPropertyAssignment(flag)
+        && ts.isIdentifier(flag.name) && flag.name.text === 'operatorInitiated'
+        && flag.initializer.kind === ts.SyntaxKind.TrueKeyword, `${operatorRetryPath}: retrySend option must be { operatorInitiated: true }`)
+    assert.doesNotMatch(source, /@\/lib\/prisma|\$executeRaw|\$queryRaw|\.create\s*\(|\.delete(?:Many)?\s*\(|updateMany|recoverStuckMessages/, `${operatorRetryPath}: operator retry reaches past retrySend`)
+}
+
+function assertOperatorRetryConsumer(source) {
+    const { sourceFile, checker } = checkedSource(operatorRetryConsumerPath, source)
+    const first = sourceFile.statements[0]
+    assert(first && ts.isExpressionStatement(first) && ts.isStringLiteralLike(first.expression) && first.expression.text === 'use server', `${operatorRetryConsumerPath}: must be a server action module`)
+    assert.deepEqual(exportedRuntimeValues(source), [operatorRetryConsumerFunction], `${operatorRetryConsumerPath}: runtime export surface drift`)
+    const imports = namedImportsFrom(sourceFile, operatorRetrySpecifier)
+    assert.deepEqual(imports.map((element) => `${(element.propertyName ?? element.name).text}:${element.name.text}`), [`${operatorRetryFunction}:${operatorRetryFunction}`], `${operatorRetryConsumerPath}: exact operator retry import`)
+    const action = topLevelFunction(sourceFile, operatorRetryConsumerFunction)[0]
+    assert(action && action.parameters.length === 1 && ts.isIdentifier(action.parameters[0].name), `${operatorRetryConsumerPath}: the action takes exactly the message id`)
+    const parameterSymbol = checker.getSymbolAtLocation(action.parameters[0].name)
+    const importSymbol = checker.getSymbolAtLocation(imports[0].name)
+    const calls = []
+    visit(sourceFile, (node) => {
+        if (!ts.isIdentifier(node) || node === imports[0].name || checker.getSymbolAtLocation(node) !== importSymbol) return
+        const call = directIdentifierCall(node)
+        assert(call, `${operatorRetryConsumerPath}: ${operatorRetryFunction} must not be rebound or referenced indirectly`)
+        calls.push(call)
+    })
+    assert.equal(calls.length, 1, `${operatorRetryConsumerPath}: exactly one ${operatorRetryFunction} call`)
+    assert.equal(calls[0].arguments.length, 1)
+    const argument = unwrapTransparent(calls[0].arguments[0])
+    assert(ts.isIdentifier(argument) && checker.getSymbolAtLocation(argument) === parameterSymbol, `${operatorRetryConsumerPath}: the action must pass its message id unchanged`)
+    assert.equal(isSyntacticallyDead(calls[0], checker), false)
+}
+
+function operatorRetryReferences(sources) {
+    return [...sources].filter(([file, source]) => file !== operatorRetryPath && (
+        source.includes(operatorRetryFunction)
+        || /operator-delivery-retry/.test(source)
+    )).map(([file]) => file).sort()
+}
+
+const operatorRetrySource = read(operatorRetryPath)
+const operatorRetryConsumerSource = read(operatorRetryConsumerPath)
+assertOperatorRetryImplementation(operatorRetrySource)
+assertOperatorRetryConsumer(operatorRetryConsumerSource)
+assert.deepEqual(operatorRetryReferences(baseRuntimeSources), [operatorRetryConsumerPath], 'operator retry must have exactly one runtime consumer')
+assert.doesNotMatch(publicBarrelSource, /operator-delivery-retry|retryFailedOutboundMessageV1/, `${publicBarrelPath}: operator retry is not re-exported`)
+
+const operatorRetryProbes = [
+    () => assertOperatorRetryImplementation(operatorRetrySource.replace('{ operatorInitiated: true }', '{ operatorInitiated: false }')),
+    () => assertOperatorRetryImplementation(operatorRetrySource.replace('MessageService.retrySend(messageId, { operatorInitiated: true })', 'MessageService.retrySend(messageId)')),
+    () => assertOperatorRetryImplementation(operatorRetrySource.replace('MessageService.retrySend(messageId, { operatorInitiated: true })', "MessageService.retrySend('other-message', { operatorInitiated: true })")),
+    () => assertOperatorRetryImplementation(`${operatorRetrySource}\nexport async function retryEveryFailedMessageV1() { return MessageService.recoverStuckMessages(0) }\n`),
+    () => assertOperatorRetryImplementation(operatorRetrySource.replace("import { MessageService } from '@/lib/MessageService'", "import { MessageService } from '@/lib/MessageService'\nimport { prisma } from '@/lib/prisma'")),
+    () => assertOperatorRetryConsumer(operatorRetryConsumerSource.replace("'use server'", "'use client'")),
+    () => assertOperatorRetryConsumer(operatorRetryConsumerSource.replace('retryFailedOutboundMessageV1(messageId)', "retryFailedOutboundMessageV1('fixed-message')")),
+    () => {
+        const extra = new Map(baseRuntimeSources)
+        extra.set('gravity-mvp/src/__architecture_probe__/second-operator-retry-consumer.ts', `import { ${operatorRetryFunction} } from '${operatorRetrySpecifier}'\nvoid ${operatorRetryFunction}('x')\n`)
+        assert.deepEqual(operatorRetryReferences(extra), [operatorRetryConsumerPath])
+    },
+    () => {
+        const extra = new Map(baseRuntimeSources)
+        extra.set('gravity-mvp/src/__architecture_probe__/raw-operator-retry.ts', `import { MessageService } from '${messageServiceSpecifier}'\nvoid MessageService.retrySend('x', { operatorInitiated: true })\n`)
+        assertRepositoryWideDenominator(extra)
+    },
+]
+for (const probe of operatorRetryProbes) assert.throws(probe, undefined, 'operator retry negative probe must be rejected')
 
 rejectProbe(
     consumerSource,
@@ -1198,6 +1334,9 @@ process.stdout.write(`${JSON.stringify({
     negative_repository_denominator_probes: 2,
     negative_dead_condition_variants: 4,
     negative_implementation_invariant_probes: 4,
+    operator_retry_capabilities: 1,
+    operator_retry_consumers: 1,
+    negative_operator_retry_probes: operatorRetryProbes.length,
     implementation_enforcement: 'RECOVERY_RETRY_SEMANTIC_NO_WHOLE_FILE_DIGEST',
     public_entrypoint: publicBarrelSpecifier,
     current_findings: scan.findings.length,
