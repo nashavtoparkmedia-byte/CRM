@@ -156,7 +156,8 @@
     "module_tests": [
       "node tools/architecture/check-whatsapp-runtime-provider-boundary.mjs",
       "node tools/architecture/check-messaging-whatsapp-message-boundary.mjs",
-      "node tools/architecture/check-messaging-whatsapp-attachment-boundary.mjs"
+      "node tools/architecture/check-messaging-whatsapp-attachment-boundary.mjs",
+      "node tools/architecture/check-whatsapp-pairing-observation-boundary.mjs"
     ]
   },
   "version": 1
