@@ -177,12 +177,12 @@ class ProfileContractTests(unittest.TestCase):
 # accepted, that the choice is made by the engine's own descriptor rather than by the caller,
 # and that no wrong, malformed or cross-component identity can satisfy the check.
 
-GRAVITY_CONFIG = "sha256:cde1748c8f305b2d491ca6ec0879fd91556ae454417f54ff49c8e3a4d9bfb6b6"
-GRAVITY_INDEX = "sha256:844cd8fe622bcd9c8be6359774c64dddd55b0c99d5bdecfd017e62fd3b7f51ce"
-MAX_CONFIG = "sha256:c31dcae8783f89d348e3f3261cdd23acad955b66f19994f2b0c96e1ab7147e30"
-MAX_INDEX = "sha256:01fe2dcde0f209771fefa128fbff7b9cea468411993ef48b721c68804382d394"
-REVISION = "be6b8eb82d8c074e82a3be0cd53db26137e984be"
-PROFILE = "crm-be6b8eb82d8c-gravity-max-source-v1"
+GRAVITY_CONFIG = "sha256:49c8434bdb0c87f881560946bdefaa040ceb5602dafd4bc6d4a6f8ac09c6d898"
+GRAVITY_INDEX = "sha256:830e29eedc0d460c33ed907e88003973ef9f08282e39116e4ebc8a6a357de698"
+MAX_CONFIG = "sha256:d6c9f0f9c7b800c08fb6366a0b223f607d6aae2502efb86b865e4118abf5e668"
+MAX_INDEX = "sha256:cfc4e940d681f2a6a1f84b13b84d398756d616462941f251717827fa0fa0a376"
+REVISION = "c7e29a24e960ddd75e6701d71e06405777e58d1e"
+PROFILE = "crm-c7e29a24e960-gravity-max-source-v1"
 INDEX_MEDIA_TYPE = "application/vnd.oci.image.index.v1+json"
 
 

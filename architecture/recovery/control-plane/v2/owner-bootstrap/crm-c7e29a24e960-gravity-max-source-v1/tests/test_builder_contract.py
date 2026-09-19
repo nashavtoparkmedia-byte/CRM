@@ -31,10 +31,10 @@ class BuilderContractTests(unittest.TestCase):
 
     def test_application_source_is_not_changed_by_runtime_builder(self) -> None:
         accepted = subprocess.run(
-            ["git", "-C", str(REPOSITORY), "rev-parse", "be6b8eb82d8c074e82a3be0cd53db26137e984be^{tree}"],
+            ["git", "-C", str(REPOSITORY), "rev-parse", "c7e29a24e960ddd75e6701d71e06405777e58d1e^{tree}"],
             check=True, text=True, stdout=subprocess.PIPE,
         ).stdout.strip()
-        self.assertEqual(accepted, "8fc34b11684318dc2278f210154447229305f16d")
+        self.assertEqual(accepted, "ca47f7d426d2da0299916ca25ef448dc0e7b7b37")
 
     def test_stage_a_verifier_cannot_dirty_the_runtime_builder(self) -> None:
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
@@ -65,7 +65,7 @@ class BuilderContractTests(unittest.TestCase):
         installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
         self.assertIn("test \"$#\" -eq 0", installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("HANDOFF='/opt/codex-work/yoko-stage-a-handoff-be6b8eb8/release-output'", installer)
+        self.assertIn("HANDOFF='/opt/codex-work/yoko-stage-a-handoff-c7e29a24/release-output'", installer)
         self.assertIn(".incoming-'+final.name", installer)
         self.assertIn("if [ -e \"$BOOTSTRAP_GUARD\" ]; then", installer)
         self.assertIn('/usr/bin/flock -x "$bootstrap_lock_fd"', installer)
@@ -228,8 +228,8 @@ class IndependentReviewBindingTests(unittest.TestCase):
 
         value = {
             "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
-            "profile_id": "crm-be6b8eb82d8c-gravity-max-source-v1",
-            "package_version": "2.0.0-17",
+            "profile_id": "crm-c7e29a24e960-gravity-max-source-v1",
+            "package_version": "2.0.0-18",
             "candidate_commit": self.COMMIT,
             "candidate_tree": self.TREE,
             "reviews": [

@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.coordinated-runtime-acceptance.v1",
+  "application_commit": "c7e29a24e960ddd75e6701d71e06405777e58d1e",
+  "application_tree": "ca47f7d426d2da0299916ca25ef448dc0e7b7b37",
+  "stage_a_builder_commit": "f32ee22a1e8967e92f1828075d7650eb8d0f8dea",
+  "stage_a_builder_tree": "25d4fa01e652cbcc015232c7a8cb64fc87e750ad",
+  "stage_a_run_id": 35395889864,
+  "stage_a_artifact_id": 10567922654,
+  "stage_a_artifact_digest": "sha256:cd63ed4aa7364fdff649fa8dc095622610f8dd3dbce96b0a300852759c772442",
+  "stage_a_artifact_bytes": 4805821920,
+  "accepted_max_invariants": [
+    "PHONE_RESOLUTION_FAIL_CLOSED",
+    "NO_SECOND_PROTOCOL_SEND_AFTER_UI_ATTEMPT",
+    "FAILURE_PRECEDENCE",
+    "RECOVERY_RETRYABLE",
+    "RETRY_REUSES_MESSAGE_ROW"
+  ],
+  "contact_ownership_unchanged": true,
+  "database_mutation_authorized": false,
+  "decision": "PASS",
+  "residual_high_medium_findings": []
+}

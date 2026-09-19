@@ -17,7 +17,7 @@ from types import MappingProxyType
 from typing import Any, Iterator, Mapping
 
 
-PROFILE_ID = "crm-be6b8eb82d8c-gravity-max-source-v1"
+PROFILE_ID = "crm-c7e29a24e960-gravity-max-source-v1"
 PROFILE_DIR = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
 PROFILE_PATH = PROFILE_DIR + "/profile.v1.json"
 SEALED_INPUTS_PATH = PROFILE_DIR + "/sealed-inputs.v1.json"
@@ -36,8 +36,8 @@ DB_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]{0,62}")
 PROFILE_SCHEMA = "yoko.crm.coordinated-pair-activation-profile.v1"
 STATE_SCHEMA = "yoko.crm.coordinated-pair-state.v1"
 RECEIPT_SCHEMA = "yoko.crm.coordinated-artifact-admission.v1"
-TARGET_GRAVITY = "yoko/crm-gravity-mvp:be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc-coordinated-v1"
-TARGET_MAX = "yoko/crm-max-scraper:be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc-coordinated-v1"
+TARGET_GRAVITY = "yoko/crm-gravity-mvp:c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea-coordinated-v1"
+TARGET_MAX = "yoko/crm-max-scraper:c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea-coordinated-v1"
 ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
 ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9"
 
@@ -124,11 +124,11 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile["profile_id"] != PROFILE_ID
         or profile["host"] != "jvxthcorvm"
         or profile["runtime_abi"] != "2.0.0"
-        or profile["package_version"] != "2.0.0-17"
+        or profile["package_version"] != "2.0.0-18"
         or profile["accepted_application"] != {
-            "commit": "be6b8eb82d8c074e82a3be0cd53db26137e984be",
-            "tree": "8fc34b11684318dc2278f210154447229305f16d",
-            "gravity_subtree": "03175f4baad1563ecf57bbebb9254df12863f07b",
+            "commit": "c7e29a24e960ddd75e6701d71e06405777e58d1e",
+            "tree": "ca47f7d426d2da0299916ca25ef448dc0e7b7b37",
+            "gravity_subtree": "7a6b193e24ed9ff08eebd473c726b48f6760aca2",
             "max_subtree": "4c4bc48aa465919324b8d661d1572d7d839d4da1",
         }
         or profile["enabled_zero_argument_profiles"] != [
@@ -145,13 +145,13 @@ def _load_profile(core: Any) -> dict[str, Any]:
         "ACTIVATION_PROFILE_INVALID",
     )
     if stage_a != {
-        "builder_commit": "0f1a213b2b1f0a8e322fd597aa4575829c6e26fc",
-        "builder_tree": "027b963c59985d3ae7a587ab4a7420bd6fb81c68",
-        "run_id": 35135070179,
-        "artifact_id": 10462154988,
-        "artifact_name": "coordinated-gravity-max-be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc",
-        "artifact_digest": "sha256:072c55e07acf493eb82938f285157ea098728327ffe4a5911c8c095dcc3a37dd",
-        "artifact_bytes": 4805820790,
+        "builder_commit": "f32ee22a1e8967e92f1828075d7650eb8d0f8dea",
+        "builder_tree": "25d4fa01e652cbcc015232c7a8cb64fc87e750ad",
+        "run_id": 35395889864,
+        "artifact_id": 10567922654,
+        "artifact_name": "coordinated-gravity-max-c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea",
+        "artifact_digest": "sha256:cd63ed4aa7364fdff649fa8dc095622610f8dd3dbce96b0a300852759c772442",
+        "artifact_bytes": 4805821920,
     }:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     deployment = _exact_dict(
@@ -368,7 +368,7 @@ def _validate_target_image(core: Any, record: dict[str, Any], reference: str, co
         or image.get("Os") != "linux"
         or image.get("Architecture") != "amd64"
         or not isinstance(labels, dict)
-        or labels.get("org.opencontainers.image.revision") != "be6b8eb82d8c074e82a3be0cd53db26137e984be"
+        or labels.get("org.opencontainers.image.revision") != "c7e29a24e960ddd75e6701d71e06405777e58d1e"
         or labels.get("yoko.activation.profile") != PROFILE_ID
     ):
         raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_MISMATCH", 74)

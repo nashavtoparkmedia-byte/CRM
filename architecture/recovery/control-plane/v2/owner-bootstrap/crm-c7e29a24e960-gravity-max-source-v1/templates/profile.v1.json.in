@@ -1,23 +1,23 @@
 {
   "schema": "yoko.crm.coordinated-pair-activation-profile.v1",
-  "profile_id": "crm-be6b8eb82d8c-gravity-max-source-v1",
+  "profile_id": "crm-c7e29a24e960-gravity-max-source-v1",
   "host": "jvxthcorvm",
   "runtime_abi": "2.0.0",
-  "package_version": "2.0.0-17",
+  "package_version": "2.0.0-18",
   "accepted_application": {
-    "commit": "be6b8eb82d8c074e82a3be0cd53db26137e984be",
-    "tree": "8fc34b11684318dc2278f210154447229305f16d",
-    "gravity_subtree": "03175f4baad1563ecf57bbebb9254df12863f07b",
+    "commit": "c7e29a24e960ddd75e6701d71e06405777e58d1e",
+    "tree": "ca47f7d426d2da0299916ca25ef448dc0e7b7b37",
+    "gravity_subtree": "7a6b193e24ed9ff08eebd473c726b48f6760aca2",
     "max_subtree": "4c4bc48aa465919324b8d661d1572d7d839d4da1"
   },
   "stage_a": {
-    "builder_commit": "0f1a213b2b1f0a8e322fd597aa4575829c6e26fc",
-    "builder_tree": "027b963c59985d3ae7a587ab4a7420bd6fb81c68",
-    "run_id": 35135070179,
-    "artifact_id": 10462154988,
-    "artifact_name": "coordinated-gravity-max-be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc",
-    "artifact_digest": "sha256:072c55e07acf493eb82938f285157ea098728327ffe4a5911c8c095dcc3a37dd",
-    "artifact_bytes": 4805820790
+    "builder_commit": "f32ee22a1e8967e92f1828075d7650eb8d0f8dea",
+    "builder_tree": "25d4fa01e652cbcc015232c7a8cb64fc87e750ad",
+    "run_id": 35395889864,
+    "artifact_id": 10567922654,
+    "artifact_name": "coordinated-gravity-max-c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea",
+    "artifact_digest": "sha256:cd63ed4aa7364fdff649fa8dc095622610f8dd3dbce96b0a300852759c772442",
+    "artifact_bytes": 4805821920
   },
   "artifact_admission": {
     "receipt_path": "@ARTIFACT_RECEIPT_PATH@",
@@ -61,15 +61,15 @@
   },
   "target": {
     "gravity": {
-      "reference": "yoko/crm-gravity-mvp:be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc-coordinated-v1",
-      "image_id": "sha256:cde1748c8f305b2d491ca6ec0879fd91556ae454417f54ff49c8e3a4d9bfb6b6",
-      "containerd_image_id": "sha256:844cd8fe622bcd9c8be6359774c64dddd55b0c99d5bdecfd017e62fd3b7f51ce",
+      "reference": "yoko/crm-gravity-mvp:c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea-coordinated-v1",
+      "image_id": "sha256:49c8434bdb0c87f881560946bdefaa040ceb5602dafd4bc6d4a6f8ac09c6d898",
+      "containerd_image_id": "sha256:830e29eedc0d460c33ed907e88003973ef9f08282e39116e4ebc8a6a357de698",
       "runtime_command_override": ["npm", "run", "start"]
     },
     "max_scraper": {
-      "reference": "yoko/crm-max-scraper:be6b8eb82d8c-0f1a213b2b1f0a8e322fd597aa4575829c6e26fc-coordinated-v1",
-      "image_id": "sha256:c31dcae8783f89d348e3f3261cdd23acad955b66f19994f2b0c96e1ab7147e30",
-      "containerd_image_id": "sha256:01fe2dcde0f209771fefa128fbff7b9cea468411993ef48b721c68804382d394"
+      "reference": "yoko/crm-max-scraper:c7e29a24e960-f32ee22a1e8967e92f1828075d7650eb8d0f8dea-coordinated-v1",
+      "image_id": "sha256:d6c9f0f9c7b800c08fb6366a0b223f607d6aae2502efb86b865e4118abf5e668",
+      "containerd_image_id": "sha256:cfc4e940d681f2a6a1f84b13b84d398756d616462941f251717827fa0fa0a376"
     }
   },
   "database": {
