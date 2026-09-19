@@ -146,6 +146,17 @@ jobs:
       - name: Generate the Prisma client
         run: npm run --prefix gravity-mvp gen
 
+      # The disposable database needs the schema production has, and part of
+      # that history is not in gravity-mvp/prisma/migrations: eighteen migrations
+      # production applied live in the governed predecessor archive. The
+      # authority (architecture/migrations/v1/production-migration-authority.json)
+      # orders the whole history by name, which is also the order migrate deploy
+      # applies a directory in. Without them the database lacks, among others,
+      # the Contact columns the Contacts identity check reads before every
+      # outbound send. The copy exists only in this runner's checkout.
+      - name: Stage the governed predecessor migrations
+        run: cp -r architecture/migrations/v1/archive/pre-outbox/. gravity-mvp/prisma/migrations/
+
       - name: Apply committed migrations to the disposable database
         run: npx --prefix gravity-mvp prisma migrate deploy --schema gravity-mvp/prisma/schema.prisma
 
@@ -159,14 +170,36 @@ jobs:
           NODE_ENV: production
         run: npm run --prefix gravity-mvp build
 
+      # The only MAX transport this stand has: a loopback stand-in that accepts
+      # the one synthetic send test06 makes and answers the way the MAX transport
+      # answers a confirmed send, with a delivery proof bound to the exact
+      # clientMessageId. It holds each answer for four seconds so the device can
+      # observe the sending state. See android/tools/acceptance-max-transport.mjs.
+      - name: Start the acceptance MAX transport
+        run: |
+          nohup node android/tools/acceptance-max-transport.mjs serve \
+            --port 3905 --target 000000000005 \
+            --provider acceptance-max-provider-0005 \
+            --content "YOKO acceptance reply 06" --delay-ms 4000 \
+            --log "$RUNNER_TEMP/acceptance-max-transport.jsonl" \
+            > "$RUNNER_TEMP/acceptance-max-transport.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:3905/__acceptance/health && exit 0
+            sleep 1
+          done
+          echo "acceptance MAX transport did not start"; cat "$RUNNER_TEMP/acceptance-max-transport.log"; exit 1
+
       - name: Start the CRM with no provider credentials
         run: |
           # env -i so nothing from the runner environment can reach the app.
           # No Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN value exists
-          # here, so every outbound transport is inert by construction.
+          # here, so every outbound transport is inert by construction. The one
+          # address given is MAX_SCRAPER_URL, and it names the loopback
+          # stand-in above: no credential, and nothing beyond this runner.
           cd gravity-mvp
           nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production \
             DATABASE_URL="$DATABASE_URL" \
+            MAX_SCRAPER_URL="http://127.0.0.1:3905" \
             MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
             MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
             npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
@@ -435,7 +468,8 @@ jobs:
             test02_correctPasswordAfterRejectionOpensTheMessenger \
             test03_directCorrectLoginOpensTheMessenger \
             test04_allThreeSeededConversationsAreListed \
-            test05_openConversationReadHistoryBackAndSwitchConversation
+            test05_openConversationReadHistoryBackAndSwitchConversation \
+            test06_sendTextAndObserveCanonicalDelivery
           do
             out="$RUNNER_TEMP/scenario-$t.log"
             echo "===== $t =====" | tee -a "$LOG"
@@ -476,13 +510,28 @@ jobs:
           # Every scenario in the list must have reported. A loop that silently
           # ran four of five would otherwise pass.
           ran=$(grep -c '^SCENARIO OK: ' "$LOG")
-          if [ "$ran" -ne 5 ]; then
-            echo "only $ran of 5 scenarios reported OK" | tee -a "$LOG"
+          if [ "$ran" -ne 6 ]; then
+            echo "only $ran of 6 scenarios reported OK" | tee -a "$LOG"
             failed=1
           fi
 
           echo "scenarios failed: $failed" | tee -a "$LOG"
           exit $failed
+
+      # test06 proves what the device showed. This proves what happened behind
+      # it: exactly one physical send reached the transport, with the typed text,
+      # the synthetic target and provider id, and the CRM persisted exactly one
+      # outbound Message for it, carrying the same clientMessageId and the
+      # delivered status the returned proof supports. The CRM is read through
+      # its own history route, the same read the device uses.
+      - name: Verify the MAX send proof against the transport and the CRM
+        if: always()
+        run: |
+          node android/tools/acceptance-max-transport.mjs verify \
+            --transport http://127.0.0.1:3905 --crm http://127.0.0.1:3002 \
+            --chat acc_chat_max_0005 --target 000000000005 \
+            --provider acceptance-max-provider-0005 \
+            --content "YOKO acceptance reply 06"
 
       # This step is why runs #1, #2 and #3 uploaded nothing. Every adb call
       # here BLOCKS when no device is present: `adb logcat` waits for one
@@ -508,6 +557,7 @@ jobs:
           # not through Gradle's connected-test task. The per-scenario logs in
           # $RUNNER_TEMP are the record.
           cp "$RUNNER_TEMP"/scenario-*.log "$OUT/" 2>/dev/null
+          cp "$RUNNER_TEMP"/acceptance-max-transport.* "$OUT/" 2>/dev/null
           sha256sum app/build/outputs/apk/acceptance/*.apk > "$OUT/apk-sha256.txt" 2>/dev/null
 
           # Runner-side facts that explain an emulator that never came up.
@@ -601,12 +651,12 @@ jobs:
           bad=$(grep -c 'SCENARIO DID NOT REPORT OK' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
           line="scenarios: ${started} started, ${okd} reported OK, ${bad} did not"
           # A green run must not carry a red annotation.
-          if [ "$bad" -eq 0 ] && [ "$okd" -eq 5 ]; then
+          if [ "$bad" -eq 0 ] && [ "$okd" -eq 6 ]; then
             echo "::notice::${line}"
           else
             echo "::error::${line}"
           fi
-          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 5 scenarios" \
+          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 6 scenarios" \
             "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
               echo "::error::gradle: $(printf '%s' "$l" | head -c 500)"
             done

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react"
 import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap, Mic, Camera, CornerUpLeft } from "lucide-react"
 import QuickReplySuggestions from "./QuickReplySuggestions"
 import type { QuickReplyTemplate } from "./QuickReplySuggestions"
@@ -282,9 +282,18 @@ export default function MessageInputArea({
         }
     }
 
+    // The draft a tap would send, kept in step with every committed render.
+    // Two taps can both run before React re-renders the cleared composer; the
+    // first one claims the draft synchronously, so the second finds nothing and
+    // one draft can only ever become one send intent.
+    const draftRef = useRef(text)
+    useLayoutEffect(() => { draftRef.current = text }, [text])
+
     const handleSend = () => {
-        if (!text.trim()) return
-        onSendMessage(text.trim(), effectiveNormalized)
+        const draft = draftRef.current.trim()
+        if (!draft) return
+        draftRef.current = ""
+        onSendMessage(draft, effectiveNormalized)
         setText("")
         draftCache.delete(cacheKey)
         onClearReply()
@@ -778,6 +787,7 @@ export default function MessageInputArea({
                 <button
                     onClick={handleSend}
                     disabled={!hasText}
+                    aria-label="Отправить"
                     className={`h-[36px] w-[36px] rounded-full items-center justify-center transition-all shrink-0 ${
                         hasText
                         ? 'flex bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-95'

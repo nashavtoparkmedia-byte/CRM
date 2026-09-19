@@ -10,18 +10,27 @@ to the `android-acceptance/**` namespace, for every pull request targeting
 `epic/android-messenger`, and on demand through `workflow_dispatch`:
 
 1. Brings up a disposable PostgreSQL service and applies the committed
-   migrations to it.
+   migrations to it, together with the governed predecessor archive
+   (`architecture/migrations/v1/archive/pre-outbox/`), so the database has the
+   schema production has.
 2. Seeds the same synthetic conversations the manual runbook uses,
-   `android/tools/acceptance-seed.sql`.
+   `android/tools/acceptance-seed.sql`, plus one reply target: a private MAX
+   conversation bound to a synthetic Contact and ContactIdentity.
 3. Builds and starts the CRM with `env -i` and an explicit allowlist, so no
    Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN credential exists in the
-   process. Every outbound transport is inert by construction.
+   process. The one transport address given, `MAX_SCRAPER_URL`, points at
+   `android/tools/acceptance-max-transport.mjs` on the runner's loopback: a
+   stand-in that accepts only the synthetic send and answers with a confirmed
+   delivery proof. Every other outbound transport is inert by construction.
 4. Asserts the shell lane already fails closed before a single test runs.
 5. Builds the acceptance APK pointed at `http://10.0.2.2:3002`, the host alias
    inside Android's user-mode network stack, plus the instrumentation APK.
 6. Boots a hardware-accelerated `android-34` emulator and runs UI Automator
    tests against it.
-7. Collects logcat, the shell's own diagnostics file, screenshots, the JUnit
+7. After the scenarios, checks the send behind `test06`: exactly one physical
+   send reached the stand-in, and the CRM persisted exactly one outbound
+   Message for it with the same clientMessageId and status `delivered`.
+8. Collects logcat, the shell's own diagnostics file, screenshots, the JUnit
    report and the APK digest as artifacts.
 
 ## The trigger contract, and why it is what it is
