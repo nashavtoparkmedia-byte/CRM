@@ -33,11 +33,51 @@ export interface Message {
     attachments?: MessageAttachment[]
 }
 
+// Holds only histories that were loaded successfully (or seeded as known-empty
+// right after a chat was created). useMessages trusts an entry here as usable
+// history, so a failed request must never write to it.
 const messageCache = new Map<string, Message[]>()
 
 // In-flight prefetch promises so two callers don't fire two requests
 // for the same chat on a fast hover. Cleared when the request settles.
 const prefetchInFlight = new Map<string, Promise<void>>()
+
+export type MessageHistoryResult =
+    | { ok: true; messages: Message[] }
+    | { ok: false; reason: 'network' | 'http' | 'malformed'; status?: number }
+
+/**
+ * One read of a chat's history, classified. An empty conversation and a
+ * failed load must never look alike: the old code read any non-array body as
+ * "no messages", so an HTTP 500 rendered as «Нет сообщений».
+ *
+ *   network rejection      -> failure
+ *   non-2xx status         -> failure (its body is not interpreted as a list)
+ *   2xx with a non-array   -> failure
+ *   2xx with an array      -> success, and [] is a genuine empty conversation
+ */
+export async function fetchMessageHistory(chatId: string): Promise<MessageHistoryResult> {
+    let res: Response
+    try {
+        res = await fetch(`/api/messages?chatId=${chatId}`)
+    } catch {
+        return { ok: false, reason: 'network' }
+    }
+    if (!res.ok) return { ok: false, reason: 'http', status: res.status }
+
+    let data: unknown
+    try {
+        data = await res.json()
+    } catch {
+        return { ok: false, reason: 'malformed', status: res.status }
+    }
+    if (!Array.isArray(data)) return { ok: false, reason: 'malformed', status: res.status }
+
+    return {
+        ok: true,
+        messages: data.map((m: any) => ({ ...m, channel: m.channel || 'whatsapp' })),
+    }
+}
 
 /**
  * Prefetch messages for a chat into the shared messageCache. Called by
@@ -50,13 +90,11 @@ export function prefetchMessages(chatId: string): Promise<void> {
     const existing = prefetchInFlight.get(chatId)
     if (existing) return existing
 
-    const p = fetch(`/api/messages?chatId=${chatId}`)
-        .then(r => r.json())
-        .then((data: any) => {
-            if (Array.isArray(data)) {
-                const enriched = data.map((m: any) => ({ ...m, channel: m.channel || 'whatsapp' }))
-                messageCache.set(chatId, enriched)
-            }
+    const p = fetchMessageHistory(chatId)
+        .then((result) => {
+            // Only a successful read may warm the cache; a warm cache is
+            // rendered as real history, including as a real empty state.
+            if (result.ok) messageCache.set(chatId, result.messages)
         })
         .catch(() => { /* fire-and-forget */ })
         .finally(() => { prefetchInFlight.delete(chatId) })
@@ -85,6 +123,17 @@ export function useMessages(chatId: string | null) {
     })
     const [isLoading, setIsLoading] = useState(false)
     const [hasMoreHistory, setHasMoreHistory] = useState(true)
+    // True once this chat has usable history: a successful read, or a cache
+    // entry (which only a successful read or a known-empty seed can create).
+    // «Нет сообщений» may only be shown when this is true.
+    const [hasLoadedHistory, setHasLoadedHistory] = useState<boolean>(() => {
+        if (!chatId || chatId.startsWith('empty:')) return true
+        return messageCache.has(chatId)
+    })
+    // The first read failed and there is nothing usable to show.
+    const [historyLoadFailed, setHistoryLoadFailed] = useState(false)
+    const [isRetryingHistory, setIsRetryingHistory] = useState(false)
+    const retryInFlight = useRef(false)
 
     const lastFetchTime = useRef(0)
     const loadInFlight = useRef(false)
@@ -98,13 +147,20 @@ export function useMessages(chatId: string | null) {
     useEffect(() => {
         if (!chatId || chatId.startsWith('empty:')) {
             setMessages([])
+            setHasLoadedHistory(true)
+            setHistoryLoadFailed(false)
             return
         }
 
+        // Everything below describes THIS chat only. ChatWorkspace remounts the
+        // hook per chat, so in that path these are no-ops; they keep the hook
+        // from ever presenting another conversation's history as this one's.
         const cached = messageCache.get(chatId)
-        if (cached) {
-            setMessages(cached)
-        }
+        // Keep the same array when nothing changes, so uiItems and the feed's
+        // scroll effects are not re-run on mount.
+        setMessages(prev => cached ?? (prev.length === 0 ? prev : []))
+        setHasLoadedHistory(cached !== undefined)
+        setHistoryLoadFailed(false)
 
         let isMounted = true
 
@@ -139,15 +195,25 @@ export function useMessages(chatId: string | null) {
             }
 
             try {
-                const res = await fetch(`/api/messages?chatId=${chatId}`)
-                const data = await res.json()
+                const result = await fetchMessageHistory(chatId)
 
-                if (isMounted && Array.isArray(data)) {
-                    // Enrich messages with channel fallback
-                    const enrichedData = data.map((m: any) => ({
-                        ...m,
-                        channel: m.channel || 'whatsapp'
-                    }))
+                if (isMounted && !result.ok) {
+                    console.error("Failed to load messages", result)
+                    // A failed refresh never takes away history the operator can
+                    // already see. If usable history exists it stays (or is
+                    // adopted, when a prefetch filled the cache meanwhile); only a
+                    // foreground read with nothing usable becomes a failure.
+                    const usable = messageCache.get(chatId)
+                    if (usable) {
+                        setMessages(usable)
+                        setHasLoadedHistory(true)
+                    } else if (!opts.silent) {
+                        setHistoryLoadFailed(true)
+                    }
+                }
+
+                if (isMounted && result.ok) {
+                    const enrichedData = result.messages
 
                     // MERGE: Keep optimistic messages that server doesn't know about yet
                     // Optimistic IDs start with 'cmid-' (clientMessageId)
@@ -167,9 +233,12 @@ export function useMessages(chatId: string | null) {
                     messageCache.set(chatId, merged)
                     setMessages(merged)
                     setHasMoreHistory(enrichedData.length >= 50)
+                    setHasLoadedHistory(true)
+                    setHistoryLoadFailed(false)
                 }
             } catch (error) {
                 console.error("Failed to load messages", error)
+                if (isMounted && !opts.silent && !messageCache.has(chatId)) setHistoryLoadFailed(true)
             } finally {
                 loadInFlight.current = false
                 if (spinnerTimer) clearTimeout(spinnerTimer)
@@ -279,6 +348,20 @@ export function useMessages(chatId: string | null) {
             if (eventSource) eventSource.close()
         }
     }, [chatId])
+
+    // Explicit retry after a failed first read. A second tap while one is
+    // pending does nothing, and the button is disabled for the same window.
+    const retryHistoryLoad = async () => {
+        if (!chatId || chatId.startsWith('empty:') || retryInFlight.current) return
+        retryInFlight.current = true
+        setIsRetryingHistory(true)
+        try {
+            await loadMessagesRef.current({ force: true })
+        } finally {
+            retryInFlight.current = false
+            setIsRetryingHistory(false)
+        }
+    }
 
     const loadMoreHistory = async () => {
         if (!chatId || !hasMoreHistory || isLoading) return
@@ -464,5 +547,18 @@ export function useMessages(chatId: string | null) {
         }).catch(() => {})
     }
 
-    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, sendMedia, deleteMessage }
+    return {
+        messages,
+        uiItems,
+        isLoading,
+        hasLoadedHistory,
+        historyLoadFailed,
+        isRetryingHistory,
+        retryHistoryLoad,
+        loadMoreHistory,
+        hasMoreHistory,
+        sendMessage,
+        sendMedia,
+        deleteMessage,
+    }
 }
