@@ -13,7 +13,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
     FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
@@ -47,11 +47,14 @@ import {
 } from './compensation-prisma-adapter'
 import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
 import {
+    checkPilotOrderV1,
     compensationSectionViewV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
+    type CompensationPilotIngestionPortV1,
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
+import { pilotScopeKeyV1 } from './compensation-pilot-selection'
 import { legacyPrismaCompensationPilotPortV1 } from './legacy-prisma-compensation-pilot-adapter'
 import {
     CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
@@ -89,7 +92,9 @@ const CONTEXT: CashOrderRequestContextV1 = {
     provider: 'yandex_fleet',
     externalParkId: PARK,
     apiConnectionId: 'conn-1',
-    observedAt: new Date(NOW.getTime() - 7_200_000),
+    // Yandex confirmed the order a few minutes ago, well inside the
+    // submission threshold the pilot enforces.
+    observedAt: new Date(NOW.getTime() - 300_000),
 }
 
 const ELIGIBLE_FACTS = {
@@ -538,7 +543,9 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         telegramUserId: TELEGRAM_USER,
         driverId: DRIVER_ID,
         contactId: CONTACT_ID,
+        selectedExternalParkId: PARK,
     }
+    const SCOPE_KEY = pilotScopeKeyV1({ driverId: DRIVER_ID, externalParkId: PARK, externalDriverProfileId: PROFILE })
     const port = legacyPrismaCompensationPilotPortV1
     const submitInput = (idempotencyKey: string, externalOrderId: string) => ({
         ...PROOF,
@@ -548,7 +555,42 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         attachmentFileId: 'tg-file-port-1',
         attachmentKind: 'photo',
         idempotencyKey,
+        scopeKey: SCOPE_KEY,
     })
+
+    async function databaseNow(): Promise<Date> {
+        const rows = await database.$queryRawUnsafe<Array<{ now: Date }>>(`SELECT date_trunc('milliseconds', now()) AS "now"`)
+        return rows[0].now
+    }
+
+    /**
+     * Ingestion as the pilot sees it, with a written, reconciled catalogue.
+     * The clock is the database's, or a fixed database instant when a test
+     * needs an exact boundary. Nothing here can reach Yandex.
+     */
+    function pilotIngestion(fixedNow?: Date): CompensationPilotIngestionPortV1 {
+        return {
+            readCatalogueFacts: vi.fn(async () => {
+                const dbNow = fixedNow ?? await databaseNow()
+                return {
+                    mode: 'write',
+                    parkEnabled: true,
+                    dbNow,
+                    lastHotSuccessAt: dbNow,
+                    reconciliationPassStartedAt: dbNow,
+                    reconciliationFloorBookedAt: null,
+                    reconciliationCursorBookedAt: null,
+                    lastReconciliationCompletedAt: dbNow,
+                }
+            }),
+            requestHotRefresh: vi.fn(async () => ({ status: 'scheduled' as const, reason: null })),
+            requestOrderConfirmation: vi.fn(async () => ({ status: 'scheduled' as const, reason: null })),
+            readOrderConfirmation: vi.fn(async () => ({
+                state: 'undetermined' as const, startedAt: null, endedAt: null, code: null,
+            })),
+        }
+    }
+    const ingestion = pilotIngestion()
 
     async function clearIdentityFixtures(): Promise<void> {
         await database.$executeRawUnsafe(`DELETE FROM "ContactMerge" WHERE "survivorId" LIKE 'pilot-port-%'`)
@@ -605,18 +647,18 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
     it('shows the confirmed person their orders and submits through C1 with the Contacts lineage', async () => {
         await seedPerson()
 
-        const section = await compensationSectionViewV1(PROOF, port, NOW)
+        const section = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
         expect(section).toMatchObject({ available: true, firstMonthKey: PERIOD_KEY, remainingBudgetKopecks: 500_000 })
         if (!section.available) return
         expect(section.orders).toHaveLength(1)
         const externalOrderId = section.orders[0].externalOrderId
 
         const idempotencyKey = randomUUID()
-        const created = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, NOW)
+        const created = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, ingestion, NOW)
         expect(created).toMatchObject({ submitted: true, amountKopecks: 30_000, status: 'created' })
         // A repeated tap is stopped by the claimed-order check before C1, so it
         // can neither create a second application nor a second evidence row.
-        const repeated = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, NOW)
+        const repeated = await submitPilotApplicationV1(submitInput(idempotencyKey, externalOrderId), port, ingestion, NOW)
         expect(repeated).toEqual({ submitted: false, refusal: 'order_already_claimed' })
         expect(await count('CompensationApplication')).toBe(1)
 
@@ -631,7 +673,7 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         expect(await port.findClaimedOrderIds([CONTACT_ID])).toEqual([externalOrderId])
         expect(await port.findClaimedOrderIds([OTHER_CONTACT_ID])).toEqual([])
 
-        const after = await compensationSectionViewV1(PROOF, port, NOW)
+        const after = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
         expect(after.applications).toHaveLength(1)
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
 
@@ -651,14 +693,14 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         await seedPerson()
         await ingestCashOrderPageV1([fleetOrder({ id: 'c'.repeat(32), short_id: 3982092 })], CONTEXT, ingestionPort())
 
-        const section = await compensationSectionViewV1(PROOF, port, NOW)
+        const section = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
         expect(section.available && section.orders).toHaveLength(2)
         if (!section.available) return
         const [first, second] = section.orders
 
-        expect(await submitPilotApplicationV1(submitInput(randomUUID(), first.externalOrderId), port, NOW))
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), first.externalOrderId), port, ingestion, NOW))
             .toMatchObject({ submitted: true, status: 'created' })
-        expect(await submitPilotApplicationV1(submitInput(randomUUID(), second.externalOrderId), port, NOW))
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), second.externalOrderId), port, ingestion, NOW))
             .toEqual({ submitted: false, refusal: 'active_pending_exists' })
         expect(await count('CompensationApplication')).toBe(1)
         expect(await count('CompensationPilotSubmission')).toBe(1)
@@ -668,7 +710,7 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         await seedPerson('pilot-port-driver-elsewhere')
 
         expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_not_proven' })
-        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, NOW)
+        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, ingestion, NOW)
         expect(outcome).toEqual({ submitted: false, refusal: 'identity_not_proven' })
         expect(await count('CompensationPerson')).toBe(0)
         expect(await count('CompensationPersonBinding')).toBe(0)
@@ -688,7 +730,7 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         )
 
         expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_needs_review' })
-        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, NOW)
+        const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, ingestion, NOW)
         expect(outcome).toEqual({ submitted: false, refusal: 'identity_needs_review' })
         expect(await count('CompensationPersonBinding')).toBe(0)
         expect(await count('CompensationApplication')).toBe(0)
@@ -736,4 +778,110 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         }
         expect(await resolvePilotIdentityV1(PROOF, port)).toMatchObject({ proven: true })
     }, 30_000)
+
+    it('records the provider observation as the verified time, not the submit time', async () => {
+        await seedPerson()
+        const section = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
+        if (!section.available) throw new Error('section unavailable')
+        const externalOrderId = section.orders[0].externalOrderId
+
+        const created = await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), port, ingestion, NOW)
+        expect(created).toMatchObject({ submitted: true, status: 'created' })
+
+        const rows = await database.$queryRawUnsafe<Array<{ verifiedAt: Date; observedAt: Date; submittedAt: Date }>>(
+            `SELECT vo."verifiedAt", co."observedAt", app."submittedAt"
+             FROM "CompensationApplication" app
+             JOIN "CompensationVerifiedOrder" vo ON vo."id" = app."verifiedOrderId"
+             JOIN "CompensationCashOrder" co
+               ON co."provider" = vo."provider" AND co."externalParkId" = vo."externalParkId"
+              AND co."externalOrderId" = vo."externalOrderId"`)
+        expect(rows).toHaveLength(1)
+        expect(rows[0].verifiedAt.getTime()).toBe(rows[0].observedAt.getTime())
+        expect(rows[0].verifiedAt.getTime()).toBe(CONTEXT.observedAt.getTime())
+        expect(rows[0].submittedAt.getTime()).toBe(NOW.getTime())
+    })
+
+    it('reaches C1 at exactly sixty minutes of database time and not a millisecond later', async () => {
+        await seedPerson()
+        const dbNow = await databaseNow()
+        const externalOrderId = 'a'.repeat(32)
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationCashOrder" SET "observedAt" = $1, "providerBookedAt" = $2 WHERE "externalOrderId" = $3`,
+            new Date(dbNow.getTime() - 3_600_001), new Date(ORDER_ENDED_AT.getTime() - 1_200_000), externalOrderId,
+        )
+        const late = pilotIngestion(dbNow)
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), port, late, NOW))
+            .toEqual({ submitted: false, refusal: 'order_confirmation_pending' })
+        expect(late.requestOrderConfirmation).toHaveBeenCalledWith(expect.objectContaining({
+            externalParkId: PARK,
+            externalOrderId,
+            providerBookedAt: new Date(ORDER_ENDED_AT.getTime() - 1_200_000),
+        }))
+        expect(await count('CompensationApplication')).toBe(0)
+        expect(await count('CompensationVerifiedOrder')).toBe(0)
+        expect(await count('CompensationPilotSubmission')).toBe(0)
+
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationCashOrder" SET "observedAt" = $1 WHERE "externalOrderId" = $2`,
+            new Date(dbNow.getTime() - 3_600_000), externalOrderId,
+        )
+        const onTime = pilotIngestion(dbNow)
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), port, onTime, NOW))
+            .toMatchObject({ submitted: true, status: 'created' })
+        expect(onTime.requestOrderConfirmation).not.toHaveBeenCalled()
+    })
+
+    it('files nothing for an order removed after the driver chose it', async () => {
+        await seedPerson()
+        const externalOrderId = 'a'.repeat(32)
+        const check = await checkPilotOrderV1({ ...PROOF, externalOrderId, scopeKey: SCOPE_KEY, retry: false }, port, ingestion, NOW)
+        expect(check.state).toBe('fresh')
+
+        // A decisive provider observation removed the row in the meantime.
+        await database.$executeRawUnsafe(`DELETE FROM "CompensationCashOrder" WHERE "externalOrderId" = $1`, externalOrderId)
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), port, ingestion, NOW))
+            .toEqual({ submitted: false, refusal: 'order_not_in_catalogue' })
+        expect(await count('CompensationApplication')).toBe(0)
+        expect(await count('CompensationPilotSubmission')).toBe(0)
+    })
+
+    it('files nothing for an order listed in park A after the driver switched to park B', async () => {
+        await seedPerson()
+        const section = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
+        expect(section).toMatchObject({ available: true, scopeKey: SCOPE_KEY })
+        const inParkB = { ...PROOF, selectedExternalParkId: 'park-yoko-2' }
+
+        const check = await checkPilotOrderV1({ ...inParkB, externalOrderId: 'a'.repeat(32), scopeKey: SCOPE_KEY, retry: false }, port, ingestion, NOW)
+        expect(check).toEqual({ state: 'refused', order: null, refusal: 'selected_park_profile_unproven' })
+        expect(await submitPilotApplicationV1({ ...submitInput(randomUUID(), 'a'.repeat(32)), ...inParkB }, port, ingestion, NOW))
+            .toEqual({ submitted: false, refusal: 'selected_park_profile_unproven' })
+        expect(await count('CompensationApplication')).toBe(0)
+        expect(await count('CompensationPerson')).toBe(0)
+    })
+
+    it('asks for a park and writes nothing when none is selected', async () => {
+        await seedPerson()
+        const unselected = { ...PROOF, selectedExternalParkId: null }
+        expect(await compensationSectionViewV1(unselected, port, ingestion, NOW))
+            .toMatchObject({ available: false, reason: 'park_not_selected' })
+        expect(await submitPilotApplicationV1({ ...submitInput(randomUUID(), 'a'.repeat(32)), ...unselected }, port, ingestion, NOW))
+            .toEqual({ submitted: false, refusal: 'park_not_selected' })
+        expect(await count('CompensationApplication')).toBe(0)
+    })
+
+    it('turns two simultaneous submits with one key into one application and one evidence row', async () => {
+        await seedPerson()
+        const idempotencyKey = randomUUID()
+        const outcomes = await Promise.all([
+            submitPilotApplicationV1(submitInput(idempotencyKey, 'a'.repeat(32)), port, ingestion, NOW),
+            submitPilotApplicationV1(submitInput(idempotencyKey, 'a'.repeat(32)), port, ingestion, NOW),
+        ])
+        const statuses = outcomes.map((outcome) => (outcome.submitted ? outcome.status : outcome.refusal))
+        // Whichever loses the race is either replayed by C1 or stopped by the
+        // claimed-order check that runs after the winner commits.
+        expect(statuses.filter((status) => status === 'created')).toHaveLength(1)
+        expect(statuses.filter((status) => status !== 'created')[0]).toMatch(/^(replayed|order_already_claimed)$/)
+        expect(await count('CompensationApplication')).toBe(1)
+        expect(await count('CompensationPilotSubmission')).toBe(1)
+    })
 })

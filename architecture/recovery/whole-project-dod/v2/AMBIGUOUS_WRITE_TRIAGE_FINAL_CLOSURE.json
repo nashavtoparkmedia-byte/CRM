@@ -3089,9 +3089,9 @@
     {
       "record_id": "3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
       "site_signature": "3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
-      "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
+      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 210,
+      "line": 213,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3113,7 +3113,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "d68932588406f18eff0c04336dd1b55af2f16d4b3f9b9311eed85b1e384f577a",
-      "sql_provenance_sha256": "583d852473213f721af248844902f01dcc485b07fe7909d9eae99fbaa1c20929",
+      "sql_provenance_sha256": "d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3139,9 +3139,9 @@
     {
       "record_id": "e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
       "site_signature": "e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
-      "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
+      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 221,
+      "line": 224,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3160,7 +3160,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "f96dbc6f2df31c9e257a951b0ae78f7d60bf5a5c86ab2127e201f42106fad085",
-      "sql_provenance_sha256": "d571dc23bf4d6b2f7aacb5fddec06b7360a4aa597bf01b6174458fd318c7fa41",
+      "sql_provenance_sha256": "80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3186,9 +3186,9 @@
     {
       "record_id": "597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
       "site_signature": "597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
-      "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
+      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 230,
+      "line": 233,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3208,7 +3208,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "241850053aab81d8a7d408ec613bfc6d7f5a2ffa5c3c0d97984ba07d936dda23",
-      "sql_provenance_sha256": "c1a57905a84aaeb2fde9fec4c7f62c899aaf827d5189c36dacad4da0fa591eed",
+      "sql_provenance_sha256": "58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3234,9 +3234,9 @@
     {
       "record_id": "a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
       "site_signature": "a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
-      "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
+      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 237,
+      "line": 240,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3252,7 +3252,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "0b9e0e3b0646cd663cb9dac88681f14079b44fd4be95e991530224249d8aee8b",
-      "sql_provenance_sha256": "a83bdcd767cde197f60fd997c71ef6e9a00a10e60efb819f6bb58764566d2c86",
+      "sql_provenance_sha256": "816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -4911,11 +4911,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 210,
+        "line": 213,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256": "583d852473213f721af248844902f01dcc485b07fe7909d9eae99fbaa1c20929"
+        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256": "d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4933,10 +4933,10 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:210:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:213:28",
         "analysis_site_signature:3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
-        "source_sha256:a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256:583d852473213f721af248844902f01dcc485b07fe7909d9eae99fbaa1c20929",
+        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256:d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6",
         "sql_sha256:d68932588406f18eff0c04336dd1b55af2f16d4b3f9b9311eed85b1e384f577a",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]
@@ -4946,11 +4946,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 221,
+        "line": 224,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256": "d571dc23bf4d6b2f7aacb5fddec06b7360a4aa597bf01b6174458fd318c7fa41"
+        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256": "80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4965,10 +4965,10 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:221:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:224:28",
         "analysis_site_signature:e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
-        "source_sha256:a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256:d571dc23bf4d6b2f7aacb5fddec06b7360a4aa597bf01b6174458fd318c7fa41",
+        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256:80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879",
         "sql_sha256:f96dbc6f2df31c9e257a951b0ae78f7d60bf5a5c86ab2127e201f42106fad085",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]
@@ -4978,11 +4978,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 230,
+        "line": 233,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256": "c1a57905a84aaeb2fde9fec4c7f62c899aaf827d5189c36dacad4da0fa591eed"
+        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256": "58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4998,10 +4998,10 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:230:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:233:28",
         "analysis_site_signature:597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
-        "source_sha256:a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256:c1a57905a84aaeb2fde9fec4c7f62c899aaf827d5189c36dacad4da0fa591eed",
+        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256:58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9",
         "sql_sha256:241850053aab81d8a7d408ec613bfc6d7f5a2ffa5c3c0d97984ba07d936dda23",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]
@@ -5011,11 +5011,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 237,
+        "line": 240,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256": "a83bdcd767cde197f60fd997c71ef6e9a00a10e60efb819f6bb58764566d2c86"
+        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256": "816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -5027,10 +5027,10 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:237:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:240:28",
         "analysis_site_signature:a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
-        "source_sha256:a0caf6b1705c062f8b5263f74391377e060b377635d94e2526fd0e3839ebe488",
-        "sql_provenance_sha256:a83bdcd767cde197f60fd997c71ef6e9a00a10e60efb819f6bb58764566d2c86",
+        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+        "sql_provenance_sha256:816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666",
         "sql_sha256:0b9e0e3b0646cd663cb9dac88681f14079b44fd4be95e991530224249d8aee8b",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]

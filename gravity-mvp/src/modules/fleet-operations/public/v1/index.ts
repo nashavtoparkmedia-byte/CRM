@@ -105,6 +105,8 @@ export type {
 export {
   compensationManagerActionV1,
   compensationManagerApplicationsV1,
+  compensationPilotOrderCheckV1,
+  compensationPilotRefreshV1,
   compensationPilotSectionV1,
   compensationPilotSubmitV1,
   resolveCompensationManagerPrincipalV1,

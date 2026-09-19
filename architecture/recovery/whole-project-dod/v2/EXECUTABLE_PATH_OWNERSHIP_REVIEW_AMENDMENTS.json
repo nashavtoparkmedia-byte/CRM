@@ -634,6 +634,69 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-compensation-pr2-selected-park-main-5232cd31-20260918",
+      "reviewed_at": "2026-09-18T00:00:00Z",
+      "reviewed_by": "CASH_COMPENSATION_PR2_SELECTED_PARK_REVIEW_20260918",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_CASH_COMPENSATION_PR2_IMPLEMENT_AUTHORIZED_20260918",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain of main 5232cd31, whose tail is the cash-order ingestion amendment cash-order-ingestion-runtime-pr1-post-b3-f3501bee-20260917, and reviews only the surfaces cash compensation PR2 adds or rewrites."
+      },
+      "reason": "Cash compensation PR2 (selected-park Telegram flow and provider-freshness submission gate) adds three tracked executable surfaces and rewrites the bytes of one reviewed exact-inventory assignment. The new surfaces are the pilot selection rules module and its unit test in paths fleet_operations owns, and the Telegram scene behaviour test in tg-bot/src, which telegram_channel owns. The driver-bot webhook route keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change. The current triple is the repository's own derivation over this tree: 2,553 + 3 = 2,556 surfaces, context-owned 1,337 -> 1,340, governed exclusions unchanged at 1,216.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2553,
+        "tracked_inventory_sha256": "54b3719a9a1c1b7159d941a5748d69bf833102aef5423a6ddacad22038f74d1d",
+        "coverage_sha256": "0f21dbaf49afbb03c870b4deed1729147e3588079f999d9ae1236951eb5da4ff"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2556,
+        "tracked_inventory_sha256": "2698f84debad317863073f282de16efc8b71898a2f739c7918ad879102cbd370",
+        "coverage_sha256": "2cecbe955587fee73b21e02597058e5b8e6e67200e67772a1b02675f87437458"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "df190c41cabcb6bcf83aa4c6b8234d75e151fae968b9d3676e5e44ec28df2f2c",
+          "current_source_sha256": "ddb84ae53511736adaae1a0f5395f9d13caadefe93338667bb92929cb9882db0",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook gains the compensation_order_check and compensation_refresh actions, and its compensation actions read the selected park from the same Telegram link the existing authority proof reads; every existing action keeps the same authority gate, status codes and responses, and the path keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-selection.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-selection.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations bounded context owns in architecture/contexts/v1/manifests/fleet_operations.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/handlers/compensation.scene.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under tg-bot/src, a path the telegram_channel bounded context owns in architecture/contexts/v1/manifests/telegram_channel.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

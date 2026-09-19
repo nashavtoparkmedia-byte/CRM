@@ -106,7 +106,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2553,
+  denominator: 2556,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))
@@ -252,6 +252,28 @@ rejects(
   'one path may not be rebound twice',
 )
 amendmentProbes.rebind_carries_exact_moving_fingerprints_and_a_decision = 'ENFORCED'
+
+// A later amendment may move an already rebound path again, but only from the
+// exact fingerprint the earlier amendment approved. The resolved rebind still
+// starts at the reviewed assignment's fingerprint, so the validator's binding
+// of previous to the assignment covers the whole chain.
+const laterCurrent = { tracked_executable_surfaces: 102, tracked_inventory_sha256: hash('18'), coverage_sha256: hash('29') }
+const laterRebind = (previous) => ({
+  ...baseAmendment(),
+  amendment_id: 'probe-later-amendment',
+  reviewed_by: 'OWNER_AUTHORIZED_LATER_OWNERSHIP_REVIEW_20260918',
+  predecessor: { ...amendedCurrent },
+  current: { ...laterCurrent },
+  unassigned_tracked_surfaces: [],
+  source_hash_rebinds: [{ path: 'a/route.ts', previous_source_sha256: previous, current_source_sha256: hash('3a'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }],
+})
+const chainOfTwo = (later) => ({ ...chainOf(baseAmendment()), amendments: [baseAmendment(), later] })
+const chained = resolveProbe(chainOfTwo(laterRebind(hash('07'))))
+assert.equal(chained.rebinds.get('a/route.ts')?.previous_source_sha256, hash('f6'), 'a chained rebind must still start at the reviewed fingerprint')
+assert.equal(chained.rebinds.get('a/route.ts')?.current_source_sha256, hash('3a'), 'a chained rebind must end at the latest approved fingerprint')
+rejects(chainOfTwo(laterRebind(hash('f6'))), /duplicate reviewed executable ownership amendment rebind/u, 'a later rebind must extend the fingerprint the earlier one approved')
+rejects(chainOfTwo(laterRebind(hash('4b'))), /duplicate reviewed executable ownership amendment rebind/u, 'a later rebind may not start from an unrelated fingerprint')
+amendmentProbes.later_rebind_extends_the_approved_fingerprint_chain = 'ENFORCED'
 
 // 5/6/7/8/14. An amendment may not carry reviewed ownership semantics at all.
 for (const forbidden of ['assignments', 'exact_inventory_changes', 'governed_exclusions', 'lifecycle_changes', 'functional_owner_changes']) {

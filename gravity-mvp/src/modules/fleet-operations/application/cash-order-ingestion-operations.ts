@@ -23,17 +23,20 @@ import {
     CashOrderIngestionRuntimeV1,
 } from '../internal/compensation/cash-order-ingestion-runtime'
 import { classifyCashOrderParkAuthorityV1 } from '../internal/compensation/cash-order-park-authority'
+import { CASH_ORDER_PROVIDER_V1 } from '../internal/compensation/cash-order-ingestion-store'
 import { legacyPrismaCashOrderIngestionStoreV1 } from '../internal/compensation/legacy-prisma-cash-order-ingestion-adapter'
 import { loadYandexCashOrderCredentialsV1 } from '../internal/compensation/yandex-cash-order-credentials'
 import { createYandexCashOrderPageFetcherV1 } from '../internal/compensation/yandex-cash-order-source'
 
+const config = parseCashOrderIngestionConfigV1({
+    mode: process.env.YOKO_CASH_ORDER_INGESTION_MODE,
+    parks: process.env.YOKO_CASH_COMPENSATION_PARKS,
+})
+
 // Built once at load, with no I/O: the store, credential source and provider
 // client are only used when a tick or a targeted request runs.
 const runtime = new CashOrderIngestionRuntimeV1(
-    parseCashOrderIngestionConfigV1({
-        mode: process.env.YOKO_CASH_ORDER_INGESTION_MODE,
-        parks: process.env.YOKO_CASH_COMPENSATION_PARKS,
-    }),
+    config,
     {
         store: legacyPrismaCashOrderIngestionStoreV1,
         loadCredentials: loadYandexCashOrderCredentialsV1,
@@ -169,6 +172,38 @@ export function readCashOrderOrderConfirmationV1(input: {
             return { state: 'failed', via: null, connectionId: null, startedAt: null, endedAt: confirmation.endedDb, code: confirmation.code }
         default:
             return { state: confirmation.state, via: null, connectionId: null, startedAt: null, endedAt: null, code: null }
+    }
+}
+
+export interface CashOrderCatalogueFactsDtoV1 {
+    mode: 'off' | 'dry_run' | 'write'
+    /** Enabled for ingestion, with a valid park configuration. */
+    parkEnabled: boolean
+    dbNow: Date
+    lastHotSuccessAt: Date | null
+    reconciliationPassStartedAt: Date | null
+    reconciliationFloorBookedAt: Date | null
+    reconciliationCursorBookedAt: Date | null
+    lastReconciliationCompletedAt: Date | null
+}
+
+/**
+ * How complete one park's local catalogue is, from its checkpoint row and this
+ * process's configuration. One short database operation; no provider call and
+ * no credential.
+ */
+export async function readCashOrderCatalogueFactsV1(externalParkId: string): Promise<CashOrderCatalogueFactsDtoV1> {
+    const read = await legacyPrismaCashOrderIngestionStoreV1.readCheckpoints(CASH_ORDER_PROVIDER_V1, [externalParkId])
+    const checkpoint = read.checkpoints.find((candidate) => candidate.externalParkId === externalParkId) ?? null
+    return {
+        mode: config.mode,
+        parkEnabled: config.configError === null && config.enabledParks.includes(externalParkId),
+        dbNow: read.dbNow,
+        lastHotSuccessAt: checkpoint === null ? null : checkpoint.lastHotSuccessAt,
+        reconciliationPassStartedAt: checkpoint === null ? null : checkpoint.reconciliationPassStartedAt,
+        reconciliationFloorBookedAt: checkpoint === null ? null : checkpoint.reconciliationFloorBookedAt,
+        reconciliationCursorBookedAt: checkpoint === null ? null : checkpoint.reconciliationCursorBookedAt,
+        lastReconciliationCompletedAt: checkpoint === null ? null : checkpoint.lastReconciliationCompletedAt,
     }
 }
 

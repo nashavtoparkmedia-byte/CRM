@@ -79,11 +79,11 @@ export interface StoredCashOrderV1 {
     endedAt: Date
 }
 
-export type CashOrderCatalogueV1 =
+export type CashOrderCatalogueV1<T extends StoredCashOrderV1 = StoredCashOrderV1> =
     | {
         eligible: true
         firstMonthKey: string
-        orders: readonly StoredCashOrderV1[]
+        orders: readonly T[]
     }
     | {
         eligible: false
@@ -100,11 +100,11 @@ export type CashOrderCatalogueV1 =
  * the same Yekaterinburg calendar the budget period uses, so the two can never
  * disagree about which month an order belongs to.
  */
-export function cashOrderCatalogueV1(
+export function cashOrderCatalogueV1<T extends StoredCashOrderV1>(
     facts: CompensationEligibilityFactsV1,
-    storedOrders: readonly StoredCashOrderV1[],
+    storedOrders: readonly T[],
     now: Date,
-): CashOrderCatalogueV1 {
+): CashOrderCatalogueV1<T> {
     const eligibility = compensationPilotEligibilityV1(facts, now)
     if (!eligibility.eligible) {
         return { eligible: false, reason: eligibility.reason, orders: [] }

@@ -49,9 +49,37 @@ describe('the telegram scene calls the backend for every decision', () => {
         expect(SCENE).toContain("callCRM('compensation_section'")
     })
 
-    it('binds both calls to the receiving bot account, as every bot Driver action does', () => {
+    it('binds every call to the receiving bot account, as every bot Driver action does', () => {
         expect(SCENE).toContain("require('../services/exactTelegramActionBinding')")
-        expect(SCENE.match(/\.\.\.exactTelegramActionBinding\(ctx\)/g) ?? []).toHaveLength(2)
+        // One payload builder carries the binding, and every CRM call uses it.
+        expect(SCENE.match(/\.\.\.exactTelegramActionBinding\(ctx\)/g) ?? []).toHaveLength(1)
+        const calls = SCENE.match(/callCRM\('[a-z_]+', [^)]*\)?/g) ?? []
+        expect(calls.length).toBeGreaterThanOrEqual(5)
+        for (const call of calls) expect(call).toContain('crmPayload(ctx')
+    })
+
+    it('asks the CRM about a chosen order and for a refresh instead of deciding either', () => {
+        expect(SCENE).toContain("callCRM('compensation_order_check'")
+        expect(SCENE).toContain("callCRM('compensation_refresh'")
+        // The scope token the CRM issued with the list goes back with the
+        // order and with the claim.
+        expect(SCENE).toContain('comp_o:${scopeKey}:${order.externalOrderId}')
+        expect(SCENE).toMatch(/compensation_order_check', crmPayload\(ctx, \{ externalOrderId, scopeKey, retry \}\)/)
+        expect(SCENE).toContain('scopeKey: state.scopeKey')
+    })
+
+    it('never reaches Yandex or waits in a handler', () => {
+        expect(SCENE).not.toMatch(/fleet-api|yandex\.net|fetch\(|setTimeout|setInterval|sleep/)
+    })
+
+    it('answers a compensation button with no open scene as stale', () => {
+        const stage = BOT.indexOf('bot.use(stage.middleware())')
+        const stale = BOT.indexOf('bot.action(/^comp_/, compensationStaleCallback)')
+        const globalCallbacks = BOT.indexOf("bot.on('callback_query'")
+        expect(stage).toBeGreaterThan(-1)
+        expect(stale).toBeGreaterThan(stage)
+        expect(globalCallbacks).toBeGreaterThan(stale)
+        expect(SCENE).toContain('async function compensationStaleCallback(ctx)')
     })
 
     it('tells a driver whose chat authority was refused something other than "share your number"', () => {
@@ -86,6 +114,9 @@ describe('the telegram scene calls the backend for every decision', () => {
             'outside_first_calendar_month', 'support_not_confirmed', 'attachment_missing',
             'claim_above_pilot_cap', 'order_not_in_catalogue', 'order_already_claimed',
             'budget_exhausted', 'active_pending_exists', 'submission_window_closed',
+            'park_not_selected', 'selected_park_profile_unproven', 'catalogue_disabled',
+            'stale_context', 'order_confirmation_pending', 'order_not_confirmed',
+            'order_check_failed', 'order_check_unavailable',
         ]) {
             expect(SCENE).toContain(refusal)
         }
@@ -121,14 +152,26 @@ describe('the telegram scene calls the backend for every decision', () => {
 })
 
 describe('the webhook routes those actions to the service', () => {
-    it('dispatches both compensation actions', () => {
+    it('dispatches every compensation action', () => {
         expect(ROUTE).toContain("case 'compensation_section':")
         expect(ROUTE).toContain("case 'compensation_submit':")
+        expect(ROUTE).toContain("case 'compensation_order_check':")
+        expect(ROUTE).toContain("case 'compensation_refresh':")
+    })
+
+    it('takes the selected park from the proven link, never from the bot', () => {
+        const block = ROUTE.slice(ROUTE.indexOf('// ── Cash compensation pilot'), ROUTE.indexOf('// Handle a phone submitted through the driver bot'))
+        expect(block).toContain('select: { driverId: true, activeParkId: true }')
+        expect(block).toContain('selectedExternalParkId: mapping.activeParkId ?? null')
+        expect(block).not.toMatch(/payload\??\.(parkId|activeParkId|selectedExternalParkId|externalParkId)/)
     })
 
     it('calls the pilot service and nothing lower', () => {
         expect(ROUTE).toContain('compensationPilotSectionV1')
         expect(ROUTE).toContain('compensationPilotSubmitV1')
+        expect(ROUTE).toContain('compensationPilotOrderCheckV1')
+        expect(ROUTE).toContain('compensationPilotRefreshV1')
+        expect(ROUTE).not.toMatch(/requestCashOrder(HotRefresh|DayConfirmation)V1|readCashOrderOrderConfirmationV1/)
         // The module public path, not the composition root: reaching past the
         // public surface is what made the whole facade read as laundering.
         expect(ROUTE).toContain("from '@/modules/fleet-operations/public/v1'")

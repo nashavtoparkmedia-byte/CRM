@@ -123,7 +123,7 @@ bot.use(async (ctx, next) => {
 });
 
 // 2. Stage initialization
-const { compensationScene } = require('./handlers/compensation');
+const { compensationScene, compensationStaleCallback } = require('./handlers/compensation');
 const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene, parkSelectScene, compensationScene]);
 
 // 2.1 Universal Commands within Stage
@@ -131,6 +131,10 @@ stage.start(startHandler.handleStart);
 
 // 3. Register Stage middleware (Adds ctx.scene and ctx.wizard)
 bot.use(stage.middleware());
+
+// A compensation button that reaches here has no open compensation scene: its
+// list is from before a restart, a park change or another section.
+bot.action(/^comp_/, compensationStaleCallback);
 
 // =============================================================================
 // GLOBAL HANDLERS (After Stage)
