@@ -739,6 +739,84 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-text-reply-v1-main-bb4da9bb-20260919",
+      "reviewed_at": "2026-09-19T00:00:00Z",
+      "reviewed_by": "MOBILE_TEXT_REPLY_V1_RECONCILIATION_EXECUTOR_REVIEW_20260919",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_ANDROID_CONTROLLED_RECONCILIATION_AUTHORIZED_20260919",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain whose tail is Mobile Conversation Read v1 reconciled onto main bb4da9bb (amendment mobile-conversation-read-v1-main-bb4da9bb-20260919, candidate 7b306e37) and reviews only the seven surfaces Mobile Text Reply v1 adds. It replaces the pre-reconciliation amendments mobile-text-reply-v1-20260918 and mobile-text-reply-v1-repair-20260918, whose per-surface decisions it carries unchanged."
+      },
+      "reason": "Records the seven tracked executable surfaces Mobile Text Reply v1 adds: six under Messaging-owned paths (the client send reconciliation, the retry server action, the operator retry capability and three Vitest tests, one of them PostgreSQL-backed) and the Android acceptance MAX transport stand-in under the platform_shell-owned android path. The same change rebinds the lifecycle surface registry entry for .github/workflows/android-acceptance-e2e.yml to its new bytes with TEST/TEST_SUPPORT/NONE unchanged, and gives the stand-in its own TEST/TEST_SUPPORT/NONE entry; both move the tracked inventory digest without moving any reviewed assignment. It adds no assignment, exact-inventory transition, functional owner or governed exclusion change, and changes the bytes of no reviewed exact-inventory assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the candidate tree: 2,557 + 7 = 2,564 surfaces, context-owned 1,341 -> 1,348, governed exclusions 1,216 unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2557,
+        "tracked_inventory_sha256": "3acff9b7293997b85a23d0f4e8d169c796c85bdf8070925f915160f2ef9a91b4",
+        "coverage_sha256": "4915458b6e61e98e9b428a47e7d122d199c1744549960cde9ae438c4d20bbbb8"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2564,
+        "tracked_inventory_sha256": "cfa6e9b52dd912aa608be0b0bff216a5c17525296223cbac1f0fb1a0aba955df",
+        "coverage_sha256": "cecc680d7adf2b9be20221306cdaa61a6ab21645dd3635c5fe2be4cf5c65f935"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "android/tools/acceptance-max-transport.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under android, which the platform_shell bounded context owns (android in architecture/contexts/v1/manifests/platform_shell.json owned_paths). It is the loopback MAX transport stand-in the Android acceptance workflow starts; its lifecycle comes from its TEST/TEST_SUPPORT/NONE entry in the lifecycle surface registry, and context ownership comes from the manifest, so it receives no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/src/app/messages/components/MobileTextReply.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test of the conversation send path, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/messages/hooks/outbound-send-state.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, the client-side reconciliation of one outbound send by clientMessageId, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/messages/message-retry-actions.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, the Messaging server action behind «Повторить» on a persisted failed message, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test of the owner-side send and retry semantics, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, the Messaging-owned operator retry of one persisted outbound message through MessageService.retrySend, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/delivery-recovery-operations.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a PostgreSQL-backed Vitest test of the retry job's candidate selection, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
