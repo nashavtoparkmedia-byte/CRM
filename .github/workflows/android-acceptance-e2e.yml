@@ -434,7 +434,8 @@ jobs:
             test01_wrongPasswordKeepsTheFormAndExplainsWhy \
             test02_correctPasswordAfterRejectionOpensTheMessenger \
             test03_directCorrectLoginOpensTheMessenger \
-            test04_allThreeSeededConversationsAreListed
+            test04_allThreeSeededConversationsAreListed \
+            test05_openConversationReadHistoryBackAndSwitchConversation
           do
             out="$RUNNER_TEMP/scenario-$t.log"
             echo "===== $t =====" | tee -a "$LOG"
@@ -473,10 +474,10 @@ jobs:
           done
 
           # Every scenario in the list must have reported. A loop that silently
-          # ran three of four would otherwise pass.
+          # ran four of five would otherwise pass.
           ran=$(grep -c '^SCENARIO OK: ' "$LOG")
-          if [ "$ran" -ne 4 ]; then
-            echo "only $ran of 4 scenarios reported OK" | tee -a "$LOG"
+          if [ "$ran" -ne 5 ]; then
+            echo "only $ran of 5 scenarios reported OK" | tee -a "$LOG"
             failed=1
           fi
 
@@ -600,12 +601,12 @@ jobs:
           bad=$(grep -c 'SCENARIO DID NOT REPORT OK' "$OUT/gradle-connected.log" 2>/dev/null || echo 0)
           line="scenarios: ${started} started, ${okd} reported OK, ${bad} did not"
           # A green run must not carry a red annotation.
-          if [ "$bad" -eq 0 ] && [ "$okd" -eq 4 ]; then
+          if [ "$bad" -eq 0 ] && [ "$okd" -eq 5 ]; then
             echo "::notice::${line}"
           else
             echo "::error::${line}"
           fi
-          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 4 scenarios" \
+          grep -hE "SCENARIO (OK|FAILED|DID NOT)|AssertionError|Exception|INSTALL_|scenarios failed|of 5 scenarios" \
             "$OUT/gradle-connected.log" 2>/dev/null | grep -v "^$" | head -6 | while IFS= read -r l; do
               echo "::error::gradle: $(printf '%s' "$l" | head -c 500)"
             done
