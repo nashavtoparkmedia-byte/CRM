@@ -14,6 +14,7 @@
  */
 
 import { compensationCalendarMonthV1, compensationPeriodKeyV1 } from './compensation-calendar'
+import { COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS } from './compensation-policy'
 import { compensationBusinessDisplayV1, type CompensationBusinessDisplayV1 } from './compensation-pilot-selection'
 
 export const MANAGER_APPLICATION_STATES_V1 = [
@@ -372,7 +373,7 @@ export interface ManagerAuthorizationAgeV1 {
 export function managerAuthorizationAgeV1(
     authorization: { openedAt: Date; expiresAt: Date },
     now: Date,
-    maxUnaidedAgeMs: number,
+    maxUnaidedAgeMs: number = COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS,
 ): ManagerAuthorizationAgeV1 {
     const ageMs = Math.max(0, now.getTime() - authorization.openedAt.getTime())
     return {

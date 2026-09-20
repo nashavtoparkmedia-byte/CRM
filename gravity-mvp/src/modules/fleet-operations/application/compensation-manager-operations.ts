@@ -33,17 +33,70 @@ export async function compensationManagerApplicationsV1(
     return listManagerApplicationsV1(filter, legacyPrismaCompensationManagerStoreV1)
 }
 
-/** One application with its history and the actions it is open to. */
+/**
+ * One application with its history and the actions it is open to.
+ *
+ * The answer is assembled here field by field rather than handed on, so what
+ * leaves this composition root is a stated projection and never a value that
+ * could carry a persistence handle with it.
+ */
 export async function compensationManagerApplicationV1(
     applicationId: string,
     now: Date = new Date(),
 ): Promise<ManagerApplicationDetailV1 | null> {
-    return readManagerApplicationV1(applicationId, legacyPrismaCompensationManagerStoreV1, now)
+    const detail = await readManagerApplicationV1(applicationId, legacyPrismaCompensationManagerStoreV1, now)
+    if (detail === null) return null
+    return {
+        applicationId: detail.applicationId,
+        state: detail.state,
+        status: detail.status,
+        submittedAt: detail.submittedAt,
+        periodKey: detail.periodKey,
+        externalParkId: detail.externalParkId,
+        parkName: detail.parkName,
+        driverName: detail.driverName,
+        driverPhone: detail.driverPhone,
+        externalDriverProfileId: detail.externalDriverProfileId,
+        boundContactIds: [...detail.boundContactIds],
+        telegramUserId: detail.telegramUserId,
+        order: { ...detail.order },
+        requestedKopecks: detail.requestedKopecks,
+        orderAmountKopecks: detail.orderAmountKopecks,
+        payableKopecks: detail.payableKopecks,
+        evidence: detail.evidence,
+        attachmentKind: detail.attachmentKind,
+        supportContactedAt: detail.supportContactedAt,
+        rejectionReason: detail.rejectionReason,
+        paidAt: detail.paidAt,
+        rejectedAt: detail.rejectedAt,
+        snapshot: { ...detail.snapshot },
+        catalogue: { ...detail.catalogue },
+        authorization: detail.authorization === null
+            ? null
+            : { ...detail.authorization, age: { ...detail.authorization.age } },
+        reconciliation: detail.reconciliation === null ? null : { ...detail.reconciliation },
+        settlement: detail.settlement === null ? null : { ...detail.settlement },
+        history: detail.history.map((entry) => ({ ...entry })),
+        allowedActions: [...detail.allowedActions],
+    }
 }
 
 /** The month as the dashboard shows it, from the monetary core's own ledger. */
 export async function compensationManagerBudgetV1(periodKey: string): Promise<ManagerBudgetViewV1> {
-    return readManagerBudgetV1(periodKey, legacyPrismaCompensationManagerStoreV1)
+    const budget = await readManagerBudgetV1(periodKey, legacyPrismaCompensationManagerStoreV1)
+    return {
+        periodKey: budget.periodKey,
+        state: budget.state,
+        limitKopecks: budget.limitKopecks,
+        reservedKopecks: budget.reservedKopecks,
+        settledKopecks: budget.settledKopecks,
+        remainingKopecks: budget.remainingKopecks,
+        awaitingPaymentKopecks: budget.awaitingPaymentKopecks,
+        applicationCount: budget.applicationCount,
+        paidCount: budget.paidCount,
+        counts: { ...budget.counts },
+        ledgerConsistent: budget.ledgerConsistent,
+    }
 }
 
 /**

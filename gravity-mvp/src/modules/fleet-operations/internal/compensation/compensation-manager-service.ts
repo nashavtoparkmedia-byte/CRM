@@ -37,7 +37,6 @@ import {
     type ManagerListFilterV1,
     type ManagerResultCodeV1,
 } from './compensation-manager-view'
-import { COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS } from './compensation-policy'
 
 export interface ManagerPrincipalV1 {
     principalId: string
@@ -277,8 +276,22 @@ export async function readManagerApplicationV1(
     const facts = await port.findApplication(applicationId)
     if (facts === null) return null
     const row = rowView(facts)
+    const age = facts.authorization === null
+        ? null
+        : managerAuthorizationAgeV1(facts.authorization, now)
     return {
-        ...row,
+        applicationId: row.applicationId,
+        state: row.state,
+        submittedAt: row.submittedAt,
+        periodKey: row.periodKey,
+        externalParkId: row.externalParkId,
+        parkName: row.parkName,
+        driverName: row.driverName,
+        order: { ...row.order },
+        requestedKopecks: row.requestedKopecks,
+        orderAmountKopecks: row.orderAmountKopecks,
+        payableKopecks: row.payableKopecks,
+        evidence: row.evidence,
         status: facts.status,
         driverPhone: facts.driverPhone,
         externalDriverProfileId: facts.externalDriverProfileId,
@@ -301,12 +314,12 @@ export async function readManagerApplicationV1(
             observedAt: facts.catalogue === null ? null : facts.catalogue.observedAt,
             providerBookedAt: facts.catalogue === null ? null : facts.catalogue.providerBookedAt,
         },
-        authorization: facts.authorization === null ? null : {
+        authorization: facts.authorization === null || age === null ? null : {
             state: facts.authorization.state,
             intendedBusinessDay: facts.authorization.intendedBusinessDay,
             openedAt: facts.authorization.openedAt,
             openedByLabel: facts.authorization.openedByLabel,
-            age: managerAuthorizationAgeV1(facts.authorization, now, COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS),
+            age: { ageMs: age.ageMs, beyondUnaidedRecall: age.beyondUnaidedRecall, stale: age.stale },
         },
         reconciliation: facts.reconciliation === null ? null : {
             state: facts.reconciliation.state,
@@ -328,7 +341,23 @@ export async function readManagerBudgetV1(
     periodKey: string,
     port: CompensationManagerPortV1,
 ): Promise<ManagerBudgetViewV1> {
-    return managerBudgetViewV1(periodKey, await port.findBudget(periodKey))
+    const stored = await port.findBudget(periodKey)
+    const view = managerBudgetViewV1(periodKey, stored)
+    // Stated field by field: what leaves this seam is a projection, never a
+    // value the store handed over.
+    return {
+        periodKey: view.periodKey,
+        state: view.state,
+        limitKopecks: view.limitKopecks,
+        reservedKopecks: view.reservedKopecks,
+        settledKopecks: view.settledKopecks,
+        remainingKopecks: view.remainingKopecks,
+        awaitingPaymentKopecks: view.awaitingPaymentKopecks,
+        applicationCount: view.applicationCount,
+        paidCount: view.paidCount,
+        counts: { ...view.counts },
+        ledgerConsistent: view.ledgerConsistent,
+    }
 }
 
 export interface ManagerActionResultV1 {
