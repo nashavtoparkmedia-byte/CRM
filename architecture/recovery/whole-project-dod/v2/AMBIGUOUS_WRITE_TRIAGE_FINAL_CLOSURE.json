@@ -2016,9 +2016,9 @@
     {
       "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
-      "source_sha256": "82a7bf8c02866612576867f15b6ac7354c362b047095d4a1aee884ba4bba027a",
+      "source_sha256": "53746677a4e5ec85b98105bc7027e28b130446de88644a7833cc127c65f383a3",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line": 2551,
+      "line": 2555,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -2045,7 +2045,7 @@
         "min"
       ],
       "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
-      "sql_provenance_sha256": "22baf633b7fb9a14ecd2633a49c4b28b229480dab93ad7de927e6731c70313fa",
+      "sql_provenance_sha256": "0f76e852d47e452d2a923470e43e7a6d508d99472c1594bac8a57249476fc9d4",
       "source_context": "whatsapp_channel",
       "source_technical_module": "whatsapp_provider",
       "owner_contexts": [],
