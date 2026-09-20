@@ -137,7 +137,9 @@ test('CRM outbound text keeps clientMessageId idempotency before creating a mess
     'const created = await (prisma.message as any).create',
     'clientMessageId lookup must happen before outbound message create',
   )
-  assert.match(messageService, /return \{ success: existing\.status !== 'failed', chatId: existing\.chatId, id: existing\.id, error: null, duplicate: true \}/)
+  // A repeated intent answers with the existing row and its canonical state.
+  assert.match(messageService, /return \{ success: existing\.status !== 'failed', chatId: existing\.chatId, id: existing\.id, clientMessageId, duplicate: true, \.\.\.canonicalSendState\(existing\) \}/)
+  assert.match(messageService, /return duplicateSendResult\(existing, clientMessageId\)/)
 })
 
 test('CRM message ordering is based on provider sentAt before createdAt fallback', () => {

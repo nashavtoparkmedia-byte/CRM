@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
+import { canRetryOutbound, hasUnknownDeliveryOutcome } from "../hooks/outbound-send-state"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
-import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
+import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, Clock, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
 import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/modules/calling/public/v1/call-status-policy"
 import { usePathname, useRouter } from "next/navigation"
 import MessageContextMenu from "./MessageContextMenu"
@@ -827,7 +828,7 @@ export default function MessageFeed({
                                 if (PLACEHOLDERS.has(trimmed)) return null
                                 return raw || null
                             })()}
-                            <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
+                            <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? (hasUnknownDeliveryOutcome(msg) ? 'w-[150px]' : 'w-[105px]') : 'w-[52px]'}`} />
                         </div>
 
                         {/* Статус (время + галочки) */}
@@ -843,7 +844,11 @@ export default function MessageFeed({
                             {isOutbound && (
                                 msg.status === 'failed' ? (
                                     <div className="flex items-center gap-1 translate-y-[1px]">
-                                        <div className="group/fail relative">
+                                        <div
+                                            className="group/fail relative"
+                                            role="img"
+                                            aria-label={hasUnknownDeliveryOutcome(msg) ? 'Статус доставки неизвестен' : 'Не отправлено'}
+                                        >
                                             <AlertCircle size={14} strokeWidth={2.5} className="text-red-500" />
                                             {msg.metadata?.error && (
                                                 <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/fail:block z-50 pointer-events-none">
@@ -853,7 +858,10 @@ export default function MessageFeed({
                                                 </div>
                                             )}
                                         </div>
-                                        {onRetry && (
+                                        {/* Only a retry that cannot duplicate is offered: an
+                                            unanswered intent, or a failure the owner marked safe to
+                                            redeliver. An unknown outcome may already be delivered. */}
+                                        {onRetry && canRetryOutbound(msg) && (
                                             <button
                                                 onClick={() => onRetry(msg)}
                                                 className="text-[10px] text-red-500 hover:text-red-700 font-medium transition-colors leading-none"
@@ -861,9 +869,20 @@ export default function MessageFeed({
                                                 Повторить
                                             </button>
                                         )}
+                                        {hasUnknownDeliveryOutcome(msg) && (
+                                            <span className="text-[10px] text-red-500 font-medium leading-none">Статус неизвестен</span>
+                                        )}
                                     </div>
+                                ) : msg.status === 'sending' ? (
+                                    <span role="img" aria-label="Отправляется" className="flex items-center translate-y-[1px]">
+                                        <Clock size={12} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white/60' : 'text-[#8ECB8E]/70'} />
+                                    </span>
                                 ) : (
-                                    <div className="flex items-baseline scale-x-[0.9] -space-x-[11px] translate-y-[2px]">
+                                    <div
+                                        role="img"
+                                        aria-label={msg.status === 'read' ? 'Прочитано' : msg.status === 'delivered' ? 'Доставлено' : 'Отправлено'}
+                                        className="flex items-baseline scale-x-[0.9] -space-x-[11px] translate-y-[2px]"
+                                    >
                                         {msg.status === 'read' ? (
                                             <>
                                                 <Check size={16} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white' : 'text-[#48A5E3]'} />

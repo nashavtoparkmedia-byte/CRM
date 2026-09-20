@@ -8,6 +8,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -248,7 +249,89 @@ class LoginAcceptanceTest {
         screenshot("05c-whatsapp-history")
     }
 
+    /**
+     * Send one text from an open MAX conversation and watch it settle.
+     *
+     * The send goes through the CRM's own send path to the only MAX transport
+     * the stand has, a loopback stand-in (android/tools/acceptance-max-transport.mjs)
+     * that holds its answer for four seconds and then returns a confirmed
+     * delivery proof. So the sending state is on screen long enough to see, and
+     * the delivered state can only come from the CRM persisting that proof.
+     * The workflow step after the scenarios checks the other side: one physical
+     * send, one persisted Message, the same clientMessageId.
+     *
+     * The text is typed as real key events. The composer is a React-controlled
+     * textarea, and only input the page receives as typing reaches its state.
+     */
+    @Test
+    fun test06_sendTextAndObserveCanonicalDelivery() {
+        signIn(correctPassword)
+        assertTrue(
+            "the conversation list never showed $REPLY_CHAT; on screen: ${visibleText()}",
+            device.wait(Until.hasObject(By.textContains(REPLY_CHAT)), MESSENGER_TIMEOUT),
+        )
+        openConversation(REPLY_CHAT)
+        assertHistoryShows(REPLY_CHAT, REPLY_INBOUND)
+        assertEquals("the reply is already in the conversation before it was sent", 0, sentBubbles())
+
+        val composer = device.wait(Until.findObject(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
+        assertNotNull("no composer in the open conversation; tree: ${treeShape(300)}", composer)
+        composer!!.click()
+        device.executeShellCommand("input text ${SEND_TEXT.replace(" ", "%s")}")
+        assertTrue(
+            "the typed text never reached the composer; on screen: ${visibleText()}",
+            waitUntil(ACTION_TIMEOUT) {
+                device.findObjects(By.clazz("android.widget.EditText")).any { it.text == SEND_TEXT }
+            },
+        )
+
+        val send = labelled(SEND)
+        assertNotNull("no «$SEND» control once the composer holds text; tree: ${treeShape(300)}", send)
+        send!!.click()
+
+        assertTrue(
+            "the message never showed a sending state; on screen: ${visibleText()}; tree: ${treeShape(300)}",
+            waitUntil(ACTION_TIMEOUT) { labelled(SENDING) != null },
+        )
+        screenshot("06a-sending")
+        assertTrue(
+            "the message never settled as delivered; on screen: ${visibleText()}; tree: ${treeShape(300)}",
+            waitUntil(MESSENGER_TIMEOUT) { labelled(DELIVERED) != null && labelled(SENDING) == null },
+        )
+        assertEquals("one send must show exactly one message", 1, sentBubbles())
+        screenshot("06b-delivered")
+
+        // Leave and come back: what the conversation shows now is the persisted row.
+        val back = backControl()
+        assertNotNull("no «$BACK_TO_LIST» control in the open conversation; tree: ${treeShape(300)}", back)
+        back!!.click()
+        assertTrue(
+            "back did not return to the conversation list; on screen: ${visibleText()}",
+            waitUntil(ACTION_TIMEOUT) { backControl() == null && device.hasObject(By.textContains(MAX_CHAT)) },
+        )
+        openConversation(REPLY_CHAT)
+        assertHistoryShows(REPLY_CHAT, REPLY_INBOUND, SEND_TEXT)
+        SystemClock.sleep(SETTLE_MS)
+        assertEquals("the persisted conversation must hold exactly one sent message", 1, sentBubbles())
+        assertNotNull(
+            "the persisted message is not shown as delivered; tree: ${treeShape(300)}",
+            labelled(DELIVERED),
+        )
+        screenshot("06c-persisted")
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
+
+    /** Bubbles carrying the sent text; the composer, once cleared, is not one of them. */
+    private fun sentBubbles(): Int =
+        device.findObjects(By.textContains(SEND_TEXT)).count { it.className != "android.widget.EditText" }
+
+    /**
+     * A control or status named by aria-label, which Chromium publishes as a
+     * content description in some versions and as text in others.
+     */
+    private fun labelled(label: String): UiObject2? =
+        device.findObject(By.desc(label)) ?: device.findObject(By.text(label))
 
     /** Tap a list row and wait until the conversation, not the list, is on screen. */
     private fun openConversation(name: String) {
@@ -463,5 +546,14 @@ class LoginAcceptanceTest {
         const val TG_OUTBOUND = "Это тестовый ответ оператора."
         const val WA_INBOUND = "Тестовое сообщение WhatsApp."
         const val BACK_TO_LIST = "Назад к списку"
+
+        /** The reply target: a synthetic MAX conversation bound to a synthetic identity. */
+        const val REPLY_CHAT = "Тест · Ответ MAX"
+        const val REPLY_INBOUND = "Можно уточнить время смены?"
+        /** Typed by key events, so ASCII; the workflow's transport expects exactly this text. */
+        const val SEND_TEXT = "YOKO acceptance reply 06"
+        const val SEND = "Отправить"
+        const val SENDING = "Отправляется"
+        const val DELIVERED = "Доставлено"
     }
 }
