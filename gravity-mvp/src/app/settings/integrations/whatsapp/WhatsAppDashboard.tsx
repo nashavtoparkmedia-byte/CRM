@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut, Pencil, Check, X } from 'lucide-react'
-import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, getWhatsAppQrCode, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection } from './whatsapp-actions'
+import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, getWhatsAppQrCode, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection, getWhatsAppAccountConfirmation, confirmWhatsAppAccountBinding } from './whatsapp-actions'
 import type { WhatsAppConnectionPublicMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
 import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 
@@ -98,6 +98,11 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
     const [editingName, setEditingName] = useState(false)
     const [nameDraft, setNameDraft] = useState(conn.name ?? '')
     const [renaming, setRenaming] = useState(false)
+    // M2A1-S3: the authenticated company-account confirmation. The projection
+    // carries a display-only PN and never a LID.
+    type AccountConfirmation = Awaited<ReturnType<typeof getWhatsAppAccountConfirmation>>
+    const [accountConfirmation, setAccountConfirmation] = useState<AccountConfirmation | null>(null)
+    const [confirmingAccount, setConfirmingAccount] = useState(false)
     const nameInputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
@@ -113,6 +118,9 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         } else {
             setLiveQr(null)
         }
+        void getWhatsAppAccountConfirmation(conn.id)
+            .then(setAccountConfirmation)
+            .catch(() => setAccountConfirmation(null))
     }, [conn])
 
     useEffect(() => {
@@ -493,6 +501,45 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                     <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); setLiveStatus('idle'); onRefresh(); setLoading(false) }} disabled={loading} className="h-[32px] px-3 text-xs cursor-pointer">
                         {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
                     </Button>
+                </div>
+            )}
+
+            {accountConfirmation && accountConfirmation.bindingId && (
+                <div className="pt-3 mt-auto border-t border-dashed text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-col items-start text-left">
+                            <span className="font-medium">
+                                {accountConfirmation.operatorConfirmed ? 'Аккаунт подтверждён' : 'Аккаунт не подтверждён'}
+                            </span>
+                            <span className="text-muted-foreground">
+                                {accountConfirmation.pnDisplay ?? 'номер недоступен'} · подключение {conn.name || conn.id} · поколение {accountConfirmation.generation}
+                            </span>
+                        </div>
+                        {accountConfirmation.confirmable && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-[32px] px-3 text-xs cursor-pointer"
+                                disabled={confirmingAccount}
+                                onClick={async () => {
+                                    setConfirmingAccount(true)
+                                    try {
+                                        await confirmWhatsAppAccountBinding(conn.id, accountConfirmation.bindingId as string)
+                                        setAccountConfirmation(await getWhatsAppAccountConfirmation(conn.id))
+                                    } finally {
+                                        setConfirmingAccount(false)
+                                    }
+                                }}
+                            >
+                                {confirmingAccount ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <CheckCircle2 size={13} className="mr-1.5" />} Подтвердить аккаунт
+                            </Button>
+                        )}
+                    </div>
+                    {!accountConfirmation.operatorConfirmed && !accountConfirmation.confirmable && (
+                        <span className="text-muted-foreground">
+                            Подтверждение возможно, пока свежая аттестация активна. Дождитесь следующего подключения.
+                        </span>
+                    )}
                 </div>
             )}
 

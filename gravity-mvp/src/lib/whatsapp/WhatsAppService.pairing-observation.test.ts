@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
         registryScheduleReconnect: vi.fn(() => { order.push('registry:scheduleReconnect') }),
         publishPendingQr: vi.fn(() => { order.push('qr:publish') }),
         clearPendingQr: vi.fn(),
+        recordAttestation: vi.fn(() => { order.push('account:record') }),
     }
 })
 
@@ -58,6 +59,10 @@ vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/p
 
 vi.mock('@/lib/prisma', () => ({
     prisma: { whatsAppConnection: { update: mocks.connectionUpdate } },
+}))
+
+vi.mock('@/modules/whatsapp-channel/internal/company-account/whatsapp-account-intake', () => ({
+    recordObservedAttestationV1: mocks.recordAttestation,
 }))
 
 vi.mock('@/modules/messaging/public/v1', () => ({
@@ -211,6 +216,18 @@ describe('WhatsApp pairing observation hooks', () => {
         await client.handlers.get('ready')!()
         await client.handlers.get('disconnected')!('LOGOUT')
         expect(mocks.observe).not.toHaveBeenCalled()
+    })
+
+    test('the runtime hands the company-account sink to the observer, and never calls it itself', async () => {
+        const client = await startedClient()
+        mocks.order.length = 0
+        await client.handlers.get('ready')!()
+        const request = lastRequest()
+        // The runtime supplies the sink; only the observer decides when a complete
+        // observation exists, so the runtime must never invoke it directly.
+        expect(request.recordAttestation).toBe(mocks.recordAttestation)
+        expect(mocks.recordAttestation).not.toHaveBeenCalled()
+        expect(mocks.order).not.toContain('account:record')
     })
 
     test('the handlers do not wait for the observer', async () => {

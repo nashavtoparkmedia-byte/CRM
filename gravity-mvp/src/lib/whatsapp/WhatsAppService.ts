@@ -19,6 +19,7 @@ import { appendConversationIdentityCollisionV1, attachMessageMediaV1, createChan
 import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 import { canonicalWhatsAppIdentityExternalIdV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 import { observeWhatsAppPairingV1 } from '@/modules/whatsapp-channel/internal/pairing-observation/whatsapp-pairing-observer'
+import { recordObservedAttestationV1 } from '@/modules/whatsapp-channel/internal/company-account/whatsapp-account-intake'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -1110,11 +1111,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     // M2A1-S2 measurement only: the pairing observer logs outcome classes and never
     // feeds a runtime decision. It is called last in the qr, ready and disconnected
     // handlers and returns immediately.
+    // M2A1-S3: the runtime hands the observed values to the company-account writer.
+    // The sink returns immediately, never throws, and owns its own durable decision.
     const pairingObservationSource = {
         connectionId,
         instanceId,
         client,
         isCurrentInstance: () => instanceIds.get(connectionId) === instanceId && clients.get(connectionId) === client,
+        recordAttestation: recordObservedAttestationV1,
     }
 
     // Visibility into WA Web internal lifecycle — helps diagnose "Execution context destroyed"
