@@ -158,7 +158,7 @@
       "node tools/architecture/check-messaging-whatsapp-message-boundary.mjs",
       "node tools/architecture/check-messaging-whatsapp-attachment-boundary.mjs",
       "node tools/architecture/check-whatsapp-pairing-observation-boundary.mjs",
-    "node tools/architecture/check-whatsapp-company-account-boundary.mjs"
+      "node tools/architecture/check-whatsapp-company-account-boundary.mjs"
     ]
   },
   "version": 1
