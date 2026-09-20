@@ -292,6 +292,16 @@ describe('one claim', () => {
         expect(text(screen.getByTestId('catalogue-state'))).toContain('больше нет в каталоге')
     })
 
+    it('shows a rejected claim with the reason and no way to act', () => {
+        render(<CompensationApplicationDetail application={detailView({
+            state: 'rejected',
+            allowedActions: [],
+            rejectionReason: 'Скриншот не подтверждает оплату',
+        })} />)
+        expect(text(screen.getByTestId('application-detail'))).toContain('Скриншот не подтверждает оплату')
+        expect(text(screen.getByTestId('actions'))).toContain('Заявка закрыта')
+    })
+
     it('shows the payout once it is settled, with who recorded it', () => {
         render(<CompensationApplicationDetail application={detailView({
             state: 'paid',

@@ -336,6 +336,31 @@ proof('the manager workflow on real PostgreSQL', () => {
             expect(back!.allowedActions).toEqual(['approve', 'reject'])
         })
 
+        it('refuses to pay an approval older than a day, and reconciliation still can', async () => {
+            const seeded = await seedApplication()
+            await approve(seeded.applicationId)
+            // The payout right is aged past the unaided-recall window in place,
+            // which is the one fact the manager screen cannot fake.
+            await database.$executeRawUnsafe(
+                `UPDATE "CompensationPayoutAuthorization"
+                 SET "openedAt" = NOW() - interval '25 hours', "expiresAt" = NOW() - interval '24 hours'`,
+            )
+
+            expect(await act(seeded.applicationId, 'mark_paid')).toMatchObject({
+                code: 'authorization_too_old_reconcile', state: 'awaiting_payment',
+            })
+            expect(await count('CompensationSettlement')).toBe(0)
+
+            const aged = await readManagerApplicationV1(seeded.applicationId, store, new Date())
+            expect(aged!.authorization!.age).toMatchObject({ beyondUnaidedRecall: true, stale: true })
+
+            // The way out is the process the refusal names.
+            await act(seeded.applicationId, 'declare_outcome_unknown', { reason: 'Одобрение старше суток' })
+            expect(await act(seeded.applicationId, 'reconcile_paid', { reason: 'Выписка подтверждает перевод' }))
+                .toMatchObject({ code: 'performed', state: 'paid' })
+            expect(await count('CompensationSettlement')).toBe(1)
+        })
+
         it('returns a claim to new when the manager cancels the approval', async () => {
             const seeded = await seedApplication()
             await approve(seeded.applicationId)

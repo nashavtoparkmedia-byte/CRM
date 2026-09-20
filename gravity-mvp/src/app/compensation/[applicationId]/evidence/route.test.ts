@@ -65,6 +65,19 @@ describe('what comes back', () => {
         expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3, 4]))
     })
 
+    it('serves a PDF support reply with the type the channel reported', async () => {
+        managerEvidence.mockResolvedValue({
+            ok: true, contentType: 'application/pdf', bytes: new Uint8Array([37, 80, 68, 70]),
+        })
+        const response = await GET(request(), params())
+        expect(response.status).toBe(200)
+        expect(response.headers.get('Content-Type')).toBe('application/pdf')
+        // Still inert: a PDF served from the CRM origin must not be a document
+        // the browser will run scripts for.
+        expect(response.headers.get('Content-Security-Policy')).toContain('sandbox')
+        expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    })
+
     it('never sends the browser to Telegram instead of answering', async () => {
         const response = await GET(request(), params())
         expect(response.status).toBeLessThan(300)
