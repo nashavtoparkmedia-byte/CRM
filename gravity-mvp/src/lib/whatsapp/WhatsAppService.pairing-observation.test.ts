@@ -142,7 +142,7 @@ vi.mock('@/modules/whatsapp-channel/internal/pairing-observation/whatsapp-pairin
 
 import { initializeClient } from './WhatsAppService'
 
-type ObservationRequest = { event: string; connectionId: string; instanceId: string; client: unknown; isCurrentInstance: () => boolean; disconnectReason?: unknown }
+type ObservationRequest = { event: string; connectionId: string; instanceId: string; client: unknown; isCurrentInstance: () => boolean; disconnectReason?: unknown; recordAttestation?: (observed: unknown) => void }
 
 async function startedClient() {
     await initializeClient(CONNECTION_ID)
