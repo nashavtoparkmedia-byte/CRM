@@ -351,7 +351,7 @@ async function attemptAttestation(input: RecordAttestationInputV1): Promise<Atte
             outcome,
             trustStateBefore: before,
             trustStateAfter: before,
-            accountLifecycle: 'absent',
+            accountLifecycle: 'unknown',
             generation: generationNumber(open?.transportGeneration),
             operatorConfirmed: snapshot?.operatorConfirmed ?? false,
             signalAgreedWithDatabase,
@@ -427,7 +427,7 @@ export async function confirmWhatsAppAccountBindingV1(input: ConfirmBindingInput
         const refuse = (outcome: WhatsAppAccountConfirmationOutcomeV1): ConfirmBindingResultV1 => ({
             outcome,
             trustStateAfter: trustClass(binding?.trustState),
-            accountLifecycle: 'absent',
+            accountLifecycle: 'unknown',
             generation: generationNumber(binding?.transportGeneration),
         })
 

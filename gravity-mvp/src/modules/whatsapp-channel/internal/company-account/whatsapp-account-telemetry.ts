@@ -42,6 +42,10 @@ export const WHATSAPP_ACCOUNT_TRUST_CLASSES_V1 = [
 export type WhatsAppAccountTrustClassV1 = (typeof WHATSAPP_ACCOUNT_TRUST_CLASSES_V1)[number]
 
 export const WHATSAPP_ACCOUNT_LIFECYCLE_CLASSES_V1 = [
+    // `absent` asserts that no account exists; `unknown` says only that this
+    // operation did not read one, which is the honest answer on a path that
+    // performs no account lookup.
+    'unknown',
     'absent',
     'pending_approval',
     'active',

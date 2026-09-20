@@ -127,6 +127,17 @@ describe('decision table', () => {
         expect(decide({ openBinding: snapshot, unchanged: null }))
             .toMatchObject({ action: 'reattest_open_generation' })
     })
+
+    it('prefers the attested set over the claim, so a binding with no claim is still readable', () => {
+        // A transport-asserted binding always carries equal attested and claimed
+        // values, because the database refuses anything else. A provider-verified
+        // binding may carry the attested set alone, and the durable pair is then
+        // the attested one: falling back to the claim would read it as missing.
+        const snapshot = openBinding({ claimedPnValue: null, claimedLidValue: null })
+        expect(bindingCanonicalPairV1(snapshot)).toEqual(pair)
+        expect(decide({ openBinding: snapshot, unchanged: null, dbNowMs: NOW + ATTESTATION_WINDOW_MS_V1 - 1 }))
+            .toMatchObject({ action: 'reattest_open_generation', outcome: 'reattested' })
+    })
 })
 
 describe('the runtime signal never decides identity', () => {
