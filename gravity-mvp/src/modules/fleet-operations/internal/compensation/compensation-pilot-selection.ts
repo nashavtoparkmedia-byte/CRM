@@ -248,20 +248,39 @@ export interface PilotListedOrderV1 {
     claimed: boolean
 }
 
+/** One instant on the business clock, as every compensation surface shows it. */
+export interface CompensationBusinessDisplayV1 {
+    /** Business day, `YYYY-MM-DD` Asia/Yekaterinburg. */
+    dayKey: string
+    /** `HH:MM` on the business clock. */
+    localTime: string
+    /** `DD.MM` on the business clock. */
+    localDate: string
+}
+
+export function compensationBusinessDisplayV1(instant: Date): CompensationBusinessDisplayV1 {
+    const parts = displayFormatter.formatToParts(instant)
+    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value ?? '00'
+    return {
+        dayKey: compensationBusinessDayKeyV1(instant),
+        localTime: `${part('hour')}:${part('minute')}`,
+        localDate: `${part('day')}.${part('month')}`,
+    }
+}
+
 export function pilotListedOrderV1(
     order: StoredCashOrderV1,
     claimedOrderIds: readonly string[],
 ): PilotListedOrderV1 {
-    const parts = displayFormatter.formatToParts(order.endedAt)
-    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((candidate) => candidate.type === type)?.value ?? '00'
+    const display = compensationBusinessDisplayV1(order.endedAt)
     return {
         externalOrderId: order.externalOrderId,
         shortOrderIdDisplay: order.shortOrderIdDisplay,
         amountKopecks: order.amountKopecks,
         endedAt: order.endedAt,
-        dayKey: compensationBusinessDayKeyV1(order.endedAt),
-        localTime: `${part('hour')}:${part('minute')}`,
-        localDate: `${part('day')}.${part('month')}`,
+        dayKey: display.dayKey,
+        localTime: display.localTime,
+        localDate: display.localDate,
         claimed: claimedOrderIds.includes(order.externalOrderId),
     }
 }

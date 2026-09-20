@@ -1,142 +1,65 @@
 'use server'
 
-import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 
-import {
-    compensationManagerActionV1,
-    compensationManagerApplicationsV1,
-    resolveCompensationManagerPrincipalV1,
-} from '@/modules/fleet-operations/public/v1'
-import { CURRENT_USER_QUERY_V1 } from '@/contracts/identity-access/v1'
-import { queryCurrentUserV1 } from '@/modules/identity-access/public/v1/identity-actions'
+import { compensationManagerActionV1 } from '@/modules/fleet-operations/public/v1'
 
-export interface CompensationApplicationView {
-    applicationId: string
-    status: string
-    boundContactIds: string[]
-    externalParkId: string
-    externalOrderId: string
-    shortOrderId: string | null
-    telegramUserId: string | null
-    attachmentFileId: string | null
-    attachmentKind: string | null
-    supportContactedAt: string | null
-    requestedKopecks: number
-    verifiedKopecks: number
-    payableKopecks: number
-    submittedAt: string
-    rejectionReason: string | null
-    hasLiveAuthorization: boolean
-    hasOpenReconciliation: boolean
-}
+import { managerEvidence, managerSession } from './manager-data'
 
 /**
- * The manager list, under the existing CRM access model.
- */
-export async function listCompensationApplications(): Promise<CompensationApplicationView[]> {
-    const rows = await compensationManagerApplicationsV1()
-    return rows.map((row) => ({
-        applicationId: row.applicationId,
-        status: row.status,
-        boundContactIds: row.boundContactIds,
-        externalParkId: row.externalParkId,
-        externalOrderId: row.externalOrderId,
-        shortOrderId: row.shortOrderIdDisplay,
-        telegramUserId: row.telegramUserId,
-        attachmentFileId: row.attachmentFileId,
-        attachmentKind: row.attachmentKind,
-        supportContactedAt: row.supportContactedAt ? row.supportContactedAt.toISOString() : null,
-        requestedKopecks: row.claimedKopecks,
-        verifiedKopecks: row.verifiedKopecks,
-        payableKopecks: row.amountKopecks,
-        submittedAt: row.submittedAt.toISOString(),
-        rejectionReason: row.rejectionReason,
-        hasLiveAuthorization: row.hasLiveAuthorization,
-        hasOpenReconciliation: row.hasOpenReconciliation,
-    }))
-}
-
-export interface ManagerActionResult {
-    ok: boolean
-    operation?: string
-    refusal?: string
-}
-
-/**
- * Resolves who is acting from the session cookie the CRM already issues.
+ * The manager's monetary actions.
  *
- * No action below takes a principal as an argument, so a crafted form post
- * cannot choose whose name ends up on a payout. An unproven session returns a
- * refusal and every caller stops before touching monetary state.
+ * No action takes a principal from the browser: the acting manager is resolved
+ * from the session on every call, so a crafted form post cannot put someone
+ * else's name on a payout. No action reports success the backend did not
+ * confirm either: the answer is the result code and the state storage holds
+ * afterwards, and the page is revalidated so the screen re-reads it.
  */
-async function actingPrincipal() {
-    const result = await queryCurrentUserV1({ contract: CURRENT_USER_QUERY_V1 })
-    return resolveCompensationManagerPrincipalV1((result as { user: unknown }).user as never)
+
+export type ManagerActionName =
+    | 'approve'
+    | 'reject'
+    | 'mark_paid'
+    | 'cancel_approval'
+    | 'declare_outcome_unknown'
+    | 'reconcile_paid'
+    | 'reconcile_not_paid'
+
+export interface ManagerActionResponse {
+    code: string
+    state: string | null
 }
 
-/**
- * Approve: takes the C1 payout authorization, attributed to the signed-in
- * manager. The money is still paid by hand afterwards.
- */
-export async function approveCompensationApplication(
-    applicationId: string,
-): Promise<ManagerActionResult> {
-    const acting = await actingPrincipal()
-    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
+export async function runCompensationManagerAction(input: {
+    applicationId: string
+    action: ManagerActionName
+    reason?: string
+}): Promise<ManagerActionResponse> {
+    const session = await managerSession()
+    if (!session.ok) return { code: session.refusal, state: null }
 
-    const outcome = await compensationManagerActionV1({
-        applicationId,
-        action: 'approve',
-        principalId: acting.principal.principalId,
-        operatorLabel: acting.principal.operatorLabel,
+    // Approving is the only action the screenshot gates, and metadata is not
+    // proof: the file is fetched now, and a failure fails the approval closed.
+    // Every other action stays available, because a Telegram outage must not
+    // strand money that is already authorised.
+    let evidenceProven = false
+    if (input.action === 'approve') {
+        const evidence = await managerEvidence(input.applicationId)
+        if (!evidence.ok) {
+            return { code: evidence.reason === 'missing' ? 'evidence_missing' : 'evidence_unavailable', state: null }
+        }
+        evidenceProven = true
+    }
+
+    const result = await compensationManagerActionV1({
+        applicationId: input.applicationId,
+        action: input.action,
+        reason: typeof input.reason === 'string' ? input.reason : null,
+        principal: session.principal,
+        evidenceProven,
     })
+
     revalidatePath('/compensation')
-    return outcome.performed
-        ? { ok: true, operation: outcome.operation }
-        : { ok: false, refusal: outcome.refusal }
-}
-
-export async function rejectCompensationApplication(
-    applicationId: string,
-    reason: string,
-): Promise<ManagerActionResult> {
-    const acting = await actingPrincipal()
-    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
-
-    const outcome = await compensationManagerActionV1({
-        applicationId,
-        action: 'reject',
-        principalId: acting.principal.principalId,
-        operatorLabel: acting.principal.operatorLabel,
-        reason,
-        // A fresh key per attempt; a repeat of the same rejection is harmless.
-        rejectionKey: randomUUID(),
-    })
-    revalidatePath('/compensation')
-    return outcome.performed
-        ? { ok: true, operation: outcome.operation }
-        : { ok: false, refusal: outcome.refusal }
-}
-
-/**
- * Mark paid, after the manager has actually paid. Routes to finalize normally,
- * and to reconciliation when C1 lost sight of the outcome.
- */
-export async function markCompensationApplicationPaid(
-    applicationId: string,
-): Promise<ManagerActionResult> {
-    const acting = await actingPrincipal()
-    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
-
-    const outcome = await compensationManagerActionV1({
-        applicationId,
-        action: 'mark_paid',
-        principalId: acting.principal.principalId,
-        operatorLabel: acting.principal.operatorLabel,
-    })
-    revalidatePath('/compensation')
-    return outcome.performed
-        ? { ok: true, operation: outcome.operation }
-        : { ok: false, refusal: outcome.refusal }
+    revalidatePath(`/compensation/${input.applicationId}`)
+    return { code: result.code, state: result.state }
 }

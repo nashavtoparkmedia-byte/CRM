@@ -37,7 +37,6 @@ import {
     decidePilotSubmissionV1,
     pilotDriverStatusV1,
     remainingBudgetKopecksV1,
-    routeManagerActionV1,
 } from './compensation-pilot-flow'
 import {
     finalizeCompensationPayoutV1,
@@ -55,6 +54,7 @@ import {
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
 import { pilotScopeKeyV1 } from './compensation-pilot-selection'
+import { routeManagerActionV1 } from './compensation-manager-view'
 import { legacyPrismaCompensationPilotPortV1 } from './legacy-prisma-compensation-pilot-adapter'
 import {
     CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
@@ -347,8 +347,9 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         // Approve routes to the C1 payout start.
         const approveRoute = routeManagerActionV1('approve', {
             status: listed.status,
-            hasLiveAuthorization: listed.liveAuthorizations > 0,
+            authorizationState: listed.liveAuthorizations > 0 ? 'active' : null,
             hasOpenReconciliation: listed.openReconciliations > 0,
+            evidence: 'present',
         })
         expect(approveRoute).toEqual({ operation: 'start_payout' })
 
@@ -366,8 +367,9 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         const afterApproval = await managerRow(submitted.applicationId)
         const payRoute = routeManagerActionV1('mark_paid', {
             status: afterApproval.status,
-            hasLiveAuthorization: afterApproval.liveAuthorizations > 0,
+            authorizationState: afterApproval.liveAuthorizations > 0 ? 'active' : null,
             hasOpenReconciliation: afterApproval.openReconciliations > 0,
+            evidence: 'present',
         })
         expect(payRoute).toEqual({ operation: 'finalize_payout' })
 
@@ -456,10 +458,11 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         const row = await managerRow(submitted.applicationId)
         const route = routeManagerActionV1('reject', {
             status: row.status,
-            hasLiveAuthorization: row.liveAuthorizations > 0,
+            authorizationState: row.liveAuthorizations > 0 ? 'active' : null,
             hasOpenReconciliation: row.openReconciliations > 0,
+            evidence: 'present',
         })
-        expect(route).toEqual({ refusal: 'reject_requires_no_live_authorization' })
+        expect(route).toEqual({ refusal: 'payout_authorization_active' })
     })
 
     it('keeps the pilot evidence to one row when a submit is replayed', async () => {
@@ -676,17 +679,6 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         const after = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
         expect(after.applications).toHaveLength(1)
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
-
-        const managerRows = await port.findManagerApplications()
-        expect(managerRows).toHaveLength(1)
-        expect(managerRows[0]).toMatchObject({
-            boundContactIds: [CONTACT_ID],
-            externalParkId: PARK,
-            telegramUserId: TELEGRAM_USER,
-            attachmentFileId: 'tg-file-port-1',
-            claimedKopecks: 30_000,
-            verifiedKopecks: 33_500,
-        })
     })
 
     it('answers a second claim while one is pending with the monetary-core refusal, writing nothing', async () => {

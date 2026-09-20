@@ -23,7 +23,20 @@ const MENU = read('tg-bot/src/handlers/start.js')
 const BOT = read('tg-bot/src/bot.js')
 const ROUTE = read('gravity-mvp/src/app/api/webhooks/bot/route.ts')
 const MANAGER_ACTIONS = read('gravity-mvp/src/app/compensation/actions.ts')
+const MANAGER_DATA = read('gravity-mvp/src/app/compensation/manager-data.ts')
+const MANAGER_BOARD = read('gravity-mvp/src/app/compensation/page.tsx')
 const MANAGER_LIST = read('gravity-mvp/src/app/compensation/CompensationApplicationList.tsx')
+const MANAGER_FILTERS = read('gravity-mvp/src/app/compensation/CompensationFilters.tsx')
+const MANAGER_BUDGET = read('gravity-mvp/src/app/compensation/CompensationBudgetPanel.tsx')
+const MANAGER_DETAIL = read('gravity-mvp/src/app/compensation/[applicationId]/CompensationApplicationDetail.tsx')
+const MANAGER_DETAIL_PAGE = read('gravity-mvp/src/app/compensation/[applicationId]/page.tsx')
+const EVIDENCE_ROUTE = read('gravity-mvp/src/app/compensation/[applicationId]/evidence/route.ts')
+const BOT_FILE_ROUTE = read('tg-bot/src/routes/crm.js')
+const BOT_FILE_SERVICE = read('tg-bot/src/services/exactCrmBotFile.js')
+const MANAGER_SCREENS = [
+    MANAGER_ACTIONS, MANAGER_DATA, MANAGER_BOARD, MANAGER_LIST,
+    MANAGER_FILTERS, MANAGER_BUDGET, MANAGER_DETAIL, MANAGER_DETAIL_PAGE,
+]
 
 describe('the telegram scene is reachable and registered', () => {
     it('has a compensation entry on the main menu', () => {
@@ -196,83 +209,161 @@ describe('the webhook routes those actions to the service', () => {
     })
 })
 
-describe('the manager screen acts only through the service', () => {
-    it('lists and acts through the pilot operations module', () => {
-        expect(MANAGER_ACTIONS).toContain('compensationManagerApplicationsV1')
-        expect(MANAGER_ACTIONS).toContain('compensationManagerActionV1')
-        expect(MANAGER_ACTIONS).toContain("from '@/modules/fleet-operations/public/v1'")
-    })
-
-    it('offers approve, reject and mark paid, and nothing else', () => {
-        expect(MANAGER_ACTIONS).toContain("action: 'approve'")
-        expect(MANAGER_ACTIONS).toContain("action: 'reject'")
-        expect(MANAGER_ACTIONS).toContain("action: 'mark_paid'")
-    })
-
-    it('never calls a C1 entry point directly', () => {
-        for (const forbidden of [
-            'startCompensationPayoutV1', 'finalizeCompensationPayoutV1',
-            'rejectCompensationApplicationV1', 'compensation-prisma-adapter',
+describe('the manager screens act only through the service', () => {
+    it('reads and acts through the module public surface, never through C1', () => {
+        for (const operation of [
+            'compensationManagerApplicationsV1', 'compensationManagerApplicationV1',
+            'compensationManagerBudgetV1', 'compensationManagerEvidenceSourceV1',
+            'compensationManagerActionV1',
         ]) {
-            expect(MANAGER_ACTIONS).not.toContain(forbidden)
+            expect(MANAGER_DATA + MANAGER_ACTIONS).toContain(operation)
+        }
+        expect(MANAGER_DATA).toContain("from '@/modules/fleet-operations/public/v1'")
+        for (const screen of MANAGER_SCREENS) {
+            for (const forbidden of [
+                'startCompensationPayoutV1', 'finalizeCompensationPayoutV1',
+                'releaseCompensationPayoutV1', 'resolveCompensationReconciliationV1',
+                'rejectCompensationApplicationV1', 'compensation-prisma-adapter',
+                "from '@/lib/prisma'",
+            ]) {
+                expect(screen).not.toContain(forbidden)
+            }
         }
     })
 
-    it('shows the person, park, order, both amounts and the attachment', () => {
-        for (const field of [
-            'boundContactIds', 'externalParkId', 'externalOrderId',
-            'requestedKopecks', 'verifiedKopecks', 'attachmentFileId',
+    it('offers every action the workflow has, and no action it does not', () => {
+        for (const action of [
+            'approve', 'reject', 'mark_paid', 'cancel_approval',
+            'declare_outcome_unknown', 'reconcile_paid', 'reconcile_not_paid',
         ]) {
-            expect(MANAGER_ACTIONS).toContain(field)
+            expect(MANAGER_ACTIONS).toContain(action)
         }
-    })
-
-    it('surfaces reconciliation when C1 requires it', () => {
-        expect(MANAGER_ACTIONS).toContain('hasOpenReconciliation')
-        expect(MANAGER_LIST).toContain('hasOpenReconciliation')
-        expect(MANAGER_LIST).toContain('Требуется сверка')
-    })
-
-    it('requires a typed reason before rejecting', () => {
-        expect(MANAGER_LIST).toContain("reason.trim() === ''")
+        // The screen renders whatever the service says is allowed rather than
+        // deciding for itself which buttons a state deserves.
+        expect(MANAGER_DETAIL).toContain('allowedActions')
     })
 
     it('resolves the acting manager from the session, never from the client', () => {
-        expect(MANAGER_ACTIONS).toContain('queryCurrentUserV1')
-        expect(MANAGER_ACTIONS).toContain('resolveCompensationManagerPrincipalV1')
-        // The client sends an application id and a reason. If it could send a
-        // principal, a crafted post could put someone else's name on a payout.
-        expect(MANAGER_LIST).not.toContain('managerId')
-        expect(MANAGER_LIST).not.toContain('operatorLabel')
-        expect(MANAGER_LIST).not.toContain('principalId')
+        expect(MANAGER_DATA).toContain('queryCurrentUserV1')
+        expect(MANAGER_DATA).toContain('resolveCompensationManagerPrincipalV1')
+        expect(MANAGER_ACTIONS).toContain('await managerSession()')
+        // The browser sends an application id, an action and a reason. If it
+        // could send a principal, a crafted post would put someone else's name
+        // on a payout.
+        for (const screen of [MANAGER_LIST, MANAGER_DETAIL, MANAGER_FILTERS, MANAGER_BUDGET]) {
+            for (const forbidden of ['managerId', 'operatorLabel', 'principalId']) {
+                expect(screen).not.toContain(forbidden)
+            }
+        }
     })
 
     it('carries no shared fallback principal anywhere in the surface', () => {
-        for (const source of [MANAGER_ACTIONS, MANAGER_LIST]) {
-            expect(source).not.toMatch(/'crm_manager'|"crm_manager"/)
-            expect(source).not.toMatch(/principalId:\s*'(manager|admin|system)'/)
+        for (const screen of MANAGER_SCREENS) {
+            expect(screen).not.toMatch(/'crm_manager'|"crm_manager"/)
+            expect(screen).not.toMatch(/principalId:\s*'(manager|admin|system)'/)
         }
     })
 
-    it('stops before any monetary call when the principal is refused', () => {
-        // Each action returns on an unresolved principal before it reaches
-        // compensationManagerActionV1.
-        const guards = MANAGER_ACTIONS.match(/if \(!acting\.resolved\) return/g) ?? []
-        expect(guards.length).toBe(3)
-    })
-
-    it('renders the identity refusals a manager can hit', () => {
-        for (const refusal of ['not_authenticated', 'user_disabled', 'user_identity_incomplete']) {
-            expect(MANAGER_LIST).toContain(refusal)
+    it('requires a session and an allowed role before anything is read or done', () => {
+        expect(MANAGER_DATA).toContain('MANAGER_ROLES_V1')
+        for (const role of ['Менеджер', 'Руководитель', 'Администратор']) {
+            expect(MANAGER_DATA).toContain(role)
         }
+        expect(MANAGER_DATA).toContain("'role_not_allowed'")
+        // Every entry point gates first: the board, the detail, the evidence
+        // response and every action.
+        for (const screen of [MANAGER_BOARD, MANAGER_DETAIL_PAGE, EVIDENCE_ROUTE, MANAGER_ACTIONS]) {
+            expect(screen).toContain('managerSession()')
+        }
+        expect(MANAGER_ACTIONS).toContain('if (!session.ok) return')
     })
 
-    it('renders the refusal codes the service can return', () => {
+    it('stops before any monetary call when the session is refused', () => {
+        const guard = MANAGER_ACTIONS.indexOf('if (!session.ok) return')
+        expect(guard).toBeGreaterThan(-1)
+        expect(guard).toBeLessThan(MANAGER_ACTIONS.indexOf('compensationManagerActionV1('))
+    })
+
+    it('proves the screenshot before approving, and only before approving', () => {
+        // Metadata is not proof: the file is fetched now, and a failure fails
+        // the approval closed. Nothing else waits on Telegram, because an
+        // outage must not strand money that is already authorised.
+        expect(MANAGER_ACTIONS).toContain("if (input.action === 'approve')")
+        expect(MANAGER_ACTIONS).toContain('managerEvidence(input.applicationId)')
+        expect(MANAGER_ACTIONS).toContain('evidenceProven')
+        expect(MANAGER_ACTIONS).toContain("'evidence_unavailable'")
+    })
+
+    it('never puts the telegram file id in anything a browser receives', () => {
+        // The browser asks for an application; the file id is resolved server
+        // side and handed straight to the channel that holds it.
+        for (const screen of MANAGER_SCREENS) {
+            expect(screen).not.toContain('attachmentFileId')
+            expect(screen).not.toContain('tg-media')
+        }
+        expect(MANAGER_DETAIL).toContain('/evidence')
+        expect(MANAGER_DATA).toContain('readTelegramBotFileV1')
+    })
+
+    it('serves the screenshot as an inert private response', () => {
+        expect(EVIDENCE_ROUTE).toContain("'Cache-Control': 'private, no-store'")
+        expect(EVIDENCE_ROUTE).toContain("'X-Content-Type-Options': 'nosniff'")
+        expect(EVIDENCE_ROUTE).toContain('sandbox')
+        // The bytes are served here; the browser is never sent to Telegram.
+        expect(EVIDENCE_ROUTE).not.toContain('NextResponse.redirect')
+        expect(EVIDENCE_ROUTE).not.toContain('api.telegram.org')
+    })
+
+    it('keeps the bot token in the bot process, behind a signed endpoint', () => {
+        expect(BOT_FILE_ROUTE).toContain("require('../services/exactCrmBotFile')")
+        expect(BOT_FILE_SERVICE).toContain('x-bot-signature')
+        // The gravity side never reads the token, and neither side logs it.
+        for (const screen of [...MANAGER_SCREENS, EVIDENCE_ROUTE]) {
+            expect(screen).not.toContain('BOT_TOKEN')
+        }
+        expect(BOT_FILE_SERVICE).not.toMatch(/console\.(log|error|warn)\([^)]*token/i)
+        expect(BOT_FILE_SERVICE).not.toMatch(/console\.(log|error|warn)\([^)]*fileUrl/i)
+    })
+
+    it('requires a typed reason before rejecting, and confirms every other action', () => {
+        expect(MANAGER_DETAIL).toContain("reason.trim() === ''")
+        expect(MANAGER_DETAIL).toContain('confirmationFor')
+        expect(MANAGER_DETAIL).toContain('data-testid="confirmation"')
+    })
+
+    it('renders the refusals a manager can actually hit', () => {
         for (const refusal of [
-            'approve_requires_pending', 'reject_requires_no_live_authorization',
-            'mark_paid_requires_authorization', 'reject_requires_reason',
+            'reject_requires_reason', 'already_paid', 'already_rejected', 'state_changed',
+            'payout_authorization_active', 'daily_limit_reached', 'budget_period_missing',
+            'authorization_too_old_reconcile', 'evidence_unavailable',
+            'not_authenticated', 'user_disabled', 'user_identity_incomplete', 'role_not_allowed',
         ]) {
-            expect(MANAGER_LIST).toContain(refusal)
+            expect(MANAGER_DETAIL + MANAGER_BOARD + MANAGER_DETAIL_PAGE).toContain(refusal)
         }
+    })
+
+    it('shows the month the ledger holds, including when there is no period at all', () => {
+        expect(MANAGER_BUDGET).toContain('remainingKopecks')
+        expect(MANAGER_BUDGET).toContain('reservedKopecks')
+        expect(MANAGER_BUDGET).toContain('settledKopecks')
+        // A missing period is a fact to show, not a zero budget to act on, and
+        // a ledger that stopped matching its applications is shown, not fixed.
+        expect(MANAGER_BUDGET).toContain("'missing'")
+        expect(MANAGER_BUDGET).toContain('ledgerConsistent')
+    })
+
+    it('filters on the same words the service knows', () => {
+        for (const field of ['periodKey', 'state', 'externalParkId']) {
+            expect(MANAGER_FILTERS).toContain(field)
+        }
+        expect(MANAGER_BOARD).toContain('managerBoard')
+    })
+
+    it('re-reads the state after every action rather than moving the screen itself', () => {
+        expect(MANAGER_ACTIONS).toContain("revalidatePath('/compensation')")
+        expect(MANAGER_ACTIONS).toContain('revalidatePath(`/compensation/${input.applicationId}`)')
+        // The component shows the service's own answer; it never assumes one.
+        expect(MANAGER_DETAIL).toContain('RESULT_TEXT[result.code]')
+        expect(MANAGER_DETAIL).not.toMatch(/setState\(\s*'(paid|rejected|awaiting_payment)'/)
     })
 })
