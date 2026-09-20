@@ -55,6 +55,10 @@ export default function MessageFeed({
     chatType,
     uiItems,
     isLoading,
+    hasLoadedHistory,
+    historyLoadFailed,
+    isRetryingHistory,
+    onRetryHistoryLoad,
     hasMoreHistory,
     onLoadMore,
     onReply,
@@ -71,6 +75,12 @@ export default function MessageFeed({
     chatType?: string
     uiItems: UIItem[]
     isLoading: boolean
+    /** A read of this chat's history has succeeded (possibly empty). */
+    hasLoadedHistory: boolean
+    /** The first read failed and nothing usable is on screen. */
+    historyLoadFailed: boolean
+    isRetryingHistory: boolean
+    onRetryHistoryLoad: () => void
     hasMoreHistory: boolean
     onLoadMore: () => void
     onReply?: (msg: Message) => void
@@ -908,14 +918,35 @@ export default function MessageFeed({
             <div className="flex-1 min-h-0 relative w-full">
 
                 {/* Overlay: загрузка */}
-                {isLoading && uiItems.length === 0 && (
+                {isLoading && uiItems.length === 0 && !historyLoadFailed && (
                     <div className="absolute inset-0 flex items-center justify-center messenger-bg text-[#8A9099] text-[13px] font-medium z-10">
                         Загрузка сообщений...
                     </div>
                 )}
 
-                {/* Overlay: нет сообщений */}
-                {!isLoading && uiItems.length === 0 && (
+                {/* Overlay: история не загрузилась. Это НЕ пустой диалог —
+                    «Нет сообщений» здесь было бы неправдой. */}
+                {historyLoadFailed && uiItems.length === 0 && (
+                    <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center messenger-bg px-6 text-center z-10">
+                        <div className="w-14 h-14 rounded-full bg-white/60 flex items-center justify-center mb-[4px] text-[#DC2626]">
+                            <AlertCircle size={22} />
+                        </div>
+                        <h3 className="text-[#474B50] text-[16px] font-semibold tracking-tight">Не удалось загрузить сообщения</h3>
+                        <p className="text-[#8A9099] text-[13px] mt-1 max-w-[280px]">История переписки сейчас недоступна.</p>
+                        <button
+                            type="button"
+                            onClick={onRetryHistoryLoad}
+                            disabled={isRetryingHistory}
+                            aria-busy={isRetryingHistory}
+                            className="mt-4 min-h-[44px] px-5 rounded-[8px] bg-[#2AABEE] text-white text-[15px] font-semibold transition-colors hover:bg-[#1E96D4] disabled:opacity-60 disabled:cursor-default"
+                        >
+                            {isRetryingHistory ? 'Загрузка…' : 'Повторить'}
+                        </button>
+                    </div>
+                )}
+
+                {/* Overlay: нет сообщений — только после УСПЕШНОЙ загрузки */}
+                {!isLoading && uiItems.length === 0 && hasLoadedHistory && !historyLoadFailed && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center messenger-bg px-6 text-center z-10">
                         <div className="w-14 h-14 rounded-full bg-white/60 flex items-center justify-center mb-[4px] text-[#B0B5BA]">
                             <MessageSquare size={22} />

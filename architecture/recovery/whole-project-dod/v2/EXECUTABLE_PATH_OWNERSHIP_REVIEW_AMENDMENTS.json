@@ -697,6 +697,48 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-conversation-read-v1-main-bb4da9bb-20260919",
+      "reviewed_at": "2026-09-19T00:00:00Z",
+      "reviewed_by": "MOBILE_CONVERSATION_READ_V1_RECONCILIATION_EXECUTOR_REVIEW_20260919",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_ANDROID_CONTROLLED_RECONCILIATION_AUTHORIZED_20260919",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain published on main at bb4da9bb, whose tail is cash-compensation-pr2-selected-park-main-5232cd31-20260918, and reviews only the one surface Mobile Conversation Read v1 adds. It replaces the pre-reconciliation amendment mobile-conversation-read-v1-20260917, which extended the older chain at 02f772ab."
+      },
+      "reason": "Records the single tracked executable surface Mobile Conversation Read v1 adds, gravity-mvp/src/app/messages/components/ConversationHistoryLoad.test.tsx, a Vitest test of the existing conversation-history read path under gravity-mvp/src/app/messages, which the messaging context manifest owns. The same change edits the Android acceptance workflow to register a fifth read-only scenario, so the reviewed lifecycle surface registry entry for .github/workflows/android-acceptance-e2e.yml is rebound to the new bytes with its TEST/TEST_SUPPORT/NONE classification unchanged; that rebind moves the tracked inventory digest without moving any path. It adds no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion change, and changes the bytes of no reviewed exact-inventory assignment, so it carries no source hash rebind. The current triple is the repository's own derivation over the candidate tree reconciled onto main bb4da9bb: 2,556 + 1 = 2,557 surfaces, context-owned 1,340 -> 1,341, governed exclusions 1,216 unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2556,
+        "tracked_inventory_sha256": "2698f84debad317863073f282de16efc8b71898a2f739c7918ad879102cbd370",
+        "coverage_sha256": "2cecbe955587fee73b21e02597058e5b8e6e67200e67772a1b02675f87437458"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2557,
+        "tracked_inventory_sha256": "3acff9b7293997b85a23d0f4e8d169c796c85bdf8070925f915160f2ef9a91b4",
+        "coverage_sha256": "4915458b6e61e98e9b428a47e7d122d199c1744549960cde9ae438c4d20bbbb8"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/messages/components/ConversationHistoryLoad.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
