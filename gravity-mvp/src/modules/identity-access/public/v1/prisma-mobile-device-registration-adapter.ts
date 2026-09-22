@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { mobileSessionBarrierEntryExpiryV1 } from './mobile-session-credentials'
 import type {
     MobilePushBindOutcomeV1,
+    MobilePushLogoutBarrierV1,
     MobilePushEligibilityFactsV1,
     MobilePushRegistrationPortV1,
     MobilePushRegistrationWriteV1,
@@ -47,11 +49,40 @@ function ineligibleWhere(facts: MobilePushEligibilityFactsV1): Prisma.MobileDevi
     ]
 }
 
+/**
+ * The barrier entries worth keeping: this logout's entry, plus every entry
+ * whose session has not expired yet. An expired entry bars a session that can
+ * no longer be presented at all, so dropping it changes nothing and keeps the
+ * stored barrier bounded by the logins of one session lifetime.
+ */
+function keptBarrierEntries(existing: string[], entry: string, now: Date): string[] {
+    const nowSeconds = Math.floor(now.getTime() / 1000)
+    const kept = existing.filter((candidate) => {
+        if (candidate === entry) return false
+        const expiry = mobileSessionBarrierEntryExpiryV1(candidate)
+        return expiry !== null && expiry > nowSeconds
+    })
+    kept.push(entry)
+    return kept
+}
+
+/**
+ * Refusal raised inside the reclaim transaction. Returning a refusal would
+ * COMMIT the release of the holder's token that the transaction already did;
+ * throwing rolls it back, so a registration that is refused changes nothing.
+ */
+class MobilePushReclaimRefusal extends Error {
+    constructor(readonly outcome: 'session_revoked' | 'holder_not_reclaimable') {
+        super(`MOBILE_PUSH_RECLAIM_REFUSED:${outcome}`)
+        this.name = 'MobilePushReclaimRefusal'
+    }
+}
+
 export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 = {
     async bind(write): Promise<MobilePushBindOutcomeV1> {
         for (let attempt = 0; attempt < MAX_INSERT_RACE_ROUNDS; attempt += 1) {
             const activated = await prisma.mobileDeviceRegistration.updateMany({
-                where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.sessionBindingId } } },
+                where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.barrierEntry } } },
                 // Written field by field on purpose: every stored fact is
                 // explicit and comes from the verified session.
                 data: {
@@ -90,7 +121,7 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 select: { revokedSessionBindings: true },
             })
             if (existing) {
-                if (existing.revokedSessionBindings.includes(write.sessionBindingId)) return { outcome: 'session_revoked' }
+                if (existing.revokedSessionBindings.includes(write.barrierEntry)) return { outcome: 'session_revoked' }
                 continue
             }
 
@@ -134,7 +165,7 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 })
                 if (released.count === 0) return { outcome: 'holder_not_reclaimable' as const }
                 const activated = await transaction.mobileDeviceRegistration.updateMany({
-                    where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.sessionBindingId } } },
+                    where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.barrierEntry } } },
                     data: {
                         fcmToken: write.fcmToken,
                         credentialSubject: write.credentialSubject,
@@ -159,12 +190,13 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                     where: { deviceId: write.deviceId },
                     select: { revokedSessionBindings: true },
                 })
-                // The release and everything after it roll back together, so a
-                // refused or retried bind never leaves the holder released.
+                // Thrown, not returned: the release above must roll back with
+                // the refusal, so a registration that is refused leaves the
+                // holder exactly as it found it.
                 if (existing) {
-                    return existing.revokedSessionBindings.includes(write.sessionBindingId)
-                        ? { outcome: 'session_revoked' as const }
-                        : { outcome: 'holder_not_reclaimable' as const }
+                    throw new MobilePushReclaimRefusal(
+                        existing.revokedSessionBindings.includes(write.barrierEntry) ? 'session_revoked' : 'holder_not_reclaimable',
+                    )
                 }
                 const created = await transaction.mobileDeviceRegistration.create({
                     data: {
@@ -183,8 +215,9 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 return { outcome: 'bound' as const, registrationId: created.id }
             })
         } catch (error) {
-            // Another device bound the token between the release and our bind:
-            // the whole transaction, release included, rolled back.
+            // Every exit below rolled the transaction back, release included.
+            if (error instanceof MobilePushReclaimRefusal) return { outcome: error.outcome }
+            // Another device bound the token between the release and our bind.
             if (isUniqueViolationOn(error, 'fcmToken')) return { outcome: 'token_conflict' as const }
             if (isUniqueViolationOn(error, 'deviceId')) return { outcome: 'holder_not_reclaimable' as const }
             throw error
@@ -198,46 +231,57 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
         return holders > 0
     },
 
-    async revokeDevice(deviceId, sessionBindingId, session, reason, now) {
+    async revokeDevice(deviceId, barrier, session, reason, now) {
         for (let attempt = 0; attempt < MAX_INSERT_RACE_ROUNDS; attempt += 1) {
-            const revoked = await prisma.mobileDeviceRegistration.updateMany({
-                where: { deviceId },
-                data: {
-                    revokedAt: now,
-                    revokedReason: reason,
-                    fcmToken: null,
-                    revokedSessionBindings: { push: sessionBindingId },
-                },
-            })
-            if (revoked.count > 0) return revoked.count
-
-            // The device never registered. A tombstone carries the barrier, so
-            // a registration still in flight from this session cannot create
-            // one afterwards.
-            try {
-                await prisma.mobileDeviceRegistration.create({
+            const outcome = await prisma.$transaction(async (transaction) => {
+                const revoked = await transaction.mobileDeviceRegistration.updateMany({
+                    where: { deviceId },
+                    data: { revokedAt: now, revokedReason: reason, fcmToken: null },
+                })
+                if (revoked.count > 0) {
+                    if (barrier) {
+                        // The row is locked by the update above, so this
+                        // read-prune-write cannot lose a concurrent logout's entry.
+                        const row = await transaction.mobileDeviceRegistration.findUnique({
+                            where: { deviceId },
+                            select: { revokedSessionBindings: true },
+                        })
+                        await transaction.mobileDeviceRegistration.updateMany({
+                            where: { deviceId },
+                            data: { revokedSessionBindings: { set: keptBarrierEntries(row?.revokedSessionBindings ?? [], barrier.entry, now) } },
+                        })
+                    }
+                    return revoked.count
+                }
+                if (!barrier) return 0
+                // The device never registered. A tombstone carries the barrier,
+                // so a registration still in flight from this session cannot
+                // create one afterwards.
+                await transaction.mobileDeviceRegistration.create({
                     data: {
                         deviceId,
                         fcmToken: null,
                         credentialSubject: session.credentialSubject,
                         runtimeOperatorId: session.runtimeOperatorId,
-                        sessionBindingId,
+                        sessionBindingId: barrier.sessionBindingId,
                         sessionIssuedAt: session.sessionIssuedAt,
                         sessionExpiresAt: session.sessionExpiresAt,
                         sessionRevocationEpoch: session.sessionRevocationEpoch,
                         lastSeenAt: now,
                         revokedAt: now,
                         revokedReason: reason,
-                        revokedSessionBindings: [sessionBindingId],
+                        revokedSessionBindings: [barrier.entry],
                     },
                     select: { id: true },
                 })
                 return 0
-            } catch (error) {
+            }).catch((error: unknown) => {
                 // A registration for this device committed first: re-run and
                 // revoke it instead.
-                if (!isUniqueViolationOn(error, 'deviceId')) throw error
-            }
+                if (isUniqueViolationOn(error, 'deviceId')) return null
+                throw error
+            })
+            if (outcome !== null) return outcome
         }
         throw new Error('MOBILE_PUSH_REGISTRATION_REVOKE_UNRESOLVED')
     },

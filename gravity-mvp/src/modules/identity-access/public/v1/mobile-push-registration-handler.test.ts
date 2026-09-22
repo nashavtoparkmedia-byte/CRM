@@ -15,6 +15,7 @@ const WRITE: MobilePushRegistrationWriteV1 = {
     credentialSubject: 'mobile',
     runtimeOperatorId: 'u1',
     sessionBindingId: 'a'.repeat(64),
+    barrierEntry: `${'a'.repeat(64)}.1790000000`,
     sessionIssuedAt: new Date(NOW.getTime() - 3600_000),
     sessionExpiresAt: new Date(NOW.getTime() + 11 * 3600_000),
     sessionRevocationEpoch: '0',
@@ -106,8 +107,9 @@ describe('Mobile Push v1 registration rules', () => {
             credentialSubject: 'mobile', runtimeOperatorId: 'u1',
             sessionIssuedAt: WRITE.sessionIssuedAt, sessionExpiresAt: WRITE.sessionExpiresAt, sessionRevocationEpoch: '0',
         }
-        await createMobilePushRegistrationHandlerV1(p).revokeForLogout('device-1', WRITE.sessionBindingId, session, NOW)
-        expect(p.revokeDevice).toHaveBeenCalledWith('device-1', WRITE.sessionBindingId, session, 'logout', NOW)
+        const barrier = { sessionBindingId: WRITE.sessionBindingId, entry: WRITE.barrierEntry }
+        await createMobilePushRegistrationHandlerV1(p).revokeForLogout('device-1', barrier, session, NOW)
+        expect(p.revokeDevice).toHaveBeenCalledWith('device-1', barrier, session, 'logout', NOW)
     })
 
     it('gives up closed rather than looping when the token keeps changing hands', async () => {

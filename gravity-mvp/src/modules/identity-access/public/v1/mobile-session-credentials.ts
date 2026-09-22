@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, createHmac, timingSafeEqual } from 'node:crypto'
 
 /**
  * Session primitive for the Android shell.
@@ -39,6 +39,8 @@ const MAX_CREDENTIAL_LENGTH = 4096
 const MAX_OPERATOR_ID_LENGTH = 64
 const MAX_DEVICE_ID_LENGTH = 128
 const SAFE_TOKEN = /^[A-Za-z0-9_-]+$/
+/** 16 random bytes, base64url, no padding. */
+const SESSION_INSTANCE_ID = /^[A-Za-z0-9_-]{22}$/
 
 export interface MobileAccessCredentialConfig {
     username: string
@@ -60,6 +62,12 @@ export interface MobileSessionPrincipalV1 {
     runtimeOperatorId: string
     deviceId: string
     expiresAtSeconds: number
+    /**
+     * The session instance this token was issued as, or null for a session
+     * issued before Mobile Push v1. Never supplied by the client: it lives
+     * inside the signed payload.
+     */
+    sessionInstanceId: string | null
 }
 
 interface MobileSessionPayload {
@@ -71,6 +79,14 @@ interface MobileSessionPayload {
     rev: string
     iat: number
     exp: number
+    /**
+     * Server-issued session instance id: 16 random bytes, minted when this
+     * session was issued. Two logins a millisecond apart are still distinct
+     * sessions, which no timestamp can promise. Absent in sessions issued
+     * before Mobile Push v1 — those stay valid for ordinary CRM access and
+     * are refused by push registration until the next login.
+     */
+    sid?: string
 }
 
 function rejectsAsPlaceholder(password: string): boolean {
@@ -205,6 +221,7 @@ export function issueMobileSession(
         rev: getMobileSessionRevocationEpoch(env),
         iat: issuedAt,
         exp: issuedAt + MOBILE_SESSION_TTL_SECONDS,
+        sid: randomBytes(16).toString('base64url'),
     }
     const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
     return `${encodedPayload}.${signPayload(encodedPayload, config).toString('base64url')}`
@@ -258,6 +275,9 @@ export function verifyMobileSession(
         && payload.iat <= nowSeconds + 60
         && payload.exp > nowSeconds
         && payload.exp - payload.iat === MOBILE_SESSION_TTL_SECONDS
+        // A session either carries a well-formed server-issued instance id or
+        // none at all. A malformed one is refused rather than ignored.
+        && (payload.sid === undefined || (typeof payload.sid === 'string' && SESSION_INSTANCE_ID.test(payload.sid)))
 
     if (!valid) return null
 
@@ -266,6 +286,7 @@ export function verifyMobileSession(
         runtimeOperatorId: payload.op,
         deviceId: payload.did,
         expiresAtSeconds: payload.exp,
+        sessionInstanceId: payload.sid ?? null,
     }
 }
 
@@ -298,42 +319,49 @@ export function normalizeMobileReturnTo(value: unknown): string {
 
 // ── Mobile Push v1: non-secret session fingerprints ─────────────────────────
 
-const SESSION_BINDING_LABEL = 'yoko.mobile-push.session-binding.v2'
+const SESSION_BINDING_LABEL = 'yoko.mobile-push.session-binding.v3'
 
 /**
- * Identity of ONE mobile session, derived from the verified session's own
- * facts. Stable for the life of that session (a token rotation inside it
- * changes nothing here) and different after a new login, because a new
- * session carries a new expiry.
+ * Identity of ONE mobile session, from the random session instance id the
+ * server minted when that session was issued.
  *
- * NOTHING password-derived goes in. Every stored field of a registration is a
- * fact an attacker with the database already has, so a digest that mixed in
- * anything derived from MOBILE_ACCESS_PASS — including the signed token, whose
- * payload is reconstructible from those same stored fields — would be a fast
- * offline verifier for password guesses. This digest is a name, not a proof:
- * it authenticates nothing, and only the signed token is ever accepted.
+ * Uniqueness comes from that randomness, not from any fact about the session:
+ * two logins for the same device in the same second, second after second, are
+ * still different sessions. Session facts alone could not promise this — they
+ * are identical at one-second resolution — and the signed token could not be
+ * used either, because every other stored field reconstructs its payload, so a
+ * digest of it would verify MOBILE_ACCESS_PASS guesses offline.
  *
- * The operator label is deliberately excluded: it is client-supplied and
- * unverified, so including it would let a client mint a fresh session identity
- * and step around the logout barrier keyed on this value.
- *
- * Two logins for the same device inside the same second share an identity.
- * That is fail-closed: a device that logged out and back in within one second
- * stays silent until its next login, and never the reverse.
+ * The digest is only a fixed-width name for a value that is already random and
+ * non-secret; it adds no secrecy, and keeps the stored binding one shape.
+ * Returns null for a session issued before Mobile Push v1: such a session has
+ * no instance id, so push registration refuses it until the next login.
  */
-export function mobileSessionBindingIdV1(
-    principal: MobileSessionPrincipalV1,
-    revocationEpoch: string,
-): string {
+export function mobileSessionBindingIdV1(principal: MobileSessionPrincipalV1): string | null {
+    if (!principal.sessionInstanceId) return null
     return createHash('sha256')
-        .update([
-            SESSION_BINDING_LABEL,
-            principal.deviceId,
-            principal.credentialSubject,
-            revocationEpoch,
-            String(principal.expiresAtSeconds),
-        ].join('\0'), 'utf8')
+        .update(`${SESSION_BINDING_LABEL}\0${principal.sessionInstanceId}`, 'utf8')
         .digest('hex')
+}
+
+/**
+ * The durable logout barrier entry for one session: its binding and the second
+ * that session expires. Logout writes exactly this string, a later bind proven
+ * by the same session computes exactly the same string, and an entry whose
+ * expiry has passed can be dropped — the session it bars can no longer be
+ * presented at all. That keeps the stored barrier bounded by the logins of one
+ * session lifetime, never by the lifetime of the device.
+ */
+export function mobileSessionBarrierEntryV1(principal: MobileSessionPrincipalV1): string | null {
+    const binding = mobileSessionBindingIdV1(principal)
+    return binding === null ? null : `${binding}.${principal.expiresAtSeconds}`
+}
+
+/** The second at which a barrier entry stops mattering, or null if it is not one of ours. */
+export function mobileSessionBarrierEntryExpiryV1(entry: string): number | null {
+    const [binding, expiry] = entry.split('.')
+    if (!/^[0-9a-f]{64}$/.test(binding ?? '') || !/^[0-9]{1,15}$/.test(expiry ?? '')) return null
+    return Number(expiry)
 }
 
 export interface MobilePushCredentialFactsV1 {

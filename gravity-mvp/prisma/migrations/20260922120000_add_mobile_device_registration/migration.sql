@@ -28,11 +28,13 @@ CREATE TABLE "MobileDeviceRegistration" (
     "lastSeenAt" TIMESTAMPTZ(3) NOT NULL,
     "revokedAt" TIMESTAMPTZ(3),
     "revokedReason" VARCHAR(32),
-    -- Durable logout barrier: every session binding whose logout this device
-    -- has completed. A registration proven by one of these sessions can never
-    -- reactivate the row, however late it arrives; a genuinely new login
-    -- carries a different binding and may.
-    "revokedSessionBindings" CHAR(64)[] NOT NULL DEFAULT ARRAY[]::CHAR(64)[],
+    -- Durable logout barrier. Each entry is one logged-out session: its
+    -- binding and the second that session expires. A registration proven by
+    -- one of these sessions can never reactivate the row, however late it
+    -- arrives; a genuinely new login carries a different binding and may.
+    -- The expiry makes the barrier prunable, so it is bounded by the logins of
+    -- one session lifetime rather than by the lifetime of the device.
+    "revokedSessionBindings" VARCHAR(96)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(96)[],
 
     CONSTRAINT "MobileDeviceRegistration_pkey" PRIMARY KEY ("id")
 );

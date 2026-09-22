@@ -24,6 +24,8 @@ export type MobilePushRegistrationFailureCodeV1 =
     | 'MOBILE_SESSION_REQUIRED'
     /** This device completed a logout for this session; only a new login may register again. */
     | 'MOBILE_SESSION_REVOKED'
+    /** The session predates Mobile Push v1 and carries no server-issued instance id; re-login. */
+    | 'MOBILE_SESSION_REISSUE_REQUIRED'
     | 'PUSH_DEVICE_ID_NOT_STABLE'
     | 'PUSH_TOKEN_BOUND_TO_OTHER_DEVICE'
 

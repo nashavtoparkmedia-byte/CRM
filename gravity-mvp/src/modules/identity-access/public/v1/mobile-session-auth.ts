@@ -5,6 +5,7 @@ import {
     getMobileAccessCredentialConfig,
     getMobileSessionRevocationEpoch,
     issueMobileSession,
+    mobileSessionBarrierEntryV1,
     mobileSessionBindingIdV1,
     isSafeDeviceId,
     isSafeRuntimeOperatorId,
@@ -176,7 +177,8 @@ export async function clearMobileSessionV1(): Promise<void> {
             const { revokeMobilePushDeviceForLogoutV1 } = await import('../../application/mobile-push-registration-operations')
             await revokeMobilePushDeviceForLogoutV1({
                 principal,
-                sessionBindingId: mobileSessionBindingIdV1(principal, getMobileSessionRevocationEpoch()),
+                sessionBindingId: mobileSessionBindingIdV1(principal),
+                barrierEntry: mobileSessionBarrierEntryV1(principal),
             })
         } catch (error) {
             console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')

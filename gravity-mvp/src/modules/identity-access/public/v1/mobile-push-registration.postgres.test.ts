@@ -11,7 +11,7 @@
  * skipped otherwise. Run the Mobile Push PostgreSQL files with
  * --no-file-parallelism: they share one disposable database.
  */
-import { createHash } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,7 +35,7 @@ vi.mock('next/headers', () => ({
 
 import { prisma } from '@/lib/prisma'
 import { POST } from '@/app/api/mobile/push-registration/route'
-import { getMobileSessionRevocationEpoch, issueMobileSession, verifyMobileSession } from './mobile-session-credentials'
+import { issueMobileSession, mobileSessionBarrierEntryV1, verifyMobileSession } from './mobile-session-credentials'
 import { clearMobileSessionV1 } from './mobile-session-auth'
 import {
     currentMobilePushEligibilityFactsV1,
@@ -70,16 +70,16 @@ function sessionFor(deviceId: string, operator = 'u1', nowMs = Date.now()): stri
     return issued
 }
 
-/** The binding recomputed here from the session's own verified facts, never from the token bytes. */
+/** The binding recomputed here from the session's own server-issued instance id. */
 function expectedBinding(sessionToken: string): string {
     const principal = verifyMobileSession(sessionToken)!
-    return createHash('sha256').update([
-        'yoko.mobile-push.session-binding.v2',
-        principal.deviceId,
-        principal.credentialSubject,
-        getMobileSessionRevocationEpoch(),
-        String(principal.expiresAtSeconds),
-    ].join('\0'), 'utf8').digest('hex')
+    return createHash('sha256')
+        .update(`yoko.mobile-push.session-binding.v3\0${principal.sessionInstanceId}`, 'utf8')
+        .digest('hex')
+}
+
+function barrierEntryOf(sessionToken: string): string {
+    return mobileSessionBarrierEntryV1(verifyMobileSession(sessionToken)!)!
 }
 
 /** Log out exactly the session that this token proves, in its own request scope. */
@@ -113,7 +113,9 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
     beforeEach(async () => {
         jar.token = undefined
         delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
-        await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
+        await prisma.mobileDeviceRegistration.deleteMany({
+            where: { OR: [{ deviceId: { startsWith: RUN } }, { deviceId: 'ephemeral-device' }] },
+        })
     })
     afterAll(async () => {
         await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
@@ -135,8 +137,13 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await rowsForRun()).toEqual([])
     })
 
-    it('3. refuses the shared fallback device id', async () => {
-        expect(await register(sessionFor('ephemeral-device'), { token: token('a') })).toEqual({ status: 422, body: { error: 'PUSH_DEVICE_ID_NOT_STABLE' } })
+    it('3. refuses the shared fallback device id, and never writes a row for it', async () => {
+        const shared = sessionFor('ephemeral-device')
+        expect(await register(shared, { token: token('a') })).toEqual({ status: 422, body: { error: 'PUSH_DEVICE_ID_NOT_STABLE' } })
+        expect(await prisma.mobileDeviceRegistration.count({ where: { deviceId: 'ephemeral-device' } })).toBe(0)
+        // Logging out on it must not leave a tombstone either: the id is
+        // shared across devices, so a barrier on it would bar all of them.
+        await logout(shared)
         expect(await prisma.mobileDeviceRegistration.count({ where: { deviceId: 'ephemeral-device' } })).toBe(0)
     })
 
@@ -179,18 +186,20 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         await register(sessionFor(device('holder5b')), { token: token('shared5b') })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('holder5b') }, data: { sessionExpiresAt: new Date(Date.now() - 1000) } })
         const facts = currentMobilePushEligibilityFactsV1(new Date())!
+        const ownSession = sessionFor(device('d5b'))
         const write: MobilePushRegistrationWriteV1 = {
             deviceId: device('d5b'),
             fcmToken: token('shared5b'),
             credentialSubject: facts.credentialSubject,
             runtimeOperatorId: 'u1',
-            sessionBindingId: 'c'.repeat(64),
+            sessionBindingId: expectedBinding(ownSession),
+            barrierEntry: barrierEntryOf(ownSession),
             sessionIssuedAt: new Date(Date.now() - HOUR),
             sessionExpiresAt: new Date(Date.now() + 11 * HOUR),
             sessionRevocationEpoch: facts.revocationEpoch,
             now: facts.now,
         }
-        let concurrentRequestOfSameDevice: (() => Promise<unknown>) | null = () => register(sessionFor(device('d5b')), { token: token('shared5b') })
+        let concurrentRequestOfSameDevice: (() => Promise<unknown>) | null = () => register(ownSession, { token: token('shared5b') })
         const interleaved: MobilePushRegistrationPortV1 = {
             ...prismaMobileDeviceRegistrationPortV1,
             async bind(bindWrite) {
@@ -462,6 +471,151 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(after).toMatchObject({ fcmToken: token('raceD-2'), revokedAt: null })
         expect(after.revokedSessionBindings).toEqual([])
         expect(await eligibleIds()).toContain(after.id)
+    })
+
+    it('2. two sessions issued in the SAME SECOND are told apart: logout of one leaves the other able to register', async () => {
+        const id = device('samesecond')
+        const at = Date.now()
+        const first = sessionFor(id, 'u1', at)
+        const second = sessionFor(id, 'u1', at)
+        // Identical session facts; only the server-issued instance id differs.
+        expect(verifyMobileSession(second)!.expiresAtSeconds).toBe(verifyMobileSession(first)!.expiresAtSeconds)
+        expect(expectedBinding(second)).not.toBe(expectedBinding(first))
+
+        await register(first, { token: token('samesecond-1') })
+        await logout(first)
+        expect(await register(first, { token: token('samesecond-1') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        // The other session of that same second is untouched by the barrier.
+        expect(await register(second, { token: token('samesecond-2') })).toEqual({ status: 200, body: { ok: true } })
+        const row = (await rowOf(id))!
+        expect(row).toMatchObject({ revokedAt: null, fcmToken: token('samesecond-2') })
+        expect(row.sessionBindingId).toBe(expectedBinding(second))
+        expect(await eligibleIds()).toContain(row.id)
+    })
+
+    it('6. a session issued before Mobile Push v1 is refused by push registration until re-login', async () => {
+        const id = device('legacy')
+        const current = sessionFor(id)
+        const payload = JSON.parse(Buffer.from(current.split('.')[0], 'base64url').toString('utf8'))
+        delete payload.sid
+        const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+        const key = createHmac('sha256', process.env.MOBILE_ACCESS_PASS!)
+            .update(`yoko-mobile-shell-session-key.v1\0${process.env.MOBILE_ACCESS_USER}`, 'utf8')
+            .digest()
+        const legacy = `${encoded}.${createHmac('sha256', key).update(`yoko-gravity-mobile-shell\0${encoded}`, 'utf8').digest('base64url')}`
+        // It is a valid session: the CRM lane still accepts it.
+        expect(verifyMobileSession(legacy)).toMatchObject({ deviceId: id, sessionInstanceId: null })
+        expect(await register(legacy, { token: token('legacy') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REISSUE_REQUIRED' } })
+        expect(await rowOf(id)).toBeNull()
+        // Logging out on a legacy session revokes nothing and bars nothing.
+        await logout(legacy)
+        expect(await rowOf(id)).toBeNull()
+        // After a re-login the device registers normally.
+        expect((await register(sessionFor(id), { token: token('legacy') })).status).toBe(200)
+    })
+
+    it('A3. a logout landing between the bind and the reclaim refuses, and releases nothing', async () => {
+        // The reclaim is the other write path, so it enforces the barrier too.
+        // Here the logout commits after bind reported the token conflict and
+        // before the reclaim runs: the reclaim must refuse, and its release of
+        // the ineligible holder must roll back with it.
+        const holder = device('holderA3')
+        const id = device('d-A3')
+        await register(sessionFor(holder), { token: token('sharedA3') })
+        await prisma.mobileDeviceRegistration.update({ where: { deviceId: holder }, data: { sessionExpiresAt: new Date(Date.now() - 1000) } })
+        const session = sessionFor(id)
+        const principal = verifyMobileSession(session)!
+        const facts = currentMobilePushEligibilityFactsV1(new Date())!
+        const write: MobilePushRegistrationWriteV1 = {
+            deviceId: id,
+            fcmToken: token('sharedA3'),
+            credentialSubject: principal.credentialSubject,
+            runtimeOperatorId: principal.runtimeOperatorId,
+            sessionBindingId: expectedBinding(session),
+            barrierEntry: barrierEntryOf(session),
+            sessionIssuedAt: new Date((principal.expiresAtSeconds - 12 * 3600) * 1000),
+            sessionExpiresAt: new Date(principal.expiresAtSeconds * 1000),
+            sessionRevocationEpoch: facts.revocationEpoch,
+            now: facts.now,
+        }
+        let logoutBetween: (() => Promise<unknown>) | null = () => logout(session)
+        const interleaved: MobilePushRegistrationPortV1 = {
+            ...prismaMobileDeviceRegistrationPortV1,
+            async bind(bindWrite) {
+                const outcome = await prismaMobileDeviceRegistrationPortV1.bind(bindWrite)
+                const run = logoutBetween
+                logoutBetween = null
+                if (run) await run()
+                return outcome
+            },
+        }
+        expect(await createMobilePushRegistrationHandlerV1(interleaved).register(write, facts))
+            .toEqual({ ok: false, code: 'MOBILE_SESSION_REVOKED' })
+        // The logged-out device stays revoked...
+        const row = (await rowOf(id))!
+        expect(row).toMatchObject({ fcmToken: null, revokedReason: 'logout' })
+        expect(await eligibleIds()).not.toContain(row.id)
+        // ...and the holder was never released, because the refusal rolled the
+        // whole reclaim transaction back.
+        expect(await rowOf(holder)).toMatchObject({ fcmToken: token('sharedA3'), revokedAt: null })
+    })
+
+    it('7a. a later logout never prunes away a barrier whose own session is still live', async () => {
+        // S1 and S2 are both live. S2's logout prunes the barrier, and S1's
+        // entry must survive it, or S1 could register again afterwards.
+        const id = device('keepbarrier')
+        const first = sessionFor(id, 'u1', Date.now() - 1000)
+        const second = sessionFor(id, 'u1', Date.now())
+        await register(first, { token: token('keepbarrier-1') })
+        await logout(first)
+        await register(second, { token: token('keepbarrier-2') })
+        await logout(second)
+        const entries = (await rowOf(id))!.revokedSessionBindings
+        expect(entries).toContain(barrierEntryOf(first))
+        expect(entries).toContain(barrierEntryOf(second))
+        // Both sessions stay barred for good.
+        expect(await register(first, { token: token('keepbarrier-1') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        expect(await register(second, { token: token('keepbarrier-2') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        const row = (await rowOf(id))!
+        expect(row.revokedAt).not.toBeNull()
+        expect(await eligibleIds()).not.toContain(row.id)
+        // Only a genuinely new login gets back in.
+        expect((await register(sessionFor(id, 'u1', Date.now() + 1000), { token: token('keepbarrier-3') })).status).toBe(200)
+    })
+
+    it('7. the durable barrier is pruned to live sessions, so repeated logout cannot grow it without bound', async () => {
+        const id = device('prune')
+        const live = sessionFor(id)
+        await register(live, { token: token('prune-1') })
+        // Entries from sessions that have already expired, plus junk.
+        const expiredSeconds = Math.floor(Date.now() / 1000) - 10
+        const stale = Array.from({ length: 40 }, (_, index) => `${'ab'.repeat(32)}.${expiredSeconds - index}`)
+        await prisma.mobileDeviceRegistration.update({
+            where: { deviceId: id },
+            data: { revokedSessionBindings: { set: [...stale, 'not-a-barrier-entry'] } },
+        })
+        await logout(live)
+        const afterFirst = (await rowOf(id))!.revokedSessionBindings
+        // Only this logout's entry survives: everything else is expired or junk.
+        expect(afterFirst).toEqual([barrierEntryOf(live)])
+
+        // Ten more login/logout cycles leave one live entry each, never the old ones.
+        let previous = barrierEntryOf(live)
+        for (let cycle = 0; cycle < 10; cycle += 1) {
+            const session = sessionFor(id, 'u1', Date.now() + cycle + 1)
+            await register(session, { token: token(`prune-cycle-${cycle}`) })
+            await logout(session)
+            const entries = (await rowOf(id))!.revokedSessionBindings
+            expect(entries).toContain(barrierEntryOf(session))
+            expect(entries.length).toBeLessThanOrEqual(cycle + 2)
+            expect(new Set(entries).size).toBe(entries.length)
+            previous = barrierEntryOf(session)
+        }
+        expect((await rowOf(id))!.revokedSessionBindings).toContain(previous)
     })
 
     it('25. a sender mismatch revokes exactly the registration that carried the rejected token', async () => {

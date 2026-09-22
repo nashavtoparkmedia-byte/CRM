@@ -28,6 +28,16 @@ export interface MobilePushEligibilityFactsV1 {
     credentialSubject: string
 }
 
+/**
+ * The barrier a logout leaves behind: the entry to record, and the session
+ * binding the tombstone row is stamped with. A session issued before Mobile
+ * Push v1 has neither, and cannot have registered anything to bar.
+ */
+export interface MobilePushLogoutBarrierV1 {
+    sessionBindingId: string
+    entry: string
+}
+
 /** What a logout tombstone records about the session that logged out. */
 export interface MobilePushRevokedSessionFactsV1 {
     credentialSubject: string
@@ -44,6 +54,8 @@ export interface MobilePushRegistrationWriteV1 {
     credentialSubject: string
     runtimeOperatorId: string
     sessionBindingId: string
+    /** The exact durable barrier entry for this session: its binding and expiry. */
+    barrierEntry: string
     sessionIssuedAt: Date
     sessionExpiresAt: Date
     sessionRevocationEpoch: string
@@ -98,7 +110,7 @@ export interface MobilePushRegistrationPortV1 {
      */
     revokeDevice(
         deviceId: string,
-        sessionBindingId: string,
+        barrier: MobilePushLogoutBarrierV1 | null,
         session: MobilePushRevokedSessionFactsV1,
         reason: 'logout',
         now: Date,
@@ -169,11 +181,15 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
 
         async revokeForLogout(
             deviceId: string,
-            sessionBindingId: string,
+            barrier: MobilePushLogoutBarrierV1 | null,
             session: MobilePushRevokedSessionFactsV1,
             now: Date,
         ): Promise<number> {
-            return port.revokeDevice(deviceId, sessionBindingId, session, 'logout', now)
+            // The shared fallback device id can never hold a registration, so
+            // it gets no tombstone either: a barrier on an id many devices
+            // share would be meaningless, and the row would be pure residue.
+            const barred = deviceId === UNSTABLE_DEVICE_ID_V1 ? null : barrier
+            return port.revokeDevice(deviceId, barred, session, 'logout', now)
         },
 
         async listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]> {

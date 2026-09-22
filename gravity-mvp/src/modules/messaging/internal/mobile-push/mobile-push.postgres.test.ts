@@ -41,8 +41,8 @@ import { legacyPrismaExternalMessagePortV1 } from '../../public/v1/legacy-prisma
 import { legacyPrismaReceiveMessagePortV1 } from '../../public/v1/legacy-prisma-receive-message-adapter'
 import { registerVerifiedMobilePushDeviceV1 } from '../../../identity-access/application/mobile-push-registration-operations'
 import {
-    getMobileSessionRevocationEpoch,
     issueMobileSession,
+    mobileSessionBarrierEntryV1,
     mobileSessionBindingIdV1,
     verifyMobileSession,
 } from '../../../identity-access/public/v1/mobile-session-credentials'
@@ -86,7 +86,7 @@ async function makeRetriesDue(): Promise<void> {
 async function registerDevice(name: string, tokenName = name, nowMs = Date.now()) {
     const sessionToken = issueMobileSession('u1', id(`dev-${name}`), undefined, nowMs)!
     const principal = verifyMobileSession(sessionToken)!
-    const result = await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal, getMobileSessionRevocationEpoch()) }, tokenOf(tokenName))
+    const result = await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal)!, barrierEntry: mobileSessionBarrierEntryV1(principal)! }, tokenOf(tokenName))
     if (!result.ok) throw new Error(result.code)
     return { registrationId: result.registrationId, sessionToken }
 }
@@ -356,7 +356,7 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
 
         // The device rotates its token inside the SAME session before the delivery runs.
         const principal = verifyMobileSession(device.sessionToken)!
-        const rotated = await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal, getMobileSessionRevocationEpoch()) }, tokenOf('rotate-new'))
+        const rotated = await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal)!, barrierEntry: mobileSessionBarrierEntryV1(principal)! }, tokenOf('rotate-new'))
         expect(rotated.ok && rotated.registrationId).toBe(device.registrationId)
 
         await relayUntilIdle()
@@ -375,7 +375,7 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
         expect(await prisma.mobileDeviceRegistration.findUnique({ where: { id: device.registrationId } })).toMatchObject({ fcmToken: null, revokedAt: null })
 
         const principal = verifyMobileSession(device.sessionToken)!
-        await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal, getMobileSessionRevocationEpoch()) }, tokenOf('unreg-2'))
+        await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal)!, barrierEntry: mobileSessionBarrierEntryV1(principal)! }, tokenOf('unreg-2'))
         await makeRetriesDue()
         await relayUntilIdle()
         ;[delivery] = await deliveriesFor(message.id)

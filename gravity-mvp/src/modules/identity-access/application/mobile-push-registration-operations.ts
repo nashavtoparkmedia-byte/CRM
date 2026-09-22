@@ -44,7 +44,7 @@ export function currentMobilePushEligibilityFactsV1(now: Date): MobilePushEligib
  * field it stores comes from that verification, none from the client.
  */
 export async function registerVerifiedMobilePushDeviceV1(
-    session: { principal: MobileSessionPrincipalV1, sessionBindingId: string },
+    session: { principal: MobileSessionPrincipalV1, sessionBindingId: string, barrierEntry: string },
     token: string,
 ): Promise<MobilePushRegistrationResultV1> {
     const now = new Date()
@@ -56,6 +56,7 @@ export async function registerVerifiedMobilePushDeviceV1(
         credentialSubject: session.principal.credentialSubject,
         runtimeOperatorId: session.principal.runtimeOperatorId,
         sessionBindingId: session.sessionBindingId,
+        barrierEntry: session.barrierEntry,
         sessionIssuedAt: new Date((session.principal.expiresAtSeconds - MOBILE_SESSION_TTL_SECONDS) * 1000),
         sessionExpiresAt: new Date(session.principal.expiresAtSeconds * 1000),
         sessionRevocationEpoch: facts.revocationEpoch,
@@ -74,11 +75,16 @@ export async function registerVerifiedMobilePushDeviceV1(
  * session must already be verified.
  */
 export async function revokeMobilePushDeviceForLogoutV1(
-    session: { principal: MobileSessionPrincipalV1, sessionBindingId: string },
+    session: { principal: MobileSessionPrincipalV1, sessionBindingId: string | null, barrierEntry: string | null },
 ): Promise<{ revoked: number }> {
     const now = new Date()
+    // A session issued before Mobile Push v1 could never have registered, so
+    // there is nothing to bar; its device row is still revoked if one exists.
+    const barrier = session.sessionBindingId && session.barrierEntry
+        ? { sessionBindingId: session.sessionBindingId, entry: session.barrierEntry }
+        : null
     return {
-        revoked: await registrations.revokeForLogout(session.principal.deviceId, session.sessionBindingId, {
+        revoked: await registrations.revokeForLogout(session.principal.deviceId, barrier, {
             credentialSubject: session.principal.credentialSubject,
             runtimeOperatorId: session.principal.runtimeOperatorId,
             sessionIssuedAt: new Date((session.principal.expiresAtSeconds - MOBILE_SESSION_TTL_SECONDS) * 1000),
