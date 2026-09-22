@@ -1,4 +1,5 @@
 import { createPrivateKey, type KeyObject } from 'node:crypto'
+import type { MobilePushTransportProblemV1 } from './mobile-push-ports'
 
 /**
  * Mobile Push v1 configuration.
@@ -34,12 +35,7 @@ export interface FcmTransportConfigV1 {
     overridden: boolean
 }
 
-export type FcmTransportConfigProblemV1 =
-    | 'missing_project_id'
-    | 'missing_client_email'
-    | 'missing_private_key'
-    | 'invalid_private_key'
-    | 'endpoint_override_refused'
+export type FcmTransportConfigProblemV1 = MobilePushTransportProblemV1
 
 export type FcmTransportConfigResultV1 =
     | { ok: true, config: FcmTransportConfigV1 }

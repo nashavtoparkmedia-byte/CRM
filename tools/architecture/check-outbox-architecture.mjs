@@ -662,6 +662,158 @@ assertCheck(
     'outbox claim safety is asserted only sequentially',
 )
 
+// ── Mobile Push v1 (MOBILE-PUSH-V1-P1): the outbox as an explicit multi-flow ──
+// The Calling assertions above are unchanged. Everything below pins the v2
+// manifest's flow set, keeps the recording-ready declaration exactly as
+// CRM-ARCH-005 accepted it, and holds the two Messaging push flows to the same
+// standard: exact writers, same-transaction append, deterministic identities,
+// fixed payload fields with no token or content, parse-before-delivery.
+const outboxManifest = JSON.parse(read('architecture/events/v1/outbox-manifest.json'))
+const MESSAGING_INTENT_WRITERS = [
+    'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-channel-message-adapter.ts',
+    'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-external-message-adapter.ts',
+    'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts',
+]
+const MESSAGING_FAN_OUT_WRITER = 'gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts'
+const APPROVED_OUTBOX_WRITERS = [
+    'gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts',
+    'gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts',
+    ...MESSAGING_INTENT_WRITERS,
+    MESSAGING_FAN_OUT_WRITER,
+]
+const messagingIntentWriters = MESSAGING_INTENT_WRITERS.map((file) => [file, read(file)])
+const messagingFanOutAdapter = read(MESSAGING_FAN_OUT_WRITER)
+const messagingIntentContract = read('gravity-mvp/src/contracts/messaging/v1/inbound-message-notification-requested-event.ts')
+const messagingDeliveryContract = read('gravity-mvp/src/contracts/messaging/v1/mobile-push-delivery-requested-event.ts')
+const messagingConsumers = read('gravity-mvp/src/modules/messaging/public/v1/mobile-push-outbox-consumers.ts')
+const messagingDispatch = read('gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-dispatch.ts')
+const messagingPushAmendments = JSON.parse(read('architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json'))
+const flowsById = new Map((outboxManifest.flows ?? []).map((flow) => [flow.id, flow]))
+
+assertCheck(
+    'outbox manifest declares exactly the reviewed flows',
+    outboxManifest.schema === 'yoko.crm.transactional-outbox-manifest.v2'
+        && outboxManifest.table === 'domain_outbox_events'
+        && outboxManifest.infrastructure_state_owner === 'platform_shell'
+        && JSON.stringify([...flowsById.keys()]) === JSON.stringify([
+            'calling.recording-ready',
+            'messaging.inbound-notification-intent',
+            'messaging.mobile-push-delivery',
+        ])
+        && JSON.stringify((outboxManifest.externally_governed_flows ?? []).map((flow) => [flow.event, flow.authority])) === JSON.stringify([[
+            'calling.AiCallFinalizationFollowUpRequested.v1',
+            'architecture/isolation/calling/ai-call-single-call-v1/recovery-manifest.json',
+        ]])
+        && outboxManifest.credentials_in_contract === false,
+    'outbox flow set drifted from the reviewed declaration',
+)
+assertCheck(
+    'recording-ready flow keeps its CRM-ARCH-005 declaration',
+    JSON.stringify(flowsById.get('calling.recording-ready')) === JSON.stringify({
+        id: 'calling.recording-ready',
+        producer_context: 'calling',
+        consumer_context: 'calling',
+        event: 'calling.RecordingReady.v1',
+        aggregate: 'Call',
+        domain_state: 'Call.recordingPath',
+        atomic_writer: 'gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts',
+        public_facade: 'gravity-mvp/src/modules/calling/public/v1/index.ts',
+        consumer: 'gravity-mvp/src/modules/calling/public/v1/outbox-consumers.ts',
+        delivery_adapter: 'BullMQ call-transcribe',
+        consumer_idempotency: 'BullMQ jobId transcribe-${callId}',
+        correlation: { correlation_id: 'Call.id', causation_id: 'FreeSWITCH channel UUID' },
+        manifest_amendment: 'architecture/events/v1/module-manifest-amendments.json',
+    })
+        && JSON.stringify(outboxManifest.reliability) === JSON.stringify({
+            event_identity: 'unique deterministic eventId',
+            transactional_append: true,
+            claim: 'compare-and-set on id, status and attempts',
+            batch_limit: 25,
+            publish_timeout_ms: 5000,
+            max_attempts: 5,
+            retry_delays_ms: [5000, 30000, 120000, 600000, 1800000],
+            stale_claim_ms: 300000,
+            poison_state: 'dead_letter',
+            last_error_max_chars: 1000,
+            last_error_secret_redaction: true,
+            publisher_idempotency: 'published status plus atomic claim',
+        }),
+    'recording-ready flow or shared reliability declaration drifted',
+)
+assertCheck(
+    'approved outbox writer denominator is explicit',
+    JSON.stringify(architecturePolicy.approved_infrastructure_writers
+        .filter((writer) => writer.model === 'DomainOutboxEvent')
+        .map((writer) => writer.file)
+        .sort()) === JSON.stringify([...APPROVED_OUTBOX_WRITERS].sort()),
+    'shared outbox writers differ from the exact reviewed set',
+)
+assertCheck(
+    'Messaging intent writers are exact and append inside the Message transaction',
+    JSON.stringify(flowsById.get('messaging.inbound-notification-intent')?.atomic_writers) === JSON.stringify(MESSAGING_INTENT_WRITERS)
+        && messagingIntentWriters.every(([, source]) => /\$transaction\(async \(?transaction\)? ?=>/.test(source)
+            && /transaction\.domainOutboxEvent\.createMany\(\{ ?data: ?\[intent\], ?skipDuplicates: ?true ?\}\)/.test(source)
+            && source.includes('inboundNotificationOutboxRowV1(')
+            && !/prisma\.domainOutboxEvent/.test(source)),
+    'an intent writer is undeclared or appends outside the Message transaction',
+)
+assertCheck(
+    'Messaging fan-out writer is exact and appends idempotently',
+    JSON.stringify(flowsById.get('messaging.mobile-push-delivery')?.atomic_writers) === JSON.stringify([MESSAGING_FAN_OUT_WRITER])
+        && messagingFanOutAdapter.includes('prisma.domainOutboxEvent.createMany(')
+        && messagingFanOutAdapter.includes('skipDuplicates: true'),
+    'fan-out writer is undeclared or not idempotent',
+)
+assertCheck(
+    'Messaging event identities are deterministic',
+    messagingIntentContract.includes('return `${INBOUND_MESSAGE_NOTIFICATION_REQUESTED_EVENT_V1}:${messageId}`')
+        && messagingDeliveryContract.includes('return `${MOBILE_PUSH_DELIVERY_REQUESTED_EVENT_V1}:${messageId}:${registrationId}`')
+        && messagingIntentContract.includes("fail('eventId must be derived from data.messageId')")
+        && messagingDeliveryContract.includes("fail('eventId must be derived from data.messageId and data.registrationId')"),
+    'a Messaging event id is not derived from its identity',
+)
+assertCheck(
+    'Messaging payload field sets are exact and carry no token or content',
+    messagingIntentContract.includes("hasOnly(input.data, ['messageId', 'chatId', 'channel'], 'data')")
+        && messagingDeliveryContract.includes("hasOnly(input.data, ['messageId', 'chatId', 'channel', 'registrationId', 'sessionBindingId'], 'data')")
+        && JSON.stringify(flowsById.get('messaging.inbound-notification-intent')?.payload_fields) === JSON.stringify(['channel', 'chatId', 'messageId'])
+        && JSON.stringify(flowsById.get('messaging.mobile-push-delivery')?.payload_fields) === JSON.stringify(['channel', 'chatId', 'messageId', 'registrationId', 'sessionBindingId'])
+        && ![...flowsById.values()].some((flow) => (flow.payload_fields ?? []).some((field) => /token|content|text|phone|name/i.test(field))),
+    'a Messaging payload can carry a token or content',
+)
+assertCheck(
+    'Messaging push contracts are versioned and provider neutral',
+    messagingIntentContract.includes("'messaging.InboundMessageNotificationRequested.v1'")
+        && messagingDeliveryContract.includes("'messaging.MobilePushDeliveryRequested.v1'")
+        && ![messagingIntentContract, messagingDeliveryContract].some((source) => /@\/lib\/|@prisma|firebase|googleapis|node:/i.test(source)),
+    'a Messaging push contract is unversioned or provider-bound',
+)
+assertCheck(
+    'Messaging consumers validate each event before acting on it',
+    messagingConsumers.includes('[INBOUND_MESSAGE_NOTIFICATION_REQUESTED_EVENT_V1]')
+        && messagingConsumers.includes('[MOBILE_PUSH_DELIVERY_REQUESTED_EVENT_V1]')
+        && messagingDispatch.includes('const intent = parseInboundMessageNotificationRequestedEventV1(payload)')
+        && messagingDispatch.includes('const delivery = parseMobilePushDeliveryRequestedEventV1(payload)'),
+    'a Messaging consumer acts on an unparsed payload',
+)
+assertCheck(
+    'composition root registers Calling and Messaging publishers without shadowing',
+    composition.includes('callingOutboxPublishersV1')
+        && composition.includes('messagingOutboxPublishersV1')
+        && composition.includes('DUPLICATE_OUTBOX_PUBLISHER')
+        && composition.includes('publishers: domainOutboxPublishersV1'),
+    'Messaging publishers are unregistered or may shadow Calling',
+)
+assertCheck(
+    'Messaging push events are declared in module manifests',
+    messagingPushAmendments.amendments.some((item) => item.context === 'messaging'
+        && JSON.stringify(item.add_events) === JSON.stringify(['messaging.InboundMessageNotificationRequested.v1', 'messaging.MobilePushDeliveryRequested.v1']))
+        && architecturePolicy.manifest_amendments.includes('architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json')
+        && [...flowsById.values()].filter((flow) => flow.id.startsWith('messaging.'))
+            .every((flow) => flow.manifest_amendment === 'architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json'),
+    'Messaging push events are undeclared',
+)
+
 const result = {
     status: failures.length === 0 ? 'PASS' : 'FAIL',
     checks,

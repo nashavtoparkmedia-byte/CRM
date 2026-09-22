@@ -78,6 +78,26 @@
       "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts",
       "reason": "same transaction as Calling terminal aggregate write; declared by YOKO-AI-CALLS-STAGE-5 recovery manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-channel-message-adapter.ts",
+      "reason": "same transaction as the inbound Message create; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-external-message-adapter.ts",
+      "reason": "same transaction as the inbound Message upsert; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts",
+      "reason": "same transaction as the inbound Message create; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts",
+      "reason": "per-device delivery events appended by the Messaging fan-out consumer; flow messaging.mobile-push-delivery in the CRM-ARCH-005 outbox manifest"
     }
   ],
   "manifest_amendments": [
@@ -140,7 +160,9 @@
     "architecture/isolation/calling/ai-agent-config-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/channel-delivery-runtime-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/compensation-pilot-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/compensation-pilot-v1/module-manifest-amendments.json",
+    "architecture/isolation/identity-access/mobile-push-registration-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",

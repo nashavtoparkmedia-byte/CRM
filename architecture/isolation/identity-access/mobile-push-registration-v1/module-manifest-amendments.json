@@ -1,0 +1,20 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "MOBILE-PUSH-V1-P1",
+  "amendments": [
+    {
+      "context": "identity_access",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:MobileDeviceRegistration"
+      ],
+      "add_commands": [
+        "RegisterMobilePushDeviceCommand.v1"
+      ],
+      "add_public_surface": [
+        "MobilePushDeviceRegistration.v1"
+      ],
+      "reason": "Identity Access owns the mobile push device registration because it owns the mobile session the registration is bound to: one stable row per app install keyed by the verified session's device id, with the provider token, a one-way session binding and the credential key it was issued under. It is pending source state, intentionally not asserted as deployed production inventory, and grants no authorization to anyone."
+    }
+  ]
+}

@@ -8,8 +8,7 @@ import type {
     MobilePushEligibleDeviceV1,
     MobilePushTargetResolutionV1,
 } from '../../../../contracts/identity-access/v1'
-import type { FcmTransportConfigProblemV1 } from './mobile-push-config'
-import type { MobilePushTransportV1 } from './fcm-http-v1-transport'
+import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from './mobile-push-ports'
 
 /**
  * Mobile Push v1 outbox consumers: intent → per-device deliveries → provider.
@@ -56,7 +55,7 @@ export interface MobilePushDispatchDependenciesV1 {
     resolveTarget(registrationId: string, sessionBindingId: string): Promise<MobilePushTargetResolutionV1>
     markTokenRejected(registrationId: string, rejectedToken: string): Promise<{ result: 'cleared' | 'already_rotated' }>
     revokeSenderMismatch(registrationId: string, rejectedToken: string): Promise<{ result: 'revoked' | 'already_rotated' }>
-    transport(): { ok: true, transport: MobilePushTransportV1 } | { ok: false, problem: FcmTransportConfigProblemV1 }
+    transport(): { ok: true, transport: MobilePushTransportV1 } | { ok: false, problem: MobilePushTransportProblemV1 }
     log(level: 'info' | 'warn' | 'error', event: string, context: Record<string, string | number>): void
 }
 

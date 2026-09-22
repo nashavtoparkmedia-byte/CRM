@@ -6,7 +6,7 @@ import {
     type MobilePushDeliveryRequestedEventV1,
 } from '../../../../contracts/messaging/v1'
 import type { MobilePushTargetResolutionV1 } from '../../../../contracts/identity-access/v1'
-import type { MobilePushSendOutcomeV1 } from './fcm-http-v1-transport'
+import type { MobilePushSendOutcomeV1 } from './mobile-push-ports'
 import {
     createMobilePushDispatchV1,
     mobilePushDataPayloadV1,

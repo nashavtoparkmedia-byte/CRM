@@ -1,5 +1,6 @@
 import { createSign } from 'node:crypto'
 import type { FcmTransportConfigV1 } from './mobile-push-config'
+import type { MobilePushSendOutcomeV1, MobilePushTransportV1 } from './mobile-push-ports'
 
 /**
  * Mobile Push v1 — the only code that speaks FCM HTTP v1.
@@ -15,22 +16,7 @@ import type { FcmTransportConfigV1 } from './mobile-push-config'
  * retire a working registration.
  */
 
-export type MobilePushSendOutcomeV1 =
-    | { kind: 'delivered' }
-    | { kind: 'retryable', code: string }
-    | { kind: 'token_unregistered' }
-    | { kind: 'token_invalid' }
-    | { kind: 'sender_mismatch' }
-    | { kind: 'terminal', code: string }
-
-export interface MobilePushMessageV1 {
-    token: string
-    data: Readonly<Record<string, string>>
-}
-
-export interface MobilePushTransportV1 {
-    send(message: MobilePushMessageV1): Promise<MobilePushSendOutcomeV1>
-}
+export type { MobilePushMessageV1, MobilePushSendOutcomeV1, MobilePushTransportV1 } from './mobile-push-ports'
 
 export interface FcmTransportDependenciesV1 {
     fetch: typeof fetch
