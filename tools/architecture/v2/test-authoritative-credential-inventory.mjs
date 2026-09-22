@@ -152,7 +152,7 @@ const reviewedCrossDomainAttempt = {
     approved_architecture_path: 'owner capability',
   }],
 }
-const fields = { records: Array.from({ length: 14 }, (_, index) => ({ id: index })) }
+const fields = { records: Array.from({ length: 15 }, (_, index) => ({ id: index })) }
 const inventory = {
   schema: 'yoko.crm.whole-repository-credential-database-access.v2',
   summary: {
@@ -879,7 +879,7 @@ const runtimeContext = {
 }
 assert.equal(
   verifyRuntimeBoundaryReviews(runtimeBoundaryReview, runtimeBoundaryReview.records, runtimeContext).runtime_boundary_accesses,
-  7,
+  8,
 )
 const runtimeFixtureFiles = [...new Set(runtimeBoundaryReview.runtime_boundary_reviews.flatMap((review) => [
   ...review.source_modules.map((module) => module.path),

@@ -809,7 +809,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   productionSecretRecords.filter((record) => record.classification === 'APPROVED_RUNTIME_PROVIDER_CAPABILITY').map((record) => record.review_id).sort(),
-  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075'],
+  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075', 'production-secret-read-076'],
   'runtime provider secret capability classification denominator drift',
 )
 assert.equal(productionSecretReview.summary?.application_runtime, currentProductionSecretReads.filter((entry) => entry.surface.lifecycle === 'APPLICATION_RUNTIME').length, 'production application secret-read summary drift')
