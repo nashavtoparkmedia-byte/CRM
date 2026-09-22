@@ -276,8 +276,11 @@ export const legacyPrismaCompensationManagerStoreV1: CompensationManagerPortV1 =
                     COALESCE(settlements."settlementSum", 0) AS "settlementSum",
                     COALESCE(settlements."settlementCount", 0) AS "settlementCount"
              FROM "CompensationBudgetPeriod" period
-             LEFT JOIN LATERAL (
-                SELECT
+             -- One row per application of the month, stated in exactly the words
+             -- the list filters on: the latest live payout right and the open
+             -- reconciliation task on that right, as in the list projection.
+             LEFT JOIN (
+                SELECT app."budgetPeriodId",
                     SUM(app."amountKopecks") FILTER (WHERE app."status" = 'PENDING') AS "pendingSum",
                     SUM(app."amountKopecks") FILTER (WHERE app."status" = 'PENDING' AND live."state" = 'active') AS "awaitingSum",
                     COUNT(*) FILTER (WHERE ${STATE_EXPRESSION} = 'new') AS "newCount",
@@ -286,24 +289,27 @@ export const legacyPrismaCompensationManagerStoreV1: CompensationManagerPortV1 =
                     COUNT(*) FILTER (WHERE ${STATE_EXPRESSION} = 'paid') AS "paidCount",
                     COUNT(*) FILTER (WHERE ${STATE_EXPRESSION} = 'rejected') AS "rejectedCount"
                 FROM "CompensationApplication" app
-                LEFT JOIN LATERAL (
-                    SELECT pa."state" FROM "CompensationPayoutAuthorization" pa
-                    WHERE pa."applicationId" = app."id" AND pa."state" IN ('active','unknown_outcome')
-                    ORDER BY pa."openedAt" DESC LIMIT 1
-                ) live ON true
-                LEFT JOIN LATERAL (
-                    SELECT rt."id" FROM "CompensationReconciliationTask" rt
-                    WHERE rt."payoutAuthorizationId" IN (
-                        SELECT pa2."id" FROM "CompensationPayoutAuthorization" pa2
-                        WHERE pa2."applicationId" = app."id"
-                    ) AND rt."state" = 'open' LIMIT 1
-                ) recon ON true
-                WHERE app."budgetPeriodId" = period."id"
-             ) applications ON true
-             LEFT JOIN LATERAL (
-                SELECT SUM(s."amountKopecks") AS "settlementSum", COUNT(*) AS "settlementCount"
-                FROM "CompensationSettlement" s WHERE s."budgetPeriodId" = period."id"
-             ) settlements ON true
+                JOIN "CompensationBudgetPeriod" app_period ON app_period."id" = app."budgetPeriodId"
+                LEFT JOIN (
+                    SELECT DISTINCT ON (pa."applicationId") pa."applicationId", pa."id", pa."state"
+                    FROM "CompensationPayoutAuthorization" pa
+                    WHERE pa."state" IN ('active','unknown_outcome')
+                    ORDER BY pa."applicationId", pa."openedAt" DESC
+                ) live ON live."applicationId" = app."id"
+                LEFT JOIN (
+                    SELECT DISTINCT ON (rt."payoutAuthorizationId") rt."payoutAuthorizationId", rt."id"
+                    FROM "CompensationReconciliationTask" rt
+                    WHERE rt."state" = 'open'
+                    ORDER BY rt."payoutAuthorizationId", rt."openedAt" DESC
+                ) recon ON recon."payoutAuthorizationId" = live."id"
+                WHERE app_period."periodKey" = $1
+                GROUP BY app."budgetPeriodId"
+             ) applications ON applications."budgetPeriodId" = period."id"
+             LEFT JOIN (
+                SELECT s."budgetPeriodId", SUM(s."amountKopecks") AS "settlementSum", COUNT(*) AS "settlementCount"
+                FROM "CompensationSettlement" s
+                GROUP BY s."budgetPeriodId"
+             ) settlements ON settlements."budgetPeriodId" = period."id"
              WHERE period."periodKey" = $1`,
             periodKey,
         )
