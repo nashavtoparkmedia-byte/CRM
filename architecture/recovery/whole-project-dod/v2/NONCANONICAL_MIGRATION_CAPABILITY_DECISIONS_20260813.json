@@ -236,10 +236,10 @@
       "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
       "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
       "expected_site_signatures": [
-        "40d48e4d213a09cc808a1e9513f4d9ced0cd53b73564ac4345c6b8761dc8436b",
-        "7a18a9495bdb0cefe45fff4f0630989babeffa6e9928320d9a83892e51bf8f45",
-        "cedabca18afe37d142beb6d932489afc1a06898013d0d3e568ef8c357004ac83",
-        "e44f243c99c4631a5782fffbbb7b2d7d83883eb6e41c1fe1d8ba6548fd99b01c"
+        "0164d67ab39198efc668a68c54559333b0a09fcba9f8c4dc5791b08871ffee07",
+        "858f215dca43aba4e982bc67ea6aa64e91658dcd39d12c971d8f958f54ed9721",
+        "cf294a3df6a703e9148344dcc7d15e13ca23a52474ad51b86096ae552e12d4c2",
+        "e749d0c5ae4f6516d87c1304ee82855b047531beab4ad88bf679394d7d0dd2a6"
       ]
     },
     {
@@ -2839,7 +2839,7 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "40d48e4d213a09cc808a1e9513f4d9ced0cd53b73564ac4345c6b8761dc8436b",
+      "site_signature": "858f215dca43aba4e982bc67ea6aa64e91658dcd39d12c971d8f958f54ed9721",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
       "source_sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4",
       "line": 15,
@@ -2857,7 +2857,7 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "e44f243c99c4631a5782fffbbb7b2d7d83883eb6e41c1fe1d8ba6548fd99b01c",
+      "site_signature": "0164d67ab39198efc668a68c54559333b0a09fcba9f8c4dc5791b08871ffee07",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
       "source_sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4",
       "line": 36,
@@ -2875,7 +2875,7 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "7a18a9495bdb0cefe45fff4f0630989babeffa6e9928320d9a83892e51bf8f45",
+      "site_signature": "e749d0c5ae4f6516d87c1304ee82855b047531beab4ad88bf679394d7d0dd2a6",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
       "source_sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4",
       "line": 40,
@@ -2893,7 +2893,7 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "cedabca18afe37d142beb6d932489afc1a06898013d0d3e568ef8c357004ac83",
+      "site_signature": "cf294a3df6a703e9148344dcc7d15e13ca23a52474ad51b86096ae552e12d4c2",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
       "source_sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4",
       "line": 43,
