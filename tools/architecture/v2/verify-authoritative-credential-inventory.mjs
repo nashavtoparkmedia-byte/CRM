@@ -611,9 +611,11 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
     resolved_semantics: 'EXACT_SOURCE_BOUND_RUNTIME_PROVIDER_SECRET_USE_AT_REVIEWED_NON_PUBLIC_BOUNDARIES',
     secret_bearing_runtime_flow: true,
     source_modules: [
+      { path: 'gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', exported_symbols: ['resolveMobilePushTargetV1'] },
       { path: 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', exported_symbols: ['resolveMobilePushTargetV1'] },
     ],
     consumer_edges: [
+      runtimeEdge('gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'OWNER_PUBLIC_CAPABILITY_REEXPORT', 'resolveMobilePushTargetV1', 'export'),
       runtimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },

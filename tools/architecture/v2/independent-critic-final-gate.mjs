@@ -372,8 +372,9 @@ const criticRuntimeBoundaryPolicies = [
     review_id: 'identity-access-mobile-push-target-runtime-provider-v1',
     access_review_ids: ['production-secret-read-076'],
     classification: 'APPROVED_RUNTIME_PROVIDER_CAPABILITY', secret_bearing_runtime_flow: true,
-    modules: { 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts': ['resolveMobilePushTargetV1'] },
+    modules: { 'gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts': ['resolveMobilePushTargetV1'], 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts': ['resolveMobilePushTargetV1'] },
     edges: [
+      criticRuntimeEdge('gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'OWNER_PUBLIC_CAPABILITY_REEXPORT', 'resolveMobilePushTargetV1', 'export'),
       criticRuntimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },
