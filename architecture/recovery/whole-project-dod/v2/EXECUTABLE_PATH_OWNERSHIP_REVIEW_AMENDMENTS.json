@@ -131,7 +131,7 @@
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository\u2019s own tracked-surface inventory over that commit\u2019s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
@@ -786,7 +786,7 @@
           "path": "gravity-mvp/src/app/messages/message-retry-actions.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface, the Messaging server action behind «Повторить» on a persisted failed message, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "A new tracked executable surface, the Messaging server action behind \u00ab\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c\u00bb on a persisted failed message, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
           "path": "gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.test.ts",
@@ -1026,6 +1026,234 @@
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
           "review_rationale": "A new Vitest suite of the operator command's argument handling, under gravity-mvp/scripts, which the gravity_scripts exclusion covers by prefix with no exact inventory. It therefore receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "mobile-push-v1-p1-main-9f87c947-20260922",
+      "reviewed_at": "2026-09-22T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_V1_P1_EXECUTOR_REVIEW_20260922",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ARCHITECT_MOBILE_PUSH_V1_P1_SERVER_FOUNDATION_AUTHORIZED_20260922",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain whose tail is Mobile Text Reply v1 (amendment mobile-text-reply-v1-main-bb4da9bb-20260919), as landed on main 9f87c947, and reviews only the thirty-two surfaces Mobile Push v1 P1 adds."
+      },
+      "reason": "Records the thirty-two tracked executable surfaces Mobile Push v1 P1 adds: thirteen under identity_access-owned paths (the device registration handler, its PostgreSQL store, the session-bound registration seam and application operations, the single send-time token capability and its application operation, the versioned registration contract, the POST /api/mobile/push-registration route now owned through gravity-mvp/src/app/api/mobile, and five tests), seventeen under Messaging-owned paths (the two outbox event contracts, the product recency policy, the in-transaction intent helper, dispatch, its runtime and application seam, the FCM HTTP v1 transport, its port and configuration, the fan-out writer, the public outbox consumers and five tests), the FCM stand-in under the platform_shell-owned android path, and the MobileDeviceRegistration migration under the gravity_schema governed exclusion. It gives the migration and the stand-in their own lifecycle registry entries, which moves the tracked inventory digest without moving any reviewed assignment. It adds no assignment, exact-inventory transition, functional owner or governed exclusion change and carries no source hash rebind. The current triple is the repository's own derivation over the candidate tree: 2,564 + 32 = 2,596 surfaces, context-owned 1,348 -> 1,379, governed exclusions 1,216 -> 1,217.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2564,
+        "tracked_inventory_sha256": "cfa6e9b52dd912aa608be0b0bff216a5c17525296223cbac1f0fb1a0aba955df",
+        "coverage_sha256": "cecc680d7adf2b9be20221306cdaa61a6ab21645dd3635c5fe2be4cf5c65f935"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2596,
+        "tracked_inventory_sha256": "29c5a0fe6d8fdc2521b90e378d905e88c15b9f90ad3c437ba0ecb28788a1c00d",
+        "coverage_sha256": "dfd6af0d76cf70ede7f84e420cf85ccd315c8aba3816c659ec00e84c2a07a359"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "android/tools/acceptance-fcm-transport.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under android, which the platform_shell bounded context owns (android in architecture/contexts/v1/manifests/platform_shell.json owned_paths). It is the loopback FCM and OAuth stand-in the Mobile Push server tests start; its lifecycle comes from its TEST/TEST_SUPPORT/NONE entry in the lifecycle surface registry, and context ownership comes from the manifest, so it receives no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle comes from the reviewed lifecycle surface registry entry and the reviewed noncanonical migration decisions."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/mobile/push-registration/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the identity_access bounded context owns (gravity-mvp/src/app/api/mobile in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/mobile/push-registration/route.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/app/api/mobile in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/identity-access/v1/mobile-push-registration.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/contracts/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/inbound-message-notification-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/contracts/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/mobile-push-delivery-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/contracts/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-push-registration-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code (the application operation behind the single reviewed runtime provider capability that resolves a device's provider token at send time), under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-device-registration-migration.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-registration-handler.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-registration-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-registration.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-session-fingerprints.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-session.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code (the single reviewed runtime provider capability that resolves a device's provider token at send time), under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/prisma-mobile-device-registration-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/mobile-push-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/inbound-notification-intent.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/inbound-notification-policy.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/inbound-notification-policy.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-config.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-contracts.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-dispatch.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-dispatch.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-ports.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/mobile-push-outbox-consumers.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         }
       ],
       "invariants": {

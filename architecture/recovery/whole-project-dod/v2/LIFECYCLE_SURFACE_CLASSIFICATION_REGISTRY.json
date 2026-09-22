@@ -77,6 +77,16 @@
       "classification_artifact": "docs/mobile/ANDROID_SHELL_STAGE_1.md"
     },
     {
+      "path": "android/tools/acceptance-fcm-transport.mjs",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "functional_owner": "platform_engineering",
+      "rationale": "Loopback-only stand-in for Firebase Cloud Messaging HTTP v1 and Google's OAuth token endpoint, used only to verify the CRM's real FCM adapter without any real provider. In serve mode it listens on 127.0.0.1, verifies the RS256 service-account assertion against a public key generated per run, answers with an access token of its own, accepts only the exact data-only send shape a CRM push carries, answers scripted provider outcomes for synthetic tokens, and records every request for the test that started it. It uses only node:http, node:fs and node:crypto, holds no credential of any real service, opens no database connection, contacts nothing and is never part of the CRM build or any deployment; the CRM refuses to point at it in production. Lifecycle classification grants no database, credential, provider or deployment authority.",
+      "classification_artifact": "architecture/events/v1/EVENT-SELECTION.md",
+      "source_sha256": "21031b6fffc670d960e87f1e959255cd8d1b84d97ea8944f30d376ce66d24191"
+    },
+    {
       "path": "android/tools/acceptance-max-transport.mjs",
       "lifecycle": "TEST",
       "disposition": "TEST_SUPPORT",
@@ -2241,6 +2251,16 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
       "source_sha256": "ed98c2b538c007aa6adaf81b5d43e6e2d82b298645dcb03f3301a5e41fadb44c"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "identity_access",
+      "source_sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4"
     },
     {
       "path": "gravity-mvp/query_driver.sql",

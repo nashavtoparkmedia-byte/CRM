@@ -9,13 +9,14 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "442d1acf7b4ea69917e8d39ec2a999d88b8bd4009ff79f1aa2652eb43f3ec210",
-    "size": 164505,
+    "sha256": "51c8f91d0f38a677a19d350538c8cfde093da91429448f86a033e6058fbd01b2",
+    "size": 166240,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
-    "fleet_operations"
+    "fleet_operations",
+    "identity_access"
   ],
   "migrations": [
     {
@@ -143,6 +144,23 @@
             "column": "sourceConnectionId"
           }
         ],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260922120000_add_mobile_device_registration",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+      "sha256": "f3bfb8664e934cbef7fd6c05ff1ca739e48390c848f730362ce5d20f1c8bd6a4",
+      "size": 2199,
+      "owner_context": "identity_access",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/identity-access/public/v1/mobile-device-registration-migration.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "MobileDeviceRegistration"
+        ],
+        "columns": [],
         "forbidden_indexes": []
       }
     }
