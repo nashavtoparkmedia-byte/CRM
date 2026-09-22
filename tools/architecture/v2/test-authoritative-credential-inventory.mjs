@@ -1040,7 +1040,7 @@ const acceptanceFixtureRecord = {
 }
 const acceptanceCredentialEntities = [
   'Account', 'AiAgentConfig', 'AiProviderSetting', 'ApiConnection', 'Bot', 'MaxConnection',
-  'MessagingConnection', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
+  'MessagingConnection', 'MobileDeviceRegistration', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
   'avito_app_settings', 'avito_auth_sessions', 'avito_auth_users', 'cookies',
 ]
 const acceptanceFields = { records: acceptanceCredentialEntities.map((entity) => ({ entity, sensitive_fields: ['token'] })) }
@@ -1462,4 +1462,4 @@ assert.throws(
   'controlled schema operation still refuses a non-migration surface',
 )
 
-process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 44 disposable acceptance database properties (40 fail-closed); 2 synthetic production-secret paths; 7 exact runtime-boundary accesses)\n')
+process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 44 disposable acceptance database properties (40 fail-closed); 2 synthetic production-secret paths; 8 exact runtime-boundary accesses)\n')
