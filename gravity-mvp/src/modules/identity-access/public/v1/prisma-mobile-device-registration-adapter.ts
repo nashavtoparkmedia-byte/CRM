@@ -30,40 +30,6 @@ import type {
 const ELIGIBILITY_LIMIT = 1000
 const MAX_INSERT_RACE_ROUNDS = 3
 
-/** Client of either the pool or an open transaction; both write the same row shape. */
-type RegistrationWriter = Pick<typeof prisma, 'mobileDeviceRegistration'>
-
-/**
- * First registration for a device. Returns null on a token conflict and
- * undefined when another transaction inserted this device first, which the
- * caller resolves by re-running the conditional bind against that row.
- */
-async function insertRegistration(
-    writer: RegistrationWriter,
-    write: MobilePushRegistrationWriteV1,
-): Promise<{ id: string } | null | undefined> {
-    try {
-        return await writer.mobileDeviceRegistration.create({
-            data: {
-                deviceId: write.deviceId,
-                fcmToken: write.fcmToken,
-                credentialSubject: write.credentialSubject,
-                runtimeOperatorId: write.runtimeOperatorId,
-                sessionBindingId: write.sessionBindingId,
-                sessionIssuedAt: write.sessionIssuedAt,
-                sessionExpiresAt: write.sessionExpiresAt,
-                sessionRevocationEpoch: write.sessionRevocationEpoch,
-                lastSeenAt: write.now,
-            },
-            select: { id: true },
-        })
-    } catch (error) {
-        if (isUniqueViolationOn(error, 'fcmToken')) return null
-        if (isUniqueViolationOn(error, 'deviceId')) return undefined
-        throw error
-    }
-}
-
 function isUniqueViolationOn(error: unknown, field: 'fcmToken' | 'deviceId'): boolean {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') return false
     const target = (error.meta as { target?: unknown } | undefined)?.target
@@ -128,9 +94,29 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 continue
             }
 
-            const created = await insertRegistration(prisma, write)
-            if (created) return { outcome: 'bound', registrationId: created.id }
-            if (created === null) return { outcome: 'token_conflict' }
+            try {
+                // First registration for this device, written field by field.
+                const created = await prisma.mobileDeviceRegistration.create({
+                    data: {
+                    deviceId: write.deviceId,
+                    fcmToken: write.fcmToken,
+                    credentialSubject: write.credentialSubject,
+                    runtimeOperatorId: write.runtimeOperatorId,
+                    sessionBindingId: write.sessionBindingId,
+                    sessionIssuedAt: write.sessionIssuedAt,
+                    sessionExpiresAt: write.sessionExpiresAt,
+                    sessionRevocationEpoch: write.sessionRevocationEpoch,
+                    lastSeenAt: write.now,
+                    },
+                    select: { id: true },
+                })
+                return { outcome: 'bound', registrationId: created.id }
+            } catch (error) {
+                if (isUniqueViolationOn(error, 'fcmToken')) return { outcome: 'token_conflict' }
+                // Another request inserted this device first: re-run the
+                // conditional bind against the row it committed.
+                if (!isUniqueViolationOn(error, 'deviceId')) throw error
+            }
         }
         throw new Error('MOBILE_PUSH_REGISTRATION_BIND_UNRESOLVED')
     },
@@ -180,9 +166,21 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                         ? { outcome: 'session_revoked' as const }
                         : { outcome: 'holder_not_reclaimable' as const }
                 }
-                const created = await insertRegistration(transaction, write)
-                if (created) return { outcome: 'bound' as const, registrationId: created.id }
-                return { outcome: 'token_conflict' as const }
+                const created = await transaction.mobileDeviceRegistration.create({
+                    data: {
+                        deviceId: write.deviceId,
+                        fcmToken: write.fcmToken,
+                        credentialSubject: write.credentialSubject,
+                        runtimeOperatorId: write.runtimeOperatorId,
+                        sessionBindingId: write.sessionBindingId,
+                        sessionIssuedAt: write.sessionIssuedAt,
+                        sessionExpiresAt: write.sessionExpiresAt,
+                        sessionRevocationEpoch: write.sessionRevocationEpoch,
+                        lastSeenAt: write.now,
+                    },
+                    select: { id: true },
+                })
+                return { outcome: 'bound' as const, registrationId: created.id }
             })
         } catch (error) {
             // Another device bound the token between the release and our bind:
