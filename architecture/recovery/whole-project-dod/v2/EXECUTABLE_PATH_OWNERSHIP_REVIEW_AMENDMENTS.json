@@ -337,7 +337,7 @@
         {
           "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
           "previous_source_sha256": "67fe16a55a8b9e37cb4cc20493e4a2b84738f45659a33a839e8d0cae17f5fd81",
-          "current_source_sha256": "1ab0afc72ac6c75b41864f240fa75ab227416f0fee05b473e874723a88d6831d",
+          "current_source_sha256": "f8be868773cc0a475f05c1469d1c8a5e6f08ff3e2c9cf82c1776794b9f84fd8d",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
           "review_rationale": "The DOM-fallback repair changed only the bytes of this already assigned MAX webhook route: it binds an attested, sender-less DOM-fallback text to the proven peer of its exact private conversation. Lifecycle APPLICATION_RUNTIME, owner legacy_gravity_runtime and exclusion gravity_runtime_remainder are unchanged."
         }
