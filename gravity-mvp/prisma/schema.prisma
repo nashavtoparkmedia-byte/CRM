@@ -91,6 +91,60 @@ model TelegramConnection {
   name          String?
 }
 
+/// YOKO-owned Telegram provider account (M2A2-TG1). `accountId` is an opaque
+/// internal id; the provider identity is `providerUserId`, the exact numeric id
+/// returned by a live `getMe()`. A bot is a Telegram user, so bot and personal
+/// ids share one id space and `providerUserId` is unique globally rather than
+/// per kind. Rows are never updated except by an explicit lifecycle transition,
+/// and never removed. Inert: nothing in the runtime reads or writes this yet.
+model TelegramAccount {
+  accountId          String                     @id @db.VarChar(64)
+  accountKind        String                     @db.VarChar(32)
+  providerUserId     String                     @unique @db.VarChar(64)
+  lifecycle          String                     @db.VarChar(32)
+  lifecycleVersion   Int
+  lifecycleChangedAt DateTime                   @default(now()) @db.Timestamptz(3)
+  lifecycleChangedBy String                     @db.VarChar(128)
+  lifecycleReason    String                     @db.VarChar(256)
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(3)
+  bindings           TelegramTransportBinding[]
+  attestations       TelegramTransportBinding[] @relation("TelegramBindingAttestedPrincipal")
+
+  @@unique([accountId, providerUserId])
+}
+
+/// Attested association of one runtime transport generation with one Telegram
+/// provider account. `transportRef` is a locator (an MTProto connection row id
+/// or a bot runtime reference) with no foreign key, so existing delete paths are
+/// unchanged. Rows are history: replacing a transport opens a new generation and
+/// never re-points an old one. `attestedProviderUserId` is bound by a composite
+/// foreign key to the principal its own account owns, so a binding can never
+/// attest an identity the account does not hold. `openTransportKey` carries the
+/// one-open-binding-per-transport rule as a plain unique constraint: it is set
+/// while the binding is open and NULL once closed. Readiness is derived from
+/// `attestedUntil` and is never stored.
+model TelegramTransportBinding {
+  bindingId              String           @id @db.VarChar(64)
+  accountId              String           @db.VarChar(64)
+  transportKind          String           @db.VarChar(32)
+  transportRef           String           @db.VarChar(128)
+  transportGeneration    BigInt
+  trustState             String           @db.VarChar(16)
+  attestedProviderUserId String?          @db.VarChar(64)
+  attestingInstanceId    String           @db.VarChar(128)
+  lastAttestedAt         DateTime?        @db.Timestamptz(3)
+  attestedUntil          DateTime?        @db.Timestamptz(3)
+  openTransportKey       String?          @unique @db.VarChar(192)
+  openedAt               DateTime         @default(now()) @db.Timestamptz(3)
+  closedAt               DateTime?        @db.Timestamptz(3)
+  closeReason            String?          @db.VarChar(32)
+  account                TelegramAccount  @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedPrincipal      TelegramAccount? @relation("TelegramBindingAttestedPrincipal", fields: [accountId, attestedProviderUserId], references: [accountId, providerUserId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([transportKind, transportRef, transportGeneration])
+  @@index([accountId])
+}
+
 model MaxConnection {
   id        String   @id
   name      String?
