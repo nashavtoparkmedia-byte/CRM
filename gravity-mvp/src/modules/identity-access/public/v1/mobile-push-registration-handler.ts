@@ -37,14 +37,10 @@ export interface MobilePushRegistrationWriteV1 {
     now: Date
 }
 
-export interface MobilePushRegistrationViewV1 {
+/** What send-time resolution may know before the token: no token, no credential facts. */
+export interface MobilePushRegistrationStatusV1 {
     id: string
-    hasToken: boolean
     sessionBindingId: string
-    sessionExpiresAt: Date
-    sessionRevocationEpoch: string
-    credentialSubject: string
-    credentialKeyId: string
     revoked: boolean
 }
 
@@ -73,23 +69,15 @@ export interface MobilePushRegistrationPortV1 {
     tokenIsBound(token: string): Promise<boolean>
     revokeDevice(deviceId: string, reason: 'logout', now: Date): Promise<number>
     listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]>
-    view(registrationId: string): Promise<MobilePushRegistrationViewV1 | null>
+    status(registrationId: string): Promise<MobilePushRegistrationStatusV1 | null>
+    /** Eligibility evaluated by the database against the facts; no stored credential fact is read back. */
+    isEligible(registrationId: string, facts: MobilePushEligibilityFactsV1): Promise<boolean>
+    /** The one read of the provider token, for the delivery being sent now. */
     currentToken(registrationId: string): Promise<string | null>
     /** CAS: clear the token only if it is still exactly the one the provider rejected. */
     clearTokenIfCurrent(registrationId: string, rejectedToken: string): Promise<boolean>
     /** CAS: revoke only if the registration still carries the rejected token. */
     revokeIfTokenCurrent(registrationId: string, rejectedToken: string, reason: 'sender_mismatch', now: Date): Promise<boolean>
-}
-
-export function isEligibleMobilePushRegistrationV1(
-    view: Pick<MobilePushRegistrationViewV1, 'revoked' | 'sessionExpiresAt' | 'sessionRevocationEpoch' | 'credentialSubject' | 'credentialKeyId'>,
-    facts: MobilePushEligibilityFactsV1,
-): boolean {
-    return !view.revoked
-        && view.sessionExpiresAt.getTime() > facts.now.getTime()
-        && view.sessionRevocationEpoch === facts.revocationEpoch
-        && view.credentialSubject === facts.credentialSubject
-        && view.credentialKeyId === facts.credentialKeyId
 }
 
 const MAX_BIND_ROUNDS = 3
@@ -148,12 +136,11 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
             sessionBindingId: string,
             facts: MobilePushEligibilityFactsV1,
         ): Promise<MobilePushTargetResolutionV1> {
-            const view = await port.view(registrationId)
-            if (!view) return { kind: 'skip', reason: 'not_found' }
-            if (view.revoked) return { kind: 'skip', reason: 'revoked' }
-            if (view.sessionBindingId !== sessionBindingId) return { kind: 'skip', reason: 'stale_session' }
-            if (!isEligibleMobilePushRegistrationV1(view, facts)) return { kind: 'skip', reason: 'ineligible' }
-            if (!view.hasToken) return { kind: 'await_token' }
+            const status = await port.status(registrationId)
+            if (!status) return { kind: 'skip', reason: 'not_found' }
+            if (status.revoked) return { kind: 'skip', reason: 'revoked' }
+            if (status.sessionBindingId !== sessionBindingId) return { kind: 'skip', reason: 'stale_session' }
+            if (!(await port.isEligible(registrationId, facts))) return { kind: 'skip', reason: 'ineligible' }
             const token = await port.currentToken(registrationId)
             return token ? { kind: 'send', token } : { kind: 'await_token' }
         },

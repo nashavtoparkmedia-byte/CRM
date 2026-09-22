@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
     createMobilePushRegistrationHandlerV1,
-    isEligibleMobilePushRegistrationV1,
     type MobilePushEligibilityFactsV1,
     type MobilePushRegistrationPortV1,
     type MobilePushRegistrationWriteV1,
@@ -30,7 +29,8 @@ function port(overrides: Partial<MobilePushRegistrationPortV1> = {}): MobilePush
         tokenIsBound: vi.fn(async () => true),
         revokeDevice: vi.fn(async () => 1),
         listEligible: vi.fn(async () => []),
-        view: vi.fn(async () => null),
+        status: vi.fn(async () => null),
+        isEligible: vi.fn(async () => true),
         currentToken: vi.fn(async () => null),
         clearTokenIfCurrent: vi.fn(async () => true),
         revokeIfTokenCurrent: vi.fn(async () => true),
@@ -81,20 +81,26 @@ describe('Mobile Push v1 registration rules', () => {
         expect(p.bind).toHaveBeenCalledTimes(3)
     })
 
-    it('decides eligibility on server facts only', () => {
-        const live = { revoked: false, sessionExpiresAt: WRITE.sessionExpiresAt, sessionRevocationEpoch: '0', credentialSubject: 'mobile', credentialKeyId: '0123456789abcdef' }
-        expect(isEligibleMobilePushRegistrationV1(live, FACTS)).toBe(true)
-        expect(isEligibleMobilePushRegistrationV1({ ...live, revoked: true }, FACTS)).toBe(false)
-        expect(isEligibleMobilePushRegistrationV1({ ...live, sessionExpiresAt: NOW }, FACTS)).toBe(false)
-        expect(isEligibleMobilePushRegistrationV1({ ...live, sessionRevocationEpoch: '1' }, FACTS)).toBe(false)
-        expect(isEligibleMobilePushRegistrationV1({ ...live, credentialSubject: 'other' }, FACTS)).toBe(false)
-        expect(isEligibleMobilePushRegistrationV1({ ...live, credentialKeyId: 'ffffffffffffffff' }, FACTS)).toBe(false)
+    it('resolves in order: missing, revoked, stale session, ineligible, then the one token read', async () => {
+        const currentToken = vi.fn(async () => 'handler-token_0123456789:ABCDEFGHIJ')
+        const status = { id: 'reg_1', sessionBindingId: 'a'.repeat(64), revoked: false }
+        const cases: Array<[Partial<MobilePushRegistrationPortV1>, unknown]> = [
+            [{ status: vi.fn(async () => null) }, { kind: 'skip', reason: 'not_found' }],
+            [{ status: vi.fn(async () => ({ ...status, revoked: true })) }, { kind: 'skip', reason: 'revoked' }],
+            [{ status: vi.fn(async () => ({ ...status, sessionBindingId: 'b'.repeat(64) })) }, { kind: 'skip', reason: 'stale_session' }],
+            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => false) }, { kind: 'skip', reason: 'ineligible' }],
+            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => true), currentToken: vi.fn(async () => null) }, { kind: 'await_token' }],
+            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => true), currentToken }, { kind: 'send', token: 'handler-token_0123456789:ABCDEFGHIJ' }],
+        ]
+        for (const [overrides, expected] of cases) {
+            expect(await createMobilePushRegistrationHandlerV1(port(overrides)).resolveTarget('reg_1', 'a'.repeat(64), FACTS)).toEqual(expected)
+        }
     })
 
     it('resolves a stale session binding as a skip, before any token is read', async () => {
         const currentToken = vi.fn(async () => 'must-not-be-read')
         const p = port({
-            view: vi.fn(async () => ({ id: 'reg_1', hasToken: true, sessionBindingId: 'b'.repeat(64), sessionExpiresAt: WRITE.sessionExpiresAt, sessionRevocationEpoch: '0', credentialSubject: 'mobile', credentialKeyId: '0123456789abcdef', revoked: false })),
+            status: vi.fn(async () => ({ id: 'reg_1', sessionBindingId: 'b'.repeat(64), revoked: false })),
             currentToken,
         })
         expect(await createMobilePushRegistrationHandlerV1(p).resolveTarget('reg_1', 'a'.repeat(64), FACTS)).toEqual({ kind: 'skip', reason: 'stale_session' })

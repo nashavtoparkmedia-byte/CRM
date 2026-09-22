@@ -1,7 +1,6 @@
 import type {
     MobilePushEligibleDeviceV1,
     MobilePushRegistrationResultV1,
-    MobilePushTargetResolutionV1,
 } from '../../../contracts/identity-access/v1'
 import {
     createMobilePushRegistrationHandlerV1,
@@ -26,7 +25,8 @@ import {
 
 const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
 
-function currentEligibilityFacts(now: Date): MobilePushEligibilityFactsV1 | null {
+/** The live server facts eligibility is judged against; null when the mobile lane is unprovisioned. */
+export function currentMobilePushEligibilityFactsV1(now: Date): MobilePushEligibilityFactsV1 | null {
     const credential = currentMobilePushCredentialFactsV1()
     if (!credential) return null
     return {
@@ -47,7 +47,7 @@ export async function registerVerifiedMobilePushDeviceV1(
     token: string,
 ): Promise<MobilePushRegistrationResultV1> {
     const now = new Date()
-    const facts = currentEligibilityFacts(now)
+    const facts = currentMobilePushEligibilityFactsV1(now)
     if (!facts) return { ok: false, code: 'MOBILE_SESSION_REQUIRED' }
     const result = await registrations.register({
         deviceId: session.principal.deviceId,
@@ -73,23 +73,10 @@ export async function revokeMobilePushDeviceForLogoutV1(deviceId: string): Promi
 
 /** Every registration that may receive push now: ids and session bindings, never tokens. */
 export async function listPushEligibleMobileDevicesV1(): Promise<MobilePushEligibleDeviceV1[]> {
-    const facts = currentEligibilityFacts(new Date())
+    const facts = currentMobilePushEligibilityFactsV1(new Date())
     if (!facts) return []
     const devices = await registrations.listEligible(facts)
     return devices.map((device) => ({ registrationId: device.registrationId, sessionBindingId: device.sessionBindingId }))
-}
-
-/** Send-time resolution of one delivery against the session binding it was fanned out under. */
-export async function resolveMobilePushTargetV1(
-    registrationId: string,
-    sessionBindingId: string,
-): Promise<MobilePushTargetResolutionV1> {
-    const facts = currentEligibilityFacts(new Date())
-    if (!facts) return { kind: 'skip', reason: 'ineligible' }
-    const resolution = await registrations.resolveTarget(registrationId, sessionBindingId, facts)
-    if (resolution.kind === 'send') return { kind: 'send', token: resolution.token }
-    if (resolution.kind === 'skip') return { kind: 'skip', reason: resolution.reason }
-    return { kind: 'await_token' }
 }
 
 /**

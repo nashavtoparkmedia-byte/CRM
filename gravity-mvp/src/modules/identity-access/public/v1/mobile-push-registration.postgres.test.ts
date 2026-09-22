@@ -29,11 +29,20 @@ import { POST } from '@/app/api/mobile/push-registration/route'
 import { issueMobileSession } from './mobile-session-credentials'
 import { clearMobileSessionV1 } from './mobile-session-auth'
 import {
+    currentMobilePushEligibilityFactsV1,
     listPushEligibleMobileDevicesV1,
     markMobilePushTokenRejectedV1,
-    resolveMobilePushTargetV1,
     revokeMobilePushSenderMismatchV1,
 } from '../../application/mobile-push-registration-operations'
+import { createMobilePushRegistrationHandlerV1 } from './mobile-push-registration-handler'
+import { prismaMobileDeviceRegistrationPortV1 } from './prisma-mobile-device-registration-adapter'
+
+// Send-time resolution is exercised through the owner's own handler and store.
+// The exported capability is reserved for its single reviewed consumer.
+async function resolveTarget(registrationId: string, sessionBindingId: string) {
+    return createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
+        .resolveTarget(registrationId, sessionBindingId, currentMobilePushEligibilityFactsV1(new Date())!)
+}
 
 const DATABASE = process.env.MOBILE_PUSH_TEST_DATABASE_URL
 const describeWithDatabase = DATABASE ? describe.sequential : describe.skip
@@ -245,11 +254,11 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const session = sessionFor(device('resolve'))
         await register(session, { token: token('resolve-1') })
         const row = await rowOf(device('resolve'))
-        expect(await resolveMobilePushTargetV1(row!.id, row!.sessionBindingId)).toEqual({ kind: 'send', token: token('resolve-1') })
+        expect(await resolveTarget(row!.id, row!.sessionBindingId)).toEqual({ kind: 'send', token: token('resolve-1') })
         await register(session, { token: token('resolve-2') })
-        expect(await resolveMobilePushTargetV1(row!.id, row!.sessionBindingId)).toEqual({ kind: 'send', token: token('resolve-2') })
-        expect(await resolveMobilePushTargetV1(row!.id, 'e'.repeat(64))).toEqual({ kind: 'skip', reason: 'stale_session' })
-        expect(await resolveMobilePushTargetV1('no-such-registration', row!.sessionBindingId)).toEqual({ kind: 'skip', reason: 'not_found' })
+        expect(await resolveTarget(row!.id, row!.sessionBindingId)).toEqual({ kind: 'send', token: token('resolve-2') })
+        expect(await resolveTarget(row!.id, 'e'.repeat(64))).toEqual({ kind: 'skip', reason: 'stale_session' })
+        expect(await resolveTarget('no-such-registration', row!.sessionBindingId)).toEqual({ kind: 'skip', reason: 'not_found' })
     })
 
     it('14. a rejected-token clear is compare-and-set: a rotated token survives', async () => {
@@ -261,7 +270,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect((await rowOf(device('cas')))!.fcmToken).toBe(token('cas-2'))
         expect(await markMobilePushTokenRejectedV1(row!.id, token('cas-2'))).toEqual({ result: 'cleared' })
         expect(await rowOf(device('cas'))).toMatchObject({ fcmToken: null, revokedAt: null })
-        expect(await resolveMobilePushTargetV1(row!.id, row!.sessionBindingId)).toEqual({ kind: 'await_token' })
+        expect(await resolveTarget(row!.id, row!.sessionBindingId)).toEqual({ kind: 'await_token' })
     })
 
     it('25. a sender mismatch revokes exactly the registration that carried the rejected token', async () => {

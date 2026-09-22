@@ -42,7 +42,6 @@ export type { MobileSessionPrincipalV1 } from './mobile-session-credentials'
 export {
     listPushEligibleMobileDevicesV1,
     markMobilePushTokenRejectedV1,
-    resolveMobilePushTargetV1,
     revokeMobilePushSenderMismatchV1,
 } from '../../application/mobile-push-registration-operations'
 export { registerMobilePushDeviceFromSessionV1 } from './mobile-push-session'

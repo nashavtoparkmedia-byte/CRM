@@ -3,9 +3,10 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import {
     listPushEligibleMobileDevicesV1,
     markMobilePushTokenRejectedV1,
-    resolveMobilePushTargetV1,
     revokeMobilePushSenderMismatchV1,
 } from '@/modules/identity-access/public/v1'
+// The reviewed secret-bearing capability; this runtime is its only consumer.
+import { resolveMobilePushTargetV1 } from '@/modules/identity-access/public/v1/mobile-push-target-capability'
 import { createFcmHttpV1TransportV1, type MobilePushTransportV1 } from './fcm-http-v1-transport'
 import { createMobilePushDispatchV1 } from './mobile-push-dispatch'
 import { isMobilePushEnabledV1, readFcmTransportConfigV1, type FcmTransportConfigV1 } from './mobile-push-config'

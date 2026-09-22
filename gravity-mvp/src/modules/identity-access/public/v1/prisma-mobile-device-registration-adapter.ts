@@ -164,31 +164,27 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
         return rows.map((row) => ({ registrationId: row.id, sessionBindingId: row.sessionBindingId }))
     },
 
-    async view(registrationId) {
+    async status(registrationId) {
         const row = await prisma.mobileDeviceRegistration.findUnique({
             where: { id: registrationId },
-            select: {
-                id: true,
-                fcmToken: true,
-                sessionBindingId: true,
-                sessionExpiresAt: true,
-                sessionRevocationEpoch: true,
-                credentialSubject: true,
-                credentialKeyId: true,
-                revokedAt: true,
-            },
+            select: { id: true, sessionBindingId: true, revokedAt: true },
         })
         if (!row) return null
-        return {
-            id: row.id,
-            hasToken: row.fcmToken !== null,
-            sessionBindingId: row.sessionBindingId,
-            sessionExpiresAt: row.sessionExpiresAt,
-            sessionRevocationEpoch: row.sessionRevocationEpoch,
-            credentialSubject: row.credentialSubject,
-            credentialKeyId: row.credentialKeyId,
-            revoked: row.revokedAt !== null,
-        }
+        return { id: row.id, sessionBindingId: row.sessionBindingId, revoked: row.revokedAt !== null }
+    },
+
+    async isEligible(registrationId, facts) {
+        const matching = await prisma.mobileDeviceRegistration.count({
+            where: {
+                id: registrationId,
+                revokedAt: null,
+                sessionExpiresAt: { gt: facts.now },
+                sessionRevocationEpoch: facts.revocationEpoch,
+                credentialKeyId: facts.credentialKeyId,
+                credentialSubject: facts.credentialSubject,
+            },
+        })
+        return matching === 1
     },
 
     async currentToken(registrationId) {
