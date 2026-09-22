@@ -985,18 +985,19 @@ export async function POST(request: Request) {
       candidateCount: 0,
       automaticLinkPerformed: false,
     }
-    if (!isOutgoing) {
+    if (domFallbackPeer) {
+      // The proven conversation already names its person. A DOM-recovered sender is not
+      // provider-framed, so it neither re-resolves the contact nor confirms reachability.
+      contactResolutionMetadata = {
+        status: 'bound_conversation_reused',
+        candidateCount: 1,
+        automaticLinkPerformed: false,
+      }
+      legacyContactResolution = { status: 'contact_reused', contactId: domFallbackPeer.contactId, source: 'identity' }
+    }
+    if (!isOutgoing && !domFallbackPeer) {
       try {
-        if (domFallbackPeer) {
-          // The proven conversation already names its person. A DOM-recovered sender is not
-          // provider-framed, so it neither re-resolves the contact nor confirms reachability.
-          contactResolutionMetadata = {
-            status: 'bound_conversation_reused',
-            candidateCount: 1,
-            automaticLinkPerformed: false,
-          }
-          legacyContactResolution = { status: 'contact_reused', contactId: domFallbackPeer.contactId, source: 'identity' }
-        } else if (maxChatKind === 'group') {
+        if (maxChatKind === 'group') {
           contactResolutionMetadata = {
             status: 'group_skipped',
             candidateCount: 0,
