@@ -1660,8 +1660,14 @@ model CrmUser {
 /// address bound to a session, not an authorization subject: `runtimeOperatorId`
 /// is informational only. An FCM token rotation updates this row in place, so
 /// the row id stays valid for delivery events already created for it.
-/// `sessionBindingId` is a one-way fingerprint of the session token that
-/// registered the row; the token itself is never stored. `fcmToken` is NULL
+/// `sessionBindingId` names the session that registered the row: a digest of
+/// the random instance id the server minted for that session. It is NOT
+/// derived from the session token or from anything password-derived, because
+/// the other columns here already rebuild that token's payload, so such a
+/// value would verify MOBILE_ACCESS_PASS guesses offline. The token itself is
+/// never stored. `revokedSessionBindings` holds one entry per session whose
+/// logout this device completed, each carrying its own expiry so logout can
+/// prune the ones that can no longer be presented. `fcmToken` is NULL
 /// when the provider rejected it (awaiting re-registration) or the row is
 /// revoked, which releases the unique binding. No foreign key: Messaging
 /// references this row only by id inside its own delivery events.
