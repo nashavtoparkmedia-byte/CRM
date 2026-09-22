@@ -23,6 +23,7 @@ import {
 } from './compensation-calendar'
 import {
     listManagerApplicationsV1,
+    managerRejectionKeyV1,
     performManagerActionV1,
     readManagerApplicationV1,
     readManagerBudgetV1,
@@ -186,6 +187,24 @@ const act = (
 /** Approve one claim the way the screens do: the screenshot is fetched first. */
 const approve = (applicationId: string, principal: ManagerPrincipalV1 = MANAGER) =>
     performManagerActionV1({ applicationId, action: 'approve', principal, evidenceProven: true }, store)
+
+async function applicationRow(applicationId: string) {
+    const rows = await database.$queryRawUnsafe<Array<{
+        status: string; version: number; rejectionKey: string | null; rejectionReason: string | null
+    }>>(
+        `SELECT "status","version","rejectionKey","rejectionReason" FROM "CompensationApplication" WHERE "id" = $1`,
+        applicationId,
+    )
+    return { ...rows[0], version: Number(rows[0].version) }
+}
+
+async function authorizationRows(applicationId: string) {
+    return database.$queryRawUnsafe<Array<{ id: string; state: string; authorizationFence: string }>>(
+        `SELECT "id","state","authorizationFence" FROM "CompensationPayoutAuthorization"
+         WHERE "applicationId" = $1 ORDER BY "openedAt" ASC`,
+        applicationId,
+    )
+}
 
 async function count(table: string, where = '', ...args: unknown[]): Promise<number> {
     const rows = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -649,6 +668,174 @@ proof('the manager workflow on real PostgreSQL', () => {
                 code: 'state_changed', state: 'new',
             })
             expect(await count('CompensationSettlement')).toBe(0)
+        })
+    })
+
+    describe('resolving a reconciliation as not paid', () => {
+        // Before cfc36f50 this path was unreachable: the resolution asked the
+        // shared release body to cancel an unknown_outcome authorization, the
+        // cancel rule refused it with reconciliation_required, and the task could
+        // never close. This walks the exact chain through the real core.
+        it('takes an unknown outcome through reconciliation back to NEW', async () => {
+            const seeded = await seedApplication()
+            await approve(seeded.applicationId)
+            const before = await applicationRow(seeded.applicationId)
+
+            expect(await act(seeded.applicationId, 'declare_outcome_unknown', { reason: 'Перевод не виден' }))
+                .toMatchObject({ code: 'performed', state: 'reconciliation' })
+            const unknown = await authorizationRows(seeded.applicationId)
+            expect(unknown).toEqual([expect.objectContaining({ state: 'unknown_outcome' })])
+            expect(await count('CompensationReconciliationTask', `WHERE "state" = 'open'`)).toBe(1)
+
+            expect(await act(seeded.applicationId, 'reconcile_not_paid', { reason: 'Банк вернул перевод' }))
+                .toMatchObject({ code: 'performed', state: 'new' })
+
+            // The payout right is released, the task is closed as not paid, and
+            // the claim is PENDING again with its money still reserved.
+            expect(await authorizationRows(seeded.applicationId))
+                .toEqual([expect.objectContaining({ state: 'cancelled' })])
+            const tasks = await database.$queryRawUnsafe<Array<{ state: string; resolution: string }>>(
+                `SELECT "state","resolution" FROM "CompensationReconciliationTask"`,
+            )
+            expect(tasks).toEqual([{ state: 'resolved', resolution: 'not_paid' }])
+            const after = await applicationRow(seeded.applicationId)
+            expect(after).toMatchObject({ status: 'PENDING', version: before.version + 1 })
+            expect(await count('CompensationSettlement')).toBe(0)
+            expect(await readManagerBudgetV1(PERIOD_KEY, store)).toMatchObject({
+                reservedKopecks: 30_000, settledKopecks: 0, ledgerConsistent: true,
+            })
+            const actions = (await database.$queryRawUnsafe<Array<{ action: string }>>(
+                `SELECT "action" FROM "CompensationAuditEvent" ORDER BY "occurredAt" ASC, "id" ASC`,
+            )).map((row) => row.action)
+            // Both rows carry the resolution time, so their mutual order is not
+            // a fact; that both exist, last, is.
+            expect([...actions.slice(-2)].sort()).toEqual(['payout_authorization_cancelled', 'reconciliation_resolved'])
+
+            // And the claim is genuinely payable again: a fresh payout right
+            // opens under a new identity, beside the released one.
+            expect(await approve(seeded.applicationId)).toMatchObject({ code: 'performed', state: 'awaiting_payment' })
+            const rights = await authorizationRows(seeded.applicationId)
+            expect(rights.map((row) => row.state).sort()).toEqual(['active', 'cancelled'])
+            expect(new Set(rights.map((row) => row.id)).size).toBe(2)
+        })
+
+        it('still refuses a plain cancel of an unknown outcome outside reconciliation', async () => {
+            const seeded = await seedApplication()
+            await approve(seeded.applicationId)
+            await act(seeded.applicationId, 'declare_outcome_unknown')
+            const [right] = await authorizationRows(seeded.applicationId)
+
+            // The manager screen never offers this, so it is asked of the port
+            // directly: the relaxed rule belongs to reconciliation alone.
+            expect(await store.releasePayout({
+                payoutAuthorizationId: right.id,
+                authorizationFence: right.authorizationFence,
+                kind: 'cancel_preparation',
+                reason: 'Попытка отменить в обход сверки',
+                principal: MANAGER,
+            })).toEqual({ ok: false, code: 'reconciliation_required', replayed: false })
+            expect(await authorizationRows(seeded.applicationId))
+                .toEqual([expect.objectContaining({ state: 'unknown_outcome' })])
+        })
+    })
+
+    describe('the rejection key', () => {
+        // The key is sha256(applicationId | CompensationApplication.version),
+        // truncated. version is C1's own counter of settled application
+        // transitions: inserted as 0 and advanced only by finalize, by releasing
+        // a preparation and by reject. It is not a CAS version; no command takes it.
+
+        it('is derived from the id and the version C1 holds, and is stored exactly', async () => {
+            const seeded = await seedApplication()
+            const read = await applicationRow(seeded.applicationId)
+            expect(read.version).toBe(0)
+
+            await act(seeded.applicationId, 'reject', { reason: 'Нет чека' })
+            const stored = await applicationRow(seeded.applicationId)
+            expect(stored.rejectionKey).toBe(managerRejectionKeyV1(seeded.applicationId, 0))
+            // The rejection itself advances the version, which is what keeps any
+            // later rejection attempt from ever computing the stored key again.
+            expect(stored.version).toBe(1)
+        })
+
+        it('replays a retried rejection instead of writing a second one', async () => {
+            const seeded = await seedApplication()
+            const key = managerRejectionKeyV1(seeded.applicationId, 0)
+            const reject = () => store.rejectApplication({
+                applicationId: seeded.applicationId, reason: 'Нет чека', rejectionKey: key, principal: MANAGER,
+            })
+
+            // A lost response retried from the same read presents the same key.
+            expect(await reject()).toEqual({ ok: true, code: null, replayed: false })
+            expect(await reject()).toEqual({ ok: true, code: null, replayed: true })
+            expect(await count('CompensationAuditEvent', `WHERE "action" = 'reject'`)).toBe(1)
+            expect(await readManagerBudgetV1(PERIOD_KEY, store)).toMatchObject({ reservedKopecks: 0 })
+        })
+
+        it('turns two simultaneous rejections into one', async () => {
+            const seeded = await seedApplication()
+            const [left, right] = await Promise.all([
+                act(seeded.applicationId, 'reject', { reason: 'Нет чека' }),
+                performManagerActionV1({
+                    applicationId: seeded.applicationId, action: 'reject', reason: 'Нет чека', principal: SECOND_MANAGER,
+                }, store),
+            ])
+            expect([left.code, right.code]).toContain('performed')
+            expect([left.code, right.code].find((code) => code !== 'performed'))
+                .toMatch(/^(already_done|already_rejected)$/u)
+            expect(await count('CompensationAuditEvent', `WHERE "action" = 'reject'`)).toBe(1)
+            expect((await applicationRow(seeded.applicationId)).rejectionKey)
+                .toBe(managerRejectionKeyV1(seeded.applicationId, 0))
+        })
+
+        it('does not treat a later rejection attempt as a replay of the stored one', async () => {
+            const seeded = await seedApplication()
+            await act(seeded.applicationId, 'reject', { reason: 'Нет чека' })
+            // A reader after the rejection sees version 1 and would compute this:
+            const laterKey = managerRejectionKeyV1(seeded.applicationId, 1)
+            expect(await store.rejectApplication({
+                applicationId: seeded.applicationId, reason: 'Другая причина', rejectionKey: laterKey, principal: SECOND_MANAGER,
+            })).toEqual({ ok: false, code: 'not_pending', replayed: false })
+            expect((await applicationRow(seeded.applicationId)).rejectionReason).toBe('Нет чека')
+        })
+
+        it('is moved by a C1 transition and by nothing else', async () => {
+            const seeded = await seedApplication()
+            const keyOf = async () => {
+                const facts = await store.findApplication(seeded.applicationId)
+                return managerRejectionKeyV1(facts!.applicationId, facts!.version)
+            }
+            const initial = await keyOf()
+
+            // Timestamps, the catalogue observation, the person's name and phone,
+            // the screenshot row and an opened-then-still-active payout right do
+            // not touch the inputs.
+            await database.$executeRawUnsafe(
+                `UPDATE "CompensationApplication" SET "updatedAt" = NOW() + interval '1 hour' WHERE "id" = $1`,
+                seeded.applicationId,
+            )
+            await database.$executeRawUnsafe(
+                `UPDATE "CompensationCashOrder" SET "observedAt" = NOW(), "updatedAt" = NOW()`,
+            )
+            await database.$executeRawUnsafe(
+                `UPDATE "Contact" SET "displayName" = 'Переименован', "updatedAt" = NOW() WHERE "id" = $1`,
+                seeded.contactId,
+            )
+            await database.$executeRawUnsafe(
+                `UPDATE "CompensationPilotSubmission" SET "supportContactedAt" = NOW() WHERE "applicationId" = $1`,
+                seeded.applicationId,
+            )
+            await approve(seeded.applicationId)
+            expect(await keyOf()).toBe(initial)
+
+            // Releasing the preparation is a settled transition: the key moves,
+            // and the rejection that follows stores the new one.
+            await act(seeded.applicationId, 'cancel_approval')
+            const moved = await keyOf()
+            expect(moved).not.toBe(initial)
+            expect(moved).toBe(managerRejectionKeyV1(seeded.applicationId, 1))
+            await act(seeded.applicationId, 'reject', { reason: 'Нет чека' })
+            expect((await applicationRow(seeded.applicationId)).rejectionKey).toBe(moved)
         })
     })
 })
