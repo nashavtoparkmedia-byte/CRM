@@ -1655,6 +1655,35 @@ model CrmUser {
   @@map("crm_users")
 }
 
+/// Mobile Push v1 (identity_access). One stable row per Android app install,
+/// keyed by the `did` inside the verified mobile session. It is a delivery
+/// address bound to a session, not an authorization subject: `runtimeOperatorId`
+/// is informational only. An FCM token rotation updates this row in place, so
+/// the row id stays valid for delivery events already created for it.
+/// `sessionBindingId` is a one-way fingerprint of the session token that
+/// registered the row; the token itself is never stored. `fcmToken` is NULL
+/// when the provider rejected it (awaiting re-registration) or the row is
+/// revoked, which releases the unique binding. No foreign key: Messaging
+/// references this row only by id inside its own delivery events.
+model MobileDeviceRegistration {
+  id                     String    @id @default(cuid())
+  deviceId               String    @unique(map: "MobileDeviceRegistration_deviceId_key") @db.VarChar(128)
+  fcmToken               String?   @unique(map: "MobileDeviceRegistration_fcmToken_key") @db.VarChar(512)
+  credentialSubject      String    @db.VarChar(128)
+  runtimeOperatorId      String    @db.VarChar(64)
+  sessionBindingId       String    @db.Char(64)
+  sessionIssuedAt        DateTime  @db.Timestamptz(3)
+  sessionExpiresAt       DateTime  @db.Timestamptz(3)
+  sessionRevocationEpoch String    @db.VarChar(64)
+  credentialKeyId        String    @db.Char(16)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  lastSeenAt             DateTime  @db.Timestamptz(3)
+  revokedAt              DateTime? @db.Timestamptz(3)
+  revokedReason          String?   @db.VarChar(32)
+
+  @@index([revokedAt, sessionExpiresAt], map: "MobileDeviceRegistration_eligibility_idx")
+}
+
 /// SIP call session. Created by FreeSWITCH events via ESL.
 /// managerId is the CRM user id (string "u1"/"u2"/... from src/data/users.json),
 /// not a Prisma FK — CRM users live in JSON, not in the DB.

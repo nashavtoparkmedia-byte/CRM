@@ -159,6 +159,20 @@ export async function writeDerivedUiIdentityCookie(principal: MobileSessionPrinc
 
 /** Log out: drop the signed session and the value derived from it. */
 export async function clearMobileSessionV1(): Promise<void> {
+    // Mobile Push v1: a logged-out device must stop receiving push, so its
+    // registration is revoked (and its token released) while the session that
+    // proves which device it is still exists. Logging out never depends on it:
+    // if revocation fails, the session is still cleared and the registration
+    // stays bounded by the session's own expiry.
+    const principal = await getMobileSessionPrincipalV1()
+    if (principal) {
+        try {
+            const { revokeMobilePushDeviceForLogoutV1 } = await import('../../application/mobile-push-registration-operations')
+            await revokeMobilePushDeviceForLogoutV1(principal.deviceId)
+        } catch (error) {
+            console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')
+        }
+    }
     const cookieStore = await cookies()
     cookieStore.set(MOBILE_SESSION_COOKIE, '', sessionCookieOptions(0))
     cookieStore.set(LEGACY_UI_IDENTITY_COOKIE, '', {

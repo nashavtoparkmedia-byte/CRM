@@ -295,3 +295,52 @@ export function normalizeMobileReturnTo(value: unknown): string {
         return fallback
     }
 }
+
+// ── Mobile Push v1: non-secret session fingerprints ─────────────────────────
+
+const SESSION_BINDING_LABEL = 'yoko.mobile-push.session-binding.v1'
+const CREDENTIAL_KEY_ID_LABEL = 'yoko.mobile-push.credential-key-id.v1'
+
+/**
+ * One-way fingerprint of an ALREADY VERIFIED session token.
+ *
+ * It changes whenever a new session is issued (a new login carries a new
+ * `iat`, so a new token) and stays identical for the life of one session, so a
+ * push delivery can prove it still belongs to the session that was live when
+ * it was fanned out. It cannot authenticate anything: the CRM only accepts the
+ * signed token itself, and the token's HMAC cannot be recovered from this
+ * digest. The token is never stored; only this fingerprint is.
+ */
+export function mobileSessionBindingIdV1(verifiedToken: string): string {
+    return createHash('sha256').update(`${SESSION_BINDING_LABEL}\0${verifiedToken}`, 'utf8').digest('hex')
+}
+
+export interface MobilePushCredentialFactsV1 {
+    /** The provisioned mobile credential's username. Not a secret. */
+    credentialSubject: string
+    /** 16-hex non-reversible fingerprint of the current session signing key. */
+    credentialKeyId: string
+}
+
+/**
+ * The credential facts a push registration is bound to, or null when the
+ * mobile lane is not provisioned.
+ *
+ * Rotating MOBILE_ACCESS_PASS (or MOBILE_ACCESS_USER) changes the signing key
+ * and therefore this key id, which makes every registration bound to the old
+ * key ineligible at once — the same lever that already kills every session.
+ * No password leaves this module.
+ */
+export function currentMobilePushCredentialFactsV1(
+    env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
+): MobilePushCredentialFactsV1 | null {
+    const config = getMobileAccessCredentialConfig(env)
+    if (!config) return null
+    return {
+        credentialSubject: config.username,
+        credentialKeyId: createHmac('sha256', sessionKey(config))
+            .update(CREDENTIAL_KEY_ID_LABEL, 'utf8')
+            .digest('hex')
+            .slice(0, 16),
+    }
+}
