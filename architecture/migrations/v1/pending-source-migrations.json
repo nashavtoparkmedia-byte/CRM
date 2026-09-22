@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "88be698b2a76af5ecaf4985278691d7a79a03ae6cc178c6a0729e75ad7fba547",
-    "size": 166253,
+    "sha256": "d65786026efa4bba8159f2b682681aab2cd99e28be3f98a7027b054fb7216003",
+    "size": 166256,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -150,8 +150,8 @@
     {
       "name": "20260922120000_add_mobile_device_registration",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-      "sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-      "size": 2660,
+      "sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+      "size": 2842,
       "owner_context": "identity_access",
       "classification": "EXPAND_ONLY",
       "production_application": false,

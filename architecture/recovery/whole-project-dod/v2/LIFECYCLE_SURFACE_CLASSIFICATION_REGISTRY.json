@@ -2260,7 +2260,7 @@
       "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "identity_access",
-      "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6"
+      "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71"
     },
     {
       "path": "gravity-mvp/query_driver.sql",

@@ -236,10 +236,10 @@
       "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
       "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
       "expected_site_signatures": [
-        "1c05b43ccbac357df052194bbc8855f03070c878164a9574649319ea1c70f0dc",
-        "26eb3140e241770e8afb68232e0ef2ef7a57c13dca54ab92f53dddca4aecc283",
-        "6e2cdc5070bd6c3fc0d1b2ea09d79a45fa695be1402f4b1b3738a5f0a4bf7edc",
-        "f2408eada213d9ddf9d9df445d3c4c5e3061d24bfe88aa4cdd7727e75a6c0987"
+        "5f3369d5c5e5e091294b261507e39aedf3fe9c4544da445f5b83ca1da2f9df60",
+        "68b883b5e54a3756a4c87389bb8a7ca2265162c96a536e6a68ef3617ee5c950c",
+        "a4fff114366233e6dcdac0901a844bff1bd71db0457e7009372e500e6b722092",
+        "e202ac2e452e23722b985c67c43233b92dcf34ef472cb47b210ae2ac5d71344a"
       ]
     },
     {
@@ -2839,9 +2839,9 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for the cash-order ingestion runtime. It adds two nullable columns to CompensationCashOrder and creates CompensationCashOrderIngestionCheckpoint, both owned by the named context, through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "6e2cdc5070bd6c3fc0d1b2ea09d79a45fa695be1402f4b1b3738a5f0a4bf7edc",
+      "site_signature": "a4fff114366233e6dcdac0901a844bff1bd71db0457e7009372e500e6b722092",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-      "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
+      "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
       "line": 17,
       "column": 1,
       "method": "sql-script",
@@ -2857,10 +2857,10 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "1c05b43ccbac357df052194bbc8855f03070c878164a9574649319ea1c70f0dc",
+      "site_signature": "5f3369d5c5e5e091294b261507e39aedf3fe9c4544da445f5b83ca1da2f9df60",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-      "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-      "line": 42,
+      "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+      "line": 44,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -2875,10 +2875,10 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "26eb3140e241770e8afb68232e0ef2ef7a57c13dca54ab92f53dddca4aecc283",
+      "site_signature": "e202ac2e452e23722b985c67c43233b92dcf34ef472cb47b210ae2ac5d71344a",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-      "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-      "line": 46,
+      "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+      "line": 48,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -2893,10 +2893,10 @@
       "review_rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "f2408eada213d9ddf9d9df445d3c4c5e3061d24bfe88aa4cdd7727e75a6c0987",
+      "site_signature": "68b883b5e54a3756a4c87389bb8a7ca2265162c96a536e6a68ef3617ee5c950c",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-      "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-      "line": 49,
+      "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+      "line": 51,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
