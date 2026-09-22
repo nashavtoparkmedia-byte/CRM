@@ -2,18 +2,18 @@
   "derivation": {
     "kind": "architecture-enforcement-observed-cross-context-imports",
     "policy_path": "architecture/enforcement/v1/policy.json",
-    "policy_sha256": "ea821306b1aace6fac26c23fbb0df857ce8d2059d0f9ebc8e20035afbfdfecb0"
+    "policy_sha256": "15263a3f51184ccfd56dd2637d5198ee3bf282127a9a51ccbdafd4400a7904ec"
   },
   "observed": {
     "architecture_findings": 0,
-    "cross_context_imports": 915,
-    "cross_context_imports_sha256": "bbb4f1254ff56c8d197dc7b5fca6e9b4f7958c942bcdf081e9ee8db11d7cffb2",
-    "scanned_files": 1652
+    "cross_context_imports": 925,
+    "cross_context_imports_sha256": "ebfa1d0d387689c261c1a8dc6550d508e9b815c5d03e6c82230713b72eec7699",
+    "scanned_files": 1656
   },
   "public_surface_migrations": [],
   "relationship_projection": {
     "count": 73,
-    "sha256": "acfcb285b7256c63a3d4f8e74dc4a7447e93469d950fd82f1e34ec516bb6849c"
+    "sha256": "323bae45f6f936ac6f613f203a496f4f72fc4f4c7f3e4f31c37c032d0e11e4d6"
   },
   "schema": "yoko.crm.accepted-dependency-source.v1",
   "version": 1
