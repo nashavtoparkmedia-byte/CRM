@@ -6571,7 +6571,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only Telegram Channel-owned provider account foundation schema (two new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; it stores no credential, token or session value; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "telegram_channel",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d"
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c"
     }
   ]
 }

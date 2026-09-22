@@ -98,8 +98,8 @@
     {
       "name": "20260922120000_add_telegram_provider_account_foundation",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "size": 13614,
+      "sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "size": 14061,
       "owner_context": "telegram_channel",
       "classification": "EXPAND_ONLY",
       "production_application": false,

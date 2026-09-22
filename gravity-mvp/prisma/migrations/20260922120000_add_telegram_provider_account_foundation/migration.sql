@@ -1,3 +1,13 @@
+-- Telegram Channel-owned provider account foundation (M2A2-TG1).
+--
+-- Expand-only SOURCE migration. This artifact is intentionally NOT applied by
+-- this delivery goal; production deployment remains a separate reviewed
+-- operation. It adds two new tables with their constraints and guard triggers
+-- and touches no existing table: no existing row is changed or removed, and no
+-- credential, token or session value is stored.
+
+BEGIN;
+
 -- CreateTable
 CREATE TABLE "TelegramAccount" (
     "accountId" VARCHAR(64) NOT NULL,
@@ -291,3 +301,5 @@ FOR EACH STATEMENT EXECUTE FUNCTION "telegram_provider_account_truncate_guard"()
 CREATE TRIGGER "TelegramTransportBinding_truncate_guard"
 BEFORE TRUNCATE ON "TelegramTransportBinding"
 FOR EACH STATEMENT EXECUTE FUNCTION "telegram_provider_account_truncate_guard"();
+
+COMMIT;

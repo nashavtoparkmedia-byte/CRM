@@ -241,32 +241,32 @@
       "functional_owner": "telegram_channel",
       "production_reachability": "CONTROLLED_MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration creates only Telegram Channel-owned provider account foundation schema (two new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; it stores no credential, token or session value; this review grants no application-runtime or production-application authority.",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Telegram Channel-owned provider account foundation schema (two new tables with their constraints, guard functions and triggers) inside one explicit transaction through controlled migration tooling and touches no existing table; it stores no credential, token or session value; this review grants no application-runtime or production-application authority.",
       "expected_site_signatures": [
-        "0e8fba020bdaa093e8f623165f0263cdfef1db3bd3237a7bbf1d247feecfee8f",
-        "1848e0dfdd6b345fe7cbf9dbff1089dd1d45969daa0eba52f930dce14eb94725",
-        "1995232c8a25375b8b53f1b88933eb175e452931dfa83c108132fbfe42685784",
-        "1b452d77a21010fc6bdba28466eefb88289838b8f77b70076e917cca26ef216c",
-        "1ccfcdf7076a69ad20f5bed9092c885c63e172c5e9ec05f5a940196997b9ba50",
-        "1d8c074a698b821a975231a02fa4772763fd460f73597bbb2b733cba3dd5d7e8",
-        "1ea31f12341aa42d6bd0402c1d110f95fe6024728bb03b1f2c4cbcb3079a4076",
-        "2786b859cee191a5a1873e208d7780cd8eff563ec627f5de50b918cb626ff619",
-        "53035314d9feffea1484319b6326e4aa1b6df5791dc0fec3b3fe16217c0b9b04",
-        "585d197233991d057cd1ad0f77f45fb2a1f35a04b140fa126019d0bf431038cd",
-        "62f9af0eccf4d72ab618215e85392fbb8c14a4436ed8dd12dff2e7a5cc848397",
-        "7f66434d9e213fc2f8ff04d5ee5cb4c635e255c413898ff2b289c3f9bec822c8",
-        "9584c105bc614400888380d62f9025dbf40e1d760ea98ef53945405c4b4d5457",
-        "965a01d239a13622f394bf2f0a1df528d523f9d0ec8b1d5fc6de2908a9d454ff",
-        "9fb2f4de27c6db6b962f8d23bdcd9e59e306259b96ef57c7e24094b180805873",
-        "a55e9906ba4e9fec9e3b91212a5626acdb115fd297d77c4a733c5f3b5e350df5",
-        "a6928bd302c55b6459230c2cf0ee7dc9ef1bc7d60429b8db598a2af4344621bf",
-        "b586c64ab7bea1b0b5f034a0ded8aaf0762a0b0f9624e35d2eaaf9762d303c1d",
-        "c50739c5cfa4f94f0fd0df508a012611147825760219c676a22f110e1ec61d9f",
-        "c61cfeb3ab6c4c361af6ecafdd20a71eccda570d5270ba8a38cc2247c07907a8",
-        "d1598e7f8f04526b03e10fc20947d29d523748a3bc3b488e5ab66379ddba9bf8",
-        "d298deb30052281966be5f7f806365788880216f68eaf0a9de2ae6f26ccbc704",
-        "db5eb0ae8f96eee8d4fbc46bddbbe3f01007f85dc0a55a198e8e85af3bfd624a",
-        "ff9557282ec44c8ff0cfaaee72c9660e734f043ae80627678553d10e10e4c327"
+        "073a734c3abfcde9c7508fd2ff4cd490f37bddd7d4456214ec173aa2c664c945",
+        "157f0d2ebd26bc380c4ac83329bf307940acf2615c1f3efeca87bd4942a6e265",
+        "1f42899390605f2ec2bd9c6ac37248c5b4863586d2d7f3f1d52e333f3096ce83",
+        "2087e375e1791d0d3e0b095c0c63f203b058748e242ce364ba72fd920aed2f14",
+        "3206ba219819d7c6a6e6258f7a1ff9ee33e165259de004d1afcea700157f125b",
+        "35fe8894b5e2a4dd815b4b27e0760fda6399af6a73b0680aa1a245a80425ae1f",
+        "395dbaa6b9c466c8f24a555a01f4c871f6441294439a13cf3cafd8528ed6f13f",
+        "62f985d491a3a12eecf0763b40775178ce068b2f46c0846471f84126bbd7071f",
+        "6ab63ab6166c94fe0c08e93a164841e6903bd003b9f59e5c8e786787c0775263",
+        "74a9cc3ffe1e232040c3abc88aa5dc711ef078799614ccb8630b39a544054ccf",
+        "91a9a6f9817cc01677479251d42f0c9b9df46db7189b4b401523591a223e49ef",
+        "975600f44a88f2fd4b1d3e6c258d0fcc3f63c6edc100bab24196e92654cd567f",
+        "a0d78f70e12b2b23256e4539253b66ed4ac1dbaf2325563ec3112e4dbade7aa8",
+        "abcdf2b22bfa15461e68c7dc7c0e9cfad85b921a7b4c44d9f466c6e00f8abf03",
+        "b57a591b64d4a9aaf9da13213b51dabfc236cb49ca83b0e51624530c3675b260",
+        "bdbba8cbda7ab8871a907bfcd306147daa6cf99dadc9c1c8d3f3ab3a5b12ed7c",
+        "bebe3f717280420da8cce717312dd1fc94422a49767aebc4f81d22d563ad4b93",
+        "cffedb056f6db28cc262e881ff5a5bd45a27c9087fca7aaa0d357b7ff628f4e9",
+        "d78c0eda567b7e308c99df8d2b980bfa859983c5788302f65cfe08ef66c0263e",
+        "dd99bff3aa7868535372ecc6e9484efaf35d7e9439863fdc187761d320cb7419",
+        "f4eca1ff5396d83b7864551256e9c37da2474a584ae36690480ded1f63f8f582",
+        "f9f91acd14feda4a1aef5530e8ffecbe534cac2127a0b6c71ffc487b37721e8b",
+        "fb6ae9c592f89e8b6fd72016fe8a771ec3670931a90376c531cad2d2a181f173",
+        "fe350072aec913d7219cc906430a9b74ea1439baaae0583ad0fd77cbeff01b5c"
       ]
     },
     {
@@ -532,6 +532,24 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
+      "site_signature": "073a734c3abfcde9c7508fd2ff4cd490f37bddd7d4456214ec173aa2c664c945",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 301,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "TelegramTransportBinding_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramTransportBinding_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "08961f45309d55e40128add8ca6a23c5d5d337ba98867ac9fb7a71ff3f544bbf",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
       "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
@@ -566,24 +584,6 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
-    },
-    {
-      "site_signature": "0e8fba020bdaa093e8f623165f0263cdfef1db3bd3237a7bbf1d247feecfee8f",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 43,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "CREATE_INDEX"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "0ff9642cf11720e899ad611c8133fa5f981eba484091cd2c062b36317f38a6cb",
@@ -676,6 +676,24 @@
       "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
     },
     {
+      "site_signature": "157f0d2ebd26bc380c4ac83329bf307940acf2615c1f3efeca87bd4942a6e265",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 88,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramAccount",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "15db98f84f1cfe5b929932f5d550423d63d0cdfe41e4c0e6d50715e0fa977424",
       "path": "gravity-mvp/scripts/migrate-contacts.ts",
       "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
@@ -710,24 +728,6 @@
         }
       ],
       "review_rationale": "Explicit operator-run recovery imports only the exact legacy WhatsApp message target."
-    },
-    {
-      "site_signature": "1848e0dfdd6b345fe7cbf9dbff1089dd1d45969daa0eba52f930dce14eb94725",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 197,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TRIGGER",
-          "exact_name": "TelegramAccount_guard",
-          "operation": "CREATE_TRIGGER"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramAccount_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "196a23de2a6296793dac656b6c808f824dd73535bc2ca30a385b0d89a74e216f",
@@ -766,24 +766,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "1995232c8a25375b8b53f1b88933eb175e452931dfa83c108132fbfe42685784",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 105,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "1b40af20b66af5e1798e965c4912aafde9749f003948df326db2de499c7f78a8",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -800,24 +782,6 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
-    },
-    {
-      "site_signature": "1b452d77a21010fc6bdba28466eefb88289838b8f77b70076e917cca26ef216c",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 78,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramAccount",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "1c59dbe30b8b6351165258127d198118d68df416cecf4e1fdb1f57cda7e0af38",
@@ -874,42 +838,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "1ccfcdf7076a69ad20f5bed9092c885c63e172c5e9ec05f5a940196997b9ba50",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 291,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TRIGGER",
-          "exact_name": "TelegramTransportBinding_truncate_guard",
-          "operation": "CREATE_TRIGGER"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramTransportBinding_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
-      "site_signature": "1d8c074a698b821a975231a02fa4772763fd460f73597bbb2b733cba3dd5d7e8",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 288,
-      "column": 8,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "ON",
-          "operation": "TRUNCATE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: TRUNCATE on ON. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "1db92e3a5d7263e888fb220d1dbe179f27e0fc56473d3305324bade57df78673",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -928,24 +856,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "1ea31f12341aa42d6bd0402c1d110f95fe6024728bb03b1f2c4cbcb3079a4076",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 40,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramAccount",
-          "operation": "CREATE_INDEX"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "1eecdf9b828dece4b2bdf78275f892bcc30b36ef34573d935f71dce448cc24cd",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -962,6 +872,24 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "1f42899390605f2ec2bd9c6ac37248c5b4863586d2d7f3f1d52e333f3096ce83",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 47,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramAccount",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "1ffa91539c1312470f0b8d12933271394b73e60fee3a4d72faaaa7e99afa7dbe",
@@ -1017,6 +945,24 @@
         }
       ],
       "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
+    },
+    {
+      "site_signature": "2087e375e1791d0d3e0b095c0c63f203b058748e242ce364ba72fd920aed2f14",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 298,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: TRUNCATE on ON. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "20c0e4af727b3522f7bdc9944ae8288f38c3fe56342ab703bf2202ccf3b891d5",
@@ -1109,24 +1055,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "2786b859cee191a5a1873e208d7780cd8eff563ec627f5de50b918cb626ff619",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 150,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "FUNCTION",
-          "exact_name": "telegram_account_guard",
-          "operation": "CREATE_FUNCTION"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_account_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "28f4ac1c35a5782ba60e2abee82838eac0c20e359ba7a19e3a3ca10532993c77",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -1216,6 +1144,60 @@
       ],
       "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
       "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.migrate_data_restore"
+    },
+    {
+      "site_signature": "3206ba219819d7c6a6e6258f7a1ff9ee33e165259de004d1afcea700157f125b",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 99,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
+      "site_signature": "35fe8894b5e2a4dd815b4b27e0760fda6399af6a73b0680aa1a245a80425ae1f",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 286,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "TelegramTransportBinding_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramTransportBinding_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
+      "site_signature": "395dbaa6b9c466c8f24a555a01f4c871f6441294439a13cf3cafd8528ed6f13f",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 56,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "396980c54d65db94ee7d3275be101007a09eaacc848b357eda7b92d0a74e70af",
@@ -1542,24 +1524,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "53035314d9feffea1484319b6326e4aa1b6df5791dc0fec3b3fe16217c0b9b04",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 55,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "540e4e8275d152a4b6a518e7e351e9983f242ea54477bd61e264f862751955a9",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
       "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
@@ -1630,24 +1594,6 @@
         }
       ],
       "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
-    },
-    {
-      "site_signature": "585d197233991d057cd1ad0f77f45fb2a1f35a04b140fa126019d0bf431038cd",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 287,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TRIGGER",
-          "exact_name": "TelegramAccount_truncate_guard",
-          "operation": "CREATE_TRIGGER"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramAccount_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "5a5799aa01106fdd5f3f53d61cc092a2d479d5cf78c06f5f3d51bf00d24b3a1e",
@@ -1722,10 +1668,10 @@
       "review_rationale": "Byte-pinned source-only expand-only migration adds the Calling-owned simulation discriminator and creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "62f9af0eccf4d72ab618215e85392fbb8c14a4436ed8dd12dff2e7a5cc848397",
+      "site_signature": "62f985d491a3a12eecf0763b40775178ce068b2f46c0846471f84126bbd7071f",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 46,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 147,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
@@ -1734,10 +1680,10 @@
         {
           "kind": "TABLE",
           "exact_name": "TelegramTransportBinding",
-          "operation": "CREATE_INDEX"
+          "operation": "ALTER_TABLE"
         }
       ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "65f1102a63ee7b4ed3b841fc8839c97ebd20aec2527815e6db414d61b01dba40",
@@ -1774,6 +1720,24 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "6ab63ab6166c94fe0c08e93a164841e6903bd003b9f59e5c8e786787c0775263",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 302,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: TRUNCATE on ON. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "6b9c032ab750ecfcd64b2cdcd3da641b7f2dd2c2ac2846498016d3b462f75a1b",
@@ -1918,6 +1882,24 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "74a9cc3ffe1e232040c3abc88aa5dc711ef078799614ccb8630b39a544054ccf",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 53,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "7657dd2651789bd84d6a775bb9aa7697e8a3606cf3124915d120eb5fb0583298",
@@ -2152,24 +2134,6 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
-    },
-    {
-      "site_signature": "7f66434d9e213fc2f8ff04d5ee5cb4c635e255c413898ff2b289c3f9bec822c8",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 280,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "FUNCTION",
-          "exact_name": "telegram_provider_account_truncate_guard",
-          "operation": "CREATE_FUNCTION"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_provider_account_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "7ffbded658510f0900ef5130b923bf144e57342e75e3630a66caff92b8786c89",
@@ -2478,6 +2442,24 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
+      "site_signature": "91a9a6f9817cc01677479251d42f0c9b9df46db7189b4b401523591a223e49ef",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 290,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "telegram_provider_account_truncate_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_provider_account_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "9437f4e4707f4fbbab0e53cdcd9ff3b9e04bd58e31f8889567a14e2696fdec7f",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
       "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
@@ -2496,28 +2478,10 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "9584c105bc614400888380d62f9025dbf40e1d760ea98ef53945405c4b4d5457",
+      "site_signature": "975600f44a88f2fd4b1d3e6c258d0fcc3f63c6edc100bab24196e92654cd567f",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 276,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TRIGGER",
-          "exact_name": "TelegramTransportBinding_guard",
-          "operation": "CREATE_TRIGGER"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramTransportBinding_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
-      "site_signature": "965a01d239a13622f394bf2f0a1df528d523f9d0ec8b1d5fc6de2908a9d454ff",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 17,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 80,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
@@ -2525,11 +2489,11 @@
       "writes": [
         {
           "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "CREATE_TABLE"
+          "exact_name": "TelegramAccount",
+          "operation": "ALTER_TABLE"
         }
       ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "97face0b14d933ca17fb894fde2d5eb7153c9f67251566367f1b14f8194ffb32",
@@ -2622,22 +2586,22 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "9fb2f4de27c6db6b962f8d23bdcd9e59e306259b96ef57c7e24094b180805873",
+      "site_signature": "a0d78f70e12b2b23256e4539253b66ed4ac1dbaf2325563ec3112e4dbade7aa8",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 137,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 297,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
       "production_reachability": "CONTROLLED_MIGRATION",
       "writes": [
         {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "ALTER_TABLE"
+          "kind": "TRIGGER",
+          "exact_name": "TelegramAccount_truncate_guard",
+          "operation": "CREATE_TRIGGER"
         }
       ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramAccount_truncate_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "a2919473a31266a18dc80e839669f8f12105482cc1c2cd3484c7efb0926b3642",
@@ -2730,42 +2694,6 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority. The analyzer reads the BEFORE TRUNCATE event keyword of the CREATE TRIGGER statement at this line as a TRUNCATE of a table named ON. No table named ON exists and nothing is truncated: the statement installs a statement-level guard that refuses truncation of a new foundation table."
     },
     {
-      "site_signature": "a55e9906ba4e9fec9e3b91212a5626acdb115fd297d77c4a733c5f3b5e350df5",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 2,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramAccount",
-          "operation": "CREATE_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
-      "site_signature": "a6928bd302c55b6459230c2cf0ee7dc9ef1bc7d60429b8db598a2af4344621bf",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 292,
-      "column": 8,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "ON",
-          "operation": "TRUNCATE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: TRUNCATE on ON. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "a7bb579420666341312247c8ba0cb7b7e5cd1eb149bad7b40489d11ac803c02a",
       "path": "gravity-mvp/scripts/migrate-contacts.ts",
       "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
@@ -2854,6 +2782,24 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "abcdf2b22bfa15461e68c7dc7c0e9cfad85b921a7b4c44d9f466c6e00f8abf03",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 207,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "TelegramAccount_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TRIGGER on TelegramAccount_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "ad05bb761375aa2d26f6573c512167bf9e9d476ccd1e7dfc33323970ae57245f",
@@ -3072,10 +3018,10 @@
       "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
     },
     {
-      "site_signature": "b586c64ab7bea1b0b5f034a0ded8aaf0762a0b0f9624e35d2eaaf9762d303c1d",
+      "site_signature": "b57a591b64d4a9aaf9da13213b51dabfc236cb49ca83b0e51624530c3675b260",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 127,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 65,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
@@ -3125,6 +3071,42 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "bdbba8cbda7ab8871a907bfcd306147daa6cf99dadc9c1c8d3f3ab3a5b12ed7c",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 62,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
+      "site_signature": "bebe3f717280420da8cce717312dd1fc94422a49767aebc4f81d22d563ad4b93",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 115,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "c099548aaa9f0871ea1cc7475912c648b58f64f43308d0bf100b315a39890bcb",
@@ -3180,42 +3162,6 @@
       ],
       "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
       "existing_capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push"
-    },
-    {
-      "site_signature": "c50739c5cfa4f94f0fd0df508a012611147825760219c676a22f110e1ec61d9f",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 52,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
-      "site_signature": "c61cfeb3ab6c4c361af6ecafdd20a71eccda570d5270ba8a38cc2247c07907a8",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 89,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "c7480706f13b3675b4534a5b6d52328ebc2997564978c2b51682642abbc4643c",
@@ -3308,10 +3254,10 @@
       "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
     },
     {
-      "site_signature": "d1598e7f8f04526b03e10fc20947d29d523748a3bc3b488e5ab66379ddba9bf8",
+      "site_signature": "cffedb056f6db28cc262e881ff5a5bd45a27c9087fca7aaa0d357b7ff628f4e9",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 70,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 59,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
@@ -3319,29 +3265,11 @@
       "writes": [
         {
           "kind": "TABLE",
-          "exact_name": "TelegramAccount",
-          "operation": "ALTER_TABLE"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
-      "site_signature": "d298deb30052281966be5f7f806365788880216f68eaf0a9de2ae6f26ccbc704",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 37,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramAccount",
+          "exact_name": "TelegramTransportBinding",
           "operation": "CREATE_INDEX"
         }
       ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "d2adf0eb9a1cf314fbd8ea4b7aba766e10b0eb8d1c5943d3256dd9482d824e26",
@@ -3398,6 +3326,24 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
+      "site_signature": "d78c0eda567b7e308c99df8d2b980bfa859983c5788302f65cfe08ef66c0263e",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 50,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramAccount",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "d81f9a400d3f0999128c4feeb23e2bec0b8259396873e5bd4edef31805c8b61c",
       "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
       "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
@@ -3452,24 +3398,6 @@
       "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
     },
     {
-      "site_signature": "db5eb0ae8f96eee8d4fbc46bddbbe3f01007f85dc0a55a198e8e85af3bfd624a",
-      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 49,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "telegram_channel",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "TelegramTransportBinding",
-          "operation": "CREATE_INDEX"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_INDEX on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
-    },
-    {
       "site_signature": "db912d18e57dcdb666998db2e2d2ce8bda6d3353b9c61063da38e2c173ba1c4d",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -3486,6 +3414,24 @@
         }
       ],
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "dd99bff3aa7868535372ecc6e9484efaf35d7e9439863fdc187761d320cb7419",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 137,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: ALTER_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     },
     {
       "site_signature": "df0a6ee8411408c361875cfb630c3f8dd448eb0602dc648a12b7d2aa5605ddd4",
@@ -3830,6 +3776,24 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
+      "site_signature": "f4eca1ff5396d83b7864551256e9c37da2474a584ae36690480ded1f63f8f582",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 160,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "telegram_account_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_account_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "f5e02b8711cbdb915625e7e01367b9c0a98d1d76eb94fbe1ace993520bbd0ffe",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
       "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
@@ -3957,6 +3921,24 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only WhatsApp Channel-owned company account foundation schema (four new tables with their constraints, guard functions and triggers) through controlled migration tooling and touches no existing table; this review grants no application-runtime or production-application authority."
     },
     {
+      "site_signature": "f9f91acd14feda4a1aef5530e8ffecbe534cac2127a0b6c71ffc487b37721e8b",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 12,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "TelegramAccount",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TABLE on TelegramAccount. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "fa9cfafb7774d76a3c75cb964b5b83f0be5a9ffa031bbaea1d963e70d4cb3f0f",
       "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
       "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
@@ -4012,6 +3994,24 @@
       "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
     },
     {
+      "site_signature": "fb6ae9c592f89e8b6fd72016fe8a771ec3670931a90376c531cad2d2a181f173",
+      "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 211,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "telegram_transport_binding_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_transport_binding_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
       "site_signature": "fba247daf824753973403cfd3c56e626aa01e681ac183ddd96fccc82adabd87e",
       "path": "gravity-mvp/prisma/migrations/20260916120000_add_whatsapp_account_foundation/migration.sql",
       "source_sha256": "47561520f4e59997cff2825dd80c2c71cb8e94390c28dfc8eab89c82dd97e8c2",
@@ -4048,22 +4048,22 @@
       "review_rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
-      "site_signature": "ff9557282ec44c8ff0cfaaee72c9660e734f043ae80627678553d10e10e4c327",
+      "site_signature": "fe350072aec913d7219cc906430a9b74ea1439baaae0583ad0fd77cbeff01b5c",
       "path": "gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql",
-      "source_sha256": "047de2812533e7f3ef330a380cfb6807b444801c8d139dc50814560882288b2d",
-      "line": 201,
+      "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c",
+      "line": 27,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "telegram_channel",
       "production_reachability": "CONTROLLED_MIGRATION",
       "writes": [
         {
-          "kind": "FUNCTION",
-          "exact_name": "telegram_transport_binding_guard",
-          "operation": "CREATE_FUNCTION"
+          "kind": "TABLE",
+          "exact_name": "TelegramTransportBinding",
+          "operation": "CREATE_TABLE"
         }
       ],
-      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_FUNCTION on telegram_transport_binding_guard. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+      "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
     }
   ]
 }
