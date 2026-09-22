@@ -27,6 +27,7 @@ const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { deriveMaxChatKind }        = require('./lib/ChatKind')
+const { attestDomRead, domCandidateExtraction, pageSample } = require('./lib/DomRouteAttestation')
 const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
 
@@ -1326,6 +1327,7 @@ async function sendTextViaUi(chatId, text, protocolChatId = null) {
   if (!page || !isReady) return false
 
   uiSendInProgress = true
+  uiSendEpoch += 1
   try {
     const targetUrl = `https://web.max.ru/${chatId}`
     if (transport) transport._activeUiChatId = protocolChatId ? String(protocolChatId) : protocolChatIdForUiRoute(chatId)
@@ -1729,6 +1731,7 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
   const tmpPath = path.join('/tmp', `max_upload_${Date.now()}_${safeName}`)
 
   uiSendInProgress = true
+  uiSendEpoch += 1
   try {
     fs.writeFileSync(tmpPath, fileBuffer)
     maxDeliveryLog({
@@ -1979,6 +1982,11 @@ const domRecoveredTextCounts = new Map()
 let domFallbackRunning = false
 let domFallbackScheduledAt = 0
 let uiSendInProgress = false
+// Every claim and every move of the shared page is counted, so a DOM read can prove that
+// nothing else used or moved the page while it was reading (lib/DomRouteAttestation.js).
+let uiSendEpoch = 0
+let mainFrameNavigationEpoch = 0
+let lastMainFrameNavigationAt = 0
 const automaticDomRecoveryTimers = new Map()
 const recentCrmOutboundTexts = []
 const RECENT_CRM_OUTBOUND_TTL_MS = 10 * 60 * 1000
@@ -2729,6 +2737,20 @@ async function materializeDomFallbackAttachments(uiRouteId, attachments = []) {
   return out
 }
 
+// One sample of everything that can move or claim the shared page around a DOM read.
+function domPageSample(uiRouteId) {
+  return pageSample({
+    url: page ? page.url() : '',
+    uiRouteId,
+    uiSendInProgress,
+    dialogBusy: _dialogBusy,
+    uiSendEpoch,
+    navigationEpoch: mainFrameNavigationEpoch,
+    lastNavigationAt: lastMainFrameNavigationAt,
+    now: Date.now(),
+  })
+}
+
 async function scrapeRecentDomMessages(uiRouteId) {
   if (!page || !isReady) return []
 
@@ -2751,9 +2773,12 @@ async function scrapeRecentDomMessages(uiRouteId) {
   }).catch(() => {})
   await page.waitForTimeout(500)
 
+  const before = domPageSample(uiRouteId)
   const candidates = await page.evaluate(() => {
     const viewportW = window.innerWidth || 1280
     const viewportH = window.innerHeight || 720
+    // Read in the same page task as the DOM snapshot below.
+    const readPathname = location.pathname
     const rows = [...document.querySelectorAll('[role="listitem"], .item, [class*="messageWrapper"]')]
     const candidates = []
 
@@ -2874,6 +2899,8 @@ async function scrapeRecentDomMessages(uiRouteId) {
         displayMinute: timeInfo.minute,
         hasReplyQuote,
         isOutgoing: /messageWrapper--isOut|message--isOut/.test(`${message.className || ''} ${message.querySelector('[class*="message--isOut"]')?.className || ''}`),
+        isMessageWrapper: message.matches('[class*="messageWrapper"]'),
+        readPathname,
       })
     }
 
@@ -2902,7 +2929,7 @@ async function scrapeRecentDomMessages(uiRouteId) {
       if (childText === text && el.children.length > 0) continue
 
       const timeInfo = displayTime(text)
-      textRows.push({ text, attachments: [], x: rect.left, y: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height, viewportW, displayTime: timeInfo.label, displayMinute: timeInfo.minute, isOutgoing: false })
+      textRows.push({ text, attachments: [], x: rect.left, y: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height, viewportW, displayTime: timeInfo.label, displayMinute: timeInfo.minute, isOutgoing: false, isMessageWrapper: false, readPathname })
     }
 
     const seen = new Set()
@@ -2917,11 +2944,19 @@ async function scrapeRecentDomMessages(uiRouteId) {
       .slice(-12)
   })
 
+  const after = domPageSample(uiRouteId)
   return candidates
     .map(candidate => {
       const cleaned = cleanDomMessageText(candidate.text)
       const attachments = Array.isArray(candidate.attachments) ? candidate.attachments : []
-      return { ...candidate, text: cleaned, attachments }
+      const verified = attestDomRead({ uiRouteId, before, readPathname: candidate.readPathname, after })
+      return {
+        ...candidate,
+        text: cleaned,
+        attachments,
+        extraction: domCandidateExtraction(candidate.isMessageWrapper),
+        _domRoute: { uiRouteId: String(uiRouteId), verified },
+      }
     })
     .filter(candidate => candidate.text || candidate.attachments.length > 0)
 }
@@ -3140,6 +3175,16 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
   const crmPhone = normalizePhoneForCrmPayload(options.phone || cachedPhone)
   const crmSenderName = options.senderName || options.name || null
+  // What page this text was read from, for the CRM to bind it to a proven conversation.
+  const resolvedRoute = resolveUiRouteIdForChat(chatId)
+  const domRoute = {
+    uiRouteId: String(uiRouteId),
+    source: resolvedRoute.source,
+    extraction: latest?.extraction === 'message_element' ? 'message_element' : 'generic_text_rows',
+    verified: latest?._domRoute?.verified === true
+      && latest._domRoute.uiRouteId === String(uiRouteId)
+      && String(resolvedRoute.uiRouteId) === String(uiRouteId),
+  }
   console.log(`[domFallback] ${reason} chatId=${chatId} text="${String(text || '').slice(0, 80)}" attachments=${attachments.length}`)
   rememberKnownChatId(chatId)
   if (crmPhone) savePhoneChatId(crmPhone, chatId)
@@ -3152,6 +3197,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     attachments,
     isOutgoing: isOutgoingCandidate,
     source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    domRoute,
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
@@ -4051,6 +4097,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // the route signal below would then read a conversation that has nothing to
             // do with this send. Claim the page for the whole compose-and-bind window.
             uiSendInProgress = true
+            uiSendEpoch += 1
             try {
             // Dismiss "Add to contacts" banner if present (it may overlay compose area)
             const bannerDismiss = page.locator('button[aria-label*="Hide" i][aria-label*="contacts" i]').first()
@@ -5408,6 +5455,12 @@ async function init() {
   })
 
   page = context.pages()[0] || await context.newPage()
+  // Counts every main-frame navigation, including same-document pushState and reloads.
+  page.on('framenavigated', frame => {
+    if (frame !== page.mainFrame()) return
+    mainFrameNavigationEpoch += 1
+    lastMainFrameNavigationAt = Date.now()
+  })
 
   // 1. Инжектируем WS-хук ДО навигации
   await transport.injectHooks(page)

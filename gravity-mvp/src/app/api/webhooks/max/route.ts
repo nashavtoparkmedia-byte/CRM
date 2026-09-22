@@ -8,9 +8,11 @@ import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messag
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
   markChannelIdentityConflictV1,
+  prepareContactConversationIdentityV1,
   startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
 } from '@/modules/contacts/public/v1'
+import { PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
@@ -133,6 +135,7 @@ type MaxWebhookBody = {
   source?: string | null
   replyToExternalId?: string | number | null
   chatKind?: 'private' | 'group' | 'unknown' | null
+  domRoute?: unknown
 }
 
 function normalizeMaxChatId(chatId: unknown): string {
@@ -191,6 +194,126 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
   return incomingAttachments.every(incoming =>
     existingAttachments.some(existing => sameMaxAttachment(incoming, existing))
   )
+}
+
+// DOM-fallback text is what the MAX scraper recovered from the web page when the provider
+// frame for a message could not be decoded (max-web-scraper forwardDomCandidate). It never
+// carries a provider senderId, and its id is `max-dom-<chatId>-<16 hex>` for the chat it was
+// read from. The scraper attests which page it read in `domRoute`
+// (max-web-scraper/lib/DomRouteAttestation.js); an unattested event is never bound.
+const MAX_DOM_FALLBACK_EXTERNAL_ID = /^max-dom-(\d{1,20})-([0-9a-f]{16})$/
+const MAX_DOM_ROUTE_ID = /^\d{1,20}$/
+
+type MaxDomFallbackRoute = {
+  uiRouteId: string
+  source: 'static_override' | 'protocol_chat_id' | 'dialog_participant'
+}
+
+type MaxDomFallbackEvent = {
+  source: string | null | undefined
+  isOutgoing: boolean | null | undefined
+  deleted: boolean | null | undefined
+  isHistoryReplay: boolean
+  isTextProviderEvent: boolean
+  trimmedText: string
+  attachments: unknown
+  senderId: unknown
+  externalId: string | null
+  chatId: unknown
+  rawChatId: unknown
+  externalChatId: string
+  domRoute: unknown
+}
+
+// A malformed attestation is a definite negative, never an exception.
+function attestedMaxDomRoute(value: unknown): MaxDomFallbackRoute | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const route = value as Record<string, unknown>
+  if (route.verified !== true || route.extraction !== 'message_element') return null
+  if (typeof route.uiRouteId !== 'string' || !MAX_DOM_ROUTE_ID.test(route.uiRouteId)) return null
+  if (route.source !== 'static_override' && route.source !== 'protocol_chat_id' && route.source !== 'dialog_participant') {
+    return null
+  }
+  return { uiRouteId: route.uiRouteId, source: route.source }
+}
+
+function boundedMaxDomFallbackRoute(event: MaxDomFallbackEvent): MaxDomFallbackRoute | null {
+  if (event.source !== 'dom_fallback') return null
+  if (event.isOutgoing || event.deleted || event.isHistoryReplay) return null
+  if (!event.isTextProviderEvent || !event.trimmedText) return null
+  if (event.attachments != null && (!Array.isArray(event.attachments) || event.attachments.length > 0)) return null
+  if (event.senderId !== undefined && event.senderId !== null) return null
+  const match = event.externalId ? MAX_DOM_FALLBACK_EXTERNAL_ID.exec(event.externalId) : null
+  if (!match || match[1] !== event.externalChatId) return null
+  if (String(event.chatId) !== event.externalChatId) return null
+  if (String(event.rawChatId ?? event.chatId) !== event.externalChatId) return null
+  return attestedMaxDomRoute(event.domRoute)
+}
+
+type MaxDomFallbackPeerProof =
+  | { status: 'bound'; senderId: string; contactId: string }
+  | { status: 'unproven'; reason: string }
+
+// The peer of a DOM-fallback event is the peer of the exact, already proven private
+// conversation whose page the scraper attests it read, and only when every independent
+// invariant names that same peer. Definite negatives return `unproven`; lookup failures
+// throw, so a transient error can never be recorded as an identity conflict.
+async function proveMaxDomFallbackPeer(
+  chat: Chat,
+  route: MaxDomFallbackRoute,
+  providerAccountId: string,
+  incomingChatKind: 'private' | 'group' | 'unknown',
+): Promise<MaxDomFallbackPeerProof> {
+  const unproven = (reason: string): MaxDomFallbackPeerProof => ({ status: 'unproven', reason })
+  const metadata = metadataRecord(chat.metadata)
+  if (chat.channel !== 'max') return unproven('channel')
+  if (chat.chatType !== 'private') return unproven('chat_type')
+  if (metadata.chatKind !== 'private') return unproven('stored_chat_kind')
+  if (incomingChatKind !== 'private') return unproven('incoming_chat_kind')
+  if (concreteProviderAccountId(metadata) !== providerAccountId) return unproven('provider_account')
+  const senderId = typeof metadata.senderId === 'string' && metadata.senderId.trim() !== '' ? metadata.senderId : null
+  if (!senderId) return unproven('stored_sender')
+  if (senderId === chat.externalChatId || senderId === metadata.rawExternalChatId) return unproven('stored_sender_is_chat_key')
+  if (!chat.contactId || !chat.contactIdentityId) return unproven('identity_link')
+  const routeNamesThisChat = route.source === 'static_override'
+    ? Object.hasOwn(MAX_CHAT_ID_ALIASES, route.uiRouteId) && MAX_CHAT_ID_ALIASES[route.uiRouteId] === chat.externalChatId
+    : route.source === 'protocol_chat_id'
+      ? route.uiRouteId === chat.externalChatId
+      : route.uiRouteId === senderId
+  if (!routeNamesThisChat) return unproven('page_route')
+  // No other private conversation on this account may claim the same peer.
+  const claimants = await prisma.chat.findMany({
+    where: {
+      channel: 'max',
+      AND: [
+        { metadata: { path: ['senderId'], equals: senderId } },
+        { metadata: { path: ['providerAccountId'], equals: providerAccountId } },
+      ],
+    },
+    select: { id: true, metadata: true },
+    take: 25,
+  })
+  const privateClaimants = claimants.filter(candidate => metadataRecord(candidate.metadata).chatKind !== 'group')
+  if (privateClaimants.length !== 1 || privateClaimants[0].id !== chat.id) return unproven('competing_conversation')
+  // Contacts owns identity integrity: an active MAX identity of this contact, a contact that
+  // is not archived, and no open or evidenced identity conflict.
+  const prepared = await prepareContactConversationIdentityV1({
+    contract: PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
+    purpose: 'send_in_bound_conversation',
+    contactId: chat.contactId,
+    channel: 'max',
+    identityId: chat.contactIdentityId,
+    phoneId: null,
+  })
+  if (prepared.status !== 'ready') return unproven(`identity_${prepared.status}`)
+  if (prepared.contact.id !== chat.contactId) return unproven('identity_contact')
+  if (prepared.identity.id !== chat.contactIdentityId) return unproven('identity_id')
+  if (prepared.identity.channel !== 'max') return unproven('identity_channel')
+  if (prepared.identity.externalId !== senderId) return unproven('identity_peer')
+  if (prepared.identity.providerAccountId && prepared.identity.providerAccountId !== providerAccountId) {
+    return unproven('identity_provider_account')
+  }
+  return { status: 'bound', senderId, contactId: chat.contactId }
 }
 
 export async function POST(request: Request) {
@@ -295,7 +418,7 @@ export async function POST(request: Request) {
     const externalChatId = normalizeMaxChatId(chatId)
     // Scraper echoes identify our own MAX account as the sender. Only inbound
     // events can contribute peer identity evidence to a conversation.
-    const peerSenderIdString = isOutgoing || !senderId ? null : String(senderId)
+    let peerSenderIdString = isOutgoing || !senderId ? null : String(senderId)
     const normalizedPeerSenderPhone = isOutgoing || !(senderPhone || phone)
       ? null
       : normalizePhoneE164(String(senderPhone || phone))
@@ -336,6 +459,27 @@ export async function POST(request: Request) {
       where: { externalChatId },
     })
     let senderCandidateCount = 0
+
+    // An attested DOM-fallback text carries no provider sender. It inherits the peer of the
+    // exact proven private conversation it names, or stays unproven so the collision guard
+    // below fails closed exactly as it does for every other sender-less event.
+    let domFallbackPeer: { senderId: string; contactId: string } | null = null
+    const domFallbackRoute = chat && !peerSenderIdString
+      ? boundedMaxDomFallbackRoute({
+        source, isOutgoing, deleted, isHistoryReplay, isTextProviderEvent, trimmedText, attachments,
+        senderId, externalId: externalIdString, chatId, rawChatId, externalChatId, domRoute: body.domRoute,
+      })
+      : null
+    if (chat && domFallbackRoute) {
+      const proof = await proveMaxDomFallbackPeer(chat, domFallbackRoute, maxProviderAccountId, maxChatKind)
+      if (proof.status === 'bound') {
+        domFallbackPeer = { senderId: proof.senderId, contactId: proof.contactId }
+        peerSenderIdString = proof.senderId
+        maxRuntimeTrace('webhook.dom_fallback_peer_bound', { providerMessageId: externalIdString, chatId: String(chatId), chatInternalId: chat.id, routeSource: domFallbackRoute.source })
+      } else {
+        maxRuntimeTrace('webhook.dom_fallback_peer_unproven', { providerMessageId: externalIdString, chatId: String(chatId), chatInternalId: chat.id, reason: proof.reason })
+      }
+    }
 
     const persistMaxIdentityCollision = async (
       existingChat: Chat,
@@ -550,7 +694,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (peerSenderIdString) {
+    if (peerSenderIdString && !domFallbackPeer) {
       const senderCandidates = await prisma.chat.findMany({
         where: {
           channel: 'max',
@@ -615,9 +759,10 @@ export async function POST(request: Request) {
         patch: {
           ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
-          ...(peerSenderName && chat.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
-          // Обновляем senderId / phone в metadata
-          ...((peerSenderIdString || effectivePeerSenderPhone) ? {
+          ...(peerSenderName && !domFallbackPeer && chat.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
+          // Обновляем senderId / phone в metadata. A DOM-bound event proves nothing new about
+          // the conversation, and its phone/name come from the scraper's cache: keep it as is.
+          ...((peerSenderIdString || effectivePeerSenderPhone) && !domFallbackPeer ? {
             metadata: {
               ...existingMetadata,
               ...(peerSenderIdString       ? { senderId: peerSenderIdString }       : {}),
@@ -767,7 +912,7 @@ export async function POST(request: Request) {
         channel: 'max',
         externalId: externalIdString,
         sentAt, // validated above
-        metadata: { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+        metadata: { senderId: domFallbackPeer ? domFallbackPeer.senderId : senderId, ...(domFallbackPeer ? { senderIdProof: 'bound_private_conversation' } : {}), maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
       })).message as Message
       if (message.chatId !== chat.id) {
         const owningChat = await prisma.chat.findUnique({ where: { id: message.chatId } })
@@ -842,7 +987,16 @@ export async function POST(request: Request) {
     }
     if (!isOutgoing) {
       try {
-        if (maxChatKind === 'group') {
+        if (domFallbackPeer) {
+          // The proven conversation already names its person. A DOM-recovered sender is not
+          // provider-framed, so it neither re-resolves the contact nor confirms reachability.
+          contactResolutionMetadata = {
+            status: 'bound_conversation_reused',
+            candidateCount: 1,
+            automaticLinkPerformed: false,
+          }
+          legacyContactResolution = { status: 'contact_reused', contactId: domFallbackPeer.contactId, source: 'identity' }
+        } else if (maxChatKind === 'group') {
           contactResolutionMetadata = {
             status: 'group_skipped',
             candidateCount: 0,
