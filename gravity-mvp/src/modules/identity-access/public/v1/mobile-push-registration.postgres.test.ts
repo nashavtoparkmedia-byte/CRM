@@ -596,7 +596,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const stale = Array.from({ length: 40 }, (_, index) => `${'ab'.repeat(32)}.${expiredSeconds - index}`)
         await prisma.mobileDeviceRegistration.update({
             where: { deviceId: id },
-            data: { revokedSessionBindings: { set: [...stale, 'not-a-barrier-entry'] } },
+            data: { revokedSessionBindings: [...stale, 'not-a-barrier-entry'] },
         })
         await logout(live)
         const afterFirst = (await rowOf(id))!.revokedSessionBindings

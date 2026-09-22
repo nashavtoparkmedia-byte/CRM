@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "021fb5b89a7cab09ebe0185db9f71855da00c6ccf9436ba662c3b03a4af70a59",
+    "source_sha256": "132c458c916385056ac71071d24bb7ad1b103c9adfe12bc4efcf752dc71b76c5",
     "reviewed_path_count": 23,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 908,
-    "sorted_site_signatures_sha256": "b33b748d630f8b4b3f525c4dd03fb15299729ad8808d5f675be20a29a51ef081"
+    "sorted_site_signatures_sha256": "337ec83b11dfa1d1adf8a6ac51e287d9698a5663464e814950ad2f6f4ea8a24d"
   },
   "authorizations": [
     {
@@ -4008,45 +4008,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.identity_access.1c05b43ccbac357d",
-      "site_signature": "1c05b43ccbac357df052194bbc8855f03070c878164a9574649319ea1c70f0dc",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-        "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-        "line": 42,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "identity_access",
-      "target": {
-        "data_owner": "identity_access",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "MobileDeviceRegistration",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
-        "evidence": [
-          "source_sha256:130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-          "site_signature:1c05b43ccbac357df052194bbc8855f03070c878164a9574649319ea1c70f0dc",
-          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:42:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.1c28bd8529170437",
       "site_signature": "1c28bd8529170437fc6d512d26200944e2b02801a3c14b3fbb59bf79e465150b",
       "status": "APPROVED",
@@ -5524,45 +5485,6 @@
         "canonical_ordinal": 15,
         "artifact_sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
         "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.identity_access.26eb3140e241770e",
-      "site_signature": "26eb3140e241770e8afb68232e0ef2ef7a57c13dca54ab92f53dddca4aecc283",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-        "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-        "line": 46,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "identity_access",
-      "target": {
-        "data_owner": "identity_access",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "MobileDeviceRegistration",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
-        "evidence": [
-          "source_sha256:130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-          "site_signature:26eb3140e241770e8afb68232e0ef2ef7a57c13dca54ab92f53dddca4aecc283",
-          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:46:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -12589,6 +12511,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.5f3369d5c5e5e091",
+      "site_signature": "5f3369d5c5e5e091294b261507e39aedf3fe9c4544da445f5b83ca1da2f9df60",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+        "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+        "line": 44,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "MobileDeviceRegistration",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+          "site_signature:5f3369d5c5e5e091294b261507e39aedf3fe9c4544da445f5b83ca1da2f9df60",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:44:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.5fb76bfe4ace1330",
       "site_signature": "5fb76bfe4ace1330613936f67f98285c7b7b4b369ecb680f7b4fbbf0e2c12320",
       "status": "APPROVED",
@@ -14145,6 +14106,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.68b883b5e54a3756",
+      "site_signature": "68b883b5e54a3756a4c87389bb8a7ca2265162c96a536e6a68ef3617ee5c950c",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+        "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+        "line": 51,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "MobileDeviceRegistration",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+          "site_signature:68b883b5e54a3756a4c87389bb8a7ca2265162c96a536e6a68ef3617ee5c950c",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:51:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.68d25db86b295a13",
       "site_signature": "68d25db86b295a139d874668af9c62062fd3a9fb7f44099fae010f085e37ab7d",
       "status": "APPROVED",
@@ -14539,45 +14539,6 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.identity_access.6e2cdc5070bd6c3f",
-      "site_signature": "6e2cdc5070bd6c3fc0d1b2ea09d79a45fa695be1402f4b1b3738a5f0a4bf7edc",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-        "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-        "line": 17,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "identity_access",
-      "target": {
-        "data_owner": "identity_access",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "MobileDeviceRegistration",
-            "operation": "CREATE_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
-        "evidence": [
-          "source_sha256:130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-          "site_signature:6e2cdc5070bd6c3fc0d1b2ea09d79a45fa695be1402f4b1b3738a5f0a4bf7edc",
-          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:17:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -21923,6 +21884,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.a4fff114366233e6",
+      "site_signature": "a4fff114366233e6dcdac0901a844bff1bd71db0457e7009372e500e6b722092",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+        "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+        "line": 17,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "MobileDeviceRegistration",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+          "site_signature:a4fff114366233e6dcdac0901a844bff1bd71db0457e7009372e500e6b722092",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:17:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.a5013ba9b9adf23c",
       "site_signature": "a5013ba9b9adf23ceb129021b0c740299cd0ef708b6f722189764841614616f2",
       "status": "APPROVED",
@@ -28730,6 +28730,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.e202ac2e452e2372",
+      "site_signature": "e202ac2e452e23722b985c67c43233b92dcf34ef472cb47b210ae2ac5d71344a",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
+        "source_sha256": "bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+        "line": 48,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "MobileDeviceRegistration",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:bb46f44a3ff012f050e5e326b856ca4e580718aa55e0f757aebd27e50a0f3c71",
+          "site_signature:e202ac2e452e23722b985c67c43233b92dcf34ef472cb47b210ae2ac5d71344a",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:48:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.contacts.e2437e44902cb738",
       "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",
       "status": "APPROVED",
@@ -30751,45 +30790,6 @@
         "canonical_ordinal": 48,
         "artifact_sha256": "843064e4cf5b537c24571c6357feaf3bd808916ddae1e2cbfd10f40ecb4b6730",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726190658_add_max_route_registry/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.identity_access.f2408eada213d9dd",
-      "site_signature": "f2408eada213d9ddf9d9df445d3c4c5e3061d24bfe88aa4cdd7727e75a6c0987",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql",
-        "source_sha256": "130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-        "line": 49,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "identity_access",
-      "target": {
-        "data_owner": "identity_access",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "MobileDeviceRegistration",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Byte-pinned source-only expand-only migration for Mobile Push v1. It creates MobileDeviceRegistration, owned by identity_access, with its two unique indexes and one eligibility index, through controlled migration tooling; no existing table, column or row is touched. This review grants no application-runtime or production-application authority.",
-        "evidence": [
-          "source_sha256:130c34e38a7a396e9ad38e3a7ac3f27c87284e4b030df9554c64e393a48c1af6",
-          "site_signature:f2408eada213d9ddf9d9df445d3c4c5e3061d24bfe88aa4cdd7727e75a6c0987",
-          "source_coordinate:gravity-mvp/prisma/migrations/20260922120000_add_mobile_device_registration/migration.sql:49:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {

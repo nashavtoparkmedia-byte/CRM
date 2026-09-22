@@ -248,7 +248,10 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                         })
                         await transaction.mobileDeviceRegistration.updateMany({
                             where: { deviceId },
-                            data: { revokedSessionBindings: { set: keptBarrierEntries(row?.revokedSessionBindings ?? [], barrier.entry, now) } },
+                            // A plain list, not { set: … }: the operator form
+                            // reads as a nested relation write the analyzer
+                            // cannot resolve, and this writes the same value.
+                            data: { revokedSessionBindings: keptBarrierEntries(row?.revokedSessionBindings ?? [], barrier.entry, now) },
                         })
                     }
                     return revoked.count
