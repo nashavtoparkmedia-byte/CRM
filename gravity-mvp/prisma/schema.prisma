@@ -1675,11 +1675,11 @@ model MobileDeviceRegistration {
   sessionIssuedAt        DateTime  @db.Timestamptz(3)
   sessionExpiresAt       DateTime  @db.Timestamptz(3)
   sessionRevocationEpoch String    @db.VarChar(64)
-  credentialKeyId        String    @db.Char(16)
   createdAt              DateTime  @default(now()) @db.Timestamptz(3)
   lastSeenAt             DateTime  @db.Timestamptz(3)
   revokedAt              DateTime? @db.Timestamptz(3)
   revokedReason          String?   @db.VarChar(32)
+  revokedSessionBindings String[]  @default([]) @db.Char(64)
 
   @@index([revokedAt, sessionExpiresAt], map: "MobileDeviceRegistration_eligibility_idx")
 }

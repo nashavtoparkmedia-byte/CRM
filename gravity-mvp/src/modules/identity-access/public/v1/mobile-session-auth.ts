@@ -3,7 +3,9 @@ import {
     MOBILE_SESSION_COOKIE,
     MOBILE_SESSION_TTL_SECONDS,
     getMobileAccessCredentialConfig,
+    getMobileSessionRevocationEpoch,
     issueMobileSession,
+    mobileSessionBindingIdV1,
     isSafeDeviceId,
     isSafeRuntimeOperatorId,
     verifyMobileAccessCredentials,
@@ -161,14 +163,21 @@ export async function writeDerivedUiIdentityCookie(principal: MobileSessionPrinc
 export async function clearMobileSessionV1(): Promise<void> {
     // Mobile Push v1: a logged-out device must stop receiving push, so its
     // registration is revoked (and its token released) while the session that
-    // proves which device it is still exists. Logging out never depends on it:
-    // if revocation fails, the session is still cleared and the registration
-    // stays bounded by the session's own expiry.
+    // proves which device it is still exists. The session that logs out is
+    // recorded in the device's durable barrier, so a registration request
+    // proven by this same session can never re-activate the device, however
+    // long it was in flight; a device that never registered gets a tombstone
+    // carrying that barrier. Logging out never depends on it: if revocation
+    // fails, the session is still cleared and the registration stays bounded
+    // by the session's own expiry.
     const principal = await getMobileSessionPrincipalV1()
     if (principal) {
         try {
             const { revokeMobilePushDeviceForLogoutV1 } = await import('../../application/mobile-push-registration-operations')
-            await revokeMobilePushDeviceForLogoutV1(principal.deviceId)
+            await revokeMobilePushDeviceForLogoutV1({
+                principal,
+                sessionBindingId: mobileSessionBindingIdV1(principal, getMobileSessionRevocationEpoch()),
+            })
         } catch (error) {
             console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')
         }

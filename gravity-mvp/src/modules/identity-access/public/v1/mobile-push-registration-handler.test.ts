@@ -8,7 +8,7 @@ import {
 } from './mobile-push-registration-handler'
 
 const NOW = new Date('2026-09-22T12:00:00.000Z')
-const FACTS: MobilePushEligibilityFactsV1 = { now: NOW, revocationEpoch: '0', credentialSubject: 'mobile', credentialKeyId: '0123456789abcdef' }
+const FACTS: MobilePushEligibilityFactsV1 = { now: NOW, revocationEpoch: '0', credentialSubject: 'mobile' }
 const WRITE: MobilePushRegistrationWriteV1 = {
     deviceId: 'device-1',
     fcmToken: 'handler-token_0123456789:ABCDEFGHIJ',
@@ -18,7 +18,6 @@ const WRITE: MobilePushRegistrationWriteV1 = {
     sessionIssuedAt: new Date(NOW.getTime() - 3600_000),
     sessionExpiresAt: new Date(NOW.getTime() + 11 * 3600_000),
     sessionRevocationEpoch: '0',
-    credentialKeyId: '0123456789abcdef',
     now: NOW,
 }
 
@@ -82,6 +81,33 @@ describe('Mobile Push v1 registration rules', () => {
         const p = port({ bind, tokenIsBoundToOtherDevice })
         expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: true, registrationId: 'reg_1', reclaimedStaleBinding: false })
         expect(tokenIsBoundToOtherDevice).toHaveBeenCalledWith(WRITE.fcmToken, WRITE.deviceId)
+    })
+
+    it('refuses for good once this device has logged this session out', async () => {
+        const p = port({ bind: vi.fn(async () => ({ outcome: 'session_revoked' as const })) })
+        expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: false, code: 'MOBILE_SESSION_REVOKED' })
+        // The barrier is decided by the write itself; nothing else is attempted.
+        expect(p.reclaimFromIneligibleHolderAndBind).not.toHaveBeenCalled()
+        expect(p.bind).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses when the logout lands while a reclaim is in flight', async () => {
+        const p = port({
+            bind: vi.fn(async () => ({ outcome: 'token_conflict' as const })),
+            reclaimFromIneligibleHolderAndBind: vi.fn(async () => ({ outcome: 'session_revoked' as const })),
+        })
+        expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: false, code: 'MOBILE_SESSION_REVOKED' })
+        expect(p.bind).toHaveBeenCalledTimes(1)
+    })
+
+    it('records the logged-out session on the device when revoking', async () => {
+        const p = port()
+        const session = {
+            credentialSubject: 'mobile', runtimeOperatorId: 'u1',
+            sessionIssuedAt: WRITE.sessionIssuedAt, sessionExpiresAt: WRITE.sessionExpiresAt, sessionRevocationEpoch: '0',
+        }
+        await createMobilePushRegistrationHandlerV1(p).revokeForLogout('device-1', WRITE.sessionBindingId, session, NOW)
+        expect(p.revokeDevice).toHaveBeenCalledWith('device-1', WRITE.sessionBindingId, session, 'logout', NOW)
     })
 
     it('gives up closed rather than looping when the token keeps changing hands', async () => {

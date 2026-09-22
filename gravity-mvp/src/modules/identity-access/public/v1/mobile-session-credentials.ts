@@ -298,49 +298,66 @@ export function normalizeMobileReturnTo(value: unknown): string {
 
 // ── Mobile Push v1: non-secret session fingerprints ─────────────────────────
 
-const SESSION_BINDING_LABEL = 'yoko.mobile-push.session-binding.v1'
-const CREDENTIAL_KEY_ID_LABEL = 'yoko.mobile-push.credential-key-id.v1'
+const SESSION_BINDING_LABEL = 'yoko.mobile-push.session-binding.v2'
 
 /**
- * One-way fingerprint of an ALREADY VERIFIED session token.
+ * Identity of ONE mobile session, derived from the verified session's own
+ * facts. Stable for the life of that session (a token rotation inside it
+ * changes nothing here) and different after a new login, because a new
+ * session carries a new expiry.
  *
- * It changes whenever a new session is issued (a new login carries a new
- * `iat`, so a new token) and stays identical for the life of one session, so a
- * push delivery can prove it still belongs to the session that was live when
- * it was fanned out. It cannot authenticate anything: the CRM only accepts the
- * signed token itself, and the token's HMAC cannot be recovered from this
- * digest. The token is never stored; only this fingerprint is.
+ * NOTHING password-derived goes in. Every stored field of a registration is a
+ * fact an attacker with the database already has, so a digest that mixed in
+ * anything derived from MOBILE_ACCESS_PASS — including the signed token, whose
+ * payload is reconstructible from those same stored fields — would be a fast
+ * offline verifier for password guesses. This digest is a name, not a proof:
+ * it authenticates nothing, and only the signed token is ever accepted.
+ *
+ * The operator label is deliberately excluded: it is client-supplied and
+ * unverified, so including it would let a client mint a fresh session identity
+ * and step around the logout barrier keyed on this value.
+ *
+ * Two logins for the same device inside the same second share an identity.
+ * That is fail-closed: a device that logged out and back in within one second
+ * stays silent until its next login, and never the reverse.
  */
-export function mobileSessionBindingIdV1(verifiedToken: string): string {
-    return createHash('sha256').update(`${SESSION_BINDING_LABEL}\0${verifiedToken}`, 'utf8').digest('hex')
+export function mobileSessionBindingIdV1(
+    principal: MobileSessionPrincipalV1,
+    revocationEpoch: string,
+): string {
+    return createHash('sha256')
+        .update([
+            SESSION_BINDING_LABEL,
+            principal.deviceId,
+            principal.credentialSubject,
+            revocationEpoch,
+            String(principal.expiresAtSeconds),
+        ].join('\0'), 'utf8')
+        .digest('hex')
 }
 
 export interface MobilePushCredentialFactsV1 {
     /** The provisioned mobile credential's username. Not a secret. */
     credentialSubject: string
-    /** 16-hex non-reversible fingerprint of the current session signing key. */
-    credentialKeyId: string
 }
 
 /**
  * The credential facts a push registration is bound to, or null when the
  * mobile lane is not provisioned.
  *
- * Rotating MOBILE_ACCESS_PASS (or MOBILE_ACCESS_USER) changes the signing key
- * and therefore this key id, which makes every registration bound to the old
- * key ineligible at once — the same lever that already kills every session.
- * No password leaves this module.
+ * OPERATIONAL CONTRACT: rotating MOBILE_ACCESS_PASS must also advance
+ * MOBILE_SESSION_REVOCATION_EPOCH. Rotation alone stops new logins and
+ * invalidates the cookies immediately, but a registration already bound to a
+ * session issued under the old password keeps receiving push until that
+ * session's expiry (at most the 12 h TTL). Advancing the epoch makes every
+ * such registration ineligible at once. Push v1 deliberately stores no
+ * password-derived value to detect the rotation itself: such a value would be
+ * an offline verifier for password guesses in the database.
  */
 export function currentMobilePushCredentialFactsV1(
     env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
 ): MobilePushCredentialFactsV1 | null {
     const config = getMobileAccessCredentialConfig(env)
     if (!config) return null
-    return {
-        credentialSubject: config.username,
-        credentialKeyId: createHmac('sha256', sessionKey(config))
-            .update(CREDENTIAL_KEY_ID_LABEL, 'utf8')
-            .digest('hex')
-            .slice(0, 16),
-    }
+    return { credentialSubject: config.username }
 }

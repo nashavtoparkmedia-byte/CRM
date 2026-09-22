@@ -18,9 +18,11 @@ import {
  * Mobile Push v1 registration operations, bound to the live server facts.
  *
  * Every eligibility decision reads the CURRENT revocation epoch and credential
- * key, so raising MOBILE_SESSION_REVOCATION_EPOCH or rotating the mobile
- * credential silences every registration bound to the old values at once,
- * without a job and without touching the rows.
+ * subject, so raising MOBILE_SESSION_REVOCATION_EPOCH silences every
+ * registration bound to an older generation at once, without a job and without
+ * touching the rows. Rotating MOBILE_ACCESS_PASS must advance that epoch too:
+ * nothing password-derived is stored, because such a value would let anyone
+ * holding the database verify password guesses offline.
  */
 
 const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
@@ -33,7 +35,6 @@ export function currentMobilePushEligibilityFactsV1(now: Date): MobilePushEligib
         now,
         revocationEpoch: getMobileSessionRevocationEpoch(),
         credentialSubject: credential.credentialSubject,
-        credentialKeyId: credential.credentialKeyId,
     }
 }
 
@@ -58,7 +59,6 @@ export async function registerVerifiedMobilePushDeviceV1(
         sessionIssuedAt: new Date((session.principal.expiresAtSeconds - MOBILE_SESSION_TTL_SECONDS) * 1000),
         sessionExpiresAt: new Date(session.principal.expiresAtSeconds * 1000),
         sessionRevocationEpoch: facts.revocationEpoch,
-        credentialKeyId: facts.credentialKeyId,
         now,
     }, facts)
     return result.ok
@@ -66,9 +66,26 @@ export async function registerVerifiedMobilePushDeviceV1(
         : { ok: false, code: result.code }
 }
 
-/** Logout revokes the device's registration and releases its token. Message state is never touched. */
-export async function revokeMobilePushDeviceForLogoutV1(deviceId: string): Promise<{ revoked: number }> {
-    return { revoked: await registrations.revokeForLogout(deviceId, new Date()) }
+/**
+ * Logout revokes the device's registration, releases its token and records the
+ * logged-out session in the device's durable barrier, so no later request
+ * proven by that same session can register again. Message state is never
+ * touched. Only identity_access's own session reader may call this: the
+ * session must already be verified.
+ */
+export async function revokeMobilePushDeviceForLogoutV1(
+    session: { principal: MobileSessionPrincipalV1, sessionBindingId: string },
+): Promise<{ revoked: number }> {
+    const now = new Date()
+    return {
+        revoked: await registrations.revokeForLogout(session.principal.deviceId, session.sessionBindingId, {
+            credentialSubject: session.principal.credentialSubject,
+            runtimeOperatorId: session.principal.runtimeOperatorId,
+            sessionIssuedAt: new Date((session.principal.expiresAtSeconds - MOBILE_SESSION_TTL_SECONDS) * 1000),
+            sessionExpiresAt: new Date(session.principal.expiresAtSeconds * 1000),
+            sessionRevocationEpoch: getMobileSessionRevocationEpoch(),
+        }, now),
+    }
 }
 
 /** Every registration that may receive push now: ids and session bindings, never tokens. */

@@ -5,19 +5,64 @@ import type {
     MobilePushEligibilityFactsV1,
     MobilePushRegistrationPortV1,
     MobilePushRegistrationWriteV1,
+    MobilePushRevokedSessionFactsV1,
 } from './mobile-push-registration-handler'
 
 /**
  * PostgreSQL storage for Mobile Push v1 device registrations.
  *
  * Two uniqueness invariants carry the concurrency guarantees: UNIQUE(deviceId)
- * makes a device's concurrent registrations converge on one row (the upsert is
- * a native INSERT … ON CONFLICT), and UNIQUE(fcmToken) makes a live token
- * belong to at most one device. Nothing here logs or returns a token except
- * `sendableToken`, which exists for the send-time resolution only.
+ * makes a device's concurrent registrations converge on one row, and
+ * UNIQUE(fcmToken) makes a live token belong to at most one device. Nothing
+ * here logs or returns a token except `sendableToken`, which exists for the
+ * send-time resolution only.
+ *
+ * The logout barrier is enforced by the database, never by a read followed by
+ * a write: every bind is a conditional UPDATE whose WHERE excludes this
+ * device's revoked session bindings. PostgreSQL re-evaluates that condition
+ * against the committed row after taking its lock, so a logout landing
+ * mid-flight either wins the row first (the bind matches nothing and is
+ * refused) or waits (and then revokes what the bind wrote). When no row
+ * exists, UNIQUE(deviceId) forces the same ordering: the loser of the insert
+ * race re-runs and meets the winner's committed state.
  */
 
 const ELIGIBILITY_LIMIT = 1000
+const MAX_INSERT_RACE_ROUNDS = 3
+
+/** Client of either the pool or an open transaction; both write the same row shape. */
+type RegistrationWriter = Pick<typeof prisma, 'mobileDeviceRegistration'>
+
+/**
+ * First registration for a device. Returns null on a token conflict and
+ * undefined when another transaction inserted this device first, which the
+ * caller resolves by re-running the conditional bind against that row.
+ */
+async function insertRegistration(
+    writer: RegistrationWriter,
+    write: MobilePushRegistrationWriteV1,
+): Promise<{ id: string } | null | undefined> {
+    try {
+        return await writer.mobileDeviceRegistration.create({
+            data: {
+                deviceId: write.deviceId,
+                fcmToken: write.fcmToken,
+                credentialSubject: write.credentialSubject,
+                runtimeOperatorId: write.runtimeOperatorId,
+                sessionBindingId: write.sessionBindingId,
+                sessionIssuedAt: write.sessionIssuedAt,
+                sessionExpiresAt: write.sessionExpiresAt,
+                sessionRevocationEpoch: write.sessionRevocationEpoch,
+                lastSeenAt: write.now,
+            },
+            select: { id: true },
+        })
+    } catch (error) {
+        if (isUniqueViolationOn(error, 'fcmToken')) return null
+        if (isUniqueViolationOn(error, 'deviceId')) return undefined
+        throw error
+    }
+}
 
 function isUniqueViolationOn(error: unknown, field: 'fcmToken' | 'deviceId'): boolean {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') return false
@@ -32,54 +77,60 @@ function ineligibleWhere(facts: MobilePushEligibilityFactsV1): Prisma.MobileDevi
         { revokedAt: { not: null } },
         { sessionExpiresAt: { lte: facts.now } },
         { sessionRevocationEpoch: { not: facts.revocationEpoch } },
-        { credentialKeyId: { not: facts.credentialKeyId } },
         { credentialSubject: { not: facts.credentialSubject } },
     ]
 }
 
 export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 = {
     async bind(write): Promise<MobilePushBindOutcomeV1> {
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-                // Written field by field on purpose: every stored fact is explicit
-                // and comes from the verified session, never from a spread.
-                const row = await prisma.mobileDeviceRegistration.upsert({
+        for (let attempt = 0; attempt < MAX_INSERT_RACE_ROUNDS; attempt += 1) {
+            const activated = await prisma.mobileDeviceRegistration.updateMany({
+                where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.sessionBindingId } } },
+                // Written field by field on purpose: every stored fact is
+                // explicit and comes from the verified session.
+                data: {
+                    fcmToken: write.fcmToken,
+                    credentialSubject: write.credentialSubject,
+                    runtimeOperatorId: write.runtimeOperatorId,
+                    sessionBindingId: write.sessionBindingId,
+                    sessionIssuedAt: write.sessionIssuedAt,
+                    sessionExpiresAt: write.sessionExpiresAt,
+                    sessionRevocationEpoch: write.sessionRevocationEpoch,
+                    lastSeenAt: write.now,
+                    revokedAt: null,
+                    revokedReason: null,
+                },
+            }).catch((error: unknown) => {
+                if (isUniqueViolationOn(error, 'fcmToken')) return null
+                throw error
+            })
+            if (activated === null) return { outcome: 'token_conflict' }
+            if (activated.count === 1) {
+                const row = await prisma.mobileDeviceRegistration.findUnique({
                     where: { deviceId: write.deviceId },
-                    create: {
-                        deviceId: write.deviceId,
-                        fcmToken: write.fcmToken,
-                        credentialSubject: write.credentialSubject,
-                        runtimeOperatorId: write.runtimeOperatorId,
-                        sessionBindingId: write.sessionBindingId,
-                        sessionIssuedAt: write.sessionIssuedAt,
-                        sessionExpiresAt: write.sessionExpiresAt,
-                        sessionRevocationEpoch: write.sessionRevocationEpoch,
-                        credentialKeyId: write.credentialKeyId,
-                        lastSeenAt: write.now,
-                    },
-                    update: {
-                        fcmToken: write.fcmToken,
-                        credentialSubject: write.credentialSubject,
-                        runtimeOperatorId: write.runtimeOperatorId,
-                        sessionBindingId: write.sessionBindingId,
-                        sessionIssuedAt: write.sessionIssuedAt,
-                        sessionExpiresAt: write.sessionExpiresAt,
-                        sessionRevocationEpoch: write.sessionRevocationEpoch,
-                        credentialKeyId: write.credentialKeyId,
-                        lastSeenAt: write.now,
-                        revokedAt: null,
-                        revokedReason: null,
-                    },
                     select: { id: true },
                 })
-                return { outcome: 'bound', registrationId: row.id }
-            } catch (error) {
-                if (isUniqueViolationOn(error, 'fcmToken')) return { outcome: 'token_conflict' }
-                // A first registration racing another for the same device: the
-                // loser re-runs and lands on the winner's row.
-                if (attempt === 0 && isUniqueViolationOn(error, 'deviceId')) continue
-                throw error
+                if (row) return { outcome: 'bound', registrationId: row.id }
+                continue
             }
+
+            // Nothing was updated: this device has no row yet, its row carries
+            // this session's logout in the barrier, or a concurrent request
+            // created the row after the update ran. Only a committed barrier
+            // refuses; anything else re-runs the conditional update, which is
+            // what actually enforces it.
+            const existing = await prisma.mobileDeviceRegistration.findUnique({
+                where: { deviceId: write.deviceId },
+                select: { revokedSessionBindings: true },
+            })
+            if (existing) {
+                if (existing.revokedSessionBindings.includes(write.sessionBindingId)) return { outcome: 'session_revoked' }
+                continue
+            }
+
+            const created = await insertRegistration(prisma, write)
+            if (created) return { outcome: 'bound', registrationId: created.id }
+            if (created === null) return { outcome: 'token_conflict' }
         }
         throw new Error('MOBILE_PUSH_REGISTRATION_BIND_UNRESOLVED')
     },
@@ -96,10 +147,9 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                     data: { fcmToken: null, revokedAt: facts.now, revokedReason: 'token_rebound' },
                 })
                 if (released.count === 0) return { outcome: 'holder_not_reclaimable' as const }
-                const row = await transaction.mobileDeviceRegistration.upsert({
-                    where: { deviceId: write.deviceId },
-                    create: {
-                        deviceId: write.deviceId,
+                const activated = await transaction.mobileDeviceRegistration.updateMany({
+                    where: { deviceId: write.deviceId, NOT: { revokedSessionBindings: { has: write.sessionBindingId } } },
+                    data: {
                         fcmToken: write.fcmToken,
                         credentialSubject: write.credentialSubject,
                         runtimeOperatorId: write.runtimeOperatorId,
@@ -107,30 +157,38 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                         sessionIssuedAt: write.sessionIssuedAt,
                         sessionExpiresAt: write.sessionExpiresAt,
                         sessionRevocationEpoch: write.sessionRevocationEpoch,
-                        credentialKeyId: write.credentialKeyId,
-                        lastSeenAt: write.now,
-                    },
-                    update: {
-                        fcmToken: write.fcmToken,
-                        credentialSubject: write.credentialSubject,
-                        runtimeOperatorId: write.runtimeOperatorId,
-                        sessionBindingId: write.sessionBindingId,
-                        sessionIssuedAt: write.sessionIssuedAt,
-                        sessionExpiresAt: write.sessionExpiresAt,
-                        sessionRevocationEpoch: write.sessionRevocationEpoch,
-                        credentialKeyId: write.credentialKeyId,
                         lastSeenAt: write.now,
                         revokedAt: null,
                         revokedReason: null,
                     },
-                    select: { id: true },
                 })
-                return { outcome: 'bound' as const, registrationId: row.id }
+                if (activated.count === 1) {
+                    const row = await transaction.mobileDeviceRegistration.findUnique({
+                        where: { deviceId: write.deviceId },
+                        select: { id: true },
+                    })
+                    if (row) return { outcome: 'bound' as const, registrationId: row.id }
+                }
+                const existing = await transaction.mobileDeviceRegistration.findUnique({
+                    where: { deviceId: write.deviceId },
+                    select: { revokedSessionBindings: true },
+                })
+                // The release and everything after it roll back together, so a
+                // refused or retried bind never leaves the holder released.
+                if (existing) {
+                    return existing.revokedSessionBindings.includes(write.sessionBindingId)
+                        ? { outcome: 'session_revoked' as const }
+                        : { outcome: 'holder_not_reclaimable' as const }
+                }
+                const created = await insertRegistration(transaction, write)
+                if (created) return { outcome: 'bound' as const, registrationId: created.id }
+                return { outcome: 'token_conflict' as const }
             })
         } catch (error) {
             // Another device bound the token between the release and our bind:
             // the whole transaction, release included, rolled back.
             if (isUniqueViolationOn(error, 'fcmToken')) return { outcome: 'token_conflict' as const }
+            if (isUniqueViolationOn(error, 'deviceId')) return { outcome: 'holder_not_reclaimable' as const }
             throw error
         }
     },
@@ -142,12 +200,48 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
         return holders > 0
     },
 
-    async revokeDevice(deviceId, reason, now) {
-        const revoked = await prisma.mobileDeviceRegistration.updateMany({
-            where: { deviceId, revokedAt: null },
-            data: { revokedAt: now, revokedReason: reason, fcmToken: null },
-        })
-        return revoked.count
+    async revokeDevice(deviceId, sessionBindingId, session, reason, now) {
+        for (let attempt = 0; attempt < MAX_INSERT_RACE_ROUNDS; attempt += 1) {
+            const revoked = await prisma.mobileDeviceRegistration.updateMany({
+                where: { deviceId },
+                data: {
+                    revokedAt: now,
+                    revokedReason: reason,
+                    fcmToken: null,
+                    revokedSessionBindings: { push: sessionBindingId },
+                },
+            })
+            if (revoked.count > 0) return revoked.count
+
+            // The device never registered. A tombstone carries the barrier, so
+            // a registration still in flight from this session cannot create
+            // one afterwards.
+            try {
+                await prisma.mobileDeviceRegistration.create({
+                    data: {
+                        deviceId,
+                        fcmToken: null,
+                        credentialSubject: session.credentialSubject,
+                        runtimeOperatorId: session.runtimeOperatorId,
+                        sessionBindingId,
+                        sessionIssuedAt: session.sessionIssuedAt,
+                        sessionExpiresAt: session.sessionExpiresAt,
+                        sessionRevocationEpoch: session.sessionRevocationEpoch,
+                        lastSeenAt: now,
+                        revokedAt: now,
+                        revokedReason: reason,
+                        revokedSessionBindings: [sessionBindingId],
+                    },
+                    select: { id: true },
+                })
+                return 0
+            } catch (error) {
+                // A registration for this device committed first: re-run and
+                // revoke it instead.
+                if (!isUniqueViolationOn(error, 'deviceId')) throw error
+            }
+        }
+        throw new Error('MOBILE_PUSH_REGISTRATION_REVOKE_UNRESOLVED')
     },
 
     async listEligible(facts) {
@@ -157,7 +251,6 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 fcmToken: { not: null },
                 sessionExpiresAt: { gt: facts.now },
                 sessionRevocationEpoch: facts.revocationEpoch,
-                credentialKeyId: facts.credentialKeyId,
                 credentialSubject: facts.credentialSubject,
             },
             select: { id: true, sessionBindingId: true },
@@ -184,7 +277,6 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 revokedAt: null,
                 sessionExpiresAt: { gt: facts.now },
                 sessionRevocationEpoch: facts.revocationEpoch,
-                credentialKeyId: facts.credentialKeyId,
                 credentialSubject: facts.credentialSubject,
             },
             select: { fcmToken: true },

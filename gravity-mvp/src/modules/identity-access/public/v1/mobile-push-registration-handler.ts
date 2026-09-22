@@ -15,12 +15,26 @@ import type {
 /** A device id the client falls back to when WebView storage fails; shared across devices. */
 export const UNSTABLE_DEVICE_ID_V1 = 'ephemeral-device'
 
-/** Server-known facts that decide whether a registration may receive push right now. */
+/**
+ * Server-known facts that decide whether a registration may receive push right
+ * now. All of them are non-secret: nothing derived from MOBILE_ACCESS_PASS is
+ * stored or compared, so the database holds no verifier for password guesses.
+ * Rotating that password therefore requires advancing
+ * MOBILE_SESSION_REVOCATION_EPOCH to silence sessions issued under the old one.
+ */
 export interface MobilePushEligibilityFactsV1 {
     now: Date
     revocationEpoch: string
     credentialSubject: string
-    credentialKeyId: string
+}
+
+/** What a logout tombstone records about the session that logged out. */
+export interface MobilePushRevokedSessionFactsV1 {
+    credentialSubject: string
+    runtimeOperatorId: string
+    sessionIssuedAt: Date
+    sessionExpiresAt: Date
+    sessionRevocationEpoch: string
 }
 
 /** Everything a registration binds, all derived from the verified session. */
@@ -33,7 +47,6 @@ export interface MobilePushRegistrationWriteV1 {
     sessionIssuedAt: Date
     sessionExpiresAt: Date
     sessionRevocationEpoch: string
-    credentialKeyId: string
     now: Date
 }
 
@@ -47,14 +60,24 @@ export interface MobilePushRegistrationStatusV1 {
 export type MobilePushBindOutcomeV1 =
     | { outcome: 'bound', registrationId: string }
     | { outcome: 'token_conflict' }
+    /** This device has completed a logout for this very session; it can never bind again. */
+    | { outcome: 'session_revoked' }
 
 export type MobilePushReclaimOutcomeV1 =
     | { outcome: 'bound', registrationId: string }
     | { outcome: 'holder_not_reclaimable' }
     | { outcome: 'token_conflict' }
+    | { outcome: 'session_revoked' }
 
 export interface MobilePushRegistrationPortV1 {
-    /** Upsert by deviceId. A unique violation on the token is reported, never resolved here. */
+    /**
+     * Bind by deviceId, but ONLY if this device has not already completed a
+     * logout for this session: the database evaluates that barrier in the same
+     * statement that writes, so a logout committing concurrently either
+     * precedes the bind (which is then refused) or follows it (and revokes
+     * what it wrote). A unique violation on the token is reported, never
+     * resolved here.
+     */
     bind(write: MobilePushRegistrationWriteV1): Promise<MobilePushBindOutcomeV1>
     /**
      * In ONE transaction: release the token from its current holder only if
@@ -67,7 +90,19 @@ export interface MobilePushRegistrationPortV1 {
     ): Promise<MobilePushReclaimOutcomeV1>
     /** Whether a row of ANOTHER device currently holds this token; this device's own row never counts. */
     tokenIsBoundToOtherDevice(token: string, deviceId: string): Promise<boolean>
-    revokeDevice(deviceId: string, reason: 'logout', now: Date): Promise<number>
+    /**
+     * Revoke this device and record the logged-out session in the device's
+     * durable barrier. Writes a tombstone row when the device has no
+     * registration yet, so a registration still in flight from that same
+     * session cannot create one afterwards.
+     */
+    revokeDevice(
+        deviceId: string,
+        sessionBindingId: string,
+        session: MobilePushRevokedSessionFactsV1,
+        reason: 'logout',
+        now: Date,
+    ): Promise<number>
     listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]>
     status(registrationId: string): Promise<MobilePushRegistrationStatusV1 | null>
     /**
@@ -112,11 +147,15 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
                 if (bound.outcome === 'bound') {
                     return { ok: true, registrationId: bound.registrationId, reclaimedStaleBinding: false }
                 }
+                // The device logged this session out. No later request proven
+                // by it may register again, however long it was in flight.
+                if (bound.outcome === 'session_revoked') return { ok: false, code: 'MOBILE_SESSION_REVOKED' }
 
                 const reclaimed = await port.reclaimFromIneligibleHolderAndBind(write, facts)
                 if (reclaimed.outcome === 'bound') {
                     return { ok: true, registrationId: reclaimed.registrationId, reclaimedStaleBinding: true }
                 }
+                if (reclaimed.outcome === 'session_revoked') return { ok: false, code: 'MOBILE_SESSION_REVOKED' }
                 // Nothing was released. If another device still holds the
                 // token, it is (or has just become) a live binding: refuse. If
                 // none does, the holder let go concurrently, or a concurrent
@@ -128,8 +167,13 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
             return { ok: false, code: 'PUSH_TOKEN_BOUND_TO_OTHER_DEVICE' }
         },
 
-        async revokeForLogout(deviceId: string, now: Date): Promise<number> {
-            return port.revokeDevice(deviceId, 'logout', now)
+        async revokeForLogout(
+            deviceId: string,
+            sessionBindingId: string,
+            session: MobilePushRevokedSessionFactsV1,
+            now: Date,
+        ): Promise<number> {
+            return port.revokeDevice(deviceId, sessionBindingId, session, 'logout', now)
         },
 
         async listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]> {

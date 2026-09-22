@@ -7,6 +7,8 @@
 -- declares its own transaction boundary rather than relying on the tool's.
 BEGIN;
 
+-- A row is also written by logout alone, as a tombstone for a device that
+-- never registered, so the barrier below exists before any registration.
 -- One stable row per Android app install, keyed by the device id inside the
 -- verified mobile session. It is a delivery address bound to that session,
 -- not an authorization subject. There is deliberately no foreign key:
@@ -22,11 +24,15 @@ CREATE TABLE "MobileDeviceRegistration" (
     "sessionIssuedAt" TIMESTAMPTZ(3) NOT NULL,
     "sessionExpiresAt" TIMESTAMPTZ(3) NOT NULL,
     "sessionRevocationEpoch" VARCHAR(64) NOT NULL,
-    "credentialKeyId" CHAR(16) NOT NULL,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMPTZ(3) NOT NULL,
     "revokedAt" TIMESTAMPTZ(3),
     "revokedReason" VARCHAR(32),
+    -- Durable logout barrier: every session binding whose logout this device
+    -- has completed. A registration proven by one of these sessions can never
+    -- reactivate the row, however late it arrives; a genuinely new login
+    -- carries a different binding and may.
+    "revokedSessionBindings" CHAR(64)[] NOT NULL DEFAULT ARRAY[]::CHAR(64)[],
 
     CONSTRAINT "MobileDeviceRegistration_pkey" PRIMARY KEY ("id")
 );

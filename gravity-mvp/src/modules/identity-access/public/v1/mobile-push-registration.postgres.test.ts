@@ -35,7 +35,7 @@ vi.mock('next/headers', () => ({
 
 import { prisma } from '@/lib/prisma'
 import { POST } from '@/app/api/mobile/push-registration/route'
-import { issueMobileSession } from './mobile-session-credentials'
+import { getMobileSessionRevocationEpoch, issueMobileSession, verifyMobileSession } from './mobile-session-credentials'
 import { clearMobileSessionV1 } from './mobile-session-auth'
 import {
     currentMobilePushEligibilityFactsV1,
@@ -70,8 +70,25 @@ function sessionFor(deviceId: string, operator = 'u1', nowMs = Date.now()): stri
     return issued
 }
 
+/** The binding recomputed here from the session's own verified facts, never from the token bytes. */
 function expectedBinding(sessionToken: string): string {
-    return createHash('sha256').update(`yoko.mobile-push.session-binding.v1\0${sessionToken}`, 'utf8').digest('hex')
+    const principal = verifyMobileSession(sessionToken)!
+    return createHash('sha256').update([
+        'yoko.mobile-push.session-binding.v2',
+        principal.deviceId,
+        principal.credentialSubject,
+        getMobileSessionRevocationEpoch(),
+        String(principal.expiresAtSeconds),
+    ].join('\0'), 'utf8').digest('hex')
+}
+
+/** Log out exactly the session that this token proves, in its own request scope. */
+async function logout(sessionToken: string): Promise<void> {
+    await jar.request.run({ token: sessionToken }, () => clearMobileSessionV1())
+}
+
+async function eligibleIds(): Promise<string[]> {
+    return (await listPushEligibleMobileDevicesV1()).map((entry) => entry.registrationId)
 }
 
 async function register(sessionToken: string | undefined, body: unknown, contentType = 'application/json') {
@@ -137,7 +154,6 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
             revokedAt: null,
         })
         expect(first!.sessionExpiresAt.getTime() - first!.sessionIssuedAt.getTime()).toBe(12 * HOUR)
-        expect(first!.credentialKeyId).toMatch(/^[0-9a-f]{16}$/)
         expect(await register(session, { token: token('d4') })).toEqual({ status: 200, body: { ok: true } })
         const second = await rowOf(device('d4'))
         expect(second!.id).toBe(first!.id)
@@ -172,7 +188,6 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
             sessionIssuedAt: new Date(Date.now() - HOUR),
             sessionExpiresAt: new Date(Date.now() + 11 * HOUR),
             sessionRevocationEpoch: facts.revocationEpoch,
-            credentialKeyId: facts.credentialKeyId,
             now: facts.now,
         }
         let concurrentRequestOfSameDevice: (() => Promise<unknown>) | null = () => register(sessionFor(device('d5b')), { token: token('shared5b') })
@@ -210,7 +225,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
     it('7. a token held by a server-provably INELIGIBLE device is reclaimed explicitly', async () => {
         const cases: Array<[string, (deviceId: string) => Promise<void>]> = [
             ['expired', async (id) => { await prisma.mobileDeviceRegistration.update({ where: { deviceId: id }, data: { sessionExpiresAt: new Date(Date.now() - 1000) } }) }],
-            ['key', async (id) => { await prisma.mobileDeviceRegistration.update({ where: { deviceId: id }, data: { credentialKeyId: '0000000000000000' } }) }],
+            ['subjectless', async (id) => { await prisma.mobileDeviceRegistration.update({ where: { deviceId: id }, data: { credentialSubject: 'retired-credential' } }) }],
             ['subject', async (id) => { await prisma.mobileDeviceRegistration.update({ where: { deviceId: id }, data: { credentialSubject: 'rotated-away' } }) }],
         ]
         for (const [label, makeIneligible] of cases) {
@@ -273,8 +288,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         await register(session, { token: token('logout') })
         const messagesBefore = await prisma.$queryRawUnsafe<Array<{ count: bigint, digest: string | null }>>(
             `SELECT count(*) AS count, md5(string_agg(id || status::text || coalesce("updatedAt"::text, ''), ',' ORDER BY id)) AS digest FROM "Message"`)
-        jar.token = session
-        await clearMobileSessionV1()
+        await logout(session)
         expect(await rowOf(device('logout'))).toMatchObject({ fcmToken: null, revokedReason: 'logout' })
         expect(await prisma.$queryRawUnsafe(
             `SELECT count(*) AS count, md5(string_agg(id || status::text || coalesce("updatedAt"::text, ''), ',' ORDER BY id)) AS digest FROM "Message"`)).toEqual(messagesBefore)
@@ -283,14 +297,14 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await rowOf(device('logout'))).toMatchObject({ revokedAt: null, revokedReason: null, fcmToken: token('logout') })
     })
 
-    it('eligibility honours revocation, token loss, expiry, epoch and credential key; never the operator label', async () => {
-        const names = ['ok', 'revoked', 'tokenless', 'expired', 'rotatedkey']
+    it('eligibility honours revocation, token loss, expiry, epoch and credential subject; never the operator label', async () => {
+        const names = ['ok', 'revoked', 'tokenless', 'expired', 'rotatedsubject']
         for (const name of names) await register(sessionFor(device(`el-${name}`), name === 'ok' ? 'u3' : 'u1'), { token: token(`el-${name}`) })
         await register(sessionFor(device('el-ok-u1'), 'u1'), { token: token('el-ok-u1') })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-revoked') }, data: { revokedAt: new Date(), revokedReason: 'logout', fcmToken: null } })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-tokenless') }, data: { fcmToken: null } })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-expired') }, data: { sessionExpiresAt: new Date(Date.now() - 1) } })
-        await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-rotatedkey') }, data: { credentialKeyId: 'ffffffffffffffff' } })
+        await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-rotatedsubject') }, data: { credentialSubject: 'retired-credential' } })
         const eligible = (await listPushEligibleMobileDevicesV1()).map((entry) => entry.registrationId)
         const ok = await rowOf(device('el-ok'))
         expect(eligible).toContain(ok!.id)
@@ -320,8 +334,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const before = sessionFor(device('relogin'), 'u1', Date.now() - 60_000)
         await register(before, { token: token('relogin') })
         const pending = await rowOf(device('relogin'))
-        jar.token = before
-        await clearMobileSessionV1()
+        await logout(before)
         await register(sessionFor(device('relogin'), 'u1', Date.now()), { token: token('relogin') })
         expect(await resolveTarget(pending!.id, pending!.sessionBindingId)).toEqual({ kind: 'skip', reason: 'stale_session' })
     })
@@ -337,7 +350,6 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await read('e'.repeat(64))).toEqual({ sendable: false })
         expect(await read(row.sessionBindingId, { now: new Date(row.sessionExpiresAt.getTime()) })).toEqual({ sendable: false })
         expect(await read(row.sessionBindingId, { revocationEpoch: 'bumped' })).toEqual({ sendable: false })
-        expect(await read(row.sessionBindingId, { credentialKeyId: 'ffffffffffffffff' })).toEqual({ sendable: false })
         expect(await read(row.sessionBindingId, { credentialSubject: 'rotated-away' })).toEqual({ sendable: false })
         await prisma.mobileDeviceRegistration.update({ where: { id: row.id }, data: { revokedAt: new Date(), revokedReason: 'logout' } })
         expect(await read(row.sessionBindingId)).toEqual({ sendable: false })
@@ -353,6 +365,103 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await markMobilePushTokenRejectedV1(row!.id, token('cas-2'))).toEqual({ result: 'cleared' })
         expect(await rowOf(device('cas'))).toMatchObject({ fcmToken: null, revokedAt: null })
         expect(await resolveTarget(row!.id, row!.sessionBindingId)).toEqual({ kind: 'await_token' })
+    })
+
+    // ── The logout barrier ──────────────────────────────────────────────────
+    // A logged-out session must never be able to register again, however late
+    // its request lands. The barrier is durable and per (device, session), so
+    // a genuinely new login still may.
+
+    it('A. an existing registration racing its own session logout never stays eligible', async () => {
+        for (const round of [1, 2, 3, 4, 5]) {
+            const id = device(`raceA-${round}`)
+            const session = sessionFor(id)
+            await register(session, { token: token(`raceA-${round}-first`) })
+            const [registration] = await Promise.all([
+                register(session, { token: token(`raceA-${round}-second`) }),
+                logout(session),
+            ])
+            const row = (await rowOf(id))!
+            expect(row.revokedAt, `round ${round} left an active row after logout`).not.toBeNull()
+            expect(row.revokedReason).toBe('logout')
+            expect(row.fcmToken).toBeNull()
+            expect(await eligibleIds()).not.toContain(row.id)
+            expect([200, 401]).toContain(registration.status)
+        }
+    })
+
+    it('A2. a registration authorized before the logout is refused when it lands after it', async () => {
+        // The request was proven by S1 before logout; only the write is late.
+        const id = device('raceA2')
+        const session = sessionFor(id)
+        await register(session, { token: token('raceA2-first') })
+        await logout(session)
+        expect(await register(session, { token: token('raceA2-late') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        const row = (await rowOf(id))!
+        expect(row).toMatchObject({ fcmToken: null, revokedReason: 'logout' })
+        expect(row.revokedAt).not.toBeNull()
+        expect(await eligibleIds()).not.toContain(row.id)
+    })
+
+    it('B. a logout for a device that never registered still blocks that session', async () => {
+        for (const round of [1, 2, 3, 4, 5]) {
+            const id = device(`raceB-${round}`)
+            const session = sessionFor(id)
+            const [registration] = await Promise.all([
+                register(session, { token: token(`raceB-${round}`) }),
+                logout(session),
+            ])
+            const row = await rowOf(id)
+            expect(row, `round ${round} lost the tombstone`).not.toBeNull()
+            expect(row!.revokedAt, `round ${round} left an active row after logout`).not.toBeNull()
+            expect(row!.fcmToken).toBeNull()
+            expect(await eligibleIds()).not.toContain(row!.id)
+            expect([200, 401]).toContain(registration.status)
+        }
+    })
+
+    it('B2. the logout tombstone refuses a later registration from the same session', async () => {
+        const id = device('raceB2')
+        const session = sessionFor(id)
+        await logout(session)
+        const tombstone = (await rowOf(id))!
+        expect(tombstone).toMatchObject({ fcmToken: null, revokedReason: 'logout' })
+        expect(await register(session, { token: token('raceB2') }))
+            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        expect((await rowOf(id))!.id).toBe(tombstone.id)
+        expect(await eligibleIds()).not.toContain(tombstone.id)
+    })
+
+    it('C. a genuinely new login for the same device registers again on the same row', async () => {
+        const id = device('raceC')
+        const first = sessionFor(id, 'u1', Date.now() - 120_000)
+        await register(first, { token: token('raceC-1') })
+        const before = (await rowOf(id))!
+        await logout(first)
+        const second = sessionFor(id, 'u1', Date.now())
+        expect(await register(second, { token: token('raceC-2') })).toEqual({ status: 200, body: { ok: true } })
+        const after = (await rowOf(id))!
+        expect(after.id).toBe(before.id)
+        expect(after).toMatchObject({ revokedAt: null, revokedReason: null, fcmToken: token('raceC-2') })
+        expect(after.sessionBindingId).toBe(expectedBinding(second))
+        expect(await eligibleIds()).toContain(after.id)
+        // The first session stays barred for good.
+        expect((await register(first, { token: token('raceC-1') })).status).toBe(401)
+        expect(await eligibleIds()).toContain(after.id)
+    })
+
+    it('D. a token rotation inside one live session is untouched by the barrier', async () => {
+        const id = device('raceD')
+        const session = sessionFor(id)
+        await register(session, { token: token('raceD-1') })
+        const before = (await rowOf(id))!
+        expect(await register(session, { token: token('raceD-2') })).toEqual({ status: 200, body: { ok: true } })
+        const after = (await rowOf(id))!
+        expect(after.id).toBe(before.id)
+        expect(after).toMatchObject({ fcmToken: token('raceD-2'), revokedAt: null })
+        expect(after.revokedSessionBindings).toEqual([])
+        expect(await eligibleIds()).toContain(after.id)
     })
 
     it('25. a sender mismatch revokes exactly the registration that carried the rejected token', async () => {

@@ -30,7 +30,6 @@ function row(suffix: string, token: string | null) {
         sessionIssuedAt: now,
         sessionExpiresAt: new Date(now.getTime() + 3600_000),
         sessionRevocationEpoch: '0',
-        credentialKeyId: '0123456789abcdef',
         lastSeenAt: now,
     }
 }
@@ -53,7 +52,6 @@ proof('MobileDeviceRegistration migration on real PostgreSQL', () => {
              WHERE table_name = 'MobileDeviceRegistration' ORDER BY column_name`)
         expect(columns).toEqual([
             { column_name: 'createdAt', is_nullable: 'NO', data_type: 'timestamp with time zone' },
-            { column_name: 'credentialKeyId', is_nullable: 'NO', data_type: 'character' },
             { column_name: 'credentialSubject', is_nullable: 'NO', data_type: 'character varying' },
             { column_name: 'deviceId', is_nullable: 'NO', data_type: 'character varying' },
             { column_name: 'fcmToken', is_nullable: 'YES', data_type: 'character varying' },
@@ -61,6 +59,7 @@ proof('MobileDeviceRegistration migration on real PostgreSQL', () => {
             { column_name: 'lastSeenAt', is_nullable: 'NO', data_type: 'timestamp with time zone' },
             { column_name: 'revokedAt', is_nullable: 'YES', data_type: 'timestamp with time zone' },
             { column_name: 'revokedReason', is_nullable: 'YES', data_type: 'character varying' },
+            { column_name: 'revokedSessionBindings', is_nullable: 'NO', data_type: 'ARRAY' },
             { column_name: 'runtimeOperatorId', is_nullable: 'NO', data_type: 'character varying' },
             { column_name: 'sessionBindingId', is_nullable: 'NO', data_type: 'character' },
             { column_name: 'sessionExpiresAt', is_nullable: 'NO', data_type: 'timestamp with time zone' },

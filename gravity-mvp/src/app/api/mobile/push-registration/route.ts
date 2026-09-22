@@ -29,6 +29,8 @@ const MAX_BODY_CHARS = 2048
 
 const FAILURE_STATUS: Record<MobilePushRegistrationFailureCodeV1, number> = {
     MOBILE_SESSION_REQUIRED: 401,
+    // The device logged this session out. Re-authenticating is the only way back.
+    MOBILE_SESSION_REVOKED: 401,
     PUSH_DEVICE_ID_NOT_STABLE: 422,
     PUSH_TOKEN_BOUND_TO_OTHER_DEVICE: 409,
 }

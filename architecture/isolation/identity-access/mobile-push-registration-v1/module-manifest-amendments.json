@@ -14,7 +14,7 @@
       "add_public_surface": [
         "MobilePushDeviceRegistration.v1"
       ],
-      "reason": "Identity Access owns the mobile push device registration because it owns the mobile session the registration is bound to: one stable row per app install keyed by the verified session's device id, with the provider token, a one-way session binding and the credential key it was issued under. It is pending source state, intentionally not asserted as deployed production inventory, and grants no authorization to anyone."
+      "reason": "Identity Access owns the mobile push device registration because it owns the mobile session the registration is bound to: one stable row per app install keyed by the verified session's device id, with the provider token, a session binding derived from the session's own non-secret facts, and a durable barrier of the session bindings this device has logged out. It stores nothing derived from the mobile password, so a database copy cannot verify password guesses offline; rotating MOBILE_ACCESS_PASS must therefore also advance MOBILE_SESSION_REVOCATION_EPOCH. It is pending source state, intentionally not asserted as deployed production inventory, and grants no authorization to anyone."
     }
   ]
 }
