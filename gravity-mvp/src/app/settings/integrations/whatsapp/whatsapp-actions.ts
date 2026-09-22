@@ -9,6 +9,7 @@ import { projectWhatsAppConnectionMetadata } from '@/modules/whatsapp-channel/pu
 import { readPendingWhatsAppQr } from '@/lib/whatsapp/whatsapp-qr-ceremony'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
+import { confirmWhatsAppAccountBindingV1, readSlotConfirmationProjectionV1 } from '@/modules/whatsapp-channel/internal/company-account/whatsapp-account-writer'
 
 const publicWhatsAppConnectionSelect = {
     id: true,
@@ -370,4 +371,25 @@ export async function getWhatsAppMessages(chatId: string) {
         orderBy: { timestamp: 'asc' },
         take: 100
     })
+}
+
+// M2A1-S3: the operator-confirmed company-account binding.
+// The client supplies opaque identifiers only. The complete provider pair and
+// the attestation are re-read from the database inside the writer's
+// transaction, so a request can never assert an identity.
+
+export async function getWhatsAppAccountConfirmation(connectionId: string) {
+    await requireIntegrationAdminAccess()
+    return readSlotConfirmationProjectionV1(connectionId)
+}
+
+export async function confirmWhatsAppAccountBinding(connectionId: string, bindingId: string) {
+    const principal = await requireIntegrationAdminAccess()
+    const result = await confirmWhatsAppAccountBindingV1({
+        connectionId,
+        bindingId,
+        principalId: principal.id,
+    })
+    revalidatePath('/settings/integrations/whatsapp')
+    return result
 }

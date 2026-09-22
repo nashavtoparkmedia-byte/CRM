@@ -307,6 +307,7 @@ const moduleTests = {
     command('check-messaging-whatsapp-message-boundary.mjs'),
     command('check-messaging-whatsapp-attachment-boundary.mjs'),
     command('check-whatsapp-pairing-observation-boundary.mjs'),
+    command('check-whatsapp-company-account-boundary.mjs'),
   ],
   work_management: [
     command('check-work-management-boundary.mjs'),

@@ -39,6 +39,18 @@ export interface WhatsAppPairingObservationRequestV1 {
     isCurrentInstance: () => boolean
     /** The raw whatsapp-web.js disconnect reason; only its class is logged. */
     disconnectReason?: unknown
+    /**
+     * Optional sink for the values of one complete observation, supplied by the
+     * runtime. This module never imports, names or inspects its implementation,
+     * and never depends on its result: measurement stays independent of it.
+     */
+    recordAttestation?: (observed: {
+        connectionId: string
+        instanceId: string
+        pnUser: string
+        lidUser: string
+        unchanged: boolean | null
+    }) => void
 }
 
 export interface WhatsAppPairingObserverDependenciesV1 {
@@ -237,6 +249,17 @@ export function createWhatsAppPairingObserverV1(deps: WhatsAppPairingObserverDep
                 .digest('base64')
             unchanged = slot.previousPairValue === null ? null : slot.previousPairValue === value
             slot.previousPairValue = value
+            try {
+                request.recordAttestation?.({
+                    connectionId: request.connectionId,
+                    instanceId: request.instanceId,
+                    pnUser: comparablePair.pnUser,
+                    lidUser: comparablePair.lidUser,
+                    unchanged,
+                })
+            } catch {
+                // The sink must never affect measurement.
+            }
         }
         emitFor(slot, request.connectionId, 'ready', flags, unchanged, durationMs, coalescedReadyCount)
     }

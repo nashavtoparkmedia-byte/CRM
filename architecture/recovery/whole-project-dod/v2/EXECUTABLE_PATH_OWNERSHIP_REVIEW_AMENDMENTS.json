@@ -374,6 +374,35 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 6
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a1-s3-whatsapp-company-account-20260920",
+      "reviewed_at": "2026-09-20T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A1_S3_CANDIDATE_OWNERSHIP_REVIEW_20260920",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A1_S3_WHATSAPP_COMPANY_ACCOUNT_CONFIRMATION_IMPLEMENTATION",
+      "reason": "M2A1-S3 adds exactly nine tracked executable surfaces and changes no existing ownership. The four company-account sources and their four tests under gravity-mvp/src/modules/whatsapp-channel/internal/company-account sit under whatsapp_channel owned paths and are context owned by the existing manifest selection. tools/architecture/check-whatsapp-company-account-boundary.mjs falls under the existing architecture_controls prefix exclusion and is classified in the lifecycle surface registry. No path belongs to an exact inventory, so no exact-inventory transition, assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes; only the denominator moves from 2509 to 2518.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2509,
+        "tracked_inventory_sha256": "5a7a5c2ddcf26333f80702a276cb25dcaa6000d739b98af291853d577324778f",
+        "coverage_sha256": "8b33642f26cb3f65c2ace5311253dd39396f06708e46fa6fa1d9018ef660aab8"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2518,
+        "tracked_inventory_sha256": "a9bc4b7be2f6162ed0caaf9b5f9b4891e81909a6ba27610a1e49d47b3e134ca0",
+        "coverage_sha256": "e7f7667a9e75c32089a8267cc1b30b1938d5aee095b1918654e32ed7907cd687"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 9
+      }
     }
   ]
 }
