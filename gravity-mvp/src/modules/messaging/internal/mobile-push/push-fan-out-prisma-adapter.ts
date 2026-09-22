@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { OUTBOX_MAX_ATTEMPTS_V1 } from '@/infrastructure/outbox/v1'
 import type { MobilePushDeliveryRequestedEventV1 } from '../../../../contracts/messaging/v1'
@@ -18,21 +19,27 @@ export const prismaMobilePushFanOutStoreV1 = {
     },
 
     async appendDeliveryEvents(events: readonly MobilePushDeliveryRequestedEventV1[]): Promise<number> {
-        if (events.length === 0) return 0
-        const appended = await prisma.domainOutboxEvent.createMany({
-            data: events.map((event) => ({
-                eventId: event.eventId,
-                eventType: event.eventType,
-                eventVersion: event.eventVersion,
-                aggregateType: event.aggregate.type,
-                aggregateId: event.aggregate.id,
-                payload: event as unknown as object,
-                maxAttempts: OUTBOX_MAX_ATTEMPTS_V1,
-                correlationId: event.correlationId,
-                causationId: event.causationId,
-            })),
-            skipDuplicates: true,
-        })
-        return appended.count
+        // One explicit row per statement: every stored field is visible at the
+        // write, and each append is idempotent on its deterministic event id,
+        // so a fan-out retried after a partial failure completes the rest.
+        let appended = 0
+        for (const event of events) {
+            const result = await prisma.domainOutboxEvent.createMany({
+                data: [{
+                    eventId: event.eventId,
+                    eventType: event.eventType,
+                    eventVersion: event.eventVersion,
+                    aggregateType: event.aggregate.type,
+                    aggregateId: event.aggregate.id,
+                    payload: event as unknown as Prisma.InputJsonValue,
+                    maxAttempts: OUTBOX_MAX_ATTEMPTS_V1,
+                    correlationId: event.correlationId,
+                    causationId: event.causationId,
+                }],
+                skipDuplicates: true,
+            })
+            appended += result.count
+        }
+        return appended
     },
 }

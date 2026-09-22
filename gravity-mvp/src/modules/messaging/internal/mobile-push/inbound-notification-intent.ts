@@ -1,6 +1,7 @@
-import type { Prisma } from '@prisma/client'
-import { OUTBOX_MAX_ATTEMPTS_V1 } from '@/infrastructure/outbox/v1'
-import { makeInboundMessageNotificationRequestedEventV1 } from '../../../../contracts/messaging/v1'
+import {
+    makeInboundMessageNotificationRequestedEventV1,
+    type InboundMessageNotificationRequestedEventV1,
+} from '../../../../contracts/messaging/v1'
 import {
     isInboundNotificationCandidateV1,
     qualifiesForInboundNotificationV1,
@@ -18,35 +19,25 @@ import { isMobilePushEnabledV1 } from './mobile-push-config'
  * the write can never qualify, the seam keeps its original single-statement
  * write untouched.
  *
- * `inboundNotificationOutboxRowV1` runs INSIDE that transaction on the
- * persisted row: the Message and its intent commit together or not at all.
+ * `inboundNotificationIntentV1` runs INSIDE that transaction on the persisted
+ * row; the seam appends the returned event with an explicit, field-by-field
+ * outbox row, so the Message and its intent commit together or not at all.
  */
 
 export function persistsWithNotificationIntentV1(input: InboundNotificationCandidateV1): boolean {
     return isMobilePushEnabledV1() && isInboundNotificationCandidateV1(input)
 }
 
-export function inboundNotificationOutboxRowV1(
+export function inboundNotificationIntentV1(
     message: PersistedInboundMessageV1,
     now: Date,
-): Prisma.DomainOutboxEventCreateManyInput | null {
+): InboundMessageNotificationRequestedEventV1 | null {
     const channel = qualifiesForInboundNotificationV1(message, now)
     if (!channel) return null
-    const event = makeInboundMessageNotificationRequestedEventV1({
+    return makeInboundMessageNotificationRequestedEventV1({
         messageId: message.id,
         chatId: message.chatId,
         channel,
         occurredAt: now.toISOString(),
     })
-    return {
-        eventId: event.eventId,
-        eventType: event.eventType,
-        eventVersion: event.eventVersion,
-        aggregateType: event.aggregate.type,
-        aggregateId: event.aggregate.id,
-        payload: event as unknown as Prisma.InputJsonValue,
-        maxAttempts: OUTBOX_MAX_ATTEMPTS_V1,
-        correlationId: event.correlationId,
-        causationId: event.causationId,
-    }
 }

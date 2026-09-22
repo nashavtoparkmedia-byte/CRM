@@ -12,13 +12,12 @@
  * MOBILE_PUSH_TEST_DATABASE_URL (DATABASE_URL must name the same database).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+import { prisma as database } from '@/lib/prisma'
 
 const DATABASE = process.env.MOBILE_PUSH_TEST_DATABASE_URL
 const proof = DATABASE ? describe.sequential : describe.skip
 const PREFIX = `mig${Date.now().toString(36)}`
 
-let database: PrismaClient
 
 function row(suffix: string, token: string | null) {
     const now = new Date()
@@ -39,8 +38,6 @@ function row(suffix: string, token: string | null) {
 proof('MobileDeviceRegistration migration on real PostgreSQL', () => {
     beforeAll(async () => {
         if (process.env.DATABASE_URL !== DATABASE) throw new Error('DATABASE_URL must equal MOBILE_PUSH_TEST_DATABASE_URL')
-        database = new PrismaClient()
-        await database.$connect()
     })
     beforeEach(async () => {
         await database.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: PREFIX } } })

@@ -195,19 +195,27 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
     })
 
     it('15. a Message and its intent commit together or not at all', async () => {
-        await chat('rollback', 'telegram')
-        await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION mobile_push_rollback_probe() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'rollback probe'; END $$`)
-        await prisma.$executeRawUnsafe(`CREATE TRIGGER mobile_push_rollback_probe BEFORE INSERT ON domain_outbox_events FOR EACH ROW WHEN ((NEW.payload -> 'data' ->> 'chatId') = '${id('chat-rollback')}') EXECUTE FUNCTION mobile_push_rollback_probe()`)
+        // A fixed probe conversation lets the rollback trigger be fixed SQL.
+        const probeChatId = 'mobile_push_rollback_probe_chat'
+        await prisma.chat.deleteMany({ where: { id: probeChatId } })
+        await prisma.chat.create({ data: { id: probeChatId, channel: 'telegram', externalChatId: `telegram:${probeChatId}`, chatType: 'private' } })
+        const write = () => legacyPrismaChannelMessagePortV1.create({
+            chatId: probeChatId, direction: 'inbound', type: 'text', content: CONTENT('rollback'),
+            externalId: id('ext-rollback'), sentAt: new Date(), channel: 'telegram',
+        })
+        await prisma.$executeRawUnsafe("CREATE OR REPLACE FUNCTION mobile_push_rollback_probe() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'rollback probe'; END $$")
+        await prisma.$executeRawUnsafe("CREATE TRIGGER mobile_push_rollback_probe BEFORE INSERT ON domain_outbox_events FOR EACH ROW WHEN ((NEW.payload -> 'data' ->> 'chatId') = 'mobile_push_rollback_probe_chat') EXECUTE FUNCTION mobile_push_rollback_probe()")
         try {
-            await expect(inbound('rollback', 'rollback')).rejects.toThrow()
+            await expect(write()).rejects.toThrow()
             expect(await prisma.message.count({ where: { externalId: id('ext-rollback') } })).toBe(0)
         } finally {
             await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS mobile_push_rollback_probe ON domain_outbox_events')
             await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS mobile_push_rollback_probe()')
         }
         // The same write succeeds, with its intent, once the outbox accepts it.
-        const message = await inbound('rollback', 'rollback')
+        const message = await write()
         expect(await intentsFor(message.id)).toHaveLength(1)
+        await prisma.chat.deleteMany({ where: { id: probeChatId } })
     })
 
     it('16. the same inbound message observed twice produces one intent and one notification per device', async () => {

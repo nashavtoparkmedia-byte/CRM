@@ -815,7 +815,7 @@ export function verifyAuthoritativeCredentialInventory(
   assert.equal(inventory.summary?.parse_findings, 0, 'credential analyzer parse finding')
   assert.equal(inventory.summary?.unreviewed_operational_surfaces, 0, 'credential inventory has unreviewed operational surfaces')
   assert.deepEqual(inventory.inventory_controls?.stale_registry_entries, [], 'credential inventory lifecycle registry has stale entries')
-  assert.equal(sensitiveFields.records?.length, 14, 'sensitive-field registry drift')
+  assert.equal(sensitiveFields.records?.length, 15, 'sensitive-field registry drift')
   assert(
     inventory.summary?.tracked_executable_surfaces >= acceptedInventory.summary?.tracked_executable_surfaces,
     'credential inventory surface denominator shrank without a reviewed checkpoint update',

@@ -752,8 +752,9 @@ assertCheck(
     'Messaging intent writers are exact and append inside the Message transaction',
     JSON.stringify(flowsById.get('messaging.inbound-notification-intent')?.atomic_writers) === JSON.stringify(MESSAGING_INTENT_WRITERS)
         && messagingIntentWriters.every(([, source]) => /\$transaction\(async \(?transaction\)? ?=>/.test(source)
-            && /transaction\.domainOutboxEvent\.createMany\(\{ ?data: ?\[intent\], ?skipDuplicates: ?true ?\}\)/.test(source)
-            && source.includes('inboundNotificationOutboxRowV1(')
+            && /transaction\.domainOutboxEvent\.createMany\(\{\s*data:\s*\[\{\s*eventId:\s*intent\.eventId,/.test(source)
+            && /skipDuplicates:\s*true/.test(source)
+            && source.includes('inboundNotificationIntentV1(')
             && !/prisma\.domainOutboxEvent/.test(source)),
     'an intent writer is undeclared or appends outside the Message transaction',
 )
@@ -761,6 +762,7 @@ assertCheck(
     'Messaging fan-out writer is exact and appends idempotently',
     JSON.stringify(flowsById.get('messaging.mobile-push-delivery')?.atomic_writers) === JSON.stringify([MESSAGING_FAN_OUT_WRITER])
         && messagingFanOutAdapter.includes('prisma.domainOutboxEvent.createMany(')
+        && messagingFanOutAdapter.includes('eventId: event.eventId,')
         && messagingFanOutAdapter.includes('skipDuplicates: true'),
     'fan-out writer is undeclared or not idempotent',
 )
