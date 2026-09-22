@@ -301,6 +301,7 @@ const moduleTests = {
     command('check-telegram-runtime-provider-boundary.mjs'),
     command('check-telegram-driver-link-boundary.mjs'),
     command('check-messaging-telegram-binary-media-boundary.mjs'),
+    command('check-telegram-provider-account-boundary.mjs'),
   ],
   whatsapp_channel: [
     command('check-whatsapp-runtime-provider-boundary.mjs'),

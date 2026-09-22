@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CONTACT-IDENTITY-M2A2-TG1-TELEGRAM-PROVIDER-ACCOUNT-FOUNDATION",
+  "amendments": [
+    {
+      "context": "telegram_channel",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:TelegramAccount",
+        "gravity-mvp/prisma/schema.prisma:TelegramTransportBinding"
+      ],
+      "reason": "Telegram Channel owns the YOKO-owned Telegram provider account, its exact provider-issued identity and lifecycle, and the attested binding of one transport generation to one account. The MTProto principal and the driver bot are two distinct provider accounts, so both are represented by the same two models rather than by a transport-shaped row. These models are an inert expand-only foundation with no runtime writer or reader; they carry no credential, token or session value, and no relation to TelegramConnection, Contacts or conversations. They are pending source state and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}
