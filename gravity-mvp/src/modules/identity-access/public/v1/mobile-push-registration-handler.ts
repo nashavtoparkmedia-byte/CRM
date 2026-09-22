@@ -37,7 +37,7 @@ export interface MobilePushRegistrationWriteV1 {
     now: Date
 }
 
-/** What send-time resolution may know before the token: no token, no credential facts. */
+/** Why a delivery is not sendable, as metadata: no token, no credential facts. */
 export interface MobilePushRegistrationStatusV1 {
     id: string
     sessionBindingId: string
@@ -65,15 +65,23 @@ export interface MobilePushRegistrationPortV1 {
         write: MobilePushRegistrationWriteV1,
         facts: MobilePushEligibilityFactsV1,
     ): Promise<MobilePushReclaimOutcomeV1>
-    /** Whether any row currently holds this token. */
-    tokenIsBound(token: string): Promise<boolean>
+    /** Whether a row of ANOTHER device currently holds this token; this device's own row never counts. */
+    tokenIsBoundToOtherDevice(token: string, deviceId: string): Promise<boolean>
     revokeDevice(deviceId: string, reason: 'logout', now: Date): Promise<number>
     listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]>
     status(registrationId: string): Promise<MobilePushRegistrationStatusV1 | null>
-    /** Eligibility evaluated by the database against the facts; no stored credential fact is read back. */
-    isEligible(registrationId: string, facts: MobilePushEligibilityFactsV1): Promise<boolean>
-    /** The one read of the provider token, for the delivery being sent now. */
-    currentToken(registrationId: string): Promise<string | null>
+    /**
+     * The one read of the provider token, for the delivery being sent now. ONE
+     * query, conditioned on the registration, the delivery's session binding
+     * and every eligibility fact, so no logout, re-login or revocation can land
+     * between the checks and the read. `sendable: false` when any condition
+     * fails; no stored credential fact is read back.
+     */
+    sendableToken(
+        registrationId: string,
+        sessionBindingId: string,
+        facts: MobilePushEligibilityFactsV1,
+    ): Promise<{ sendable: false } | { sendable: true, token: string | null }>
     /** CAS: clear the token only if it is still exactly the one the provider rejected. */
     clearTokenIfCurrent(registrationId: string, rejectedToken: string): Promise<boolean>
     /** CAS: revoke only if the registration still carries the rejected token. */
@@ -109,10 +117,11 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
                 if (reclaimed.outcome === 'bound') {
                     return { ok: true, registrationId: reclaimed.registrationId, reclaimedStaleBinding: true }
                 }
-                // Nothing was released. If some row still holds the token, it
-                // is (or has just become) a live binding: refuse. If no row
-                // holds it any more, the holder let go concurrently; bind again.
-                if (await port.tokenIsBound(write.fcmToken)) {
+                // Nothing was released. If another device still holds the
+                // token, it is (or has just become) a live binding: refuse. If
+                // none does, the holder let go concurrently, or a concurrent
+                // request of this same device already bound it; bind again.
+                if (await port.tokenIsBoundToOtherDevice(write.fcmToken, write.deviceId)) {
                     return { ok: false, code: 'PUSH_TOKEN_BOUND_TO_OTHER_DEVICE' }
                 }
             }
@@ -136,13 +145,15 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
             sessionBindingId: string,
             facts: MobilePushEligibilityFactsV1,
         ): Promise<MobilePushTargetResolutionV1> {
+            const target = await port.sendableToken(registrationId, sessionBindingId, facts)
+            if (target.sendable) return target.token ? { kind: 'send', token: target.token } : { kind: 'await_token' }
+            // Not sendable: that decision is final. The reason below is metadata
+            // for the operations log only and never turns a skip into a send.
             const status = await port.status(registrationId)
             if (!status) return { kind: 'skip', reason: 'not_found' }
             if (status.revoked) return { kind: 'skip', reason: 'revoked' }
             if (status.sessionBindingId !== sessionBindingId) return { kind: 'skip', reason: 'stale_session' }
-            if (!(await port.isEligible(registrationId, facts))) return { kind: 'skip', reason: 'ineligible' }
-            const token = await port.currentToken(registrationId)
-            return token ? { kind: 'send', token } : { kind: 'await_token' }
+            return { kind: 'skip', reason: 'ineligible' }
         },
 
         async markTokenRejected(registrationId: string, rejectedToken: string): Promise<'cleared' | 'already_rotated'> {

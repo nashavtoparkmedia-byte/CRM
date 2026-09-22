@@ -26,12 +26,11 @@ function port(overrides: Partial<MobilePushRegistrationPortV1> = {}): MobilePush
     return {
         bind: vi.fn(async () => ({ outcome: 'bound' as const, registrationId: 'reg_1' })),
         reclaimFromIneligibleHolderAndBind: vi.fn(async () => ({ outcome: 'holder_not_reclaimable' as const })),
-        tokenIsBound: vi.fn(async () => true),
+        tokenIsBoundToOtherDevice: vi.fn(async () => true),
         revokeDevice: vi.fn(async () => 1),
         listEligible: vi.fn(async () => []),
         status: vi.fn(async () => null),
-        isEligible: vi.fn(async () => true),
-        currentToken: vi.fn(async () => null),
+        sendableToken: vi.fn(async () => ({ sendable: false as const })),
         clearTokenIfCurrent: vi.fn(async () => true),
         revokeIfTokenCurrent: vi.fn(async () => true),
         ...overrides,
@@ -70,40 +69,43 @@ describe('Mobile Push v1 registration rules', () => {
         const bind = vi.fn()
             .mockResolvedValueOnce({ outcome: 'token_conflict' })
             .mockResolvedValueOnce({ outcome: 'bound', registrationId: 'reg_1' })
-        const p = port({ bind, tokenIsBound: vi.fn(async () => false) })
+        const p = port({ bind, tokenIsBoundToOtherDevice: vi.fn(async () => false) })
         expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: true, registrationId: 'reg_1', reclaimedStaleBinding: false })
         expect(bind).toHaveBeenCalledTimes(2)
     })
 
+    it('asks only whether ANOTHER device holds the token, so its own concurrent bind is never a 409', async () => {
+        const bind = vi.fn()
+            .mockResolvedValueOnce({ outcome: 'token_conflict' })
+            .mockResolvedValueOnce({ outcome: 'bound', registrationId: 'reg_1' })
+        const tokenIsBoundToOtherDevice = vi.fn(async () => false)
+        const p = port({ bind, tokenIsBoundToOtherDevice })
+        expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: true, registrationId: 'reg_1', reclaimedStaleBinding: false })
+        expect(tokenIsBoundToOtherDevice).toHaveBeenCalledWith(WRITE.fcmToken, WRITE.deviceId)
+    })
+
     it('gives up closed rather than looping when the token keeps changing hands', async () => {
-        const p = port({ bind: vi.fn(async () => ({ outcome: 'token_conflict' as const })), tokenIsBound: vi.fn(async () => false) })
+        const p = port({ bind: vi.fn(async () => ({ outcome: 'token_conflict' as const })), tokenIsBoundToOtherDevice: vi.fn(async () => false) })
         expect(await createMobilePushRegistrationHandlerV1(p).register(WRITE, FACTS)).toEqual({ ok: false, code: 'PUSH_TOKEN_BOUND_TO_OTHER_DEVICE' })
         expect(p.bind).toHaveBeenCalledTimes(3)
     })
 
-    it('resolves in order: missing, revoked, stale session, ineligible, then the one token read', async () => {
-        const currentToken = vi.fn(async () => 'handler-token_0123456789:ABCDEFGHIJ')
+    it('sends or awaits only on the one conditional read, and explains a skip in order: missing, revoked, stale session, ineligible', async () => {
         const status = { id: 'reg_1', sessionBindingId: 'a'.repeat(64), revoked: false }
         const cases: Array<[Partial<MobilePushRegistrationPortV1>, unknown]> = [
+            [{ sendableToken: vi.fn(async () => ({ sendable: true as const, token: 'handler-token_0123456789:ABCDEFGHIJ' })) }, { kind: 'send', token: 'handler-token_0123456789:ABCDEFGHIJ' }],
+            [{ sendableToken: vi.fn(async () => ({ sendable: true as const, token: null })) }, { kind: 'await_token' }],
             [{ status: vi.fn(async () => null) }, { kind: 'skip', reason: 'not_found' }],
             [{ status: vi.fn(async () => ({ ...status, revoked: true })) }, { kind: 'skip', reason: 'revoked' }],
             [{ status: vi.fn(async () => ({ ...status, sessionBindingId: 'b'.repeat(64) })) }, { kind: 'skip', reason: 'stale_session' }],
-            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => false) }, { kind: 'skip', reason: 'ineligible' }],
-            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => true), currentToken: vi.fn(async () => null) }, { kind: 'await_token' }],
-            [{ status: vi.fn(async () => status), isEligible: vi.fn(async () => true), currentToken }, { kind: 'send', token: 'handler-token_0123456789:ABCDEFGHIJ' }],
+            // Not sendable although the row looks fine now (e.g. a racing
+            // re-registration): the decision stays a skip.
+            [{ status: vi.fn(async () => status) }, { kind: 'skip', reason: 'ineligible' }],
         ]
         for (const [overrides, expected] of cases) {
-            expect(await createMobilePushRegistrationHandlerV1(port(overrides)).resolveTarget('reg_1', 'a'.repeat(64), FACTS)).toEqual(expected)
+            const p = port(overrides)
+            expect(await createMobilePushRegistrationHandlerV1(p).resolveTarget('reg_1', 'a'.repeat(64), FACTS)).toEqual(expected)
+            expect(p.sendableToken).toHaveBeenCalledWith('reg_1', 'a'.repeat(64), FACTS)
         }
-    })
-
-    it('resolves a stale session binding as a skip, before any token is read', async () => {
-        const currentToken = vi.fn(async () => 'must-not-be-read')
-        const p = port({
-            status: vi.fn(async () => ({ id: 'reg_1', sessionBindingId: 'b'.repeat(64), revoked: false })),
-            currentToken,
-        })
-        expect(await createMobilePushRegistrationHandlerV1(p).resolveTarget('reg_1', 'a'.repeat(64), FACTS)).toEqual({ kind: 'skip', reason: 'stale_session' })
-        expect(currentToken).not.toHaveBeenCalled()
     })
 })

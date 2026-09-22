@@ -222,6 +222,7 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
         await chat('dup-max', 'max')
         await chat('dup-avito', 'avito')
         await registerDevice('dup')
+        await registerDevice('dup2')
         const upsert = () => legacyPrismaExternalMessagePortV1.upsert({
             lookupExternalId: id('ext-dup-max'), chatId: id('chat-dup-max'), direction: 'inbound', type: 'text',
             content: CONTENT('dup-max'), channel: 'max', externalId: id('ext-dup-max'), sentAt: new Date(), metadata: {},
@@ -246,9 +247,12 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
 
         await relayUntilIdle()
         await relayUntilIdle()
-        expect(await sendsFor([tokenOf('dup')])).toHaveLength(3)
-        for (const messageId of [first.id, received.messageId, created.id]) {
-            expect((await sendsFor([tokenOf('dup')])).filter((entry) => (entry.data as Record<string, string>).messageId === messageId)).toHaveLength(1)
+        for (const device of ['dup', 'dup2']) {
+            const sends = await sendsFor([tokenOf(device)])
+            expect(sends).toHaveLength(3)
+            for (const messageId of [first.id, received.messageId, created.id]) {
+                expect(sends.filter((entry) => (entry.data as Record<string, string>).messageId === messageId)).toHaveLength(1)
+            }
         }
     })
 

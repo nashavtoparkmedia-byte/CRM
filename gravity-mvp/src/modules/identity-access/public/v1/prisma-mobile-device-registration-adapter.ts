@@ -14,7 +14,7 @@ import type {
  * makes a device's concurrent registrations converge on one row (the upsert is
  * a native INSERT … ON CONFLICT), and UNIQUE(fcmToken) makes a live token
  * belong to at most one device. Nothing here logs or returns a token except
- * `currentToken`, which exists for the send-time resolution only.
+ * `sendableToken`, which exists for the send-time resolution only.
  */
 
 const ELIGIBILITY_LIMIT = 1000
@@ -135,8 +135,11 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
         }
     },
 
-    async tokenIsBound(token) {
-        return (await prisma.mobileDeviceRegistration.count({ where: { fcmToken: token } })) > 0
+    async tokenIsBoundToOtherDevice(token, deviceId) {
+        const holders = await prisma.mobileDeviceRegistration.count({
+            where: { fcmToken: token, deviceId: { not: deviceId } },
+        })
+        return holders > 0
     },
 
     async revokeDevice(deviceId, reason, now) {
@@ -173,26 +176,20 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
         return { id: row.id, sessionBindingId: row.sessionBindingId, revoked: row.revokedAt !== null }
     },
 
-    async isEligible(registrationId, facts) {
-        const matching = await prisma.mobileDeviceRegistration.count({
+    async sendableToken(registrationId, sessionBindingId, facts) {
+        const row = await prisma.mobileDeviceRegistration.findFirst({
             where: {
                 id: registrationId,
+                sessionBindingId,
                 revokedAt: null,
                 sessionExpiresAt: { gt: facts.now },
                 sessionRevocationEpoch: facts.revocationEpoch,
                 credentialKeyId: facts.credentialKeyId,
                 credentialSubject: facts.credentialSubject,
             },
-        })
-        return matching === 1
-    },
-
-    async currentToken(registrationId) {
-        const row = await prisma.mobileDeviceRegistration.findUnique({
-            where: { id: registrationId },
             select: { fcmToken: true },
         })
-        return row?.fcmToken ?? null
+        return row ? { sendable: true, token: row.fcmToken } : { sendable: false }
     },
 
     async clearTokenIfCurrent(registrationId, rejectedToken) {

@@ -22,9 +22,11 @@ import type { InboundNotificationChannelV1 } from '../../../../contracts/messagi
 export const INBOUND_NOTIFICATION_RECENCY_WINDOW_MS_V1 = 15 * 60_000
 
 /**
- * A row only qualifies in the call that created it. An upsert that returned an
- * existing row, or any later re-observation of the same message, is older than
- * this and cannot produce a second intent.
+ * A row qualifies only within one minute of being persisted. This is a time
+ * window, not a proof that the current call created the row: a re-observation
+ * inside the minute qualifies again, and adds nothing only because the intent
+ * id is derived from the message id and a duplicate insert is skipped. Any
+ * later re-observation is outside the window.
  */
 export const INBOUND_NOTIFICATION_CREATED_WITHIN_MS_V1 = 60_000
 

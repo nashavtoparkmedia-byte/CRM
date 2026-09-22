@@ -15,12 +15,21 @@ import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const jar = vi.hoisted(() => ({ token: undefined as string | undefined }))
+// Each request sees its own cookie, so concurrent requests in one test are
+// really different sessions (a shared variable would let them all read the last).
+const jar = await vi.hoisted(async () => {
+    const { AsyncLocalStorage } = await import('node:async_hooks')
+    return { token: undefined as string | undefined, request: new AsyncLocalStorage<{ token: string | undefined }>() }
+})
 vi.mock('next/headers', () => ({
-    cookies: async () => ({
-        get: (name: string) => (name === 'yoko_mobile_session' && jar.token ? { name, value: jar.token } : undefined),
-        set: () => undefined,
-    }),
+    cookies: async () => {
+        const request = jar.request.getStore()
+        const token = request ? request.token : jar.token
+        return {
+            get: (name: string) => (name === 'yoko_mobile_session' && token ? { name, value: token } : undefined),
+            set: () => undefined,
+        }
+    },
     headers: async () => new Headers(),
 }))
 
@@ -34,7 +43,11 @@ import {
     markMobilePushTokenRejectedV1,
     revokeMobilePushSenderMismatchV1,
 } from '../../application/mobile-push-registration-operations'
-import { createMobilePushRegistrationHandlerV1 } from './mobile-push-registration-handler'
+import {
+    createMobilePushRegistrationHandlerV1,
+    type MobilePushRegistrationPortV1,
+    type MobilePushRegistrationWriteV1,
+} from './mobile-push-registration-handler'
 import { prismaMobileDeviceRegistrationPortV1 } from './prisma-mobile-device-registration-adapter'
 
 // Send-time resolution is exercised through the owner's own handler and store.
@@ -62,13 +75,14 @@ function expectedBinding(sessionToken: string): string {
 }
 
 async function register(sessionToken: string | undefined, body: unknown, contentType = 'application/json') {
-    jar.token = sessionToken
-    const response = await POST(new NextRequest('http://localhost/api/mobile/push-registration', {
-        method: 'POST',
-        headers: { 'content-type': contentType },
-        body: typeof body === 'string' ? body : JSON.stringify(body),
-    }))
-    return { status: response.status, body: await response.json() as Record<string, unknown> }
+    return jar.request.run({ token: sessionToken }, async () => {
+        const response = await POST(new NextRequest('http://localhost/api/mobile/push-registration', {
+            method: 'POST',
+            headers: { 'content-type': contentType },
+            body: typeof body === 'string' ? body : JSON.stringify(body),
+        }))
+        return { status: response.status, body: await response.json() as Record<string, unknown> }
+    })
 }
 
 const rowOf = (deviceId: string) => prisma.mobileDeviceRegistration.findUnique({ where: { deviceId } })
@@ -80,6 +94,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         if (!process.env.MOBILE_ACCESS_USER || !process.env.MOBILE_ACCESS_PASS) throw new Error('MOBILE_ACCESS_* must be provisioned for the test process')
     })
     beforeEach(async () => {
+        jar.token = undefined
         delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
         await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
     })
@@ -139,6 +154,43 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const rows = await rowsForRun()
         expect(rows).toHaveLength(1)
         expect(rows[0].fcmToken).toMatch(new RegExp(`^${RUN}_tok_d5-[012]_`))
+    })
+
+    it('5b. a device is never refused because its OWN concurrent request bound the token first', async () => {
+        // Replays the interleaving deterministically: B's bind hits the token
+        // on an ineligible holder; A (same device) reclaims it before B's
+        // reclaim runs; B's reclaim then finds nothing to release.
+        await register(sessionFor(device('holder5b')), { token: token('shared5b') })
+        await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('holder5b') }, data: { sessionExpiresAt: new Date(Date.now() - 1000) } })
+        const facts = currentMobilePushEligibilityFactsV1(new Date())!
+        const write: MobilePushRegistrationWriteV1 = {
+            deviceId: device('d5b'),
+            fcmToken: token('shared5b'),
+            credentialSubject: facts.credentialSubject,
+            runtimeOperatorId: 'u1',
+            sessionBindingId: 'c'.repeat(64),
+            sessionIssuedAt: new Date(Date.now() - HOUR),
+            sessionExpiresAt: new Date(Date.now() + 11 * HOUR),
+            sessionRevocationEpoch: facts.revocationEpoch,
+            credentialKeyId: facts.credentialKeyId,
+            now: facts.now,
+        }
+        let concurrentRequestOfSameDevice: (() => Promise<unknown>) | null = () => register(sessionFor(device('d5b')), { token: token('shared5b') })
+        const interleaved: MobilePushRegistrationPortV1 = {
+            ...prismaMobileDeviceRegistrationPortV1,
+            async bind(bindWrite) {
+                const outcome = await prismaMobileDeviceRegistrationPortV1.bind(bindWrite)
+                const run = concurrentRequestOfSameDevice
+                concurrentRequestOfSameDevice = null
+                if (run) expect(await run()).toEqual({ status: 200, body: { ok: true } })
+                return outcome
+            },
+        }
+        expect(await createMobilePushRegistrationHandlerV1(interleaved).register(write, facts)).toMatchObject({ ok: true })
+        expect(await rowsForRun()).toHaveLength(2)
+        expect(await rowOf(device('d5b'))).toMatchObject({ fcmToken: token('shared5b'), revokedAt: null })
+        expect(await prismaMobileDeviceRegistrationPortV1.tokenIsBoundToOtherDevice(token('shared5b'), device('d5b'))).toBe(false)
+        expect(await prismaMobileDeviceRegistrationPortV1.tokenIsBoundToOtherDevice(token('shared5b'), device('holder5b'))).toBe(true)
     })
 
     it('6. a token held by another ELIGIBLE device fails closed and changes neither row', async () => {
@@ -234,6 +286,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
     it('eligibility honours revocation, token loss, expiry, epoch and credential key; never the operator label', async () => {
         const names = ['ok', 'revoked', 'tokenless', 'expired', 'rotatedkey']
         for (const name of names) await register(sessionFor(device(`el-${name}`), name === 'ok' ? 'u3' : 'u1'), { token: token(`el-${name}`) })
+        await register(sessionFor(device('el-ok-u1'), 'u1'), { token: token('el-ok-u1') })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-revoked') }, data: { revokedAt: new Date(), revokedReason: 'logout', fcmToken: null } })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-tokenless') }, data: { fcmToken: null } })
         await prisma.mobileDeviceRegistration.update({ where: { deviceId: device('el-expired') }, data: { sessionExpiresAt: new Date(Date.now() - 1) } })
@@ -241,6 +294,8 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const eligible = (await listPushEligibleMobileDevicesV1()).map((entry) => entry.registrationId)
         const ok = await rowOf(device('el-ok'))
         expect(eligible).toContain(ok!.id)
+        // Live devices under different operator labels are both eligible.
+        expect(eligible).toContain((await rowOf(device('el-ok-u1')))!.id)
         for (const name of names.slice(1)) expect(eligible).not.toContain((await rowOf(device(`el-${name}`)))!.id)
         // Every listed entry carries a session binding and nothing else.
         const listed = (await listPushEligibleMobileDevicesV1()).find((entry) => entry.registrationId === ok!.id)
@@ -259,6 +314,33 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await resolveTarget(row!.id, row!.sessionBindingId)).toEqual({ kind: 'send', token: token('resolve-2') })
         expect(await resolveTarget(row!.id, 'e'.repeat(64))).toEqual({ kind: 'skip', reason: 'stale_session' })
         expect(await resolveTarget('no-such-registration', row!.sessionBindingId)).toEqual({ kind: 'skip', reason: 'not_found' })
+    })
+
+    it('a delivery fanned out before logout and re-login never reaches the new session', async () => {
+        const before = sessionFor(device('relogin'), 'u1', Date.now() - 60_000)
+        await register(before, { token: token('relogin') })
+        const pending = await rowOf(device('relogin'))
+        jar.token = before
+        await clearMobileSessionV1()
+        await register(sessionFor(device('relogin'), 'u1', Date.now()), { token: token('relogin') })
+        expect(await resolveTarget(pending!.id, pending!.sessionBindingId)).toEqual({ kind: 'skip', reason: 'stale_session' })
+    })
+
+    it('the send-time token read is ONE query conditioned on the binding and every eligibility fact', async () => {
+        const session = sessionFor(device('one-read'))
+        await register(session, { token: token('one-read') })
+        const row = (await rowOf(device('one-read')))!
+        const facts = currentMobilePushEligibilityFactsV1(new Date())!
+        const read = (sessionBindingId: string, overrides: Partial<typeof facts> = {}) =>
+            prismaMobileDeviceRegistrationPortV1.sendableToken(row.id, sessionBindingId, { ...facts, ...overrides })
+        expect(await read(row.sessionBindingId)).toEqual({ sendable: true, token: token('one-read') })
+        expect(await read('e'.repeat(64))).toEqual({ sendable: false })
+        expect(await read(row.sessionBindingId, { now: new Date(row.sessionExpiresAt.getTime()) })).toEqual({ sendable: false })
+        expect(await read(row.sessionBindingId, { revocationEpoch: 'bumped' })).toEqual({ sendable: false })
+        expect(await read(row.sessionBindingId, { credentialKeyId: 'ffffffffffffffff' })).toEqual({ sendable: false })
+        expect(await read(row.sessionBindingId, { credentialSubject: 'rotated-away' })).toEqual({ sendable: false })
+        await prisma.mobileDeviceRegistration.update({ where: { id: row.id }, data: { revokedAt: new Date(), revokedReason: 'logout' } })
+        expect(await read(row.sessionBindingId)).toEqual({ sendable: false })
     })
 
     it('14. a rejected-token clear is compare-and-set: a rotated token survives', async () => {

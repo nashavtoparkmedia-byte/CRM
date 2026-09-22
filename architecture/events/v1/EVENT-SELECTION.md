@@ -48,7 +48,11 @@ criteria the recording flow did:
 - **Intrinsically asynchronous and replay-safe.** A notification is sent after
   the message is stored and has deterministic identities: one intent per
   Message, one delivery per Message and stable device registration. A retried
-  or duplicated event cannot notify a device twice.
+  or duplicated event adds no second intent or delivery event. The send itself
+  is at-least-once: a relay publish timeout, or a crash after the provider
+  accepted the push and before the row is marked published, can send the same
+  delivery again. The device therefore deduplicates by message id (the P2
+  Android contract).
 - **Losing it materially degrades operations.** An operator away from the
   desktop misses a customer message.
 

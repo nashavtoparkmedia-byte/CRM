@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
     currentMobilePushCredentialFactsV1,
@@ -14,10 +15,12 @@ describe('Mobile Push v1 session fingerprints', () => {
     it('binds to one session: stable for the same token, different for a new login', () => {
         const first = issueMobileSession('u1', 'device-1', ENV, NOW)!
         const second = issueMobileSession('u1', 'device-1', ENV, NOW + 1000)!
-        expect(mobileSessionBindingIdV1(first)).toBe(mobileSessionBindingIdV1(first))
+        const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex')
+        // Computed independently: a domain-separated digest of the whole signed token.
+        expect(mobileSessionBindingIdV1(first)).toBe(sha256(`yoko.mobile-push.session-binding.v1\0${first}`))
         expect(mobileSessionBindingIdV1(first)).not.toBe(mobileSessionBindingIdV1(second))
-        expect(mobileSessionBindingIdV1(first)).toMatch(/^[0-9a-f]{64}$/)
-        expect(mobileSessionBindingIdV1(first)).not.toContain(first.split('.')[1])
+        // Not a plain token hash, so it cannot be matched against a hash made for any other purpose.
+        expect(mobileSessionBindingIdV1(first)).not.toBe(sha256(first))
     })
 
     it('fingerprints the signing key without exposing the credential', () => {

@@ -74,9 +74,14 @@ describe('Mobile Push v1 product recency policy', () => {
         expect(qualifiesForInboundNotificationV1(pastEdge, NOW)).toBeNull()
     })
 
-    it('qualifies a row only in the call that created it, so a re-observation adds nothing', () => {
-        const existing = row({ createdAt: new Date(NOW.getTime() - minutes(2)), sentAt: new Date(NOW.getTime() - minutes(3)) })
-        expect(qualifiesForInboundNotificationV1(existing, NOW)).toBeNull()
+    it('is a one-minute window after persistence, not a proof of creation by this call', () => {
+        const persistedAgo = (ms: number) => row({ createdAt: new Date(NOW.getTime() - ms), sentAt: new Date(NOW.getTime() - ms - 1_000) })
+        // Inside the minute a re-observed row qualifies again; the intent's
+        // message-derived id is what keeps it to one intent.
+        expect(qualifiesForInboundNotificationV1(persistedAgo(59_999), NOW)).toBe('telegram')
+        expect(qualifiesForInboundNotificationV1(persistedAgo(60_000), NOW)).toBe('telegram')
+        expect(qualifiesForInboundNotificationV1(persistedAgo(60_001), NOW)).toBeNull()
+        expect(qualifiesForInboundNotificationV1(persistedAgo(minutes(2)), NOW)).toBeNull()
     })
 
     it('uses the same candidate rules before the write as after it', () => {
