@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "edfff8b74312f979f19c9c92238f8b0a6dedb865f2bb92c50e4fc16f473c01cd"
+      "sha256": "af869169788329daeb98e9385578a0e4b001e9b0d10ec32e888778905140f18b"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "5ebba0436e1ae175d977ffe1ea13bfd11091364361fcf3e548b4b984cb1faa19"
+      "sha256": "1df15d17dca21189a63b9ab71fe2a0793c098827c0b9ade4fd800c742cbf9f9f"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "3dad36b6736901f6d472935172f96c297dec5de052bd72095cc26d584b02b22f"
+      "sha256": "78963f662c165e65276ac120c3a47802912eb9d16c1b71c822c56b81d01da8e5"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "187778f95d2c420aa56f7855d3f9ba98058f391b1a08b8cfa1aa39eded7ae4d9"
+      "sha256": "a9dc70ca5d770e78ad163aed74954e3ba82728db13fad7793d96afddacddff0a"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

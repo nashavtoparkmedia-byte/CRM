@@ -1911,7 +1911,7 @@
     {
       "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
       "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
-      "source_sha256": "d6ba12f7612a0d6d61f663e20e2d390e8ac5b43a89302c7929d42ec499e9f038",
+      "source_sha256": "04f9c6dfa6279fdd077c92faeeb7c64ef5ae962ecd42d51e666b951d93776295",
       "file": "gravity-mvp/src/lib/MessageService.ts",
       "line": 102,
       "column": 65,
@@ -1935,7 +1935,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
-      "sql_provenance_sha256": "db2dc76e2c2ed437ad3986e7254e8ea11b57d41b6490265df7db37deb8ab0ec8",
+      "sql_provenance_sha256": "80abbd28a4349b42734e6b5cadee5dd1c8bccd4f669d6a4015229293a6919bcc",
       "source_context": "messaging",
       "source_technical_module": "messages",
       "owner_contexts": [],
@@ -4675,8 +4675,8 @@
         "line": 102,
         "column": 65,
         "method": "$queryRaw",
-        "source_sha256": "d6ba12f7612a0d6d61f663e20e2d390e8ac5b43a89302c7929d42ec499e9f038",
-        "sql_provenance_sha256": "db2dc76e2c2ed437ad3986e7254e8ea11b57d41b6490265df7db37deb8ab0ec8"
+        "source_sha256": "04f9c6dfa6279fdd077c92faeeb7c64ef5ae962ecd42d51e666b951d93776295",
+        "sql_provenance_sha256": "80abbd28a4349b42734e6b5cadee5dd1c8bccd4f669d6a4015229293a6919bcc"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4698,8 +4698,8 @@
         "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
         "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:d6ba12f7612a0d6d61f663e20e2d390e8ac5b43a89302c7929d42ec499e9f038",
-        "sql_provenance_sha256:db2dc76e2c2ed437ad3986e7254e8ea11b57d41b6490265df7db37deb8ab0ec8"
+        "source_sha256:04f9c6dfa6279fdd077c92faeeb7c64ef5ae962ecd42d51e666b951d93776295",
+        "sql_provenance_sha256:80abbd28a4349b42734e6b5cadee5dd1c8bccd4f669d6a4015229293a6919bcc"
       ]
     },
     {

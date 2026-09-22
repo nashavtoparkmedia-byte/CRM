@@ -10,6 +10,7 @@ import AiProposedReplyBubble from "./AiProposedReplyBubble"
 import AiCoachModal from "./AiCoachModal"
 import LearnFromReplyBanner from "./LearnFromReplyBanner"
 import { learnFromOutboundAction } from "../learn-from-outbound-actions"
+import { retryFailedMessageAction } from "../message-retry-actions"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import { useProposedReply } from "../hooks/useProposedReply"
@@ -118,9 +119,10 @@ function ChatWorkspaceInner({
         hasMoreHistory,
         loadMoreHistory,
         sendMessage,
+        retryMessage,
         sendMedia,
         deleteMessage,
-    } = useMessages(effectiveChatId)
+    } = useMessages(effectiveChatId, { retryPersistedDelivery: retryFailedMessageAction })
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -256,11 +258,9 @@ function ChatWorkspaceInner({
             .catch(err => console.warn('[learnFromOutbound] non-blocking:', err))
     }
 
+    // «Повторить» retries THAT message; it never starts a new send.
     const handleRetry = (msg: Message) => {
-        const quotedMsgId = typeof msg.metadata?.quotedMsgId === 'string'
-            ? msg.metadata.quotedMsgId
-            : undefined
-        sendMessage(msg.content, msg.channel, quotedMsgId)
+        void retryMessage(msg)
     }
 
     const handleReply = (msg: Message) => {
