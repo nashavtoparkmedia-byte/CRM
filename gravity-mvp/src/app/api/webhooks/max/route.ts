@@ -759,7 +759,7 @@ export async function POST(request: Request) {
         patch: {
           ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
-          ...(peerSenderName && !domFallbackPeer && chat.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
+          ...(!domFallbackPeer && peerSenderName && chat.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
           // Обновляем senderId / phone в metadata. A DOM-bound event proves nothing new about
           // the conversation, and its phone/name come from the scraper's cache: keep it as is.
           ...((peerSenderIdString || effectivePeerSenderPhone) && !domFallbackPeer ? {
