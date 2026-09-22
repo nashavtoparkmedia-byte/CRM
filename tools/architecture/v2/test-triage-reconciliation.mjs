@@ -8,10 +8,10 @@ const records = document.records ?? []
 const ids = records.map(record => record.record_id)
 const signatures = records.map(record => record.site_signature)
 if (records.length !== new Set(ids).size) throw new Error('triage reconciliation has duplicate record IDs')
-if (records.length !== 62) throw new Error('current exact ambiguity denominator drift')
+if (records.length !== 63) throw new Error('current exact ambiguity denominator drift')
 if (records.length !== new Set(signatures).size || records.some((record) => record.record_id !== record.site_signature)) throw new Error('triage reconciliation signature identity drift')
 const signatureDigest = createHash('sha256').update(`${[...signatures].sort().join('\n')}\n`).digest('hex')
-if (signatureDigest !== 'a6bb518af935ec0a6ce3ba4f5951b82324ecc151dea74522bada1a81664eb9cb') throw new Error('current exact ambiguity signature digest drift')
+if (signatureDigest !== '7bfbac779a5c665a1e645d077ebe4a826bb6ab24c9a39222728c59deac3a5044') throw new Error('current exact ambiguity signature digest drift')
 if (document.current_exact_review?.ambiguous_denominator !== records.length || document.current_exact_review?.sorted_site_signatures_sha256 !== signatureDigest) throw new Error('current exact ambiguity review binding drift')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
 const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
@@ -22,7 +22,7 @@ if (document.summary.RECONCILIATION_TOTAL !== records.length || document.summary
 if (document.summary.RESOLVED_NON_WRITE !== counts.RESOLVED_NON_WRITE) throw new Error('resolved non-write count drift')
 if (document.summary.MATERIAL_UNRESOLVED_WRITE_RISK !== counts.MATERIAL_UNRESOLVED_WRITE_RISK) throw new Error('material ambiguity count drift')
 if (counts.RESOLVED_NON_WRITE < 27) throw new Error('static SELECT reclassification regression')
-if (counts.RESOLVED_NON_WRITE !== 41 || counts.OWNER_VALID_WRITE !== 17 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
+if (counts.RESOLVED_NON_WRITE !== 42 || counts.OWNER_VALID_WRITE !== 17 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
   throw new Error('current exact ambiguity disposition count drift')
 }
 for (const id of [
@@ -47,11 +47,18 @@ for (const id of [
 }
 for (const id of [
   '3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d',
-  '597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646',
-  'a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7',
   'e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2',
 ]) {
   if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`cash-compensation pilot read-only SQL regression for ${id}`)
+}
+// The manager list, detail and month reads that replaced the pilot manager
+// queries: each must stay an exactly proven read-only projection.
+for (const id of [
+  '7146621cc49a948fb4bfdd37c78f6faa4835db24c3bacec99bb7175325268cc2',
+  '7e2df02de5b270d858af7c2ba0533a31da1146b3ac16a4e974976e0c8e8f7ce3',
+  '556823a8ca310f7d113ef8231d75805393fcd771d2a5112e539b445fe37a09fc',
+]) {
+  if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`cash-compensation manager read-only SQL regression for ${id}`)
 }
 if (records.find(record => record.record_id === 'f7691415bdb4eb6bcb72502c8df0febd83b69ce0e9280e91988852663bc4a313')?.semantic_state !== 'OWNER_VALID_WRITE') {
   throw new Error('telegram owner-valid nested write regression')
@@ -86,6 +93,10 @@ for (const retiredSignature of [
   'b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982',
   'd0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9',
   'c3b1d82673f656bcf2590f40a70eb462c4ebc1a89a7a78f8bb8cf53565c124f1',
+  // The pilot manager list and detail queries, removed when the manager
+  // screens moved to their own adapter.
+  '597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646',
+  'a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7',
 ]) {
   if (records.some(record => record.record_id === retiredSignature)) throw new Error(`retired ambiguity signature leaked into current review: ${retiredSignature}`)
 }
