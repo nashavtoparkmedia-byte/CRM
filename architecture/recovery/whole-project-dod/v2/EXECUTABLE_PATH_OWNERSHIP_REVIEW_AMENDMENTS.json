@@ -1059,7 +1059,7 @@
       },
       "current": {
         "tracked_executable_surfaces": 2596,
-        "tracked_inventory_sha256": "199c6200f8ae1f1778ea5d3f6723c2312e063a47ce1e360145e6bb386da84683",
+        "tracked_inventory_sha256": "29c5a0fe6d8fdc2521b90e378d905e88c15b9f90ad3c437ba0ecb28788a1c00d",
         "coverage_sha256": "dfd6af0d76cf70ede7f84e420cf85ccd315c8aba3816c659ec00e84c2a07a359"
       },
       "unassigned_tracked_surfaces": [
