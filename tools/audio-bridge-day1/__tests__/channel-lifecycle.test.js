@@ -943,9 +943,65 @@ test('a failed cap hangup is not retried, and the channel keeps no stale mark', 
     await tick()
 
     assert.equal(h.kills().length, 1, 'one attempt, no retry loop')
-    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'failed'])
+    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'failed', 'armed'])
     assert.equal(h.lifecycle.isKilled(X), false, 'the episode is released so a later trigger can act')
     assert.equal(h.lifecycle.isTerminating(X), false)
+    // And the trigger that can act is the cap itself, back on the clock: a hangup
+    // that did not land must not leave the call unbounded.
+    const rearmed = capTimers(h)
+    assert.equal(rearmed.length, 1, 'the cap is re-armed after an attempt that did not land')
+    rearmed[0].fn()
+    await tick()
+    assert.equal(h.kills().length, 2, 'one command per cap period, not a loop')
+})
+
+test('a cap spent while an earlier hangup is still in flight comes back', async () => {
+    // The bot's goodbye kill is sent at 9:59 and the ESL reply is still pending when
+    // the cap expires at 10:00. The cap is spent as a duplicate — correct, no second
+    // command — but if that kill then fails there would be nothing left to end the
+    // call, so the backstop returns.
+    let settle = null
+    const h = harness({
+        eslReply: cmd => (cmd.startsWith('uuid_kill ')
+            ? new Promise((_, reject) => { settle = () => reject(new Error('esl timeout after 5000ms (stage=sending)')) })
+            : Promise.resolve('+OK Success')),
+    })
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    assert.equal(h.kills().length, 1, 'the goodbye kill is out but unanswered')
+
+    capTimers(h)[0].fn()
+    await tick()
+    assert.equal(h.kills().length, 1, 'the cap adds no second command while one is in flight')
+    assert.equal(h.terminationKinds().at(-1), 'suppressed')
+
+    settle()
+    await tick()
+    const rearmed = capTimers(h)
+    assert.equal(rearmed.length, 1, 'once the in-flight kill fails, the cap is back')
+    rearmed[0].fn()
+    await tick()
+    assert.equal(h.kills().length, 2, 'and it tries exactly once more')
+})
+
+test('a hangup that lands leaves no cap behind', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'issued'])
+    assert.equal(h.terminationKinds().filter(k => k === 'armed').length, 1, 'a successful hangup re-arms nothing')
+
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [], 'and the channel takes its cap with it')
+})
+
+test('an unusable cap duration stops the bridge instead of removing the cap', () => {
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, null]) {
+        assert.throws(() => harness({ maxCallDurationMs: bad }), /invalid max call duration/)
+    }
 })
 
 test('the cap is the backstop for a hangup that failed', async () => {

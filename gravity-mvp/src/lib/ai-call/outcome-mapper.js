@@ -96,11 +96,16 @@ function computeOutcome({ aiAnalysis, reason, sessionStatus, realUserUtterances 
 
     // The hard duration cap cut the call. It is a safety and cost limit, not a
     // provider or bridge failure, so it must never land in `error`: the
-    // conversation did happen, it was stopped. It also cannot carry an LLM
-    // verdict — a verdict only exists once end_call ran, and that reason wins the
-    // terminal race — so the split is the same one the drop paths use: whether
-    // the lead ever really spoke. The slug is what tells an operator why.
-    if (reason === 'max_duration') {
+    // conversation did happen, it was stopped. The split is the one the drop paths
+    // use — whether the lead ever really spoke — and the slug is what tells an
+    // operator why the call ended.
+    //
+    // A verdict can coexist with this reason, in one narrow window: end_call sets
+    // the result and only then awaits its goodbye phrase, so a cap expiring inside
+    // that await finalizes with the cap's reason and the verdict already attached.
+    // The verdict is then the business truth and wins; recording it as a drop
+    // would contradict the analysis stored on the same row.
+    if (reason === 'max_duration' && !qStatus) {
         return hadSpeech
             ? { outcome: 'dropped_mid_call', reason: 'max_duration' }
             : { outcome: 'dropped_no_input', reason: 'max_duration' }

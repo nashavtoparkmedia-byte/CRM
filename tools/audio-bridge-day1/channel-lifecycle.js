@@ -158,6 +158,11 @@ function createChannelLifecycle({
     if (!FORK_MIX_TYPES.has(mixType)) {
         throw new Error(`invalid audio fork mix type "${mixType}" (expected mono, mixed or stereo)`)
     }
+    // Same reasoning for the cap: a bad value here would silently remove the only
+    // bound on how long a call can exist, which is worse than not starting.
+    if (!(Number.isFinite(maxCallDurationMs) && maxCallDurationMs > 0)) {
+        throw new Error(`invalid max call duration "${maxCallDurationMs}" (expected a positive number of ms)`)
+    }
     const answeredChannels = new Set()   // the answered fact has been seen
     const forkedChannels = new Set()     // uuid_audio_fork start issued (exactly-once guard)
     const boundChannels = new Set()      // CRM session bind requested (once per channel)
@@ -329,7 +334,6 @@ function createChannelLifecycle({
      */
     function armMaxDurationTimer(uuid) {
         if (maxDurationTimers.has(uuid) || deadChannels.has(uuid)) return
-        if (!(Number.isFinite(maxCallDurationMs) && maxCallDurationMs > 0)) return
         const timer = setTimer(() => {
             maxDurationTimers.delete(uuid)
             onMaxCallDuration(uuid)
@@ -363,7 +367,11 @@ function createChannelLifecycle({
                 logError(`[esl] session stop failed for ${uuid} at the duration cap: ${err.message}`)
             }
         }
-        terminate(uuid, { reason: 'max_duration', graceMs: 0 })
+        const disposition = terminate(uuid, { reason: 'max_duration', graceMs: 0 })
+        // The cap was spent on a channel whose earlier hangup is still outstanding.
+        // If that one lands the channel dies and this timer is cleared with it; if
+        // it does not, the backstop has to still be there.
+        if (disposition === 'duplicate') rearmCapAfterUnlandedAttempt(uuid)
     }
 
     // A kill FreeSWITCH accepted is answered by CHANNEL_HANGUP_COMPLETE, and
@@ -377,6 +385,21 @@ function createChannelLifecycle({
     function releaseTerminationEpisode(uuid) {
         terminatingChannels.delete(uuid)
         killedChannels.delete(uuid)
+    }
+
+    // A hangup that did not land leaves an answered channel that may still be up,
+    // and the cap is the only thing that would ever end it — but the cap is a
+    // one-shot timer and may already have been spent (consumed by its own failing
+    // attempt, or burnt as a duplicate while an earlier kill was still in flight).
+    // Re-arming it here is what keeps the ten-minute guarantee from degrading into
+    // "we tried once". It is not a retry loop: one command per cap period at most,
+    // and it converges — a success, an "already gone" reply, or the real hangup
+    // clears the timer for good.
+    function rearmCapAfterUnlandedAttempt(uuid) {
+        if (deadChannels.has(uuid) || killedChannels.has(uuid)) return
+        if (!answeredChannels.has(uuid)) return
+        armMaxDurationTimer(uuid)
+        log(`[esl] ${uuid} hangup did not land -> duration cap re-armed`)
     }
 
     function expireTerminationMark(uuid) {
@@ -422,11 +445,13 @@ function createChannelLifecycle({
                 logError(`[esl] termination REJECTED for ${uuid} (${requested.reason}): ${text.slice(0, 120)}`)
                 releaseTerminationEpisode(uuid)
                 emitTermination('failed', uuid, { ...requested, detail: text.slice(0, 120) })
+                rearmCapAfterUnlandedAttempt(uuid)
             })
             .catch(err => {
                 logError(`[esl] termination FAILED for ${uuid} (${requested.reason}): ${err.message}`)
                 releaseTerminationEpisode(uuid)
                 emitTermination('failed', uuid, { ...requested, detail: String(err.message).slice(0, 120) })
+                rearmCapAfterUnlandedAttempt(uuid)
             })
     }
 

@@ -293,6 +293,26 @@ test('a genuine bridge failure still wins over the cap reason', () => {
     )
 })
 
+test('a verdict already reached wins over the cap reason', () => {
+    // end_call sets its result before awaiting the goodbye phrase, so a cap that
+    // expires during that phrase finalizes under the cap reason with the verdict
+    // attached. The row must not claim both "qualified" and "dropped".
+    assert.deepEqual(
+        computeOutcome({
+            aiAnalysis: { qualification_status: 'qualified' },
+            reason: 'max_duration', sessionStatus: 'ended', realUserUtterances: 5,
+        }),
+        { outcome: 'qualified', reason: 'llm_qualified' },
+    )
+    assert.deepEqual(
+        computeOutcome({
+            aiAnalysis: { qualification_status: 'unclear', transfer_reason: 'лид просит менеджера' },
+            reason: 'max_duration', sessionStatus: 'ended', realUserUtterances: 5,
+        }),
+        { outcome: 'unclear_engaged', reason: 'llm_transferred_to_manager' },
+    )
+})
+
 test('the cap reason does not disturb the ordinary verdict paths', () => {
     assert.deepEqual(
         computeOutcome({
