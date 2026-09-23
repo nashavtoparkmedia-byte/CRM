@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,9 @@ BUILDER_COMMIT = "3e6e592864a50519379b36b36b3f1a38f56a30ab"
 BUILDER_BASE_COMMIT = "fb9fb30d9eb221a04342fe0ef7324f78d8ff7576"
 PROFILE = "crm-fb9fb30d9eb2-gravity-max-source-v1"
 WORKFLOW = ".github/workflows/coordinated-gravity-max-fb9fb30d.yml"
+sys.path.insert(0, str(AUTHORITY))
+import coordinated_release_contract as contract  # noqa: E402
+
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 HOSTED_BUILDER_REF = "refs/heads/stage-a-builder"
 HOSTED_BUILDER_BASE_REF = "refs/heads/stage-a-builder-base"
@@ -291,16 +295,34 @@ class StageAContractTests(unittest.TestCase):
         self.assertIn("run-id: '34984925377'", workflow)
 
     def test_application_and_builder_authorities_are_separate_and_fixed(self) -> None:
+        # The workflow's in-source trust anchors must name THIS candidate. They
+        # are compared against the contract, never against literals, so a
+        # re-pinned authority cannot keep asserting a predecessor's tree while
+        # checking out this one - an anchor set that contradicts the contract
+        # aborts the build and stops corroborating it.
         workflow = (ROOT / WORKFLOW).read_text()
         for value in (
             APPLICATION_COMMIT,
-            "ca47f7d426d2da0299916ca25ef448dc0e7b7b37",
-            "7a6b193e24ed9ff08eebd473c726b48f6760aca2",
-            "4c4bc48aa465919324b8d661d1572d7d839d4da1",
-            "test \"$(git -C application-source rev-parse 'HEAD~1^{commit}')\" = 738496cdc418597d2eade8aaabe851dbcccaab05",
-            "test \"$(git -C application-source rev-parse 'HEAD~2^{commit}')\" = be6b8eb82d8c074e82a3be0cd53db26137e984be",
+            contract.APPLICATION_TREE,
+            contract.GRAVITY_SUBTREE,
+            contract.MAX_SUBTREE,
         ):
             self.assertIn(value, workflow)
+        chain = contract.APPLICATION_LINEAGE[1:] + (
+            contract.REPAIR_BASE_COMMIT, contract.REPAIR_BASE_PARENT, contract.BASELINE_COMMIT,
+        )
+        for depth, commit in enumerate(chain, start=1):
+            self.assertIn(
+                f"test \"$(git -C application-source rev-parse 'HEAD~{depth}^{{commit}}')\" = {commit}",
+                workflow,
+            )
+        # The checkout must be deep enough to resolve the whole chain.
+        depth = int(re.search(r"ref: " + APPLICATION_COMMIT + r"\n(?:\s*#[^\n]*\n)*\s*fetch-depth: (\d+)", workflow).group(1))
+        self.assertGreaterEqual(depth, len(chain) + 1)
+        # No predecessor identity may survive in the anchors.
+        for stale in ("ca47f7d426d2da0299916ca25ef448dc0e7b7b37", "7a6b193e24ed9ff08eebd473c726b48f6760aca2",
+                      "4c4bc48aa465919324b8d661d1572d7d839d4da1"):
+            self.assertNotIn(stale, workflow)
         self.assertIn("path: release-authority", workflow)
         self.assertIn("path: application-source", workflow)
         self.assertIn("EXPECTED_BUILDER_COMMIT: ${{ github.sha }}", workflow)

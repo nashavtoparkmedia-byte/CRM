@@ -33,7 +33,10 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: fb9fb30d9eb221a04342fe0ef7324f78d8ff7576
-          fetch-depth: 3
+          # Deep enough to resolve the whole repair chain: the candidate, its
+          # six repair commits, the repair base, its parent and the accepted
+          # baseline (HEAD~9).
+          fetch-depth: 12
           persist-credentials: false
           path: application-source
 
@@ -46,11 +49,22 @@ jobs:
           test "$GITHUB_REF" = refs/heads/codex/coordinated-gravity-max-fb9fb30d
           test "$(git -C release-authority rev-parse 'HEAD^{commit}')" = "$EXPECTED_BUILDER_COMMIT"
           test "$(git -C application-source rev-parse 'HEAD^{commit}')" = fb9fb30d9eb221a04342fe0ef7324f78d8ff7576
-          test "$(git -C application-source rev-parse 'HEAD^{tree}')" = ca47f7d426d2da0299916ca25ef448dc0e7b7b37
-          test "$(git -C application-source rev-parse 'HEAD:gravity-mvp')" = 7a6b193e24ed9ff08eebd473c726b48f6760aca2
-          test "$(git -C application-source rev-parse 'HEAD:max-web-scraper')" = 4c4bc48aa465919324b8d661d1572d7d839d4da1
-          test "$(git -C application-source rev-parse 'HEAD~1^{commit}')" = 738496cdc418597d2eade8aaabe851dbcccaab05
-          test "$(git -C application-source rev-parse 'HEAD~2^{commit}')" = be6b8eb82d8c074e82a3be0cd53db26137e984be
+          test "$(git -C application-source rev-parse 'HEAD^{tree}')" = a5a86806833ffb85175a639c4b0880fd9deb1318
+          test "$(git -C application-source rev-parse 'HEAD:gravity-mvp')" = 6c4523235bd6af2fdde778609cb37c0b7538e4e3
+          test "$(git -C application-source rev-parse 'HEAD:max-web-scraper')" = 44e64cdf9e77671875f0681cb483a5b660c84b8a
+          # The repair delta, newest first. HEAD~7 is the repair base c7e29a24:
+          # the candidate whose production acceptance failed and was rolled
+          # back on 2026-09-22. It is this delta's technical base only, never an
+          # accepted release. HEAD~9 is the accepted baseline be6b8eb8.
+          test "$(git -C application-source rev-parse 'HEAD~1^{commit}')" = cf070e9838be16a743b2355ffc0c2c7365622f89
+          test "$(git -C application-source rev-parse 'HEAD~2^{commit}')" = cbae19c4ac222eb098154a7873746a345a9f7cc8
+          test "$(git -C application-source rev-parse 'HEAD~3^{commit}')" = 4a88ef24d4859e4a5046c8c16a1a4e17f8952e93
+          test "$(git -C application-source rev-parse 'HEAD~4^{commit}')" = 410a5e98e054ab36c8dc9de1fa561ddfc2f4671b
+          test "$(git -C application-source rev-parse 'HEAD~5^{commit}')" = a109f99a263d70aa9a4f7cb2175487c1721b3bde
+          test "$(git -C application-source rev-parse 'HEAD~6^{commit}')" = ca0fa1796d7be9cd6f09b6cd7084ba63bbe48f62
+          test "$(git -C application-source rev-parse 'HEAD~7^{commit}')" = c7e29a24e960ddd75e6701d71e06405777e58d1e
+          test "$(git -C application-source rev-parse 'HEAD~8^{commit}')" = 738496cdc418597d2eade8aaabe851dbcccaab05
+          test "$(git -C application-source rev-parse 'HEAD~9^{commit}')" = be6b8eb82d8c074e82a3be0cd53db26137e984be
           builder_tree=$(git -C release-authority rev-parse 'HEAD^{tree}')
           printf 'RELEASE_BUILDER_COMMIT=%s\n' "$EXPECTED_BUILDER_COMMIT" >> "$GITHUB_ENV"
           printf 'RELEASE_BUILDER_TREE=%s\n' "$builder_tree" >> "$GITHUB_ENV"
