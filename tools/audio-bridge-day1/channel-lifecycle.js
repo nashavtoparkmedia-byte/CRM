@@ -52,14 +52,20 @@
  * calls into a CallSession — a session asks for termination, the primitive does
  * not answer back.
  *
- * Duration: it also owns the hard cap on an answered call. The deadline is absolute
- * — the answer instant FreeSWITCH reports plus DEFAULT_MAX_CALL_DURATION_MS — set
- * once and never moved, so a lost CHANNEL_ANSWER recovered later gets only the time
- * the call has left, and a failed hangup never buys another window. When it expires
- * the module performs two independent actions — stop the session, then terminate the
- * channel immediately — and an immediate request preempts a kill that is still only
- * scheduled, so a goodbye grace can never hold the deadline up. A channel still up
- * past its deadline is marked overdue and stays that way until it dies.
+ * Duration: it also owns the application-side deadline for an answered call. The
+ * policy comes from the channel itself (the Calling originate sets it), and the
+ * deadline is absolute — the answer instant FreeSWITCH reports plus that policy —
+ * set once and never moved, so a lost CHANNEL_ANSWER recovered later gets only the
+ * time the call has left, and a failed hangup never buys another window. When it
+ * expires the module performs two independent actions — stop the session, then
+ * terminate the channel immediately — and an immediate request preempts a kill that
+ * is still only scheduled, so a goodbye grace can never hold the deadline up.
+ *
+ * This module is not the last line of defence for that limit. The same originate
+ * installs a FreeSWITCH-native scheduled hangup before the number is dialed, which
+ * holds even if this process or its event socket disappears after the answer. What
+ * lives here is the precise, observable, CRM-meaningful deadline; `overdue` remains
+ * as evidence for the case where both this module and its own hangup fell short.
  *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
@@ -93,13 +99,17 @@ const CHANNEL_ALREADY_GONE = /no such channel/i
 // phrase finish playing; a wrong playback estimate must not defer a hangup for
 // minutes. This bounds the wait only — it is not a call-duration policy.
 const MAX_TERMINATION_GRACE_MS = 30 * 1000
-// Hard cap on how long an ANSWERED AI call may physically exist. Owner decision:
-// ten minutes, one cap for inbound and outbound alike, measured from the answer
-// fact, cut immediately with no warning phrase. It is a safety and cost limit,
-// not a provider failure, and deliberately not configurable through the
-// environment — the number is a product decision, so it lives in the source that
-// implements it. A scenario's advisory targetDurationSec is never used for this.
-const DEFAULT_MAX_CALL_DURATION_MS = 10 * 60 * 1000
+// The hard maximum an answered AI call may last travels WITH the channel: the
+// Calling originate sets it, FreeSWITCH carries it, and this module reads it back.
+// There is deliberately no default here. A duration literal in the bridge would be
+// a second copy of a product policy, and two copies drift; a bridge that invented
+// its own number could also quietly disagree with the scheduled hangup FreeSWITCH
+// is already holding for the same channel.
+const MAX_ANSWERED_POLICY_HEADER = 'variable_yoko_ai_max_answered_ms'
+// Sanity bounds for the value that arrives on the channel. Anything outside them is
+// not a policy this module will act on — it fails closed instead of guessing.
+const MIN_ANSWERED_POLICY_MS = 1000
+const MAX_ANSWERED_POLICY_MS = 60 * 60 * 1000
 // Tolerances for the answer instant FreeSWITCH reports. A value slightly ahead of
 // this process's clock is ordinary skew; one wildly ahead, or older than a day, is
 // not an answer time and is ignored in favour of the local clock.
@@ -122,10 +132,19 @@ const ANSWER_MAX_AGE_MS = 24 * 60 * 60 * 1000
  */
 function parseAnswerEpochMs(headers, nowMs) {
     if (!headers) return null
+    // Ordered so every fallback is at or before the real answer. Progress and early
+    // media precede the answer in SIP, and channel creation precedes the dial, so a
+    // missing answer stamp can only move the deadline EARLIER — never later. The one
+    // thing this must never do is restart the clock at "now", which would hand a
+    // recovered channel a fresh full policy.
     const candidates = [
         [headers['Caller-Channel-Answered-Time'], 1000],
         [headers['variable_answer_uepoch'], 1000],
         [headers['variable_answer_epoch'], 1 / 1000],
+        [headers['variable_progress_media_epoch'], 1 / 1000],
+        [headers['variable_progress_epoch'], 1 / 1000],
+        [headers['Caller-Channel-Created-Time'], 1000],
+        [headers['variable_start_epoch'], 1 / 1000],
     ]
     for (const [raw, perMs] of candidates) {
         if (raw === undefined || raw === null || String(raw).trim() === '') continue
@@ -137,6 +156,42 @@ function parseAnswerEpochMs(headers, nowMs) {
         return answeredAt
     }
     return null
+}
+
+/**
+ * The hard-duration policy the channel carries, in milliseconds, or null.
+ *
+ * Strict on purpose: a policy is an integer number of milliseconds inside sane
+ * bounds. Fractions, NaN, Infinity, zero, negatives, padded junk and absurd values
+ * are all rejected rather than coerced, because the alternative to a trustworthy
+ * policy is failing closed, not acting on a guess.
+ */
+/**
+ * The first usable epoch value among `names`, in milliseconds. `perMs` is how many
+ * source units make a millisecond (1000 for microseconds, 1/1000 for seconds).
+ */
+function parseFsEpochMs(headers, names, perMs) {
+    if (!headers) return null
+    for (const name of names) {
+        const raw = headers[name]
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue
+        const value = Number(String(raw).trim())
+        if (!Number.isFinite(value) || value <= 0) continue
+        return Math.round(value / perMs)
+    }
+    return null
+}
+
+function parsePolicyMs(headers) {
+    if (!headers) return null
+    const raw = headers[MAX_ANSWERED_POLICY_HEADER]
+    if (raw === undefined || raw === null) return null
+    const text = String(raw).trim()
+    if (!/^[0-9]+$/.test(text)) return null
+    const value = Number(text)
+    if (!Number.isSafeInteger(value)) return null
+    if (value < MIN_ANSWERED_POLICY_MS || value > MAX_ANSWERED_POLICY_MS) return null
+    return value
 }
 
 function parseEslEventHeaders(text) {
@@ -191,18 +246,12 @@ function createChannelLifecycle({
     onTerminationEvent = () => {},
     deadChannelTtlMs = DEFAULT_DEAD_CHANNEL_TTL_MS,
     preAnswerTimeoutMs = DEFAULT_PRE_ANSWER_TIMEOUT_MS,
-    maxCallDurationMs = DEFAULT_MAX_CALL_DURATION_MS,
     setTimer = setTimeout,
     clearTimer = clearTimeout,
 }) {
     // A misconfigured mix type would make every call deaf; refuse to start instead.
     if (!FORK_MIX_TYPES.has(mixType)) {
         throw new Error(`invalid audio fork mix type "${mixType}" (expected mono, mixed or stereo)`)
-    }
-    // Same reasoning for the cap: a bad value here would silently remove the only
-    // bound on how long a call can exist, which is worse than not starting.
-    if (!(Number.isFinite(maxCallDurationMs) && maxCallDurationMs > 0)) {
-        throw new Error(`invalid max call duration "${maxCallDurationMs}" (expected a positive number of ms)`)
     }
     const answeredChannels = new Set()   // the answered fact has been seen
     const forkedChannels = new Set()     // uuid_audio_fork start issued (exactly-once guard)
@@ -218,6 +267,9 @@ function createChannelLifecycle({
     const maxDurationDeadlines = new Map() // uuid -> absolute deadline, set once, never moved
     const deadlineReached = new Set()      // the duration deadline has arrived for this channel
     const overdueChannels = new Set()      // past the deadline, hangup did not land, still up
+    const maxDurationPolicies = new Map()  // uuid -> policy ms the channel carried
+    const bindClassifications = new Map()  // uuid -> Promise<'product'|'diagnostic'|'unknown'>
+    const policyMissingChannels = new Set()  // handled once per channel
 
     function clearPreAnswerTimer(uuid) {
         const timer = preAnswerTimers.get(uuid)
@@ -256,7 +308,12 @@ function createChannelLifecycle({
                     logError(`[esl] ${uuid} is answered but its CHANNEL_ANSWER was not delivered -> running answer actions`)
                     // The dump carries the answer instant, so the deadline is the one
                     // the call actually earned, not ten minutes from this discovery.
-                    onAnswerFact(uuid, 'known', 'uuid_dump', parseAnswerEpochMs(parseEslEventHeaders(text), Date.now()))
+                    const dumped = parseEslEventHeaders(text)
+                    const dumpedPolicyMs = parsePolicyMs(dumped)
+                    if (dumpedPolicyMs !== null && !maxDurationPolicies.has(uuid)) {
+                        maxDurationPolicies.set(uuid, dumpedPolicyMs)
+                    }
+                    onAnswerFact(uuid, 'known', 'uuid_dump', parseAnswerEpochMs(dumped, Date.now()), dumpedPolicyMs)
                     return
                 }
                 if (answerState) {
@@ -366,7 +423,7 @@ function createChannelLifecycle({
     /**
      * The hard cap on an answered call, as an ABSOLUTE deadline.
      *
-     * The deadline is the answer instant plus maxCallDurationMs. It is computed once
+     * The deadline is the answer instant plus the channel's policy. It is computed once
      * and never moved: not by a later answer-bearing event, not by a recovery, and
      * not by a hangup that failed. The timer only ever holds what is LEFT of it, so a
      * channel discovered late by the pre-answer re-check gets the time it actually
@@ -379,17 +436,21 @@ function createChannelLifecycle({
      * CallSession at all (the CRM lookup can 404), which is why it lives here with
      * the channel state rather than in the session.
      */
-    function armMaxDurationTimer(uuid, answerAtMs = null) {
+    function armMaxDurationTimer(uuid, answerAtMs, policyMs) {
         if (deadChannels.has(uuid)) return
         // Structural, not just incidental: once the deadline has arrived it can never
         // be armed again, so no path can hand a channel a second window.
         if (deadlineReached.has(uuid)) return
+        // No trustworthy policy, no invented one. Whether that is fatal depends on
+        // whether this is a product call, which onPolicyMissing decides.
+        if (policyMs === null || policyMs === undefined) return
         const now = Date.now()
         let deadlineAt = maxDurationDeadlines.get(uuid)
         let answerSource = 'existing_deadline'
         if (deadlineAt === undefined) {
-            answerSource = answerAtMs === null ? 'local_clock' : 'channel'
-            deadlineAt = (answerAtMs ?? now) + maxCallDurationMs
+            if (answerAtMs === null || answerAtMs === undefined) return
+            answerSource = 'channel'
+            deadlineAt = answerAtMs + policyMs
             maxDurationDeadlines.set(uuid, deadlineAt)
         }
         if (maxDurationTimers.has(uuid)) return
@@ -400,15 +461,83 @@ function createChannelLifecycle({
         }, remainingMs)
         if (timer && typeof timer.unref === 'function') timer.unref()
         maxDurationTimers.set(uuid, timer)
-        log(`[esl] ${uuid} duration deadline in ${remainingMs} ms (cap ${maxCallDurationMs} ms, answer from ${answerSource})`)
-        emitTermination('armed', uuid, { reason: 'max_duration', maxCallDurationMs, remainingMs, answerSource })
+        log(`[esl] ${uuid} duration deadline in ${remainingMs} ms (policy ${policyMs} ms, answer from ${answerSource})`)
+        emitTermination('armed', uuid, { reason: 'max_duration', policyMs, remainingMs, answerSource })
+    }
+
+    /**
+     * The channel could not be given an enforceable deadline.
+     *
+     * Either it carried no policy at all or the value was unusable, and the answer
+     * anchor may also be missing. What happens next depends on what the channel IS,
+     * and that is decided by the CRM resolution the bind already performed — never by
+     * whether a CallSession happens to be in memory right now. The bind is
+     * asynchronous and a channel can answer, fork and even finish while it is still
+     * in flight, so "no session yet" proves nothing.
+     *
+     *   product     the CRM resolved a Call for this channel -> fail closed, end it
+     *               now rather than let an unbounded billable call continue
+     *   diagnostic  the CRM proved there is no Call (an explicit 404) -> this is a
+     *               manual dial into the park extension, not a product call, and this
+     *               module claims no hard-limit ownership over it
+     *   unknown     the resolution failed, is unavailable, or never happened -> it
+     *               cannot prove non-product, so it fails closed too
+     */
+    /**
+     * What a bind result proves about the channel.
+     *
+     * Only an explicit, CRM-proven "there is no Call for this uuid" counts as
+     * diagnostic. Everything else — a failure, an unavailable CRM, a shape this
+     * module does not recognise — is unknown, which fails closed. Absence of a
+     * CallSession is never consulted here: the bind is asynchronous and the channel
+     * can answer while it is still in flight.
+     */
+    function classificationOf(result) {
+        const value = result && typeof result === 'object' ? result.classification : undefined
+        if (value === 'product' || value === 'diagnostic' || value === 'unknown') return value
+        return 'unknown'
+    }
+
+    function onPolicyMissing(uuid, detail) {
+        if (policyMissingChannels.has(uuid) || deadChannels.has(uuid)) return
+        policyMissingChannels.add(uuid)
+        emitTermination('policy_missing', uuid, { reason: 'max_duration', detail })
+        const decide = classification => {
+            if (deadChannels.has(uuid)) return
+            if (classification === 'diagnostic') {
+                log(`[esl] ${uuid} has no hard-duration policy and the CRM proved it is not a product call -> leaving it alone`)
+                emitTermination('suppressed', uuid, {
+                    reason: 'max_duration',
+                    detail: 'not a product call, no policy claimed',
+                })
+                return
+            }
+            logError(
+                `[esl] ${uuid} is a ${classification === 'product' ? 'product' : 'possibly product'} call `
+                + `with no enforceable duration policy (${detail}) -> terminating`,
+            )
+            const session = getSession(uuid)
+            if (session) {
+                try { session.stop('max_duration') } catch (err) {
+                    logError(`[esl] session stop failed for ${uuid} on missing policy: ${err.message}`)
+                }
+            }
+            terminate(uuid, { reason: 'max_duration', graceMs: 0 })
+        }
+        const classification = bindClassifications.get(uuid)
+        if (classification === undefined) {
+            // Nothing ever resolved this channel, so nothing proved it harmless.
+            decide('unknown')
+            return
+        }
+        classification.then(decide).catch(() => decide('unknown'))
     }
 
     /**
      * Past its deadline and still physically up.
      *
-     * The channel is never granted another window for this: maxCallDurationMs
-     * measures answered call time, not the interval between hangup attempts. It stays
+     * The channel is never granted another window for this: the policy measures
+     * answered call time, not the interval between hangup attempts. It stays
      * overdue until it dies, and the state is said out loud once so an operator can
      * see a call the bridge could not end.
      */
@@ -453,7 +582,7 @@ function createChannelLifecycle({
         // From here the channel is past its deadline. Recorded as a fact rather than
         // recomputed from a clock later, and never reset: the deadline cannot un-pass.
         deadlineReached.add(uuid)
-        logError(`[esl] ${uuid} hit the hard duration cap after ${maxCallDurationMs} ms -> terminating`)
+        logError(`[esl] ${uuid} hit its hard duration deadline (policy ${maxDurationPolicies.get(uuid) ?? 'unknown'} ms) -> terminating`)
         const session = getSession(uuid)
         if (session) {
             try { session.stop('max_duration') } catch (err) {
@@ -636,18 +765,54 @@ function createChannelLifecycle({
         return 'scheduled'
     }
 
-    function onAnswerFact(uuid, ext, via, answerAtMs = null) {
+    function onAnswerFact(uuid, ext, via, answerAtMs = null, policyMs = null) {
         if (deadChannels.has(uuid)) return
         clearPreAnswerTimer(uuid)
         if (!answeredChannels.has(uuid)) {
             answeredChannels.add(uuid)
             flushPendingBroadcasts(uuid)
-            armMaxDurationTimer(uuid, answerAtMs)
+            armMaxDurationTimer(uuid, answerAtMs, policyMs)
+            if (!maxDurationDeadlines.has(uuid)) {
+                onPolicyMissing(uuid, policyMs === null || policyMs === undefined
+                    ? 'no usable hard-duration policy on the channel'
+                    : 'no usable answer anchor on the channel')
+            }
         }
         startFork(uuid, ext, via)
     }
 
-    function releaseChannel(uuid, cause) {
+    /**
+     * Why a channel that FreeSWITCH just ended should be finalized.
+     *
+     * Decided from FreeSWITCH's own accounting, never from this process's clock: a
+     * hangup event delivered late must not relabel a lead who hung up at 9:59 as a
+     * safety cut. `billsec` is the answered duration FreeSWITCH measured, so
+     * comparing it to the policy the same channel carried answers the question
+     * exactly. Its terminal timestamp is the fallback, and if neither is usable this
+     * does not guess.
+     */
+    function terminalReasonFor(uuid, headers) {
+        const policyMs = maxDurationPolicies.get(uuid)
+        if (!policyMs) return 'closed'
+        const billsecRaw = headers ? headers['variable_billsec'] : undefined
+        if (billsecRaw !== undefined && /^[0-9]+$/.test(String(billsecRaw).trim())) {
+            const billsecMs = Number(String(billsecRaw).trim()) * 1000
+            return billsecMs >= policyMs ? 'max_duration' : 'closed'
+        }
+        const deadlineAt = maxDurationDeadlines.get(uuid)
+        const hangupAtMs = parseFsEpochMs(headers, ['Caller-Channel-Hangup-Time', 'variable_end_uepoch'], 1000)
+            ?? parseFsEpochMs(headers, ['variable_end_epoch'], 1 / 1000)
+        if (deadlineAt !== undefined && hangupAtMs !== null) {
+            return hangupAtMs >= deadlineAt ? 'max_duration' : 'closed'
+        }
+        return 'closed'
+    }
+
+    function releaseChannel(uuid, cause, headers = null) {
+        // Decided before any of this channel's state is dropped: the policy it carried
+        // and the deadline derived from it are what make the hangup's own numbers
+        // meaningful, and both are cleared below.
+        const terminalReason = terminalReasonFor(uuid, headers)
         clearPreAnswerTimer(uuid)
         // FreeSWITCH ended the channel, so a pending deferred kill has nothing
         // left to end. Dropping the mark as well keeps the state of a reaped
@@ -657,6 +822,9 @@ function createChannelLifecycle({
         maxDurationDeadlines.delete(uuid)
         deadlineReached.delete(uuid)
         overdueChannels.delete(uuid)
+        maxDurationPolicies.delete(uuid)
+        bindClassifications.delete(uuid)
+        policyMissingChannels.delete(uuid)
         releaseTerminationEpisode(uuid)
         const queued = pendingBroadcasts.get(uuid)
         if (queued && queued.length) {
@@ -677,7 +845,7 @@ function createChannelLifecycle({
         // covers calls that were never answered (no fork, so no WS ever opened).
         const session = getSession(uuid)
         if (session) {
-            try { session.stop() } catch (err) { logError(`[esl] session stop failed for ${uuid}: ${err.message}`) }
+            try { session.stop(terminalReason) } catch (err) { logError(`[esl] session stop failed for ${uuid}: ${err.message}`) }
         }
     }
 
@@ -703,7 +871,7 @@ function createChannelLifecycle({
         log(`[esl] ${eventName} uuid=${uuid} dialed=[${dialedExts.join(',')}] matched=${matched ?? 'none'} answerState=${answerState ?? '?'}`)
 
         if (eventName === 'CHANNEL_HANGUP_COMPLETE') {
-            releaseChannel(uuid, 'CHANNEL_HANGUP_COMPLETE')
+            releaseChannel(uuid, 'CHANNEL_HANGUP_COMPLETE', headers)
             return
         }
         if (deadChannels.has(uuid)) {
@@ -714,6 +882,8 @@ function createChannelLifecycle({
         }
         const ext = matched ?? 'known'
         const answerAtMs = parseAnswerEpochMs(headers, Date.now())
+        const policyMs = parsePolicyMs(headers)
+        if (policyMs !== null && !maxDurationPolicies.has(uuid)) maxDurationPolicies.set(uuid, policyMs)
         if (eventName === 'CHANNEL_PARK') {
             if (boundChannels.has(uuid)) {
                 log(`[esl] CHANNEL_PARK repeated for ${uuid}: session bind already requested`)
@@ -721,15 +891,31 @@ function createChannelLifecycle({
                 boundChannels.add(uuid)
                 let bind
                 try { bind = ensureSession(uuid, () => deadChannels.has(uuid)) } catch (err) { bind = Promise.reject(err) }
-                Promise.resolve(bind).catch(err => logError(`[esl] session bind failed for ${uuid}: ${err.message}`))
+                // The same resolution serves two purposes: it binds the session, and
+                // its outcome is what classifies the channel as a product call, a
+                // proven non-product dial, or unknown. No second CRM lookup.
+                const settled = Promise.resolve(bind).then(
+                    result => classificationOf(result),
+                    err => {
+                        logError(`[esl] session bind failed for ${uuid}: ${err.message}`)
+                        return 'unknown'
+                    },
+                )
+                bindClassifications.set(uuid, settled)
             }
-            if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK', answerAtMs)
-            else armPreAnswerTimer(uuid)
+            if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK', answerAtMs, policyMs)
+            else {
+                armPreAnswerTimer(uuid)
+                // Still ringing, so there is no deadline to arm yet — but a missing
+                // policy is already fatal for a product call, and waiting for an
+                // answer that may never come would only delay the evidence.
+                if (policyMs === null) onPolicyMissing(uuid, 'no usable hard-duration policy on the channel')
+            }
             return
         }
         // CHANNEL_ANSWER: either matched (built after the transfer) or a channel
         // this lifecycle already tracks.
-        onAnswerFact(uuid, ext, 'CHANNEL_ANSWER', answerAtMs)
+        onAnswerFact(uuid, ext, 'CHANNEL_ANSWER', answerAtMs, policyMs)
     }
 
     /**
@@ -769,6 +955,7 @@ function createChannelLifecycle({
         isKilled: uuid => killedChannels.has(uuid),
         isOverdue: uuid => overdueChannels.has(uuid),
         deadlineAt: uuid => maxDurationDeadlines.get(uuid) ?? null,
+        policyMs: uuid => maxDurationPolicies.get(uuid) ?? null,
         snapshot: () => ({
             answered: [...answeredChannels],
             forked: [...forkedChannels],
@@ -794,6 +981,9 @@ module.exports = {
     DEFAULT_PRE_ANSWER_TIMEOUT_MS,
     DEFAULT_HANGUP_CAUSE,
     MAX_TERMINATION_GRACE_MS,
-    DEFAULT_MAX_CALL_DURATION_MS,
+    MAX_ANSWERED_POLICY_HEADER,
+    MIN_ANSWERED_POLICY_MS,
+    MAX_ANSWERED_POLICY_MS,
     parseAnswerEpochMs,
+    parsePolicyMs,
 }

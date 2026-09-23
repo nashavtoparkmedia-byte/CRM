@@ -4,6 +4,43 @@ import { isStrongMachineSecret } from './strong-machine-secret'
 export const CONTROLLED_REAL_CALL_CONFIRMATION = 'PLACE_ONE_CONTROLLED_REAL_AI_CALL' as const
 export const CONTROLLED_REAL_CALL_ATTEMPT_LIMIT = 1 as const
 
+/**
+ * Hard maximum an answered AI call may last, and the single place this repository
+ * states it. Owner decision: ten minutes, one limit for inbound and outbound
+ * alike, measured from the answer, cut immediately with no warning phrase. It is a
+ * safety and cost limit, not a provider failure.
+ *
+ * Everything that enforces it derives from this constant. The originate hands
+ * FreeSWITCH a scheduled hangup in whole seconds and the same policy in
+ * milliseconds as a channel variable; the audio bridge reads that variable back
+ * off the channel and derives its own semantic deadline from it. There is
+ * deliberately no second copy — no environment variable, no configuration row, no
+ * literal in the bridge — because two copies of a product policy drift.
+ */
+export const CONTROLLED_REAL_CALL_MAX_ANSWERED_MS = 10 * 60 * 1000
+
+/**
+ * The two representations FreeSWITCH needs, derived from one policy.
+ *
+ * `sched_hangup` takes whole seconds, so a policy that is not a whole number of
+ * seconds cannot be expressed exactly. Rounding it up would quietly lengthen the
+ * Owner's maximum and rounding down would quietly shorten it, so this refuses
+ * instead: a policy that cannot be enforced exactly is a defect to fix at the
+ * source, not at the call.
+ */
+export function controlledRealCallHardLimit(maxAnsweredMs: number = CONTROLLED_REAL_CALL_MAX_ANSWERED_MS): {
+    maxAnsweredMs: number
+    seconds: number
+} {
+    if (!Number.isSafeInteger(maxAnsweredMs) || maxAnsweredMs <= 0) {
+        throw new Error(`controlled real call hard limit must be a positive integer of ms, got ${maxAnsweredMs}`)
+    }
+    if (maxAnsweredMs % 1000 !== 0) {
+        throw new Error(`controlled real call hard limit must be a whole number of seconds, got ${maxAnsweredMs} ms`)
+    }
+    return { maxAnsweredMs, seconds: maxAnsweredMs / 1000 }
+}
+
 const E164 = /^\+[1-9]\d{7,14}$/
 const REQUEST_ID = /^[A-Za-z0-9_-]{16,128}$/
 const EXACT_MEGAFON_DIAL_TEMPLATE = 'sofia/gateway/megafon/${number}' as const

@@ -381,8 +381,20 @@ function eslApi(command, timeoutMs = 5000) {
 // bridge looks the row up here and builds a CallSession around the
 // scenario.
 
+/**
+ * Bind the CRM session for a channel, and say what the channel IS.
+ *
+ * The return value carries a classification because the channel lifecycle has to
+ * decide, when a channel arrives without an enforceable duration policy, whether it
+ * is a product call that must be ended or a manual dial into the park extension that
+ * was never ours. Only an explicit CRM 404 proves the latter; a transport failure, a
+ * CRM that is down, or a malformed answer proves nothing and is reported as unknown
+ * so the caller can fail closed. The absence of a CallSession is deliberately NOT a
+ * signal: this function is asynchronous and a channel can answer, fork and finish
+ * while it is still running.
+ */
 async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
-    if (sessions.has(callUuid)) return sessions.get(callUuid)
+    if (sessions.has(callUuid)) return { classification: 'product', session: sessions.get(callUuid) }
 
     // Refresh provider keys from CRM (DB-backed). The fetch is cached
     // 60 s in crm-client, so back-to-back calls share one DB hit. The
@@ -400,18 +412,23 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
     try {
         resolved = await crm.resolveCallByUuid(callUuid)
     } catch (err) {
-        // 404 is expected for ad-hoc test calls (no CRM session row). Don't
-        // spam the log — the WS handler will note "session=no" anyway.
-        if (!err.message.includes('HTTP 404')) {
-            console.error(`[crm] resolve ${callUuid}: ${err.message}`)
+        // A 404 is the CRM proving there is no Call for this channel — an ad-hoc dial
+        // into the park extension. Anything else proves nothing at all.
+        if (err.message.includes('HTTP 404')) {
+            return { classification: 'diagnostic', session: null }
         }
-        return null
+        console.error(`[crm] resolve ${callUuid}: ${err.message}`)
+        return { classification: 'unknown', session: null }
     }
-    if (!resolved?.callId || !resolved?.scenario) return null
+    if (!resolved?.callId || !resolved?.scenario) {
+        // A 200 this shape cannot be acted on and does not prove absence either.
+        console.error(`[crm] resolve ${callUuid}: unusable payload`)
+        return { classification: 'unknown', session: null }
+    }
 
     // Another CHANNEL_PARK for this call may have bound a session while we were
     // awaiting the CRM; never create a second CallSession for one channel.
-    if (sessions.has(callUuid)) return sessions.get(callUuid)
+    if (sessions.has(callUuid)) return { classification: 'product', session: sessions.get(callUuid) }
 
     console.log(`[session] bind ${callUuid} → callId=${resolved.callId} scenario="${resolved.scenario.name}"`)
 
@@ -486,13 +503,13 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
         // STT stream or silence timer is created for a channel that is gone.
         console.log(`[session] ${callUuid} hung up during CRM bind -> finalize as closed without starting`)
         session.stop()
-        return null
+        return { classification: 'product', session: null }
     }
     session.start().catch(err => {
         console.error(`[session ${callUuid}] start failed: ${err.message}`)
         sessions.delete(callUuid)
     })
-    return session
+    return { classification: 'product', session }
 }
 
 // Translate the Windows AUDIO_DIR into the path FreeSWITCH (running in
