@@ -117,3 +117,13 @@ export {
   compensationManagerPeriodKeyV1,
   resolveCompensationManagerPrincipalV1,
 } from '../../application/compensation-manager-operations'
+export { ensureCompensationBudgetPeriodV1 } from '../../application/compensation-budget-period-operations'
+export type {
+  CompensationBudgetPeriodResultV1,
+  EnsureCompensationBudgetPeriodInputV1,
+} from '../../internal/compensation/compensation-budget-period-service'
+export type {
+  CompensationBudgetPeriodOutcomeV1,
+  CompensationBudgetPeriodRefusalV1,
+  CompensationBudgetPeriodViewV1,
+} from '../../internal/compensation/compensation-budget-period'
