@@ -203,6 +203,8 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 // (max-web-scraper/lib/DomRouteAttestation.js); an unattested event is never bound.
 const MAX_DOM_FALLBACK_EXTERNAL_ID = /^max-dom-(\d{1,20})-([0-9a-f]{16})$/
 const MAX_DOM_ROUTE_ID = /^\d{1,20}$/
+// Bounded page for the competing-conversation scan; a full page fails closed.
+const MAX_DOM_FALLBACK_CLAIMANT_LIMIT = 25
 
 type MaxDomFallbackRoute = {
   uiRouteId: string
@@ -290,8 +292,12 @@ async function proveMaxDomFallbackPeer(
       metadata: { path: ['senderId'], equals: senderId },
     },
     select: { id: true, metadata: true },
-    take: 25,
+    take: MAX_DOM_FALLBACK_CLAIMANT_LIMIT,
   })
+  // A full page means the claimant set was truncated, so "exactly one private claimant"
+  // would be a statement about an arbitrary slice rather than about the peer. Dropping the
+  // provider-account filter widened this population, so the truncation must fail closed.
+  if (claimants.length >= MAX_DOM_FALLBACK_CLAIMANT_LIMIT) return unproven('competing_conversation_unbounded')
   const privateClaimants = claimants.filter(candidate => metadataRecord(candidate.metadata).chatKind !== 'group')
   if (privateClaimants.length !== 1 || privateClaimants[0].id !== chat.id) return unproven('competing_conversation')
   // Contacts owns identity integrity. The conversation's linked identity is not necessarily
@@ -471,7 +477,13 @@ export async function POST(request: Request) {
         senderId, externalId: externalIdString, chatId, rawChatId, externalChatId, domRoute: body.domRoute,
       })
       : null
-    if (chat && domFallbackRoute) {
+    // Look a replay up before proving anything: a stored message needs no new proof, and
+    // the proof takes the global contact-ownership fence, which a re-delivery burst would
+    // otherwise serialise against every Contacts write.
+    const storedDomMessage = chat && domFallbackRoute && externalIdString
+      ? await prisma.message.findUnique({ where: { externalId: externalIdString }, include: { chat: true } })
+      : null
+    if (chat && domFallbackRoute && !storedDomMessage) {
       const proof = await proveMaxDomFallbackPeer(chat, domFallbackRoute, maxProviderAccountId, maxChatKind)
       if (proof.status === 'bound') {
         domFallbackPeer = { senderId: proof.senderId, contactId: proof.contactId }
@@ -626,12 +638,8 @@ export async function POST(request: Request) {
     // line - and this branch is what keeps a replay from ever reaching the guard. The existing text-duplicate branch stays exactly
     // where it is: hoisting that one would lift provider-framed replays above the collision
     // guard too, and a provider-framed replay carrying a wrong senderId must keep failing.
-    if (chat && domFallbackRoute && externalIdString) {
-      const storedDomMessage = await prisma.message.findUnique({
-        where: { externalId: externalIdString },
-        include: { chat: true },
-      })
-      if (storedDomMessage) {
+    if (chat && domFallbackRoute && storedDomMessage) {
+      {
         const storedSenderId = (() => {
           const value = metadataRecord(storedDomMessage.metadata).senderId
           return typeof value === 'string' && value.trim() !== '' ? value : null

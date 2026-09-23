@@ -1101,6 +1101,29 @@ describe('MAX webhook DOM-fallback peer binding', () => {
     expect(mocks.markIdentityConflict).toHaveBeenCalled()
   })
 
+  test('rejects an unstamped legacy chat that claims the same peer', async () => {
+    // the claimant scan is unfiltered by provider account precisely so this chat is visible
+    const unstamped = provenPrivateChat({ id: 'chat-legacy', externalChatId: '902400000888' }, { providerAccountId: undefined })
+    mocks.chatFindMany.mockImplementation(async () => [chat, unstamped])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('rejects a competing private chat on a different provider account', async () => {
+    const foreign = provenPrivateChat({ id: 'chat-foreign', externalChatId: '902400000999' }, { providerAccountId: '902100000777' })
+    mocks.chatFindMany.mockImplementation(async () => [chat, foreign])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('fails closed when the claimant scan comes back truncated', async () => {
+    // a full page means "exactly one private claimant" would describe an arbitrary slice
+    const page = Array.from({ length: 25 }, (_, index) => provenPrivateChat(
+      { id: `chat-group-${index}`, externalChatId: `9024000${String(index).padStart(5, '0')}` },
+      { chatKind: 'group' },
+    ))
+    mocks.chatFindMany.mockImplementation(async () => [chat, ...page].slice(0, 25))
+    await expectUnproven(await POST(domRequest()))
+  })
+
   test('rejects when a second private Chat on the same account claims the same peer', async () => {
     mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-other', externalChatId: '902400000777' })])
     await expectUnproven(await POST(domRequest()))
@@ -1109,7 +1132,9 @@ describe('MAX webhook DOM-fallback peer binding', () => {
   test('accepts the exact production topology: chat linked to the chat-key identity, peer in a sibling identity', async () => {
     // Contact holds three active MAX identities: phone, chat-key (which the Chat links to)
     // and the peer. This is the shape that made fb9fb30d fail production with identity_peer.
-    chat = provenPrivateChat({ contactIdentityId: DOM_CHATKEY_IDENTITY })
+    expect(chat.contactIdentityId).toBe(DOM_CHATKEY_IDENTITY)
+    expect(chat.contactIdentityId).not.toBe(DOM_PEER_IDENTITY)
+    expect(chat.metadata.senderId).toBe(DOM_PEER)
     mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity())
 
     const response = await POST(domRequest())
@@ -1202,8 +1227,7 @@ describe('MAX webhook DOM-fallback peer binding', () => {
   })
 
   test.each([
-    ['no identity of this Contact carries the stored peer', { status: 'peer_identity_not_found' }],
-    ['the peer identity belongs to another Contact', { status: 'peer_identity_not_found' }],
+    ['no identity of this Contact carries the stored peer, or it belongs to another Contact', { status: 'peer_identity_not_found' }],
     ['Contact is archived or missing', { status: 'contact_not_found' }],
     ['the peer identity has an open conflict', { status: 'peer_identity_conflicted' }],
     ["the Chat's linked identity is missing, inactive or foreign", { status: 'linked_identity_not_found' }],
