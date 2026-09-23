@@ -16,20 +16,20 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 62,
+    "RAW_BASELINE_AMBIGUOUS": 63,
     "CONFIRMED_WRITE_OWNER_RESOLVED": 21,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
     "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 0,
     "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
-    "CONFIRMED_NON_WRITE": 41,
+    "CONFIRMED_NON_WRITE": 42,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
-    "RESOLVED_NON_WRITE": 41,
+    "RESOLVED_NON_WRITE": 42,
     "OWNER_VALID_WRITE": 17,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 62,
+    "RECONCILIATION_TOTAL": 63,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -3089,9 +3089,9 @@
     {
       "record_id": "3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
       "site_signature": "3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
-      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+      "source_sha256": "a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 213,
+      "line": 160,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3113,7 +3113,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "d68932588406f18eff0c04336dd1b55af2f16d4b3f9b9311eed85b1e384f577a",
-      "sql_provenance_sha256": "d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6",
+      "sql_provenance_sha256": "5418c59595dfc24145d9113f8e463b7ec231e35098546b61eef61f05f50102de",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3139,9 +3139,9 @@
     {
       "record_id": "e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
       "site_signature": "e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
-      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
+      "source_sha256": "a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
       "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 224,
+      "line": 171,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3160,7 +3160,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "f96dbc6f2df31c9e257a951b0ae78f7d60bf5a5c86ab2127e201f42106fad085",
-      "sql_provenance_sha256": "80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879",
+      "sql_provenance_sha256": "68e62815aaa83c9a577bf906e48760d1ef88b8738f79e5471782947382a85774",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3184,11 +3184,11 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
-      "site_signature": "597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
-      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-      "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 233,
+      "record_id": "7146621cc49a948fb4bfdd37c78f6faa4835db24c3bacec99bb7175325268cc2",
+      "site_signature": "7146621cc49a948fb4bfdd37c78f6faa4835db24c3bacec99bb7175325268cc2",
+      "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+      "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+      "line": 223,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3202,13 +3202,19 @@
       "selected_columns": [
         "BY",
         "DESC",
+        "IS",
         "LIMIT",
+        "OR",
         "ORDER",
-        "submittedAt"
+        "id",
+        "periodKey",
+        "submittedAt",
+        "text",
+        "timestamptz"
       ],
       "called_functions": [],
-      "sql_sha256": "241850053aab81d8a7d408ec613bfc6d7f5a2ffa5c3c0d97984ba07d936dda23",
-      "sql_provenance_sha256": "58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9",
+      "sql_sha256": "9083e59b06eb5b4ca5c26891d547306638851757c06bfa9d01a79a1e542246ab",
+      "sql_provenance_sha256": "282055b030f15883de33e9d94c1e4c77405c8390f240cec0d6497cf180ba61c6",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3226,17 +3232,17 @@
       ],
       "unresolved_targets": [],
       "disposition": "CONFIRMED_NON_WRITE",
-      "rationale": "Read-only raw SELECT in the cash-compensation pilot adapter. It projects application, verified-order, bound-contact and pilot-evidence columns for the driver and manager lists, or finds the claimed orders of a proven person. The analyzer reports it because the projection, joins and lineage filter are shared constants it cannot resolve statically; the statement performs no INSERT, UPDATE, DELETE or DDL and owns no table.",
+      "rationale": "Read-only raw SELECT that pages the cash-compensation manager list. It projects application, verified-order, budget-period, payout-authorization, reconciliation, settlement, bound-contact, contact-name, contact-phone, cash-order and connection-name columns; every filter is a null-tolerant bound parameter. The analyzer reports it because the projection and joins are shared constants it cannot resolve statically; the statement performs no INSERT, UPDATE, DELETE or DDL and owns no table.",
       "ownership_classification": "OWNED_CONTEXT_READ",
       "final_ownership_classification": "OWNED_CONTEXT_READ",
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
-      "site_signature": "a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
-      "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-      "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-      "line": 240,
+      "record_id": "7e2df02de5b270d858af7c2ba0533a31da1146b3ac16a4e974976e0c8e8f7ce3",
+      "site_signature": "7e2df02de5b270d858af7c2ba0533a31da1146b3ac16a4e974976e0c8e8f7ce3",
+      "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+      "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+      "line": 244,
       "column": 28,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -3252,7 +3258,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "0b9e0e3b0646cd663cb9dac88681f14079b44fd4be95e991530224249d8aee8b",
-      "sql_provenance_sha256": "816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666",
+      "sql_provenance_sha256": "b19a08bcacea3f7e0f67f0aa810c676732af3c8e64d8a46840499987179c1a3e",
       "source_context": "fleet_operations",
       "source_technical_module": "fleet_operations.module",
       "owner_contexts": [],
@@ -3270,16 +3276,82 @@
       ],
       "unresolved_targets": [],
       "disposition": "CONFIRMED_NON_WRITE",
-      "rationale": "Read-only raw SELECT in the cash-compensation pilot adapter. It projects application, verified-order, bound-contact and pilot-evidence columns for the driver and manager lists, or finds the claimed orders of a proven person. The analyzer reports it because the projection, joins and lineage filter are shared constants it cannot resolve statically; the statement performs no INSERT, UPDATE, DELETE or DDL and owns no table.",
+      "rationale": "Read-only raw SELECT that reads one application for the cash-compensation manager detail page through the same fixed projection the list uses; the application id is a bound parameter. The analyzer reports it because the projection and joins are shared constants it cannot resolve statically; the statement performs no INSERT, UPDATE, DELETE or DDL and owns no table.",
+      "ownership_classification": "OWNED_CONTEXT_READ",
+      "final_ownership_classification": "OWNED_CONTEXT_READ",
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "556823a8ca310f7d113ef8231d75805393fcd771d2a5112e539b445fe37a09fc",
+      "site_signature": "556823a8ca310f7d113ef8231d75805393fcd771d2a5112e539b445fe37a09fc",
+      "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+      "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+      "line": 266,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "CompensationApplication",
+        "CompensationBudgetPeriod",
+        "CompensationPayoutAuthorization",
+        "CompensationReconciliationTask",
+        "CompensationSettlement"
+      ],
+      "selected_columns": [
+        "AND",
+        "amountKopecks",
+        "applicationId",
+        "budgetPeriodId",
+        "id",
+        "limitKopecks",
+        "openedAt",
+        "payoutAuthorizationId",
+        "periodKey",
+        "reservedKopecks",
+        "settledKopecks",
+        "state",
+        "status"
+      ],
+      "called_functions": [
+        "coalesce",
+        "count",
+        "sum"
+      ],
+      "sql_sha256": "05148e6e8af565b55b375fe3d7b12bb1cadec12f17878b4d5f478f068de49b57",
+      "sql_provenance_sha256": "6eccde72df1ae9952b9470a86b5dc4fd6bc0d694e006af2c2eb7727fdc99b5e2",
+      "source_context": "fleet_operations",
+      "source_technical_module": "fleet_operations.module",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Read-only raw SELECT that aggregates one budget month for the cash-compensation manager dashboard: the ledger counters of the period, the sums and state counts of its applications and the sum of its settlements; the period key is a bound parameter. The analyzer reports it because the state expression is a shared constant it cannot resolve statically; the statement performs no INSERT, UPDATE, DELETE or DDL and owns no table.",
       "ownership_classification": "OWNED_CONTEXT_READ",
       "final_ownership_classification": "OWNED_CONTEXT_READ",
       "semantic_state": "RESOLVED_NON_WRITE"
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 62,
+    "ambiguous_denominator": 63,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "a6bb518af935ec0a6ce3ba4f5951b82324ecc151dea74522bada1a81664eb9cb",
+    "sorted_site_signatures_sha256": "7bfbac779a5c665a1e645d077ebe4a826bb6ab24c9a39222728c59deac3a5044",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
@@ -4911,11 +4983,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 213,
+        "line": 160,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256": "d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6"
+        "source_sha256": "a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
+        "sql_provenance_sha256": "5418c59595dfc24145d9113f8e463b7ec231e35098546b61eef61f05f50102de"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4933,10 +5005,10 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:213:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:160:28",
         "analysis_site_signature:3c8b6a337b6fd950c5edc302c3e0bc84a70e7dcfbbf20f2ff7c882b973def68d",
-        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256:d91f1eb8e214dd7864784d8de56820c8647d46ee763a20f644df17b47c49d9f6",
+        "source_sha256:a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
+        "sql_provenance_sha256:5418c59595dfc24145d9113f8e463b7ec231e35098546b61eef61f05f50102de",
         "sql_sha256:d68932588406f18eff0c04336dd1b55af2f16d4b3f9b9311eed85b1e384f577a",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]
@@ -4946,11 +5018,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 224,
+        "line": 171,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256": "80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879"
+        "source_sha256": "a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
+        "sql_provenance_sha256": "68e62815aaa83c9a577bf906e48760d1ef88b8738f79e5471782947382a85774"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4965,24 +5037,24 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:224:28",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:171:28",
         "analysis_site_signature:e45442210f7a72860d8a8d86c3746447c11dd18c6d83133397d4774b3c855cc2",
-        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256:80c37404a30325f0242d13e23630ce15d9c1e7b14156a0cd9838d440fd641879",
+        "source_sha256:a282d63be6cd7119dd3ac359ad2921eddbe231b9e0d471859242328d4be0f686",
+        "sql_provenance_sha256:68e62815aaa83c9a577bf906e48760d1ef88b8738f79e5471782947382a85774",
         "sql_sha256:f96dbc6f2df31c9e257a951b0ae78f7d60bf5a5c86ab2127e201f42106fad085",
         "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
       ]
     },
     {
-      "site_signature": "597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
+      "site_signature": "7146621cc49a948fb4bfdd37c78f6faa4835db24c3bacec99bb7175325268cc2",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
-        "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 233,
+        "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+        "line": 223,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256": "58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9"
+        "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256": "282055b030f15883de33e9d94c1e4c77405c8390f240cec0d6497cf180ba61c6"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4990,32 +5062,38 @@
         "selected_columns": [
           "BY",
           "DESC",
+          "IS",
           "LIMIT",
+          "OR",
           "ORDER",
-          "submittedAt"
+          "id",
+          "periodKey",
+          "submittedAt",
+          "text",
+          "timestamptz"
         ],
-        "sql_sha256": "241850053aab81d8a7d408ec613bfc6d7f5a2ffa5c3c0d97984ba07d936dda23",
+        "sql_sha256": "9083e59b06eb5b4ca5c26891d547306638851757c06bfa9d01a79a1e542246ab",
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:233:28",
-        "analysis_site_signature:597ba78db554435fa8022c2bf677a75b3b2f29abcb6cf1a96cda3b41c5d9c646",
-        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256:58c4b7cfe3174aec18e2238cafea512b3e32411984139a36bf837f4d711ce1e9",
-        "sql_sha256:241850053aab81d8a7d408ec613bfc6d7f5a2ffa5c3c0d97984ba07d936dda23",
-        "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts:223:28",
+        "analysis_site_signature:7146621cc49a948fb4bfdd37c78f6faa4835db24c3bacec99bb7175325268cc2",
+        "source_sha256:b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256:282055b030f15883de33e9d94c1e4c77405c8390f240cec0d6497cf180ba61c6",
+        "sql_sha256:9083e59b06eb5b4ca5c26891d547306638851757c06bfa9d01a79a1e542246ab",
+        "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations or read through the contexts it may depend on, and it writes nothing, so the read crosses no ownership boundary."
       ]
     },
     {
-      "site_signature": "a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
+      "site_signature": "7e2df02de5b270d858af7c2ba0533a31da1146b3ac16a4e974976e0c8e8f7ce3",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
-        "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts",
-        "line": 240,
+        "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+        "line": 244,
         "column": 28,
         "method": "$queryRawUnsafe",
-        "source_sha256": "9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256": "816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666"
+        "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256": "b19a08bcacea3f7e0f67f0aa810c676732af3c8e64d8a46840499987179c1a3e"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -5027,12 +5105,63 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-adapter.ts:240:28",
-        "analysis_site_signature:a80c42fc3b2add0d7b9d632ab8453738c686277cfd2c3951382364cd83930ef7",
-        "source_sha256:9871db06df8278fb6c7c208951e6b20d1430100d2e66fc5c148198c2c1c18739",
-        "sql_provenance_sha256:816c4b83d68733e37c58315735cbc7a409a46571513957efd9c546913e112666",
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts:244:28",
+        "analysis_site_signature:7e2df02de5b270d858af7c2ba0533a31da1146b3ac16a4e974976e0c8e8f7ce3",
+        "source_sha256:b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256:b19a08bcacea3f7e0f67f0aa810c676732af3c8e64d8a46840499987179c1a3e",
         "sql_sha256:0b9e0e3b0646cd663cb9dac88681f14079b44fd4be95e991530224249d8aee8b",
-        "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations, which is the context this adapter belongs to, so the read crosses no ownership boundary."
+        "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations or read through the contexts it may depend on, and it writes nothing, so the read crosses no ownership boundary."
+      ]
+    },
+    {
+      "site_signature": "556823a8ca310f7d113ef8231d75805393fcd771d2a5112e539b445fe37a09fc",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+        "line": 266,
+        "column": 28,
+        "method": "$queryRawUnsafe",
+        "source_sha256": "b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256": "6eccde72df1ae9952b9470a86b5dc4fd6bc0d694e006af2c2eb7727fdc99b5e2"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "CompensationApplication",
+          "CompensationBudgetPeriod",
+          "CompensationPayoutAuthorization",
+          "CompensationReconciliationTask",
+          "CompensationSettlement"
+        ],
+        "selected_columns": [
+          "AND",
+          "amountKopecks",
+          "applicationId",
+          "budgetPeriodId",
+          "id",
+          "limitKopecks",
+          "openedAt",
+          "payoutAuthorizationId",
+          "periodKey",
+          "reservedKopecks",
+          "settledKopecks",
+          "state",
+          "status"
+        ],
+        "sql_sha256": "05148e6e8af565b55b375fe3d7b12bb1cadec12f17878b4d5f478f068de49b57",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "count",
+          "sum"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts:266:28",
+        "analysis_site_signature:556823a8ca310f7d113ef8231d75805393fcd771d2a5112e539b445fe37a09fc",
+        "source_sha256:b6059dae654ad57955f2643c1c45974ee43c75edbb9498bfe531cb0b7eb0a522",
+        "sql_provenance_sha256:6eccde72df1ae9952b9470a86b5dc4fd6bc0d694e006af2c2eb7727fdc99b5e2",
+        "sql_sha256:05148e6e8af565b55b375fe3d7b12bb1cadec12f17878b4d5f478f068de49b57",
+        "The statement text begins with SELECT and contains no data-modifying clause. Every table it names is owned by fleet_operations or read through the contexts it may depend on, and it writes nothing, so the read crosses no ownership boundary."
       ]
     }
   ]

@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "b1dcc9bc9c87fa8528f2c3041912bb6b17542150a998443285f08cbfb0eff104"
+    "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a"
   },
   "amendments": [
     {
@@ -805,6 +805,137 @@
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
           "review_rationale": "A new tracked executable surface, a PostgreSQL-backed Vitest test of the retry job's candidate selection, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-compensation-manager-crm-main-9f87c947-20260922",
+      "reviewed_at": "2026-09-22T00:00:00Z",
+      "reviewed_by": "CASH_COMPENSATION_MANAGER_CRM_RECONCILIATION_EXECUTOR_REVIEW_20260922",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MANAGER_CRM_SPECULATIVE_RECONCILIATION_AUTHORIZED_20260922",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 9f87c947, whose tail is mobile-text-reply-v1-main-bb4da9bb-20260919, and reviews only the surfaces the Manager CRM completion adds. It replaces the pre-reconciliation amendment cash-compensation-manager-crm-main-59932ecd-20260920, which extended the older chain at 59932ecd, and carries its per-surface decisions unchanged."
+      },
+      "reason": "Records the nineteen tracked executable surfaces the cash-compensation Manager CRM completion adds, reconciled onto main 9f87c947: 2,564 + 19 = 2,583 surfaces, context-owned 1,348 -> 1,357 and governed exclusions 1,216 -> 1,226. Seven of them are APPLICATION_RUNTIME paths inside the exact runtime inventory of gravity_runtime_remainder, which an amendment may not carry, so their reviewed assignments and the exclusion's exact-inventory transition (250 -> 257 paths) are recorded in the historical registry itself and this amendment chain pins base.decision_registry_sha256 to those bytes. The remaining twelve receive no explicit assignment: four are owned by the fleet_operations context manifest, five are Vitest suites and two are the tg-bot file transport and its Node test, all under prefix exclusions with no exact inventory. Three existing reviewed assignments under gravity-mvp/src/app/compensation change bytes and are rebound below with their lifecycle, functional owner, governed exclusion and rationale unchanged. The current triple is the repository's own derivation over the reconciled tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2564,
+        "tracked_inventory_sha256": "cfa6e9b52dd912aa608be0b0bff216a5c17525296223cbac1f0fb1a0aba955df",
+        "coverage_sha256": "cecc680d7adf2b9be20221306cdaa61a6ab21645dd3635c5fe2be4cf5c65f935"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2583,
+        "tracked_inventory_sha256": "26650c08604b4ed2f07f7c62fcb66813913c6d7ef2d5cb7b22e8994b4f555aaf",
+        "coverage_sha256": "86b438f67b3d06fbd64f576a8b2804d04d23244c5dbbf6c931e52ab82c715aaf"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/page.tsx",
+          "previous_source_sha256": "77c960816bcc122ca76ef30b20fe53bd20b2b3c74602be911c477409ea698954",
+          "current_source_sha256": "2001f3641ddecf8019b1973f39f9445e3f3a39f1112f212095cd9a47b127247a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation board becomes a filtered list with the month's budget above it, reading through the same server-only composition root. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/actions.ts",
+          "previous_source_sha256": "db8f94ff7737a133a25b7ceae26d2b984d00eff8e77a6efe872ec29f80a9d87c",
+          "current_source_sha256": "76e13acab7df3680b1571aea160e154d6d6785b9ecde70a4c8af176d382649ee",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The server action now carries every manager action the monetary core already supports rather than three, still resolving the acting principal from the CRM session and still reaching the monetary core only through the fleet_operations public compensation capability. Its lifecycle, functional owner, governed exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/CompensationApplicationList.tsx",
+          "previous_source_sha256": "fa787632130a4599e9d403d79afff5ee007d5386ab0795dc1b3a0caec0af8f07",
+          "current_source_sha256": "8000d4c4539d16d9b53970154c3fc8697f178a79610b11d8ed87030bd9382954",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The list becomes rows that link to one application each and takes no action of its own, so the monetary decisions it used to host moved to the application page. Its lifecycle, functional owner, governed exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-manager-view.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in architecture/contexts/v1/manifests/fleet-operations.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-manager-service.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in architecture/contexts/v1/manifests/fleet-operations.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-manager-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in architecture/contexts/v1/manifests/fleet-operations.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/application/compensation-manager-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in architecture/contexts/v1/manifests/fleet-operations.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-manager-view.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-manager-service.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-manager.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns, gated behind an explicit isolated-database environment flag. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/manager-actions.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under gravity-mvp/src/app, which the gravity_runtime_remainder exclusion covers by prefix. Its exact runtime inventory admits APPLICATION_RUNTIME paths only, so a test surface receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/manager-screens.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under gravity-mvp/src/app, which the gravity_runtime_remainder exclusion covers by prefix. Its exact runtime inventory admits APPLICATION_RUNTIME paths only, so a test surface receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/[applicationId]/evidence/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under gravity-mvp/src/app, which the gravity_runtime_remainder exclusion covers by prefix. Its exact runtime inventory admits APPLICATION_RUNTIME paths only, so a test surface receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/services/exactCrmBotFile.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under tg-bot/src, which the telegram_bot_remainder exclusion covers by prefix with no exact inventory, alongside the existing exactCrmBotDelivery handler it is modelled on. It therefore receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/security/exactBotFile.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Node test suite under tg-bot/src, which the telegram_bot_remainder exclusion covers by prefix with no exact inventory, alongside the existing bot security suites. It therefore receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         }
       ],
       "invariants": {

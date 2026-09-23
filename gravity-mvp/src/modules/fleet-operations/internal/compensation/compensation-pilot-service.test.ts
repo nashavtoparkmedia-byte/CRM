@@ -4,13 +4,11 @@ import type { PilotCatalogueFactsV1, PilotCatalogueOrderV1 } from './compensatio
 import {
     checkPilotOrderV1,
     compensationSectionViewV1,
-    performManagerActionV1,
     requestPilotRefreshV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
     type CompensationPilotIngestionPortV1,
     type CompensationPilotPortV1,
-    type ManagerApplicationRowV1,
     type PilotDriverFactsV1,
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
@@ -54,28 +52,6 @@ const ELIGIBLE_DRIVER: PilotDriverFactsV1 = {
     },
 }
 
-const MANAGER_ROW: ManagerApplicationRowV1 = {
-    applicationId: 'app-1',
-    status: 'submitted',
-    externalOrderId: ORDER.externalOrderId,
-    shortOrderIdDisplay: '3982091',
-    claimedKopecks: 30_000,
-    amountKopecks: 30_000,
-    verifiedKopecks: 33_500,
-    submittedAt: NOW,
-    rejectionReason: null,
-    boundContactIds: [CONTACT],
-    externalParkId: PARK,
-    telegramUserId: '777',
-    attachmentFileId: 'tg-file-1',
-    attachmentKind: 'photo',
-    supportContactedAt: NOW,
-    hasLiveAuthorization: false,
-    hasOpenReconciliation: false,
-    payoutAuthorizationId: null,
-    authorizationFence: null,
-}
-
 function port(overrides: Partial<CompensationPilotPortV1> = {}): CompensationPilotPortV1 {
     return {
         confirmMainDriver: vi.fn(async () => 'confirmed' as const),
@@ -87,13 +63,7 @@ function port(overrides: Partial<CompensationPilotPortV1> = {}): CompensationPil
         findBudgetPeriod: vi.fn(async () => ({ limitKopecks: 500_000, reservedKopecks: 0, settledKopecks: 0 })),
         findClaimedOrderIds: vi.fn(async () => []),
         findDriverApplications: vi.fn(async () => []),
-        findManagerApplications: vi.fn(async () => [MANAGER_ROW]),
-        findManagerApplication: vi.fn(async () => MANAGER_ROW),
         submitApplication: vi.fn(async () => ({ applicationId: 'app-1', amountKopecks: 30_000, status: 'created' as const })),
-        startPayout: vi.fn(async () => {}),
-        rejectApplication: vi.fn(async () => {}),
-        finalizePayout: vi.fn(async () => {}),
-        resolveReconciliation: vi.fn(async () => {}),
         ...overrides,
     }
 }
@@ -250,86 +220,6 @@ describe('submitting from the bot', () => {
         const p = port({ findClaimedOrderIds: vi.fn(async () => [ORDER.externalOrderId]) })
         const outcome = await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)
         expect(outcome).toEqual({ submitted: false, refusal: 'order_already_claimed' })
-    })
-})
-
-describe('manager actions reach the right C1 operation', () => {
-    it('approve starts the payout', async () => {
-        const p = port()
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'approve', principalId: 'm1', operatorLabel: 'Manager',
-        }, p)
-        expect(outcome).toEqual({ performed: true, operation: 'start_payout' })
-        expect(p.startPayout).toHaveBeenCalledWith({
-            applicationId: 'app-1', principalId: 'm1', operatorLabel: 'Manager',
-        })
-    })
-
-    it('mark paid finalizes using the stored authorization evidence', async () => {
-        const p = port({
-            findManagerApplication: vi.fn(async () => ({
-                ...MANAGER_ROW,
-                hasLiveAuthorization: true,
-                payoutAuthorizationId: 'auth-1',
-                authorizationFence: 'fence-1',
-            })),
-        })
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'mark_paid', principalId: 'm1', operatorLabel: 'Manager',
-        }, p)
-        expect(outcome).toEqual({ performed: true, operation: 'finalize_payout' })
-        expect(p.finalizePayout).toHaveBeenCalledWith({
-            payoutAuthorizationId: 'auth-1', authorizationFence: 'fence-1',
-            principalId: 'm1', operatorLabel: 'Manager',
-        })
-    })
-
-    it('routes a lost outcome to reconciliation instead of finalize', async () => {
-        const p = port({
-            findManagerApplication: vi.fn(async () => ({ ...MANAGER_ROW, hasOpenReconciliation: true })),
-        })
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'mark_paid', principalId: 'm1', operatorLabel: 'Manager',
-        }, p)
-        expect(outcome).toEqual({ performed: true, operation: 'resolve_reconciliation' })
-        expect(p.finalizePayout).not.toHaveBeenCalled()
-    })
-
-    it('refuses to reject while a payout is in flight', async () => {
-        const p = port({
-            findManagerApplication: vi.fn(async () => ({ ...MANAGER_ROW, hasLiveAuthorization: true })),
-        })
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'reject', principalId: 'm1', operatorLabel: 'M', reason: 'no',
-        }, p)
-        expect(outcome).toEqual({ performed: false, refusal: 'reject_requires_no_live_authorization' })
-        expect(p.rejectApplication).not.toHaveBeenCalled()
-    })
-
-    it('requires a reason to reject', async () => {
-        const p = port()
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'reject', principalId: 'm1', operatorLabel: 'M', reason: '   ',
-        }, p)
-        expect(outcome).toEqual({ performed: false, refusal: 'reject_requires_reason' })
-        expect(p.rejectApplication).not.toHaveBeenCalled()
-    })
-
-    it('refuses an action on an application that does not exist', async () => {
-        const p = port({ findManagerApplication: vi.fn(async () => null) })
-        const outcome = await performManagerActionV1({
-            applicationId: 'missing', action: 'approve', principalId: 'm1', operatorLabel: null,
-        }, p)
-        expect(outcome).toEqual({ performed: false, refusal: 'application_not_found' })
-    })
-
-    it('never finalizes an application that was never approved', async () => {
-        const p = port()
-        const outcome = await performManagerActionV1({
-            applicationId: 'app-1', action: 'mark_paid', principalId: 'm1', operatorLabel: null,
-        }, p)
-        expect(outcome).toEqual({ performed: false, refusal: 'mark_paid_requires_authorization' })
-        expect(p.finalizePayout).not.toHaveBeenCalled()
     })
 })
 

@@ -209,6 +209,7 @@ export type CompensationCancelDecisionV1 =
 export function compensationCancelDecisionV1(
     authorization: CompensationPayoutAuthorizationSnapshotV1,
     presentedFence: string,
+    viaReconciliation = false,
 ): CompensationCancelDecisionV1 {
     if (authorization.authorizationFence !== presentedFence) {
         return { kind: 'refuse', code: 'authorization_fenced' }
@@ -216,7 +217,10 @@ export function compensationCancelDecisionV1(
     if (authorization.state === 'cancelled') return { kind: 'replay' }
     if (authorization.state === 'finalized') return { kind: 'refuse', code: 'already_finalized' }
     if (authorization.state === 'unknown_outcome') {
-        return { kind: 'refuse', code: 'reconciliation_required' }
+        // An unknown outcome is exactly what reconciliation exists to settle:
+        // resolving it as "the money never left" releases the preparation.
+        // Any other caller must go through that process instead of guessing.
+        if (!viaReconciliation) return { kind: 'refuse', code: 'reconciliation_required' }
     }
     return { kind: 'cancel' }
 }

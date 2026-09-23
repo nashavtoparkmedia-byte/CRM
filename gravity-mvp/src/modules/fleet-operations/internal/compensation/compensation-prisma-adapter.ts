@@ -877,13 +877,19 @@ async function finalizeInTransaction(
 export async function releaseCompensationPayoutV1(
     command: ReleaseCompensationPayoutCommandV1,
 ): Promise<ReleaseCompensationPayoutResultV1> {
-    return prisma.$transaction((tx) => releaseInTransaction(tx, command))
+    return prisma.$transaction((tx) => releaseInTransaction(tx, command, false))
 }
 
-/** Release body, shared by the manager's own release and by reconciliation. */
+/**
+ * Release body, shared by the manager's own release and by reconciliation.
+ * `viaReconciliation` only permits cancelling an authorization whose outcome is
+ * unknown, which is the one thing reconciliation exists to decide; every other
+ * monetary invariant below is identical on both paths.
+ */
 async function releaseInTransaction(
     tx: Tx,
     command: ReleaseCompensationPayoutCommandV1,
+    viaReconciliation: boolean,
     presetLocks?: LockLedger,
 ): Promise<ReleaseCompensationPayoutResultV1> {
     {
@@ -908,7 +914,9 @@ async function releaseInTransaction(
         const authorization = authorizations[0]
 
         if (command.kind === 'cancel_preparation') {
-            const decision = compensationCancelDecisionV1(authorization, command.authorizationFence)
+            const decision = compensationCancelDecisionV1(
+                authorization, command.authorizationFence, viaReconciliation,
+            )
             if (decision.kind === 'refuse') fail(decision.code, `release refused: ${decision.code}`)
             if (decision.kind === 'replay') {
                 return {
@@ -1141,7 +1149,7 @@ export async function resolveCompensationReconciliationV1(
                 reason: command.resolutionEvidence,
                 principal: command.principal,
                 releasedAt: command.resolvedAt,
-            }, locks)
+            }, true, locks)
         }
 
         // Rank 7, taken last: the guarded UPDATE takes the row lock itself, so

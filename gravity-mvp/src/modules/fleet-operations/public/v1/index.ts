@@ -103,11 +103,17 @@ export type {
   ScheduledCashOrderIngestionResultV1,
 } from '../../application/cash-order-ingestion-operations'
 export {
-  compensationManagerActionV1,
-  compensationManagerApplicationsV1,
   compensationPilotOrderCheckV1,
   compensationPilotRefreshV1,
   compensationPilotSectionV1,
   compensationPilotSubmitV1,
-  resolveCompensationManagerPrincipalV1,
 } from '../../application/compensation-pilot-operations'
+export {
+  compensationManagerActionV1,
+  compensationManagerApplicationV1,
+  compensationManagerApplicationsV1,
+  compensationManagerBudgetV1,
+  compensationManagerEvidenceSourceV1,
+  compensationManagerPeriodKeyV1,
+  resolveCompensationManagerPrincipalV1,
+} from '../../application/compensation-manager-operations'

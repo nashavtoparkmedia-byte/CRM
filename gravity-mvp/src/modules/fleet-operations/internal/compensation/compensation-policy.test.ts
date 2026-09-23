@@ -183,6 +183,23 @@ describe('compensationCancelDecisionV1', () => {
         expect(compensationCancelDecisionV1(authorization({ state: 'unknown_outcome' }), 'fence1'))
             .toEqual({ kind: 'refuse', code: 'reconciliation_required' })
     })
+
+    it('releases an unknown outcome when reconciliation decides the money never left', () => {
+        // This is the whole point of reconciliation: without it, resolving a
+        // task as not paid would ask to cancel a preparation the plain rule
+        // refuses, and the task could never be closed.
+        expect(compensationCancelDecisionV1(authorization({ state: 'unknown_outcome' }), 'fence1', true))
+            .toEqual({ kind: 'cancel' })
+    })
+
+    it('still guards the fence and a settled payout on the reconciliation path', () => {
+        expect(compensationCancelDecisionV1(authorization({ state: 'unknown_outcome' }), 'stale', true))
+            .toEqual({ kind: 'refuse', code: 'authorization_fenced' })
+        expect(compensationCancelDecisionV1(authorization({ state: 'finalized' }), 'fence1', true))
+            .toEqual({ kind: 'refuse', code: 'already_finalized' })
+        expect(compensationCancelDecisionV1(authorization({ state: 'cancelled' }), 'fence1', true))
+            .toEqual({ kind: 'replay' })
+    })
 })
 
 describe('compensationAttemptDecisionV1', () => {

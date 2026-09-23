@@ -5,7 +5,6 @@ import {
     decidePilotSubmissionV1,
     pilotDriverStatusV1,
     remainingBudgetKopecksV1,
-    routeManagerActionV1,
     PILOT_MAX_CLAIMED_RUBLES,
     type PilotSubmissionContextV1,
     type PilotSubmissionRequestV1,
@@ -127,49 +126,5 @@ describe('remaining budget', () => {
     it('never reports a negative remainder', () => {
         expect(remainingBudgetKopecksV1({ limitKopecks: 10_000, reservedKopecks: 9_000, settledKopecks: 5_000 }))
             .toBe(0)
-    })
-})
-
-describe('manager action routing', () => {
-    const pending = { status: 'PENDING', hasLiveAuthorization: false, hasOpenReconciliation: false }
-
-    it('approves by starting the C1 payout', () => {
-        expect(routeManagerActionV1('approve', pending)).toEqual({ operation: 'start_payout' })
-    })
-
-    it('refuses to approve twice', () => {
-        expect(routeManagerActionV1('approve', { ...pending, hasLiveAuthorization: true }))
-            .toEqual({ refusal: 'approve_requires_pending' })
-    })
-
-    it('refuses to approve a settled application', () => {
-        expect(routeManagerActionV1('approve', { ...pending, status: 'PAID' }))
-            .toEqual({ refusal: 'approve_requires_pending' })
-    })
-
-    it('rejects through C1 when no payout is in flight', () => {
-        expect(routeManagerActionV1('reject', pending)).toEqual({ operation: 'reject_application' })
-    })
-
-    it('refuses to reject while a payout outcome is unresolved', () => {
-        expect(routeManagerActionV1('reject', { ...pending, hasLiveAuthorization: true }))
-            .toEqual({ refusal: 'reject_requires_no_live_authorization' })
-        expect(routeManagerActionV1('reject', { ...pending, hasOpenReconciliation: true }))
-            .toEqual({ refusal: 'reject_requires_no_live_authorization' })
-    })
-
-    it('marks paid by finalizing the authorization', () => {
-        expect(routeManagerActionV1('mark_paid', { ...pending, hasLiveAuthorization: true }))
-            .toEqual({ operation: 'finalize_payout' })
-    })
-
-    it('routes a lost outcome through reconciliation instead of finalize', () => {
-        expect(routeManagerActionV1('mark_paid', { ...pending, hasOpenReconciliation: true }))
-            .toEqual({ operation: 'resolve_reconciliation' })
-    })
-
-    it('refuses to mark paid something never approved', () => {
-        expect(routeManagerActionV1('mark_paid', pending))
-            .toEqual({ refusal: 'mark_paid_requires_authorization' })
     })
 })

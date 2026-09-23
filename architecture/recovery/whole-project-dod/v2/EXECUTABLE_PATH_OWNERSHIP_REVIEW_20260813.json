@@ -86,7 +86,7 @@
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
-      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability.",
+      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability. The Manager CRM completion of that workflow admits exactly seven further surfaces under the same owner and the same exclusion: the budget panel, the board filters, the server-only manager data module, the money formatting helper, and the application detail page with its detail component and its evidence route. None owns a monetary decision, holds a credential or reaches a production capability; every monetary write still goes through the fleet_operations public compensation capability, and the evidence route serves stored bytes obtained through the Telegram channel without ever handling the bot token. The exact runtime inventory therefore moves from two hundred and fifty paths to two hundred and fifty-seven.",
       "previous_inventory": {
         "path_count": 242,
         "path_sha256": "9865049dfe3569e41ef7e3669c820a185e7dc1582614ba6fdf13af88a90657b8"
@@ -336,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 250,
-        "path_sha256": "2b8a27fbaa69a178a5edf8fe0063dbacc87b957c1ee4904f733a278341eb7135"
+        "path_count": 257,
+        "path_sha256": "349e5680f3462b4ea70a21f7c27589c0d47dfe3b80b049caab324f36bbc2bf95"
       }
     },
     {
@@ -2296,6 +2296,76 @@
       "source_sha256": "fa787632130a4599e9d403d79afff5ee007d5386ab0795dc1b3a0caec0af8f07",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Reviewed current assignment for the cash-compensation pilot: the path keeps the lifecycle and functional owner its governed exclusion already declares, and this branch changes neither."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/CompensationBudgetPanel.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "f1fd89ddbc69cff8b7d8a68b91c4410c6a580735f137e04183c00859ddfb4ec6",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders the month the monetary core reports and computes no amount of its own; it holds no credential and reaches no production capability."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/CompensationFilters.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "844f0dbe4ac5c50ddcb309e817e49b453c771ba9a711316f5637cb73db54d362",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders month, state and park as form controls that navigate with the filter in the URL; it decides nothing, holds no credential and reaches no production capability."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/manager-data.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "b36a0cdf4266dfe00fc870a82da55034fffcec359d331829391c219c69c3c0db",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It is the server-only composition root of the manager screens: it proves the CRM session through identity-access, reads the fleet-operations compensation surface and asks the Telegram channel for a stored file. It holds no credential of its own and takes no monetary decision."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/money.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "58ca2d1cf6cade1a22d9b10bc2705610800c7c79f9b95087c8f2fc45cfb85d4d",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It formats kopecks and names the manager states for display only; it decides no amount, holds no credential and reaches no production capability."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/[applicationId]/CompensationApplicationDetail.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "c5200c7aa552dd44355959e7f08d77c0a6b93d8bb68e0669f3940c5b2a5c8966",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders the actions the server said are open and reports the result code the server returned, never a state of its own; it holds no credential and reaches no production capability."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/[applicationId]/evidence/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "05c1bf8daa0af553ac09c6625e88124dd9ce0fbb2c4775d989b25adb93597f8b",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It gates on the CRM session and serves one stored support screenshot as private, inert bytes obtained through the Telegram channel; it never handles the bot token, and no Telegram file id reaches a browser through it."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/[applicationId]/page.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "855ffb4b04020f8fb1fca762b021e7dec7092ca17974f8bf1eb9645c98e81ff5",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Manager CRM completion admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It gates on the CRM session and projects one application into the detail view; it holds no credential and takes no monetary decision."
     },
     {
       "path": "gravity-mvp/src/app/control/attention/page.tsx",

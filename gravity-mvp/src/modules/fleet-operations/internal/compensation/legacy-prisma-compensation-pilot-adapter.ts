@@ -15,32 +15,11 @@ import {
     resolveContactLineageV1,
 } from '@/modules/contacts/public/v1'
 
-import {
-    FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
-    REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
-    RESOLVE_COMPENSATION_RECONCILIATION_COMMAND_V1,
-    START_COMPENSATION_PAYOUT_COMMAND_V1,
-    SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
-} from '../../../../contracts/fleet-operations/v1'
+import { SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1 } from '../../../../contracts/fleet-operations/v1'
 import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
-import {
-    CompensationErrorV1,
-    finalizeCompensationPayoutV1,
-    rejectCompensationApplicationV1,
-    resolveCompensationReconciliationV1,
-    startCompensationPayoutV1,
-    submitCompensationApplicationV1,
-} from './compensation-prisma-adapter'
+import { CompensationErrorV1, submitCompensationApplicationV1 } from './compensation-prisma-adapter'
 import { pilotDriverStatusV1 } from './compensation-pilot-flow'
-import type {
-    CompensationPilotPortV1,
-    ManagerApplicationRowV1,
-    PilotApplicationSummaryV1,
-} from './compensation-pilot-service'
-
-function principal(principalId: string, operatorLabel: string | null) {
-    return { principalId, principalKind: 'crm_user' as const, operatorLabel }
-}
+import type { CompensationPilotPortV1, PilotApplicationSummaryV1 } from './compensation-pilot-service'
 
 /** A person's applications, found through any contact bound to it. */
 const BOUND_TO_LINEAGE = `
@@ -55,35 +34,19 @@ const BOUND_TO_LINEAGE = `
 const APPLICATION_SELECT = `
     app."id" AS "applicationId", app."status", app."claimedKopecks", app."amountKopecks",
     app."submittedAt", app."rejectionReason",
-    vo."externalOrderId", vo."shortOrderIdDisplay", vo."externalParkId",
+    vo."externalOrderId", vo."shortOrderIdDisplay",
     vo."amountKopecks" AS "verifiedKopecks",
-    bound."contactIds" AS "boundContactIds",
-    ps."telegramUserId", ps."attachmentFileId", ps."attachmentKind", ps."supportContactedAt",
-    live."id" AS "payoutAuthorizationId", live."authorizationFence",
-    (live."id" IS NOT NULL) AS "hasLiveAuthorization",
-    (recon."id" IS NOT NULL) AS "hasOpenReconciliation"
+    (live."id" IS NOT NULL) AS "hasLiveAuthorization"
 `
 
 const APPLICATION_FROM = `
     FROM "CompensationApplication" app
     JOIN "CompensationVerifiedOrder" vo ON vo."id" = app."verifiedOrderId"
-    LEFT JOIN "CompensationPilotSubmission" ps ON ps."applicationId" = app."id"
     LEFT JOIN LATERAL (
-        SELECT array_agg(pb."contactId" ORDER BY pb."contactId") AS "contactIds"
-        FROM "CompensationPersonBinding" pb
-        WHERE pb."compensationPersonId" = app."compensationPersonId"
-    ) bound ON true
-    LEFT JOIN LATERAL (
-        SELECT pa."id", pa."authorizationFence" FROM "CompensationPayoutAuthorization" pa
+        SELECT pa."id" FROM "CompensationPayoutAuthorization" pa
         WHERE pa."applicationId" = app."id" AND pa."state" IN ('active','unknown_outcome')
         ORDER BY pa."openedAt" DESC LIMIT 1
     ) live ON true
-    LEFT JOIN LATERAL (
-        SELECT rt."id" FROM "CompensationReconciliationTask" rt
-        JOIN "CompensationPayoutAuthorization" pa2 ON pa2."id" = rt."payoutAuthorizationId"
-        WHERE pa2."applicationId" = app."id" AND rt."state" = 'open'
-        LIMIT 1
-    ) recon ON true
 `
 
 function toSummary(row: Record<string, unknown>): PilotApplicationSummaryV1 {
@@ -100,22 +63,6 @@ function toSummary(row: Record<string, unknown>): PilotApplicationSummaryV1 {
         verifiedKopecks: Number(row.verifiedKopecks),
         submittedAt: new Date(row.submittedAt as string),
         rejectionReason: row.rejectionReason === null ? null : String(row.rejectionReason),
-    }
-}
-
-function toManagerRow(row: Record<string, unknown>): ManagerApplicationRowV1 {
-    return {
-        ...toSummary(row),
-        boundContactIds: Array.isArray(row.boundContactIds) ? row.boundContactIds.map(String) : [],
-        externalParkId: String(row.externalParkId),
-        telegramUserId: row.telegramUserId === null ? null : String(row.telegramUserId),
-        attachmentFileId: row.attachmentFileId === null ? null : String(row.attachmentFileId),
-        attachmentKind: row.attachmentKind === null ? null : String(row.attachmentKind),
-        supportContactedAt: row.supportContactedAt === null ? null : new Date(row.supportContactedAt as string),
-        hasLiveAuthorization: row.hasLiveAuthorization === true,
-        hasOpenReconciliation: row.hasOpenReconciliation === true,
-        payoutAuthorizationId: row.payoutAuthorizationId === null ? null : String(row.payoutAuthorizationId),
-        authorizationFence: row.authorizationFence === null ? null : String(row.authorizationFence),
     }
 }
 
@@ -229,21 +176,6 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
         return rows.map(toSummary)
     },
 
-    async findManagerApplications() {
-        const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-            `SELECT ${APPLICATION_SELECT} ${APPLICATION_FROM} ORDER BY app."submittedAt" DESC LIMIT 200`,
-        )
-        return rows.map(toManagerRow)
-    },
-
-    async findManagerApplication(applicationId) {
-        const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-            `SELECT ${APPLICATION_SELECT} ${APPLICATION_FROM} WHERE app."id" = $1`,
-            applicationId,
-        )
-        return rows[0] ? toManagerRow(rows[0]) : null
-    },
-
     async submitApplication(input) {
         let result: Awaited<ReturnType<typeof submitCompensationApplicationV1>>
         try {
@@ -294,53 +226,5 @@ export const legacyPrismaCompensationPilotPortV1: CompensationPilotPortV1 = {
             amountKopecks: result.amountKopecks,
             status: result.status,
         }
-    },
-
-    async startPayout(input) {
-        await startCompensationPayoutV1({
-            contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
-            applicationId: input.applicationId,
-            principal: principal(input.principalId, input.operatorLabel),
-            startedAt: new Date(),
-        })
-    },
-
-    async rejectApplication(input) {
-        await rejectCompensationApplicationV1({
-            contract: REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
-            applicationId: input.applicationId,
-            rejectionKey: input.rejectionKey,
-            reason: input.reason,
-            principal: principal(input.principalId, input.operatorLabel),
-            rejectedAt: new Date(),
-        })
-    },
-
-    async finalizePayout(input) {
-        await finalizeCompensationPayoutV1({
-            contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
-            payoutAuthorizationId: input.payoutAuthorizationId,
-            authorizationFence: input.authorizationFence,
-            principal: principal(input.principalId, input.operatorLabel),
-            finalizedAt: new Date(),
-        })
-    },
-
-    async resolveReconciliation(input) {
-        const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-            `SELECT rt."id" FROM "CompensationReconciliationTask" rt
-             JOIN "CompensationPayoutAuthorization" pa ON pa."id" = rt."payoutAuthorizationId"
-             WHERE pa."applicationId" = $1 AND rt."state" = 'open' LIMIT 1`,
-            input.applicationId,
-        )
-        if (!rows[0]) return
-        await resolveCompensationReconciliationV1({
-            contract: RESOLVE_COMPENSATION_RECONCILIATION_COMMAND_V1,
-            reconciliationTaskId: rows[0].id,
-            resolution: 'paid',
-            resolutionEvidence: 'manager confirmed the manual payout reached the driver',
-            principal: principal(input.principalId, input.operatorLabel),
-            resolvedAt: new Date(),
-        })
-    },
+    }
 }

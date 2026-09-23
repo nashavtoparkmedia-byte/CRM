@@ -42,8 +42,6 @@ import {
     decidePilotSubmissionV1,
     pilotDriverStatusV1,
     remainingBudgetKopecksV1,
-    routeManagerActionV1,
-    type ManagerActionV1,
     type PilotDriverStatusV1,
     type PilotSubmissionRefusalV1,
 } from './compensation-pilot-flow'
@@ -102,21 +100,6 @@ export interface PilotApplicationSummaryV1 {
     rejectionReason: string | null
 }
 
-export interface ManagerApplicationRowV1 extends PilotApplicationSummaryV1 {
-    /** Every contact bound to the application's monetary person. */
-    boundContactIds: string[]
-    externalParkId: string
-    telegramUserId: string | null
-    attachmentFileId: string | null
-    attachmentKind: string | null
-    supportContactedAt: Date | null
-    hasLiveAuthorization: boolean
-    hasOpenReconciliation: boolean
-    /** Present only while a payout is in flight; needed to finalize it. */
-    payoutAuthorizationId: string | null
-    authorizationFence: string | null
-}
-
 export interface CompensationPilotPortV1 {
     /** Contacts' confirmation that the Contact's person is this Driver. */
     confirmMainDriver(contactId: string, driverId: string): Promise<PilotMainDriverConfirmationV1>
@@ -129,8 +112,6 @@ export interface CompensationPilotPortV1 {
     } | null>
     findClaimedOrderIds(lineage: readonly string[]): Promise<string[]>
     findDriverApplications(lineage: readonly string[]): Promise<PilotApplicationSummaryV1[]>
-    findManagerApplications(): Promise<ManagerApplicationRowV1[]>
-    findManagerApplication(applicationId: string): Promise<ManagerApplicationRowV1 | null>
     /**
      * C1 submit, plus the pilot evidence, as one unit. The order carries the
      * observation time C1 records as its verification time.
@@ -150,18 +131,6 @@ export interface CompensationPilotPortV1 {
         /** C1 refused the claim; its code is passed on to the driver. */
         | { refusal: string }
     >
-    startPayout(input: { applicationId: string; principalId: string; operatorLabel: string | null }): Promise<void>
-    rejectApplication(input: {
-        applicationId: string; reason: string; rejectionKey: string
-        principalId: string; operatorLabel: string | null
-    }): Promise<void>
-    finalizePayout(input: {
-        payoutAuthorizationId: string; authorizationFence: string
-        principalId: string; operatorLabel: string | null
-    }): Promise<void>
-    resolveReconciliation(input: {
-        applicationId: string; principalId: string; operatorLabel: string | null
-    }): Promise<void>
 }
 
 /**
@@ -593,85 +562,6 @@ export async function submitPilotApplicationV1(
     })
     if ('refusal' in result) return { submitted: false, refusal: result.refusal }
     return { submitted: true, ...result }
-}
-
-export type ManagerActionOutcomeV1 =
-    | { performed: true; operation: string }
-    | { performed: false; refusal: string }
-
-/**
- * Performs a manager action by routing it to the C1 operation that does it.
- *
- * The routing decision and the call are kept together so a screen cannot
- * finalize a payout that was never authorized by calling the wrong one.
- */
-export async function performManagerActionV1(
-    input: {
-        applicationId: string
-        action: ManagerActionV1
-        principalId: string
-        operatorLabel: string | null
-        /** Required for reject; ignored otherwise. */
-        reason?: string
-        rejectionKey?: string
-    },
-    port: CompensationPilotPortV1,
-): Promise<ManagerActionOutcomeV1> {
-    const row = await port.findManagerApplication(input.applicationId)
-    if (!row) return { performed: false, refusal: 'application_not_found' }
-
-    const route = routeManagerActionV1(input.action, {
-        status: row.status === 'paid' ? 'PAID' : row.status === 'rejected' ? 'REJECTED' : 'PENDING',
-        hasLiveAuthorization: row.hasLiveAuthorization,
-        hasOpenReconciliation: row.hasOpenReconciliation,
-    })
-    if ('refusal' in route) return { performed: false, refusal: route.refusal }
-
-    switch (route.operation) {
-        case 'start_payout':
-            await port.startPayout({
-                applicationId: row.applicationId,
-                principalId: input.principalId,
-                operatorLabel: input.operatorLabel,
-            })
-            return { performed: true, operation: 'start_payout' }
-
-        case 'reject_application': {
-            const reason = (input.reason ?? '').trim()
-            if (reason === '') return { performed: false, refusal: 'reject_requires_reason' }
-            await port.rejectApplication({
-                applicationId: row.applicationId,
-                reason,
-                rejectionKey: input.rejectionKey ?? row.applicationId,
-                principalId: input.principalId,
-                operatorLabel: input.operatorLabel,
-            })
-            return { performed: true, operation: 'reject_application' }
-        }
-
-        case 'finalize_payout': {
-            // Routing already established an authorization is live; without its
-            // fence C1 would refuse, so a missing one is a bug, not a refusal.
-            if (!row.payoutAuthorizationId || !row.authorizationFence) {
-                return { performed: false, refusal: 'authorization_evidence_missing' }
-            }
-            await port.finalizePayout({
-                payoutAuthorizationId: row.payoutAuthorizationId,
-                authorizationFence: row.authorizationFence,
-                principalId: input.principalId,
-                operatorLabel: input.operatorLabel,
-            })
-            return { performed: true, operation: 'finalize_payout' }
-        }
-
-        case 'resolve_reconciliation':
-            await port.resolveReconciliation({
-                applicationId: row.applicationId,
-                principalId: input.principalId,
-                operatorLabel: input.operatorLabel,
-            })
-            return { performed: true, operation: 'resolve_reconciliation' }
-    }
 }
 
 export { pilotDriverStatusV1 }
