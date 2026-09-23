@@ -1040,22 +1040,22 @@
       }
     },
     {
-      "amendment_id": "mobile-push-v1-p1-main-9f87c947-20260922",
-      "reviewed_at": "2026-09-22T00:00:00Z",
-      "reviewed_by": "MOBILE_PUSH_V1_P1_EXECUTOR_REVIEW_20260922",
+      "amendment_id": "mobile-push-v1-p1-main-8a83d826-20260923",
+      "reviewed_at": "2026-09-23T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_V1_P1_RECONCILIATION_EXECUTOR_REVIEW_20260923",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "ARCHITECT_MOBILE_PUSH_V1_P1_SERVER_FOUNDATION_AUTHORIZED_20260922",
+      "authorization": "ORCHESTRATOR_MOBILE_PUSH_V1_P1_RECONCILIATION_AUTHORIZED_20260923",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain whose tail is Mobile Text Reply v1 (amendment mobile-text-reply-v1-main-bb4da9bb-20260919), as landed on main 9f87c947, and reviews only the thirty-two surfaces Mobile Push v1 P1 adds."
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain whose tail is the Cash Compensation Manager CRM amendment (cash-compensation-manager-crm-main-9f87c947-20260922), as landed on main 8a83d826, and reviews only the surfaces Mobile Push v1 P1 adds. It re-anchors the same reviewed surface set onto that newer tail: the surfaces, their owners and the reasoning are unchanged from the 2026-09-22 review, only the predecessor and the denominator move."
       },
       "reason": "Records the thirty-two tracked executable surfaces Mobile Push v1 P1 adds: thirteen under identity_access-owned paths (the device registration handler, its PostgreSQL store, the session-bound registration seam and application operations, the single send-time token capability and its application operation, the versioned registration contract, the POST /api/mobile/push-registration route now owned through gravity-mvp/src/app/api/mobile, and five tests), seventeen under Messaging-owned paths (the two outbox event contracts, the product recency policy, the in-transaction intent helper, dispatch, its runtime and application seam, the FCM HTTP v1 transport, its port and configuration, the fan-out writer, the public outbox consumers and five tests), the FCM stand-in under the platform_shell-owned android path, and the MobileDeviceRegistration migration under the gravity_schema governed exclusion. It gives the migration and the stand-in their own lifecycle registry entries, which moves the tracked inventory digest without moving any reviewed assignment. It adds no assignment, exact-inventory transition, functional owner or governed exclusion change and carries no source hash rebind. The current triple is the repository's own derivation over the candidate tree: 2,564 + 32 = 2,596 surfaces, context-owned 1,348 -> 1,379, governed exclusions 1,216 -> 1,217.",
       "predecessor": {
-        "tracked_executable_surfaces": 2564,
-        "tracked_inventory_sha256": "cfa6e9b52dd912aa608be0b0bff216a5c17525296223cbac1f0fb1a0aba955df",
-        "coverage_sha256": "cecc680d7adf2b9be20221306cdaa61a6ab21645dd3635c5fe2be4cf5c65f935"
+        "tracked_executable_surfaces": 2583,
+        "tracked_inventory_sha256": "26650c08604b4ed2f07f7c62fcb66813913c6d7ef2d5cb7b22e8994b4f555aaf",
+        "coverage_sha256": "86b438f67b3d06fbd64f576a8b2804d04d23244c5dbbf6c931e52ab82c715aaf"
       },
       "current": {
         "tracked_executable_surfaces": 2596,
