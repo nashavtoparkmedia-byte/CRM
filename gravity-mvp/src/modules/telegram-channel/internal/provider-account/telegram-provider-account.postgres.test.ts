@@ -244,6 +244,30 @@ proof('telegram provider account writer against the real guards', () => {
         )).rejects.toThrow(/cannot retire while a transport binding is open/u)
     })
 
+    it('refuses one provider principal owning two accounts, even under a different kind', async () => {
+        // A Telegram bot IS a Telegram user, so bot ids and user ids share one
+        // provider id space. `providerUserId` therefore carries a standalone
+        // global unique and `accountKind` is part of no key: the kind describes
+        // the principal, it never scopes its identity.
+        const providerUserId = freshPrincipal()
+        await attest({ transportRef: freshRef(), providerUserId })
+        await expect(db.$executeRawUnsafe(
+            `INSERT INTO "TelegramAccount"("accountId","accountKind","providerUserId","lifecycle","lifecycleVersion","lifecycleChangedBy","lifecycleReason")
+             VALUES ($1,'bot_api',$2,'pending_approval',1,'proof','same principal, different kind')`, randomUUID(), providerUserId,
+        )).rejects.toThrow(/"providerUserId"\)=\(\d+\) already exists/u)
+
+        // And the writer refuses rather than creating a second account for it.
+        await expect(recordTelegramTransportAttestationV1({
+            transportKind: 'bot_runtime', transportRef: freshRef(), providerUserId,
+            accountKind: 'bot_api', attestingInstanceId: 'bot-instance',
+        })).rejects.toBeInstanceOf(TelegramAccountRefusalV1)
+
+        const rows = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
+            'SELECT "accountId" FROM "TelegramAccount" WHERE "providerUserId" = $1', providerUserId,
+        )
+        expect(rows).toHaveLength(1)
+    })
+
     it('refuses a duplicated provider identity under a second account', async () => {
         const providerUserId = freshPrincipal()
         await attest({ transportRef: freshRef(), providerUserId })
