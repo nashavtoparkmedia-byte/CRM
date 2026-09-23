@@ -13,6 +13,16 @@ import {
 } from '../internal/compensation/compensation-budget-period-service'
 import { legacyPrismaCompensationBudgetPeriodStoreV1 } from '../internal/compensation/legacy-prisma-compensation-budget-period-adapter'
 
+// The composition root is also where the operation's vocabulary leaves the
+// module: the public facade re-exports these from here, so it never has to
+// name an internal path of its own.
+export type { CompensationBudgetPeriodResultV1, EnsureCompensationBudgetPeriodInputV1 }
+export type {
+    CompensationBudgetPeriodOutcomeV1,
+    CompensationBudgetPeriodRefusalV1,
+    CompensationBudgetPeriodViewV1,
+} from '../internal/compensation/compensation-budget-period'
+
 /**
  * Ensures the compensation budget month exists with at least this limit.
  *

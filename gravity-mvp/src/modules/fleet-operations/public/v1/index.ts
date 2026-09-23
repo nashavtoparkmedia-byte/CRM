@@ -119,11 +119,9 @@ export {
 } from '../../application/compensation-manager-operations'
 export { ensureCompensationBudgetPeriodV1 } from '../../application/compensation-budget-period-operations'
 export type {
-  CompensationBudgetPeriodResultV1,
-  EnsureCompensationBudgetPeriodInputV1,
-} from '../../internal/compensation/compensation-budget-period-service'
-export type {
   CompensationBudgetPeriodOutcomeV1,
   CompensationBudgetPeriodRefusalV1,
+  CompensationBudgetPeriodResultV1,
   CompensationBudgetPeriodViewV1,
-} from '../../internal/compensation/compensation-budget-period'
+  EnsureCompensationBudgetPeriodInputV1,
+} from '../../application/compensation-budget-period-operations'
