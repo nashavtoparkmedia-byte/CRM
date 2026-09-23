@@ -85,15 +85,24 @@ only safe before step 9.
   (`end_call`), or when its session is closed while the channel is still up: it sends one
   `uuid_kill … NORMAL_CLEARING` after the final phrase has had time to play. A restart of the bridge
   still leaves live channels up, unchanged.
-- A bridge built at or after the hard-duration change caps an **answered** AI call at ten minutes,
-  measured from the answer, one limit for inbound and outbound alike. At the deadline it ends the
-  session and sends one `uuid_kill … NORMAL_CLEARING` immediately, with no warning phrase and no
-  grace — including when a goodbye grace was already waiting, which it cancels rather than queues
-  behind. It is a safety and cost limit, not a failure: the CRM records such a call as an ended
-  session whose outcome reason is `max_duration`. A call that is still ringing is not capped (the
-  pre-answer re-check governs that), and a channel whose CRM session never bound is capped too — it
-  is the one ending nothing else in the bridge can produce. The value is not configurable through
-  the environment; it is a product decision and lives in the source that implements it.
+- A bridge built at or after the hard-duration change caps an **answered** AI call at ten minutes.
+  The deadline is absolute: the instant FreeSWITCH reports it answered the channel plus ten minutes,
+  one limit for inbound and outbound alike. It is set once and never moved — a CHANNEL_ANSWER lost
+  and recovered later gets only the time the call has left, and a hangup that fails never buys
+  another window. At the deadline the bridge ends the session and sends one
+  `uuid_kill … NORMAL_CLEARING` immediately, with no warning phrase and no grace — including when a
+  goodbye grace was already waiting, which it cancels rather than queues behind. It is a safety and
+  cost limit, not a failure: the CRM records such a call as an ended session whose outcome reason is
+  `max_duration`. A call that is still ringing is not capped (the pre-answer re-check governs that),
+  and a channel whose CRM session never bound is capped too — it is the one ending nothing else in
+  the bridge can produce. The value is not configurable through the environment; it is a product
+  decision and lives in the source that implements it.
+- **Known limit of the cap.** If that one hangup does not reach FreeSWITCH — a wedged event socket,
+  a refused command — the bridge logs the channel as `overdue` and does not try again: it must not
+  grant the call another ten minutes, and it has no retry policy. Such a channel stays up until the
+  far end hangs up, and `ai_call_termination_overdue` in the bridge log is the operator's signal for
+  it. Closing that last gap needs a decision (a FreeSWITCH-side fail-safe or a bounded re-check),
+  not a bridge-side retry.
 - Older images have no cap on any layer — neither the dialplan nor the bridge — so a call nobody
   ends runs until the far end hangs up.
 - `.env.production` is shared through `env_file` with seven services, and gravity-mvp can reveal

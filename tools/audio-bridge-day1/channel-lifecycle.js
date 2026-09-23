@@ -52,11 +52,14 @@
  * calls into a CallSession — a session asks for termination, the primitive does
  * not answer back.
  *
- * Duration: it also owns the hard cap on an answered call (DEFAULT_MAX_CALL_DURATION_MS),
- * armed once on the answer fact and cleared with the channel. When it expires the
- * module performs two independent actions — stop the session, then terminate the
- * channel immediately — and an immediate request preempts a kill that is still
- * only scheduled, so a goodbye grace can never hold the cap up.
+ * Duration: it also owns the hard cap on an answered call. The deadline is absolute
+ * — the answer instant FreeSWITCH reports plus DEFAULT_MAX_CALL_DURATION_MS — set
+ * once and never moved, so a lost CHANNEL_ANSWER recovered later gets only the time
+ * the call has left, and a failed hangup never buys another window. When it expires
+ * the module performs two independent actions — stop the session, then terminate the
+ * channel immediately — and an immediate request preempts a kill that is still only
+ * scheduled, so a goodbye grace can never hold the deadline up. A channel still up
+ * past its deadline is marked overdue and stays that way until it dies.
  *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
@@ -97,6 +100,44 @@ const MAX_TERMINATION_GRACE_MS = 30 * 1000
 // environment — the number is a product decision, so it lives in the source that
 // implements it. A scenario's advisory targetDurationSec is never used for this.
 const DEFAULT_MAX_CALL_DURATION_MS = 10 * 60 * 1000
+// Tolerances for the answer instant FreeSWITCH reports. A value slightly ahead of
+// this process's clock is ordinary skew; one wildly ahead, or older than a day, is
+// not an answer time and is ignored in favour of the local clock.
+const ANSWER_CLOCK_SKEW_MS = 5 * 1000
+const ANSWER_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * The instant FreeSWITCH answered the channel, in epoch milliseconds, or null.
+ *
+ * Both paths that can establish the answer fact carry it. An event's caller-profile
+ * headers include `Caller-Channel-Answered-Time` in microseconds, and a `uuid_dump`
+ * reply carries the same set because mod_commands serialises the channel with the
+ * same event-data builder — which is why the pre-answer re-check can already read
+ * `Answer-State` out of a dump. `variable_answer_uepoch` and `variable_answer_epoch`
+ * are the same instant by another name and are read as fallbacks.
+ *
+ * This is what makes the deadline absolute instead of "ten minutes from when we
+ * noticed": a lost CHANNEL_ANSWER that only the re-check discovers would otherwise
+ * buy the call a whole extra re-check interval of life.
+ */
+function parseAnswerEpochMs(headers, nowMs) {
+    if (!headers) return null
+    const candidates = [
+        [headers['Caller-Channel-Answered-Time'], 1000],
+        [headers['variable_answer_uepoch'], 1000],
+        [headers['variable_answer_epoch'], 1 / 1000],
+    ]
+    for (const [raw, perMs] of candidates) {
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue
+        const value = Number(String(raw).trim())
+        if (!Number.isFinite(value) || value <= 0) continue
+        const answeredAt = Math.round(value / perMs)
+        if (answeredAt > nowMs + ANSWER_CLOCK_SKEW_MS) continue
+        if (answeredAt < nowMs - ANSWER_MAX_AGE_MS) continue
+        return answeredAt
+    }
+    return null
+}
 
 function parseEslEventHeaders(text) {
     const headers = {}
@@ -174,6 +215,9 @@ function createChannelLifecycle({
     const terminationTimers = new Map()    // uuid -> { timer, requested } for a deferred terminate()
     const terminationMarkTimers = new Map()  // uuid -> TTL that expires a stale terminating mark
     const maxDurationTimers = new Map()    // uuid -> hard-cap timer armed on the answer fact
+    const maxDurationDeadlines = new Map() // uuid -> absolute deadline, set once, never moved
+    const deadlineReached = new Set()      // the duration deadline has arrived for this channel
+    const overdueChannels = new Set()      // past the deadline, hangup did not land, still up
 
     function clearPreAnswerTimer(uuid) {
         const timer = preAnswerTimers.get(uuid)
@@ -210,7 +254,9 @@ function createChannelLifecycle({
                 const answerState = parseEslEventHeaders(text)['Answer-State']
                 if (answerState === 'answered') {
                     logError(`[esl] ${uuid} is answered but its CHANNEL_ANSWER was not delivered -> running answer actions`)
-                    onAnswerFact(uuid, 'known', 'uuid_dump')
+                    // The dump carries the answer instant, so the deadline is the one
+                    // the call actually earned, not ten minutes from this discovery.
+                    onAnswerFact(uuid, 'known', 'uuid_dump', parseAnswerEpochMs(parseEslEventHeaders(text), Date.now()))
                     return
                 }
                 if (answerState) {
@@ -318,30 +364,74 @@ function createChannelLifecycle({
     }
 
     /**
-     * The hard cap, armed once on the first answer fact this module accepts.
+     * The hard cap on an answered call, as an ABSOLUTE deadline.
      *
-     * It is a backstop, not the normal way a call ends: everything else — the
-     * bot's own end_call, the silence strikes, the lead hanging up — should get
-     * there first. It exists for the cases nothing else covers: a hung dialog, a
-     * lost end_call, an LLM or STT that never returns, and a channel that never
-     * bound a CallSession at all (the CRM lookup can 404), which is why it lives
-     * here with the channel state rather than in the session.
+     * The deadline is the answer instant plus maxCallDurationMs. It is computed once
+     * and never moved: not by a later answer-bearing event, not by a recovery, and
+     * not by a hangup that failed. The timer only ever holds what is LEFT of it, so a
+     * channel discovered late by the pre-answer re-check gets the time it actually
+     * has, and one whose deadline already passed is terminated at once.
      *
-     * A channel whose CHANNEL_ANSWER was lost and is only discovered by the
-     * pre-answer re-check starts its cap from that discovery, so its ceiling is
-     * the cap plus at most one re-check interval. FreeSWITCH's own answer time is
-     * not available at that point, and a late cap is still a cap.
+     * It is a backstop, not the normal way a call ends: everything else — the bot's
+     * own end_call, the silence strikes, the lead hanging up — should get there
+     * first. It exists for the cases nothing else covers: a hung dialog, a lost
+     * end_call, an LLM or STT that never returns, and a channel that never bound a
+     * CallSession at all (the CRM lookup can 404), which is why it lives here with
+     * the channel state rather than in the session.
      */
-    function armMaxDurationTimer(uuid) {
-        if (maxDurationTimers.has(uuid) || deadChannels.has(uuid)) return
+    function armMaxDurationTimer(uuid, answerAtMs = null) {
+        if (deadChannels.has(uuid)) return
+        // Structural, not just incidental: once the deadline has arrived it can never
+        // be armed again, so no path can hand a channel a second window.
+        if (deadlineReached.has(uuid)) return
+        const now = Date.now()
+        let deadlineAt = maxDurationDeadlines.get(uuid)
+        let answerSource = 'existing_deadline'
+        if (deadlineAt === undefined) {
+            answerSource = answerAtMs === null ? 'local_clock' : 'channel'
+            deadlineAt = (answerAtMs ?? now) + maxCallDurationMs
+            maxDurationDeadlines.set(uuid, deadlineAt)
+        }
+        if (maxDurationTimers.has(uuid)) return
+        const remainingMs = Math.max(0, deadlineAt - now)
         const timer = setTimer(() => {
             maxDurationTimers.delete(uuid)
             onMaxCallDuration(uuid)
-        }, maxCallDurationMs)
+        }, remainingMs)
         if (timer && typeof timer.unref === 'function') timer.unref()
         maxDurationTimers.set(uuid, timer)
-        log(`[esl] ${uuid} answered -> hard duration cap armed at ${maxCallDurationMs} ms`)
-        emitTermination('armed', uuid, { reason: 'max_duration', maxCallDurationMs })
+        log(`[esl] ${uuid} duration deadline in ${remainingMs} ms (cap ${maxCallDurationMs} ms, answer from ${answerSource})`)
+        emitTermination('armed', uuid, { reason: 'max_duration', maxCallDurationMs, remainingMs, answerSource })
+    }
+
+    /**
+     * Past its deadline and still physically up.
+     *
+     * The channel is never granted another window for this: maxCallDurationMs
+     * measures answered call time, not the interval between hangup attempts. It stays
+     * overdue until it dies, and the state is said out loud once so an operator can
+     * see a call the bridge could not end.
+     */
+    function markOverdue(uuid, detail) {
+        if (overdueChannels.has(uuid)) return
+        overdueChannels.add(uuid)
+        logError(`[esl] ${uuid} is past its duration deadline and still up: ${detail}`)
+        emitTermination('overdue', uuid, { reason: 'max_duration', detail })
+    }
+
+    /**
+     * A hangup command that did not land.
+     *
+     * Before the deadline there is nothing to do here: the deadline timer is still
+     * armed and will make exactly one further attempt when it arrives. After it, the
+     * channel is overdue — no new timer and no retry, so nothing on this path can
+     * extend a call's life or loop. Whether the deadline has passed is the fact the
+     * deadline firing recorded, never a clock comparison.
+     */
+    function afterUnlandedAttempt(uuid) {
+        if (deadChannels.has(uuid)) return
+        if (!deadlineReached.has(uuid)) return
+        markOverdue(uuid, 'hangup did not land after the deadline')
     }
 
     /**
@@ -360,6 +450,9 @@ function createChannelLifecycle({
             emitTermination('suppressed', uuid, { reason: 'max_duration', detail: 'channel already hung up' })
             return
         }
+        // From here the channel is past its deadline. Recorded as a fact rather than
+        // recomputed from a clock later, and never reset: the deadline cannot un-pass.
+        deadlineReached.add(uuid)
         logError(`[esl] ${uuid} hit the hard duration cap after ${maxCallDurationMs} ms -> terminating`)
         const session = getSession(uuid)
         if (session) {
@@ -368,10 +461,11 @@ function createChannelLifecycle({
             }
         }
         const disposition = terminate(uuid, { reason: 'max_duration', graceMs: 0 })
-        // The cap was spent on a channel whose earlier hangup is still outstanding.
-        // If that one lands the channel dies and this timer is cleared with it; if
-        // it does not, the backstop has to still be there.
-        if (disposition === 'duplicate') rearmCapAfterUnlandedAttempt(uuid)
+        // An earlier hangup is still outstanding, so the deadline deliberately sent
+        // nothing. The channel is overdue from now on: if that hangup lands it dies,
+        // and if it does not, this is the state an operator has to see. Either way the
+        // call is not given more time.
+        if (disposition === 'duplicate') markOverdue(uuid, 'hangup already outstanding at the deadline')
     }
 
     // A kill FreeSWITCH accepted is answered by CHANNEL_HANGUP_COMPLETE, and
@@ -385,21 +479,6 @@ function createChannelLifecycle({
     function releaseTerminationEpisode(uuid) {
         terminatingChannels.delete(uuid)
         killedChannels.delete(uuid)
-    }
-
-    // A hangup that did not land leaves an answered channel that may still be up,
-    // and the cap is the only thing that would ever end it — but the cap is a
-    // one-shot timer and may already have been spent (consumed by its own failing
-    // attempt, or burnt as a duplicate while an earlier kill was still in flight).
-    // Re-arming it here is what keeps the ten-minute guarantee from degrading into
-    // "we tried once". It is not a retry loop: one command per cap period at most,
-    // and it converges — a success, an "already gone" reply, or the real hangup
-    // clears the timer for good.
-    function rearmCapAfterUnlandedAttempt(uuid) {
-        if (deadChannels.has(uuid) || killedChannels.has(uuid)) return
-        if (!answeredChannels.has(uuid)) return
-        armMaxDurationTimer(uuid)
-        log(`[esl] ${uuid} hangup did not land -> duration cap re-armed`)
     }
 
     function expireTerminationMark(uuid) {
@@ -445,13 +524,13 @@ function createChannelLifecycle({
                 logError(`[esl] termination REJECTED for ${uuid} (${requested.reason}): ${text.slice(0, 120)}`)
                 releaseTerminationEpisode(uuid)
                 emitTermination('failed', uuid, { ...requested, detail: text.slice(0, 120) })
-                rearmCapAfterUnlandedAttempt(uuid)
+                afterUnlandedAttempt(uuid)
             })
             .catch(err => {
                 logError(`[esl] termination FAILED for ${uuid} (${requested.reason}): ${err.message}`)
                 releaseTerminationEpisode(uuid)
                 emitTermination('failed', uuid, { ...requested, detail: String(err.message).slice(0, 120) })
-                rearmCapAfterUnlandedAttempt(uuid)
+                afterUnlandedAttempt(uuid)
             })
     }
 
@@ -557,13 +636,13 @@ function createChannelLifecycle({
         return 'scheduled'
     }
 
-    function onAnswerFact(uuid, ext, via) {
+    function onAnswerFact(uuid, ext, via, answerAtMs = null) {
         if (deadChannels.has(uuid)) return
         clearPreAnswerTimer(uuid)
         if (!answeredChannels.has(uuid)) {
             answeredChannels.add(uuid)
             flushPendingBroadcasts(uuid)
-            armMaxDurationTimer(uuid)
+            armMaxDurationTimer(uuid, answerAtMs)
         }
         startFork(uuid, ext, via)
     }
@@ -575,6 +654,9 @@ function createChannelLifecycle({
         // uuid identical to one this lifecycle never terminated.
         clearTerminationTimers(uuid)
         clearMaxDurationTimer(uuid)
+        maxDurationDeadlines.delete(uuid)
+        deadlineReached.delete(uuid)
+        overdueChannels.delete(uuid)
         releaseTerminationEpisode(uuid)
         const queued = pendingBroadcasts.get(uuid)
         if (queued && queued.length) {
@@ -631,6 +713,7 @@ function createChannelLifecycle({
             return
         }
         const ext = matched ?? 'known'
+        const answerAtMs = parseAnswerEpochMs(headers, Date.now())
         if (eventName === 'CHANNEL_PARK') {
             if (boundChannels.has(uuid)) {
                 log(`[esl] CHANNEL_PARK repeated for ${uuid}: session bind already requested`)
@@ -640,13 +723,13 @@ function createChannelLifecycle({
                 try { bind = ensureSession(uuid, () => deadChannels.has(uuid)) } catch (err) { bind = Promise.reject(err) }
                 Promise.resolve(bind).catch(err => logError(`[esl] session bind failed for ${uuid}: ${err.message}`))
             }
-            if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK')
+            if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK', answerAtMs)
             else armPreAnswerTimer(uuid)
             return
         }
         // CHANNEL_ANSWER: either matched (built after the transfer) or a channel
         // this lifecycle already tracks.
-        onAnswerFact(uuid, ext, 'CHANNEL_ANSWER')
+        onAnswerFact(uuid, ext, 'CHANNEL_ANSWER', answerAtMs)
     }
 
     /**
@@ -684,6 +767,8 @@ function createChannelLifecycle({
         isDead: uuid => deadChannels.has(uuid),
         isTerminating: uuid => terminatingChannels.has(uuid),
         isKilled: uuid => killedChannels.has(uuid),
+        isOverdue: uuid => overdueChannels.has(uuid),
+        deadlineAt: uuid => maxDurationDeadlines.get(uuid) ?? null,
         snapshot: () => ({
             answered: [...answeredChannels],
             forked: [...forkedChannels],
@@ -695,6 +780,7 @@ function createChannelLifecycle({
             killed: [...killedChannels],
             terminationTimers: [...terminationTimers.keys()],
             maxDurationTimers: [...maxDurationTimers.keys()],
+            overdue: [...overdueChannels],
         }),
     }
 }
@@ -709,4 +795,5 @@ module.exports = {
     DEFAULT_HANGUP_CAUSE,
     MAX_TERMINATION_GRACE_MS,
     DEFAULT_MAX_CALL_DURATION_MS,
+    parseAnswerEpochMs,
 }

@@ -63,6 +63,9 @@ const FORK_URL = 'ws://127.0.0.1:3030/audio'
 
 function harness({ eslReply = async () => '+OK Success', mixType = 'mono', maxCallDurationMs } = {}) {
     const calls = { esl: [], ensure: [], forkFailures: [], termination: [] }
+    // Per-command replies a test can set, e.g. a uuid_dump that reports the answer
+    // instant. Falls through to `eslReply` for anything not set.
+    const eslReplies = new Map()
     const logs = { info: [], error: [] }
     const timers = []
     const sessions = new Map()
@@ -70,7 +73,13 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono', maxCa
         autoForkExtensions: ['9999', '9998'],
         forkWsUrl: FORK_URL,
         mixType,
-        eslApi: cmd => { calls.esl.push(cmd); return eslReply(cmd) },
+        eslApi: cmd => {
+            calls.esl.push(cmd)
+            for (const [prefix, reply] of eslReplies) {
+                if (cmd.startsWith(prefix)) return Promise.resolve(reply)
+            }
+            return eslReply(cmd)
+        },
         ensureSession: (uuid, isDead) => { calls.ensure.push({ uuid, isDead }); return Promise.resolve(null) },
         getSession: uuid => sessions.get(uuid),
         log: msg => logs.info.push(msg),
@@ -93,7 +102,7 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono', maxCa
     const kills = () => calls.esl.filter(c => c.startsWith('uuid_kill '))
     const terminationKinds = () => calls.termination.map(e => e.kind)
     const liveTimers = ms => timers.filter(t => t.ms === ms && !t.cleared && !t.fired)
-    return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts, kills, terminationKinds }
+    return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts, kills, terminationKinds, eslReplies }
 }
 
 function ev(name, uuid, dest, answerState) {
@@ -139,7 +148,7 @@ test('early media capture: exactly one fork, on CHANNEL_ANSWER, after the queued
     assert.equal(h.calls.ensure[0].uuid, EARLY_A)
     assert.ok(h.logs.info.some(l => l.includes(`auto-forking audio for ${EARLY_A}`) && l.includes('via CHANNEL_ANSWER')))
     assert.equal(h.forks().some(c => c.includes(EARLY_B)), false, 'callee leg never forked')
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [EARLY_A], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [EARLY_A], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [], overdue: [] })
 })
 
 test('no early media capture: exactly one fork, on the already-answered CHANNEL_PARK', async () => {
@@ -148,7 +157,7 @@ test('no early media capture: exactly one fork, on the already-answered CHANNEL_
         h.lifecycle.handleEvent(e)
         if (e['Event-Name'] === 'CHANNEL_ANSWER' && e['Unique-ID'] === NOEARLY_A) {
             // The answer is emitted before the transfer: it must not create any state.
-            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [] })
+            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [], overdue: [] })
             assert.equal(h.calls.esl.length, 0)
             assert.equal(h.calls.ensure.length, 0)
         }
@@ -288,7 +297,7 @@ test('an unanswered call that hangs up: queued playback resolves 0, session stop
     assert.equal(session.stopCount, 1)
     assert.equal(h.forks().length, 0)
     assert.equal(h.broadcasts().length, 0)
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [X], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [X], pending: [], preAnswerTimers: [], terminating: [], killed: [], terminationTimers: [], maxDurationTimers: [], overdue: [] })
     assert.equal(await h.lifecycle.playOrQueue(X, '/tts/late.wav', 700), null, 'late playback is dropped')
     assert.equal(h.calls.esl.length, 0)
 })
@@ -476,7 +485,9 @@ test('terminate on a live channel sends exactly one hangup and never touches the
     // The whole payload, not a field at a time: these events are the operator
     // surface and must stay bounded to identifiers and a truncated reply.
     assert.deepEqual(h.calls.termination[0], {
-        kind: 'armed', callUuid: X, reason: 'max_duration', maxCallDurationMs: DEFAULT_MAX_CALL_DURATION_MS,
+        kind: 'armed', callUuid: X, reason: 'max_duration',
+        maxCallDurationMs: DEFAULT_MAX_CALL_DURATION_MS,
+        remainingMs: DEFAULT_MAX_CALL_DURATION_MS, answerSource: 'local_clock',
     })
     assert.deepEqual(h.calls.termination[1], {
         kind: 'requested', callUuid: X, reason: 'completed', cause: DEFAULT_HANGUP_CAUSE, graceMs: 0,
@@ -883,8 +894,11 @@ test('the cap after a hangup already sent adds no second hangup', async () => {
     await tick()
 
     assert.equal(h.kills().length, 1, 'at most one hangup per episode')
-    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'issued', 'suppressed'])
+    // The deadline found the hangup already sent, so it adds nothing — and records
+    // that this channel is now past its deadline while still up.
+    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'issued', 'suppressed', 'overdue'])
     assert.equal(h.calls.termination[3].detail, 'hangup already sent')
+    assert.equal(h.lifecycle.isOverdue(X), true)
 })
 
 test('the cap after a real hangup sends nothing at all', async () => {
@@ -943,23 +957,22 @@ test('a failed cap hangup is not retried, and the channel keeps no stale mark', 
     await tick()
 
     assert.equal(h.kills().length, 1, 'one attempt, no retry loop')
-    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'failed', 'armed'])
-    assert.equal(h.lifecycle.isKilled(X), false, 'the episode is released so a later trigger can act')
+    assert.deepEqual(h.terminationKinds(), ['armed', 'requested', 'failed', 'overdue'])
+    assert.equal(h.lifecycle.isKilled(X), false, 'the episode is released')
     assert.equal(h.lifecycle.isTerminating(X), false)
-    // And the trigger that can act is the cap itself, back on the clock: a hangup
-    // that did not land must not leave the call unbounded.
-    const rearmed = capTimers(h)
-    assert.equal(rearmed.length, 1, 'the cap is re-armed after an attempt that did not land')
-    rearmed[0].fn()
-    await tick()
-    assert.equal(h.kills().length, 2, 'one command per cap period, not a loop')
+    // The deadline has passed, so the channel is overdue and stays that way. It is
+    // NOT given another ten minutes, and nothing is re-armed to try again.
+    assert.equal(h.lifecycle.isOverdue(X), true)
+    assert.deepEqual(capTimers(h), [], 'no new window')
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [])
+    assert.equal(h.kills().length, 1, 'and no further command is ever sent')
 })
 
-test('a cap spent while an earlier hangup is still in flight comes back', async () => {
+test('a cap spent while an earlier hangup is still in flight does not buy more time', async () => {
     // The bot's goodbye kill is sent at 9:59 and the ESL reply is still pending when
-    // the cap expires at 10:00. The cap is spent as a duplicate — correct, no second
-    // command — but if that kill then fails there would be nothing left to end the
-    // call, so the backstop returns.
+    // the deadline arrives. The deadline correctly sends nothing — one command while
+    // one is outstanding — and the channel becomes overdue. When that kill then fails
+    // the channel is still overdue: no second ten-minute window, no retry.
     let settle = null
     const h = harness({
         eslReply: cmd => (cmd.startsWith('uuid_kill ')
@@ -973,16 +986,17 @@ test('a cap spent while an earlier hangup is still in flight comes back', async 
 
     capTimers(h)[0].fn()
     await tick()
-    assert.equal(h.kills().length, 1, 'the cap adds no second command while one is in flight')
-    assert.equal(h.terminationKinds().at(-1), 'suppressed')
+    assert.equal(h.kills().length, 1, 'the deadline adds no second command while one is in flight')
+    assert.equal(h.lifecycle.isOverdue(X), true, 'and the channel is overdue from that moment')
+    assert.equal(h.calls.termination.at(-1).kind, 'overdue')
+    assert.equal(h.calls.termination.at(-1).detail, 'hangup already outstanding at the deadline')
 
     settle()
     await tick()
-    const rearmed = capTimers(h)
-    assert.equal(rearmed.length, 1, 'once the in-flight kill fails, the cap is back')
-    rearmed[0].fn()
-    await tick()
-    assert.equal(h.kills().length, 2, 'and it tries exactly once more')
+    assert.deepEqual(capTimers(h), [], 'the failure grants no new window')
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [])
+    assert.equal(h.kills().length, 1, 'and sends nothing further')
+    assert.equal(h.terminationKinds().filter(k => k === 'armed').length, 1, 'armed exactly once, ever')
 })
 
 test('a hangup that lands leaves no cap behind', async () => {
@@ -1028,6 +1042,188 @@ test('the cap is the backstop for a hangup that failed', async () => {
 
     assert.equal(h.kills().length, 2, 'the cap tries once more — one attempt per trigger, not a loop')
     assert.equal(h.terminationKinds().at(-1), 'issued')
+})
+
+// ---- Absolute answer deadline -------------------------------------------------
+//
+// The cap is ten minutes of ANSWERED CALL, measured from the instant FreeSWITCH
+// answered the channel — not from the moment this bridge noticed. A lost
+// CHANNEL_ANSWER discovered later by the pre-answer re-check must not buy the call
+// another re-check interval, and no failure may ever move the deadline.
+
+const { parseAnswerEpochMs } = require('../channel-lifecycle')
+
+function answeredAgo(ms, now = Date.now()) {
+    // `Caller-Channel-Answered-Time` is microseconds since the epoch; a uuid_dump
+    // carries the same header because mod_commands serialises the channel with the
+    // same event-data builder that stamps events.
+    return String((now - ms) * 1000)
+}
+
+test('the answer instant is read from the headers FreeSWITCH stamps, and junk is ignored', () => {
+    const now = 1_800_000_000_000
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': String((now - 5000) * 1000) }, now), now - 5000)
+    assert.equal(parseAnswerEpochMs({ variable_answer_uepoch: String((now - 7000) * 1000) }, now), now - 7000)
+    assert.equal(parseAnswerEpochMs({ variable_answer_epoch: String(Math.floor((now - 9000) / 1000)) }, now), now - 9000)
+    // Preference order: the caller-profile header wins over the variables.
+    assert.equal(parseAnswerEpochMs({
+        'Caller-Channel-Answered-Time': String((now - 1000) * 1000),
+        variable_answer_uepoch: String((now - 400_000) * 1000),
+    }, now), now - 1000)
+    // Nothing usable -> null, and the caller falls back to its own clock.
+    assert.equal(parseAnswerEpochMs({}, now), null)
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': '0' }, now), null)
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': 'not-a-number' }, now), null)
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': '' }, now), null)
+    // Implausible values are not answer times: far future, or older than a day.
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': String((now + 60_000) * 1000) }, now), null)
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': String((now - 48 * 3600_000) * 1000) }, now), null)
+    // Ordinary clock skew is tolerated.
+    assert.equal(parseAnswerEpochMs({ 'Caller-Channel-Answered-Time': String((now + 1000) * 1000) }, now), now + 1000)
+})
+
+test('the deadline is measured from the answer the channel reports, not from delivery', async () => {
+    const h = harness()
+    const headers = ev('CHANNEL_ANSWER', X, '9999', 'answered')
+    headers['Caller-Channel-Answered-Time'] = answeredAgo(4 * 60 * 1000)
+    h.lifecycle.handleEvent(headers)
+    await tick()
+
+    const armed = h.calls.termination[0]
+    assert.equal(armed.kind, 'armed')
+    assert.equal(armed.answerSource, 'channel', 'the channel told us when it answered')
+    // Four minutes are already spent, so about six remain — never a fresh ten.
+    assert.ok(armed.remainingMs <= 6 * 60 * 1000, `remaining ${armed.remainingMs} must not exceed what is left`)
+    assert.ok(armed.remainingMs > 6 * 60 * 1000 - 5000, `remaining ${armed.remainingMs} must be about six minutes`)
+    assert.equal(h.timers.filter(t => t.ms === armed.remainingMs).length, 1, 'the timer holds only the remainder')
+})
+
+test('a lost CHANNEL_ANSWER recovered by the re-check gets only the time the call has left', async () => {
+    const h = harness()
+    // Ringing park: the answer event is lost, so the pre-answer re-check is armed.
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    await tick()
+    const recheck = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
+    assert.equal(recheck.length, 1)
+    assert.deepEqual(h.terminationKinds(), [], 'nothing is capped while it may still be ringing')
+
+    // FreeSWITCH answers the dump: answered, and it happened eight minutes ago.
+    h.eslReplies.set('uuid_dump', [
+        'Event-Name: CHANNEL_DATA',
+        `Unique-ID: ${X}`,
+        'Answer-State: answered',
+        `Caller-Channel-Answered-Time: ${answeredAgo(8 * 60 * 1000)}`,
+    ].join('\n'))
+    recheck[0].fn()
+    await tick()
+    await tick()
+
+    const armed = h.calls.termination.find(e => e.kind === 'armed')
+    assert.ok(armed, 'the recovery caps the channel')
+    assert.equal(armed.answerSource, 'channel')
+    assert.ok(armed.remainingMs <= 2 * 60 * 1000, `remaining ${armed.remainingMs}: eight of ten minutes are gone`)
+    assert.ok(armed.remainingMs > 2 * 60 * 1000 - 5000, `remaining ${armed.remainingMs} must be about two minutes`)
+    assert.equal(h.kills().length, 0, 'and it is not yet due')
+})
+
+test('a recovery after the deadline terminates at once', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    await tick()
+    const recheck = h.liveTimers(DEFAULT_PRE_ANSWER_TIMEOUT_MS)
+
+    // The channel answered eleven minutes ago and nobody knew: already overdue.
+    h.eslReplies.set('uuid_dump', [
+        'Event-Name: CHANNEL_DATA',
+        `Unique-ID: ${X}`,
+        'Answer-State: answered',
+        `Caller-Channel-Answered-Time: ${answeredAgo(11 * 60 * 1000)}`,
+    ].join('\n'))
+    recheck[0].fn()
+    await tick()
+    await tick()
+
+    const armed = h.calls.termination.find(e => e.kind === 'armed')
+    assert.equal(armed.remainingMs, 0, 'no time left at all')
+    const due = h.timers.filter(t => t.ms === 0 && !t.cleared)
+    assert.equal(due.length, 1, 'the deadline is due immediately, not in ten minutes')
+    due[0].fn()
+    await tick()
+    assert.deepEqual(session.stopReasons, ['max_duration'])
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+})
+
+test('the deadline never moves, whatever arrives later', async () => {
+    const h = harness()
+    const first = ev('CHANNEL_PARK', X, '9999', 'answered')
+    first['Caller-Channel-Answered-Time'] = answeredAgo(3 * 60 * 1000)
+    h.lifecycle.handleEvent(first)
+    await tick()
+    const deadline = h.lifecycle.deadlineAt(X)
+    assert.ok(deadline, 'a deadline exists')
+
+    // A later answer-bearing event, with a later answer time, must not extend it.
+    const later = ev('CHANNEL_ANSWER', X, '9999', 'answered')
+    later['Caller-Channel-Answered-Time'] = answeredAgo(0)
+    h.lifecycle.handleEvent(later)
+    await tick()
+    assert.equal(h.lifecycle.deadlineAt(X), deadline, 'the deadline is absolute')
+    assert.equal(h.terminationKinds().filter(k => k === 'armed').length, 1, 'and armed exactly once')
+})
+
+test('a channel is overdue only after its deadline, and a pre-deadline failure just waits for it', async () => {
+    // A goodbye kill fails at nine minutes. The deadline is still armed and holds the
+    // remaining minute, so exactly one further attempt happens — at the deadline, not
+    // ten minutes after the failure.
+    let replies = 0
+    const h = harness({
+        eslReply: async cmd => {
+            if (!cmd.startsWith('uuid_kill ')) return '+OK Success'
+            replies += 1
+            return replies === 1 ? '-ERR Operation not permitted' : '+OK Success'
+        },
+    })
+    const headers = ev('CHANNEL_PARK', X, '9999', 'answered')
+    headers['Caller-Channel-Answered-Time'] = answeredAgo(9 * 60 * 1000)
+    h.lifecycle.handleEvent(headers)
+    await tick()
+    const armed = h.calls.termination[0]
+    assert.ok(armed.remainingMs > 0 && armed.remainingMs <= 60 * 1000, 'about a minute left')
+
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    assert.equal(h.kills().length, 1)
+    assert.equal(h.lifecycle.isOverdue(X), false, 'not overdue yet: the deadline has not passed')
+    const due = h.timers.filter(t => t.ms === armed.remainingMs && !t.cleared && !t.fired)
+    assert.equal(due.length, 1, 'the original deadline is still the one armed')
+
+    due[0].fn()
+    await tick()
+    assert.equal(h.kills().length, 2, 'exactly one further attempt, at the deadline')
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [], 'and nothing is armed after it')
+})
+
+test('no path can send a third hangup for one channel', async () => {
+    // Worst case chained: a pre-deadline attempt fails, the deadline attempt fails
+    // too, and then every timer left in the harness is fired. Two commands, ever.
+    const h = harness({ eslReply: async cmd => (cmd.startsWith('uuid_kill ') ? '-ERR Operation not permitted' : '+OK Success') })
+    const headers = ev('CHANNEL_PARK', X, '9999', 'answered')
+    headers['Caller-Channel-Answered-Time'] = answeredAgo(10 * 60 * 1000 - 1000)
+    h.lifecycle.handleEvent(headers)
+    await tick()
+
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    for (const t of h.timers.filter(t => !t.cleared && !t.fired)) t.fn()
+    await tick()
+    for (const t of h.timers.filter(t => !t.cleared && !t.fired)) t.fn()
+    await tick()
+
+    assert.equal(h.kills().length, 2, 'one pre-deadline attempt, one at the deadline, nothing more')
+    assert.equal(h.lifecycle.isOverdue(X), true)
+    assert.equal(h.terminationKinds().filter(k => k === 'overdue').length, 1, 'said once, not per attempt')
 })
 
 // ---- Session correlation ------------------------------------------------------
