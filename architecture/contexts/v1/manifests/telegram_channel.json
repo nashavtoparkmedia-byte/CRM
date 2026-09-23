@@ -318,7 +318,8 @@
     "module_tests": [
       "node tools/architecture/check-telegram-runtime-provider-boundary.mjs",
       "node tools/architecture/check-telegram-driver-link-boundary.mjs",
-      "node tools/architecture/check-messaging-telegram-binary-media-boundary.mjs"
+      "node tools/architecture/check-messaging-telegram-binary-media-boundary.mjs",
+      "node tools/architecture/check-telegram-provider-account-boundary.mjs"
     ]
   },
   "version": 1
