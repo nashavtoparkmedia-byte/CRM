@@ -432,6 +432,35 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 6
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a2-tg2a-telegram-provider-account-wiring-20260923",
+      "reviewed_at": "2026-09-23T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A2_TG2A_CANDIDATE_OWNERSHIP_REVIEW_20260923",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A2_TG2A_TELEGRAM_PROVIDER_ACCOUNT_LIVE_WIRING_IMPLEMENTATION",
+      "reason": "M2A2-TG2A adds exactly four tracked executable surfaces and changes no existing ownership. gravity-mvp/src/modules/telegram-channel/internal/provider-account/telegram-account-intake.ts and its two proofs telegram-account-intake.test.ts and telegram-account-intake.postgres.test.ts sit under telegram_channel owned paths and are context owned by the existing manifest selection. gravity-mvp/src/app/tg-actions.provider-account.test.ts is a test beside the already tracked gravity-mvp/src/app/tg-actions.identity.test.ts and is placed by the same existing cohort rule that places that file. The modified surfaces gravity-mvp/src/app/tg-actions.ts, gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx and tools/architecture/check-telegram-provider-account-boundary.mjs were already tracked and keep their placement. No path belongs to an exact inventory, so no exact-inventory transition, assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes; only the denominator moves from 2524 to 2528.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2524,
+        "tracked_inventory_sha256": "9c4d09d1c74aede2117d2d315d860d17f201af3f972097ea75da3cbc6a3901e9",
+        "coverage_sha256": "3b329f46938d897268843312fea231f4c75024e193d393e7c254decf42bcde59"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2528,
+        "tracked_inventory_sha256": "5ed3ad16c62741d17b7c907fa8937c720dcd92e1c6b3d3007753364891da0912",
+        "coverage_sha256": "1305d1a88e689ef105746d7183a19cd33ff74b60b63cde00a5b5a8845561611b"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 4
+      }
     }
   ]
 }
