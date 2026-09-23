@@ -1465,9 +1465,9 @@
     {
       "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
-      "source_sha256": "c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
+      "source_sha256": "d2f2e49a123947b0ac8ee6dc17ff3586ac5e8a02ccada8df5095faed6aa665ed",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line": 1936,
+      "line": 2082,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1490,7 +1490,7 @@
         "min"
       ],
       "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
-      "sql_provenance_sha256": "f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0",
+      "sql_provenance_sha256": "16953b7b24e46f35b70749dff5cd01e6a02655aae0488031d3361847238d9517",
       "source_context": "telegram_channel",
       "source_technical_module": "telegram_provider",
       "owner_contexts": [],
@@ -4086,11 +4086,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/tg-actions.ts",
-        "line": 1936,
+        "line": 2082,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
-        "sql_provenance_sha256": "f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0"
+        "source_sha256": "d2f2e49a123947b0ac8ee6dc17ff3586ac5e8a02ccada8df5095faed6aa665ed",
+        "sql_provenance_sha256": "16953b7b24e46f35b70749dff5cd01e6a02655aae0488031d3361847238d9517"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4113,8 +4113,8 @@
         "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
         "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:c28d10bc96dcab9bf131fb89e726dec69f938918b8a9f970cbc9605bc552d581",
-        "sql_provenance_sha256:f673f8a4b6817d811e72165571c573d8903eccfd83be5f1c0121c2c1ceacf5c0"
+        "source_sha256:d2f2e49a123947b0ac8ee6dc17ff3586ac5e8a02ccada8df5095faed6aa665ed",
+        "sql_provenance_sha256:16953b7b24e46f35b70749dff5cd01e6a02655aae0488031d3361847238d9517"
       ]
     },
     {
