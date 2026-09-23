@@ -16,6 +16,13 @@ import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { cleanupDanglingContactIdentitiesV1, isResolvedChannelContactResultV1, markChannelIdentityConflictV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
+import {
+    admitTelegramProviderAccountV1,
+    describeTelegramProviderAccountV1,
+    recordObservedAttestationV1,
+    type TelegramAdmissionResultV1,
+    type TelegramProviderAccountStateV1,
+} from '@/modules/telegram-channel/internal/provider-account/telegram-account-intake'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -237,7 +244,7 @@ export async function submitTelegram2FAPassword(loginId: string, password: strin
 }
 
 export async function checkTelegramAuthStatus(loginId: string) {
-    await requireIntegrationAdminAccess()
+    const principal = await requireIntegrationAdminAccess()
     pruneTerminalLogins()
     const terminal = terminalLogins.get(loginId)
     if (terminal) return { status: terminal.status }
@@ -257,7 +264,10 @@ export async function checkTelegramAuthStatus(loginId: string) {
 
         try {
             const sessionString = (data.client.session as StringSession).save()
-            // Fetch user info to get the telegram ID
+            // Fetch user info to get the telegram ID. This first observation is
+            // kept in memory and is never read back from the stored row: it is
+            // compared against a second live observation below, so the record's
+            // id can never become an identity source.
             const me = await data.client.getMe()
             const telegramId = me.id.toString()
             const phoneNumber = me.phone || null
@@ -272,7 +282,7 @@ export async function checkTelegramAuthStatus(loginId: string) {
             }
 
             // Save to DB
-            await (prisma as any).telegramConnection.upsert({
+            const connectionRow = await (prisma as any).telegramConnection.upsert({
                 where: { id: telegramId },
                 create: {
                     id: telegramId,
@@ -294,9 +304,18 @@ export async function checkTelegramAuthStatus(loginId: string) {
                 }
             })
             console.log(`[TG-AUTH] Session saved to database successfully`)
+            // M2A2-TG2A: the authenticated ceremony is the admission action for
+            // the principal that just authenticated. The transport record is
+            // committed above, so the locator below comes from that record.
+            const admission = await runTelegramProviderAccountAdmissionV1({
+                client: data.client,
+                transportRef: String(connectionRow?.id ?? telegramId),
+                observedProviderUserId: telegramId,
+                principalId: principal.id,
+            })
             await disposeActiveLogin(loginId)
             revalidatePath('/telegram')
-            return { status: 'success' }
+            return { status: 'success', accountAdmission: admission.status, accountAdmissionReason: admission.reason }
         } catch {
             // The failed Prisma invocation carried apiHash and sessionString;
             // its diagnostic object is intentionally not emitted.
@@ -343,6 +362,53 @@ export async function getTelegramConnections() {
         apiHashConfigured: true,
         sessionConfigured: true,
     }))
+}
+
+/**
+ * Operator display only. Admission never trusts this read: it re-attests from a
+ * live client before it admits anything.
+ */
+export async function getTelegramProviderAccountState(connectionId: string): Promise<TelegramProviderAccountStateV1> {
+    await requireIntegrationAdminAccess()
+    const transportRef = concreteOpaqueId(connectionId)
+    if (!transportRef) {
+        return { available: false, providerAccountId: null, accountKind: null, lifecycle: null, readiness: null }
+    }
+    return await describeTelegramProviderAccountV1('mtproto_session', transportRef)
+}
+
+/**
+ * Explicit admission for a transport that is already running. It never admits
+ * from a stored projection alone: a live client is obtained, a fresh getMe is
+ * taken, the attestation is awaited, and only then is the account admitted.
+ * A process restart admits nothing by itself.
+ */
+export async function admitTelegramProviderAccount(connectionId: string): Promise<TelegramAdmissionResultV1> {
+    const principal = await requireIntegrationAdminAccess()
+    const requested = concreteOpaqueId(connectionId)
+    if (!requested) return { status: 'unavailable', reason: 'transport_unavailable' }
+
+    const connection = await (prisma as any).telegramConnection.findUnique({ where: { id: requested } })
+    if (!connection || connection.isActive !== true || !connection.sessionString) {
+        return { status: 'unavailable', reason: 'transport_unavailable' }
+    }
+
+    let client: TelegramClient
+    try {
+        client = await getTelegramClient(connection)
+    } catch {
+        return { status: 'unavailable', reason: 'transport_unavailable' }
+    }
+
+    const admission = await runTelegramProviderAccountAdmissionV1({
+        client,
+        // The locator is the transport record's own id, never the principal.
+        transportRef: String(connection.id),
+        observedProviderUserId: null,
+        principalId: principal.id,
+    })
+    revalidatePath('/settings/integrations/telegram')
+    return admission
 }
 
 export async function updateTelegramConnectionSettings(id: string, name: string, isDefault: boolean) {
@@ -1306,21 +1372,90 @@ export async function stopTelegramHealthCheck(): Promise<void> {
     }
 }
 
-async function attestTelegramProviderAccount(
-    client: TelegramClient,
-    connectionId: string,
-): Promise<string> {
+/**
+ * One live provider authentication. The returned value is exactly what getMe
+ * reported; nothing here reads a stored row, an environment value or a cache.
+ */
+async function readLiveProviderPrincipal(client: TelegramClient): Promise<string> {
     const me = await client.getMe()
     const providerAccountId = concreteOpaqueId(me?.id?.toString())
     if (!providerAccountId || !/^\d+$/.test(providerAccountId) || providerAccountId === '0') {
         throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN')
     }
+    return providerAccountId
+}
+
+/**
+ * The runtime instance this attestation is made by. The transport registry
+ * instance is preferred; a process-scoped identity is used when a cached client
+ * is attested outside the branch that opens an instance. It is diagnostic only
+ * and never an identity source.
+ */
+const tgProcessInstanceId = `process:${randomUUID()}`
+
+function attestingInstanceIdFor(connectionId: string): string {
+    return tgInstanceIds.get(connectionId) ?? tgProcessInstanceId
+}
+
+async function attestTelegramProviderAccount(
+    client: TelegramClient,
+    connectionId: string,
+): Promise<string> {
+    const providerAccountId = await readLiveProviderPrincipal(client)
     const cached = tgProviderAccountIds.get(connectionId)
     if (cached && cached !== providerAccountId) {
         throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_CHANGED')
     }
     tgProviderAccountIds.set(connectionId, providerAccountId)
+    // M2A2-TG2A: the durable provider-account foundation observes this live
+    // authentication. The hand-off is not awaited, and this call site does not
+    // rely on the intake's own fail-open guarantee: nothing the foundation can
+    // do may reach a Telegram runtime path.
+    try {
+        recordObservedAttestationV1({
+            transportKind: 'mtproto_session',
+            transportRef: connectionId,
+            accountKind: 'mtproto_user',
+            providerUserId: providerAccountId,
+            attestingInstanceId: attestingInstanceIdFor(connectionId),
+        })
+    } catch {
+        // A provider-account failure is never a Telegram failure.
+    }
     return providerAccountId
+}
+
+/**
+ * M2A2-TG2A admission ceremony: one awaited sequence over the single TG1
+ * writer. The caller has already persisted the transport record, so the
+ * attestation observed here is made after that record exists, and the locator
+ * is the persisted record's own id.
+ */
+async function runTelegramProviderAccountAdmissionV1(input: {
+    client: TelegramClient
+    transportRef: string
+    /** A principal a previous live observation of this ceremony reported, held in memory. */
+    observedProviderUserId: string | null
+    principalId: string
+}): Promise<TelegramAdmissionResultV1> {
+    let providerUserId: string
+    try {
+        providerUserId = await readLiveProviderPrincipal(input.client)
+    } catch {
+        return { status: 'unavailable', reason: 'principal_unproven' }
+    }
+    try {
+        return await admitTelegramProviderAccountV1({
+            transportKind: 'mtproto_session',
+            transportRef: input.transportRef,
+            accountKind: 'mtproto_user',
+            providerUserId,
+            attestingInstanceId: attestingInstanceIdFor(input.transportRef),
+            previouslyObservedProviderUserId: input.observedProviderUserId,
+        }, input.principalId)
+    } catch {
+        return { status: 'unavailable', reason: 'attestation_unavailable' }
+    }
 }
 
 async function getTelegramClient(connection: any) {

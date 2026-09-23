@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { CheckCircle2, QrCode, LogOut, Loader2, Send, Plus, Star, Edit2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
-import { getTelegramAuthQR, getTelegramAuthQRFromSavedConnection, checkTelegramAuthStatus, disconnectTelegram, submitTelegram2FAPassword, updateTelegramConnectionSettings, pauseTelegramConnection, resumeTelegramConnection, deleteConnectionMessages } from '../../../tg-actions'
+import { getTelegramAuthQR, getTelegramAuthQRFromSavedConnection, checkTelegramAuthStatus, disconnectTelegram, submitTelegram2FAPassword, updateTelegramConnectionSettings, pauseTelegramConnection, resumeTelegramConnection, deleteConnectionMessages, getTelegramProviderAccountState, admitTelegramProviderAccount } from '../../../tg-actions'
 import type { TelegramConnectionPublicMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 
@@ -34,6 +34,49 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
     const [resumeDialog, setResumeDialog] = useState<{ connId: string; connName: string; bufferedCount?: number } | null>(null)
     const [deleteDialog, setDeleteDialog] = useState<{ connId: string; connName: string } | null>(null)
     const [disconnectDialog, setDisconnectDialog] = useState<{ connId: string; connName: string } | null>(null)
+
+    // M2A2-TG2A: provider-account admission. The state shown here is a display
+    // read; admitting always re-attests from a live client on the server.
+    type ProviderAccountState = { available: boolean; lifecycle: string | null; readiness: string | null }
+    const [accountStates, setAccountStates] = useState<Record<string, ProviderAccountState>>({})
+    const [admittingId, setAdmittingId] = useState<string | null>(null)
+
+    const loadAccountState = useCallback(async (connectionId: string) => {
+        try {
+            const state = await getTelegramProviderAccountState(connectionId)
+            setAccountStates(prev => ({ ...prev, [connectionId]: state }))
+        } catch {
+            setAccountStates(prev => ({ ...prev, [connectionId]: { available: false, lifecycle: null, readiness: null } }))
+        }
+    }, [])
+
+    useEffect(() => {
+        for (const connection of initialConnections) {
+            void loadAccountState(connection.id)
+        }
+    }, [initialConnections, loadAccountState])
+
+    const handleAdmitAccount = async (connectionId: string) => {
+        setAdmittingId(connectionId)
+        try {
+            await admitTelegramProviderAccount(connectionId)
+        } catch {
+            // The action reports its own outcome; a transport failure is not fatal here.
+        } finally {
+            await loadAccountState(connectionId)
+            setAdmittingId(null)
+        }
+    }
+
+    function accountStateLabel(state: ProviderAccountState | undefined): string {
+        if (!state) return 'проверяется…'
+        if (!state.available) return 'недоступен'
+        if (state.lifecycle === null) return 'не привязан'
+        if (state.lifecycle !== 'active') return 'ожидает допуска'
+        if (state.readiness === 'ready') return 'допущен, подтверждён'
+        if (state.readiness === 'stale_attestation') return 'допущен, подтверждение устарело'
+        return 'допущен'
+    }
     const [actionLoading, setActionLoading] = useState(false)
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -231,6 +274,23 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-2 rounded-lg bg-secondary/40 px-2.5 py-1.5 mb-2">
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Аккаунт провайдера: {accountStateLabel(accountStates[conn.id])}
+                                    </span>
+                                    {accountStates[conn.id]?.lifecycle !== 'active' && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-6 px-2 text-[11px]"
+                                            disabled={admittingId === conn.id}
+                                            onClick={() => handleAdmitAccount(conn.id)}
+                                        >
+                                            {admittingId === conn.id ? 'Допуск…' : 'Допустить'}
+                                        </Button>
+                                    )}
                                 </div>
 
                                 <ChannelSyncBlock channel="telegram" connectionId={conn.id} />
