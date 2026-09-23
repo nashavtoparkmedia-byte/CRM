@@ -51,9 +51,11 @@ describe('inbound conversation peer identity query contract', () => {
         }
     })
 
-    test('the query carries no purpose and no reachability axis', () => {
-        // Reachability answers "can we send"; this query authorizes no send. A purpose axis
-        // is what made the previous candidate reject 141 of 181 production identities.
-        expect(Object.keys(valid)).toEqual(['contract', 'contactId', 'channel', 'peerExternalId', 'linkedIdentityId'])
+    test('a purpose axis cannot be smuggled in, and a future version is refused', () => {
+        // Reachability answers "can we send"; this query authorizes no send. A purpose axis is
+        // what made the previous candidate reject 141 of 181 production identities, so the
+        // parser must refuse the key outright rather than ignore it.
+        expect(() => parse({ ...valid, purpose: 'send_in_bound_conversation' })).toThrow()
+        expect(() => parse({ ...valid, contract: 'contacts.ResolveInboundConversationPeerIdentityQuery.v2' })).toThrow()
     })
 })

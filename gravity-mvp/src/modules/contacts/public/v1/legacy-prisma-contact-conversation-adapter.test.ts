@@ -86,6 +86,7 @@ function peerTransaction(options: {
     openPeerConflict?: boolean
     linkedMissing?: boolean
     archived?: boolean
+    contactMissing?: boolean
     providerAccountId?: string | null
 } = {}) {
     const peer = options.peerMissing ? null : {
@@ -108,20 +109,24 @@ function peerTransaction(options: {
         metadata: {},
     }
     const contact = {
-        findUnique: vi.fn().mockResolvedValue(options.archived ? null : {
+        findUnique: vi.fn().mockResolvedValue(options.contactMissing ? null : {
             id: 'contact-1',
             displayName: 'User A',
-            isArchived: false,
+            isArchived: options.archived === true,
             customFields: options.openPeerConflict ? {
                 identityConflicts: [{ identityId: 'identity-peer', status: 'open' }],
             } : {},
         }),
     }
+    // The fixture holds rows and applies the adapter's OWN where-clause to them, so every
+    // predicate the adapter states is what decides the result. A fixture that re-implemented
+    // ownership, active or channel itself would keep passing if the adapter dropped them.
+    const rows = [linked, peer].filter(Boolean) as Array<Record<string, unknown>>
+    const matches = (row: Record<string, unknown>, where: Record<string, unknown>) =>
+        Object.entries(where).every(([key, value]) => row[key] === value)
     const contactIdentity = {
-        // the adapter asks for the linked identity first, then the peer
-        findFirst: vi.fn()
-            .mockImplementationOnce(async () => linked)
-            .mockImplementationOnce(async () => (peer && peer.contactId === 'contact-1' && peer.isActive && peer.channel === 'max' ? peer : null)),
+        findFirst: vi.fn(async (args: { where: Record<string, unknown> }) =>
+            rows.find(row => matches(row, args.where)) ?? null),
         findMany: vi.fn(),
         create: vi.fn(),
     }
@@ -182,7 +187,8 @@ describe('Contacts inbound conversation peer identity query', () => {
         ['the peer identity is flagged conflicted', { peerConflictState: 'conflicted' }, 'peer_identity_conflicted'],
         ['the Contact holds an open conflict on the peer', { openPeerConflict: true }, 'peer_identity_conflicted'],
         ["the Chat's linked identity is missing, inactive or foreign", { linkedMissing: true }, 'linked_identity_not_found'],
-        ['the Contact is archived or missing', { archived: true }, 'contact_not_found'],
+        ['the Contact is archived', { archived: true }, 'contact_not_found'],
+        ['the Contact does not exist', { contactMissing: true }, 'contact_not_found'],
     ])('refuses when %s', async (_label, options, status) => {
         const tx = peerTransaction(options)
         mocks.runTransaction.mockImplementation(async work => work(tx))
