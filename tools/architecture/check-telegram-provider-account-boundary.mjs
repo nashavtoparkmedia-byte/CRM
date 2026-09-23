@@ -236,6 +236,12 @@ export function assertRuntimeHandOff(source) {
   const admits = ceremony.indexOf('await admitTelegramProviderAccountV1(')
   assert(live >= 0 && admits > live, 'the ceremony must observe a live principal before it admits')
 
+  const login = declarationBody(code, 'export async function checkTelegramAuthStatus')
+  assert.match(login, /let admission[\s\S]{0,240}try \{[\s\S]{0,320}await runTelegramProviderAccountAdmissionV1/u,
+    'a persisted login must not be able to fail because of the admission ceremony')
+  assert.doesNotMatch(login, /transportRef: String\(connectionRow\?\.id \?\? telegramId\)|transportRef: telegramId/u,
+    'the login locator must come from the persisted record with no fallback to the principal')
+
   const action = declarationBody(code, 'export async function admitTelegramProviderAccount')
   assert.match(action, /await requireIntegrationAdminAccess\(\)/u, 'admission must require an authenticated operator')
   assert.match(action, /await getTelegramClient\(connection\)/u, 'admission must re-attest from a live client')
@@ -362,6 +368,10 @@ const rejected = {
     const principal = await requireIntegrationAdminAccess()`,
     `export async function admitTelegramProviderAccount(connectionId: string): Promise<TelegramAdmissionResultV1> {
     const principal = { id: 'anonymous' }`)),
+  login_fails_on_admission: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'let admission: TelegramAdmissionResultV1 = ', 'const admission: TelegramAdmissionResultV1 = ')),
+  login_locator_falls_back_to_the_principal: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'transportRef: persistedTransportRef,', 'transportRef: telegramId,')),
   stored_projection_admits: () => assertRuntimeHandOff(read(RUNTIME).replace(
     "return await describeTelegramProviderAccountV1('mtproto_session', transportRef)",
     "return await admitTelegramProviderAccountV1({}, 'anonymous')")),
@@ -395,6 +405,8 @@ const messages = {
   locator_from_the_principal: /never be derived from the provider principal/u,
   ceremony_skips_the_live_principal: /must observe a live principal before it admits/u,
   admission_without_an_operator: /admission must require an authenticated operator/u,
+  login_fails_on_admission: /must not be able to fail because of the admission ceremony/u,
+  login_locator_falls_back_to_the_principal: /locator must come from the persisted record/u,
   stored_projection_admits: /stored projection may never admit an account/u,
   public_surface_grows: /public surface changed/u,
   foundation_binds_the_session_row: /must not relate to a transport row, a contact or a conversation/u,

@@ -306,13 +306,24 @@ export async function checkTelegramAuthStatus(loginId: string) {
             console.log(`[TG-AUTH] Session saved to database successfully`)
             // M2A2-TG2A: the authenticated ceremony is the admission action for
             // the principal that just authenticated. The transport record is
-            // committed above, so the locator below comes from that record.
-            const admission = await runTelegramProviderAccountAdmissionV1({
-                client: data.client,
-                transportRef: String(connectionRow?.id ?? telegramId),
-                observedProviderUserId: telegramId,
-                principalId: principal.id,
-            })
+            // committed above, and the locator is that record's own id: there is
+            // no fallback to the principal even though the two agree today.
+            // Admission can never change the outcome of a persisted login, so it
+            // is guarded here as well as inside the ceremony.
+            const persistedTransportRef = concreteOpaqueId(connectionRow?.id)
+            let admission: TelegramAdmissionResultV1 = { status: 'unavailable', reason: 'transport_unavailable' }
+            try {
+                if (persistedTransportRef) {
+                    admission = await runTelegramProviderAccountAdmissionV1({
+                        client: data.client,
+                        transportRef: persistedTransportRef,
+                        observedProviderUserId: telegramId,
+                        principalId: principal.id,
+                    })
+                }
+            } catch {
+                // The session is persisted and Telegram works; the account is reported separately.
+            }
             await disposeActiveLogin(loginId)
             revalidatePath('/telegram')
             return { status: 'success', accountAdmission: admission.status, accountAdmissionReason: admission.reason }

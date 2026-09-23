@@ -296,6 +296,15 @@ describe('login admission ceremony', () => {
         expect(result).toMatchObject({ status: 'success', accountAdmission: 'pending_approval' })
     })
 
+    test('skips admission when the persisted record carries no id, never falling back to the principal', async () => {
+        mocks.telegramConnectionUpsert.mockResolvedValue({})
+        const actions = await freshActions()
+        const result = await completeLogin(actions)
+
+        expect(result).toMatchObject({ status: 'success', accountAdmission: 'unavailable', accountAdmissionReason: 'transport_unavailable' })
+        expect(mocks.admitAccount).not.toHaveBeenCalled()
+    })
+
     test('a thrown ceremony never breaks the login', async () => {
         mocks.admitAccount.mockRejectedValue(new Error('foundation down'))
         const actions = await freshActions()
