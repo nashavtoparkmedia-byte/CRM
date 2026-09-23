@@ -19,10 +19,10 @@ import {
 } from './compensation-budget-period'
 import type { CompensationBudgetPeriodPortV1 } from './compensation-budget-period-service'
 
-const PERIOD_SELECT = `
-    SELECT "id","periodKey","state","limitKopecks","reservedKopecks","settledKopecks"
-    FROM "CompensationBudgetPeriod"
-`
+// Both statements below are written out in full rather than composed from a
+// shared fragment. A statement the analyzer can read end to end is provably a
+// read of one named table; one assembled from a constant is not, and would have
+// to be accepted on review instead of on evidence.
 
 interface PeriodRow {
     id: string
@@ -48,7 +48,9 @@ function toRow(row: PeriodRow | undefined): CompensationBudgetPeriodRowV1 | null
 export const legacyPrismaCompensationBudgetPeriodStoreV1: CompensationBudgetPeriodPortV1 = {
     async findPeriod(periodKey) {
         const rows = await prisma.$queryRawUnsafe<PeriodRow[]>(
-            `${PERIOD_SELECT} WHERE "periodKey" = $1`,
+            `SELECT "id","periodKey","state","limitKopecks","reservedKopecks","settledKopecks"
+             FROM "CompensationBudgetPeriod"
+             WHERE "periodKey" = $1`,
             periodKey,
         )
         return toRow(rows[0])
@@ -58,7 +60,9 @@ export const legacyPrismaCompensationBudgetPeriodStoreV1: CompensationBudgetPeri
         return prisma.$transaction(async (tx) => {
             const locked = async (): Promise<CompensationBudgetPeriodRowV1 | null> => toRow(
                 (await tx.$queryRawUnsafe<PeriodRow[]>(
-                    `${PERIOD_SELECT} WHERE "periodKey" = $1 FOR UPDATE`,
+                    `SELECT "id","periodKey","state","limitKopecks","reservedKopecks","settledKopecks"
+                     FROM "CompensationBudgetPeriod"
+                     WHERE "periodKey" = $1 FOR UPDATE`,
                     window.periodKey,
                 ))[0],
             )
