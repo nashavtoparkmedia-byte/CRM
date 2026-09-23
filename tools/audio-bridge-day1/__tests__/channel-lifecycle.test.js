@@ -465,8 +465,14 @@ test('terminate on a live channel sends exactly one hangup and never touches the
     assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`], 'one kill, default cause')
     assert.equal(session.stopCount, 0, 'the primitive is one-way: it does not stop the session')
     assert.deepEqual(h.terminationKinds(), ['requested', 'issued'])
-    assert.equal(h.calls.termination[0].reason, 'completed')
-    assert.equal(h.calls.termination[0].graceMs, 0)
+    // The whole payload, not a field at a time: these events are the operator
+    // surface and must stay bounded to identifiers and a truncated reply.
+    assert.deepEqual(h.calls.termination[0], {
+        kind: 'requested', callUuid: X, reason: 'completed', cause: DEFAULT_HANGUP_CAUSE, graceMs: 0,
+    })
+    assert.deepEqual(h.calls.termination[1], {
+        kind: 'issued', callUuid: X, reason: 'completed', cause: DEFAULT_HANGUP_CAUSE, graceMs: 0, reply: '+OK Success',
+    })
     assert.ok(h.lifecycle.isTerminating(X), 'the channel is marked while its hangup is in flight')
     assert.deepEqual(h.lifecycle.snapshot().terminating, [X])
 })
@@ -543,8 +549,25 @@ test('an implausible grace is clamped instead of deferring the hangup indefinite
     assert.equal(h.calls.termination[0].graceMs, MAX_TERMINATION_GRACE_MS, 'the event reports the clamped wait')
 })
 
-test('a rejected hangup is reported once and not retried', async () => {
+test('a channel FreeSWITCH says is already gone is a suppression, not a failure', async () => {
+    // The ordinary ending: the lead hangs up, the fork WebSocket closes and stops
+    // the session over one socket while CHANNEL_HANGUP_COMPLETE is still in flight
+    // over another, so the kill arrives after the channel is gone. Reporting that
+    // as an error would make the failure signal meaningless.
     const h = harness({ eslReply: async cmd => (cmd.startsWith('uuid_kill ') ? '-ERR No such channel!' : '+OK Success') })
+    await answered(h)
+
+    h.lifecycle.terminate(X, { reason: 'closed' })
+    await tick()
+
+    assert.equal(h.kills().length, 1)
+    assert.deepEqual(h.terminationKinds(), ['requested', 'suppressed'])
+    assert.equal(h.calls.termination[1].detail, 'channel already gone')
+    assert.deepEqual(h.logs.error, [], 'a normal ending logs no error')
+})
+
+test('a rejected hangup is reported once and not retried', async () => {
+    const h = harness({ eslReply: async cmd => (cmd.startsWith('uuid_kill ') ? '-ERR Operation not permitted' : '+OK Success') })
     await answered(h)
 
     h.lifecycle.terminate(X, { reason: 'completed' })
@@ -552,8 +575,13 @@ test('a rejected hangup is reported once and not retried', async () => {
 
     assert.equal(h.kills().length, 1, 'no retry storm: one attempt only')
     assert.deepEqual(h.terminationKinds(), ['requested', 'failed'])
-    assert.equal(h.calls.termination[1].detail, '-ERR No such channel!')
+    assert.equal(h.calls.termination[1].detail, '-ERR Operation not permitted')
     assert.equal(h.logs.error.filter(m => m.includes('termination REJECTED')).length, 1)
+    // Not even a deferred retry: firing every timer the failure could have armed
+    // must not produce a second command.
+    for (const t of h.timers.filter(t => !t.cleared && !t.fired)) t.fn()
+    await tick()
+    assert.equal(h.kills().length, 1, 'no timer-based retry either')
     // The channel may still be up. A later independent safety trigger has to be
     // able to act on it — one transient ESL failure must not produce a call that
     // nothing can ever end. Still one attempt per trigger, so still no loop.

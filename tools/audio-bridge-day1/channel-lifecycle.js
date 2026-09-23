@@ -47,9 +47,10 @@
  * actions; a channel still ringing keeps waiting, however long the far end rings.
  *
  * Termination: this module also owns ending a channel (see terminate below). It is
- * the only place that sends a hangup, it does so at most once per channel, and it
- * never calls into a CallSession — a session asks for termination, the primitive
- * does not answer back.
+ * the only place in the bridge that sends a hangup (the CRM keeps its own, for
+ * cancelling an originate), it does so at most once per channel, and it never
+ * calls into a CallSession — a session asks for termination, the primitive does
+ * not answer back.
  *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
@@ -74,6 +75,11 @@ const DEFAULT_HANGUP_CAUSE = 'NORMAL_CLEARING'
 // A cause is interpolated into an ESL command line; only the documented
 // FreeSWITCH cause-token shape may reach it.
 const HANGUP_CAUSE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/
+// mod_commands' answer when the channel is already gone. It is the ordinary race,
+// not a failure: the WS close that follows a lead hangup reaches this module over
+// a different socket than the ESL event that marks the channel dead, so a normal
+// ending would otherwise report an error every time.
+const CHANNEL_ALREADY_GONE = /no such channel/i
 // Upper bound for a deferred termination. The grace exists to let a final
 // phrase finish playing; a wrong playback estimate must not defer a hangup for
 // minutes. This bounds the wait only — it is not a call-duration policy.
@@ -312,6 +318,12 @@ function createChannelLifecycle({
                     if (!deadChannels.has(uuid)) expireTerminationMark(uuid)
                     return
                 }
+                if (CHANNEL_ALREADY_GONE.test(text)) {
+                    log(`[esl] termination for ${uuid} (${requested.reason}) found the channel already gone`)
+                    emitTermination('suppressed', uuid, { ...requested, detail: 'channel already gone' })
+                    if (!deadChannels.has(uuid)) expireTerminationMark(uuid)
+                    return
+                }
                 logError(`[esl] termination REJECTED for ${uuid} (${requested.reason}): ${text.slice(0, 120)}`)
                 terminatingChannels.delete(uuid)
                 emitTermination('failed', uuid, { ...requested, detail: text.slice(0, 120) })
@@ -319,7 +331,7 @@ function createChannelLifecycle({
             .catch(err => {
                 logError(`[esl] termination FAILED for ${uuid} (${requested.reason}): ${err.message}`)
                 terminatingChannels.delete(uuid)
-                emitTermination('failed', uuid, { ...requested, detail: err.message })
+                emitTermination('failed', uuid, { ...requested, detail: String(err.message).slice(0, 120) })
             })
     }
 

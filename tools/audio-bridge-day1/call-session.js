@@ -841,7 +841,14 @@ class CallSession {
      * way. Called at most once per session, because _end runs at most once.
      */
     _requestPhysicalTermination(reason) {
-        if (!PHYSICAL_TERMINATION_REASONS.has(reason)) return
+        if (!PHYSICAL_TERMINATION_REASONS.has(reason)) {
+            // Says so out loud. A terminal reason added later without a decision
+            // about the channel would otherwise reproduce the exact bug this
+            // stage fixes — a finalized record beside a call still on the line —
+            // and leave no trace of why.
+            console.log(`[call ${this.callUuid}] no physical termination for terminal reason "${reason}" (by design)`)
+            return
+        }
         const remainingPlaybackMs = Math.max(0, this.playbackEndsAt - Date.now())
         // Only a phrase still on the wire earns a grace. `closed` means the
         // stream to this session is already gone, so there is nothing to play

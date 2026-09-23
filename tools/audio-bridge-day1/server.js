@@ -49,6 +49,13 @@ const runtime = require('./runtime-config')
 const { opsLog } = require('./opsLog')
 const { CallSession } = require('./call-session')
 const { createChannelLifecycle, createSessionResolver, parseEslEventHeaders } = require('./channel-lifecycle')
+// Set by shutdown() before it stops the live sessions. C1a deliberately leaves
+// the shutdown policy exactly as it was: a restart finalizes each session as
+// `closed` and leaves its channel up. Whether redeploying the bridge should drop
+// calls in progress is a separate, Owner-visible decision, and a hangup issued
+// from the shutdown path would in any case race the process exit below.
+let shuttingDown = false
+
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
 // reference one of these by the `call-id` query string (set in fork_meta).
 const sessions = new Map()
@@ -468,7 +475,9 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
         // session. Until this existed, a call the bot itself ended stayed parked
         // until the lead hung up — and the session was already out of the map,
         // so nothing owned that channel any more.
-        requestTermination: ({ reason, graceMs }) => lifecycle.terminate(callUuid, { reason, graceMs }),
+        requestTermination: ({ reason, graceMs }) => (shuttingDown
+            ? 'skipped_shutdown'
+            : lifecycle.terminate(callUuid, { reason, graceMs })),
     })
     sessions.set(callUuid, session)
     if (isChannelDead()) {
@@ -703,7 +712,10 @@ startEslEventListener()
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
 
 function shutdown(signal) {
-    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size})`)
+    // Before any session is stopped: their terminal transitions must not turn a
+    // redeploy into a wave of hangups (see `shuttingDown` above).
+    shuttingDown = true
+    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size}); live channels are left up`)
     for (const session of sessions.values()) {
         try { session.stop() } catch {}
     }
