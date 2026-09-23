@@ -8,11 +8,11 @@ import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messag
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
   markChannelIdentityConflictV1,
-  prepareContactConversationIdentityV1,
+  resolveInboundConversationPeerIdentityV1,
   startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
 } from '@/modules/contacts/public/v1'
-import { PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { RESOLVE_INBOUND_CONVERSATION_PEER_IDENTITY_QUERY_V1 } from '@/contracts/contacts/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
@@ -282,35 +282,36 @@ async function proveMaxDomFallbackPeer(
       : route.uiRouteId === senderId
   if (!routeNamesThisChat) return unproven('page_route')
   // No other private conversation on this account may claim the same peer.
+  // Deliberately unfiltered by provider account: a legacy chat carrying this peer without a
+  // provider stamp would otherwise be invisible and could claim the same peer unseen.
   const claimants = await prisma.chat.findMany({
     where: {
       channel: 'max',
-      AND: [
-        { metadata: { path: ['senderId'], equals: senderId } },
-        { metadata: { path: ['providerAccountId'], equals: providerAccountId } },
-      ],
+      metadata: { path: ['senderId'], equals: senderId },
     },
     select: { id: true, metadata: true },
     take: 25,
   })
   const privateClaimants = claimants.filter(candidate => metadataRecord(candidate.metadata).chatKind !== 'group')
   if (privateClaimants.length !== 1 || privateClaimants[0].id !== chat.id) return unproven('competing_conversation')
-  // Contacts owns identity integrity: an active MAX identity of this contact, a contact that
-  // is not archived, and no open or evidenced identity conflict.
-  const prepared = await prepareContactConversationIdentityV1({
-    contract: PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
-    purpose: 'send_in_bound_conversation',
+  // Contacts owns identity integrity. The conversation's linked identity is not necessarily
+  // the peer's identity: production binds Chat.contactIdentityId to an identity whose
+  // externalId is the conversation key, while the peer speaks from a sibling identity of the
+  // same Contact. Contacts resolves the peer by its exact external id within this Contact,
+  // confirms the conversation's own link is still an active identity of this Contact on this
+  // channel, and never consults reachability, because nothing here authorizes a send.
+  const resolved = await resolveInboundConversationPeerIdentityV1({
+    contract: RESOLVE_INBOUND_CONVERSATION_PEER_IDENTITY_QUERY_V1,
     contactId: chat.contactId,
     channel: 'max',
-    identityId: chat.contactIdentityId,
-    phoneId: null,
+    peerExternalId: senderId,
+    linkedIdentityId: chat.contactIdentityId,
   })
-  if (prepared.status !== 'ready') return unproven(`identity_${prepared.status}`)
-  if (prepared.contact.id !== chat.contactId) return unproven('identity_contact')
-  if (prepared.identity.id !== chat.contactIdentityId) return unproven('identity_id')
-  if (prepared.identity.channel !== 'max') return unproven('identity_channel')
-  if (prepared.identity.externalId !== senderId) return unproven('identity_peer')
-  if (prepared.identity.providerAccountId && prepared.identity.providerAccountId !== providerAccountId) {
+  if (resolved.status !== 'ready') return unproven(resolved.status)
+  if (resolved.contact.id !== chat.contactId) return unproven('identity_contact')
+  if (resolved.peerIdentity.channel !== 'max') return unproven('identity_channel')
+  if (resolved.peerIdentity.externalId !== senderId) return unproven('identity_peer')
+  if (resolved.peerIdentity.providerAccountId && resolved.peerIdentity.providerAccountId !== providerAccountId) {
     return unproven('identity_provider_account')
   }
   return { status: 'bound', senderId, contactId: chat.contactId }
@@ -615,6 +616,55 @@ export async function POST(request: Request) {
         }, { status: 409 })
       }
       return null
+    }
+
+    // A DOM-fallback replay must dedupe before the collision guard can answer it.
+    // Without this branch a second delivery of an already stored message would reach the
+    // guard below with no proven peer whenever Contacts state moved in between, and be
+    // answered 409 with a fresh identity conflict even though the message is safely stored.
+    // The peer proof above still runs first - it is side-effect free apart from one trace
+    // line - and this branch is what keeps a replay from ever reaching the guard. The existing text-duplicate branch stays exactly
+    // where it is: hoisting that one would lift provider-framed replays above the collision
+    // guard too, and a provider-framed replay carrying a wrong senderId must keep failing.
+    if (chat && domFallbackRoute && externalIdString) {
+      const storedDomMessage = await prisma.message.findUnique({
+        where: { externalId: externalIdString },
+        include: { chat: true },
+      })
+      if (storedDomMessage) {
+        const storedSenderId = (() => {
+          const value = metadataRecord(storedDomMessage.metadata).senderId
+          return typeof value === 'string' && value.trim() !== '' ? value : null
+        })()
+        // The sender leg is not required here: this returns the id of a message that is
+        // already stored, so failing closed buys nothing and would cost a 409 plus a conflict
+        // write - including for a stored message that carries no senderId, and for group or
+        // unowned chats whose default for this leg is false. The stored sender is evidence
+        // only. Every other leg still runs.
+        const collision = await rejectExistingChatCollision(storedDomMessage.chat, {
+          requireExactExternalChatId: true,
+          expectedChatId: chat.id,
+          incomingPeerSenderId: storedSenderId,
+          requirePeerSenderProof: false,
+        })
+        if (collision) return collision
+        maxRuntimeTrace('webhook.dom_fallback_duplicate', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          chatInternalId: storedDomMessage.chatId,
+          messageId: storedDomMessage.id,
+        })
+        await maxContactResolutionShadow.session?.complete({
+          status: 'no_contact',
+          reason: 'existing_provider_message',
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: storedDomMessage.chatId,
+          messageId: storedDomMessage.id,
+          deduped: true,
+        })
+      }
     }
 
     if (chat) {
