@@ -1,14 +1,14 @@
-# Runtime 2.0.0-18 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-19 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
 
-- application commit `c7e29a24e960ddd75e6701d71e06405777e58d1e`;
-- coordinated profile `crm-c7e29a24e960-gravity-max-source-v1`;
-- Stage A builder `f32ee22a1e8967e92f1828075d7650eb8d0f8dea`;
-- hosted artifact run `35395889864`, artifact `10567922654`;
-- Gravity image `sha256:49c8434bdb0c87f881560946bdefaa040ceb5602dafd4bc6d4a6f8ac09c6d898`;
-- MAX scraper image `sha256:d6c9f0f9c7b800c08fb6366a0b223f607d6aae2502efb86b865e4118abf5e668`.
+- application commit `fb9fb30d9eb221a04342fe0ef7324f78d8ff7576`;
+- coordinated profile `crm-fb9fb30d9eb2-gravity-max-source-v1`;
+- Stage A builder `19b631bc1d7026c4b8fe43f0713a57ef216d2ed9`;
+- hosted artifact run `35840959933`, artifact `10741409277`;
+- Gravity image `sha256:6253bf1e709061fd126f4c8a7cda08f2252f7b1a9acbd3174efbde5239b6455d`;
+- MAX scraper image `sha256:b2d8d70802cfd9fa0f7995dfd100acfdb8543921352383b63f40a1ea0cd977da`.
 
 It does not rebuild application images and does not authorize an arbitrary
 revision, image, service, path, Docker command, shell, database migration, or
@@ -17,7 +17,7 @@ zero-argument `database-status`, `release-preflight`, `release-activate`, and
 `rollback` operations plus the existing read-only `predecessor-observe`.
 
 The trusted Runtime core, predecessor observer, base policy, and sudoers file
-are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-17,
+are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-18,
 the installed predecessor, is the exact direct control-plane rollback and is not
 modified by this builder.
 
@@ -51,9 +51,10 @@ read from runtime input and there is no list to extend.
   attaches one fixed source per service:
   `/var/lib/crm/release-staging/messaging-be6b8eb8/{gravity-mvp,max-web-scraper}.env`.
   The directory keeps the name it was staged under for the be6b8eb8 Messaging
-  release. The c7e29a24 hotfix is that release plus the outbound fix and needs
-  the same single secret, so re-staging the material under a new name would be
-  a production write with no benefit. It is a secret source path, not an
+  release. The DOM-fallback repair fb9fb30d is that release plus the outbound
+  chatType fix plus this inbound repair, and needs the same single secret, so
+  re-staging the material under a new name would be a production write with no
+  benefit. It is a secret source path, not an
   artifact or image binding.
 - The source directory must be root-owned `0700` with every ancestor
   root-owned and not group- or other-writable. Each source must be a
@@ -88,9 +89,9 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
-The installer also requires the already-installed 2.0.0-17 DEB at its exact
+The installer also requires the already-installed 2.0.0-18 DEB at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`490a242bd89c5dc5c8377c9d47cf6602fef73bdfa879388080170507eaff8a34`.
+`f8b1671c36b902251e1c9e1cf7075d468006e91692ab8bdda7b5f65ff492c5ef`.
 Any successor installation failure restores that exact package automatically.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
@@ -98,4 +99,4 @@ start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and
 the authenticated Stage A handoff. Independent configured reviewers must bind
 the final commit/tree, package, seal, bootstrap, Stage A artifact, and the
-2.0.0-17 rollback before installation.
+2.0.0-18 rollback before installation.
