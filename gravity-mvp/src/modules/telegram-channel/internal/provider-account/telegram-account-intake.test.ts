@@ -34,7 +34,7 @@ const observed: ObservedAttestationV1 = {
 }
 
 const attestation = {
-    action: 'opened_first_generation' as const,
+    action: 'open_first_generation' as const,
     outcome: 'opened_first_generation' as const,
     accountLifecycle: 'pending_approval',
     trustStateAfter: 'verified',
@@ -51,12 +51,18 @@ const projection = {
     capabilities: [] as readonly string[],
 }
 
+// Every mock is declared with the dependency's own signature, so a drifting
+// contract fails type checking here rather than silently in a cast.
+const recordFn = (implementation: AccountIntakeDependenciesV1['record']) => vi.fn(implementation)
+const projectFn = (implementation: AccountIntakeDependenciesV1['project']) => vi.fn(implementation)
+const admitFn = (implementation: AccountIntakeDependenciesV1['admit']) => vi.fn(implementation)
+
 function deps(overrides: Partial<AccountIntakeDependenciesV1> = {}) {
     const emitted: Array<{ level: string; event: string; context: Record<string, unknown> }> = []
     const base: AccountIntakeDependenciesV1 = {
-        record: vi.fn(async () => attestation),
-        project: vi.fn(async () => projection),
-        admit: vi.fn(async () => ({ outcome: 'admitted', lifecycle: 'active' })),
+        record: recordFn(async () => attestation),
+        project: projectFn(async () => projection),
+        admit: admitFn(async () => ({ outcome: 'admitted', lifecycle: 'active' })),
         emit: (level, event, context) => { emitted.push({ level, event, context: context as Record<string, unknown> }) },
         now: () => 0,
         ...overrides,
@@ -74,20 +80,20 @@ describe('runtime observation is fire-and-forget', () => {
     })
 
     it('never reports a database failure to the caller', async () => {
-        const { base, emitted } = deps({ record: vi.fn(async () => { throw new Error('connection refused') }) })
+        const { base, emitted } = deps({ record: recordFn(async () => { throw new Error('connection refused') }) })
         await expect(createTelegramAccountIntakeV1(base).observe(observed)).resolves.toBeUndefined()
         expect(emitted.map(entry => entry.event)).toEqual([TELEGRAM_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1])
     })
 
     it('never reports a missing foundation table to the caller', async () => {
         const missing = Object.assign(new Error('The table `TelegramAccount` does not exist'), { code: 'P2021' })
-        const { base } = deps({ record: vi.fn(async () => { throw missing }) })
+        const { base } = deps({ record: recordFn(async () => { throw missing }) })
         await expect(createTelegramAccountIntakeV1(base).observe(observed)).resolves.toBeUndefined()
     })
 
     it('survives a telemetry sink that throws', async () => {
         const { base } = deps({
-            record: vi.fn(async () => { throw new Error('down') }),
+            record: recordFn(async () => { throw new Error('down') }),
             emit: () => { throw new Error('sink down') },
         })
         await expect(createTelegramAccountIntakeV1(base).observe(observed)).resolves.toBeUndefined()
@@ -111,9 +117,9 @@ describe('admission is synchronous and proves what it reports', () => {
     it('admits after attesting and reading the projection back, in that order', async () => {
         const order: string[] = []
         const { base } = deps({
-            record: vi.fn(async () => { order.push('record'); return attestation }),
-            project: vi.fn(async () => { order.push('project'); return projection }),
-            admit: vi.fn(async () => { order.push('admit'); return { outcome: 'admitted', lifecycle: 'active' } }),
+            record: recordFn(async () => { order.push('record'); return attestation }),
+            project: projectFn(async () => { order.push('project'); return projection }),
+            admit: admitFn(async () => { order.push('admit'); return { outcome: 'admitted', lifecycle: 'active' } }),
         })
         const result = await createTelegramAccountIntakeV1(base).admit(observed, 'identity-access:integration-admin-session')
         expect(result).toEqual({ status: 'admitted', reason: 'admitted' })
@@ -122,14 +128,14 @@ describe('admission is synchronous and proves what it reports', () => {
     })
 
     it('treats an already active account as admitted', async () => {
-        const { base } = deps({ admit: vi.fn(async () => ({ outcome: 'already_active', lifecycle: 'active' })) })
+        const { base } = deps({ admit: admitFn(async () => ({ outcome: 'already_active', lifecycle: 'active' })) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'admitted', reason: 'already_active',
         })
     })
 
     it('reports unavailable and admits nothing when the attestation cannot commit', async () => {
-        const { base } = deps({ record: vi.fn(async () => { throw new Error('connection refused') }) })
+        const { base } = deps({ record: recordFn(async () => { throw new Error('connection refused') }) })
         const result = await createTelegramAccountIntakeV1(base).admit(observed, 'admin')
         expect(result).toEqual({ status: 'unavailable', reason: 'attestation_unavailable' })
         expect(base.project).not.toHaveBeenCalled()
@@ -138,49 +144,49 @@ describe('admission is synchronous and proves what it reports', () => {
 
     it('distinguishes a writer refusal from an unavailable foundation', async () => {
         const refusal = Object.assign(new Error('refused'), { name: 'TelegramAccountRefusalV1' })
-        const { base } = deps({ record: vi.fn(async () => { throw refusal }) })
+        const { base } = deps({ record: recordFn(async () => { throw refusal }) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'unavailable', reason: 'attestation_refused',
         })
     })
 
     it('refuses to admit when the attestation did not leave the binding verified', async () => {
-        const { base } = deps({ record: vi.fn(async () => ({ ...attestation, trustStateAfter: 'mismatched' })) })
+        const { base } = deps({ record: recordFn(async () => ({ ...attestation, trustStateAfter: 'mismatched' })) })
         const result = await createTelegramAccountIntakeV1(base).admit(observed, 'admin')
         expect(result).toEqual({ status: 'unavailable', reason: 'attestation_refused' })
         expect(base.admit).not.toHaveBeenCalled()
     })
 
     it('reports unavailable when the projection cannot be read', async () => {
-        const { base } = deps({ project: vi.fn(async () => { throw new Error('down') }) })
+        const { base } = deps({ project: projectFn(async () => { throw new Error('down') }) })
         const result = await createTelegramAccountIntakeV1(base).admit(observed, 'admin')
         expect(result).toEqual({ status: 'unavailable', reason: 'projection_unavailable' })
         expect(base.admit).not.toHaveBeenCalled()
     })
 
     it('never fakes pending when no durable account exists', async () => {
-        const { base } = deps({ project: vi.fn(async () => ({ ...projection, providerAccountId: null, lifecycle: null })) })
+        const { base } = deps({ project: projectFn(async () => ({ ...projection, providerAccountId: null, lifecycle: null })) })
         const result = await createTelegramAccountIntakeV1(base).admit(observed, 'admin')
         expect(result).toEqual({ status: 'unavailable', reason: 'account_absent' })
         expect(base.admit).not.toHaveBeenCalled()
     })
 
     it('refuses an account of another kind', async () => {
-        const { base } = deps({ project: vi.fn(async () => ({ ...projection, accountKind: 'bot_api' as const })) })
+        const { base } = deps({ project: projectFn(async () => ({ ...projection, accountKind: 'bot_api' as const })) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'unavailable', reason: 'account_absent',
         })
     })
 
     it('reports pending when a durable pending account exists and admission fails', async () => {
-        const { base } = deps({ admit: vi.fn(async () => { throw new Error('admission down') }) })
+        const { base } = deps({ admit: admitFn(async () => { throw new Error('admission down') }) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'pending_approval', reason: 'admission_unavailable',
         })
     })
 
     it('reports pending when the account is proven pending but not admissible right now', async () => {
-        const { base } = deps({ admit: vi.fn(async () => ({ outcome: 'not_admissible', lifecycle: 'pending_approval' })) })
+        const { base } = deps({ admit: admitFn(async () => ({ outcome: 'not_admissible', lifecycle: 'pending_approval' })) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'pending_approval', reason: 'admission_unavailable',
         })
@@ -188,8 +194,8 @@ describe('admission is synchronous and proves what it reports', () => {
 
     it('does not report pending for a lifecycle that is not pending approval', async () => {
         const { base } = deps({
-            project: vi.fn(async () => ({ ...projection, lifecycle: 'retired' })),
-            admit: vi.fn(async () => ({ outcome: 'not_admissible', lifecycle: 'retired' })),
+            project: projectFn(async () => ({ ...projection, lifecycle: 'retired' })),
+            admit: admitFn(async () => ({ outcome: 'not_admissible', lifecycle: 'retired' })),
         })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'unavailable', reason: 'lifecycle_not_admissible',
@@ -197,7 +203,7 @@ describe('admission is synchronous and proves what it reports', () => {
     })
 
     it('reports unavailable when the account vanished between the read and the admission', async () => {
-        const { base } = deps({ admit: vi.fn(async () => ({ outcome: 'account_not_found', lifecycle: 'unknown' })) })
+        const { base } = deps({ admit: admitFn(async () => ({ outcome: 'account_not_found', lifecycle: 'unknown' })) })
         await expect(createTelegramAccountIntakeV1(base).admit(observed, 'admin')).resolves.toEqual({
             status: 'unavailable', reason: 'account_absent',
         })
@@ -254,7 +260,7 @@ describe('the display read can never admit', () => {
     })
 
     it('reports unavailable instead of throwing when the foundation is down', async () => {
-        const { base } = deps({ project: vi.fn(async () => { throw new Error('down') }) })
+        const { base } = deps({ project: projectFn(async () => { throw new Error('down') }) })
         await expect(createTelegramAccountIntakeV1(base).describe('mtproto_session', 'conn-row-1')).resolves.toEqual({
             available: false, providerAccountId: null, accountKind: null, lifecycle: null, readiness: null,
         })
