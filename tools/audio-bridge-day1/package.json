@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "gen-wav": "node gen-test-wav.js",
-    "test": "node --test __tests__/silence-timer.test.js"
+    "test": "node --test __tests__/silence-timer.test.js __tests__/channel-lifecycle.test.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.13.0",

@@ -49,6 +49,13 @@ const runtime = require('./runtime-config')
 const { opsLog } = require('./opsLog')
 const { CallSession } = require('./call-session')
 const { createChannelLifecycle, createSessionResolver, parseEslEventHeaders } = require('./channel-lifecycle')
+// Set by shutdown() before it stops the live sessions. C1a deliberately leaves
+// the shutdown policy exactly as it was: a restart finalizes each session as
+// `closed` and leaves its channel up. Whether redeploying the bridge should drop
+// calls in progress is a separate, Owner-visible decision, and a hangup issued
+// from the shutdown path would in any case race the process exit below.
+let shuttingDown = false
+
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
 // reference one of these by the `call-id` query string (set in fork_meta).
 const sessions = new Map()
@@ -139,6 +146,15 @@ const lifecycle = createChannelLifecycle({
     ensureSession: (callUuid, isChannelDead) => ensureSessionForCall(callUuid, isChannelDead),
     getSession: callUuid => sessions.get(callUuid),
     onForkFailure: (callUuid, reason) => opsLog('error', 'ai_call_audio_fork_failed', { callUuid, reason }),
+    // Four bounded termination events, names only — the payload carries the
+    // channel uuid, the reason, the hangup cause, the grace and at most a
+    // truncated FreeSWITCH reply. This is the operator surface for «did the call
+    // actually end», readable with `tail bridge.log | jq` without the DB.
+    onTerminationEvent: (kind, detail) => opsLog(
+        kind === 'failed' ? 'error' : 'info',
+        `ai_call_termination_${kind}`,
+        detail,
+    ),
     // Interval for re-checking a channel parked before answer; the default (90 s) is the
     // production value, the variable exists so the isolated runtime probe can exercise it.
     preAnswerTimeoutMs: Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) > 0 ? Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) : undefined,
@@ -453,6 +469,15 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
             activeReported = true
             crm.postState(resolved.callId, 'active')
         },
+        // The dialog ending does not end the call. The channel lifecycle owns
+        // that: it suppresses the request when FreeSWITCH already reported the
+        // channel dead, kills at most once, and never calls back into the
+        // session. Until this existed, a call the bot itself ended stayed parked
+        // until the lead hung up — and the session was already out of the map,
+        // so nothing owned that channel any more.
+        requestTermination: ({ reason, graceMs }) => (shuttingDown
+            ? 'skipped_shutdown'
+            : lifecycle.terminate(callUuid, { reason, graceMs })),
     })
     sessions.set(callUuid, session)
     if (isChannelDead()) {
@@ -687,7 +712,10 @@ startEslEventListener()
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
 
 function shutdown(signal) {
-    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size})`)
+    // Before any session is stopped: their terminal transitions must not turn a
+    // redeploy into a wave of hangups (see `shuttingDown` above).
+    shuttingDown = true
+    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size}); live channels are left up`)
     for (const session of sessions.values()) {
         try { session.stop() } catch {}
     }
