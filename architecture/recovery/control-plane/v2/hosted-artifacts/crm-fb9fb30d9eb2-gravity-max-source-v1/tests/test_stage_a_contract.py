@@ -218,6 +218,55 @@ class StageAContractTests(unittest.TestCase):
         for pinned in (".github/workflows/architecture-enforcement.yml", "tools/architecture/run-authoritative-ci.mjs"):
             self.assertNotIn(pinned, names)
 
+    def test_public_annotations_derive_the_release_lineage_from_the_verified_manifest(self) -> None:
+        # Actions annotations are the only release evidence readable without a
+        # token. A hardcoded lineage row can drift from the verified tuple
+        # silently, so the published rows must be derived from the manifest the
+        # contract itself validated, and never restate a predecessor's tuple.
+        workflow = (ROOT / WORKFLOW).read_text()
+        step = workflow.split("Publish exact release identities as public annotations", 1)[1]
+        self.assertIn("authority = manifest['source_authority']", step)
+        for derived in (
+            "pull_request={authority['pull_request']['number']}",
+            "base_ref={authority['pull_request']['base']['ref']}",
+            "base_sha={authority['pull_request']['base']['sha']}",
+            "blast_base={authority['execution_proof']['blast_base_commit']}",
+        ):
+            self.assertIn(derived, step)
+        # No literal pull request number, base ref or base sha may be published.
+        for literal in ("pull_request=107", "pull_request=113", "base_ref=release/", "base_sha=be6b8eb8", "base_sha=c7e29a24"):
+            self.assertNotIn(literal, step)
+        self.assertNotIn("release/messaging-hotfix-base-be6b8eb8-20260918", workflow)
+
+    def test_public_annotations_state_the_repair_base_is_not_accepted(self) -> None:
+        workflow = (ROOT / WORKFLOW).read_text()
+        step = workflow.split("Publish exact release identities as public annotations", 1)[1]
+        self.assertIn("base_is_repair_base_not_accepted=", step)
+        self.assertIn("public release lineage misrepresentation", step)
+
+    def test_hosted_artifact_name_matches_the_transport_authority(self) -> None:
+        # The transport job looks the artifact up by the name the transport
+        # module derives; a workflow that uploads under any other name breaks
+        # the registry check instead of the build.
+        import importlib.util
+        import sys as _sys
+        if str(AUTHORITY) not in _sys.path:
+            _sys.path.insert(0, str(AUTHORITY))
+        spec = importlib.util.spec_from_file_location("hosted_artifact_transport", AUTHORITY / "hosted_artifact_transport.py")
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        expected = module.release_artifact_name("${{ github.sha }}")
+        workflow = (ROOT / WORKFLOW).read_text()
+        self.assertIn(f"name: {expected}", workflow)
+        # Every artifact-name variant in the workflow must be the one the
+        # transport module derives; a stale 12-hex prefix would upload under a
+        # name the transport registry never looks for.
+        variants = set(re.findall(r"coordinated-gravity-max-[0-9a-f]{12}-", workflow))
+        self.assertEqual(variants, {module.release_artifact_name("")})
+        shard_variants = set(re.findall(r"coordinated-transport-[0-9a-f]{12}-", workflow))
+        self.assertEqual(shard_variants, {module.transport_artifact_prefix("")})
+
     def test_workflow_is_content_specific_and_has_minimal_permissions(self) -> None:
         workflow = (ROOT / WORKFLOW).read_text()
         self.assertIn("codex/coordinated-gravity-max-fb9fb30d", workflow)

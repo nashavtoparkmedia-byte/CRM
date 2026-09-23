@@ -1,10 +1,12 @@
 """Fail-closed contract for the fixed Stage A Gravity + MAX hosted artifact.
 
-This authority is bounded to one exact Messaging hotfix tuple. Its source
-authority is a single pull_request run of the architecture-enforcement
-workflow (PR #107, run 35825049410) whose base is the exact accepted release
-baseline be6b8eb8, and it additionally requires that baseline's own
-successful main-push source authority (run 34984925377). It accepts no other
+This authority is bounded to one exact Messaging DOM-fallback repair tuple.
+Its source authority is a single pull_request run of the
+architecture-enforcement workflow (PR #113, run 35825049410) whose base is the
+repair base c7e29a24 - the rejected candidate whose production acceptance
+failed on 2026-09-22, never an accepted release - and it additionally requires
+the accepted baseline be6b8eb8 and that baseline's own successful main-push
+source authority (run 34984925377). It accepts no other
 pull request, run, base, head, repository or event, and it does not change
 any predecessor authority, all of which still require a push source run.
 """

@@ -189,7 +189,7 @@ jobs:
         id: coordinated_upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: coordinated-gravity-max-fb9fb30de960-${{ github.sha }}
+          name: coordinated-gravity-max-fb9fb30d9eb2-${{ github.sha }}
           path: |
             release-output/gravity-image.docker.tar
             release-output/gravity-image-attestation.json
@@ -221,7 +221,7 @@ jobs:
           import json, pathlib, sys
           artifact_id, digest, builder = sys.argv[1:]
           value = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
-          expected_name = f'coordinated-gravity-max-fb9fb30de960-{builder}'
+          expected_name = f'coordinated-gravity-max-fb9fb30d9eb2-{builder}'
           if (
               value.get('id') != int(artifact_id)
               or value.get('name') != expected_name
@@ -255,11 +255,27 @@ jobs:
           def rev(value):
               return subprocess.run(['git', '-C', str(source), 'rev-parse', value], check=True, capture_output=True, text=True).stdout.strip()
           components = manifest['components']
+          authority = manifest['source_authority']
+          baseline = authority['baseline']
           rows = [
               ('source', f"commit={rev('HEAD^{commit}')} tree={rev('HEAD^{tree}')} gravity_subtree={rev('HEAD:gravity-mvp')} max_subtree={rev('HEAD:max-web-scraper')} clean=true"),
               ('builder', f'commit={builder} tree={builder_tree}'),
-              ('source-authority', 'event=pull_request run_id=35825049410 pull_request=107 base_ref=release/messaging-hotfix-base-be6b8eb8-20260918 base_sha=be6b8eb82d8c074e82a3be0cd53db26137e984be proof_artifact_id=10739658988 proof_artifact_digest=sha256:a59e283061d567afb20e0866cdbcf74a6af248f7b1ea6f509d9165720069079f'),
-              ('baseline-authority', 'event=push branch=main commit=be6b8eb82d8c074e82a3be0cd53db26137e984be run_id=34984925377 proof_artifact_id=10411840982 proof_artifact_digest=sha256:94c87f50f7d575e5ff8b3e6bc898e68d8f87f2999b4d1c70aaf24669c02e78cc'),
+              ('source-authority', (
+                  f"event={authority['run']['event']} run_id={authority['run']['id']} "
+                  f"pull_request={authority['pull_request']['number']} "
+                  f"base_ref={authority['pull_request']['base']['ref']} "
+                  f"base_sha={authority['pull_request']['base']['sha']} "
+                  f"base_is_repair_base_not_accepted={str(not authority['repair_base']['production_accepted']).lower()} "
+                  f"blast_base={authority['execution_proof']['blast_base_commit']} "
+                  f"proof_artifact_id={authority['proof_artifact']['id']} "
+                  f"proof_artifact_digest={authority['proof_artifact']['digest']}"
+              )),
+              ('baseline-authority', (
+                  f"event={baseline['run']['event']} branch={baseline['run']['branch']} "
+                  f"commit={baseline['commit']} run_id={baseline['run']['id']} "
+                  f"proof_artifact_id={baseline['proof_artifact']['id']} "
+                  f"proof_artifact_digest={baseline['proof_artifact']['digest']}"
+              )),
           ]
           for key, label in (('gravity', 'gravity'), ('max_scraper', 'max-scraper')):
               value = components[key]
@@ -271,6 +287,12 @@ jobs:
           rows.append(('artifact', f"id={identity['id']} name={identity['name']} digest={identity['digest']} bytes={identity['size_in_bytes']}"))
           if manifest['application']['commit'] != rev('HEAD^{commit}') or identity['id'] != int(artifact_id) or identity['digest'] != f'sha256:{digest}':
               raise SystemExit('public release identity mismatch')
+          if (
+              authority['pull_request']['base']['sha'] != manifest['source_authority']['repair_base']['commit']
+              or authority['repair_base']['production_accepted'] is not False
+              or baseline['commit'] == authority['pull_request']['base']['sha']
+          ):
+              raise SystemExit('public release lineage misrepresentation')
           for title, text in rows:
               print(f'::notice title=stage-a-{title}::{text}')
           PY
@@ -319,7 +341,7 @@ jobs:
           workflow_run = value.get('workflow_run')
           if (
               value.get('id') != int(artifact_id)
-              or value.get('name') != f'coordinated-gravity-max-fb9fb30de960-{builder}'
+              or value.get('name') != f'coordinated-gravity-max-fb9fb30d9eb2-{builder}'
               or value.get('digest') != f'sha256:{digest}'
               or value.get('expired') is not False
               or type(value.get('size_in_bytes')) is not int

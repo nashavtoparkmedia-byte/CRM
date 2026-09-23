@@ -1,8 +1,9 @@
 """Negative and preservation tests for the bounded pull_request source authority.
 
-This authority trusts exactly one pull_request run (PR #107, run 35825049410,
-base release/messaging-hotfix-base-be6b8eb8-20260918 at be6b8eb8, head
-fb9fb30d, same non-fork repository) plus the baseline's main-push authority.
+This authority trusts exactly one pull_request run (PR #113, run 35825049410,
+base release/messaging-dom-fallback-repair-base-c7e29a24-20260923 at the repair
+base c7e29a24, head fb9fb30d, same non-fork repository) plus the accepted
+baseline's main-push authority. The repair base is not an accepted release.
 Every member of that tuple is mutated here one at a time and must be rejected,
 and the predecessor authorities must still require a push source run.
 """
@@ -40,7 +41,7 @@ PREDECESSORS = {
 }
 PUSH_EVENT_GUARD = '        or run.get("event") != "push"\n'
 FOREIGN_REPOSITORY_ID = 999999999
-MAIN_TIP_AT_ISSUE = "5232cd31f7553d76929fbeb6bae56931939f5c22"
+MAIN_TIP_AT_ISSUE = "db739dd989c75c7ff74d53a1b1ae596f29987913"
 OTHER_COMMIT = "474c0707f457c233e292a3d4b4fd60c012d72f9f"
 
 
