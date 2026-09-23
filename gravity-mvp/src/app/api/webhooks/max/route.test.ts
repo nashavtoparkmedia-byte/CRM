@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   shadowStart: vi.fn(),
   shadowComplete: vi.fn(),
   resolveContact: vi.fn(),
+  prepareIdentity: vi.fn(),
   isResolvedContact: vi.fn(),
   recordReachability: vi.fn(),
   selectSenderCandidate: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('@/modules/contacts/public/v1', () => ({
   markChannelIdentityConflictV1: mocks.markIdentityConflict,
   isResolvedChannelContactResultV1: mocks.isResolvedContact,
   resolveChannelContactOperationV1: mocks.resolveContact,
+  prepareContactConversationIdentityV1: mocks.prepareIdentity,
 }))
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
   contactReachabilityV1: {
@@ -796,5 +798,456 @@ describe('MAX webhook provider-account admission', () => {
     expect(mocks.resolveContact).not.toHaveBeenCalled()
     expect(mocks.ensureContactLink).not.toHaveBeenCalled()
     expect(mocks.recordReachability).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOM-fallback inbound (production failure 2026-09-22 11:44:50Z).
+//
+// The provider push lost its message object, so the scraper recovered the text from
+// the page and forwarded it without a provider senderId. Such an event may inherit the
+// peer of the exact, already proven private conversation it names — only when the
+// scraper attests it read that conversation's page and every independent MAX invariant
+// names that same peer. The chat id and route below are C4's, from MAX_CHAT_ID_ALIASES.
+// ---------------------------------------------------------------------------
+const DOM_ACCOUNT = '902100000248'
+const DOM_CHAT = '902454841098'
+const DOM_ROUTE = '511708938'
+const DOM_PEER = '902200000154'
+const DOM_EXTERNAL_ID = `max-dom-${DOM_CHAT}-7ef524501d31775e`
+
+function attestedRoute(overrides: Record<string, unknown> = {}) {
+  return { uiRouteId: DOM_ROUTE, source: 'static_override', extraction: 'message_element', verified: true, ...overrides }
+}
+
+function domRequest(overrides: Record<string, unknown> = {}, omit: string[] = []) {
+  const body: Record<string, unknown> = {
+    accountId: DOM_ACCOUNT,
+    externalId: DOM_EXTERNAL_ID,
+    chatId: DOM_CHAT,
+    rawChatId: DOM_CHAT,
+    text: 'A2-0922-K7Q3',
+    timestamp: Date.now() - 1_000,
+    messageType: 'text',
+    attachments: [],
+    isOutgoing: false,
+    source: 'dom_fallback',
+    chatKind: 'private',
+    domRoute: attestedRoute(),
+    ...overrides,
+  }
+  for (const key of omit) delete body[key]
+  return new Request('https://crm.example/api/webhooks/max', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Max-Scraper-Webhook-Secret': WEBHOOK_SECRET },
+    body: JSON.stringify(body),
+  })
+}
+
+function provenPrivateChat(overrides: Record<string, unknown> = {}, metadata: Record<string, unknown> = {}) {
+  return {
+    id: 'chat-c4',
+    channel: 'max',
+    externalChatId: DOM_CHAT,
+    chatType: 'private',
+    name: 'User A',
+    contactId: 'contact-c4',
+    contactIdentityId: 'identity-c4',
+    driverId: null,
+    metadata: {
+      senderId: DOM_PEER,
+      chatKind: 'private',
+      providerAccountId: DOM_ACCOUNT,
+      connectionId: 'max_scraper',
+      rawExternalChatId: DOM_CHAT,
+      contactResolution: { status: 'identity_reused', candidateCount: 1, automaticLinkPerformed: true },
+      ...metadata,
+    },
+    ...overrides,
+  }
+}
+
+function readyIdentity(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'ready',
+    contact: { id: 'contact-c4', displayName: 'User A' },
+    identity: {
+      id: 'identity-c4',
+      channel: 'max',
+      externalId: DOM_PEER,
+      providerAliasValues: [],
+      providerAccountId: null,
+      ...overrides,
+    },
+  }
+}
+
+describe('MAX webhook DOM-fallback peer binding', () => {
+  let chat: ReturnType<typeof provenPrivateChat>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('MAX_SCRAPER_WEBHOOK_SECRET', WEBHOOK_SECRET)
+    chat = provenPrivateChat()
+    mocks.messageFindUnique.mockResolvedValue(null)
+    mocks.shadowStart.mockResolvedValue({ session: { complete: mocks.shadowComplete } })
+    mocks.shadowComplete.mockResolvedValue(undefined)
+    mocks.emitMessage.mockResolvedValue(undefined)
+    mocks.appendCollision.mockResolvedValue(undefined)
+    mocks.markIdentityConflict.mockResolvedValue(undefined)
+    mocks.chatFindUnique.mockImplementation(async () => chat)
+    mocks.chatFindMany.mockImplementation(async () => [chat])
+    mocks.prepareIdentity.mockResolvedValue(readyIdentity())
+    mocks.selectSenderCandidate.mockReturnValue({ status: 'none', candidateCount: 0 })
+    mocks.patchConversation.mockImplementation(async () => ({ conversation: chat }))
+    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-dom-1', chatId: 'chat-c4' } })
+    mocks.resolveContact.mockResolvedValue({
+      status: 'identity_reused',
+      isNew: false,
+      contact: { id: 'contact-c4' },
+      identity: { id: 'identity-c4' },
+    })
+    mocks.isResolvedContact.mockReturnValue(true)
+    mocks.recordReachability.mockResolvedValue({ outcome: 'updated', identityId: 'identity-c4', status: 'confirmed' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function expectNoDomMessage() {
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.replaceMessage).not.toHaveBeenCalled()
+    expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+    expect(mocks.emitMessage).not.toHaveBeenCalled()
+    expect(mocks.recordReachability).not.toHaveBeenCalled()
+  }
+
+  async function expectUnproven(response: Response) {
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_UNPROVEN' })
+    expect(mocks.appendCollision).toHaveBeenCalledOnce()
+    expect(mocks.appendCollision.mock.calls[0][0].evidence).toMatchObject({
+      reason: 'sender_identity_unproven',
+      incomingSenderId: null,
+    })
+    expectNoDomMessage()
+  }
+
+  async function expectBound(response: Response) {
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true, chatInternalId: 'chat-c4', messageId: 'message-dom-1' })
+    expect(mocks.upsertMessage).toHaveBeenCalledOnce()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  }
+
+  test('accepts the exact production DOM-fallback event once on the proven private conversation', async () => {
+    await expectBound(await POST(domRequest()))
+
+    expect(mocks.prepareIdentity).toHaveBeenCalledOnce()
+    expect(mocks.prepareIdentity).toHaveBeenCalledWith({
+      contract: 'contacts.PrepareContactConversationIdentityCommand.v1',
+      purpose: 'send_in_bound_conversation',
+      contactId: 'contact-c4',
+      channel: 'max',
+      identityId: 'identity-c4',
+      phoneId: null,
+    })
+    expect(mocks.chatFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        channel: 'max',
+        AND: [
+          { metadata: { path: ['senderId'], equals: DOM_PEER } },
+          { metadata: { path: ['providerAccountId'], equals: DOM_ACCOUNT } },
+        ],
+      },
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-c4',
+      direction: 'inbound',
+      externalId: DOM_EXTERNAL_ID,
+      content: 'A2-0922-K7Q3',
+      metadata: expect.objectContaining({
+        senderId: DOM_PEER,
+        senderIdProof: 'bound_private_conversation',
+        source: 'dom_fallback',
+        maxChatId: DOM_CHAT,
+      }),
+    }))
+    // The conversation already names its person: no new resolution, link or reachability.
+    expect(mocks.resolveContact).not.toHaveBeenCalled()
+    expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+    expect(mocks.recordReachability).not.toHaveBeenCalled()
+    expect(mocks.selectSenderCandidate).not.toHaveBeenCalled()
+    // The Chat patch keeps only activity; payload phone/name never reach it.
+    expect(mocks.patchConversation.mock.calls[0][0].patch).not.toHaveProperty('metadata')
+    expect(mocks.patchConversation.mock.calls[0][0].patch).not.toHaveProperty('name')
+    expect(mocks.patchConversation).toHaveBeenLastCalledWith(expect.objectContaining({
+      patch: { metadata: expect.objectContaining({ contactResolution: { status: 'bound_conversation_reused', candidateCount: 1, automaticLinkPerformed: false } }) },
+    }))
+    expect(mocks.shadowComplete).toHaveBeenCalledWith({ status: 'contact_reused', contactId: 'contact-c4', source: 'identity' })
+    expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+  })
+
+  test('ignores payload phone and name on an accepted DOM-fallback event', async () => {
+    chat = provenPrivateChat({ name: 'MAX:902200000154' })
+    await expectBound(await POST(domRequest({ phone: '+79990000000', senderPhone: '+79990000000', senderName: 'Cached Name' })))
+    expect(mocks.patchConversation.mock.calls[0][0].patch).toEqual({ lastMessageAt: expect.any(Date) })
+  })
+
+  test('replays the same DOM-fallback event as a duplicate of the stored message', async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: 'message-dom-1', chatId: 'chat-c4', externalId: DOM_EXTERNAL_ID, chat })
+
+    const response = await POST(domRequest())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true, chatInternalId: 'chat-c4', messageId: 'message-dom-1', deduped: true })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('binds a protocol-route DOM read only to the same canonical chat id', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { rawExternalChatId: '902400000777' })
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectBound(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: '902400000777', source: 'protocol_chat_id' }) })))
+  })
+
+  test('binds a participant-route DOM read only when the route is the proven peer', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { rawExternalChatId: '902400000777' })
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectBound(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: DOM_PEER, source: 'dialog_participant' }) })))
+  })
+
+  test('ignores a group conversation that happens to store the same sender', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-group', externalChatId: '902400000555' }, { chatKind: 'group' })])
+    await expectBound(await POST(domRequest()))
+  })
+
+  test.each([
+    ['no attestation', { domRoute: undefined }],
+    ['attestation not verified', { domRoute: attestedRoute({ verified: false }) }],
+    ['verified is a string', { domRoute: attestedRoute({ verified: 'true' }) }],
+    ['heuristic text row', { domRoute: attestedRoute({ extraction: 'generic_text_rows' }) }],
+    ['unknown route source', { domRoute: attestedRoute({ source: 'guessed' }) }],
+    ['static route that Gravity does not map to this chat', { domRoute: attestedRoute({ uiRouteId: '201482140' }) }],
+    ['static route with a prototype key', { domRoute: attestedRoute({ uiRouteId: 'constructor' }) }],
+    ['non-numeric route', { domRoute: attestedRoute({ uiRouteId: '51170893x' }) }],
+    ['protocol route of another chat', { domRoute: attestedRoute({ uiRouteId: '902400000777', source: 'protocol_chat_id' }) }],
+    ['participant route that is not the proven peer', { domRoute: attestedRoute({ uiRouteId: '902200000999', source: 'dialog_participant' }) }],
+    ['attestation is an array', { domRoute: [attestedRoute()] }],
+    ['attestation is a string', { domRoute: 'verified' }],
+    ['attestation is null', { domRoute: null }],
+  ])('rejects without a verified page binding: %s', async (_label, event) => {
+    await expectUnproven(await POST(domRequest(event)))
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+  })
+
+  test('keeps rejecting a DOM-fallback event when the provider account is absent from the payload', async () => {
+    const response = await POST(domRequest({}, ['accountId']))
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('keeps rejecting a DOM-fallback event on a Chat whose provider account was never proven', async () => {
+    chat = provenPrivateChat({}, { providerAccountId: undefined })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects a DOM-fallback event carried by another provider account', async () => {
+    const response = await POST(domRequest({ accountId: '902100000999' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' })
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects when the Contact identity carries a different concrete provider account', async () => {
+    mocks.prepareIdentity.mockResolvedValue(readyIdentity({ providerAccountId: '902100000999' }))
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('rejects a DOM-fallback event that claims a group conversation', async () => {
+    const response = await POST(domRequest({ chatKind: 'group' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expectNoDomMessage()
+  })
+
+  test.each([
+    ['incoming kind unknown', { chatKind: 'unknown' }, {}, {}, []],
+    ['incoming kind missing', {}, {}, {}, ['chatKind']],
+    ['stored kind missing', {}, { chatKind: undefined }, {}, []],
+    ['stored kind group on a person-owned Chat', { chatKind: 'group' }, { chatKind: 'group' }, {}, []],
+    ['Chat column is not private', {}, {}, { chatType: 'group' }, []],
+  ])('rejects without proof when %s', async (_label, event, storedMetadata, chatColumns, omit) => {
+    chat = provenPrivateChat(chatColumns, storedMetadata)
+    const response = await POST(domRequest(event, omit as string[]))
+    expect(response.status).toBe(409)
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).toHaveBeenCalled()
+  })
+
+  test('rejects when a second private Chat on the same account claims the same peer', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-other', externalChatId: '902400000777' })])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test.each([
+    ['identity belongs to another Contact', { status: 'identity_not_found' }],
+    ['Contact is archived or missing', { status: 'contact_not_found' }],
+    ['identity has an open conflict', { status: 'identity_conflicted' }],
+    ['prepared Contact differs from the Chat', { ...readyIdentity(), contact: { id: 'contact-other', displayName: 'X' } }],
+    ['prepared identity differs from the Chat', readyIdentity({ id: 'identity-other' })],
+    ['identity names another peer', readyIdentity({ externalId: '902200000999' })],
+    ['identity is not MAX', readyIdentity({ channel: 'telegram' })],
+  ])('rejects when %s', async (_label, prepared) => {
+    mocks.prepareIdentity.mockResolvedValue(prepared)
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('fails without writing any collision or conflict when the Contacts lookup throws', async () => {
+    mocks.prepareIdentity.mockRejectedValue(new Error('CONTACT_OWNERSHIP_BUSY'))
+    const response = await POST(domRequest())
+    expect(response.status).toBe(500)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('fails without writing any collision or conflict when the claimant lookup throws', async () => {
+    mocks.chatFindMany.mockRejectedValue(new Error('connection reset'))
+    const response = await POST(domRequest())
+    expect(response.status).toBe(500)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test.each([
+    ['stored sender missing', {}, { senderId: undefined }],
+    ['stored sender is the chat id', {}, { senderId: DOM_CHAT }],
+    ['stored sender is the raw chat id', {}, { senderId: '511708938', rawExternalChatId: '511708938' }],
+    ['Chat has no identity link', { contactIdentityId: null }, {}],
+    ['Chat has no Contact link', { contactId: null }, {}],
+  ])('rejects without proof when %s', async (_label, columns, storedMetadata) => {
+    chat = provenPrivateChat(columns, storedMetadata)
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects an unresolved shortId key that only a DOM event ever named', async () => {
+    const shortId = '197100100'
+    chat = provenPrivateChat({ externalChatId: shortId }, { senderId: undefined, chatKind: undefined, rawExternalChatId: shortId })
+    const response = await POST(domRequest({
+      chatId: shortId,
+      rawChatId: shortId,
+      externalId: `max-dom-${shortId}-7ef524501d31775e`,
+      chatKind: 'unknown',
+      domRoute: attestedRoute({ uiRouteId: shortId, source: 'protocol_chat_id' }),
+    }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_UNPROVEN' })
+    expectNoDomMessage()
+  })
+
+  test('rejects a route-id alias even when it normalizes to the proven conversation', async () => {
+    await expectUnproven(await POST(domRequest({ chatId: DOM_ROUTE, rawChatId: DOM_ROUTE, externalId: `max-dom-${DOM_ROUTE}-7ef524501d31775e` })))
+  })
+
+  test('rejects when the raw chat id differs from the canonical chat id', async () => {
+    await expectUnproven(await POST(domRequest({ rawChatId: DOM_ROUTE })))
+  })
+
+  test('rejects a stale legacy Chat that carries no provider stamps', async () => {
+    chat = provenPrivateChat({}, { chatKind: undefined, providerAccountId: undefined })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expectNoDomMessage()
+  })
+
+  test.each([
+    ['placeholder id of another chat', { externalId: 'max-dom-902400000777-7ef524501d31775e' }],
+    ['provider-shaped id', { externalId: 'd301a0bdbcf79419e8' }],
+    ['short hash', { externalId: `max-dom-${DOM_CHAT}-7ef5` }],
+    ['uppercase hash', { externalId: `max-dom-${DOM_CHAT}-7EF524501D31775E` }],
+    ['trailing suffix', { externalId: `${DOM_EXTERNAL_ID}-x` }],
+    ['live DOM recovery source', { source: 'live_dom_recovery' }],
+    ['history source', { source: 'history' }],
+    ['no source', { source: null }],
+    ['empty sender field', { senderId: '' }],
+    ['attachments present', { attachments: [{ type: 'image', url: 'https://i.example/x.jpg' }], messageType: 'image' }],
+  ])('rejects a forged or partial DOM-fallback marker: %s', async (_label, event) => {
+    const response = await POST(domRequest(event))
+    expect([200, 409]).toContain(response.status)
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['a deletion', { deleted: true }],
+    ['a non-text message without attachments', { messageType: 'video' }],
+    ['a text event with an attachment that has no source', { attachments: [{ type: 'image' }] }],
+  ])('never binds %s', async (_label, event) => {
+    await POST(domRequest(event))
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  test('rejects a route-id alias in chatId even when rawChatId is canonical', async () => {
+    await expectUnproven(await POST(domRequest({ chatId: DOM_ROUTE, rawChatId: DOM_CHAT })))
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+  })
+
+  test('never treats a non-numeric route as a page route, even for a matching stored sender', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { senderId: 'peer-x', rawExternalChatId: '902400000777' })
+    mocks.chatFindMany.mockImplementation(async () => [chat])
+    mocks.prepareIdentity.mockResolvedValue(readyIdentity({ externalId: 'peer-x' }))
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectUnproven(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: 'peer-x', source: 'dialog_participant' }) })))
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+  })
+
+  test('never binds a Chat of another channel that shares the external id', async () => {
+    chat = provenPrivateChat({ channel: 'telegram' })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('keeps the existing mismatch failure for a DOM event that carries another sender', async () => {
+    const response = await POST(domRequest({ senderId: '902200000999' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_COLLISION' })
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('leaves a valid provider-framed inbound unchanged', async () => {
+    const response = await POST(domRequest({
+      externalId: 'd301a0bdbd00000001',
+      senderId: DOM_PEER,
+      senderName: 'User A',
+      source: undefined,
+      domRoute: undefined,
+    }))
+    expect(response.status).toBe(200)
+    expect(mocks.prepareIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.not.objectContaining({ senderIdProof: expect.anything() }),
+    }))
+    expect(mocks.resolveContact).toHaveBeenCalledOnce()
+    expect(mocks.recordReachability).toHaveBeenCalledOnce()
   })
 })

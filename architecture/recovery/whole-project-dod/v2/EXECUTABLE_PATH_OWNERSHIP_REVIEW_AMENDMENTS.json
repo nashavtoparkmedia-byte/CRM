@@ -309,6 +309,50 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "messaging-max-dom-fallback-inbound-repair-20260922",
+      "reviewed_at": "2026-09-22T00:00:00Z",
+      "reviewed_by": "MESSAGING_DOM_FALLBACK_REPAIR_IMPLEMENTER_20260922",
+      "role": "REPAIR_IMPLEMENTER_WITH_INDEPENDENT_ADVERSARIAL_DESIGN_REVIEW",
+      "authorization": "ORCHESTRATOR_CONTINUE_PRODUCT_REPAIR_20260922_WITH_PRODUCT_OWNER_APPROVED_EVIDENCE_REBIND",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "This amendment records the mechanical consequences of the MAX DOM-fallback inbound repair on candidate branch codex/messaging-max-dom-fallback-inbound-repair-20260922 (baseline c7e29a24). Two new files, max-web-scraper/lib/DomRouteAttestation.js and its node:test file, are selected by the max_channel context manifest and are therefore context-owned; they move the tracked executable denominator from 2,501 to 2,503, measured with the repository's own tracked-surface inventory. The already assigned MAX webhook route changed only in bytes: its lifecycle, functional owner, governed exclusion and inventory kind are unchanged, so its source fingerprint is rebound mechanically. No assignment, exact-inventory transition, lifecycle, owner or rationale is created or altered.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2501,
+        "tracked_inventory_sha256": "2f57634c4b6fc451b2862e76d9592381e6e31ff7d41cda0e45169bafeb381e1c",
+        "coverage_sha256": "c254a172cdc7cb8f8999f58aeda439d9c8121c7c10d4e8ff3d2e896b6df1a1c9"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2503,
+        "tracked_inventory_sha256": "696815960b119e94431548a3218e72c99030b8d04f7368bbe8f4b8e0fafb9321",
+        "coverage_sha256": "ae39cb7672f5101c39c32a213dd7478eae4eaa2276dc3bfb0117ae3bc970aa33"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "67fe16a55a8b9e37cb4cc20493e4a2b84738f45659a33a839e8d0cae17f5fd81",
+          "current_source_sha256": "f8be868773cc0a475f05c1469d1c8a5e6f08ff3e2c9cf82c1776794b9f84fd8d",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The DOM-fallback repair changed only the bytes of this already assigned MAX webhook route: it binds an attested, sender-less DOM-fallback text to the proven peer of its exact private conversation. Lifecycle APPLICATION_RUNTIME, owner legacy_gravity_runtime and exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
