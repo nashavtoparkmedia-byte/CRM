@@ -21,6 +21,10 @@
 //   4. second strike ends the call with qualification_status='unclear'
 //   5. STT activity resets strikes + clears the armed timer
 //   6. stop() clears the timer (no leaked setTimeout on session teardown)
+//
+// It also covers the terminal-transition contract the physical-termination
+// primitive depends on: exactly one finalize, a first-writer-wins terminal
+// reason, and exactly one provider-agnostic termination request per session.
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
@@ -76,7 +80,7 @@ const { CallSession } = require('../call-session')
 // ---- Helpers --------------------------------------------------------------
 
 function makeSession(overrides = {}) {
-    const events = { state: [], transcript: [], finalize: [] }
+    const events = { state: [], transcript: [], finalize: [], termination: [] }
     const s = new CallSession({
         callUuid: `test-${Math.random().toString(36).slice(2, 8)}`,
         scenario: {},
@@ -84,6 +88,10 @@ function makeSession(overrides = {}) {
         onFinalize: r => events.finalize.push(r),
         onTranscriptItem: (role, text) => events.transcript.push({ role, text }),
         onState: state => events.state.push(state),
+        // Stands in for the channel lifecycle's terminate(). The session is
+        // provider-agnostic: it passes a reason and a grace and learns nothing
+        // back, so a plain recorder is the whole contract.
+        requestTermination: request => events.termination.push(request),
         ...overrides,
     })
     // Squash the silence-timeout window for test runs: the production
@@ -326,6 +334,7 @@ test('stop() during in-flight playback keeps the session ended and finalizes onc
     assert.equal(events.finalize.length, 1, 'finalized exactly once')
     assert.equal(events.finalize[0].reason, 'closed')
     assert.equal(s.silenceTimer, null, 'no silence timer re-armed after stop()')
+    assert.equal(events.termination.length, 1, 'playback finishing after stop() adds no second action')
     const endedAt = events.state.indexOf('ended')
     assert.ok(endedAt >= 0)
     assert.deepEqual(events.state.slice(endedAt + 1), [], 'no state transition after ended')
@@ -354,6 +363,7 @@ test('a turn whose LLM reply arrives after stop() does not synthesise speech', a
     assert.equal(s.silenceTimer, null)
     assert.deepEqual(events.transcript, [], 'the late reply is not recorded as spoken')
     assert.deepEqual(events.finalize[0].transcriptItems, [], 'the finalized transcript stays unchanged')
+    assert.equal(events.termination.length, 1, 'a late LLM reply adds no second termination request')
 })
 
 test('a tool call whose LLM reply arrives after stop() is not applied', async (t) => {
@@ -372,6 +382,7 @@ test('a tool call whose LLM reply arrives after stop() is not applied', async (t
 
     assert.deepEqual(s.leadData, {}, 'lead data is not changed after stop()')
     assert.equal(events.finalize.length, 1)
+    assert.equal(events.termination.length, 1, 'a late tool call adds no second termination request')
 })
 
 test('synthesis that finishes after stop() is never broadcast', async (t) => {
@@ -392,6 +403,7 @@ test('synthesis that finishes after stop() is never broadcast', async (t) => {
     assert.equal(broadcasts, 0, 'no playback handed to FreeSWITCH after stop()')
     assert.equal(s.state, 'ended')
     assert.equal(events.finalize.length, 1)
+    assert.equal(events.termination.length, 1, 'late synthesis adds no second termination request')
 })
 
 test('an STT final delivered after stop() records nothing and starts no turn', async (t) => {
@@ -407,5 +419,172 @@ test('an STT final delivered after stop() records nothing and starts no turn', a
     assert.deepEqual(events.transcript, [], 'no user transcript item after stop()')
     assert.equal(spoke, 0, 'onUserSpoke does not fire after stop()')
     assert.equal(mockState.llmCalls.length, 0, 'no LLM turn after stop()')
+    assert.equal(events.finalize.length, 1)
+    assert.equal(events.termination.length, 1, 'a late STT final adds no second termination request')
+})
+
+// ---- Physical termination request ---------------------------------------------
+// Ending the dialog is not ending the call. After its terminal transition the
+// session asks the injected callback to end the physical call — once, with the
+// reason the first trigger chose, and with a grace that covers whatever of the
+// last phrase is still playing. The session knows nothing about channels: what
+// happens to that request (kill, suppressed as already dead, refused) is the
+// channel lifecycle's business and is covered in channel-lifecycle.test.js.
+
+function endCallTurn(s, args = { qualification_status: 'qualified', lead_summary: 'ok' }) {
+    mockState.llmReturn = { kind: 'function', name: 'end_call', args, callId: 'call-1' }
+    return s._doTurn(false)
+}
+
+test('end_call finalizes once and requests physical termination once', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'completed')
+    assert.equal(s.terminalReason, 'completed')
+    assert.equal(events.termination.length, 1, 'exactly one termination request')
+    assert.equal(events.termination[0].reason, 'completed', 'the request carries the terminal reason')
+})
+
+test('the termination grace covers the remaining playback of the goodbye phrase', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({ broadcastWav: async () => 4000 })
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    const { graceMs } = events.termination[0]
+    // Playback was estimated at 4 s and started during this turn, so the grace is
+    // the remainder plus the fixed margin. Bounded, not exact: the remainder is
+    // measured against the wall clock, and the whole turn is synchronous here.
+    assert.ok(graceMs > 4000, `grace ${graceMs} must outlast the estimated playback`)
+    assert.ok(graceMs <= 5000, `grace ${graceMs} must not exceed playback plus the margin`)
+})
+
+test('a goodbye that never reached FreeSWITCH is not waited for', async (t) => {
+    resetMocks()
+    // playOrQueue returns null for a channel that already hung up.
+    const { s, events, cleanup } = makeSession({ broadcastWav: async () => null })
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    assert.equal(events.termination.length, 1)
+    assert.equal(events.termination[0].graceMs, 0, 'nothing is playing, so nothing is waited for')
+})
+
+test('a hangup during the final phrase wins the reason and still requests termination once', async (t) => {
+    resetMocks()
+    let releaseSynth = null
+    mockState.synthGate = new Promise(resolve => { releaseSynth = resolve })
+    let broadcasts = 0
+    const { s, events, cleanup } = makeSession({
+        broadcastWav: async () => { broadcasts++; return 1000 },
+    })
+    t.after(cleanup)
+
+    const turn = endCallTurn(s)
+    // The lead hangs up while the goodbye is still being synthesised. This is what
+    // the lifecycle's releaseChannel does on CHANNEL_HANGUP_COMPLETE.
+    s.stop()
+    releaseSynth()
+    await turn
+
+    assert.equal(broadcasts, 0, 'the goodbye is never handed to FreeSWITCH')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'closed', 'the hangup got there first and owns the reason')
+    assert.equal(s.terminalReason, 'closed')
+    assert.equal(events.termination.length, 1, 'exactly one termination request')
+    assert.equal(events.termination[0].reason, 'closed')
+    assert.equal(events.termination[0].graceMs, 0)
+})
+
+test('concurrent end_call and stop(): the first reason wins, one finalize, one request', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    await endCallTurn(s)
+    s.stop()
+    s.stop('max_duration')
+    s._end('completed')
+
+    assert.equal(s.terminalReason, 'completed', 'later triggers cannot relabel the terminal reason')
+    assert.equal(events.finalize.length, 1)
+    assert.equal(events.finalize[0].reason, 'completed')
+    assert.equal(events.termination.length, 1, 'at most one physical termination per session')
+})
+
+test('a WS close while the channel is still alive requests termination', (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    s._setState('listening')
+    s.stop()
+
+    assert.equal(events.finalize[0].reason, 'closed')
+    assert.equal(events.termination.length, 1, 'a bridge-side close still has to end the call')
+    assert.deepEqual(events.termination[0], { reason: 'closed', graceMs: 0 })
+})
+
+test('transfer_to_manager stays outside the termination path', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    await s._dispatchTool('transfer_to_manager', { reason: 'лид просит менеджера' }, 'call-2')
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1)
+    assert.equal(events.finalize[0].reason, 'transferred')
+    // C1a must not change what the lead experiences after «оставайтесь на линии»:
+    // the honest semantics of that promise are a separate bounded follow-up.
+    assert.deepEqual(events.termination, [], 'a transfer does not end the channel here')
+})
+
+test('a finalize that throws still ends the physical call', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({
+        onFinalize: () => { throw new Error('CRM unreachable') },
+    })
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.termination.length, 1, 'a CRM failure must not leave a live call on the line')
+    assert.equal(events.termination[0].reason, 'completed')
+})
+
+test('a termination request that throws does not break the terminal transition', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({
+        requestTermination: () => { throw new Error('esl unavailable') },
+    })
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1, 'the canonical finalize already happened and stands')
+    assert.equal(s.terminalReason, 'completed', 'the chosen reason is unchanged by a telephony failure')
+})
+
+test('a session with no termination callback behaves exactly as before', async (t) => {
+    resetMocks()
+    // The bridge's own audio-only mode and every existing caller that does not
+    // pass the callback must keep working.
+    const { s, events, cleanup } = makeSession({ requestTermination: undefined })
+    t.after(cleanup)
+
+    await endCallTurn(s)
+
+    assert.equal(s.state, 'ended')
     assert.equal(events.finalize.length, 1)
 })

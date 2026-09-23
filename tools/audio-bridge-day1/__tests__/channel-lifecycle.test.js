@@ -25,6 +25,8 @@ const {
     buildAudioForkCommand,
     DEFAULT_DEAD_CHANNEL_TTL_MS,
     DEFAULT_PRE_ANSWER_TIMEOUT_MS,
+    DEFAULT_HANGUP_CAUSE,
+    MAX_TERMINATION_GRACE_MS,
 } = require('../channel-lifecycle')
 
 const EARLY_MEDIA_CAPTURE = [
@@ -59,7 +61,7 @@ const FORK_URL = 'ws://127.0.0.1:3030/audio'
 // ---- Helpers --------------------------------------------------------------
 
 function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}) {
-    const calls = { esl: [], ensure: [], forkFailures: [] }
+    const calls = { esl: [], ensure: [], forkFailures: [], termination: [] }
     const logs = { info: [], error: [] }
     const timers = []
     const sessions = new Map()
@@ -73,6 +75,7 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}
         log: msg => logs.info.push(msg),
         logError: msg => logs.error.push(msg),
         onForkFailure: (uuid, reason) => calls.forkFailures.push({ uuid, reason }),
+        onTerminationEvent: (kind, detail) => calls.termination.push({ kind, ...detail }),
         setTimer: (fn, ms) => {
             const t = { ms, cleared: false, fired: false, unref() {} }
             t.fn = () => { t.fired = true; fn() }
@@ -83,8 +86,10 @@ function harness({ eslReply = async () => '+OK Success', mixType = 'mono' } = {}
     })
     const forks = () => calls.esl.filter(c => c.startsWith('uuid_audio_fork '))
     const broadcasts = () => calls.esl.filter(c => c.startsWith('uuid_broadcast '))
+    const kills = () => calls.esl.filter(c => c.startsWith('uuid_kill '))
+    const terminationKinds = () => calls.termination.map(e => e.kind)
     const liveTimers = ms => timers.filter(t => t.ms === ms && !t.cleared && !t.fired)
-    return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts }
+    return { lifecycle, calls, logs, timers, liveTimers, sessions, forks, broadcasts, kills, terminationKinds }
 }
 
 function ev(name, uuid, dest, answerState) {
@@ -126,7 +131,7 @@ test('early media capture: exactly one fork, on CHANNEL_ANSWER, after the queued
     assert.equal(h.calls.ensure[0].uuid, EARLY_A)
     assert.ok(h.logs.info.some(l => l.includes(`auto-forking audio for ${EARLY_A}`) && l.includes('via CHANNEL_ANSWER')))
     assert.equal(h.forks().some(c => c.includes(EARLY_B)), false, 'callee leg never forked')
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [EARLY_A], pending: [], preAnswerTimers: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [EARLY_A], pending: [], preAnswerTimers: [], terminating: [], terminationTimers: [] })
 })
 
 test('no early media capture: exactly one fork, on the already-answered CHANNEL_PARK', async () => {
@@ -135,7 +140,7 @@ test('no early media capture: exactly one fork, on the already-answered CHANNEL_
         h.lifecycle.handleEvent(e)
         if (e['Event-Name'] === 'CHANNEL_ANSWER' && e['Unique-ID'] === NOEARLY_A) {
             // The answer is emitted before the transfer: it must not create any state.
-            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [], pending: [], preAnswerTimers: [] })
+            assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [], pending: [], preAnswerTimers: [], terminating: [], terminationTimers: [] })
             assert.equal(h.calls.esl.length, 0)
             assert.equal(h.calls.ensure.length, 0)
         }
@@ -275,7 +280,7 @@ test('an unanswered call that hangs up: queued playback resolves 0, session stop
     assert.equal(session.stopCount, 1)
     assert.equal(h.forks().length, 0)
     assert.equal(h.broadcasts().length, 0)
-    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [X], pending: [], preAnswerTimers: [] })
+    assert.deepEqual(h.lifecycle.snapshot(), { answered: [], forked: [], bound: [], dead: [X], pending: [], preAnswerTimers: [], terminating: [], terminationTimers: [] })
     assert.equal(await h.lifecycle.playOrQueue(X, '/tts/late.wav', 700), null, 'late playback is dropped')
     assert.equal(h.calls.esl.length, 0)
 })
@@ -433,6 +438,214 @@ test('foreign channels create no state, timers or logs', () => {
     assert.equal(h.logs.info.length, 0)
     assert.equal(h.calls.esl.length, 0)
     assert.equal(h.lifecycle.isDead(other), false)
+})
+
+// ---- Physical termination -----------------------------------------------------
+//
+// The primitive that ends a channel. It is one-way on purpose: a session asks for
+// termination, and this module never calls back into the session. The session's
+// own finalize stays exactly-once because of its own terminal state, not because
+// of anything here.
+
+async function answered(h, uuid = X) {
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', uuid, '9999', 'answered'))
+    await tick()
+    return h
+}
+
+test('terminate on a live channel sends exactly one hangup and never touches the session', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    await answered(h)
+
+    assert.equal(h.lifecycle.terminate(X, { reason: 'completed' }), 'issued')
+    await tick()
+
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`], 'one kill, default cause')
+    assert.equal(session.stopCount, 0, 'the primitive is one-way: it does not stop the session')
+    assert.deepEqual(h.terminationKinds(), ['requested', 'issued'])
+    assert.equal(h.calls.termination[0].reason, 'completed')
+    assert.equal(h.calls.termination[0].graceMs, 0)
+    assert.ok(h.lifecycle.isTerminating(X), 'the channel is marked while its hangup is in flight')
+    assert.deepEqual(h.lifecycle.snapshot().terminating, [X])
+})
+
+test('a duplicate terminate request issues no second hangup', async () => {
+    const h = harness()
+    await answered(h)
+
+    assert.equal(h.lifecycle.terminate(X, { reason: 'completed' }), 'issued')
+    assert.equal(h.lifecycle.terminate(X, { reason: 'closed' }), 'duplicate')
+    assert.equal(h.lifecycle.terminate(X, { reason: 'closed', graceMs: 5000 }), 'duplicate')
+    await tick()
+
+    assert.equal(h.kills().length, 1, 'exactly one kill for three requests')
+    assert.equal(h.timers.filter(t => t.ms === 5000).length, 0, 'a duplicate never arms a grace timer')
+    // The suppressions are synchronous; `issued` waits for FreeSWITCH's reply.
+    assert.deepEqual(h.terminationKinds(), ['requested', 'suppressed', 'suppressed', 'issued'])
+})
+
+test('terminate on a channel FreeSWITCH already hung up sends nothing', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+
+    assert.equal(h.lifecycle.terminate(X, { reason: 'closed' }), 'suppressed')
+    await tick()
+
+    assert.equal(h.kills().length, 0, 'zero ESL kills for a dead channel')
+    assert.deepEqual(h.terminationKinds(), ['suppressed'])
+    assert.equal(h.calls.termination[0].detail, 'channel already hung up')
+})
+
+test('a grace defers the hangup by exactly the requested wait', async () => {
+    const h = harness()
+    await answered(h)
+
+    assert.equal(h.lifecycle.terminate(X, { reason: 'completed', graceMs: 2400 }), 'scheduled')
+    await tick()
+    assert.equal(h.kills().length, 0, 'nothing is sent while the last phrase is still playing')
+    const pending = h.liveTimers(2400)
+    assert.equal(pending.length, 1, 'one grace timer, armed at the requested wait')
+    assert.deepEqual(h.lifecycle.snapshot().terminationTimers, [X])
+
+    pending[0].fn()
+    await tick()
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+    assert.deepEqual(h.terminationKinds(), ['requested', 'issued'])
+    assert.deepEqual(h.lifecycle.snapshot().terminationTimers, [], 'the timer state is cleaned up')
+})
+
+test('a real hangup during the grace cancels the deferred hangup', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed', graceMs: 2400 })
+    await tick()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+
+    assert.equal(h.liveTimers(2400).length, 0, 'the grace timer is cleared by the real hangup')
+    assert.equal(h.kills().length, 0, 'the lead hung up first, so nothing is sent')
+    assert.equal(h.lifecycle.isTerminating(X), false, 'the mark is released with the channel')
+})
+
+test('an implausible grace is clamped instead of deferring the hangup indefinitely', async () => {
+    const h = harness()
+    await answered(h)
+
+    h.lifecycle.terminate(X, { reason: 'completed', graceMs: 45 * 60 * 1000 })
+    await tick()
+
+    assert.equal(h.liveTimers(MAX_TERMINATION_GRACE_MS).length, 1, 'clamped to the bound')
+    assert.equal(h.calls.termination[0].graceMs, MAX_TERMINATION_GRACE_MS, 'the event reports the clamped wait')
+})
+
+test('a rejected hangup is reported once and not retried', async () => {
+    const h = harness({ eslReply: async cmd => (cmd.startsWith('uuid_kill ') ? '-ERR No such channel!' : '+OK Success') })
+    await answered(h)
+
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+
+    assert.equal(h.kills().length, 1, 'no retry storm: one attempt only')
+    assert.deepEqual(h.terminationKinds(), ['requested', 'failed'])
+    assert.equal(h.calls.termination[1].detail, '-ERR No such channel!')
+    assert.equal(h.logs.error.filter(m => m.includes('termination REJECTED')).length, 1)
+    // The channel may still be up. A later independent safety trigger has to be
+    // able to act on it — one transient ESL failure must not produce a call that
+    // nothing can ever end. Still one attempt per trigger, so still no loop.
+    assert.equal(h.lifecycle.isTerminating(X), false, 'a rejected attempt releases the mark')
+    assert.equal(h.lifecycle.terminate(X, { reason: 'max_duration' }), 'issued', 'a later trigger may try again')
+    await tick()
+    assert.equal(h.kills().length, 2, 'exactly one attempt per independent trigger')
+})
+
+test('a terminating mark does not outlive a lost hangup event', async (t) => {
+    const h = harness()
+    await answered(h)
+
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    assert.ok(h.lifecycle.isTerminating(X), 'marked while FreeSWITCH works on the kill')
+
+    // FreeSWITCH accepted the kill but its CHANNEL_HANGUP_COMPLETE never arrived
+    // (an event-socket reconnect can lose one), so the mark expires on its own.
+    const expiry = h.liveTimers(DEFAULT_DEAD_CHANNEL_TTL_MS)
+    assert.equal(expiry.length, 1, 'the mark is bounded by the same TTL as the dead set')
+    expiry[0].fn()
+    assert.equal(h.lifecycle.isTerminating(X), false, 'the state converges instead of growing')
+    assert.equal(h.kills().length, 1, 'expiry sends nothing by itself')
+})
+
+test('a hangup event that does arrive releases the mark immediately', async (t) => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+
+    assert.equal(h.lifecycle.isTerminating(X), false)
+    assert.equal(h.liveTimers(DEFAULT_DEAD_CHANNEL_TTL_MS).filter(t => !t.cleared).length, 1,
+        'only the dead-channel reaper is left running')
+})
+
+test('a failing ESL transport is reported once and not retried', async () => {
+    const h = harness({
+        eslReply: async cmd => {
+            if (cmd.startsWith('uuid_kill ')) throw new Error('esl timeout after 5000ms (stage=sending)')
+            return '+OK Success'
+        },
+    })
+    await answered(h)
+
+    h.lifecycle.terminate(X, { reason: 'closed' })
+    await tick()
+
+    assert.equal(h.kills().length, 1)
+    assert.deepEqual(h.terminationKinds(), ['requested', 'failed'])
+    assert.match(h.calls.termination[1].detail, /esl timeout/)
+})
+
+test('terminate refuses inputs that must never reach an ESL command line', async () => {
+    const h = harness()
+    await answered(h)
+
+    assert.equal(h.lifecycle.terminate('not-a-uuid', { reason: 'completed' }), 'refused')
+    assert.equal(h.lifecycle.terminate(X, { reason: 'completed', cause: 'NORMAL_CLEARING; uuid_kill all' }), 'refused')
+    await tick()
+
+    assert.equal(h.kills().length, 0, 'nothing is sent for a refused request')
+    assert.deepEqual(h.terminationKinds(), ['failed', 'failed'])
+    assert.equal(h.lifecycle.isTerminating(X), false, 'a refused request leaves no mark')
+})
+
+test('the hangup this bridge sends still drives the existing CHANNEL_HANGUP_COMPLETE path', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'early'))
+    const queued = h.lifecycle.playOrQueue(X, '/tts/goodbye.wav', 1800)
+    await tick()
+
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    assert.equal(session.stopCount, 0, 'the kill alone does not end the session')
+
+    // FreeSWITCH answers our kill with the same event a lead hangup produces, and
+    // that is what the CRM turns into recording processing. Nothing about that
+    // path changes: the bridge sends only the kill, never a fork stop.
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+
+    assert.equal(session.stopCount, 1, 'the release path still stops the session exactly once')
+    assert.ok(h.lifecycle.isDead(X))
+    assert.equal(await queued, 0, 'an unplayed queued phrase still resolves so _speak can fall through')
+    assert.deepEqual(h.calls.esl.filter(c => c.includes('uuid_audio_fork')), [], 'no fork stop is issued')
+    assert.equal(h.kills().length, 1)
 })
 
 // ---- Session correlation ------------------------------------------------------

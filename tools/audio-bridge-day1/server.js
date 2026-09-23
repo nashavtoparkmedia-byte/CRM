@@ -139,6 +139,15 @@ const lifecycle = createChannelLifecycle({
     ensureSession: (callUuid, isChannelDead) => ensureSessionForCall(callUuid, isChannelDead),
     getSession: callUuid => sessions.get(callUuid),
     onForkFailure: (callUuid, reason) => opsLog('error', 'ai_call_audio_fork_failed', { callUuid, reason }),
+    // Four bounded termination events, names only — the payload carries the
+    // channel uuid, the reason, the hangup cause, the grace and at most a
+    // truncated FreeSWITCH reply. This is the operator surface for «did the call
+    // actually end», readable with `tail bridge.log | jq` without the DB.
+    onTerminationEvent: (kind, detail) => opsLog(
+        kind === 'failed' ? 'error' : 'info',
+        `ai_call_termination_${kind}`,
+        detail,
+    ),
     // Interval for re-checking a channel parked before answer; the default (90 s) is the
     // production value, the variable exists so the isolated runtime probe can exercise it.
     preAnswerTimeoutMs: Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) > 0 ? Number(process.env.BRIDGE_PRE_ANSWER_CHECK_MS) : undefined,
@@ -453,6 +462,13 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
             activeReported = true
             crm.postState(resolved.callId, 'active')
         },
+        // The dialog ending does not end the call. The channel lifecycle owns
+        // that: it suppresses the request when FreeSWITCH already reported the
+        // channel dead, kills at most once, and never calls back into the
+        // session. Until this existed, a call the bot itself ended stayed parked
+        // until the lead hung up — and the session was already out of the map,
+        // so nothing owned that channel any more.
+        requestTermination: ({ reason, graceMs }) => lifecycle.terminate(callUuid, { reason, graceMs }),
     })
     sessions.set(callUuid, session)
     if (isChannelDead()) {

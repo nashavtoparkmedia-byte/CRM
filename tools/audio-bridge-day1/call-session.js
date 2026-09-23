@@ -24,6 +24,11 @@
  *   ...
  *   s.stop()             // WS close OR end_call tool
  *
+ * Ending the dialog is not the same as ending the call: after the terminal
+ * transition the session asks its injected `requestTermination` callback to end
+ * the physical call. It stays provider-agnostic — reason plus a grace in
+ * milliseconds, nothing about channels, ESL or FreeSWITCH.
+ *
  * Without OPENAI_API_KEY the session degrades to "log-only mode": STT
  * (if present) still records the transcript, but the bot won't respond.
  * That preserves the Day-1 audio-only behaviour for boxes with no keys.
@@ -48,6 +53,26 @@ const { getFragmentVersions } = require('./prompt-fragments')
  */
 const STATES = ['idle', 'greeting', 'listening', 'thinking', 'speaking', 'ended']
 
+/**
+ * Terminal reasons whose application-level end also means the physical call must
+ * end. The session stays provider-agnostic: it asks for termination through the
+ * injected `requestTermination` callback and knows nothing about channels.
+ *
+ * `transferred` is deliberately absent. That tool promises a live handoff that
+ * does not exist yet, and its honest product semantics are a separate bounded
+ * follow-up; ending the channel here would silently change what the lead
+ * experiences after that phrase. Keeping the set explicit — rather than
+ * terminating on every reason — is what stops a future reason from acquiring a
+ * hangup by accident.
+ */
+const PHYSICAL_TERMINATION_REASONS = new Set(['completed', 'closed'])
+/**
+ * Head-room added to the remaining estimated playback before the channel is cut.
+ * The playback oracle anchors at the moment `uuid_broadcast` was issued, not at
+ * the first sample on the wire, so the estimate can run slightly short.
+ */
+const TERMINATION_PLAYBACK_MARGIN_MS = 1000
+
 class CallSession {
     /**
      * @param {Object} opts
@@ -66,8 +91,17 @@ class CallSession {
      *                                           Fires more than once is
      *                                           harmless; server.js guards
      *                                           against duplicate POSTs.
+     * @param {Function} [opts.requestTermination] ({ reason, graceMs }) => void.
+     *                                           Asks whoever owns the physical
+     *                                           call to end it, after the
+     *                                           application terminal transition.
+     *                                           Provider-agnostic on purpose:
+     *                                           the session passes a reason and
+     *                                           a grace in milliseconds and
+     *                                           learns nothing back. Called at
+     *                                           most once per session.
      */
-    constructor({ callUuid, scenario, broadcastWav, onFinalize, onTranscriptItem, onState, onUserSpoke }) {
+    constructor({ callUuid, scenario, broadcastWav, onFinalize, onTranscriptItem, onState, onUserSpoke, requestTermination }) {
         this.callUuid = callUuid
         this.scenario = scenario
         this.broadcastWav = broadcastWav
@@ -75,8 +109,18 @@ class CallSession {
         this.onTranscriptItem = onTranscriptItem ?? (() => {})
         this.onState = onState ?? (() => {})
         this.onUserSpoke = onUserSpoke ?? (() => {})
+        this.requestTermination = requestTermination ?? (() => {})
 
         this.state = 'idle'
+        // The reason of the FIRST trigger that ended this session. Whichever
+        // trigger arrives first owns it — the finalize payload and the
+        // termination request both use it, and a later trigger cannot rewrite
+        // what was already reported.
+        this.terminalReason = null
+        // Wall-clock estimate of when the last broadcast TTS phrase stops
+        // playing. Anchors the termination grace so a goodbye is not cut off.
+        // 0 means nothing is playing.
+        this.playbackEndsAt = 0
         // OpenAI message history — system + alternating user/assistant turns.
         this.messages = []
         // Canonical transcript receipts are final-only. Their identity and
@@ -745,15 +789,24 @@ class CallSession {
         // this gives a defence-in-depth against echo without requiring
         // the (broken) uuid_audio_fork pause API.
         this.acceptSttAfter = Date.now() + estimatedPlaybackMs + this.POST_SPEAK_GRACE_MS
+        // Same oracle, second consumer: the termination grace. A dropped or
+        // queue-resolved-to-zero playback leaves this at 0, so a hangup that
+        // follows is immediate rather than waiting for audio nobody hears.
+        if (estimatedPlaybackMs > 0) this.playbackEndsAt = Date.now() + estimatedPlaybackMs
     }
 
     _end(reason) {
         if (this.state === 'ended') return
+        // First writer wins. The early return above already made onFinalize
+        // exactly-once; this makes the REASON exactly-once too, so a hangup that
+        // lands a beat after `end_call` cannot relabel a completed conversation.
+        this.terminalReason = this.terminalReason ?? reason
+        const terminalReason = this.terminalReason
         this._setState('ended')
         try {
             this.onFinalize({
                 callUuid: this.callUuid,
-                reason,
+                reason: terminalReason,
                 result: this.finalResult,
                 leadData: this.leadData,
                 // Compatibility analysis input is derived from the same
@@ -775,9 +828,35 @@ class CallSession {
         } catch (err) {
             console.error(`[call ${this.callUuid}] onFinalize threw: ${err.message}`)
         }
+        // Asked for after the canonical finalize attempt and independently of its
+        // outcome: a CRM failure must not leave a live call on the line, and a
+        // channel that cannot be ended must not change what was finalized.
+        this._requestPhysicalTermination(terminalReason)
     }
 
-    stop() {
+    /**
+     * Ask the physical-call owner to end the channel. One-way by design: the
+     * session does not learn whether the channel was killed, suppressed as
+     * already dead, or refused — its own lifecycle is already terminal either
+     * way. Called at most once per session, because _end runs at most once.
+     */
+    _requestPhysicalTermination(reason) {
+        if (!PHYSICAL_TERMINATION_REASONS.has(reason)) return
+        const remainingPlaybackMs = Math.max(0, this.playbackEndsAt - Date.now())
+        // Only a phrase still on the wire earns a grace. `closed` means the
+        // stream to this session is already gone, so there is nothing to play
+        // out and nothing to wait for.
+        const graceMs = reason === 'completed' && remainingPlaybackMs > 0
+            ? remainingPlaybackMs + TERMINATION_PLAYBACK_MARGIN_MS
+            : 0
+        try {
+            this.requestTermination({ reason, graceMs })
+        } catch (err) {
+            console.error(`[call ${this.callUuid}] termination request threw: ${err.message}`)
+        }
+    }
+
+    stop(reason = 'closed') {
         if (this.userPauseTimer) {
             clearTimeout(this.userPauseTimer)
             this.userPauseTimer = null
@@ -787,7 +866,7 @@ class CallSession {
             try { this.sttSession.stop() } catch {}
             this.sttSession = null
         }
-        if (this.state !== 'ended') this._end('closed')
+        if (this.state !== 'ended') this._end(reason)
     }
 }
 
