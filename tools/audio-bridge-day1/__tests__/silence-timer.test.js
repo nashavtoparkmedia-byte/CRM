@@ -588,3 +588,80 @@ test('a session with no termination callback behaves exactly as before', async (
     assert.equal(s.state, 'ended')
     assert.equal(events.finalize.length, 1)
 })
+
+// ---- Hard duration cap, session side ------------------------------------------
+// The cap itself lives in the channel lifecycle (channel-lifecycle.test.js). What
+// the session owes it: a terminal transition under the cap's reason, exactly one
+// finalize, no termination request of its own — the lifecycle sends the hangup —
+// and no way for late work to come back afterwards.
+
+test('stop("max_duration") finalizes once under that reason and asks for no hangup', (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    s._setState('listening')
+    s.stop('max_duration')
+
+    assert.equal(s.state, 'ended')
+    assert.equal(s.terminalReason, 'max_duration')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'max_duration', 'the CRM learns why the call was cut')
+    assert.deepEqual(events.termination, [],
+        'the channel lifecycle owns this hangup; asking from here would risk a second one')
+})
+
+test('a cap that lands together with end_call does not relabel the conversation', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    mockState.llmReturn = { kind: 'function', name: 'end_call', args: { qualification_status: 'qualified', lead_summary: 'ok' }, callId: 'c1' }
+    await s._doTurn(false)
+    s.stop('max_duration')
+
+    assert.equal(s.terminalReason, 'completed', 'first writer wins: the bot did finish the conversation')
+    assert.equal(events.finalize.length, 1)
+    assert.equal(events.finalize[0].reason, 'completed')
+    assert.equal(events.termination.length, 1, 'and its goodbye termination request stands alone')
+    assert.equal(events.termination[0].reason, 'completed')
+})
+
+test('a cap during an in-flight turn lets nothing come back afterwards', async (t) => {
+    resetMocks()
+    let releaseLlm = null
+    mockState.llmReturn = new Promise(resolve => {
+        releaseLlm = () => resolve({ kind: 'function', name: 'save_lead_data', args: { field: 'city', value: 'late' }, callId: 'c2' })
+    })
+    let broadcasts = 0
+    const { s, events, cleanup } = makeSession({ broadcastWav: async () => { broadcasts++; return 1000 } })
+    t.after(cleanup)
+
+    const turn = s._doTurn(false)
+    s.stop('max_duration')
+    releaseLlm()
+    await turn
+    await s._onSttFinal('а можно ещё вопрос')
+
+    assert.equal(events.finalize.length, 1, 'one finalize')
+    assert.equal(events.finalize[0].reason, 'max_duration')
+    assert.equal(broadcasts, 0, 'no audio after the cut')
+    assert.deepEqual(s.leadData, {}, 'no tool call applied after the cut')
+    assert.deepEqual(events.transcript, [], 'no transcript item after the cut')
+    assert.deepEqual(events.termination, [], 'and still no termination request from the session')
+})
+
+test('a repeated cap stop finalizes only once', (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    s._setState('listening')
+    s.stop('max_duration')
+    s.stop('max_duration')
+    s.stop()
+
+    assert.equal(events.finalize.length, 1)
+    assert.equal(s.terminalReason, 'max_duration')
+    assert.deepEqual(events.termination, [])
+})

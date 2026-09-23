@@ -66,7 +66,7 @@ const OUTCOME_VALUES = Object.freeze([
  *
  *   @param {string} reason
  *     The bridge's reason string: 'completed' | 'transferred' | 'closed'
- *     | 'failed' | other.
+ *     | 'max_duration' | 'failed' | other.
  *
  *   @param {string} sessionStatus
  *     AiCallSessionStatus already computed from reason ('ended' /
@@ -93,6 +93,18 @@ function computeOutcome({ aiAnalysis, reason, sessionStatus, realUserUtterances 
     const qStatus = aiAnalysis?.qualification_status
     const transferReason = aiAnalysis?.transfer_reason
     const hadSpeech = (realUserUtterances ?? 0) > 0
+
+    // The hard duration cap cut the call. It is a safety and cost limit, not a
+    // provider or bridge failure, so it must never land in `error`: the
+    // conversation did happen, it was stopped. It also cannot carry an LLM
+    // verdict — a verdict only exists once end_call ran, and that reason wins the
+    // terminal race — so the split is the same one the drop paths use: whether
+    // the lead ever really spoke. The slug is what tells an operator why.
+    if (reason === 'max_duration') {
+        return hadSpeech
+            ? { outcome: 'dropped_mid_call', reason: 'max_duration' }
+            : { outcome: 'dropped_no_input', reason: 'max_duration' }
+    }
 
     // Explicit LLM verdict paths.
     if (qStatus === 'qualified') {

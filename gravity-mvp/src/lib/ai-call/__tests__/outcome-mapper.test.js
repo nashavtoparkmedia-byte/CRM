@@ -253,3 +253,52 @@ test('normalizeQualificationScore: null / undefined / NaN → null', () => {
     assert.equal(normalizeQualificationScore('abc'), null)
     assert.equal(normalizeQualificationScore(NaN), null)
 })
+
+// ════════════════════════════════════════════════════════════════════
+// Hard duration cap — a safety cutoff, never a failure
+//
+// The bridge cuts an answered call at its hard cap and finalizes with
+// reason 'max_duration'. Owner decision: the conversation happened and
+// was stopped, so this must not read as a provider or bridge failure,
+// and the cause must be visible to an operator in the reason slug.
+
+test('max_duration with speech is a mid-call drop carrying its own reason', () => {
+    assert.deepEqual(
+        computeOutcome({ aiAnalysis: null, reason: 'max_duration', sessionStatus: 'ended', realUserUtterances: 4 }),
+        { outcome: 'dropped_mid_call', reason: 'max_duration' },
+    )
+})
+
+test('max_duration without speech is a no-input drop carrying its own reason', () => {
+    assert.deepEqual(
+        computeOutcome({ aiAnalysis: null, reason: 'max_duration', sessionStatus: 'ended', realUserUtterances: 0 }),
+        { outcome: 'dropped_no_input', reason: 'max_duration' },
+    )
+})
+
+test('max_duration is never reported as an error outcome', () => {
+    const outcome = computeOutcome({
+        aiAnalysis: null, reason: 'max_duration', sessionStatus: 'ended', realUserUtterances: 2,
+    })
+    assert.notEqual(outcome.outcome, 'error')
+    assert.notEqual(outcome.reason, 'bridge_failed')
+})
+
+test('a genuine bridge failure still wins over the cap reason', () => {
+    // Defence in depth: if the session really did fail, that is the truth,
+    // whatever reason string arrived with it.
+    assert.deepEqual(
+        computeOutcome({ aiAnalysis: null, reason: 'max_duration', sessionStatus: 'failed', realUserUtterances: 2 }),
+        { outcome: 'error', reason: 'bridge_failed' },
+    )
+})
+
+test('the cap reason does not disturb the ordinary verdict paths', () => {
+    assert.deepEqual(
+        computeOutcome({
+            aiAnalysis: { qualification_status: 'qualified' },
+            reason: 'completed', sessionStatus: 'ended', realUserUtterances: 3,
+        }),
+        { outcome: 'qualified', reason: 'llm_qualified' },
+    )
+})
