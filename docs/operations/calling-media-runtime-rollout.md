@@ -79,7 +79,14 @@ only safe before step 9.
 - The CRM waits 10 s for the originate reply. A callee without early media who answers later is
   recorded as `outcome_unknown` (HTTP 504, retry forbidden) even though the call proceeds and the
   bridge runs the dialog and finalizes it.
-- The bridge never hangs up an AI call itself and there is no maximum call duration; a parked call
-  whose session ended lasts until the far end hangs up.
+- The image this runbook rolls out never hangs up an AI call itself, so a parked call whose session
+  ended lasts until the far end hangs up. A bridge built from `tools/audio-bridge-day1` at or after
+  the physical-termination change does end the channel once the bot itself closes the conversation
+  (`end_call`), or when its session is closed while the channel is still up: it sends one
+  `uuid_kill … NORMAL_CLEARING` after the final phrase has had time to play. A restart of the bridge
+  still leaves live channels up, unchanged.
+- There is still no maximum call duration on any layer — neither in the dialplan nor in the bridge —
+  so a call nobody ends runs until the far end hangs up. The hard cap is a separate change, because
+  its value is an Owner decision.
 - `.env.production` is shared through `env_file` with seven services, and gravity-mvp can reveal
   `MEGAFON_SIP_PASSWORD` to administrators in env mode; see `docs/SECRETS.md` 2.9.

@@ -46,6 +46,12 @@
  * events are ignored); a channel that is already answered gets its answer
  * actions; a channel still ringing keeps waiting, however long the far end rings.
  *
+ * Termination: this module also owns ending a channel (see terminate below). It is
+ * the only place in the bridge that sends a hangup (the CRM keeps its own, for
+ * cancelling an originate), it does so at most once per channel, and it never
+ * calls into a CallSession — a session asks for termination, the primitive does
+ * not answer back.
+ *
  * History that still constrains the design (issue #23):
  *   - Speaking on CHANNEL_PARK: Megafon's SBC routes pre-answer audio into the
  *     ringback, so the start of the greeting is lost. Playback stays answer-gated.
@@ -61,6 +67,23 @@ const DEFAULT_DEAD_CHANNEL_TTL_MS = 10 * 60 * 1000
 const DEFAULT_PRE_ANSWER_TIMEOUT_MS = 90 * 1000
 const FORK_MIX_TYPES = new Set(['mono', 'mixed', 'stereo'])
 const CHANNEL_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// The only hangup cause this bridge sends. An answered leg is recorded as
+// `completed` by the CRM whichever cause arrives (it keys on billsec), while a
+// non-standard cause on a leg with no media would be mapped to a failure, so
+// there is no reason to invent others here.
+const DEFAULT_HANGUP_CAUSE = 'NORMAL_CLEARING'
+// A cause is interpolated into an ESL command line; only the documented
+// FreeSWITCH cause-token shape may reach it.
+const HANGUP_CAUSE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/
+// mod_commands' answer when the channel is already gone. It is the ordinary race,
+// not a failure: the WS close that follows a lead hangup reaches this module over
+// a different socket than the ESL event that marks the channel dead, so a normal
+// ending would otherwise report an error every time.
+const CHANNEL_ALREADY_GONE = /no such channel/i
+// Upper bound for a deferred termination. The grace exists to let a final
+// phrase finish playing; a wrong playback estimate must not defer a hangup for
+// minutes. This bounds the wait only — it is not a call-duration policy.
+const MAX_TERMINATION_GRACE_MS = 30 * 1000
 
 function parseEslEventHeaders(text) {
     const headers = {}
@@ -111,6 +134,7 @@ function createChannelLifecycle({
     log = console.log,
     logError = console.error,
     onForkFailure = () => {},
+    onTerminationEvent = () => {},
     deadChannelTtlMs = DEFAULT_DEAD_CHANNEL_TTL_MS,
     preAnswerTimeoutMs = DEFAULT_PRE_ANSWER_TIMEOUT_MS,
     setTimer = setTimeout,
@@ -126,6 +150,9 @@ function createChannelLifecycle({
     const deadChannels = new Set()       // past CHANNEL_HANGUP_COMPLETE; reaped after the TTL
     const pendingBroadcasts = new Map()  // uuid -> [{ file, durMs, resolve }]
     const preAnswerTimers = new Map()    // uuid -> timer armed by a pre-answer PARK
+    const terminatingChannels = new Set()  // terminate() accepted; at-most-once kill guard
+    const terminationTimers = new Map()    // uuid -> timer armed by a deferred terminate()
+    const terminationMarkTimers = new Map()  // uuid -> TTL that expires a stale terminating mark
 
     function clearPreAnswerTimer(uuid) {
         const timer = preAnswerTimers.get(uuid)
@@ -239,6 +266,143 @@ function createChannelLifecycle({
         try { onForkFailure(uuid, reason) } catch (err) { logError(`[esl] fork failure hook threw for ${uuid}: ${err.message}`) }
     }
 
+    // Four bounded event kinds, never a value that could carry a secret: the
+    // channel uuid, the caller's reason, the cause, the grace and at most a
+    // truncated FreeSWITCH reply.
+    function emitTermination(kind, uuid, detail) {
+        try { onTerminationEvent(kind, { callUuid: uuid, ...detail }) } catch (err) {
+            logError(`[esl] termination hook threw for ${uuid}: ${err.message}`)
+        }
+    }
+
+    function clearTerminationTimers(uuid) {
+        for (const timers of [terminationTimers, terminationMarkTimers]) {
+            const timer = timers.get(uuid)
+            if (timer === undefined) continue
+            timers.delete(uuid)
+            try { clearTimer(timer) } catch {}
+        }
+    }
+
+    // A kill FreeSWITCH accepted is answered by CHANNEL_HANGUP_COMPLETE, and
+    // releaseChannel drops the mark then. If that event is lost (an event-socket
+    // reconnect can lose one), this bounds the mark the same way the dead set is
+    // bounded, so the state converges instead of growing for the process lifetime.
+    function expireTerminationMark(uuid) {
+        if (terminationMarkTimers.has(uuid)) return
+        const timer = setTimer(() => {
+            terminationMarkTimers.delete(uuid)
+            terminatingChannels.delete(uuid)
+        }, deadChannelTtlMs)
+        if (timer && typeof timer.unref === 'function') timer.unref()
+        terminationMarkTimers.set(uuid, timer)
+    }
+
+    // The single place that ends a channel, and it attempts the command exactly
+    // once per accepted request: there is no retry here and no loop.
+    //
+    // A rejected or failed attempt releases the mark. The channel may well still
+    // be up, and an independent later safety trigger — a duration cap, an
+    // operator action — must be able to act on it; a permanent mark would turn
+    // one transient ESL failure into a call nothing can ever end. That is bounded
+    // by the number of triggers, not by retries: each one gets a single attempt.
+    function issueKill(uuid, requested) {
+        let reply
+        try { reply = eslApi(`uuid_kill ${uuid} ${requested.cause}`) } catch (err) { reply = Promise.reject(err) }
+        Promise.resolve(reply)
+            .then(out => {
+                const text = String(out).trim()
+                if (text.startsWith('+OK')) {
+                    log(`[esl] ${uuid} terminated (${requested.reason}): ${text.slice(0, 120)}`)
+                    emitTermination('issued', uuid, { ...requested, reply: text.slice(0, 120) })
+                    if (!deadChannels.has(uuid)) expireTerminationMark(uuid)
+                    return
+                }
+                if (CHANNEL_ALREADY_GONE.test(text)) {
+                    log(`[esl] termination for ${uuid} (${requested.reason}) found the channel already gone`)
+                    emitTermination('suppressed', uuid, { ...requested, detail: 'channel already gone' })
+                    if (!deadChannels.has(uuid)) expireTerminationMark(uuid)
+                    return
+                }
+                logError(`[esl] termination REJECTED for ${uuid} (${requested.reason}): ${text.slice(0, 120)}`)
+                terminatingChannels.delete(uuid)
+                emitTermination('failed', uuid, { ...requested, detail: text.slice(0, 120) })
+            })
+            .catch(err => {
+                logError(`[esl] termination FAILED for ${uuid} (${requested.reason}): ${err.message}`)
+                terminatingChannels.delete(uuid)
+                emitTermination('failed', uuid, { ...requested, detail: String(err.message).slice(0, 120) })
+            })
+    }
+
+    /**
+     * Physical channel termination — one direction only.
+     *
+     * This is the only code path that ends a FreeSWITCH channel, and it never
+     * calls back into a CallSession. A session's own terminal transition (its
+     * exactly-once finalize) belongs to the session; the two lifecycles are
+     * connected by this contract, not by mutual calls, so no cycle exists. A
+     * second safety trigger therefore performs two independent actions —
+     * stopping its session and calling terminate() — rather than one nested in
+     * the other.
+     *
+     * At most one kill per channel: `terminatingChannels` is marked
+     * synchronously, before any timer is armed or any command is sent, so a
+     * duplicate request — another trigger, a repeated event — can never issue a
+     * second kill. A channel FreeSWITCH already reported dead is never touched.
+     *
+     * `graceMs` defers the kill so a final phrase can finish playing. The wait
+     * uses the injected timer and is bounded; a real CHANNEL_HANGUP_COMPLETE in
+     * the meantime cancels it (releaseChannel clears the timer, and the deferred
+     * kill re-checks the dead set before sending anything).
+     *
+     * Returns its disposition and never throws: callers are terminal paths that
+     * must not be broken by a telephony-side problem.
+     */
+    function terminate(uuid, { reason = 'unspecified', cause = DEFAULT_HANGUP_CAUSE, graceMs = 0 } = {}) {
+        const requested = { reason, cause, graceMs }
+        if (!CHANNEL_UUID_PATTERN.test(String(uuid))) {
+            logError(`[esl] termination REFUSED for ${uuid}: not a channel uuid FreeSWITCH can be asked about`)
+            emitTermination('failed', uuid, { ...requested, detail: 'not a channel uuid' })
+            return 'refused'
+        }
+        if (!HANGUP_CAUSE_PATTERN.test(String(cause))) {
+            logError(`[esl] termination REFUSED for ${uuid}: invalid hangup cause`)
+            emitTermination('failed', uuid, { ...requested, detail: 'invalid hangup cause' })
+            return 'refused'
+        }
+        if (deadChannels.has(uuid)) {
+            log(`[esl] termination suppressed for ${uuid} (${reason}): channel already hung up`)
+            emitTermination('suppressed', uuid, { ...requested, detail: 'channel already hung up' })
+            return 'suppressed'
+        }
+        if (terminatingChannels.has(uuid)) {
+            log(`[esl] termination suppressed for ${uuid} (${reason}): termination already in progress`)
+            emitTermination('suppressed', uuid, { ...requested, detail: 'termination already in progress' })
+            return 'duplicate'
+        }
+        terminatingChannels.add(uuid)
+        const waitMs = Number.isFinite(graceMs) && graceMs > 0 ? Math.min(graceMs, MAX_TERMINATION_GRACE_MS) : 0
+        emitTermination('requested', uuid, { ...requested, graceMs: waitMs })
+        log(`[esl] terminating ${uuid} (${reason}, cause ${cause}, grace ${waitMs} ms)`)
+        if (waitMs === 0) {
+            issueKill(uuid, { ...requested, graceMs: waitMs })
+            return 'issued'
+        }
+        const timer = setTimer(() => {
+            terminationTimers.delete(uuid)
+            if (deadChannels.has(uuid)) {
+                log(`[esl] deferred termination suppressed for ${uuid} (${reason}): channel already hung up`)
+                emitTermination('suppressed', uuid, { ...requested, graceMs: waitMs, detail: 'channel already hung up' })
+                return
+            }
+            issueKill(uuid, { ...requested, graceMs: waitMs })
+        }, waitMs)
+        if (timer && typeof timer.unref === 'function') timer.unref()
+        terminationTimers.set(uuid, timer)
+        return 'scheduled'
+    }
+
     function onAnswerFact(uuid, ext, via) {
         if (deadChannels.has(uuid)) return
         clearPreAnswerTimer(uuid)
@@ -251,6 +415,11 @@ function createChannelLifecycle({
 
     function releaseChannel(uuid, cause) {
         clearPreAnswerTimer(uuid)
+        // FreeSWITCH ended the channel, so a pending deferred kill has nothing
+        // left to end. Dropping the mark as well keeps the state of a reaped
+        // uuid identical to one this lifecycle never terminated.
+        clearTerminationTimers(uuid)
+        terminatingChannels.delete(uuid)
         const queued = pendingBroadcasts.get(uuid)
         if (queued && queued.length) {
             log(`[esl] ${cause} ${uuid} -> dropping ${queued.length} unplayed broadcast(s)`)
@@ -355,7 +524,9 @@ function createChannelLifecycle({
     return {
         handleEvent,
         playOrQueue,
+        terminate,
         isDead: uuid => deadChannels.has(uuid),
+        isTerminating: uuid => terminatingChannels.has(uuid),
         snapshot: () => ({
             answered: [...answeredChannels],
             forked: [...forkedChannels],
@@ -363,6 +534,8 @@ function createChannelLifecycle({
             dead: [...deadChannels],
             pending: [...pendingBroadcasts.keys()],
             preAnswerTimers: [...preAnswerTimers.keys()],
+            terminating: [...terminatingChannels],
+            terminationTimers: [...terminationTimers.keys()],
         }),
     }
 }
@@ -374,4 +547,6 @@ module.exports = {
     buildAudioForkCommand,
     DEFAULT_DEAD_CHANNEL_TTL_MS,
     DEFAULT_PRE_ANSWER_TIMEOUT_MS,
+    DEFAULT_HANGUP_CAUSE,
+    MAX_TERMINATION_GRACE_MS,
 }
