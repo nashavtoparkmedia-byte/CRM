@@ -7,7 +7,10 @@ import {
     ControlledRealCallInputError,
     inspectControlledRealCallReadiness,
     parseControlledRealCallRequest,
+    CONTROLLED_REAL_CALL_MAX_ANSWERED_MS,
+    controlledRealCallHardLimit,
 } from './controlled-real-ai-call'
+import { controlledRealAiCallChannelVars } from '../internal/ai-calls/freeswitch-controlled-real-ai-call-adapter'
 
 function readyEnv(): Record<string, string | undefined> {
     return {
@@ -174,5 +177,58 @@ describe('controlled real AI-call admission', () => {
         expect(controlledRealCallIdentity('operator-proof-0001')).toEqual(first)
         expect(controlledRealCallIdentity('operator-proof-0002')).not.toEqual(first)
         expect(first.fsUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/)
+    })
+})
+
+describe('hard maximum answered-call duration', () => {
+    const RECORDING = '/var/lib/freeswitch/recordings/fs-1.wav'
+
+    it('states the Owner policy exactly once, as ten minutes', () => {
+        expect(CONTROLLED_REAL_CALL_MAX_ANSWERED_MS).toBe(10 * 60 * 1000)
+    })
+
+    it('derives both FreeSWITCH representations from that one value', () => {
+        const limit = controlledRealCallHardLimit()
+        expect(limit).toEqual({ maxAnsweredMs: CONTROLLED_REAL_CALL_MAX_ANSWERED_MS, seconds: 600 })
+
+        const vars = controlledRealAiCallChannelVars(RECORDING)
+        expect(vars.execute_on_answer_yoko_ai_hard_limit).toBe(`'sched_hangup +${limit.seconds} NORMAL_CLEARING'`)
+        expect(vars.yoko_ai_max_answered_ms).toBe(String(limit.maxAnsweredMs))
+        // Whole seconds in the hook, whole milliseconds on the channel, one policy.
+        expect(Number(vars.yoko_ai_max_answered_ms)).toBe(limit.seconds * 1000)
+    })
+
+    it('refuses a policy it cannot express exactly rather than rounding the product decision', () => {
+        expect(() => controlledRealCallHardLimit(600_500)).toThrow(/whole number of seconds/)
+        expect(() => controlledRealCallHardLimit(0)).toThrow(/positive integer/)
+        expect(() => controlledRealCallHardLimit(-1000)).toThrow(/positive integer/)
+        expect(() => controlledRealCallHardLimit(1.5)).toThrow(/positive integer/)
+        expect(() => controlledRealCallHardLimit(Number.NaN)).toThrow(/positive integer/)
+        expect(() => controlledRealCallHardLimit(Number.POSITIVE_INFINITY)).toThrow(/positive integer/)
+        // A shorter whole-second policy is expressible and must be derived, not assumed.
+        expect(controlledRealCallHardLimit(20_000)).toEqual({ maxAnsweredMs: 20_000, seconds: 20 })
+    })
+
+    it('keeps the recording hook intact and installs the hard limit beside it', () => {
+        const vars = controlledRealAiCallChannelVars(RECORDING)
+        expect(vars.execute_on_answer).toBe(`'record_session ${RECORDING}'`)
+        expect(vars.recording_file).toBe(RECORDING)
+        expect(vars.RECORD_STEREO).toBe('true')
+        expect(vars.recording_follow_transfer).toBe('true')
+        // FreeSWITCH runs every variable whose name starts with execute_on_answer, so
+        // the hard limit has its own suffixed name and never overwrites the recording.
+        const answerHooks = Object.keys(vars).filter(name => name.startsWith('execute_on_answer'))
+        expect(answerHooks.sort()).toEqual(['execute_on_answer', 'execute_on_answer_yoko_ai_hard_limit'])
+    })
+
+    it('produces originate values the command grammar can carry', () => {
+        // The originate joins variables with commas and quotes values with spaces, so a
+        // comma anywhere in a value would split it into a bogus variable.
+        for (const [name, value] of Object.entries(controlledRealAiCallChannelVars(RECORDING))) {
+            expect(value, `${name} must not contain a comma`).not.toContain(',')
+            if (value.includes(' ')) {
+                expect(value.startsWith("'") && value.endsWith("'"), `${name} must be quoted`).toBe(true)
+            }
+        }
     })
 })

@@ -64,6 +64,11 @@ const STATES = ['idle', 'greeting', 'listening', 'thinking', 'speaking', 'ended'
  * experiences after that phrase. Keeping the set explicit — rather than
  * terminating on every reason — is what stops a future reason from acquiring a
  * hangup by accident.
+ *
+ * `max_duration` is absent for the opposite reason: the hard duration cap lives
+ * in the channel lifecycle, which stops this session and ends the channel as two
+ * independent actions. Asking for termination from here as well would rebuild the
+ * cycle the primitive exists to avoid, and would risk a second hangup.
  */
 const PHYSICAL_TERMINATION_REASONS = new Set(['completed', 'closed'])
 /**
@@ -846,7 +851,7 @@ class CallSession {
             // about the channel would otherwise reproduce the exact bug this
             // stage fixes — a finalized record beside a call still on the line —
             // and leave no trace of why.
-            console.log(`[call ${this.callUuid}] no physical termination for terminal reason "${reason}" (by design)`)
+            console.log(`[call ${this.callUuid}] terminal reason "${reason}" does not request termination from the session (by design)`)
             return
         }
         const remainingPlaybackMs = Math.max(0, this.playbackEndsAt - Date.now())

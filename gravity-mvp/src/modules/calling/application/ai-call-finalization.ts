@@ -483,10 +483,15 @@ function buildTerminal(
     request: AiCallFinalizationInput,
     endedAt: Date,
 ): { terminal: AiCallTerminalUpdate; validationIssues: unknown[] } {
+    // `max_duration` is the bridge's hard safety cap on an answered call. The
+    // conversation happened and was stopped, so it ends like any other completed
+    // session rather than as a failure; the outcome mapper carries the cause in
+    // its reason slug. Anything still unrecognised stays `failed` on purpose.
     const sessionStatus: AiCallTerminalUpdate['aiSessionStatus'] =
         request.reason === 'completed' ? 'ended'
             : request.reason === 'transferred' ? 'transferring'
-                : request.reason === 'closed' ? 'ended' : 'failed'
+                : request.reason === 'closed' ? 'ended'
+                    : request.reason === 'max_duration' ? 'ended' : 'failed'
     const leadData = request.leadData ?? request.result?.lead_data ?? {}
     const analysis: AiCallTerminalUpdate['aiAnalysis'] = request.result
         ? {

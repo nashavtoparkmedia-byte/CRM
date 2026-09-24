@@ -85,8 +85,34 @@ only safe before step 9.
   (`end_call`), or when its session is closed while the channel is still up: it sends one
   `uuid_kill … NORMAL_CLEARING` after the final phrase has had time to play. A restart of the bridge
   still leaves live channels up, unchanged.
-- There is still no maximum call duration on any layer — neither in the dialplan nor in the bridge —
-  so a call nobody ends runs until the far end hangs up. The hard cap is a separate change, because
-  its value is an Owner decision.
+- A bridge built at or after the hard-duration change caps an **answered** AI call at ten minutes.
+  The deadline is absolute: the instant FreeSWITCH reports it answered the channel plus ten minutes,
+  one limit for inbound and outbound alike. It is set once and never moved — a CHANNEL_ANSWER lost
+  and recovered later gets only the time the call has left, and a hangup that fails never buys
+  another window. At the deadline the bridge ends the session and sends one
+  `uuid_kill … NORMAL_CLEARING` immediately, with no warning phrase and no grace — including when a
+  goodbye grace was already waiting, which it cancels rather than queues behind. It is a safety and
+  cost limit, not a failure: the CRM records such a call as an ended session whose outcome reason is
+  `max_duration`. A call that is still ringing is not capped (the pre-answer re-check governs that),
+  and a channel whose CRM session never bound is capped too — it is the one ending nothing else in
+  the bridge can produce. The value is not configurable through the environment; it is a product
+  decision and lives in the source that implements it.
+- **FreeSWITCH enforces the limit itself.** The limit does not depend on the bridge being alive.
+  The originate installs two answer hooks before the number is dialed: the existing `record_session`
+  one, and a second, separately named one that runs `sched_hangup` — so at the moment FreeSWITCH
+  answers the channel it schedules its own hangup ten minutes out, inside its own core. That
+  schedule survives the bridge crashing, its event socket wedging and the network going away;
+  verified on this exact image with the event socket unloaded, where the parked channel still died at
+  its deadline with `NORMAL_CLEARING`. A call that ends normally first leaves the schedule to fire
+  against a channel that no longer exists, which is a no-op.
+  The same originate also puts the policy itself on the channel as `yoko_ai_max_answered_ms`, and the
+  bridge reads it back rather than holding its own copy: there is exactly one ten-minute value in the
+  repository, in the Calling application layer. A channel that arrives without a usable policy is not
+  given an invented one — if the CRM proves it is a product call it is ended immediately, and only an
+  explicit CRM "no such call" marks it as a manual diagnostic dial that this limit does not own.
+  `ai_call_termination_overdue` remains in the bridge log as evidence for the case where both the
+  bridge's own hangup and its deadline fell short.
+- Older images have no cap on any layer — neither the dialplan nor the bridge — so a call nobody
+  ends runs until the far end hangs up.
 - `.env.production` is shared through `env_file` with seven services, and gravity-mvp can reveal
   `MEGAFON_SIP_PASSWORD` to administrators in env mode; see `docs/SECRETS.md` 2.9.

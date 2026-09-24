@@ -432,6 +432,50 @@ describe('Calling durable single-call finalization', () => {
         expect(h.persistence.journal().followUp.retryableFailures).toBe(3)
     })
 
+    it('records a hard duration cap as an ended session, not a failure', async () => {
+        const h = harness()
+        // What the bridge sends when its ten-minute cap cuts an answered call: no
+        // LLM verdict, because end_call never ran.
+        await expect(h.operation('call-1', {
+            reason: 'max_duration',
+            transcript: [{ role: 'user', content: 'Yes' }],
+            realUserUtterances: 1,
+            events: [],
+        })).resolves.toMatchObject({ kind: 'success' })
+
+        expect(h.persistence.terminal).toMatchObject({
+            aiSessionStatus: 'ended',
+            aiOutcome: 'dropped_mid_call',
+            aiOutcomeReason: 'max_duration',
+            status: 'completed',
+            hangupCause: 'NORMAL_CLEARING',
+        })
+        expect(h.create).not.toHaveBeenCalled()
+    })
+
+    it('keeps the transcript of a capped call and stays within the drop-path shape', async () => {
+        const h = harness()
+        await h.operation('call-1', {
+            reason: 'max_duration',
+            leadData: { experienceYears: '5' },
+            transcript: [{ role: 'user', content: 'Yes' }],
+            transcriptItems: [{
+                messageId: 'audio-bridge-transcript:v1:fs-1:1',
+                ordinal: 1, segmentRevision: 1, role: 'user', content: 'Yes', final: true,
+            }],
+            realUserUtterances: 1,
+            events: [],
+        })
+        expect(h.persistence.terminal?.aiAnalysis).toBeNull()
+        expect(h.persistence.terminal?.aiSummary).toBeNull()
+        // Pre-existing shape, shared with every other drop path: lead data reaches
+        // the row inside `result`, which a call with no LLM verdict does not carry.
+        // A cap behaves exactly like a lead hanging up mid-call here; changing that
+        // is a finalization question of its own, not part of the duration cap.
+        expect(h.persistence.terminal?.leadDataStructured).toEqual({})
+        expect(h.persistence.terminal?.aiSessionStatus).toBe('ended')
+    })
+
     it('completes a no-follow-up outcome without invoking Work Management', async () => {
         const h = harness()
         await expect(h.operation('call-1', { reason: 'closed' })).resolves.toMatchObject({
