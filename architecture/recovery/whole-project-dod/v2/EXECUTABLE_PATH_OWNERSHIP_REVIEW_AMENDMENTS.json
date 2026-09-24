@@ -461,6 +461,44 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 4
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a2-tg2b-telegram-bot-provider-account-20260924",
+      "reviewed_at": "2026-09-24T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A2_TG2B_CANDIDATE_OWNERSHIP_REVIEW_20260924",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A2_TG2B_TELEGRAM_BOT_PROVIDER_ACCOUNT_LIVE_WIRING_IMPLEMENTATION",
+      "reason": "M2A2-TG2B adds exactly seven tracked executable surfaces and changes no existing ownership. Four sit under telegram_channel owned paths in gravity-mvp: the internal protocol gravity-mvp/src/modules/telegram-channel/internal/bot-attestation/telegram-bot-attestation-protocol.ts, the application composition gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.ts with its proof, and the contract gravity-mvp/src/contracts/telegram-channel/v1/provider-account-attestation-commands.ts. Three sit under the telegram_channel owned path tg-bot/src: services/providerAccountAttestation.js with its proof and the boundary proof security/providerAccountAttestationBoundary.source.test.js. All seven are context owned by the existing manifest selection. The modified surfaces were already tracked and keep their placement. No path belongs to an exact inventory, so no exact-inventory transition, assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes; only the denominator moves from 2528 to 2535.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2528,
+        "tracked_inventory_sha256": "2e8f26ddefbc47d401e19d17dbe4f03cd989f3804ee289eeead13f1852103d66",
+        "coverage_sha256": "1305d1a88e689ef105746d7183a19cd33ff74b60b63cde00a5b5a8845561611b"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2535,
+        "tracked_inventory_sha256": "79746cfbdd2dcc30650f6a732712a5d44842c19d436eccb383477179b82af93f",
+        "coverage_sha256": "b5866167321bd60306ee15cc9b886cb19060de71feb08d43963fca294d5e3bfe"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "91228a9e7e2178298539eac5c0a58ad88b944da87cc523ab186d4cb703dde7c4",
+          "current_source_sha256": "d37b509555610696d4f4d83611177ead80bf61beabb600b2349e21d459200c96",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "M2A2-TG2B adds one authenticated action case to this already assigned runtime surface and its owning capability call. The reviewed lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, exclusion gravity_runtime_remainder and exact_runtime_inventory membership are unchanged; only the source fingerprint moves."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 7
+      }
     }
   ]
 }
