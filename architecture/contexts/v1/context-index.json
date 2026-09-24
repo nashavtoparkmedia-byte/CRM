@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "6b17c7eb6c82017a3d73885ef9aa0b845e371aacd5a1066b6f5e5aed66717ca2"
+      "sha256": "956944b668bc2d353ddbd775ac6c603ee2152ee2ff0d1691184d1a392ec66919"
     },
     {
       "context": "whatsapp_channel",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "c444fa4f231793d05d8c9f7e8599ae62d98b7aa42bfa335cff558cfd94acf93d"
+      "sha256": "09e8e7049f337e32a8253720162b2bdd6946d82e4b10e26c091abd83ca41eb4d"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
