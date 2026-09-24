@@ -337,11 +337,47 @@
         {
           "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
           "previous_source_sha256": "67fe16a55a8b9e37cb4cc20493e4a2b84738f45659a33a839e8d0cae17f5fd81",
-          "current_source_sha256": "f8be868773cc0a475f05c1469d1c8a5e6f08ff3e2c9cf82c1776794b9f84fd8d",
+          "current_source_sha256": "3a2cf475f8c074cac8e57f1b2a4a6fda414b2f22a69dd3639b38e1a769655207",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "The DOM-fallback repair changed only the bytes of this already assigned MAX webhook route: it binds an attested, sender-less DOM-fallback text to the proven peer of its exact private conversation. Lifecycle APPLICATION_RUNTIME, owner legacy_gravity_runtime and exclusion gravity_runtime_remainder are unchanged."
+          "review_rationale": "The DOM-fallback repair changed only the bytes of this already assigned MAX webhook route, and the topology repair on top of it changed those bytes again: the route now proves an inbound peer through the Contacts inbound peer identity query instead of the conversation's linked identity. A path may carry one rebind, so this one names the current bytes. Lifecycle APPLICATION_RUNTIME, owner legacy_gravity_runtime and exclusion gravity_runtime_remainder are unchanged by either change."
         }
       ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
+    },
+    {
+      "amendment_id": "messaging-max-dom-fallback-topology-repair-20260924",
+      "reviewed_at": "2026-09-24T00:00:00Z",
+      "reviewed_by": "MESSAGING_TOPOLOGY_REPAIR_IMPLEMENTER_20260924",
+      "role": "REPAIR_IMPLEMENTER_WITH_INDEPENDENT_ADVERSARIAL_DESIGN_AND_IMPLEMENTATION_REVIEW",
+      "authorization": "ORCHESTRATOR_CONTINUE_PRODUCT_REPAIR_20260924_AFTER_PRODUCTION_ROLLBACK_OF_fb9fb30d",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "The MAX DOM-fallback topology repair adds three tracked executable surfaces, all selected by the contacts context manifest and therefore context-owned: the inbound conversation peer identity query contract, its contract test and the Contacts handler that serves it. They move the tracked executable denominator from 2,503 to 2,506, measured with the repository's own tracked-surface inventory. No assignment, exact-inventory transition, lifecycle, functional owner, governed exclusion or reviewed rationale is created or altered, and this amendment carries no rebind of its own: the only already assigned surface whose bytes moved is the MAX webhook route, whose single permitted rebind is carried by the predecessor amendment and now names the current bytes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2503,
+        "tracked_inventory_sha256": "696815960b119e94431548a3218e72c99030b8d04f7368bbe8f4b8e0fafb9321",
+        "coverage_sha256": "ae39cb7672f5101c39c32a213dd7478eae4eaa2276dc3bfb0117ae3bc970aa33"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2506,
+        "tracked_inventory_sha256": "89cf58e48aaf59b26857f2565e2a509e8deedd37776d98cae8656d8bd36e7f73",
+        "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
+      },
+      "source_hash_rebinds": [],
       "invariants": {
         "assignments_added": 0,
         "assignments_removed": 0,
