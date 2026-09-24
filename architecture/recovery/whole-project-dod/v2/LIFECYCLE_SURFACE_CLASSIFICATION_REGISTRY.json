@@ -6559,7 +6559,7 @@
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
-      "rationale": "Active architecture control-plane surface for the M2A2-TG1 Telegram provider-account foundation; approved path is a bounded read-only boundary control that pins the module file set, the rule that identity may come only from the authenticated getMe id, the single database-reaching source, the absence of any credential or session name, the projection shape, the migration's constraint contract, the inertness of the foundation and the unchanged public surface. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "rationale": "Active architecture control-plane surface for the M2A2-TG1 Telegram provider-account foundation; approved path is a bounded read-only boundary control that pins the module file set, the rule that identity may come only from the authenticated getMe id, the single database-reaching source, the absence of any credential or session name, the projection shape, the migration's constraint contract, the exact set of approved importers now that M2A2-TG2A wired the foundation to the MTProto runtime, the two orchestration modes over the single writer, the guarded non-awaited runtime hand-off, the ordered admission ceremony and the unchanged public surface. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     },

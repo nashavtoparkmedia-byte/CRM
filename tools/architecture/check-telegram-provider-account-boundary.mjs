@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 
-// M2A2-TG1 boundary: the Telegram provider-account foundation owns Telegram
-// account identity alone. The provider-authenticated getMe() id is the only
-// identity authority, credentials never reach this module, only its writer
+// M2A2-TG1/TG2A boundary: the Telegram provider-account foundation owns
+// Telegram account identity alone. The provider-authenticated getMe() id is the
+// only identity authority, credentials never reach this module, only its writer
 // touches the database, the projection carries no secret and no provider id,
-// the foundation stays inert, and it adds no cross-context public API.
+// and it adds no cross-context public API.
+//
+// TG2A replaced inertness with an exact importer allowlist: the runtime and its
+// tests may reach the intake, nothing else may, the writer keeps exactly one
+// caller, the runtime hand-off can never fail into Telegram, and the ceremony
+// may never report a pending account it did not read back.
 
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -18,12 +23,20 @@ const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const MODULE_DIR = 'gravity-mvp/src/modules/telegram-channel/internal/provider-account'
 const IDENTITY = `${MODULE_DIR}/telegram-account-identity.ts`
 const WRITER = `${MODULE_DIR}/telegram-account-writer.ts`
-const SOURCES = [IDENTITY, WRITER]
+const INTAKE = `${MODULE_DIR}/telegram-account-intake.ts`
+const SOURCES = [IDENTITY, WRITER, INTAKE]
 const MODULE_FILES = [
   ...SOURCES,
   `${MODULE_DIR}/telegram-account-identity.test.ts`,
+  `${MODULE_DIR}/telegram-account-intake.test.ts`,
+  `${MODULE_DIR}/telegram-account-intake.postgres.test.ts`,
   `${MODULE_DIR}/telegram-provider-account.postgres.test.ts`,
 ]
+
+// The runtime that observes live provider authentications, and its proof.
+const RUNTIME = 'gravity-mvp/src/app/tg-actions.ts'
+const RUNTIME_TEST = 'gravity-mvp/src/app/tg-actions.provider-account.test.ts'
+const APPROVED_IMPORTERS = [RUNTIME, RUNTIME_TEST]
 
 const MIGRATION = 'gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql'
 const SCHEMA = 'gravity-mvp/prisma/schema.prisma'
@@ -31,6 +44,7 @@ const SCHEMA = 'gravity-mvp/prisma/schema.prisma'
 const ALLOWED_MODULE_DEPENDENCIES = new Map([
   [IDENTITY, []],
   [WRITER, ['node:crypto', '@prisma/client', '@/lib/prisma', './telegram-account-identity']],
+  [INTAKE, ['@/infrastructure/operations/operational-log', './telegram-account-identity', './telegram-account-writer']],
 ])
 
 // A credential, a session or a token may never be named in this module.
@@ -143,9 +157,97 @@ export function assertProjectionShape(source) {
     'the projection must not carry a provider id, a credential, a process identity or a routing internal')
 }
 
-/** The foundation stays inert until a runtime hook is reviewed separately. */
-export function assertInert(importers) {
-  assert.deepEqual(importers, [], 'the Telegram provider account foundation must stay inert: nothing may import it yet')
+/** Only the reviewed runtime may reach the foundation. */
+export function assertApprovedImporters(importers) {
+  assert.deepEqual(importers, [...APPROVED_IMPORTERS].sort(),
+    'only the reviewed Telegram runtime may use the provider account foundation')
+  for (const importer of importers) {
+    assert.doesNotMatch(importer, /\/modules\/(?:contacts|messaging|max-channel|whatsapp-channel)\//u,
+      'another domain must not reach the provider account foundation')
+    assert.doesNotMatch(importer, /\/public\//u, 'the provider account foundation must not be re-exported publicly')
+  }
+}
+
+/** The writer keeps exactly one production caller: the intake. */
+export function assertWriterCallers(files) {
+  const callers = files
+    .filter(([relative]) => relative !== WRITER)
+    .filter(([relative, source]) => moduleReferences(relative, source).some((specifier) => /telegram-account-writer/u.test(specifier)))
+    .map(([relative]) => relative)
+    .sort()
+  assert.deepEqual(callers, [
+    INTAKE,
+    `${MODULE_DIR}/telegram-account-intake.postgres.test.ts`,
+    `${MODULE_DIR}/telegram-provider-account.postgres.test.ts`,
+  ].sort(), 'only the intake and the foundation proofs may call the writer')
+}
+
+function declarationBody(code, header) {
+  const start = code.indexOf(header)
+  assert(start >= 0, `missing declaration: ${header}`)
+  const next = code.indexOf('\nexport ', start + header.length)
+  return code.slice(start, next < 0 ? code.length : next)
+}
+
+/** Two orchestration modes over one writer, each with its own contract. */
+export function assertIntakeModes(source) {
+  const code = withoutComments(INTAKE, source)
+
+  const runtime = declarationBody(code, 'export function recordObservedAttestationV1')
+  assert.match(runtime, /: void/u, 'the runtime hand-off must not return a promise')
+  assert.match(runtime, /void intake\(\)\.observe\(input\)/u, 'the runtime hand-off must not be awaited')
+  assert.match(runtime, /catch/u, 'the runtime hand-off must swallow every failure')
+
+  const observe = declarationBody(code, 'async observe(')
+  assert.match(observe, /catch/u, 'the runtime mode must swallow every failure')
+
+  const ceremony = declarationBody(code, 'async admit(')
+  const attested = ceremony.indexOf('await attest(input')
+  const projected = ceremony.indexOf('deps.project(')
+  const admitted = ceremony.indexOf('deps.admit(')
+  assert(attested >= 0 && projected > attested && admitted > projected,
+    'the ceremony must attest, read the projection back and only then admit')
+
+  for (const claim of [...code.matchAll(/status: 'pending_approval'/gu)]) {
+    const preceding = code.slice(Math.max(0, claim.index - 200), claim.index)
+    assert.match(preceding, /durablyPending/u,
+      'a pending account may only be reported after the projection proved one exists')
+  }
+
+  const display = declarationBody(code, 'async describe(')
+  assert.doesNotMatch(display, /deps\.admit\(|deps\.record\(/u, 'the display read may never write or admit')
+}
+
+/** The runtime call site, the ceremony order and the locator source. */
+export function assertRuntimeHandOff(source) {
+  const code = withoutComments(RUNTIME, source)
+
+  const handOff = code.indexOf('recordObservedAttestationV1({')
+  assert(handOff >= 0, 'the runtime must hand its live observation to the foundation')
+  assert.doesNotMatch(code, /await recordObservedAttestationV1/u, 'the runtime hand-off must not be awaited')
+  assert.match(code.slice(Math.max(0, handOff - 200), handOff), /try \{/u,
+    'the runtime hand-off must be guarded at the call site')
+
+  assert.doesNotMatch(code, /transportRef: (?:providerAccountId|providerUserId|me\.|String\(providerAccountId\))/u,
+    'the transport locator may never be derived from the provider principal')
+
+  const ceremony = declarationBody(code, 'async function runTelegramProviderAccountAdmissionV1')
+  const live = ceremony.indexOf('readLiveProviderPrincipal(input.client)')
+  const admits = ceremony.indexOf('await admitTelegramProviderAccountV1(')
+  assert(live >= 0 && admits > live, 'the ceremony must observe a live principal before it admits')
+
+  const login = declarationBody(code, 'export async function checkTelegramAuthStatus')
+  assert.match(login, /let admission[\s\S]{0,240}try \{[\s\S]{0,320}await runTelegramProviderAccountAdmissionV1/u,
+    'a persisted login must not be able to fail because of the admission ceremony')
+  assert.doesNotMatch(login, /transportRef: String\(connectionRow\?\.id \?\? telegramId\)|transportRef: telegramId/u,
+    'the login locator must come from the persisted record with no fallback to the principal')
+
+  const action = declarationBody(code, 'export async function admitTelegramProviderAccount')
+  assert.match(action, /await requireIntegrationAdminAccess\(\)/u, 'admission must require an authenticated operator')
+  assert.match(action, /await getTelegramClient\(connection\)/u, 'admission must re-attest from a live client')
+  const state = declarationBody(code, 'export async function getTelegramProviderAccountState')
+  assert.match(state, /await requireIntegrationAdminAccess\(\)/u, 'the state read must require an authenticated operator')
+  assert.doesNotMatch(state, /admitTelegramProviderAccountV1/u, 'a stored projection may never admit an account')
 }
 
 /** The database carries the invariants the writer depends on. */
@@ -197,7 +299,10 @@ const presentModuleFiles = files.map(([relative]) => relative).filter((relative)
 assert.deepEqual(presentModuleFiles, [...MODULE_FILES].sort(), 'provider account module files changed')
 
 const importers = providerAccountImporters(files)
-assertInert(importers)
+assertApprovedImporters(importers)
+assertWriterCallers(files)
+assertIntakeModes(read(INTAKE))
+assertRuntimeHandOff(read(RUNTIME))
 for (const relative of SOURCES) assertModuleSource(relative, read(relative))
 assertExactProviderForm(read(IDENTITY))
 assertReadinessIsDerived(read(IDENTITY))
@@ -239,7 +344,37 @@ const rejected = {
   projection_leaks_provider_id: () => assertProjectionShape(read(WRITER).replace('    accountKind: TelegramAccountKindV1 | null', '    accountKind: TelegramAccountKindV1 | null\n    providerUserId: string')),
   migration_drops_the_composite_key: () => assertMigrationContract(read(MIGRATION).replace('FOREIGN KEY ("accountId", "attestedProviderUserId") REFERENCES "TelegramAccount"("accountId", "providerUserId")', 'FOREIGN KEY ("accountId") REFERENCES "TelegramAccount"("accountId")')),
   migration_stores_a_credential: () => assertMigrationContract(`${read(MIGRATION)}\nALTER TABLE "TelegramAccount" ADD COLUMN "sessionString" TEXT;`),
-  foundation_becomes_reachable: () => assertInert(['gravity-mvp/src/app/tg-actions.ts']),
+  foreign_importer: () => assertApprovedImporters([...APPROVED_IMPORTERS, 'gravity-mvp/src/modules/contacts/internal/linker.ts'].sort()),
+  writer_gains_a_caller: () => assertWriterCallers([
+    ...files,
+    ['gravity-mvp/src/app/tg-bot-actions.ts', "import { recordTelegramTransportAttestationV1 } from '@/modules/telegram-channel/internal/provider-account/telegram-account-writer'"],
+  ]),
+  runtime_mode_returns_a_promise: () => assertIntakeModes(read(INTAKE).replace('ObservedAttestationV1): void {', 'ObservedAttestationV1): Promise<void> {')),
+  runtime_mode_is_awaited: () => assertIntakeModes(read(INTAKE).replace('void intake().observe(input)', 'await intake().observe(input)')),
+  pending_without_proof: () => assertIntakeModes(read(INTAKE).replace(
+    "return finish({ status: 'unavailable', reason: 'projection_unavailable' })",
+    "return finish({ status: 'pending_approval', reason: 'projection_unavailable' })")),
+  display_read_writes: () => assertIntakeModes(read(INTAKE).replace(
+    'await deps.project(transportKind, transportRef)', 'await deps.record({})')),
+  hand_off_is_awaited: () => assertRuntimeHandOff(read(RUNTIME).replace('recordObservedAttestationV1({', 'await recordObservedAttestationV1({')),
+  hand_off_is_unguarded: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'const cached = tgProviderAccountIds.get(connectionId)',
+    'recordObservedAttestationV1({})\n    const cached = tgProviderAccountIds.get(connectionId)')),
+  locator_from_the_principal: () => assertRuntimeHandOff(read(RUNTIME).replace('transportRef: connectionId,', 'transportRef: providerAccountId,')),
+  ceremony_skips_the_live_principal: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'await readLiveProviderPrincipal(input.client)', 'input.observedProviderUserId ?? ""')),
+  admission_without_an_operator: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    `export async function admitTelegramProviderAccount(connectionId: string): Promise<TelegramAdmissionResultV1> {
+    const principal = await requireIntegrationAdminAccess()`,
+    `export async function admitTelegramProviderAccount(connectionId: string): Promise<TelegramAdmissionResultV1> {
+    const principal = { id: 'anonymous' }`)),
+  login_fails_on_admission: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'let admission: TelegramAdmissionResultV1 = ', 'const admission: TelegramAdmissionResultV1 = ')),
+  login_locator_falls_back_to_the_principal: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    'transportRef: persistedTransportRef,', 'transportRef: telegramId,')),
+  stored_projection_admits: () => assertRuntimeHandOff(read(RUNTIME).replace(
+    "return await describeTelegramProviderAccountV1('mtproto_session', transportRef)",
+    "return await admitTelegramProviderAccountV1({}, 'anonymous')")),
   public_surface_grows: () => assertNoPublicSurface([], { public_surface: ['TelegramDeliveryPort.v1'] }),
   foundation_binds_the_session_row: () => assertNoShortcut(read(SCHEMA).replace('  bindings           TelegramTransportBinding[]', '  connection         TelegramConnection @relation(fields: [accountId], references: [id])')),
   public_file_reexports_the_writer: () => assertNoPublicSurface(
@@ -259,7 +394,20 @@ const messages = {
   projection_leaks_provider_id: /projection changed/u,
   migration_drops_the_composite_key: /binding attests only its own account principal/u,
   migration_stores_a_credential: /must not store a credential/u,
-  foundation_becomes_reachable: /must stay inert/u,
+  foreign_importer: /only the reviewed Telegram runtime/u,
+  writer_gains_a_caller: /only the intake and the foundation proofs/u,
+  runtime_mode_returns_a_promise: /must not return a promise/u,
+  runtime_mode_is_awaited: /must not be awaited/u,
+  pending_without_proof: /may only be reported after the projection proved one exists/u,
+  display_read_writes: /display read may never write or admit/u,
+  hand_off_is_awaited: /hand-off must not be awaited/u,
+  hand_off_is_unguarded: /must be guarded at the call site/u,
+  locator_from_the_principal: /never be derived from the provider principal/u,
+  ceremony_skips_the_live_principal: /must observe a live principal before it admits/u,
+  admission_without_an_operator: /admission must require an authenticated operator/u,
+  login_fails_on_admission: /must not be able to fail because of the admission ceremony/u,
+  login_locator_falls_back_to_the_principal: /locator must come from the persisted record/u,
+  stored_projection_admits: /stored projection may never admit an account/u,
   public_surface_grows: /public surface changed/u,
   foundation_binds_the_session_row: /must not relate to a transport row, a contact or a conversation/u,
   public_file_reexports_the_writer: /must not expose the provider account foundation/u,
@@ -274,8 +422,10 @@ console.log(JSON.stringify({
   control: 'telegram-provider-account-boundary',
   module_files: MODULE_FILES.length,
   importers: importers.length,
+  approved_importers: APPROVED_IMPORTERS.length,
+  writer_callers: 3,
   database_sources: 1,
-  inert: true,
+  orchestration_modes: 2,
   public_surface_changes: 0,
   negative_probes: Object.keys(rejected).length,
 }, null, 2))
