@@ -47,6 +47,10 @@ const RUNTIME_TEST = 'gravity-mvp/src/app/tg-actions.provider-account.test.ts'
 // surface re-exports it.
 const INGRESS = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.ts'
 const INGRESS_TEST = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.test.ts'
+// The signed statement, the freshness window and the replay guard live behind
+// the composition: a module the public barrel reaches may export only narrow
+// business functions.
+const PROTOCOL = 'gravity-mvp/src/modules/telegram-channel/internal/bot-attestation/telegram-bot-attestation-protocol.ts'
 const APPROVED_IMPORTERS = [RUNTIME, RUNTIME_TEST, INGRESS]
 
 const MIGRATION = 'gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql'
@@ -177,6 +181,29 @@ export function assertApprovedImporters(importers) {
       'another domain must not reach the provider account foundation')
     assert.doesNotMatch(importer, /\/public\//u, 'a public facade may not reach the foundation; the application layer owns that composition')
   }
+}
+
+/** The signed statement, its key derivation and the bounded replay guard. */
+export function assertAttestationProtocol(source) {
+  const code = withoutComments(PROTOCOL, source)
+  assert.match(code, /timingSafeEqual/u, 'the signature comparison must be constant time')
+  assert.match(code, /createHash\('sha256'\)\.update\(`\$\{TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1\}\|\$\{secret\}`\)/u,
+    'the signing key must be derived from the shared secret')
+  assert.match(code, /digest\('base64url'\)/u, 'the signature encoding changed')
+  assert.match(code, /MAX_OBSERVATION_AGE_MS = 120000\b/u, 'the accepted observation age changed')
+  assert.match(code, /MAX_OBSERVATION_FUTURE_SKEW_MS = 30000\b/u, 'the accepted clock skew changed')
+  assert.match(code, /REPLAY_CACHE_MAXIMUM = 2048\b/u, 'the replay cache bound changed')
+  const canonical = code.slice(code.indexOf('export function canonicalTelegramProviderAttestationV1'))
+  const order = ['TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1', 'TELEGRAM_PROVIDER_ATTESTATION_ACTION_V1',
+    'payload.providerUserId', 'payload.transportRef', 'payload.attestingInstanceId', 'payload.observedAt', 'payload.attestationId']
+  let previous = -1
+  for (const field of order) {
+    const at = canonical.indexOf(field)
+    assert(at > previous, `the canonical statement changed at: ${field}`)
+    previous = at
+  }
+  assert.match(canonical, /join\('\\n'\)/u, 'the canonical separator changed')
+  assert.doesNotMatch(code, /@\/lib\/prisma|@prisma\//u, 'the protocol must not reach a database')
 }
 
 /** The writer keeps exactly one production caller: the intake. */
@@ -334,15 +361,19 @@ export function assertIngressCapability(source) {
     'the ingress may reach the foundation only through the intake')
   assert.doesNotMatch(code, /recordTelegramTransportAttestationV1|readProviderAccountProjectionV1|admitTelegramAccountV1|ProviderAccountProjectionV1/u,
     'the ingress must not name the writer, the projection reader or the admission')
+  // The public barrel reaches this file, so it may export only functions.
+  const exported = [...code.matchAll(/^export (const|class|interface|enum|let|var|function|async function|type) /gmu)].map((match) => match[1])
+  assert.deepEqual([...new Set(exported)].sort(), ['async function', 'function'],
+    'a composition the public surface reaches may export only narrow business functions')
 
   const entry = declarationBody(code, 'export async function attestTelegramProviderAccountFromBotV1')
   const order = [
     ['action', /input\.action !== TELEGRAM_PROVIDER_ATTESTATION_ACTION_V1/u],
     ['shape', /parseTelegramProviderAttestationPayloadV1\(input\.payload\)/u],
     ['signature', /signatureMatches\(expected, payload\.signature\)/u],
-    ['principal', /PROVIDER_USER_ID\.test\(payload\.providerUserId\)/u],
+    ['principal', /PROVIDER_USER_ID_PATTERN\.test\(payload\.providerUserId\)/u],
     ['transport', /payload\.transportRef === payload\.providerUserId/u],
-    ['instance', /UUID\.test\(payload\.attestingInstanceId\)/u],
+    ['instance', /UUID_PATTERN\.test\(payload\.attestingInstanceId\)/u],
     ['freshness', /age > MAX_OBSERVATION_AGE_MS/u],
     ['replay', /deps\.replay\.admit\(payload\.attestationId, now\)/u],
     ['record', /await deps\.record\(/u],
@@ -354,11 +385,6 @@ export function assertIngressCapability(source) {
     assert(match > previous, `the ingress security order changed at: ${label}`)
     previous = match
   }
-
-  assert.match(code, /timingSafeEqual/u, 'the signature comparison must be constant time')
-  assert.match(code, /createHash\('sha256'\)\.update\(`\$\{TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1\}\|\$\{secret\}`\)/u,
-    'the signing key must be derived from the shared secret')
-  assert.match(code, /digest\('base64url'\)/u, 'the signature encoding changed')
 
   const telemetry = code.match(/deps\.emit\(TELEGRAM_PROVIDER_ATTESTATION_EVENT_V1, \{[^}]*\}/u)
   assert(telemetry, 'the ingress must report a bounded outcome')
@@ -381,6 +407,7 @@ assertWriterCallers(files)
 assertIntakeModes(read(INTAKE))
 assertRuntimeHandOff(read(RUNTIME))
 assertIngressCapability(read(INGRESS))
+assertAttestationProtocol(read(PROTOCOL))
 for (const relative of SOURCES) assertModuleSource(relative, read(relative))
 assertExactProviderForm(read(IDENTITY))
 assertReadinessIsDerived(read(IDENTITY))
@@ -459,8 +486,13 @@ const rejected = {
   ingress_records_before_the_replay_check: () => assertIngressCapability(read(INGRESS).replace(
     '    if (!deps.replay.admit(payload.attestationId, now)) return report(\'replayed\')',
     '    const early = await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    if (!deps.replay.admit(payload.attestationId, now)) return report(\'replayed\')')),
-  ingress_compares_the_signature_loosely: () => assertIngressCapability(read(INGRESS).replaceAll('timingSafeEqual', 'Object.is')),
-  ingress_signs_with_the_bearer_secret: () => assertIngressCapability(read(INGRESS).replace(
+  protocol_compares_the_signature_loosely: () => assertAttestationProtocol(read(PROTOCOL).replaceAll('timingSafeEqual', 'Object.is')),
+  protocol_widens_the_freshness_window: () => assertAttestationProtocol(read(PROTOCOL).replace('MAX_OBSERVATION_AGE_MS = 120_000', 'MAX_OBSERVATION_AGE_MS = 1_200_000')),
+  protocol_unbounds_the_replay_cache: () => assertAttestationProtocol(read(PROTOCOL).replace('REPLAY_CACHE_MAXIMUM = 2048', 'REPLAY_CACHE_MAXIMUM = 2_000_000')),
+  protocol_reorders_the_canonical_statement: () => assertAttestationProtocol(read(PROTOCOL).replace('payload.providerUserId,\n        payload.transportRef,', 'payload.transportRef,\n        payload.providerUserId,')),
+  ingress_exports_more_than_functions: () => assertIngressCapability(read(INGRESS).replace(
+    'export async function attestTelegramProviderAccountFromBotV1', 'export const INGRESS_LIMIT = 1\nexport async function attestTelegramProviderAccountFromBotV1')),
+  protocol_signs_with_the_bearer_secret: () => assertAttestationProtocol(read(PROTOCOL).replace(
     'createHash(\'sha256\').update(`${TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1}|${secret}`).digest()',
     'Buffer.from(secret)')),
   ingress_telemetry_leaks_the_principal: () => assertIngressCapability(read(INGRESS).replace(
@@ -512,8 +544,12 @@ const messages = {
   ingress_reaches_the_writer_directly: /only through the intake/u,
   ingress_records_before_proving_the_signature: /ingress security order changed/u,
   ingress_records_before_the_replay_check: /ingress security order changed/u,
-  ingress_compares_the_signature_loosely: /signature comparison must be constant time/u,
-  ingress_signs_with_the_bearer_secret: /signing key must be derived/u,
+  protocol_compares_the_signature_loosely: /signature comparison must be constant time/u,
+  protocol_widens_the_freshness_window: /accepted observation age changed/u,
+  protocol_unbounds_the_replay_cache: /replay cache bound changed/u,
+  protocol_reorders_the_canonical_statement: /canonical statement changed/u,
+  ingress_exports_more_than_functions: /may export only narrow business functions/u,
+  protocol_signs_with_the_bearer_secret: /signing key must be derived/u,
   ingress_telemetry_leaks_the_principal: /telemetry must carry no principal/u,
   ingress_mode_admits: /ingress mode must never admit or read back/u,
   ingress_mode_swallows_failures: /ingress mode must surface a failure/u,

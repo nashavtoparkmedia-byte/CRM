@@ -6,14 +6,16 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
     attestTelegramProviderAccountFromBotV1,
+    telegramProviderAttestationStatusV1,
+} from './telegram-provider-account-attestation'
+import {
     canonicalTelegramProviderAttestationV1,
     deriveTelegramProviderAttestationKeyV1,
     signTelegramProviderAttestationV1,
     TelegramAttestationReplayCacheV1,
-    telegramProviderAttestationStatusV1,
     MAX_OBSERVATION_AGE_MS,
     MAX_OBSERVATION_FUTURE_SKEW_MS,
-} from './telegram-provider-account-attestation'
+} from '../internal/bot-attestation/telegram-bot-attestation-protocol'
 
 const SECRET = 'test-bot-secret'
 const INSTANCE = '11111111-1111-4111-8111-111111111111'
