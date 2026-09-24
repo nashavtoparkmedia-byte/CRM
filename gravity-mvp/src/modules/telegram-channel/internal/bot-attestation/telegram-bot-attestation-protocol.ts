@@ -17,9 +17,16 @@ export const TELEGRAM_PROVIDER_ATTESTATION_EVENT_V1 = 'telegram_provider_account
 export const MAX_OBSERVATION_AGE_MS = 120_000
 /** A reporting clock may run this far ahead of the server, and no further. */
 export const MAX_OBSERVATION_FUTURE_SKEW_MS = 30_000
-/** The replay cache holds an id for as long as it could still be accepted. */
-export const REPLAY_RETENTION_MS = MAX_OBSERVATION_AGE_MS + MAX_OBSERVATION_FUTURE_SKEW_MS
 export const REPLAY_CACHE_MAXIMUM = 2048
+
+/**
+ * The last instant at which one signed observation can still pass freshness.
+ * Replay retention is derived from this, never from a separate duration whose
+ * correctness would depend on two constants staying numerically related.
+ */
+export function latestValidAtV1(observedAt: number): number {
+    return observedAt + MAX_OBSERVATION_AGE_MS
+}
 
 export const PROVIDER_USER_ID_PATTERN = /^[0-9]{1,64}$/u
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
@@ -61,33 +68,49 @@ export function signatureMatches(expected: string, supplied: string): boolean {
     return left.length === right.length && timingSafeEqual(left, right)
 }
 
-/** A bounded, process-local replay guard. Gravity runs one process for this authority. */
+/**
+ * A bounded, process-local replay guard. Gravity runs one process for this
+ * authority.
+ *
+ * Each entry carries the exact absolute instant after which its own payload can
+ * no longer pass freshness, so an id is forgotten strictly later than the last
+ * moment its payload could be replayed. Expiry order is not insertion order -
+ * an observation reported with an older timestamp expires sooner - so the sweep
+ * examines every entry rather than stopping at the first live one.
+ */
 export class TelegramAttestationReplayCacheV1 {
+    /** attestationId -> the last instant its payload can still pass freshness. */
     private readonly seen = new Map<string, number>()
 
-    constructor(
-        private readonly maximum: number = REPLAY_CACHE_MAXIMUM,
-        private readonly retentionMs: number = REPLAY_RETENTION_MS,
-    ) {}
+    constructor(private readonly maximum: number = REPLAY_CACHE_MAXIMUM) {}
 
     get size(): number {
         return this.seen.size
     }
 
-    /** True when this id has not been accepted inside the retention window. */
-    admit(attestationId: string, nowMs: number): boolean {
-        for (const [id, seenAt] of this.seen) {
-            if (nowMs - seenAt >= this.retentionMs) this.seen.delete(id)
-            else break
+    /**
+     * True when this id has not been accepted while its payload was still
+     * capable of passing freshness. An entry is forgotten only once now is
+     * strictly past its own validity, so at now === latestValidAt a duplicate
+     * is still rejected.
+     */
+    admit(attestationId: string, nowMs: number, latestValidAt: number): boolean {
+        for (const [id, expiresAt] of [...this.seen]) {
+            if (nowMs > expiresAt) this.seen.delete(id)
         }
-        const previous = this.seen.get(attestationId)
-        if (previous !== undefined && nowMs - previous < this.retentionMs) return false
-        this.seen.delete(attestationId)
-        this.seen.set(attestationId, nowMs)
+        if (this.seen.has(attestationId)) return false
+        this.seen.set(attestationId, latestValidAt)
         while (this.seen.size > this.maximum) {
-            const oldest = this.seen.keys().next().value
-            if (oldest === undefined) break
-            this.seen.delete(oldest)
+            let earliestId: string | null = null
+            let earliestExpiry = Number.POSITIVE_INFINITY
+            for (const [id, expiresAt] of this.seen) {
+                if (expiresAt < earliestExpiry) {
+                    earliestExpiry = expiresAt
+                    earliestId = id
+                }
+            }
+            if (earliestId === null) break
+            this.seen.delete(earliestId)
         }
         return true
     }

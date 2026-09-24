@@ -22,6 +22,7 @@ import { operationalLogV1 } from '@/infrastructure/operations/operational-log'
 
 import {
     canonicalTelegramProviderAttestationV1,
+    latestValidAtV1,
     signTelegramProviderAttestationV1,
     signatureMatches,
     TelegramAttestationReplayCacheV1,
@@ -92,7 +93,9 @@ export async function attestTelegramProviderAccountFromBotV1(
     if (age < -MAX_OBSERVATION_FUTURE_SKEW_MS) return report('stale')
 
     if (!UUID_PATTERN.test(payload.attestationId)) return report('malformed')
-    if (!deps.replay.admit(payload.attestationId, now)) return report('replayed')
+    // The entry is retained until this exact payload can no longer pass the
+    // freshness check above, so the two windows cannot leave a gap.
+    if (!deps.replay.admit(payload.attestationId, now, latestValidAtV1(payload.observedAt))) return report('replayed')
 
     const recorded = await deps.record({
         transportKind: 'bot_runtime',

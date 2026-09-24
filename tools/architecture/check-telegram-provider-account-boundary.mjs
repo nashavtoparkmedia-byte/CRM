@@ -193,6 +193,16 @@ export function assertAttestationProtocol(source) {
   assert.match(code, /MAX_OBSERVATION_AGE_MS = 120000\b/u, 'the accepted observation age changed')
   assert.match(code, /MAX_OBSERVATION_FUTURE_SKEW_MS = 30000\b/u, 'the accepted clock skew changed')
   assert.match(code, /REPLAY_CACHE_MAXIMUM = 2048\b/u, 'the replay cache bound changed')
+  // Replay retention is derived from the payload's own validity, never from a
+  // separate duration whose correctness depends on two constants agreeing.
+  assert.match(code, /function latestValidAtV1\(observedAt: number\): number \{\s*return observedAt \+ MAX_OBSERVATION_AGE_MS;\s*\}/u,
+    'replay expiry must be derived from the last instant a payload stays fresh')
+  assert.doesNotMatch(code, /REPLAY_RETENTION_MS/u, 'replay retention must not become an independent duration again')
+  const guard = code.slice(code.indexOf('export class TelegramAttestationReplayCacheV1'))
+  assert.match(guard, /if \(nowMs > expiresAt\)\s*\n?\s*this\.seen\.delete\(id\);/u,
+    'an entry may be forgotten only strictly after its payload can no longer be fresh')
+  assert.doesNotMatch(guard, /nowMs >= expiresAt/u, 'forgetting at the last fresh instant reopens the replay boundary')
+  assert.match(guard, /while \(this\.seen\.size > this\.maximum\)/u, 'the replay cache must stay bounded')
   const canonical = code.slice(code.indexOf('export function canonicalTelegramProviderAttestationV1'))
   const order = ['TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1', 'TELEGRAM_PROVIDER_ATTESTATION_ACTION_V1',
     'payload.providerUserId', 'payload.transportRef', 'payload.attestingInstanceId', 'payload.observedAt', 'payload.attestationId']
@@ -375,7 +385,7 @@ export function assertIngressCapability(source) {
     ['transport', /payload\.transportRef === payload\.providerUserId/u],
     ['instance', /UUID_PATTERN\.test\(payload\.attestingInstanceId\)/u],
     ['freshness', /age > MAX_OBSERVATION_AGE_MS/u],
-    ['replay', /deps\.replay\.admit\(payload\.attestationId, now\)/u],
+    ['replay', /deps\.replay\.admit\(payload\.attestationId, now, latestValidAtV1\(payload\.observedAt\)\)/u],
     ['record', /await deps\.record\(/u],
   ]
   let previous = -1
@@ -484,11 +494,19 @@ const rejected = {
     '    const secret = deps.secret()',
     '    await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    const secret = deps.secret()')),
   ingress_records_before_the_replay_check: () => assertIngressCapability(read(INGRESS).replace(
-    '    if (!deps.replay.admit(payload.attestationId, now)) return report(\'replayed\')',
-    '    const early = await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    if (!deps.replay.admit(payload.attestationId, now)) return report(\'replayed\')')),
+    '    if (!deps.replay.admit(',
+    '    const early = await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    if (!deps.replay.admit(')),
   protocol_compares_the_signature_loosely: () => assertAttestationProtocol(read(PROTOCOL).replaceAll('timingSafeEqual', 'Object.is')),
   protocol_widens_the_freshness_window: () => assertAttestationProtocol(read(PROTOCOL).replace('MAX_OBSERVATION_AGE_MS = 120_000', 'MAX_OBSERVATION_AGE_MS = 1_200_000')),
   protocol_unbounds_the_replay_cache: () => assertAttestationProtocol(read(PROTOCOL).replace('REPLAY_CACHE_MAXIMUM = 2048', 'REPLAY_CACHE_MAXIMUM = 2_000_000')),
+  replay_forgets_at_the_last_fresh_instant: () => assertAttestationProtocol(read(PROTOCOL).replace('if (nowMs > expiresAt)', 'if (nowMs >= expiresAt)')),
+  replay_expiry_becomes_an_independent_duration: () => assertAttestationProtocol(read(PROTOCOL).replace(
+    'return observedAt + MAX_OBSERVATION_AGE_MS', 'return observedAt + REPLAY_RETENTION_MS')),
+  replay_cache_loses_its_bound: () => assertAttestationProtocol(read(PROTOCOL).replace(
+    'while (this.seen.size > this.maximum)', 'while (false)')),
+  ingress_admits_without_payload_validity: () => assertIngressCapability(read(INGRESS).replace(
+    'deps.replay.admit(payload.attestationId, now, latestValidAtV1(payload.observedAt))',
+    'deps.replay.admit(payload.attestationId, now)')),
   protocol_reorders_the_canonical_statement: () => assertAttestationProtocol(read(PROTOCOL).replace('payload.providerUserId,\n        payload.transportRef,', 'payload.transportRef,\n        payload.providerUserId,')),
   ingress_exports_more_than_functions: () => assertIngressCapability(read(INGRESS).replace(
     'export async function attestTelegramProviderAccountFromBotV1', 'export const INGRESS_LIMIT = 1\nexport async function attestTelegramProviderAccountFromBotV1')),
@@ -547,6 +565,10 @@ const messages = {
   protocol_compares_the_signature_loosely: /signature comparison must be constant time/u,
   protocol_widens_the_freshness_window: /accepted observation age changed/u,
   protocol_unbounds_the_replay_cache: /replay cache bound changed/u,
+  replay_forgets_at_the_last_fresh_instant: /forgotten only strictly after its payload can no longer be fresh/u,
+  replay_expiry_becomes_an_independent_duration: /replay expiry must be derived from the last instant a payload stays fresh/u,
+  replay_cache_loses_its_bound: /replay cache must stay bounded/u,
+  ingress_admits_without_payload_validity: /ingress no longer checks: replay/u,
   protocol_reorders_the_canonical_statement: /canonical statement changed/u,
   ingress_exports_more_than_functions: /may export only narrow business functions/u,
   protocol_signs_with_the_bearer_secret: /signing key must be derived/u,

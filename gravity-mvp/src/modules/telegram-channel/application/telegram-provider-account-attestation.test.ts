@@ -13,6 +13,7 @@ import {
     deriveTelegramProviderAttestationKeyV1,
     signTelegramProviderAttestationV1,
     TelegramAttestationReplayCacheV1,
+    latestValidAtV1,
     MAX_OBSERVATION_AGE_MS,
     MAX_OBSERVATION_FUTURE_SKEW_MS,
 } from '../internal/bot-attestation/telegram-bot-attestation-protocol'
@@ -272,27 +273,105 @@ describe('replay', () => {
         expect(record).not.toHaveBeenCalled()
     })
 
+    it('retains an entry through the exact last instant its payload stays fresh', () => {
+        const cache = new TelegramAttestationReplayCacheV1()
+        const observedAt = NOW + MAX_OBSERVATION_FUTURE_SKEW_MS
+        const latestValidAt = latestValidAtV1(observedAt)
+        expect(latestValidAt).toBe(NOW + 150_000)
+        expect(cache.admit(ATTESTATION, NOW, latestValidAt)).toBe(true)
+        expect(cache.admit(ATTESTATION, NOW + 149_999, latestValidAt)).toBe(false)
+        // The defect this repair closes: the entry must still exist here.
+        expect(cache.admit(ATTESTATION, latestValidAt, latestValidAt)).toBe(false)
+        // One millisecond later the payload can no longer be fresh anyway.
+        expect(cache.admit(ATTESTATION, latestValidAt + 1, latestValidAt)).toBe(true)
+    })
+
     it('keeps the cache bounded at its maximum', () => {
-        const cache = new TelegramAttestationReplayCacheV1(2048, 150_000)
+        const cache = new TelegramAttestationReplayCacheV1()
         for (let index = 0; index < 4096; index += 1) {
-            expect(cache.admit(`id-${index}`, NOW)).toBe(true)
+            expect(cache.admit(`id-${index}`, NOW, NOW + MAX_OBSERVATION_AGE_MS)).toBe(true)
         }
         expect(cache.size).toBeLessThanOrEqual(2048)
     })
 
-    it('forgets an entry once its retention window has passed', () => {
-        const cache = new TelegramAttestationReplayCacheV1(2048, 150_000)
-        expect(cache.admit(ATTESTATION, NOW)).toBe(true)
-        expect(cache.admit(ATTESTATION, NOW + 149_999)).toBe(false)
-        expect(cache.admit(ATTESTATION, NOW + 150_000)).toBe(true)
+    it('evicts the entry closest to expiry when it is over its bound', () => {
+        const cache = new TelegramAttestationReplayCacheV1(2)
+        cache.admit('long-lived', NOW, NOW + 150_000)
+        cache.admit('short-lived', NOW, NOW + 1_000)
+        cache.admit('third', NOW, NOW + 100_000)
+        expect(cache.size).toBe(2)
+        // The one closest to being forgettable went, not the oldest insertion.
+        expect(cache.admit('short-lived', NOW, NOW + 1_000)).toBe(true)
+        expect(cache.admit('long-lived', NOW, NOW + 150_000)).toBe(false)
     })
 
-    it('drops expired entries rather than growing forever', () => {
-        const cache = new TelegramAttestationReplayCacheV1(2048, 1_000)
-        for (let index = 0; index < 100; index += 1) cache.admit(`id-${index}`, NOW)
-        expect(cache.size).toBe(100)
-        cache.admit('later', NOW + 2_000)
-        expect(cache.size).toBe(1)
+    it('drops every entry whose own validity has passed, regardless of insertion order', () => {
+        const cache = new TelegramAttestationReplayCacheV1()
+        // Inserted first but valid longest; inserted second but expiring first.
+        cache.admit('late-expiry', NOW, NOW + 150_000)
+        cache.admit('early-expiry', NOW, NOW + 1_000)
+        expect(cache.size).toBe(2)
+        cache.admit('sweeper', NOW + 2_000, NOW + 2_000)
+        expect(cache.admit('early-expiry', NOW + 2_000, NOW + 1_000)).toBe(true)
+        expect(cache.admit('late-expiry', NOW + 2_000, NOW + 150_000)).toBe(false)
+    })
+})
+
+describe('the replay window covers the whole freshness window', () => {
+    const observedAt = NOW + MAX_OBSERVATION_FUTURE_SKEW_MS
+
+    it('rejects a duplicate one millisecond before the payload goes stale', async () => {
+        const { record, injected } = deps()
+        expect((await send(payload({ observedAt }), injected)).outcome).toBe('attested')
+        const replay = await attestTelegramProviderAccountFromBotV1(
+            { action: 'attest_provider_account', payload: payload({ observedAt }) },
+            { ...injected, now: () => NOW + 149_999 } as never,
+        )
+        expect(replay.outcome).toBe('replayed')
+        expect(record).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects a duplicate at the exact last fresh instant', async () => {
+        const { record, injected } = deps()
+        expect((await send(payload({ observedAt }), injected)).outcome).toBe('attested')
+        const replay = await attestTelegramProviderAccountFromBotV1(
+            { action: 'attest_provider_account', payload: payload({ observedAt }) },
+            { ...injected, now: () => NOW + 150_000 } as never,
+        )
+        expect(replay.outcome).toBe('replayed')
+        expect(record).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects the same payload as stale one millisecond later, before replay is consulted', async () => {
+        const { record, injected } = deps()
+        expect((await send(payload({ observedAt }), injected)).outcome).toBe('attested')
+        const replay = await attestTelegramProviderAccountFromBotV1(
+            { action: 'attest_provider_account', payload: payload({ observedAt }) },
+            { ...injected, now: () => NOW + 150_001 } as never,
+        )
+        expect(replay.outcome).toBe('stale')
+        expect(record).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects an immediate duplicate of a payload accepted at the oldest allowed age', async () => {
+        const { record, injected } = deps()
+        const oldest = NOW - MAX_OBSERVATION_AGE_MS
+        expect((await send(payload({ observedAt: oldest }), injected)).outcome).toBe('attested')
+        const replay = await send(payload({ observedAt: oldest }), injected)
+        expect(replay.outcome).toBe('replayed')
+        expect(record).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejects that same payload as stale one millisecond later', async () => {
+        const { record, injected } = deps()
+        const oldest = NOW - MAX_OBSERVATION_AGE_MS
+        expect((await send(payload({ observedAt: oldest }), injected)).outcome).toBe('attested')
+        const replay = await attestTelegramProviderAccountFromBotV1(
+            { action: 'attest_provider_account', payload: payload({ observedAt: oldest }) },
+            { ...injected, now: () => NOW + 1 } as never,
+        )
+        expect(replay.outcome).toBe('stale')
+        expect(record).toHaveBeenCalledTimes(1)
     })
 })
 

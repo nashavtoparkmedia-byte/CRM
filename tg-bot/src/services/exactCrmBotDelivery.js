@@ -1,7 +1,5 @@
 'use strict';
 
-const { observeBotPrincipalV1 } = require('./providerAccountAttestation');
-
 function concreteId(value) {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
     const normalized = String(value).trim();
@@ -53,7 +51,7 @@ function responseStatus(error) {
     return 502;
 }
 
-function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.env, observeProviderPrincipal = observeBotPrincipalV1 }) {
+function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.env }) {
     return async function exactCrmBotDelivery(req, res) {
         let requestedPeer = null;
         try {
@@ -83,9 +81,6 @@ function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.e
             // This live call is the provider-account attestation. It must be
             // immediately before sendMessage and may not be replaced by env.
             const liveBot = await bot.telegram.getMe();
-            // M2A2-TG2B: the same live observation also reports the principal.
-            // It is never awaited, so delivery is unaffected either way.
-            observeProviderPrincipal(liveBot, 'outbound_delivery');
             const liveAccount = concreteId(liveBot?.id);
             if (!liveAccount) throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN');
             if (requestedAccount !== liveAccount) {

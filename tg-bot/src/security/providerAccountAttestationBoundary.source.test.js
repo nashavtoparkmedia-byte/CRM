@@ -16,9 +16,10 @@ const read = relative => readFileSync(resolve(root, relative), 'utf8');
 const ATTESTATION = 'src/services/providerAccountAttestation.js';
 const CALL_SITES = [
     'src/services/botRuntime.js',
-    'src/services/exactCrmBotDelivery.js',
     'src/bot.js',
 ];
+/** Delivery is delivery: it may never carry provider-account observation. */
+const DELIVERY = 'src/services/exactCrmBotDelivery.js';
 
 test('the attestation module never reaches a database or the owner-side writer', () => {
     const source = read(ATTESTATION);
@@ -28,7 +29,7 @@ test('the attestation module never reaches a database or the owner-side writer',
 });
 
 test('no bot call site imports provider-account persistence', () => {
-    for (const relative of CALL_SITES) {
+    for (const relative of [...CALL_SITES, DELIVERY]) {
         const source = read(relative);
         assert.doesNotMatch(source, /telegram-account-writer|telegram-account-intake/, relative);
         assert.doesNotMatch(source, /TelegramAccount\b|TelegramTransportBinding/, relative);
@@ -75,4 +76,29 @@ test('reporting is fire-and-forget at every call site', () => {
         const source = read(relative);
         assert.doesNotMatch(source, /await observe(BotPrincipalV1|ProviderPrincipal)\(/, relative);
     }
+});
+
+test('the outbound delivery path carries no provider-account observation', () => {
+    const source = read(DELIVERY);
+    assert.doesNotMatch(source, /providerAccountAttestation|observeBotPrincipalV1|observeProviderPrincipal/);
+    // The delivery identity checks that predate TG2B stay exactly where they were.
+    assert.match(source, /const liveBot = await bot\.telegram\.getMe\(\);/);
+    assert.match(source, /TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN/);
+    assert.match(source, /TELEGRAM_BOT_PROVIDER_ACCOUNT_MISMATCH/);
+    assert.match(source, /TELEGRAM_BOT_TRANSPORT_UNAUTHORIZED/);
+});
+
+test('provider-account observation happens only on lifecycle and health surfaces', () => {
+    const startup = read('src/bot.js');
+    assert.match(startup, /observeBotPrincipalV1\(me, 'startup'\)/);
+    assert.match(startup, /observeBotPrincipalV1\(me, 'polling_heartbeat'\)/);
+    assert.match(read('src/services/botRuntime.js'), /observeProviderPrincipal\(me, 'runtime_status'\)/);
+    // Exactly three reporting reasons exist in the bot.
+    const reasons = new Set();
+    for (const relative of [...CALL_SITES, DELIVERY]) {
+        for (const match of read(relative).matchAll(/observe(?:BotPrincipalV1|ProviderPrincipal)\([^,]+, '([a-z_]+)'\)/g)) {
+            reasons.add(match[1]);
+        }
+    }
+    assert.deepEqual([...reasons].sort(), ['polling_heartbeat', 'runtime_status', 'startup']);
 });
