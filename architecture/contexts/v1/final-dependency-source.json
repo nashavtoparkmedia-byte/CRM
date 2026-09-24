@@ -6,14 +6,14 @@
   },
   "observed": {
     "architecture_findings": 0,
-    "cross_context_imports": 929,
-    "cross_context_imports_sha256": "78f0ecb960689649c72ee860413ee2f7f5fe0965d8ea23af326f6945ccb3e687",
-    "scanned_files": 1675
+    "cross_context_imports": 930,
+    "cross_context_imports_sha256": "fdb7a3e4bdc2a999ba1bd6b14166b60dfa0062ab40d576f09acca41980cbefb6",
+    "scanned_files": 1682
   },
   "public_surface_migrations": [],
   "relationship_projection": {
     "count": 73,
-    "sha256": "ece8b58a03129689a4c7908cec2b3b99390c35ba33017738d133be4d3298fb20"
+    "sha256": "cbd1d3308500946f4c076fb1d70d298ce509d76cf11dfd233753570f750b2614"
   },
   "schema": "yoko.crm.accepted-dependency-source.v1",
   "version": 1
