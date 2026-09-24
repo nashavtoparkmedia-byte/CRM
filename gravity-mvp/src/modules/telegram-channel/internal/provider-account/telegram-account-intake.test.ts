@@ -17,6 +17,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import {
+    attestTelegramTransportV1,
     createTelegramAccountIntakeV1,
     recordObservedAttestationV1,
     TELEGRAM_ACCOUNT_TELEMETRY_EVENT_V1,
@@ -241,6 +242,40 @@ describe('admission is synchronous and proves what it reports', () => {
         expect(Object.keys(passed).sort()).toEqual([
             'accountKind', 'attestingInstanceId', 'providerUserId', 'transportKind', 'transportRef',
         ])
+    })
+})
+
+describe('the ingress mode is awaited and never admits', () => {
+    it('returns the writer outcome to its caller', async () => {
+        const { base } = deps()
+        const result = await createTelegramAccountIntakeV1(base).attestTransport(observed)
+        expect(result).toEqual(attestation)
+        expect(base.record).toHaveBeenCalledWith(observed)
+    })
+
+    it('never admits and never reads the projection', async () => {
+        const { base } = deps()
+        await createTelegramAccountIntakeV1(base).attestTransport(observed)
+        expect(base.admit).not.toHaveBeenCalled()
+        expect(base.project).not.toHaveBeenCalled()
+    })
+
+    it('reports its own mode in telemetry', async () => {
+        const { base, emitted } = deps()
+        await createTelegramAccountIntakeV1(base).attestTransport(observed)
+        expect(emitted).toHaveLength(1)
+        expect(emitted[0].context.mode).toBe('ingress')
+    })
+
+    it('surfaces a failure rather than swallowing it', async () => {
+        const { base } = deps({ record: recordFn(async () => { throw new Error('down') }) })
+        await expect(createTelegramAccountIntakeV1(base).attestTransport(observed)).rejects.toThrow('down')
+    })
+
+    it('maps a failure to a bounded outcome through the exported entry point', async () => {
+        await expect(attestTelegramTransportV1(observed)).resolves.toEqual({
+            recorded: false, outcome: 'attestation_unavailable',
+        })
     })
 })
 

@@ -46,6 +46,14 @@ export interface ObservedAttestationV1 {
     attestingInstanceId: string
 }
 
+/**
+ * The orchestration modes over the single writer. `runtime` is fire-and-forget
+ * from a Telegram runtime, `ceremony` is the authenticated admission sequence,
+ * and `ingress` is an authenticated cross-process report that is awaited so the
+ * caller can answer its own request.
+ */
+export type TelegramIntakeModeV1 = 'runtime' | 'ceremony' | 'ingress'
+
 export type TelegramAdmissionStatusV1 = 'admitted' | 'pending_approval' | 'unavailable'
 
 export const TELEGRAM_ADMISSION_REASONS_V1 = [
@@ -108,7 +116,7 @@ function defaultDependencies(): AccountIntakeDependenciesV1 {
 /** The bounded telemetry shape. It carries no principal and no locator. */
 function attestationTelemetry(input: {
     transportKind: TelegramTransportKindV1
-    mode: 'runtime' | 'ceremony'
+    mode: TelegramIntakeModeV1
     result: AttestationResultV1
     durationMs: number
 }): Record<string, unknown> {
@@ -129,7 +137,7 @@ function attestationTelemetry(input: {
 export function createTelegramAccountIntakeV1(deps: AccountIntakeDependenciesV1) {
     async function attest(
         input: ObservedAttestationV1,
-        mode: 'runtime' | 'ceremony',
+        mode: TelegramIntakeModeV1,
     ): Promise<AttestationResultV1> {
         const startedAt = deps.now()
         const result = await deps.record({
@@ -164,6 +172,15 @@ export function createTelegramAccountIntakeV1(deps: AccountIntakeDependenciesV1)
                     // Telemetry must not become a second failure path.
                 }
             }
+        },
+
+        /**
+         * Awaited attestation without admission, for an authenticated ingress
+         * that must answer its own request. It surfaces the writer's outcome
+         * and never admits: lifecycle stays an operator decision.
+         */
+        async attestTransport(input: ObservedAttestationV1): Promise<AttestationResultV1> {
+            return await attest(input, 'ingress')
         },
 
         /** Synchronous admission. Surfaces exactly what it proved. */
@@ -285,6 +302,23 @@ export async function admitTelegramProviderAccountV1(
     principalId: string,
 ): Promise<TelegramAdmissionResultV1> {
     return await intake().admit(input, principalId)
+}
+
+/**
+ * Records one attestation reported by an authenticated cross-process runtime.
+ * It is awaited by its caller, so it reports a bounded outcome instead of a
+ * raw failure, and it never admits an account.
+ */
+export async function attestTelegramTransportV1(
+    input: ObservedAttestationV1,
+): Promise<{ recorded: boolean; outcome: string }> {
+    try {
+        const result = await intake().attestTransport(input)
+        return { recorded: result.trustStateAfter === 'verified', outcome: result.outcome }
+    } catch (error) {
+        const refused = (error as { name?: unknown } | null)?.name === 'TelegramAccountRefusalV1'
+        return { recorded: false, outcome: refused ? 'attestation_refused' : 'attestation_unavailable' }
+    }
 }
 
 /** Reads one transport's account state for an operator surface. Never throws. */

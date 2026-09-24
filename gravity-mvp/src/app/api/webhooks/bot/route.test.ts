@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     recordDriverAction: vi.fn(),
     authorizeDriverTelegram: vi.fn(),
     providerFetch: vi.fn(),
+    attestProviderAccount: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -41,10 +42,14 @@ vi.mock('@/modules/fleet-operations/public/v1/yandex-connection-capability', () 
 }))
 
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
+    attestTelegramProviderAccountFromBotV1: mocks.attestProviderAccount,
     patchDriverTelegramLinkV1: mocks.patchDriverTelegramLink,
     prepareManualDriverTelegramLinkAuthorityV1: mocks.authorizeDriverTelegram,
     recordBotUserProfileV1: mocks.recordBotUserProfile,
     recordPendingBotLinkRequestV1: mocks.recordPendingBotLinkRequest,
+    telegramProviderAttestationStatusV1: (outcome: string) => ({
+        attested: 200, unauthenticated: 401, malformed: 400, stale: 400, replayed: 409, unavailable: 503,
+    } as Record<string, number>)[outcome] ?? 503,
 }))
 
 vi.mock('@/modules/messaging/public/v1', () => ({
@@ -308,5 +313,63 @@ describe('driver-bot current Telegram authority', () => {
         expect(response.status).toBe(409)
         expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+})
+
+describe('M2A2-TG2B provider-account attestation ingress', () => {
+    const payload = {
+        domain: 'yoko-telegram-provider-attestation:v1',
+        action: 'attest_provider_account',
+        providerUserId: '7000',
+        transportRef: 'driver-bot-primary',
+        attestingInstanceId: '11111111-1111-4111-8111-111111111111',
+        observedAt: 1790000000000,
+        attestationId: '22222222-2222-4222-8222-222222222222',
+        signature: 'RKgV0cfeg_6MEm0JQAYePsDndC7OJpMuig38fswVr-s',
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+    })
+
+    test('an unauthenticated caller never reaches the capability', async () => {
+        const request = new Request('https://crm.example/api/webhooks/bot', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-bot-signature': 'wrong-secret' },
+            body: JSON.stringify({ action: 'attest_provider_account', payload }),
+        })
+        const response = await POST(request)
+        expect(response.status).toBe(401)
+        expect(mocks.attestProviderAccount).not.toHaveBeenCalled()
+    })
+
+    test('an authenticated report is handed to the owning capability untouched', async () => {
+        mocks.attestProviderAccount.mockResolvedValue({ contract: 'x', outcome: 'attested' })
+        const response = await POST(actionRequest('attest_provider_account', payload))
+        expect(response.status).toBe(200)
+        expect(await response.json()).toEqual({ outcome: 'attested' })
+        expect(mocks.attestProviderAccount).toHaveBeenCalledWith({ action: 'attest_provider_account', payload })
+    })
+
+    test('every capability outcome maps to its own status', async () => {
+        for (const [outcome, status] of [
+            ['attested', 200], ['unauthenticated', 401], ['malformed', 400],
+            ['stale', 400], ['replayed', 409], ['unavailable', 503],
+        ] as const) {
+            mocks.attestProviderAccount.mockResolvedValue({ contract: 'x', outcome })
+            const response = await POST(actionRequest('attest_provider_account', payload))
+            expect(response.status).toBe(status)
+            expect(await response.json()).toEqual({ outcome })
+        }
+    })
+
+    test('the route decides nothing about the statement itself', async () => {
+        mocks.attestProviderAccount.mockResolvedValue({ contract: 'x', outcome: 'malformed' })
+        const response = await POST(actionRequest('attest_provider_account', { nonsense: true }))
+        expect(response.status).toBe(400)
+        expect(mocks.attestProviderAccount).toHaveBeenCalledWith({
+            action: 'attest_provider_account', payload: { nonsense: true },
+        })
     })
 })

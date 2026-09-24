@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { observeBotPrincipalV1 } = require('./providerAccountAttestation');
 
 const DEFAULT_ALLOWED_UPDATES = ['message', 'callback_query'];
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
@@ -22,6 +23,9 @@ function safeEqual(left, right) {
 function createBotRuntime(options = {}) {
     const env = options.env || process.env;
     const runtimeLogger = options.logger || logger;
+    // M2A2-TG2B: report the live provider principal. Fire-and-forget by
+    // contract; the bot runtime never depends on it.
+    const observeProviderPrincipal = options.observeProviderPrincipal || observeBotPrincipalV1;
     const botToken = options.botToken || env.BOT_TOKEN || '';
     const mode = String(env.BOT_UPDATE_MODE || 'polling').toLowerCase();
     const webhookUrl = String(env.TELEGRAM_WEBHOOK_URL || '').trim();
@@ -96,6 +100,7 @@ function createBotRuntime(options = {}) {
             instance.telegram.getWebhookInfo()
         ]);
         lastCheckAt = new Date().toISOString();
+        observeProviderPrincipal(me, 'runtime_status');
         return { me, info };
     }
 

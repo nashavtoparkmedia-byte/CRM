@@ -3,10 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import {
+    attestTelegramProviderAccountFromBotV1,
     patchDriverTelegramLinkV1,
     prepareManualDriverTelegramLinkAuthorityV1,
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
+    telegramProviderAttestationStatusV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
                 return await handleSetActivePark(payload)
             case 'get_park_info':
                 return await handleGetParkInfo(payload)
+            case 'attest_provider_account':
+                return await handleProviderAccountAttestation(action, payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -61,6 +65,20 @@ export async function POST(request: Request) {
         console.error('Webhook error:', err)
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
     }
+}
+
+/**
+ * M2A2-TG2B: an authenticated bot runtime reports the provider principal
+ * Telegram authenticated it as. The shared secret above proves the caller; the
+ * owning capability proves the statement and owns every security decision,
+ * including the durable write. Nothing is decided here.
+ */
+async function handleProviderAccountAttestation(action: unknown, payload: unknown): Promise<NextResponse> {
+    const outcome = await attestTelegramProviderAccountFromBotV1({ action, payload })
+    return NextResponse.json(
+        { outcome: outcome.outcome },
+        { status: telegramProviderAttestationStatusV1(outcome.outcome) },
+    )
 }
 
 async function requireCurrentBotDriverAuthority(

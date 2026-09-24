@@ -27,3 +27,8 @@ export {
     saveManualDriverTelegramLinkV1,
     upsertDriverTelegramLinkV1,
 } from '../../application/telegram-link-operations'
+
+export {
+    attestTelegramProviderAccountFromBotV1,
+    telegramProviderAttestationStatusV1,
+} from './provider-account-attestation'

@@ -14,6 +14,7 @@ import {
     admitTelegramAccountV1,
     readProviderAccountProjectionV1,
     recordTelegramTransportAttestationV1,
+    TelegramAccountRefusalV1,
 } from './telegram-account-writer'
 
 const proof = process.env.YOKO_TELEGRAM_PROVIDER_ACCOUNT_POSTGRES_PROOF === '1' ? describe : describe.skip
@@ -186,6 +187,116 @@ proof('runtime observation against the real foundation', () => {
         const transportRef = freshRef()
         await expect(intake.observe(observation(transportRef, 'not-a-principal'))).resolves.toBeUndefined()
         expect(await bindings(transportRef)).toHaveLength(0)
+    })
+})
+
+proof('M2A2-TG2B: a bot runtime transport against the real foundation', () => {
+    const botObservation = (transportRef: string, providerUserId: string, instance = `instance:${transportRef}`) => ({
+        transportKind: 'bot_runtime' as const,
+        transportRef,
+        accountKind: 'bot_api' as const,
+        providerUserId,
+        attestingInstanceId: instance,
+    })
+
+    it('opens a pending bot account whose transport identity is not the principal', async () => {
+        const transportRef = 'driver-bot-primary-' + randomUUID()
+        const providerUserId = freshPrincipal()
+
+        const result = await intake.attestTransport(botObservation(transportRef, providerUserId))
+        expect(result.outcome).toBe('opened_first_generation')
+        expect(result.trustStateAfter).toBe('verified')
+
+        const rows = await bindings(transportRef)
+        expect(rows).toHaveLength(1)
+        expect(rows[0].transportKind).toBe('bot_runtime')
+        expect(rows[0].transportRef).toBe(transportRef)
+        expect(rows[0].transportRef).not.toBe(providerUserId)
+        expect(rows[0].attestedProviderUserId).toBe(providerUserId)
+
+        const projection = await readProviderAccountProjectionV1('bot_runtime', transportRef)
+        expect(projection.accountKind).toBe('bot_api')
+        expect(projection.lifecycle).toBe('pending_approval')
+        expect(projection.readiness).toBe('not_admitted')
+        const row = await account(projection.providerAccountId as string)
+        expect(row?.accountKind).toBe('bot_api')
+    })
+
+    it('is idempotent for the same principal inside one attestation window', async () => {
+        const transportRef = 'driver-bot-primary-' + randomUUID()
+        const providerUserId = freshPrincipal()
+
+        await intake.attestTransport(botObservation(transportRef, providerUserId))
+        const again = await intake.attestTransport(botObservation(transportRef, providerUserId))
+
+        expect(again.outcome).toBe('attestation_still_fresh')
+        expect(await bindings(transportRef)).toHaveLength(1)
+    })
+
+    it('keeps the same account and generation when the process restarts', async () => {
+        const transportRef = 'driver-bot-primary-' + randomUUID()
+        const providerUserId = freshPrincipal()
+
+        await intake.attestTransport(botObservation(transportRef, providerUserId, `instance:${randomUUID()}`))
+        const before = await readProviderAccountProjectionV1('bot_runtime', transportRef)
+
+        // A restarted process mints a new instance id and observes the same principal.
+        await intake.attestTransport(botObservation(transportRef, providerUserId, `instance:${randomUUID()}`))
+        const after = await readProviderAccountProjectionV1('bot_runtime', transportRef)
+
+        expect(after.providerAccountId).toBe(before.providerAccountId)
+        const rows = await bindings(transportRef)
+        expect(rows).toHaveLength(1)
+        expect(String(rows[0].transportGeneration)).toBe('1')
+    })
+
+    it('follows TG1 replacement semantics when the live principal changes', async () => {
+        const transportRef = 'driver-bot-primary-' + randomUUID()
+        const first = freshPrincipal()
+        const second = freshPrincipal()
+
+        await intake.attestTransport(botObservation(transportRef, first))
+        const firstAccount = (await readProviderAccountProjectionV1('bot_runtime', transportRef)).providerAccountId
+        const replaced = await intake.attestTransport(botObservation(transportRef, second))
+
+        expect(replaced.outcome).toBe('replaced_on_principal_change')
+        const rows = await bindings(transportRef)
+        expect(rows).toHaveLength(2)
+        expect(rows[0].trustState).toBe('mismatched')
+        expect(rows[0].closeReason).toBe('principal_changed')
+        expect(rows[1].attestedProviderUserId).toBe(second)
+        expect((await readProviderAccountProjectionV1('bot_runtime', transportRef)).providerAccountId).not.toBe(firstAccount)
+    })
+
+    it('refuses a bot principal reported on an MTProto transport', async () => {
+        const transportRef = 'driver-bot-primary-' + randomUUID()
+        await expect(intake.attestTransport({
+            ...botObservation(transportRef, freshPrincipal()),
+            transportKind: 'mtproto_session' as const,
+        })).rejects.toBeInstanceOf(TelegramAccountRefusalV1)
+        expect(await bindings(transportRef)).toHaveLength(0)
+    })
+
+    it('shares one foundation with the MTProto transport without a second writer', async () => {
+        const botRef = 'driver-bot-primary-' + randomUUID()
+        const mtprotoRef = 'conn-' + randomUUID()
+        const botPrincipal = freshPrincipal()
+        const mtprotoPrincipal = freshPrincipal()
+
+        await intake.attestTransport(botObservation(botRef, botPrincipal))
+        await intake.observe(observation(mtprotoRef, mtprotoPrincipal))
+
+        const bot = await readProviderAccountProjectionV1('bot_runtime', botRef)
+        const mtproto = await readProviderAccountProjectionV1('mtproto_session', mtprotoRef)
+        expect(bot.accountKind).toBe('bot_api')
+        expect(mtproto.accountKind).toBe('mtproto_user')
+        expect(bot.providerAccountId).not.toBe(mtproto.providerAccountId)
+
+        const rows = await db.$queryRawUnsafe<Array<Record<string, unknown>>>(
+            'SELECT "transportKind", count(*) AS total FROM "TelegramTransportBinding" WHERE "transportRef" = ANY($1) GROUP BY 1',
+            [botRef, mtprotoRef],
+        )
+        expect(rows).toHaveLength(2)
     })
 })
 
