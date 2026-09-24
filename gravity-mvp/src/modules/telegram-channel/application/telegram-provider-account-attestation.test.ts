@@ -13,7 +13,7 @@ import {
     telegramProviderAttestationStatusV1,
     MAX_OBSERVATION_AGE_MS,
     MAX_OBSERVATION_FUTURE_SKEW_MS,
-} from './provider-account-attestation'
+} from './telegram-provider-account-attestation'
 
 const SECRET = 'test-bot-secret'
 const INSTANCE = '11111111-1111-4111-8111-111111111111'

@@ -31,4 +31,4 @@ export {
 export {
     attestTelegramProviderAccountFromBotV1,
     telegramProviderAttestationStatusV1,
-} from './provider-account-attestation'
+} from '../../application/telegram-provider-account-attestation'

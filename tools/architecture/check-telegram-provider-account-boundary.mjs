@@ -42,9 +42,11 @@ const MODULE_FILES = [
 // The runtime that observes live provider authentications, and its proof.
 const RUNTIME = 'gravity-mvp/src/app/tg-actions.ts'
 const RUNTIME_TEST = 'gravity-mvp/src/app/tg-actions.provider-account.test.ts'
-// The single public capability: the authenticated cross-process ingress.
-const INGRESS = 'gravity-mvp/src/modules/telegram-channel/public/v1/provider-account-attestation.ts'
-const INGRESS_TEST = 'gravity-mvp/src/modules/telegram-channel/public/v1/provider-account-attestation.test.ts'
+// The authenticated cross-process ingress. It lives in the application layer,
+// because a public facade may not reach its own context's internals; the public
+// surface re-exports it.
+const INGRESS = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.ts'
+const INGRESS_TEST = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.test.ts'
 const APPROVED_IMPORTERS = [RUNTIME, RUNTIME_TEST, INGRESS]
 
 const MIGRATION = 'gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql'
@@ -173,9 +175,7 @@ export function assertApprovedImporters(importers) {
   for (const importer of importers) {
     assert.doesNotMatch(importer, /\/modules\/(?:contacts|messaging|max-channel|whatsapp-channel)\//u,
       'another domain must not reach the provider account foundation')
-    if (importer !== INGRESS) {
-      assert.doesNotMatch(importer, /\/public\//u, 'only the reviewed ingress capability may reach the foundation from public')
-    }
+    assert.doesNotMatch(importer, /\/public\//u, 'a public facade may not reach the foundation; the application layer owns that composition')
   }
 }
 
@@ -306,8 +306,6 @@ const PUBLIC_EXPOSURE = /internal\/provider-account|ProviderAccountProjectionV1|
 
 export function assertNoPublicSurface(publicFiles, manifest) {
   for (const [relative, source] of publicFiles) {
-    // The reviewed ingress capability has its own, stricter rules below.
-    if (relative === INGRESS || relative === INGRESS_TEST) continue
     assert.doesNotMatch(withoutComments(relative, source), PUBLIC_EXPOSURE,
       `public API must not expose the provider account foundation: ${relative}`)
   }
@@ -330,8 +328,9 @@ export function assertNoPublicSurface(publicFiles, manifest) {
 export function assertIngressCapability(source) {
   const code = withoutComments(INGRESS, source)
 
+  assert.doesNotMatch(INGRESS, /\/public\//u, 'the ingress must not be a public facade source')
   const foundationImports = moduleReferences(INGRESS, source).filter((specifier) => /provider-account/u.test(specifier))
-  assert.deepEqual(foundationImports, ['../../internal/provider-account/telegram-account-intake'],
+  assert.deepEqual(foundationImports, ['../internal/provider-account/telegram-account-intake'],
     'the ingress may reach the foundation only through the intake')
   assert.doesNotMatch(code, /recordTelegramTransportAttestationV1|readProviderAccountProjectionV1|admitTelegramAccountV1|ProviderAccountProjectionV1/u,
     'the ingress must not name the writer, the projection reader or the admission')
@@ -452,8 +451,8 @@ const rejected = {
   login_locator_falls_back_to_the_principal: () => assertRuntimeHandOff(read(RUNTIME).replace(
     'transportRef: persistedTransportRef,', 'transportRef: telegramId,')),
   ingress_reaches_the_writer_directly: () => assertIngressCapability(read(INGRESS).replace(
-    "import { attestTelegramTransportV1 } from '../../internal/provider-account/telegram-account-intake'",
-    "import { recordTelegramTransportAttestationV1 } from '../../internal/provider-account/telegram-account-writer'")),
+    "import { attestTelegramTransportV1 } from '../internal/provider-account/telegram-account-intake'",
+    "import { recordTelegramTransportAttestationV1 } from '../internal/provider-account/telegram-account-writer'")),
   ingress_records_before_proving_the_signature: () => assertIngressCapability(read(INGRESS).replace(
     '    const secret = deps.secret()',
     '    await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    const secret = deps.secret()')),

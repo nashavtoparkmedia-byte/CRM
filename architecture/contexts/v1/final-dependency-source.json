@@ -5,15 +5,15 @@
     "policy_sha256": "7a02e23c38277ea3b61f8bb9a3da440d755620759edfa066f37b8be198b85d86"
   },
   "observed": {
-    "architecture_findings": 0,
-    "cross_context_imports": 908,
-    "cross_context_imports_sha256": "51bbe3a859e8085b55b98ac26811031debf26f8c3864850087e11ae77e1fb81e",
-    "scanned_files": 1591
+    "architecture_findings": 2,
+    "cross_context_imports": 909,
+    "cross_context_imports_sha256": "03755b038dfef67a55346d6e5727f4708e7a40dafe05ae9f228b9a11eb428b12",
+    "scanned_files": 1597
   },
   "public_surface_migrations": [],
   "relationship_projection": {
     "count": 73,
-    "sha256": "ddd8f30fe1f2e0d4d162226850eaebc4bd861aa9057e0602e83f545a2c322ff2"
+    "sha256": "073100ac4bdfc9c034d265bce5590c8dcae252dda355f4d253fdb9918dbae854"
   },
   "schema": "yoko.crm.accepted-dependency-source.v1",
   "version": 1

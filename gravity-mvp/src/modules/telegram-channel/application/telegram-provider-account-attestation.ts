@@ -24,7 +24,7 @@ import {
 } from '@/contracts/telegram-channel/v1'
 import { operationalLogV1 } from '@/infrastructure/operations/operational-log'
 
-import { attestTelegramTransportV1 } from '../../internal/provider-account/telegram-account-intake'
+import { attestTelegramTransportV1 } from '../internal/provider-account/telegram-account-intake'
 
 export const TELEGRAM_PROVIDER_ATTESTATION_EVENT_V1 = 'telegram_provider_account_ingress'
 
