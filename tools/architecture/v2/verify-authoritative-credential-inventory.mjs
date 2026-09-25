@@ -602,6 +602,23 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },
+  {
+    // Mobile Push v1: the device's FCM registration token leaves identity_access
+    // only through this capability, and only to address one FCM request.
+    review_id: 'identity-access-mobile-push-target-runtime-provider-v1',
+    access_review_ids: ['production-secret-read-076'],
+    classification: 'APPROVED_RUNTIME_PROVIDER_CAPABILITY',
+    resolved_semantics: 'EXACT_SOURCE_BOUND_RUNTIME_PROVIDER_SECRET_USE_AT_REVIEWED_NON_PUBLIC_BOUNDARIES',
+    secret_bearing_runtime_flow: true,
+    source_modules: [
+      { path: 'gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', exported_symbols: ['resolveMobilePushTargetV1'] },
+      { path: 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', exported_symbols: ['resolveMobilePushTargetV1'] },
+    ],
+    consumer_edges: [
+      runtimeEdge('gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'OWNER_PUBLIC_CAPABILITY_REEXPORT', 'resolveMobilePushTargetV1', 'export'),
+      runtimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
+    ],
+  },
 ]
 
 function sha256Bytes(value) {
@@ -815,7 +832,7 @@ export function verifyAuthoritativeCredentialInventory(
   assert.equal(inventory.summary?.parse_findings, 0, 'credential analyzer parse finding')
   assert.equal(inventory.summary?.unreviewed_operational_surfaces, 0, 'credential inventory has unreviewed operational surfaces')
   assert.deepEqual(inventory.inventory_controls?.stale_registry_entries, [], 'credential inventory lifecycle registry has stale entries')
-  assert.equal(sensitiveFields.records?.length, 14, 'sensitive-field registry drift')
+  assert.equal(sensitiveFields.records?.length, 15, 'sensitive-field registry drift')
   assert(
     inventory.summary?.tracked_executable_surfaces >= acceptedInventory.summary?.tracked_executable_surfaces,
     'credential inventory surface denominator shrank without a reviewed checkpoint update',

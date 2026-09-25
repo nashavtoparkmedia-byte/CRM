@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "MOBILE-PUSH-V1-P1",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_events": [
+        "messaging.InboundMessageNotificationRequested.v1",
+        "messaging.MobilePushDeliveryRequested.v1"
+      ],
+      "add_public_surface": [
+        "MobilePushOutboxConsumers.v1"
+      ],
+      "add_internal_surface": [
+        "gravity-mvp/src/modules/messaging/internal/mobile-push"
+      ],
+      "reason": "Messaging owns the durable notification intent for a qualifying inbound Message, appended in the same transaction as the Message by its own persistence seams, and its expansion into per-device push deliveries sent through a Messaging-internal FCM HTTP v1 adapter. Both events flow through the shared transactional outbox declared in architecture/events/v1/outbox-manifest.json; neither carries a device token or message content."
+    }
+  ]
+}

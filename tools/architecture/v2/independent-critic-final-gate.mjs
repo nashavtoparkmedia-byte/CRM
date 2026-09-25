@@ -368,6 +368,16 @@ const criticRuntimeBoundaryPolicies = [
       criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },
+  {
+    review_id: 'identity-access-mobile-push-target-runtime-provider-v1',
+    access_review_ids: ['production-secret-read-076'],
+    classification: 'APPROVED_RUNTIME_PROVIDER_CAPABILITY', secret_bearing_runtime_flow: true,
+    modules: { 'gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts': ['resolveMobilePushTargetV1'], 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts': ['resolveMobilePushTargetV1'] },
+    edges: [
+      criticRuntimeEdge('gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'OWNER_PUBLIC_CAPABILITY_REEXPORT', 'resolveMobilePushTargetV1', 'export'),
+      criticRuntimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
+    ],
+  },
 ]
 const runtimeEdgeIdentity = (edge) => [edge.source, edge.exported_symbol, edge.consumer, edge.imported_as, edge.import_kind].join('|')
 const resolveCriticRuntimeImport = (consumer, specifier, trackedFileSet) => {
@@ -799,7 +809,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   productionSecretRecords.filter((record) => record.classification === 'APPROVED_RUNTIME_PROVIDER_CAPABILITY').map((record) => record.review_id).sort(),
-  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075'],
+  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075', 'production-secret-read-076'],
   'runtime provider secret capability classification denominator drift',
 )
 assert.equal(productionSecretReview.summary?.application_runtime, currentProductionSecretReads.filter((entry) => entry.surface.lifecycle === 'APPLICATION_RUNTIME').length, 'production application secret-read summary drift')

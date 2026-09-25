@@ -31,3 +31,38 @@ Flows deliberately not eventified:
 
 This prevents CRM-ARCH-005 from turning the modular monolith into an accidental
 distributed system.
+
+## Mobile Push v1 (second flow family, MOBILE-PUSH-V1-P1)
+
+The text above records the CRM-ARCH-005 decision and stays as written. Mobile
+Push v1 adds one more asynchronous flow family because it meets the same
+criteria the recording flow did:
+
+`Messaging inbound Message persisted -> messaging.InboundMessageNotificationRequested.v1 -> fan-out -> messaging.MobilePushDeliveryRequested.v1 -> FCM`
+
+- **A durable write followed by a lossy side effect.** Today a new inbound
+  message is announced by `emitMessageReceived`, a fire-and-forget call made
+  after the Message commits and skipped by most inbound paths. A restart in
+  that gap loses the announcement. A phone notification built on it would be
+  silently lost the same way.
+- **Intrinsically asynchronous and replay-safe.** A notification is sent after
+  the message is stored and has deterministic identities: one intent per
+  Message, one delivery per Message and stable device registration. A retried
+  or duplicated event adds no second intent or delivery event. The send itself
+  is at-least-once: a relay publish timeout, or a crash after the provider
+  accepted the push and before the row is marked published, can send the same
+  delivery again. The device therefore deduplicates by message id (the P2
+  Android contract).
+- **Losing it materially degrades operations.** An operator away from the
+  desktop misses a customer message.
+
+The intent is appended in the same transaction as the Message by Messaging's
+own three persistence seams. It is not appended by provider adapters or by the
+in-process emitter. Per-device delivery reuses the outbox, which already gives
+each event its own retry, backoff and dead-letter state, rather than adding a
+second queue or a delivery ledger. The provider token is resolved when the
+push is sent and is never stored in the event.
+
+Both flows are declared in `outbox-manifest.json` (v2 `flows[]`). They are off
+unless `MOBILE_PUSH_ENABLED=true`. The Calling recording flow is unchanged.
+The AI-call finalization flow stays under its own recovery authority.
