@@ -1525,3 +1525,808 @@ test('raw ESL event text is parsed and drives the lifecycle', async () => {
     await tick()
     assert.equal(h.forks().length, 1)
 })
+
+// ════════════════════════════════════════════════════════════════════════════════
+// C2 — intentional bridge shutdown
+//
+// A bridge that is going away takes the AI runtime with it, so a product call left
+// on the line is a lead holding a silent channel until C1b's native cutoff. These
+// tests pin the whole shutdown contract: what is proven product and therefore ends,
+// what is left alone, that the channels FreeSWITCH has but this process never saw
+// are found, and that none of it can be reached twice or run unbounded.
+// ════════════════════════════════════════════════════════════════════════════════
+
+const {
+    createShutdownSequence,
+    SHUTDOWN_TERMINATION_REASON,
+    MAX_ANSWERED_POLICY_VARIABLE,
+} = require('../channel-lifecycle')
+
+const Y = '22222222-3333-4444-8555-666666666666'
+const Z = '33333333-4444-4555-8666-777777777777'
+
+/** The reply shape `show channels as json` returns, newest channel first. */
+function channelListing(rows) {
+    return JSON.stringify(rows.length === 0
+        ? { row_count: 0 }
+        : { row_count: rows.length, rows: rows.map((r, i) => ({ created_epoch: String(1790000000 - i), ...r })) })
+}
+
+// A harness whose ESL answers the two sweep commands, and `uuid_getvar` per channel.
+function harnessWithSweep({ rows = [], vars = {}, listingError = false, getvarError = new Set() } = {}) {
+    const h = harness({
+        eslReply: async cmd => {
+            if (cmd === 'show channels as json') {
+                if (listingError) throw new Error('esl timeout after 5000ms (stage=sending)')
+                return channelListing(rows)
+            }
+            const getvar = cmd.match(new RegExp(`^uuid_getvar ([0-9a-f-]+) ${MAX_ANSWERED_POLICY_VARIABLE}$`))
+            if (getvar) {
+                const uuid = getvar[1]
+                if (getvarError.has(uuid)) throw new Error('esl timeout after 5000ms (stage=sending)')
+                return vars[uuid] ?? '_undef_'
+            }
+            return '+OK Success'
+        },
+    })
+    return h
+}
+
+const sweepCalls = h => h.calls.esl.filter(c => c.startsWith('uuid_getvar '))
+
+// ---- known channels -------------------------------------------------------
+
+test('shutdown ends one answered product call, exactly once', async () => {
+    const h = harnessWithSweep()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    await answered(h)
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested, [{ uuid: X, proof: 'policy_marker', verdict: 'issued' }])
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+    assert.equal(h.calls.termination.find(e => e.kind === 'requested').reason, SHUTDOWN_TERMINATION_REASON)
+    assert.equal(h.calls.termination.find(e => e.kind === 'requested').graceMs, 0, 'no goodbye playback during shutdown')
+    assert.equal(session.stopCount, 0, 'the lifecycle never stops the session for us')
+})
+
+test('shutdown ends several product calls', async () => {
+    const h = harnessWithSweep()
+    for (const uuid of [X, Y, Z]) await answered(h, uuid)
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested.map(r => r.uuid).sort(), [X, Y, Z].sort())
+    assert.equal(h.kills().length, 3)
+})
+
+test('a channel proven only by its policy marker is still ended', async () => {
+    // No CallSession, and the CRM never settled: the marker the Calling originate
+    // put on the channel is enough on its own.
+    const h = harnessWithSweep({})
+    const pending = new Promise(() => {})
+    const p = harness({ bindResult: () => pending })
+    p.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    await tick()
+
+    p.lifecycle.beginShutdown()
+    const known = p.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested, [{ uuid: X, proof: 'policy_marker', verdict: 'issued' }])
+    assert.equal(p.kills().length, 1)
+    void h
+})
+
+test('a channel proven only by its settled CRM classification is still ended', async () => {
+    // A product call whose channel carries no usable policy: C1b already ends such a
+    // call at answer, but a shutdown before that must not leave it either.
+    const h = harness({ classification: 'product' })
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'ringing', { policy: null }))
+    await tick()
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested.map(r => r.proof), ['crm_classification'])
+    assert.equal(h.kills().length, 1)
+})
+
+test('a ringing product call that never answered is ended too', async () => {
+    const h = harness()
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'ringing'))
+    await tick()
+    assert.deepEqual(h.lifecycle.snapshot().preAnswerTimers, [X], 'pre-answer, still waiting')
+
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+})
+
+test('a diagnostic channel on the same park extension is left alone', async () => {
+    const h = harness({ classification: 'diagnostic' })
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered', { policy: null }))
+    await tick()
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested, [])
+    assert.deepEqual(known.skipped, [X])
+    assert.equal(h.kills().length, 0, 'sharing extension 9999 is not evidence')
+})
+
+test('an unknown classification with no marker was already ended by C1b, and shutdown adds nothing', async () => {
+    // C1b fails closed on a product-or-unknown channel that carries no enforceable
+    // duration policy, so by the time a shutdown runs this channel is already dead
+    // or killed. The C2 statement here is the second half: no second hangup, and the
+    // shutdown phase claims no product proof of its own.
+    const h = harness({ bindResult: () => Promise.reject(new Error('CRM unreachable')) })
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'ringing', { policy: null }))
+    await tick()
+    await tick()
+    assert.equal(h.kills().length, 1, 'C1b already ended it')
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    // 'unknown' is not product proof, so the shutdown claims none: the channel is
+    // already handled and nothing here needs to guess about it.
+    assert.deepEqual(known.requested, [])
+    assert.deepEqual(known.skipped, [X])
+    assert.equal(h.kills().length, 1, 'still one hangup in total')
+})
+
+test('the shutdown phase itself never kills a channel with no product proof', async () => {
+    // Nothing about the channel says Calling: no marker, and the CRM proved it is
+    // not a product call. Sharing the park extension is not evidence.
+    const h = harness({ classification: 'diagnostic' })
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered', { policy: null }))
+    await tick()
+    assert.equal(h.kills().length, 0, 'C1b left it alone too')
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested, [])
+    assert.deepEqual(known.skipped, [X])
+    assert.equal(h.kills().length, 0)
+})
+
+test('an unknown classification WITH a valid marker fails closed and is ended', async () => {
+    const h = harness({ bindResult: () => Promise.reject(new Error('CRM unreachable')) })
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    await tick()
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested.map(r => r.proof), ['policy_marker'])
+    assert.equal(h.kills().length, 1)
+})
+
+test('shutdown adds no hangup for a channel that already hung up', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested, [])
+    assert.equal(h.kills().length, 0)
+})
+
+test('shutdown adds no second hangup for a channel already killed', async () => {
+    const h = harness()
+    await answered(h)
+    assert.equal(h.lifecycle.terminate(X, { reason: 'completed' }), 'issued')
+    await tick()
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested.map(r => r.verdict), ['duplicate'])
+    assert.equal(h.kills().length, 1, 'still one hangup in total')
+})
+
+test('shutdown escalates a pending goodbye or transfer grace to immediate', async () => {
+    const h = harness()
+    await answered(h)
+    assert.equal(h.lifecycle.terminate(X, { reason: 'transferred', graceMs: 5000 }), 'scheduled')
+    await tick()
+    const grace = h.liveTimers(5000)
+    assert.equal(grace.length, 1)
+
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.deepEqual(known.requested.map(r => r.verdict), ['escalated'])
+    assert.equal(grace[0].cleared, true, 'the pending grace is cancelled, not fired')
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`], 'one hangup in total')
+    const escalated = h.calls.termination.find(e => e.kind === 'escalated')
+    assert.equal(escalated.reason, SHUTDOWN_TERMINATION_REASON)
+    assert.equal(escalated.preempted_reason, 'transferred')
+})
+
+test('a hard-duration kill in flight and shutdown together still send one hangup', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    await answered(h)
+
+    capTimers(h)[0].fn()          // the cap fires
+    await tick()
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    assert.equal(h.kills().length, 1, 'exactly one physical kill for one channel')
+    assert.deepEqual(session.stopReasons, ['max_duration'])
+})
+
+test('a remote hangup during shutdown still releases channel state', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    await answered(h)
+    h.lifecycle.beginShutdown()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup', { billsec: 12 }))
+    await tick()
+
+    assert.equal(h.lifecycle.isDead(X), true)
+    assert.deepEqual(session.stopReasons, ['closed'], 'the application reason is unchanged by shutdown')
+    assert.deepEqual(h.lifecycle.snapshot().answered, [])
+})
+
+test('a rejected shutdown hangup is reported once and not retried', async () => {
+    const h = harness({ eslReply: async () => '-ERR Invalid uuid' })
+    await answered(h)
+
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    await tick()
+    await tick()
+
+    assert.equal(h.kills().length, 1, 'no retry storm')
+    assert.equal(h.terminationKinds().filter(k => k === 'failed').length, 1)
+})
+
+// ---- shutdown-mode events -------------------------------------------------
+
+test('a product PARK that arrives during shutdown is ended, and binds nothing', async () => {
+    const h = harness()
+    h.lifecycle.beginShutdown()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered'))
+    await tick()
+
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+    assert.deepEqual(h.calls.ensure, [], 'no CRM bind')
+    assert.equal(h.forks().length, 0, 'no audio fork')
+    assert.equal(h.broadcasts().length, 0, 'no greeting')
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [], 'no duration timer armed')
+    assert.deepEqual(h.lifecycle.snapshot().bound, [], 'no session bind recorded')
+})
+
+test('a product ANSWER that arrives during shutdown is ended, and forks nothing', async () => {
+    const h = harness()
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'ringing'))
+    await tick()
+    const forksBefore = h.forks().length
+    h.lifecycle.beginShutdown()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    await tick()
+
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`])
+    assert.equal(h.forks().length, forksBefore, 'no audio fork on a shutdown answer')
+    assert.deepEqual(h.lifecycle.snapshot().maxDurationTimers, [], 'no duration timer armed')
+})
+
+test('an unmarked PARK during shutdown is left alone', async () => {
+    const h = harness()
+    h.lifecycle.beginShutdown()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_PARK', X, '9999', 'answered', { policy: null }))
+    await tick()
+
+    assert.equal(h.kills().length, 0, 'extension 9999 alone is not evidence')
+    assert.deepEqual(h.calls.ensure, [])
+})
+
+test('a shutdown-mode event for a channel already killed sends no second hangup', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_ANSWER', X, '9999', 'answered'))
+    await tick()
+
+    assert.equal(h.kills().length, 1)
+})
+
+// ---- the unseen-channel sweep ---------------------------------------------
+
+test('the sweep ends a product channel this process has never seen', async () => {
+    // The originate-before-PARK race: FreeSWITCH already has the channel, with the
+    // marker on it, and no event has reached the bridge yet.
+    const h = harnessWithSweep({
+        rows: [{ uuid: Y, name: 'sofia/gateway/megafon/79990000000' }],
+        vars: { [Y]: String(POLICY_MS) },
+    })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+    await tick()
+
+    assert.equal(sweep.enumerated, 1)
+    assert.equal(sweep.inspected, 1)
+    assert.deepEqual(sweep.requested, [{ uuid: Y, proof: 'policy_marker', verdict: 'issued' }])
+    assert.deepEqual(h.kills(), [`uuid_kill ${Y} ${DEFAULT_HANGUP_CAUSE}`])
+})
+
+test('the sweep leaves an unmarked channel alone', async () => {
+    const h = harnessWithSweep({
+        rows: [{ uuid: Y, name: 'sofia/internal/101' }, { uuid: Z, name: 'loopback/9999-a' }],
+        vars: {},   // both answer `_undef_`
+    })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+
+    assert.equal(sweep.inspected, 2)
+    assert.deepEqual(sweep.requested, [])
+    assert.equal(h.kills().length, 0)
+})
+
+test('a channel found by the lifecycle and by the sweep is killed once', async () => {
+    const h = harnessWithSweep({ rows: [{ uuid: X }], vars: { [X]: String(POLICY_MS) } })
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels({ skip: new Set(known.requested.map(r => r.uuid)) })
+    await tick()
+
+    assert.equal(h.kills().length, 1, 'one physical kill episode for one channel')
+    assert.deepEqual(sweep.requested, [])
+    assert.equal(sweepCalls(h).length, 0, 'a channel already handled is not even inspected')
+})
+
+test('a channel the sweep sees but the lifecycle already killed is skipped by its guards', async () => {
+    const h = harnessWithSweep({ rows: [{ uuid: X }], vars: { [X]: String(POLICY_MS) } })
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()   // no skip set at all
+
+    assert.deepEqual(sweep.requested, [])
+    assert.equal(h.kills().length, 1)
+})
+
+test('zero channels is a clean, bounded sweep', async () => {
+    const h = harnessWithSweep({ rows: [] })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+
+    assert.deepEqual(sweep, { enumerated: 0, inspected: 0, requested: [], truncated: null, enumerationFailed: false })
+    assert.equal(h.kills().length, 0)
+})
+
+test('an enumeration failure does not undo the kills already issued', async () => {
+    const h = harnessWithSweep({ listingError: true })
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    await tick()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+
+    assert.equal(sweep.enumerationFailed, true)
+    assert.equal(h.kills().length, 1, 'the known channel still died')
+    assert.equal(h.terminationKinds().includes('sweep_failed'), true)
+})
+
+test('an unusable channel listing is a failure, not a crash', async () => {
+    const h = harness({ eslReply: async () => 'not json at all' })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+
+    assert.equal(sweep.enumerationFailed, true)
+    assert.equal(h.kills().length, 0)
+})
+
+test('one unreadable channel does not cost the others their inspection', async () => {
+    const h = harnessWithSweep({
+        rows: [{ uuid: Y }, { uuid: Z }],
+        vars: { [Z]: String(POLICY_MS) },
+        getvarError: new Set([Y]),
+    })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+    await tick()
+
+    assert.equal(sweep.inspected, 2)
+    assert.deepEqual(sweep.requested.map(r => r.uuid), [Z])
+    assert.deepEqual(h.kills(), [`uuid_kill ${Z} ${DEFAULT_HANGUP_CAUSE}`])
+})
+
+test('a channel that vanished between listing and inspection is not an error', async () => {
+    const h = harnessWithSweep({ rows: [{ uuid: Y }], vars: { [Y]: '-ERR No such channel!' } })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels()
+
+    assert.deepEqual(sweep.requested, [])
+    assert.equal(h.kills().length, 0)
+    assert.equal(h.logs.error.length, 0, 'a gone channel is not reported as a failure')
+})
+
+test('the sweep stops at its channel cap and says so', async () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({
+        uuid: `44444444-5555-4666-8777-${String(i).padStart(12, '0')}`,
+    }))
+    const h = harnessWithSweep({ rows: many, vars: {} })
+    h.lifecycle.beginShutdown()
+
+    const sweep = await h.lifecycle.sweepUnseenProductChannels({ maxChannels: 10 })
+
+    assert.equal(sweep.enumerated, 200)
+    assert.equal(sweep.inspected, 10, 'a busy switch cannot make shutdown unbounded')
+    assert.equal(sweep.truncated, 'channel_cap')
+    const evidence = h.calls.termination.find(e => e.kind === 'sweep_truncated')
+    assert.equal(evidence.detail, 'channel_cap')
+    assert.equal(evidence.enumerated, 200)
+    assert.equal(evidence.inspected, 10)
+})
+
+test('the sweep stops at its deadline and says so', async () => {
+    const rows = Array.from({ length: 50 }, (_, i) => ({
+        uuid: `55555555-6666-4777-8888-${String(i).padStart(12, '0')}`,
+    }))
+    let clock = 0
+    const h = harness({
+        eslReply: async cmd => {
+            if (cmd === 'show channels as json') return channelListing(rows)
+            clock += 400            // every inspection costs wall-clock time
+            return '_undef_'
+        },
+    })
+    const realNow = Date.now
+    Date.now = () => realNow() + clock
+    try {
+        h.lifecycle.beginShutdown()
+        const sweep = await h.lifecycle.sweepUnseenProductChannels({ deadlineMs: 1000 })
+        assert.equal(sweep.truncated, 'deadline')
+        assert.ok(sweep.inspected < 50, `stopped early, inspected ${sweep.inspected}`)
+        assert.equal(h.calls.termination.find(e => e.kind === 'sweep_truncated').detail, 'deadline')
+    } finally {
+        Date.now = realNow
+    }
+})
+
+// ---- the acknowledgement window -------------------------------------------
+
+test('the acknowledgement window resolves as soon as every hangup has landed', async () => {
+    const h = harnessWithSweep()
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+
+    const acks = await h.lifecycle.awaitTerminationAcks(known.requested.map(r => r.uuid), 3000)
+
+    assert.deepEqual(acks, { waited: 1, timedOut: false, outstanding: [] })
+    assert.equal(h.liveTimers(3000).length, 0, 'the budget timer is cleared, not left armed')
+})
+
+test('the acknowledgement window ends at its budget when a hangup never lands', async () => {
+    let release = null
+    const h = harness({ eslReply: () => new Promise(resolve => { release = resolve }) })
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    const known = h.lifecycle.terminateKnownProductChannels()
+
+    const pending = h.lifecycle.awaitTerminationAcks(known.requested.map(r => r.uuid), 3000)
+    await tick()
+    const budget = h.liveTimers(3000)
+    assert.equal(budget.length, 1, 'one budget timer')
+    budget[0].fn()
+    const acks = await pending
+
+    assert.equal(acks.timedOut, true)
+    assert.deepEqual(acks.outstanding, [X])
+    assert.equal(typeof release, 'function', 'the ESL reply is still outstanding, by construction')
+})
+
+test('waiting on a channel whose hangup already landed resolves at once', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.terminate(X, { reason: 'completed' })
+    await tick()
+
+    const acks = await h.lifecycle.awaitTerminationAcks([X], 3000)
+
+    assert.deepEqual(acks, { waited: 1, timedOut: false, outstanding: [] })
+})
+
+test('a hangup event that arrives instead of an acknowledgement still ends the wait', async () => {
+    let release = null
+    const h = harness({ eslReply: () => new Promise(resolve => { release = resolve }) })
+    await answered(h)
+    h.lifecycle.beginShutdown()
+    h.lifecycle.terminateKnownProductChannels()
+    const pending = h.lifecycle.awaitTerminationAcks([X], 3000)
+    await tick()
+
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    const acks = await pending
+
+    assert.equal(acks.timedOut, false)
+    assert.equal(typeof release, 'function')
+})
+
+test('nothing to acknowledge is not a wait', async () => {
+    const h = harness()
+    const acks = await h.lifecycle.awaitTerminationAcks([], 3000)
+    assert.deepEqual(acks, { waited: 0, timedOut: false, outstanding: [] })
+    assert.equal(h.timers.length, 0, 'no budget timer armed for an empty set')
+})
+
+// ---- the shutdown sequence ------------------------------------------------
+//
+// The order is the safety contract, so it is asserted as an order and not as a set
+// of independent effects. `server.js` opens its sockets at require time and cannot
+// be driven by a test, which is why the sequence takes its process effects as
+// injected functions.
+
+function sequenceHarness({ lifecycle, hangingPhase = null, ...opts } = {}) {
+    const order = []
+    const timers = []
+    const fakeLifecycle = lifecycle ?? {
+        beginShutdown: () => { order.push('mark') },
+        terminateKnownProductChannels: () => {
+            order.push('terminate-known')
+            return { requested: [{ uuid: X, proof: 'policy_marker', verdict: 'issued' }], skipped: [] }
+        },
+        sweepUnseenProductChannels: async () => {
+            order.push('sweep')
+            if (hangingPhase === 'sweep') await new Promise(() => {})
+            return { enumerated: 1, inspected: 1, requested: [{ uuid: Y, proof: 'policy_marker', verdict: 'issued' }], truncated: null, enumerationFailed: false }
+        },
+        awaitTerminationAcks: async uuids => {
+            order.push(`acks:${uuids.join(',')}`)
+            if (hangingPhase === 'acks') await new Promise(() => {})
+            return { waited: uuids.length, timedOut: false, outstanding: [] }
+        },
+    }
+    const sequence = createShutdownSequence({
+        lifecycle: fakeLifecycle,
+        stopSessions: () => { order.push('stop-sessions') },
+        closeWebSockets: () => { order.push('close-ws') },
+        closeEslListener: () => { order.push('close-esl') },
+        closeHttpServer: () => { order.push('close-http') },
+        exit: () => { order.push('exit') },
+        log: () => {},
+        logError: () => {},
+        setTimer: (fn, ms) => {
+            const t = { ms, cleared: false, fired: false, unref() {} }
+            t.fn = () => { t.fired = true; fn() }
+            timers.push(t)
+            return t
+        },
+        clearTimer: t => { t.cleared = true },
+        ...opts,
+    })
+    return { sequence, order, timers }
+}
+
+test('the shutdown order puts physical safety before finalization and closure', async () => {
+    const h = sequenceHarness()
+
+    await h.sequence.shutdown('SIGTERM')
+
+    assert.deepEqual(h.order, [
+        'mark',
+        'terminate-known',
+        'stop-sessions',
+        'sweep',
+        `acks:${X},${Y}`,
+        'close-ws',
+        'close-esl',
+        'close-http',
+        'exit',
+    ])
+})
+
+test('HTTP playback is not closed before the termination phases have run', async () => {
+    const h = sequenceHarness()
+    await h.sequence.shutdown('SIGTERM')
+
+    const http = h.order.indexOf('close-http')
+    for (const phase of ['terminate-known', 'sweep', `acks:${X},${Y}`]) {
+        assert.ok(h.order.indexOf(phase) < http, `${phase} must precede closing HTTP`)
+    }
+    assert.ok(h.order.indexOf('close-esl') < http, 'the event listener stops before HTTP')
+})
+
+test('exit cannot happen before the termination phases got their chance', async () => {
+    const h = sequenceHarness()
+    await h.sequence.shutdown('SIGTERM')
+
+    const exit = h.order.indexOf('exit')
+    assert.equal(exit, h.order.length - 1)
+    assert.ok(h.order.indexOf('terminate-known') < exit)
+    assert.ok(h.order.indexOf(`acks:${X},${Y}`) < exit)
+})
+
+test('a second SIGTERM is the same shutdown: no phase runs twice', async () => {
+    const h = sequenceHarness()
+
+    const first = h.sequence.shutdown('SIGTERM')
+    await h.sequence.shutdown('SIGTERM')
+    await first
+
+    assert.deepEqual(h.order.filter(step => step === 'terminate-known'), ['terminate-known'])
+    assert.deepEqual(h.order.filter(step => step === 'stop-sessions'), ['stop-sessions'])
+    assert.deepEqual(h.order.filter(step => step === 'exit'), ['exit'])
+    assert.deepEqual(h.sequence.signalsSeen(), ['SIGTERM', 'SIGTERM'])
+})
+
+test('SIGINT then SIGTERM is one shutdown', async () => {
+    const h = sequenceHarness()
+
+    const first = h.sequence.shutdown('SIGINT')
+    await h.sequence.shutdown('SIGTERM')
+    await first
+
+    assert.deepEqual(h.order.filter(step => step === 'mark'), ['mark'])
+    assert.deepEqual(h.sequence.signalsSeen(), ['SIGINT', 'SIGTERM'])
+})
+
+test('a later signal does not extend the hard cap', async () => {
+    const h = sequenceHarness({ hardCapMs: 5000 })
+    const first = h.sequence.shutdown('SIGTERM')
+    await h.sequence.shutdown('SIGTERM')
+    await first
+
+    assert.equal(h.timers.filter(t => t.ms === 5000).length, 1, 'exactly one cap timer for one shutdown')
+})
+
+test('the hard cap exits even if a phase never finishes', async () => {
+    const h = sequenceHarness({ hangingPhase: 'acks', hardCapMs: 5000 })
+
+    void h.sequence.shutdown('SIGTERM')
+    await tick()
+    assert.equal(h.order.includes('exit'), false, 'nothing exited yet')
+
+    const cap = h.timers.find(t => t.ms === 5000)
+    cap.fn()
+
+    assert.equal(h.order.includes('exit'), true, 'the cap is what bounds a stuck phase')
+    assert.deepEqual(h.order.filter(step => step === 'exit'), ['exit'])
+})
+
+test('a sweep that never returns cannot hold the process past the cap', async () => {
+    const h = sequenceHarness({ hangingPhase: 'sweep', hardCapMs: 5000 })
+
+    void h.sequence.shutdown('SIGTERM')
+    await tick()
+    h.timers.find(t => t.ms === 5000).fn()
+
+    assert.equal(h.order.includes('exit'), true)
+})
+
+test('the cap timer is cleared when the phases finish in time', async () => {
+    const h = sequenceHarness({ hardCapMs: 5000 })
+    await h.sequence.shutdown('SIGTERM')
+
+    const cap = h.timers.find(t => t.ms === 5000)
+    assert.equal(cap.cleared, true)
+    assert.equal(cap.fired, false)
+})
+
+test('a phase that throws still closes the sockets and exits', async () => {
+    const h = sequenceHarness({
+        lifecycle: {
+            beginShutdown: () => {},
+            terminateKnownProductChannels: () => { throw new Error('lifecycle exploded') },
+            sweepUnseenProductChannels: async () => ({ enumerated: 0, inspected: 0, requested: [], truncated: null, enumerationFailed: false }),
+            awaitTerminationAcks: async () => ({ waited: 0, timedOut: false, outstanding: [] }),
+        },
+    })
+
+    await h.sequence.shutdown('SIGTERM')
+
+    assert.deepEqual(h.order, ['close-ws', 'close-esl', 'close-http', 'exit'])
+})
+
+test('a stopSessions that throws does not stop the shutdown', async () => {
+    const h = sequenceHarness({ stopSessions: () => { throw new Error('CRM client exploded') } })
+
+    await h.sequence.shutdown('SIGTERM')
+
+    assert.equal(h.order.includes('sweep'), true, 'the sweep still ran')
+    assert.equal(h.order.includes('exit'), true)
+})
+
+test('a closer that throws does not prevent the remaining closures or the exit', async () => {
+    const h = sequenceHarness({ closeWebSockets: () => { throw new Error('ws exploded') } })
+
+    await h.sequence.shutdown('SIGTERM')
+
+    assert.deepEqual(h.order.slice(-3), ['close-esl', 'close-http', 'exit'])
+})
+
+test('the sweep is told which channels the known-channel phase already handled', async () => {
+    const seen = []
+    const h = sequenceHarness({
+        lifecycle: {
+            beginShutdown: () => {},
+            terminateKnownProductChannels: () => ({ requested: [{ uuid: X, proof: 'policy_marker', verdict: 'issued' }], skipped: [] }),
+            sweepUnseenProductChannels: async opts => {
+                seen.push([...opts.skip])
+                return { enumerated: 0, inspected: 0, requested: [], truncated: null, enumerationFailed: false }
+            },
+            awaitTerminationAcks: async () => ({ waited: 0, timedOut: false, outstanding: [] }),
+        },
+        sweepDeadlineMs: 1500,
+        sweepMaxChannels: 64,
+    })
+
+    await h.sequence.shutdown('SIGTERM')
+
+    assert.deepEqual(seen, [[X]])
+})
+
+test('the full sequence against the real lifecycle: known kill, sweep kill, one each', async () => {
+    // End to end through the real module: one answered product call the bridge knows,
+    // one product channel only FreeSWITCH knows, one unrelated channel.
+    const lifecycleHarness = harnessWithSweep({
+        rows: [{ uuid: Y, name: 'sofia/gateway/megafon/79990000000' }, { uuid: Z, name: 'sofia/internal/101' }],
+        vars: { [Y]: String(POLICY_MS) },
+    })
+    const session = fakeSession()
+    lifecycleHarness.sessions.set(X, session)
+    await answered(lifecycleHarness, X)
+
+    const h = sequenceHarness({
+        lifecycle: lifecycleHarness.lifecycle,
+        stopSessions: () => { for (const s of lifecycleHarness.sessions.values()) s.stop() },
+    })
+    await h.sequence.shutdown('SIGTERM')
+    await tick()
+
+    assert.deepEqual(lifecycleHarness.kills().sort(), [
+        `uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`,
+        `uuid_kill ${Y} ${DEFAULT_HANGUP_CAUSE}`,
+    ].sort())
+    assert.equal(sweepCalls(lifecycleHarness).length, 2, 'both unknown channels inspected, the known one skipped')
+    assert.deepEqual(session.stopReasons, [undefined], 'the session finalizes under its own default reason')
+    assert.equal(lifecycleHarness.lifecycle.isShuttingDown(), true)
+})

@@ -108,11 +108,37 @@ const MAX_TERMINATION_GRACE_MS = 30 * 1000
 const MAX_ANSWERED_POLICY_HEADER = 'variable_yoko_ai_max_answered_ms'
 // Sanity bounds for the value that arrives on the channel. Anything outside them is
 // not a policy this module will act on — it fails closed instead of guessing.
+// The same marker as a channel variable name, for the api reply path (uuid_getvar).
+const MAX_ANSWERED_POLICY_VARIABLE = MAX_ANSWERED_POLICY_HEADER.replace(/^variable_/, '')
 const MIN_ANSWERED_POLICY_MS = 1000
 const MAX_ANSWERED_POLICY_MS = 60 * 60 * 1000
 // Tolerances for the answer instant FreeSWITCH reports. A value slightly ahead of
 // this process's clock is ordinary skew; one wildly ahead, or older than a day, is
 // not an answer time and is ignored in favour of the local clock.
+// C2. The operational trigger recorded on a hangup this process issues because it
+// is going away. It is a physical reason only: the application terminal reason a
+// session finalizes under is unchanged ('closed'), and nothing persists this.
+const SHUTDOWN_TERMINATION_REASON = 'bridge_shutdown'
+/**
+ * Bounds for the shutdown sweep that looks for product channels this process has
+ * never seen (a controlled originate accepted by FreeSWITCH whose CHANNEL_PARK had
+ * not arrived yet). Both exist so the sweep cannot become a function of how many
+ * channels the switch happens to have: FreeSWITCH also carries every unrelated
+ * call, and a redeploy may not wait on them.
+ */
+const DEFAULT_SWEEP_DEADLINE_MS = 1500
+const DEFAULT_SWEEP_MAX_CHANNELS = 64
+/** How long a kill this process issued is given to be acknowledged before exit. */
+const DEFAULT_TERMINATION_ACK_BUDGET_MS = 3000
+/**
+ * The whole shutdown, measured from the first accepted signal. Docker sends SIGKILL
+ * about 10 s after SIGTERM and the production compose sets no stop_grace_period, so
+ * the sequence must finish well inside that with room for the socket closures.
+ */
+const DEFAULT_SHUTDOWN_HARD_CAP_MS = 5000
+/** Acknowledgement kinds that end a termination episode, whatever the outcome. */
+const TERMINAL_ACK_KINDS = new Set(['issued', 'suppressed', 'failed'])
+
 const ANSWER_CLOCK_SKEW_MS = 5 * 1000
 const ANSWER_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -270,6 +296,14 @@ function createChannelLifecycle({
     const maxDurationPolicies = new Map()  // uuid -> policy ms the channel carried
     const bindClassifications = new Map()  // uuid -> Promise<'product'|'diagnostic'|'unknown'>
     const policyMissingChannels = new Set()  // handled once per channel
+    // C2 shutdown mode. Set once, never cleared: a bridge that has begun shutting
+    // down does no new AI work, and every later signal is the same shutdown.
+    let shuttingDown = false
+    // Shutdown acknowledgement bookkeeping only — the at-most-once decision stays
+    // with killedChannels / terminatingChannels / deadChannels.
+    const ackWaiters = new Map()      // uuid -> resolve[]
+    const ackedChannels = new Set()   // uuid whose termination episode already ended
+    const settledClassifications = new Map()  // uuid -> 'product' | 'diagnostic' | 'unknown'
 
     function clearPreAnswerTimer(uuid) {
         const timer = preAnswerTimers.get(uuid)
@@ -395,9 +429,37 @@ function createChannelLifecycle({
     // caller's reason, the cause, the grace, the cap and at most a truncated
     // FreeSWITCH reply.
     function emitTermination(kind, uuid, detail) {
+        if (TERMINAL_ACK_KINDS.has(kind)) resolveAckWaiters(uuid)
         try { onTerminationEvent(kind, { callUuid: uuid, ...detail }) } catch (err) {
             logError(`[esl] termination hook threw for ${uuid}: ${err.message}`)
         }
+    }
+
+    function resolveAckWaiters(uuid) {
+        ackedChannels.add(uuid)
+        const waiters = ackWaiters.get(uuid)
+        if (waiters === undefined) return
+        ackWaiters.delete(uuid)
+        for (const resolve of waiters) { try { resolve() } catch {} }
+    }
+
+    /**
+     * Resolves once this channel's termination episode has ended — the hangup was
+     * issued, suppressed as pointless, or failed. Deliberately NOT a new contract on
+     * terminate(): it listens to the same bounded events the operator log already
+     * receives, so normal runtime ownership is untouched.
+     *
+     * A channel whose episode ended before shutdown resolves at once rather than
+     * waiting for an event that will never be emitted again — which is what makes a
+     * `duplicate` verdict safe to wait on.
+     */
+    function terminationAck(uuid) {
+        if (ackedChannels.has(uuid) || deadChannels.has(uuid)) return Promise.resolve()
+        return new Promise(resolve => {
+            const waiters = ackWaiters.get(uuid) ?? []
+            waiters.push(resolve)
+            ackWaiters.set(uuid, waiters)
+        })
     }
 
     function clearTerminationTimers(uuid) {
@@ -765,6 +827,172 @@ function createChannelLifecycle({
         return 'scheduled'
     }
 
+    // ── C2: intentional shutdown ───────────────────────────────────────────────
+    //
+    // A bridge that is going away must not leave a product AI call on the line: the
+    // lead would hold a live channel with nothing listening or speaking until the
+    // C1b native cutoff. These phases are asked for by the process's signal handler
+    // and use the one physical primitive this module already owns — nothing here
+    // sends a hangup of its own.
+
+    function beginShutdown() {
+        if (shuttingDown) return false
+        shuttingDown = true
+        return true
+    }
+
+    /**
+     * Why a channel this process already knows about is a product call.
+     *
+     * Two independent proofs, both already held here: the hard-duration policy the
+     * Calling originate put on the channel, and the settled CRM classification. A
+     * dial into the park extension proves nothing by itself — diagnostic dials share
+     * it — so an unmarked, unclassified channel is left alone.
+     */
+    function productProofFor(uuid) {
+        if (maxDurationPolicies.has(uuid)) return 'policy_marker'
+        if (settledClassifications.get(uuid) === 'product') return 'crm_classification'
+        return null
+    }
+
+    function knownChannels() {
+        const live = new Set()
+        for (const uuid of [
+            ...answeredChannels, ...boundChannels, ...forkedChannels,
+            ...pendingBroadcasts.keys(), ...preAnswerTimers.keys(),
+        ]) {
+            if (!deadChannels.has(uuid)) live.add(uuid)
+        }
+        return live
+    }
+
+    /**
+     * Phase 1: every channel this process knows and can prove is a product call is
+     * ended now. `graceMs: 0` on purpose — there is no AI runtime left to play a
+     * phrase out, and a pending goodbye or transfer grace is escalated rather than
+     * waited for, which the primitive already does.
+     */
+    function terminateKnownProductChannels() {
+        const requested = []
+        const skipped = []
+        for (const uuid of knownChannels()) {
+            const proof = productProofFor(uuid)
+            if (proof === null) {
+                skipped.push(uuid)
+                log(`[esl] shutdown leaves ${uuid} alone: nothing proves it is a product call`)
+                continue
+            }
+            const verdict = terminate(uuid, { reason: SHUTDOWN_TERMINATION_REASON, graceMs: 0 })
+            requested.push({ uuid, proof, verdict })
+        }
+        return { requested, skipped }
+    }
+
+    function parseChannelRows(reply) {
+        const parsed = JSON.parse(String(reply).trim())
+        if (!parsed || typeof parsed !== 'object') throw new Error('unusable channel listing')
+        const rows = Array.isArray(parsed.rows) ? parsed.rows : []
+        // Newest first: a controlled originate in flight is the youngest channel on
+        // the switch, and a truncated sweep must inspect the likely ones.
+        return rows
+            .filter(row => row && CHANNEL_UUID_PATTERN.test(String(row.uuid)))
+            .sort((a, b) => Number(b.created_epoch ?? 0) - Number(a.created_epoch ?? 0))
+    }
+
+    /**
+     * Phase 2: the channels this process has never seen.
+     *
+     * A controlled originate is accepted by FreeSWITCH before its CHANNEL_PARK
+     * reaches this bridge, so a channel can exist, carry the Calling policy marker
+     * and be completely absent from the state above. FreeSWITCH is asked what it
+     * has, each candidate is asked for the marker, and a proven product channel goes
+     * to the same terminate(). Bounded twice — by a deadline and by a channel cap —
+     * because the switch also carries every unrelated call and a redeploy may not
+     * wait on them.
+     */
+    async function sweepUnseenProductChannels({
+        deadlineMs = DEFAULT_SWEEP_DEADLINE_MS,
+        maxChannels = DEFAULT_SWEEP_MAX_CHANNELS,
+        skip = new Set(),
+    } = {}) {
+        const startedAt = Date.now()
+        const expired = () => Date.now() - startedAt >= deadlineMs
+        const summary = {
+            enumerated: 0, inspected: 0, requested: [], truncated: null, enumerationFailed: false,
+        }
+        let rows
+        try {
+            rows = parseChannelRows(await eslApi('show channels as json'))
+        } catch (err) {
+            summary.enumerationFailed = true
+            logError(`[esl] shutdown sweep could not enumerate channels: ${err.message}`)
+            emitTermination('sweep_failed', 'none', {
+                reason: SHUTDOWN_TERMINATION_REASON, detail: String(err.message).slice(0, 120),
+            })
+            return summary
+        }
+        summary.enumerated = rows.length
+        for (const row of rows) {
+            const uuid = String(row.uuid)
+            if (skip.has(uuid) || deadChannels.has(uuid) || killedChannels.has(uuid)
+                || terminatingChannels.has(uuid)) continue
+            if (summary.inspected >= maxChannels || expired()) {
+                summary.truncated = summary.inspected >= maxChannels ? 'channel_cap' : 'deadline'
+                break
+            }
+            summary.inspected++
+            let policyMs = null
+            try {
+                const reply = String(await eslApi(`uuid_getvar ${uuid} ${MAX_ANSWERED_POLICY_VARIABLE}`)).trim()
+                if (CHANNEL_ALREADY_GONE.test(reply)) continue
+                // The same validator the event path uses — one definition of a usable
+                // policy, whether it arrives in a header or in an api reply.
+                policyMs = parsePolicyMs({ [MAX_ANSWERED_POLICY_HEADER]: reply })
+            } catch (err) {
+                // One unreadable channel must not cost the others their chance.
+                logError(`[esl] shutdown sweep could not read ${uuid}: ${err.message}`)
+                continue
+            }
+            if (policyMs === null) continue
+            if (!maxDurationPolicies.has(uuid)) maxDurationPolicies.set(uuid, policyMs)
+            const verdict = terminate(uuid, { reason: SHUTDOWN_TERMINATION_REASON, graceMs: 0 })
+            summary.requested.push({ uuid, proof: 'policy_marker', verdict })
+        }
+        if (summary.truncated !== null) {
+            logError(`[esl] shutdown sweep truncated (${summary.truncated}) after ${summary.inspected} of ${summary.enumerated} channel(s)`)
+            emitTermination('sweep_truncated', 'none', {
+                reason: SHUTDOWN_TERMINATION_REASON,
+                detail: summary.truncated,
+                enumerated: summary.enumerated,
+                inspected: summary.inspected,
+            })
+        }
+        return summary
+    }
+
+    /**
+     * Phase 3: give the hangups this shutdown asked for a bounded chance to land.
+     * Waits on the same events the operator log receives, never on the CRM, and
+     * never past its budget.
+     */
+    async function awaitTerminationAcks(uuids, budgetMs = DEFAULT_TERMINATION_ACK_BUDGET_MS) {
+        const pending = [...new Set(uuids)]
+        if (pending.length === 0) return { waited: 0, timedOut: false, outstanding: [] }
+        let timer = null
+        const timeout = new Promise(resolve => {
+            timer = setTimer(() => resolve('timeout'), budgetMs)
+            if (timer && typeof timer.unref === 'function') timer.unref()
+        })
+        const acked = Promise.all(pending.map(uuid => terminationAck(uuid))).then(() => 'acked')
+        const outcome = await Promise.race([acked, timeout])
+        if (timer !== null) { try { clearTimer(timer) } catch {} }
+        const outstanding = pending.filter(uuid => !ackedChannels.has(uuid) && !deadChannels.has(uuid))
+        if (outcome === 'timeout') {
+            logError(`[esl] shutdown stopped waiting for ${outstanding.length} unacknowledged hangup(s) after ${budgetMs} ms`)
+        }
+        return { waited: pending.length, timedOut: outcome === 'timeout', outstanding }
+    }
+
     function onAnswerFact(uuid, ext, via, answerAtMs = null, policyMs = null) {
         if (deadChannels.has(uuid)) return
         clearPreAnswerTimer(uuid)
@@ -824,7 +1052,12 @@ function createChannelLifecycle({
         overdueChannels.delete(uuid)
         maxDurationPolicies.delete(uuid)
         bindClassifications.delete(uuid)
+        settledClassifications.delete(uuid)
         policyMissingChannels.delete(uuid)
+        // The hangup this channel just had is the end of any episode it had open, so
+        // a shutdown waiting on it must not be left hanging.
+        resolveAckWaiters(uuid)
+        ackedChannels.delete(uuid)
         releaseTerminationEpisode(uuid)
         const queued = pendingBroadcasts.get(uuid)
         if (queued && queued.length) {
@@ -884,6 +1117,19 @@ function createChannelLifecycle({
         const answerAtMs = parseAnswerEpochMs(headers, Date.now())
         const policyMs = parsePolicyMs(headers)
         if (policyMs !== null && !maxDurationPolicies.has(uuid)) maxDurationPolicies.set(uuid, policyMs)
+        if (shuttingDown) {
+            // A PARK or ANSWER that arrives while this process is going away must not
+            // start anything — no CRM bind, no greeting, no audio fork, no STT/LLM/TTS
+            // and no new duration timer. It is only evidence about a channel, and the
+            // marker is already in these headers, so no api round trip is needed.
+            if (policyMs === null) {
+                log(`[esl] ${eventName} during shutdown leaves ${uuid} alone: no Calling policy marker`)
+                return
+            }
+            log(`[esl] ${eventName} during shutdown proves ${uuid} is a product call -> terminating`)
+            terminate(uuid, { reason: SHUTDOWN_TERMINATION_REASON, graceMs: 0 })
+            return
+        }
         if (eventName === 'CHANNEL_PARK') {
             if (boundChannels.has(uuid)) {
                 log(`[esl] CHANNEL_PARK repeated for ${uuid}: session bind already requested`)
@@ -902,6 +1148,9 @@ function createChannelLifecycle({
                     },
                 )
                 bindClassifications.set(uuid, settled)
+                // The same resolution, recorded synchronously readable: shutdown has a
+                // budget and cannot await a CRM round trip per channel.
+                settled.then(value => { if (!deadChannels.has(uuid)) settledClassifications.set(uuid, value) })
             }
             if (answerState === 'answered') onAnswerFact(uuid, ext, 'CHANNEL_PARK', answerAtMs, policyMs)
             else {
@@ -954,6 +1203,11 @@ function createChannelLifecycle({
         isTerminating: uuid => terminatingChannels.has(uuid),
         isKilled: uuid => killedChannels.has(uuid),
         isOverdue: uuid => overdueChannels.has(uuid),
+        isShuttingDown: () => shuttingDown,
+        beginShutdown,
+        terminateKnownProductChannels,
+        sweepUnseenProductChannels,
+        awaitTerminationAcks,
         deadlineAt: uuid => maxDurationDeadlines.get(uuid) ?? null,
         policyMs: uuid => maxDurationPolicies.get(uuid) ?? null,
         snapshot: () => ({
@@ -972,8 +1226,124 @@ function createChannelLifecycle({
     }
 }
 
+/**
+ * The bridge's shutdown sequence, as a function of injected effects.
+ *
+ * It lives here rather than in server.js because every phase it orders is about
+ * channels and the physical primitive this module owns, and because server.js opens
+ * its sockets at require time and therefore cannot be driven by a test. The effects
+ * that are genuinely the process's — stopping sessions, closing the WS server, the
+ * ESL listener and the HTTP server, and exiting — are passed in.
+ *
+ * The safety order is the contract:
+ *
+ *   1. shutdown mode      no new AI work from this moment
+ *   2. known channels     every proven product channel is asked to end, now
+ *   3. sessions           CRM finalization is *attempted*, never awaited (its retry
+ *                         budget reaches ~17 s and must never sit in front of a
+ *                         hangup, with Docker's SIGKILL at ~10 s)
+ *   4. sweep              the channels FreeSWITCH has but this process never saw
+ *   5. acknowledgement    a bounded chance for those hangups to land
+ *   6. WS, 7. ESL, 8. HTTP, 9. exit
+ *
+ * The whole sequence is bounded by one hard cap measured from the first accepted
+ * signal: if a phase overruns it, the process exits anyway. Later signals are the
+ * same shutdown — they never restart a phase, extend the cap, or re-finalize.
+ */
+function createShutdownSequence({
+    lifecycle,
+    stopSessions,
+    closeWebSockets,
+    closeEslListener,
+    closeHttpServer,
+    exit,
+    log = console.log,
+    logError = console.error,
+    now = Date.now,
+    setTimer = setTimeout,
+    clearTimer = clearTimeout,
+    sweepDeadlineMs = DEFAULT_SWEEP_DEADLINE_MS,
+    sweepMaxChannels = DEFAULT_SWEEP_MAX_CHANNELS,
+    ackBudgetMs = DEFAULT_TERMINATION_ACK_BUDGET_MS,
+    hardCapMs = DEFAULT_SHUTDOWN_HARD_CAP_MS,
+}) {
+    let started = false
+    let finished = false
+    let capTimer = null
+    const signals = []
+
+    function finish(via) {
+        if (finished) return
+        finished = true
+        if (capTimer !== null) { try { clearTimer(capTimer) } catch {} }
+        log(`[main] shutdown complete via ${via}`)
+        try { exit() } catch (err) { logError(`[main] exit hook threw: ${err.message}`) }
+    }
+
+    async function shutdown(signal) {
+        signals.push(signal)
+        if (started) {
+            // A second signal is the same shutdown. Saying so is the whole behaviour:
+            // restarting a phase would risk a second hangup and a second finalize.
+            log(`[main] ${signal} ignored — shutdown already in progress`)
+            return
+        }
+        started = true
+        const startedAt = now()
+        lifecycle.beginShutdown()
+        capTimer = setTimer(() => {
+            logError(`[main] shutdown hard cap of ${hardCapMs} ms reached — exiting with phases incomplete`)
+            finish('hard cap')
+        }, hardCapMs)
+        if (capTimer && typeof capTimer.unref === 'function') capTimer.unref()
+
+        const requested = []
+        try {
+            const known = lifecycle.terminateKnownProductChannels()
+            for (const entry of known.requested) requested.push(entry.uuid)
+            log(`[main] ${signal} — shutting down: ${known.requested.length} known product channel(s) terminated, ${known.skipped.length} left alone`)
+
+            // Issued, never awaited: a CRM that is slow or down must not keep a
+            // channel alive, and an unfinalized row is already swept by the CRM's own
+            // stale-session reaper.
+            try { stopSessions() } catch (err) { logError(`[main] stopping sessions threw: ${err.message}`) }
+
+            const sweep = await lifecycle.sweepUnseenProductChannels({
+                deadlineMs: sweepDeadlineMs,
+                maxChannels: sweepMaxChannels,
+                skip: new Set(requested),
+            })
+            for (const entry of sweep.requested) requested.push(entry.uuid)
+            log(`[main] shutdown sweep: ${sweep.inspected} of ${sweep.enumerated} channel(s) inspected, ${sweep.requested.length} unseen product channel(s) terminated${sweep.truncated ? ` (truncated: ${sweep.truncated})` : ''}`)
+
+            const acks = await lifecycle.awaitTerminationAcks(requested, ackBudgetMs)
+            if (acks.timedOut) logError(`[main] shutdown proceeding with ${acks.outstanding.length} unacknowledged hangup(s)`)
+        } catch (err) {
+            // No phase failure may keep the process alive, and none may skip closure.
+            logError(`[main] shutdown phase failed: ${err.message}`)
+        }
+        if (finished) return
+        for (const [name, close] of [
+            ['websockets', closeWebSockets],
+            ['esl listener', closeEslListener],
+            ['http server', closeHttpServer],
+        ]) {
+            try { close() } catch (err) { logError(`[main] closing ${name} threw: ${err.message}`) }
+        }
+        log(`[main] shutdown phases done in ${now() - startedAt} ms (signals: ${signals.join(', ')})`)
+        finish('phases complete')
+    }
+
+    return {
+        shutdown,
+        isShuttingDown: () => started,
+        signalsSeen: () => [...signals],
+    }
+}
+
 module.exports = {
     createChannelLifecycle,
+    createShutdownSequence,
     createSessionResolver,
     parseEslEventHeaders,
     buildAudioForkCommand,
@@ -982,6 +1352,12 @@ module.exports = {
     DEFAULT_HANGUP_CAUSE,
     MAX_TERMINATION_GRACE_MS,
     MAX_ANSWERED_POLICY_HEADER,
+    MAX_ANSWERED_POLICY_VARIABLE,
+    SHUTDOWN_TERMINATION_REASON,
+    DEFAULT_SWEEP_DEADLINE_MS,
+    DEFAULT_SWEEP_MAX_CHANNELS,
+    DEFAULT_TERMINATION_ACK_BUDGET_MS,
+    DEFAULT_SHUTDOWN_HARD_CAP_MS,
     MIN_ANSWERED_POLICY_MS,
     MAX_ANSWERED_POLICY_MS,
     parseAnswerEpochMs,
