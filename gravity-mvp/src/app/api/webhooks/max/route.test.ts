@@ -1208,6 +1208,10 @@ describe('MAX webhook DOM-fallback peer binding', () => {
     expect(mocks.appendCollision).not.toHaveBeenCalled()
     expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
     expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    // The proof is SKIPPED on a replay, not merely tolerated when it fails. Dedupe alone
+    // cannot prove that: the duplicate branch answers 200 either way, so without this the
+    // stored-message guard could be dropped and every replay would silently re-prove.
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
   })
 
   test('a stored duplicate carrying no senderId still dedupes instead of failing closed', async () => {
@@ -1224,6 +1228,34 @@ describe('MAX webhook DOM-fallback peer binding', () => {
     expect(replay.status).toBe(200)
     await expect(replay.json()).resolves.toMatchObject({ deduped: true })
     expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('a replay that collides records the stored message sender as the incoming evidence', async () => {
+    // This leg passes requirePeerSenderProof: false, so the stored sender never decides the
+    // outcome - it survives only as recorded evidence. No dedupe assertion can pin that, so
+    // without this the branch could pass null and the audit would lose the sender silently.
+    // The stored chat carries a different senderId on purpose, proving the recorded incoming
+    // value comes from the stored MESSAGE rather than from the chat it points at.
+    const storedChat = provenPrivateChat({ id: 'chat-other' }, { senderId: '902299999999' })
+    mocks.messageFindUnique.mockResolvedValue({
+      id: 'message-dom-1',
+      chatId: 'chat-other',
+      direction: 'inbound',
+      metadata: { senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' },
+      chat: storedChat,
+    })
+
+    const replay = await POST(domRequest())
+
+    expect(replay.status).toBe(409)
+    expect(mocks.appendCollision).toHaveBeenCalledWith({
+      chatId: 'chat-other',
+      evidence: expect.objectContaining({
+        reason: 'message_chat_mismatch',
+        incomingSenderId: DOM_PEER,
+        existingSenderId: '902299999999',
+      }),
+    })
   })
 
   test.each([

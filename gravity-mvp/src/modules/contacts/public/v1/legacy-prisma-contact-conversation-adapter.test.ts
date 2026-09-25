@@ -85,6 +85,8 @@ function peerTransaction(options: {
     peerConflictState?: string
     openPeerConflict?: boolean
     linkedMissing?: boolean
+    linkedOwner?: 'same' | 'other'
+    linkedChannel?: string
     archived?: boolean
     contactMissing?: boolean
     providerAccountId?: string | null
@@ -102,8 +104,8 @@ function peerTransaction(options: {
     }
     const linked = options.linkedMissing ? null : {
         id: 'identity-chatkey',
-        contactId: 'contact-1',
-        channel: 'max',
+        contactId: options.linkedOwner === 'other' ? 'contact-other' : 'contact-1',
+        channel: options.linkedChannel ?? 'max',
         externalId: '902454841098',
         isActive: true,
         metadata: {},
@@ -187,6 +189,11 @@ describe('Contacts inbound conversation peer identity query', () => {
         ['the peer identity is flagged conflicted', { peerConflictState: 'conflicted' }, 'peer_identity_conflicted'],
         ['the Contact holds an open conflict on the peer', { openPeerConflict: true }, 'peer_identity_conflicted'],
         ["the Chat's linked identity is missing, inactive or foreign", { linkedMissing: true }, 'linked_identity_not_found'],
+        // The linked identity must be scoped as strictly as the peer: a row that exists but
+        // belongs to another Contact, or sits on another channel, is not this conversation's
+        // link, and accepting it would let a foreign link authorize an inbound peer.
+        ['the linked identity row belongs to another Contact', { linkedOwner: 'other' as const }, 'linked_identity_not_found'],
+        ['the linked identity row is on another channel', { linkedChannel: 'telegram' }, 'linked_identity_not_found'],
         ['the Contact is archived', { archived: true }, 'contact_not_found'],
         ['the Contact does not exist', { contactMissing: true }, 'contact_not_found'],
     ])('refuses when %s', async (_label, options, status) => {
