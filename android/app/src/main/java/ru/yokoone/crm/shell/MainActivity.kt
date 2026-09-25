@@ -141,6 +141,38 @@ class MainActivity : AppCompatActivity() {
         webView.saveState(outState)
     }
 
+    /**
+     * A third opportunity, for the case neither of the other two covers: the
+     * app returning to the foreground on a session established while it was
+     * away. Costs one cookie read; PushRegistration ignores it unless the
+     * observation is actually a transition.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) observeSession(webView.url)
+    }
+
+    /**
+     * Hand the shell's view of the session to the registration state machine.
+     *
+     * It reads whether a session cookie exists for the pinned origin and
+     * whether the page is the login screen. It does not read the cookie value
+     * and stores nothing about it.
+     */
+    private fun observeSession(url: String?) {
+        val started = PushRegistration.onPageSettled(
+            this,
+            url,
+            CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN),
+        )
+        if (started) {
+            // Persist the jar now: the registration attempt may run in a
+            // process started after this one is gone, and a cookie that was
+            // never flushed is a cookie that worker cannot see.
+            CookieManager.getInstance().flush()
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         // Persist cookies now: the process may never get another chance.
@@ -230,25 +262,26 @@ class MainActivity : AppCompatActivity() {
                 rememberLastVisitedUrl()
                 ShellDiagnostics.write("nav done  ${ShellDiagnostics.safeUrl(url)}")
 
-                // The only place the shell can see a sign-in happen. A login
-                // completes inside this WebView with no second onResume, so
-                // resuming is not the signal; a page settling on an
-                // authenticated CRM URL is. PushRegistration decides whether
-                // that is a transition worth acting on, and answers true only
-                // when it started a new session generation.
-                if (PushRegistration.onPageSettled(
-                        this@MainActivity,
-                        url,
-                        CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN),
-                    )
-                ) {
-                    // Persist the jar now. The registration attempt may run in
-                    // a process started after this one is gone, and a cookie
-                    // that was never flushed is a cookie that worker cannot
-                    // see.
-                    CookieManager.getInstance().flush()
-                }
+                observeSession(url)
             }
+        }
+
+        /**
+         * The signal a document load does NOT give us.
+         *
+         * The CRM is a Next.js App Router application: signing in posts a
+         * Server Action, the server answers 303, and the router then moves to
+         * the messenger client-side, inside the same document. No second page
+         * load happens, so onPageFinished fires once - for the login screen -
+         * and never again. The first hosted run proved it: the device held a
+         * token, observed no authenticated session, and therefore never
+         * registered. doUpdateVisitedHistory is the hook Chromium calls for
+         * those history changes, so it is the one that sees a sign-in.
+         */
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            super.doUpdateVisitedHistory(view, url, isReload)
+            if (currentLoadFailed) return
+            observeSession(url)
         }
 
         override fun onReceivedError(

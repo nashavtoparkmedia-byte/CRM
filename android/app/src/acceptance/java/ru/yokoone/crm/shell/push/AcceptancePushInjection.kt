@@ -55,7 +55,8 @@ class AcceptancePushInjection : BroadcastReceiver() {
                         " generation=${state.sessionGeneration}" +
                         " registered=${state.isRegistered}" +
                         " needs=${state.needsRegistration}" +
-                        " blocked=${state.blockedReason ?: "none"}",
+                        " blocked=${state.blockedReason ?: "none"}" +
+                        " observations=${PushRegistration.observations}",
                 )
                 Log.i(TAG, "$STATE_PREFIX registered=${state.isRegistered} blocked=${state.blockedReason ?: "none"}")
             }

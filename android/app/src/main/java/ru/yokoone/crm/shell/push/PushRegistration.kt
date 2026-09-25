@@ -56,9 +56,21 @@ object PushRegistration {
     @Volatile
     private var lastAuthenticatedObservation: Boolean? = null
 
+    /**
+     * How many times the shell has looked, this process.
+     *
+     * Zero in a state report means the observation hook never fired at all,
+     * which is a different defect from observing an unauthenticated page, and
+     * the two were indistinguishable in the first hosted run.
+     */
+    @Volatile
+    var observations: Int = 0
+        private set
+
     @VisibleForTesting
     fun forgetProcessObservation() {
         lastAuthenticatedObservation = null
+        observations = 0
     }
 
     /** The provider has a token for this installation. Idempotent. */
@@ -73,6 +85,7 @@ object PushRegistration {
      * that may run in a later process.
      */
     fun onPageSettled(context: Context, url: String?, cookieHeader: String?): Boolean {
+        observations += 1
         val authenticated = isAuthenticatedPage(url, cookieHeader)
         val previous = lastAuthenticatedObservation
         lastAuthenticatedObservation = authenticated
