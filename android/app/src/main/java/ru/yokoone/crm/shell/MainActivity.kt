@@ -33,6 +33,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import ru.yokoone.crm.shell.push.PushRegistration
 
 /**
  * The whole shell.
@@ -228,6 +229,25 @@ class MainActivity : AppCompatActivity() {
                 currentTargetUrl = url ?: currentTargetUrl
                 rememberLastVisitedUrl()
                 ShellDiagnostics.write("nav done  ${ShellDiagnostics.safeUrl(url)}")
+
+                // The only place the shell can see a sign-in happen. A login
+                // completes inside this WebView with no second onResume, so
+                // resuming is not the signal; a page settling on an
+                // authenticated CRM URL is. PushRegistration decides whether
+                // that is a transition worth acting on, and answers true only
+                // when it started a new session generation.
+                if (PushRegistration.onPageSettled(
+                        this@MainActivity,
+                        url,
+                        CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN),
+                    )
+                ) {
+                    // Persist the jar now. The registration attempt may run in
+                    // a process started after this one is gone, and a cookie
+                    // that was never flushed is a cookie that worker cannot
+                    // see.
+                    CookieManager.getInstance().flush()
+                }
             }
         }
 

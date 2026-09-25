@@ -50,6 +50,10 @@ android {
         // it hands the target to this path and the CRM decides where to go.
         buildConfigField("String", "OPEN_CHAT_PATH", "\"/messages/open\"")
         buildConfigField("String", "MESSENGER_PATH", "\"/messages\"")
+        // The one endpoint the shell itself calls. Compile-time, like the
+        // origin it is appended to: there is no setting, no intent extra and no
+        // payload field that can point the registrar anywhere else.
+        buildConfigField("String", "PUSH_REGISTRATION_PATH", "\"/api/mobile/push-registration\"")
     }
 
     signingConfigs {
@@ -166,6 +170,11 @@ dependencies {
     // the feature-detection helpers used instead of addJavascriptInterface.
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("com.google.android.material:material:1.12.0")
+    // Durable, network-aware scheduling for the one request the shell makes.
+    // A token can arrive while the device is offline and the process can die
+    // before connectivity returns, so the retry has to outlive both; 2.9.x is
+    // the last line that builds against compileSdk 34.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Robolectric runs the shell's pure navigation logic on the JVM, so origin
     // pinning and payload validation are provable without a device.
