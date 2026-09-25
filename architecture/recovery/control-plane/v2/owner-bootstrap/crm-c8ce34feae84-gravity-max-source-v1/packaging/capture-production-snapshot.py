@@ -12,9 +12,9 @@ from typing import Any
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # The snapshot describes the runtime that is installed right now, which is still
-# 2.0.0-18 under its own profile. This must not follow the successor's id or the
+# 2.0.0-19 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
-EXPECTED_PROFILE = "crm-c7e29a24e960-gravity-max-source-v1"
+EXPECTED_PROFILE = "crm-fb9fb30d9eb2-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
@@ -100,7 +100,7 @@ def main() -> None:
     postgres = records["docker-inspect:crm.container.postgres"]["evidence"]
     database = records["database-status"]["evidence"]
     provenance = records["docker-provenance"]["evidence"]
-    if version.get("package_version") != "2.0.0-18" or version.get("activation_profile") != EXPECTED_PROFILE:
+    if version.get("package_version") != "2.0.0-19" or version.get("activation_profile") != EXPECTED_PROFILE:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
@@ -121,7 +121,7 @@ def main() -> None:
             raise ValueError(f"{label} predecessor mismatch")
     if maximum.get("mounts") != [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}]:
         raise ValueError("MAX persistent volume mismatch")
-    # The installed 2.0.0-18 profile was sealed against the same 63-row ledger this successor pins
+    # The installed 2.0.0-19 profile was sealed against the same 63-row ledger this successor pins
     # (the 2.0.0-16 profile before it reported that ledger as DRIFTED from its 62-row baseline, so
     # both states stay accepted). The successor pins the ledger exactly: the count, the ledger digest
     # (re-derived read-only from the database, independently of this runtime) and the database

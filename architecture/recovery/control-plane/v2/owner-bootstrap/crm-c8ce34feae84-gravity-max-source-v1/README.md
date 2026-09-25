@@ -1,14 +1,14 @@
-# Runtime 2.0.0-19 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-20 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
 
-- application commit `fb9fb30d9eb221a04342fe0ef7324f78d8ff7576`;
-- coordinated profile `crm-fb9fb30d9eb2-gravity-max-source-v1`;
-- Stage A builder `19b631bc1d7026c4b8fe43f0713a57ef216d2ed9`;
+- application commit `c8ce34feae84e5674357df496be37d0cd8a457bb`;
+- coordinated profile `crm-c8ce34feae84-gravity-max-source-v1`;
+- Stage A builder `bfa68acaf2add2c53540d07bc1813e5235dad700`;
 - hosted artifact run `35840959933`, artifact `10741409277`;
-- Gravity image `sha256:6253bf1e709061fd126f4c8a7cda08f2252f7b1a9acbd3174efbde5239b6455d`;
-- MAX scraper image `sha256:b2d8d70802cfd9fa0f7995dfd100acfdb8543921352383b63f40a1ea0cd977da`.
+- Gravity image `sha256:61373b30fc235222cc20b25d2d9772876e8f20f5c88ceeb60159dc7dad7fadd3`;
+- MAX scraper image `sha256:f1f3e5093efad1b0d1d0923ae8be3879e462a1c7e822f0d26a75637ac62eff20`.
 
 It does not rebuild application images and does not authorize an arbitrary
 revision, image, service, path, Docker command, shell, database migration, or
@@ -17,7 +17,7 @@ zero-argument `database-status`, `release-preflight`, `release-activate`, and
 `rollback` operations plus the existing read-only `predecessor-observe`.
 
 The trusted Runtime core, predecessor observer, base policy, and sudoers file
-are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-18,
+are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-19,
 the installed predecessor, is the exact direct control-plane rollback and is not
 modified by this builder.
 
@@ -89,9 +89,9 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
-The installer also requires the already-installed 2.0.0-18 DEB at its exact
+The installer also requires the already-installed 2.0.0-19 DEB at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`f8b1671c36b902251e1c9e1cf7075d468006e91692ab8bdda7b5f65ff492c5ef`.
+`7aaeb8c11d3c7a0ddc2525a136f83e21459ac9b938e87dd3f063c0284c242490`.
 Any successor installation failure restores that exact package automatically.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
@@ -99,4 +99,4 @@ start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and
 the authenticated Stage A handoff. Independent configured reviewers must bind
 the final commit/tree, package, seal, bootstrap, Stage A artifact, and the
-2.0.0-18 rollback before installation.
+2.0.0-19 rollback before installation.

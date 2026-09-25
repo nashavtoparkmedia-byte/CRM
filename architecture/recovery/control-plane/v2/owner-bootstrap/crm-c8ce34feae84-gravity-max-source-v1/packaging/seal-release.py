@@ -17,17 +17,17 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-fb9fb30d9eb2-gravity-max-source-v1"
-PROFILE_ID = "crm-fb9fb30d9eb2-gravity-max-source-v1"
-APPLICATION_COMMIT = "fb9fb30d9eb221a04342fe0ef7324f78d8ff7576"
-APPLICATION_TREE = "a5a86806833ffb85175a639c4b0880fd9deb1318"
-STAGE_A_COMMIT = "19b631bc1d7026c4b8fe43f0713a57ef216d2ed9"
-STAGE_A_TREE = "965852031bce660f18b8bb14b0548e51f640b80e"
-ARTIFACT_DIGEST = "7a95291a10eb27b09e1dcef440edd3cf606affe12e5c3635293c87ffa7e9dfa7"
+PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-c8ce34feae84-gravity-max-source-v1"
+PROFILE_ID = "crm-c8ce34feae84-gravity-max-source-v1"
+APPLICATION_COMMIT = "c8ce34feae84e5674357df496be37d0cd8a457bb"
+APPLICATION_TREE = "6a1051c3fff1147090b7c3e37310e149a811ac80"
+STAGE_A_COMMIT = "bfa68acaf2add2c53540d07bc1813e5235dad700"
+STAGE_A_TREE = "b9a268673ce63a668c329c2f16c76847965770cf"
+ARTIFACT_DIGEST = "578574ab728149b02226e147b7622dc0024495e92ee88c2dce4c9774b0d43b51"
 ARTIFACT_STORE = f"/var/lib/yoko-privileged-runtime/coordinated-artifacts/{ARTIFACT_DIGEST}"
-ROLLBACK_VERSION = "2.0.0-18"
-ROLLBACK_SHA = "f8b1671c36b902251e1c9e1cf7075d468006e91692ab8bdda7b5f65ff492c5ef"
-ROLLBACK_SEAL_SHA = "3a3628b2e2ab0e152d795ad1d701cc9bacb93f9b32717586558b777df02184ec"
+ROLLBACK_VERSION = "2.0.0-19"
+ROLLBACK_SHA = "7aaeb8c11d3c7a0ddc2525a136f83e21459ac9b938e87dd3f063c0284c242490"
+ROLLBACK_SEAL_SHA = "3f9c94fe975326c3955170d6dc31a6fee6700198d739861e910c21262fc35018"
 EPOCH = 1788307200
 ARTIFACT_FILES = {
     "authoritative-ci-execution.json": {"sha256": "9def57d3f02c3fdee06d3623fc72ea0551564a5dc3385180cdcd36f081ed247d", "bytes": 5590},
@@ -190,7 +190,7 @@ def validate_independent_review(path: Path, commit: str, tree: str) -> tuple[dic
     if (
         document.get("schema") != REVIEW_SCHEMA
         or document.get("profile_id") != PROFILE_ID
-        or document.get("package_version") != "2.0.0-19"
+        or document.get("package_version") != "2.0.0-20"
     ):
         raise ValueError("independent review document contract mismatch")
     if document.get("candidate_commit") != commit or document.get("candidate_tree") != tree:
@@ -301,7 +301,7 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         # The installed runtime being rolled back to still reports its own profile.
         # This mirrors what the live snapshot records, so it must not follow the
         # successor's profile id.
-        "runtime_profile_id": "crm-c7e29a24e960-gravity-max-source-v1",
+        "runtime_profile_id": "crm-fb9fb30d9eb2-gravity-max-source-v1",
         "gravity_image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
         "max_image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
         "max_volume_source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3",
@@ -347,7 +347,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
     # taken from the Stage A builder checkout rather than the runtime builder repository. That
     # checkout has already been pinned to STAGE_A_COMMIT/STAGE_A_TREE above, so the verifier's
     # own bytes are bound to a verified identity; the runtime repository need not carry a copy.
-    verifier = stage_a_builder / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-fb9fb30d9eb2-gravity-max-source-v1/verify-coordinated-artifact.py"
+    verifier = stage_a_builder / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-c8ce34feae84-gravity-max-source-v1/verify-coordinated-artifact.py"
     completed = command([
         "/usr/bin/python3", "-I", "-B", str(verifier),
         "--artifact-directory", str(artifact),
@@ -363,10 +363,10 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         "schema": "yoko.crm.coordinated-gravity-max-release.v1",
         "application_commit": APPLICATION_COMMIT,
         "builder_commit": STAGE_A_COMMIT,
-        "gravity_image_id": "sha256:6253bf1e709061fd126f4c8a7cda08f2252f7b1a9acbd3174efbde5239b6455d",
-        "gravity_containerd_image_id": "sha256:b16dbcc8a9ec1ba5728de6f38ece2118178a339a25d860a24aa04560ba960841",
-        "max_image_id": "sha256:b2d8d70802cfd9fa0f7995dfd100acfdb8543921352383b63f40a1ea0cd977da",
-        "max_containerd_image_id": "sha256:2f4107e14656308f4ecd2dec707139ef99ee1e335b6f633fb8f2d81612b7dfd5",
+        "gravity_image_id": "sha256:61373b30fc235222cc20b25d2d9772876e8f20f5c88ceeb60159dc7dad7fadd3",
+        "gravity_containerd_image_id": "sha256:5dfd9c27df26016170cb7cb3f1ed379a296f0cccacfc166af78485bbb4382560",
+        "max_image_id": "sha256:f1f3e5093efad1b0d1d0923ae8be3879e462a1c7e822f0d26a75637ac62eff20",
+        "max_containerd_image_id": "sha256:3954f5f5f406155de062edfbe95e05c1c756ab9b41b221846656bc86d7215cf5",
         "combined_docker_archive_bytes": 4805824512,
     }
     if result != expected_result:
@@ -382,7 +382,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
             "bytes": 4805842610,
             "digest": "sha256:" + ARTIFACT_DIGEST,
             "id": 10741409277,
-            "name": "coordinated-gravity-max-fb9fb30d9eb2-19b631bc1d7026c4b8fe43f0713a57ef216d2ed9",
+            "name": "coordinated-gravity-max-c8ce34feae84-bfa68acaf2add2c53540d07bc1813e5235dad700",
         }
     ):
         raise ValueError("authenticated Stage A transport identity mismatch")
@@ -514,7 +514,7 @@ def main() -> None:
     sealed_inputs = {
         "schema": "yoko.crm.coordinated-runtime-sealed-inputs.v1",
         "profile_id": PROFILE_ID,
-        "package_version": "2.0.0-19",
+        "package_version": "2.0.0-20",
         "runtime_builder": {
             "commit": builder_commit,
             "tree": builder_tree,
@@ -553,12 +553,12 @@ def main() -> None:
     write_json(generated / "sealed-inputs.v1.json", sealed_inputs)
 
     command([str(ROOT / "packaging/build-package.sh")], stdout=subprocess.DEVNULL)
-    package = dist / "yoko-privileged-runtime_2.0.0-19_all.deb"
+    package = dist / "yoko-privileged-runtime_2.0.0-20_all.deb"
     package_sha = sha(package)
     release_seal = {
         "schema": "yoko.crm.coordinated-runtime-release-seal.v1",
         "profile_id": PROFILE_ID,
-        "package_version": "2.0.0-19",
+        "package_version": "2.0.0-20",
         "runtime_builder": {"commit": builder_commit, "tree": builder_tree, "subtree_inventory_sha256": sealed_inputs["runtime_builder"]["subtree_inventory_sha256"]},
         "accepted_application": sealed_inputs["accepted_application"],
         "stage_a": sealed_inputs["stage_a"],
@@ -611,7 +611,7 @@ def main() -> None:
     payload_manifest = {
         "schema": "yoko.crm.coordinated-owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
-        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-19", "architecture": "all"},
+        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-20", "architecture": "all"},
         "direct_rollback": {
             "name": "yoko-privileged-runtime", "version": ROLLBACK_VERSION, "sha256": ROLLBACK_SHA,
             "store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/yoko-privileged-runtime_{ROLLBACK_VERSION}_all.deb",
@@ -619,7 +619,7 @@ def main() -> None:
         "files": payload_files,
     }
     write_json(payload / "payload-manifest.json", payload_manifest, 0o400)
-    bundle_name = "yoko-crm-coordinated-runtime-2.0.0-19.tar"
+    bundle_name = "yoko-crm-coordinated-runtime-2.0.0-20.tar"
     with tempfile.TemporaryDirectory(prefix=".bundle-build.", dir=ROOT) as raw_work:
         work = Path(raw_work)
         build_tar(generated / "bundle", work / "a.tar")

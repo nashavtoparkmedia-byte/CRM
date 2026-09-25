@@ -31,10 +31,10 @@ class BuilderContractTests(unittest.TestCase):
 
     def test_application_source_is_not_changed_by_runtime_builder(self) -> None:
         accepted = subprocess.run(
-            ["git", "-C", str(REPOSITORY), "rev-parse", "fb9fb30d9eb221a04342fe0ef7324f78d8ff7576^{tree}"],
+            ["git", "-C", str(REPOSITORY), "rev-parse", "c8ce34feae84e5674357df496be37d0cd8a457bb^{tree}"],
             check=True, text=True, stdout=subprocess.PIPE,
         ).stdout.strip()
-        self.assertEqual(accepted, "a5a86806833ffb85175a639c4b0880fd9deb1318")
+        self.assertEqual(accepted, "6a1051c3fff1147090b7c3e37310e149a811ac80")
 
     def test_stage_a_verifier_cannot_dirty_the_runtime_builder(self) -> None:
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
@@ -228,8 +228,8 @@ class IndependentReviewBindingTests(unittest.TestCase):
 
         value = {
             "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
-            "profile_id": "crm-fb9fb30d9eb2-gravity-max-source-v1",
-            "package_version": "2.0.0-19",
+            "profile_id": "crm-c8ce34feae84-gravity-max-source-v1",
+            "package_version": "2.0.0-20",
             "candidate_commit": self.COMMIT,
             "candidate_tree": self.TREE,
             "reviews": [
