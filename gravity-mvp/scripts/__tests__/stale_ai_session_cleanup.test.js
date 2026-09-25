@@ -147,12 +147,13 @@ test('stale greeting session is also reaped', async () => {
     assert.equal(stub.db[0].metadata.staleCleanupPreviousStatus, 'greeting')
 })
 
-// ── 5. transferring untouched (semi-terminal, scope-excluded) ──────────
+// ── 5. transferring untouched (terminal label, scope-excluded) ─────────
 
 test('transferring session is NOT reaped even if past TTL', async () => {
-    // Critical invariant: SIP REFER + human pickup can legitimately
-    // hold a call in `transferring` for minutes. Cleanup v1 must not
-    // false-positive these.
+    // Critical invariant, with the real reason: `transferring` is not a live
+    // state. There is no SIP REFER in this product — it is the terminal label
+    // for "the lead asked for a manager", already finalized with status and
+    // endedAt. Cleanup must not touch those rows.
     const target = row({ id: 'call-transferring', aiSessionStatus: 'transferring' })
     const { stub, result } = await runUnderConfig([target])
 

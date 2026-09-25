@@ -494,3 +494,76 @@ describe('AudioBridge callback source boundary', () => {
         }
     })
 })
+
+// The product has neither a live transfer nor a guaranteed manager callback, so
+// nothing a lead hears may promise either. The wording lives in four places —
+// the bridge phrase, the tool description the model is given, the default
+// scenario prompt shipped for new scenarios, and the dev simulator that has to
+// represent the same semantics — and they are asserted together because drift
+// between them is exactly how the false promise survived.
+describe('transfer_to_manager lead-facing wording', () => {
+    const CANONICAL_HANDOFF_LINE =
+        'Спасибо. Я зафиксировал ваш запрос на менеджера. На этом завершу звонок.'
+
+    // Claims the system cannot keep. Applied to the lead-facing phrase only: the
+    // prompts legitimately mention them as prohibitions.
+    const FORBIDDEN_CLAIMS = [/соединя/i, /оставайтесь/i, /на линии/i, /перевед|перевож/i, /перезвон/i, /свяж/i]
+
+    // Exact phrases from the version that promised a live handoff. None of them
+    // appears inside a legitimate negation, so they can be scanned for directly.
+    const RETIRED_PROMISES = [
+        'Соединяю вас с менеджером',
+        'оставайтесь на линии',
+        'Сейчас соединю с менеджером',
+        'Перевести разговор на живого менеджера',
+        'передать звонок менеджеру',
+    ]
+
+    const wordingSources: Array<[string, string]> = [
+        ['bridge', '../tools/audio-bridge-day1/call-session.js'],
+        ['tool description', '../tools/audio-bridge-day1/llm-client.js'],
+        ['default scenario', 'src/lib/ai-call/default-scenario.ts'],
+        ['dev simulator', 'src/lib/ai-call/devSimulator.ts'],
+    ]
+
+    it('is truthful: the request is recorded and the call ends', () => {
+        expect(CANONICAL_HANDOFF_LINE).toMatch(/зафиксировал/i)
+        expect(CANONICAL_HANDOFF_LINE).toMatch(/заверш/i)
+        for (const claim of FORBIDDEN_CLAIMS) {
+            expect(CANONICAL_HANDOFF_LINE, `must not promise ${claim}`).not.toMatch(claim)
+        }
+    })
+
+    it.each(wordingSources)('%s carries none of the retired promises', (_label, path) => {
+        const source = readSource(path)
+        for (const promise of RETIRED_PROMISES) {
+            expect(source, `${path} still promises "${promise}"`).not.toContain(promise)
+        }
+    })
+
+    it('speaks the same phrase from the bridge and from the simulator', () => {
+        expect(readSource('../tools/audio-bridge-day1/call-session.js'))
+            .toContain(`await this._speak('${CANONICAL_HANDOFF_LINE}')`)
+        expect(readSource('src/lib/ai-call/devSimulator.ts'))
+            .toContain(`content: '${CANONICAL_HANDOFF_LINE}'`)
+    })
+
+    it('tells the model in both tool definitions that no connection happens', () => {
+        for (const path of ['../tools/audio-bridge-day1/llm-client.js', 'src/lib/ai-call/devSimulator.ts']) {
+            const source = readSource(path)
+            expect(source, path).toContain('Зафиксировать запрос лида на менеджера и завершить этот разговор.')
+            expect(source, path).toContain('Соединения с менеджером во время этого ')
+            // The internal contract name is deliberately unchanged.
+            expect(source, path).toContain("name: 'transfer_to_manager'")
+        }
+    })
+
+    it('does not instruct the default scenario to connect anyone', () => {
+        const scenario = readSource('src/lib/ai-call/default-scenario.ts')
+        expect(scenario).toContain('Передам ваши ответы менеджеру. На этом завершу звонок')
+        // Monolithic prompt and the (currently dormant) fragment library must not
+        // drift apart: whichever one becomes live, the promise stays out.
+        expect(scenario).toContain('НИКОГДА не обещай, что соединяешь с менеджером')
+        expect(scenario).toContain('НИКОГДА не обещай соединение с менеджером, ожидание на линии или обратный ')
+    })
+})

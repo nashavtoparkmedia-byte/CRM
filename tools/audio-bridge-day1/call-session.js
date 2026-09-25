@@ -58,25 +58,32 @@ const STATES = ['idle', 'greeting', 'listening', 'thinking', 'speaking', 'ended'
  * end. The session stays provider-agnostic: it asks for termination through the
  * injected `requestTermination` callback and knows nothing about channels.
  *
- * `transferred` is deliberately absent. That tool promises a live handoff that
- * does not exist yet, and its honest product semantics are a separate bounded
- * follow-up; ending the channel here would silently change what the lead
- * experiences after that phrase. Keeping the set explicit — rather than
- * terminating on every reason — is what stops a future reason from acquiring a
- * hangup by accident.
+ * `transferred` is present. There is no live handoff in this product: the tool
+ * records that the lead asked for a manager and the AI conversation ends there,
+ * so the phrase the lead hears now says exactly that and the channel must not be
+ * left open behind it. It gets the same playback grace as `completed` because the
+ * handoff phrase is still on the wire when the session goes terminal. Keeping the
+ * set explicit — rather than terminating on every reason — is what stops a future
+ * reason from acquiring a hangup by accident.
  *
  * `max_duration` is absent for the opposite reason: the hard duration cap lives
  * in the channel lifecycle, which stops this session and ends the channel as two
  * independent actions. Asking for termination from here as well would rebuild the
  * cycle the primitive exists to avoid, and would risk a second hangup.
  */
-const PHYSICAL_TERMINATION_REASONS = new Set(['completed', 'closed'])
+const PHYSICAL_TERMINATION_REASONS = new Set(['completed', 'closed', 'transferred'])
 /**
  * Head-room added to the remaining estimated playback before the channel is cut.
  * The playback oracle anchors at the moment `uuid_broadcast` was issued, not at
  * the first sample on the wire, so the estimate can run slightly short.
  */
 const TERMINATION_PLAYBACK_MARGIN_MS = 1000
+/**
+ * Terminal reasons that end the channel while a phrase the bot just produced can
+ * still be playing. Cutting those without a grace clips the last thing the lead
+ * hears; `closed` is excluded because the session's stream is already gone.
+ */
+const PLAYBACK_GRACE_REASONS = new Set(['completed', 'transferred'])
 
 class CallSession {
     /**
@@ -708,9 +715,12 @@ class CallSession {
 
         if (name === 'transfer_to_manager') {
             console.log(`[call ${this.callUuid}] transfer_to_manager: ${args.reason}`)
-            // Live transfer not wired in this PR — for now we just speak a
-            // polite handoff line and end. CRM records the intent via the
-            // finalize payload (aiTransferReason).
+            // There is no live transfer and no guaranteed callback in this
+            // product: the tool records that the lead asked for a manager, and
+            // this conversation ends. The phrase below promises exactly that and
+            // nothing more. CRM records the intent via the finalize payload
+            // (aiTransferReason); `transferred` also ends the channel, so the
+            // lead is not left on a silent line after it.
             this.finalResult = {
                 qualification_status: 'unclear',
                 lead_summary: 'Лид запросил живого менеджера.',
@@ -722,7 +732,7 @@ class CallSession {
                 },
                 transfer_reason: args.reason,
             }
-            await this._speak('Соединяю вас с менеджером, оставайтесь на линии.')
+            await this._speak('Спасибо. Я зафиксировал ваш запрос на менеджера. На этом завершу звонок.')
             return this._end('transferred')
         }
 
@@ -855,10 +865,12 @@ class CallSession {
             return
         }
         const remainingPlaybackMs = Math.max(0, this.playbackEndsAt - Date.now())
-        // Only a phrase still on the wire earns a grace. `closed` means the
-        // stream to this session is already gone, so there is nothing to play
-        // out and nothing to wait for.
-        const graceMs = reason === 'completed' && remainingPlaybackMs > 0
+        // Only a phrase still on the wire earns a grace. `completed` and
+        // `transferred` both end the call right after the bot said something, and
+        // `_speak` returns as soon as `uuid_broadcast` was issued, so the audio is
+        // still playing out. `closed` means the stream to this session is already
+        // gone, so there is nothing to play out and nothing to wait for.
+        const graceMs = PLAYBACK_GRACE_REASONS.has(reason) && remainingPlaybackMs > 0
             ? remainingPlaybackMs + TERMINATION_PLAYBACK_MARGIN_MS
             : 0
         try {

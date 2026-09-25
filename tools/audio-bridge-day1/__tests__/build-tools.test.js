@@ -87,6 +87,25 @@ test('end_call and transfer_to_manager tools NOT mutated by buildTools', () => {
     assert.deepEqual(transfer, modTransfer, 'transfer_to_manager schema preserved')
 })
 
+test('transfer_to_manager describes an escalation, never a connection', () => {
+    // What the model is told is what the model says. The tool records the need
+    // for a manager and ends the conversation: there is no live transfer and no
+    // guaranteed callback, so the description must license neither.
+    const transfer = findTool(llm.TOOLS, 'transfer_to_manager')
+    assert.ok(transfer, 'the tool name stays part of the contract')
+    const description = transfer.function.description
+
+    assert.match(description, /Зафиксировать запрос лида на менеджера/)
+    assert.match(description, /заверш/i, 'the model is told the conversation ends')
+    assert.match(description, /Соединения с менеджером во время этого звонка не происходит/)
+    for (const promise of [
+        'Перевести разговор на живого менеджера',
+        'оставайтесь на линии',
+    ]) {
+        assert.ok(!description.includes(promise), `description must not carry "${promise}"`)
+    }
+})
+
 test('end_call schema contains qualification_score (PR #57)', () => {
     // Regression on the LLM tool schema itself — the optional score arg
     // must remain reachable so the model can populate it.
