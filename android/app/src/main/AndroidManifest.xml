@@ -35,5 +35,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Firebase only dispatches to this when a default FirebaseApp exists,
+             which requires an external google-services.json that this
+             repository deliberately does not carry. Not exported: only the
+             messaging library may start it. -->
+        <service
+            android:name=".push.PushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
     </application>
 </manifest>

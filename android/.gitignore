@@ -6,3 +6,7 @@ local.properties
 *.jks
 *.keystore
 keystore.properties
+
+# Firebase configuration is Owner-provided, project-specific and external.
+# Physical acceptance drops it here and rebuilds the same commit.
+app/google-services.json

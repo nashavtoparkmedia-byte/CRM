@@ -175,6 +175,11 @@ dependencies {
     // before connectivity returns, so the retry has to outlive both; 2.9.x is
     // the last line that builds against compileSdk 34.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    // Firebase Cloud Messaging. The dependency compiles and the app runs with
+    // no Firebase configuration at all: FirebaseApp simply never initializes,
+    // the service is never dispatched to, and FcmTokenProvider fetches nothing.
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-messaging")
 
     // Robolectric runs the shell's pure navigation logic on the JVM, so origin
     // pinning and payload validation are provable without a device.
@@ -185,4 +190,31 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.12.2")
     testImplementation("androidx.test:core:1.5.0")
+}
+
+/**
+ * Firebase configuration is external, and its absence is a normal build state.
+ *
+ * No google-services.json is committed, and none may be: it is generated for a
+ * specific Firebase project and belongs to whoever owns that project. Without
+ * it this build produces an APK with the messaging code compiled in and no
+ * Firebase configuration, which is exactly what deterministic CI and the
+ * emulator acceptance run need — nothing initializes, nothing registers, and no
+ * external service is contacted.
+ *
+ * To run physical acceptance, place the Owner-provided file at
+ * android/app/google-services.json (git-ignored) and rebuild THE SAME commit.
+ * The plugin then applies, Firebase initializes, and the current token becomes
+ * available. No tracked file changes, so the candidate under test is still the
+ * candidate that was reviewed.
+ *
+ * The file must register both application ids, because the acceptance variant
+ * carries a suffix and the plugin fails a build whose id it cannot find:
+ *
+ *     ru.yokoone.crm.shell
+ *     ru.yokoone.crm.shell.acceptance
+ */
+if (file("google-services.json").isFile) {
+    apply(plugin = "com.google.gms.google-services")
+    logger.lifecycle("google-services.json present: Firebase configuration will be compiled in")
 }
