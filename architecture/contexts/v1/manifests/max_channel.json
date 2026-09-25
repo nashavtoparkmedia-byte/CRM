@@ -152,7 +152,8 @@
     "module_tests": [
       "node tools/architecture/check-driver-max-messaging-boundary.mjs",
       "node tools/architecture/check-messaging-max-message-boundary.mjs",
-      "node tools/architecture/check-messaging-max-attachments-boundary.mjs"
+      "node tools/architecture/check-messaging-max-attachments-boundary.mjs",
+      "node tools/architecture/check-max-provider-account-boundary.mjs"
     ]
   },
   "version": 1

@@ -48,7 +48,7 @@
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "1ca09259a166e9c04fdc92fcf9a922490e3bb6bbd39696f5396fa331935c4f04"
+      "sha256": "91f03e9021a018daed5620d2c4186a073a1919b74f3d6f3da9f8e1941c586082"
     },
     {
       "context": "messaging",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "5504ef170a60fe4a65d5be41e34b92e920109dcd3738bb4c8bbd5f463798a44f"
+      "sha256": "8893db79abff1919d48fb0faba019b649cd2b013eb7d63881cb64fa77501e75e"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",

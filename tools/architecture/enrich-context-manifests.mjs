@@ -281,6 +281,7 @@ const moduleTests = {
     command('check-driver-max-messaging-boundary.mjs'),
     command('check-messaging-max-message-boundary.mjs'),
     command('check-messaging-max-attachments-boundary.mjs'),
+    command('check-max-provider-account-boundary.mjs'),
   ],
   messaging: [
     command('check-messaging-message-stream-boundary.mjs'),
