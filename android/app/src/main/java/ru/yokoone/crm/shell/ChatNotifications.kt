@@ -9,14 +9,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 /**
- * Stage-1 notification entry point.
+ * The shell's only notification entry point.
  *
- * The notifications posted here are LOCAL and exist to prove the navigation
- * contract end to end: cold start, warm start, expired session, and several
- * notifications for different chats at once. They are not remote push; no FCM
- * token is registered and nothing arrives from a server. The native boundary
- * that a later stage plugs FCM into is [postChatNotification] — a remote
- * message handler would call exactly this and nothing else would change.
+ * Both callers reach the same code: the acceptance seed, which posts a local
+ * notification to prove navigation, and [ru.yokoone.crm.shell.push.RemotePushHandler],
+ * which posts one for a message that actually arrived. There is deliberately no
+ * second implementation for remote push — a payload becomes a notification here
+ * or not at all.
  *
  * Two invariants live here:
  *
@@ -48,11 +47,24 @@ object ChatNotifications {
     }
 
     /**
-     * Post one conversation notification.
+     * Post one conversation notification, and say truthfully whether the system
+     * accepted it.
      *
      * [notificationId] is derived from the chat id by the caller so that
      * several chats produce several distinct, independently tappable
      * notifications rather than replacing one another.
+     *
+     * The channel is created here rather than relied upon. A remote message can
+     * start this process with no Activity ever created, and on that path
+     * nothing else would have run [ensureChannel]; creating an existing channel
+     * is a no-op, so the cost is nothing and the alternative is a notification
+     * silently dropped for want of a channel.
+     *
+     * The return value is `posted`, NOT "displayed". It is true when the app is
+     * permitted to notify, the channel is not muted to IMPORTANCE_NONE, and the
+     * platform accepted the notification without throwing. Whether and how the
+     * system then presents it — heads-up, silent, on the lock screen, or folded
+     * away — is not this app's decision and is not claimed here.
      */
     fun postChatNotification(
         context: Context,
@@ -62,7 +74,15 @@ object ChatNotifications {
         messageId: String?,
         title: String,
         body: String,
-    ) {
+    ): Boolean {
+        ensureChannel(context)
+
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return false
+        if (manager.getNotificationChannelCompat(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
+            return false
+        }
+
         val intent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -90,9 +110,7 @@ object ChatNotifications {
             .setContentIntent(pending)
             .build()
 
-        runCatching {
-            NotificationManagerCompat.from(context).notify(notificationId, notification)
-        }
+        return runCatching { manager.notify(notificationId, notification) }.isSuccess
     }
 
     /** Stable, collision-resistant enough id per conversation. */

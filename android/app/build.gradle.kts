@@ -125,6 +125,18 @@ android {
         }
     }
 
+    // One test seam, two implementations, chosen by the build rather than at
+    // runtime. src/acceptance carries TestNotificationSeed, its receiver and the
+    // hook that posts it; debug and release compile the no-op in src/noop
+    // instead. The distinction matters: a runtime flag can be flipped and still
+    // ships the class, while a source set that was never compiled into the
+    // variant leaves nothing in the artifact to reach. The release assertions in
+    // the acceptance workflow check exactly that.
+    sourceSets {
+        getByName("debug").java.srcDir("src/noop/java")
+        getByName("release").java.srcDir("src/noop/java")
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true

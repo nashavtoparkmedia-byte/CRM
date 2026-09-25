@@ -81,7 +81,7 @@ class MainActivity : AppCompatActivity() {
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) TestNotificationSeed.ensureDiagnosticsNotification(this) }
+    ) { granted -> if (granted) ShellTestHooks.onNotificationsReady(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -371,18 +371,18 @@ class MainActivity : AppCompatActivity() {
     //
     // There is none, deliberately.
     //
-    // Stage 1 needs no native operation from the page. Session expiry is
+    // The page needs no native operation from the shell. Session expiry is
     // handled by the CRM redirecting to the mobile login, a notification target
     // is consumed natively from the Intent, and every other decision is the
     // CRM's. Injecting an object into the page to carry messages nothing sends
     // would be attack surface bought for nothing.
     //
-    // When push lands it will need exactly one operation, to hand the FCM
-    // registration token to the page so it can be bound to the session that
-    // owns the device. That will use WebViewCompat.addWebMessageListener with
-    // an allowed-origin rule of BuildConfig.CRM_ORIGIN — never
-    // addJavascriptInterface, which injects into every frame regardless of
-    // origin and cannot be restricted.
+    // Push registration does not change this. An earlier version of this
+    // comment said the FCM token would be handed to the page over a
+    // WebMessageListener; it is not, and no bridge was ever added. The device
+    // registers natively against the CRM's own endpoint, carrying the session
+    // cookie the WebView already holds, so the token, the device identity and
+    // the session value never cross into page script in either direction.
 
     // ── Navigation and state ─────────────────────────────────────────────
 
@@ -492,17 +492,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Local test notifications (stage 1 only) ──────────────────────────
+    // ── Notification permission ──────────────────────────────────────────
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            TestNotificationSeed.ensureDiagnosticsNotification(this)
+            ShellTestHooks.onNotificationsReady(this)
             return
         }
         val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
         if (granted) {
-            TestNotificationSeed.ensureDiagnosticsNotification(this)
+            ShellTestHooks.onNotificationsReady(this)
         } else {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

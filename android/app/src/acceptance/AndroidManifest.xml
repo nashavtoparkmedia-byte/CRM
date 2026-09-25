@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Acceptance-only manifest.
+
+    The seed receiver lives here and nowhere else. It was declared in the main
+    manifest until Mobile Push v1 P2, which meant the class and its receiver
+    shipped in the release artifact even though nothing in a release build could
+    reach them. The boundary is now the build, not a runtime flag: the class
+    exists only in src/acceptance, this manifest is merged only into the
+    acceptance variant, and the release artifact is asserted to contain neither.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Acceptance aid: the action button on the ongoing diagnostics
+             notification. Not exported — only this app can trigger it, so no
+             other app can make the shell post a notification or choose its
+             target. -->
+        <receiver
+            android:name=".TestNotificationSeed$SeedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

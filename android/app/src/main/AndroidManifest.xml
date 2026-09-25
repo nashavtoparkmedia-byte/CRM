@@ -4,8 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android 13+ requires a runtime grant before any notification is shown.
-         Stage 1 uses this only for the local test notification used to prove
-         deep-link navigation; no remote push is registered or received yet. -->
+         The shell asks once; without it nothing this app posts reaches the
+         screen, and the push path reports that truthfully rather than
+         pretending a notification was displayed. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -33,18 +34,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!-- Stage-1 acceptance aid: the action button on the ongoing
-             diagnostics notification. Not exported — only this app can
-             trigger it, so no other app can make the shell post a
-             notification or choose its target. -->
-        <receiver
-            android:name=".TestNotificationSeed$SeedReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION" />
-            </intent-filter>
-        </receiver>
 
     </application>
 </manifest>
