@@ -23,6 +23,8 @@ export type {
     ContactConversationPersistencePortV1,
     PrepareContactConversationIdentityPersistenceResultV1,
 } from './contact-conversation-handler'
+export { createResolveInboundConversationPeerIdentityHandlerV1 } from './inbound-conversation-peer-identity-handler'
+export type { InboundConversationPeerIdentityPersistencePortV1 } from './inbound-conversation-peer-identity-handler'
 export { ContactMergeErrorV1, createMergeContactsHandlerV1 } from './contact-merge-handler'
 export type {
     ContactMergeContactsQueryRepositoryV1,
@@ -70,6 +72,7 @@ export {
     runDriverClusterContactOwnershipV1,
     resolveContactLineageV1,
     prepareContactConversationIdentityV1,
+    resolveInboundConversationPeerIdentityV1,
     resolveChannelContactOperationV1,
     resolveChannelContactV1,
     resolveContactByPhoneV1,

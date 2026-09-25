@@ -72,6 +72,145 @@ function transaction(
     return { contact, contactIdentity, contactPhone }
 }
 
+/**
+ * The production topology the inbound peer query exists for: one Contact, three active MAX
+ * identities - a phone-shaped one, one whose externalId is the conversation key (which the
+ * Chat is linked to), and the peer who actually speaks.
+ */
+function peerTransaction(options: {
+    peerOwner?: 'same' | 'other'
+    peerActive?: boolean
+    peerMissing?: boolean
+    peerChannel?: string
+    peerConflictState?: string
+    openPeerConflict?: boolean
+    linkedMissing?: boolean
+    linkedOwner?: 'same' | 'other'
+    linkedChannel?: string
+    archived?: boolean
+    contactMissing?: boolean
+    providerAccountId?: string | null
+} = {}) {
+    const peer = options.peerMissing ? null : {
+        id: 'identity-peer',
+        contactId: options.peerOwner === 'other' ? 'contact-other' : 'contact-1',
+        channel: options.peerChannel ?? 'max',
+        externalId: '902264026154',
+        isActive: options.peerActive !== false,
+        metadata: {
+            conflictState: options.peerConflictState ?? 'clear',
+            providerAccountId: options.providerAccountId === undefined ? 'max-account-a' : options.providerAccountId,
+        },
+    }
+    const linked = options.linkedMissing ? null : {
+        id: 'identity-chatkey',
+        contactId: options.linkedOwner === 'other' ? 'contact-other' : 'contact-1',
+        channel: options.linkedChannel ?? 'max',
+        externalId: '902454841098',
+        isActive: true,
+        metadata: {},
+    }
+    const contact = {
+        findUnique: vi.fn().mockResolvedValue(options.contactMissing ? null : {
+            id: 'contact-1',
+            displayName: 'User A',
+            isArchived: options.archived === true,
+            customFields: options.openPeerConflict ? {
+                identityConflicts: [{ identityId: 'identity-peer', status: 'open' }],
+            } : {},
+        }),
+    }
+    // The fixture holds rows and applies the adapter's OWN where-clause to them, so every
+    // predicate the adapter states is what decides the result. A fixture that re-implemented
+    // ownership, active or channel itself would keep passing if the adapter dropped them.
+    const rows = [linked, peer].filter(Boolean) as Array<Record<string, unknown>>
+    const matches = (row: Record<string, unknown>, where: Record<string, unknown>) =>
+        Object.entries(where).every(([key, value]) => row[key] === value)
+    const contactIdentity = {
+        findFirst: vi.fn(async (args: { where: Record<string, unknown> }) =>
+            rows.find(row => matches(row, args.where)) ?? null),
+        findMany: vi.fn(),
+        create: vi.fn(),
+    }
+    return { contact, contactIdentity, contactPhone: { findFirst: vi.fn() } }
+}
+
+describe('Contacts inbound conversation peer identity query', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        mocks.lockRows.mockResolvedValue({})
+    })
+
+    const query = {
+        contactId: 'contact-1',
+        channel: 'max' as const,
+        peerExternalId: '902264026154',
+        linkedIdentityId: 'identity-chatkey',
+    }
+
+    test('resolves the peer identity while the Chat stays linked to the chat-key identity', async () => {
+        const tx = peerTransaction()
+        mocks.runTransaction.mockImplementation(async work => work(tx))
+
+        await expect(port.resolveInboundConversationPeerIdentity(query)).resolves.toEqual({
+            status: 'ready',
+            contact: { id: 'contact-1', displayName: 'User A' },
+            peerIdentity: {
+                kind: 'inbound_peer_identity',
+                id: 'identity-peer',
+                channel: 'max',
+                externalId: '902264026154',
+                providerAccountId: 'max-account-a',
+            },
+        })
+        // nothing is created and both identity rows are locked for the read
+        expect(tx.contactIdentity.create).not.toHaveBeenCalled()
+        expect(mocks.lockRows).toHaveBeenCalledWith(tx, expect.objectContaining({
+            contactIds: ['contact-1'],
+            identityIds: ['identity-chatkey'],
+            identities: [{ channel: 'max', externalId: '902264026154' }],
+        }))
+    })
+
+    test('reachability is never consulted, so an unknown peer still resolves', async () => {
+        const tx = peerTransaction()
+        // the fixture carries no reachabilityStatus at all; a reachability-gated query
+        // would have to read one, and 141 of 181 production MAX identities are 'unknown'
+        mocks.runTransaction.mockImplementation(async work => work(tx))
+        await expect(port.resolveInboundConversationPeerIdentity(query))
+            .resolves.toMatchObject({ status: 'ready' })
+    })
+
+    test.each([
+        ['the peer identity does not exist', { peerMissing: true }, 'peer_identity_not_found'],
+        ['the peer identity belongs to another Contact', { peerOwner: 'other' as const }, 'peer_identity_not_found'],
+        ['the peer identity is inactive', { peerActive: false }, 'peer_identity_not_found'],
+        ['the peer identity is on another channel', { peerChannel: 'telegram' }, 'peer_identity_not_found'],
+        ['the peer identity is flagged conflicted', { peerConflictState: 'conflicted' }, 'peer_identity_conflicted'],
+        ['the Contact holds an open conflict on the peer', { openPeerConflict: true }, 'peer_identity_conflicted'],
+        ["the Chat's linked identity is missing, inactive or foreign", { linkedMissing: true }, 'linked_identity_not_found'],
+        // The linked identity must be scoped as strictly as the peer: a row that exists but
+        // belongs to another Contact, or sits on another channel, is not this conversation's
+        // link, and accepting it would let a foreign link authorize an inbound peer.
+        ['the linked identity row belongs to another Contact', { linkedOwner: 'other' as const }, 'linked_identity_not_found'],
+        ['the linked identity row is on another channel', { linkedChannel: 'telegram' }, 'linked_identity_not_found'],
+        ['the Contact is archived', { archived: true }, 'contact_not_found'],
+        ['the Contact does not exist', { contactMissing: true }, 'contact_not_found'],
+    ])('refuses when %s', async (_label, options, status) => {
+        const tx = peerTransaction(options)
+        mocks.runTransaction.mockImplementation(async work => work(tx))
+        await expect(port.resolveInboundConversationPeerIdentity(query)).resolves.toEqual({ status })
+        expect(tx.contactIdentity.create).not.toHaveBeenCalled()
+    })
+
+    test('a legacy provider-account stamp is reported as null rather than as an account', async () => {
+        const tx = peerTransaction({ providerAccountId: 'legacy' })
+        mocks.runTransaction.mockImplementation(async work => work(tx))
+        await expect(port.resolveInboundConversationPeerIdentity(query))
+            .resolves.toMatchObject({ peerIdentity: expect.objectContaining({ providerAccountId: null }) })
+    })
+})
+
 describe('Contacts outbound conversation identity preparation', () => {
     beforeEach(() => {
         vi.clearAllMocks()

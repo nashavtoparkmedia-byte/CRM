@@ -126,7 +126,7 @@ function invalid(message: string): never {
     throw new ContactConversationContractValidationError('INVALID_CONTRACT', message)
 }
 
-function parseEnvelope(
+export function parseEnvelope(
     input: unknown,
     expectedContract: string,
     contractPrefix: string,
@@ -150,11 +150,11 @@ function parseEnvelope(
     return input
 }
 
-function requireNonEmptyString(value: unknown, field: string): asserts value is string {
+export function requireNonEmptyString(value: unknown, field: string): asserts value is string {
     if (typeof value !== 'string' || value.trim() === '') invalid(`${field} is required`)
 }
 
-function requireChannel(value: unknown): asserts value is ContactConversationChannelV1 {
+export function requireChannel(value: unknown): asserts value is ContactConversationChannelV1 {
     if (typeof value !== 'string' || !CHANNELS.has(value as ContactConversationChannelV1)) {
         invalid('channel is invalid')
     }
@@ -164,7 +164,7 @@ function requireNullableNonEmptyString(value: unknown, field: string): asserts v
     if (value !== null) requireNonEmptyString(value, field)
 }
 
-function requireLegacyIdentifier(value: unknown, field: string): asserts value is string {
+export function requireLegacyIdentifier(value: unknown, field: string): asserts value is string {
     if (typeof value !== 'string' || value.length === 0) invalid(`${field} is required`)
 }
 
