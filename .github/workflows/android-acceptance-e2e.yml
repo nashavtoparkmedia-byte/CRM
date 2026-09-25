@@ -625,21 +625,40 @@ jobs:
             echo "INBOUND_TEXT=YOKO acceptance push inbound"
           } >> "$GITHUB_ENV"
 
+          # The port is the authority, not the recorded pid. `npx next start`
+          # runs the server as a child, and the first attempt at this step
+          # killed the recorded process and left the listener behind: the push
+          # phase would then have been served by a production-mode CRM that
+          # refuses every endpoint override, and the failure would have read as
+          # a product defect rather than a stale process.
+          listeners() {
+            ss -ltnp 2>/dev/null \
+              | grep ':3002 ' \
+              | grep -o 'pid=[0-9]*' \
+              | cut -d= -f2 \
+              | sort -u
+          }
+          serving() {
+            curl -sf -o /dev/null --max-time 2 http://127.0.0.1:3002/login/mobile
+          }
+
           PID=$(cat "$RUNNER_TEMP/crm-phase1.pid")
           kill "$PID" 2>/dev/null || true
-          for _ in $(seq 1 30); do kill -0 "$PID" 2>/dev/null || break; sleep 1; done
-          if kill -0 "$PID" 2>/dev/null; then kill -9 "$PID" || true; sleep 2; fi
 
-          # Prove the port is free rather than assume it. A survivor would serve
-          # the push phase in production mode and refuse every override, and the
-          # failure would look like a product defect.
-          for _ in $(seq 1 15); do
-            curl -sf -o /dev/null --max-time 2 http://127.0.0.1:3002/login/mobile || break
+          for _ in $(seq 1 20); do
+            serving || break
+            for holder in $(listeners); do kill "$holder" 2>/dev/null || true; done
             sleep 2
           done
-          if curl -sf -o /dev/null --max-time 2 http://127.0.0.1:3002/login/mobile; then
+
+          if serving; then
+            for holder in $(listeners); do kill -9 "$holder" 2>/dev/null || true; done
+            sleep 3
+          fi
+
+          if serving; then
             echo "::error::something is still serving 3002 after the phase-1 CRM was stopped"
-            ss -ltnp 'sport = :3002' || true
+            ss -ltnp 2>/dev/null | grep ':3002 ' || true
             exit 1
           fi
           echo "phase-1 CRM stopped"
@@ -765,6 +784,13 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "::error::the MAX webhook answered $code"
             cat "$RUNNER_TEMP/max-webhook-response.json" || true
+            exit 1
+          fi
+          # A skipped event also answers 200. The route names the reason, and
+          # accepting one here would turn a fixture problem into a mysterious
+          # absence of any push further down.
+          if grep -q '"skipped"' "$RUNNER_TEMP/max-webhook-response.json"; then
+            echo "::error::the MAX webhook skipped the message: $(cat "$RUNNER_TEMP/max-webhook-response.json")"
             exit 1
           fi
 
