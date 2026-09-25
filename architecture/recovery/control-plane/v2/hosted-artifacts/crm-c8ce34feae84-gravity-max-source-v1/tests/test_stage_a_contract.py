@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "c8ce34feae84e5674357df496be37d0cd8a457bb"
-BUILDER_COMMIT = "6d3c9420a37740f7c4e4346744a89e7bc29ece15"
+BUILDER_COMMIT = "62c36f4165b0ef3152fab178f2f2d491eee0d5ce"
 BUILDER_BASE_COMMIT = "c8ce34feae84e5674357df496be37d0cd8a457bb"
 PROFILE = "crm-c8ce34feae84-gravity-max-source-v1"
 WORKFLOW = ".github/workflows/coordinated-gravity-max-c8ce34fe.yml"
@@ -308,17 +308,23 @@ class StageAContractTests(unittest.TestCase):
             contract.MAX_SUBTREE,
         ):
             self.assertIn(value, workflow)
-        chain = contract.APPLICATION_LINEAGE[1:] + (
-            contract.REPAIR_BASE_COMMIT, contract.REPAIR_BASE_PARENT, contract.BASELINE_COMMIT,
-        )
+        # The anchors cover this candidate's own delta and stop at the repair
+        # base. REPAIR_BASE_PARENT stays bound by the contract's exact
+        # parent-of-repair-base assertion, and the accepted baseline below it is
+        # bound by the accepted predecessor authority - neither is restated as a
+        # workflow anchor, so the checkout needs no history beyond the delta.
+        chain = contract.APPLICATION_LINEAGE[1:] + (contract.REPAIR_BASE_COMMIT,)
         for depth, commit in enumerate(chain, start=1):
             self.assertIn(
                 f"test \"$(git -C application-source rev-parse 'HEAD~{depth}^{{commit}}')\" = {commit}",
                 workflow,
             )
-        # The checkout must be deep enough to resolve the whole chain.
+        # The checkout must be deep enough to resolve the whole chain AND one
+        # commit past the repair base, because the contract asserts the exact
+        # parent of the repair base. len(chain) + 2 keeps that requirement
+        # explicit so trimming the anchors can never silently starve it.
         depth = int(re.search(r"ref: " + APPLICATION_COMMIT + r"\n(?:\s*#[^\n]*\n)*\s*fetch-depth: (\d+)", workflow).group(1))
-        self.assertGreaterEqual(depth, len(chain) + 1)
+        self.assertGreaterEqual(depth, len(chain) + 2)
         # No predecessor identity may survive in the anchors.
         for stale in ("a5a86806833ffb85175a639c4b0880fd9deb1318", "7a6b193e24ed9ff08eebd473c726b48f6760aca2",
                       "4c4bc48aa465919324b8d661d1572d7d839d4da1"):

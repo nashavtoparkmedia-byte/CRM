@@ -19,6 +19,29 @@ sys.path.insert(0, str(AUTHORITY))
 import coordinated_release_contract as contract  # noqa: E402
 
 
+def predecessor_checkout(destination: Path) -> None:
+    """Materialise the accepted predecessor authority as read-only evidence.
+
+    One exact immutable commit, fetched locally and checked out detached, so the
+    chained proof is exercised against the real accepted authority rather than a
+    hand-built stand-in. It is never vendored into this authority's own tree.
+    """
+    repository = Path(subprocess.run(
+        ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "--show-toplevel"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip())
+    subprocess.run(["git", "init", "--quiet", str(destination)], check=True)
+    subprocess.run(
+        ["git", "-C", str(destination), "fetch", "--quiet", "--depth", "1",
+         str(repository), contract.PREDECESSOR_BUILDER_COMMIT],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(destination), "checkout", "--quiet", "--detach", "FETCH_HEAD"],
+        check=True,
+    )
+
+
 def pinned_bytes(relative: str) -> bytes:
     """Read a file from the pinned application commit rather than the working tree.
 
@@ -352,6 +375,7 @@ def pull_request_repository() -> dict[str, object]:
 
 def write_source_evidence(evidence: Path) -> None:
     """Write the exact public GitHub evidence shapes for the bounded tuple."""
+    # (see predecessor_checkout below for the accepted predecessor evidence)
     write_json(evidence / contract.SOURCE_PROOF, source_proof())
     write_json(evidence / "run.json", {
         "id": contract.SOURCE_RUN_ID,
@@ -493,6 +517,9 @@ class CoordinatedArtifactTests(unittest.TestCase):
             "environment": {"NODE_ENV": "production", "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright", "TZ": "Europe/Moscow"},
         })
 
+        cls.predecessor = cls.base / "predecessor"
+        predecessor_checkout(cls.predecessor)
+
         cls.artifact = cls.base / "artifact"
         cls.artifact.mkdir()
         docker_archive(cls.artifact / contract.GRAVITY_ARCHIVE, contract.expected_image_reference("gravity", cls.builder_commit), maximum=False)
@@ -512,6 +539,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
     @classmethod
     def run_emitter(cls, artifact: Path) -> None:
         contract.exact_directory(artifact, (contract.GRAVITY_ARCHIVE, contract.MAX_ARCHIVE), "pre-attestation artifact")
+        contract.validate_predecessor_authority(cls.predecessor)
         contract.validate_application_source(cls.application)
         builder = contract.builder_identity(cls.builder, cls.builder_commit, cls.builder_tree)
         source_authority, proof_bytes = contract.validate_source_authority(cls.evidence)
@@ -556,7 +584,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
     def verify(self, artifact: Path, *, builder_commit: str | None = None, builder_tree: str | None = None) -> subprocess.CompletedProcess[str]:
         try:
             value = contract.verify_artifact(
-                artifact, self.application, self.builder, self.evidence,
+                artifact, self.application, self.builder, self.evidence, self.predecessor,
                 builder_commit or self.builder_commit,
                 builder_tree or self.builder_tree,
             )
