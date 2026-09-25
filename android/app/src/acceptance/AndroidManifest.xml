@@ -34,6 +34,7 @@
             <intent-filter>
                 <action android:name="ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH" />
                 <action android:name="ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN" />
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.REPORT_PUSH_STATE" />
             </intent-filter>
         </receiver>
 

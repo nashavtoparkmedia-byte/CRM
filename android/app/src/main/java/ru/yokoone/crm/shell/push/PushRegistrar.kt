@@ -5,6 +5,7 @@ import androidx.annotation.VisibleForTesting
 import org.json.JSONObject
 import ru.yokoone.crm.shell.BuildConfig
 import ru.yokoone.crm.shell.CrmOrigin
+import ru.yokoone.crm.shell.ShellDiagnostics
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -49,10 +50,25 @@ object PushRegistrar {
     }
 
     fun register(token: String): Outcome {
-        if (!TOKEN_SHAPE.matches(token)) return Outcome.Refused("INVALID_TOKEN_SHAPE")
+        if (!TOKEN_SHAPE.matches(token)) return refused("INVALID_TOKEN_SHAPE")
         val cookie = sessionCookiePair(CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN))
-            ?: return Outcome.Refused("NO_SESSION_COOKIE")
+            ?: return refused("NO_SESSION_COOKIE")
         return post(endpoint(), token, cookie)
+    }
+
+    /**
+     * Refuse, and say so where a test build can be read.
+     *
+     * The diagnostics are deliberately shaped like the shell's other network
+     * lines, because those are the ones the acceptance job lifts out of the
+     * device log and publishes. Without that, a device that never registers is
+     * indistinguishable from a server that never fanned out, and the job log
+     * that would tell them apart needs repository admin rights to read.
+     * No token, cookie or session value is ever written.
+     */
+    private fun refused(code: String): Outcome {
+        ShellDiagnostics.write("YOKO_NET fail push-registration $code")
+        return Outcome.Refused(code)
     }
 
     private fun endpoint(): String = CrmOrigin.ORIGIN + BuildConfig.PUSH_REGISTRATION_PATH
@@ -100,17 +116,25 @@ object PushRegistrar {
             connection.outputStream.use { it.write("""{"token":"$token"}""".toByteArray(Charsets.UTF_8)) }
 
             when (val status = connection.responseCode) {
-                200 -> Outcome.Registered
-                401, 409, 422, 400, 413, 415 -> Outcome.Refused(errorCode(connection, status))
-                in 300..399 -> Outcome.Refused("UNEXPECTED_REDIRECT")
-                in 500..599 -> Outcome.Retryable("http_$status")
-                else -> Outcome.Retryable("http_$status")
+                200 -> {
+                    ShellDiagnostics.write("YOKO_NET done POST /api/mobile/push-registration status=200")
+                    Outcome.Registered
+                }
+                401, 409, 422, 400, 413, 415 -> refused(errorCode(connection, status))
+                in 300..399 -> refused("UNEXPECTED_REDIRECT")
+                in 500..599 -> retryable("http_$status")
+                else -> retryable("http_$status")
             }
         } catch (error: IOException) {
-            Outcome.Retryable(error.javaClass.simpleName)
+            retryable(error.javaClass.simpleName)
         } finally {
             connection?.disconnect()
         }
+    }
+
+    private fun retryable(detail: String): Outcome {
+        ShellDiagnostics.write("YOKO_NET fail push-registration retryable $detail")
+        return Outcome.Retryable(detail)
     }
 
     /**

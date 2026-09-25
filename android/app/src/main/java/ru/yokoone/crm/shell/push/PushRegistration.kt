@@ -3,6 +3,7 @@ package ru.yokoone.crm.shell.push
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import ru.yokoone.crm.shell.CrmOrigin
+import ru.yokoone.crm.shell.ShellDiagnostics
 
 /**
  * When the device asks the CRM to remember it, and when it does not.
@@ -96,8 +97,21 @@ object PushRegistration {
     }
 
     private fun requestIfNeeded(context: Context, state: PushTokenState.Snapshot) {
-        if (!state.needsRegistration) return
-        val token = state.newestToken ?: return
+        val token = state.newestToken
+        if (!state.needsRegistration || token == null) {
+            // Silence here used to be ambiguous: a device that never asked and a
+            // CRM that never answered look the same from outside. The derived
+            // state says which, and carries no token or session value.
+            ShellDiagnostics.write(
+                "YOKO_NET fail push-enqueue skipped" +
+                    " token=${token != null}" +
+                    " generation=${state.sessionGeneration}" +
+                    " registered=${state.isRegistered}" +
+                    " blocked=${state.blockedReason ?: "none"}",
+            )
+            return
+        }
+        ShellDiagnostics.write("YOKO_NET done POST push-enqueue generation=${state.sessionGeneration}")
         scheduler.schedule(context.applicationContext, state.sessionGeneration, token)
     }
 }
