@@ -162,6 +162,54 @@ android {
     }
 }
 
+/**
+ * Make a failing unit test say what failed, in the job summary.
+ *
+ * Reading an Actions job log needs admin rights on the repository; annotations
+ * do not. Without this, a red test step is a single "Process completed with
+ * exit code 1" and every repair is a guess. The notice on start also
+ * distinguishes the two failure modes that look identical from outside: a
+ * Kotlin compile error never reaches it.
+ */
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStackTraces = true
+    }
+    doFirst {
+        // Names the classes the task actually discovered. A variant source set
+        // that AGP did not pick up, or a --tests filter that matches nothing,
+        // is otherwise indistinguishable from a failing assertion.
+        val discovered = testClassesDirs.asFileTree
+            .matching { include("**/*Test.class") }
+            .files
+            .map { it.name.removeSuffix(".class") }
+            .sorted()
+        println("::notice::$name started with ${discovered.size} test classes: ${discovered.joinToString(",").take(400)}")
+    }
+    addTestListener(object : org.gradle.api.tasks.testing.TestListener {
+        override fun beforeSuite(suite: org.gradle.api.tasks.testing.TestDescriptor) = Unit
+        override fun afterSuite(
+            suite: org.gradle.api.tasks.testing.TestDescriptor,
+            result: org.gradle.api.tasks.testing.TestResult,
+        ) = Unit
+        override fun beforeTest(descriptor: org.gradle.api.tasks.testing.TestDescriptor) = Unit
+        override fun afterTest(
+            descriptor: org.gradle.api.tasks.testing.TestDescriptor,
+            result: org.gradle.api.tasks.testing.TestResult,
+        ) {
+            if (result.resultType == org.gradle.api.tasks.testing.TestResult.ResultType.FAILURE) {
+                val cause = result.exceptions.firstOrNull()?.toString()
+                    ?.replace("\n", " / ")
+                    ?.take(600)
+                    ?: "failed"
+                println("::error::${descriptor.className}#${descriptor.name}: $cause")
+            }
+        }
+    })
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
