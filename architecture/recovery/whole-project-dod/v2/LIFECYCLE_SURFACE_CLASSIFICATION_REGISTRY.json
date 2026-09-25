@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 716,
+    "total_entries": 718,
     "test": 35,
     "dead_historical": 92,
-    "migration_only": 83,
-    "active_operational": 501,
+    "migration_only": 84,
+    "active_operational": 502,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6572,6 +6572,25 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "telegram_channel",
       "source_sha256": "2870fb3087f7e1cadd65324cc7628d2d5b33dea2b065ccf4d15147abb77ad36c"
+    },
+    {
+      "path": "tools/architecture/check-max-provider-account-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the M2A2-MAX1A MAX provider-account foundation; approved path is a bounded read-only boundary control that pins the module file set, the rule that identity may come only from the live authenticated principal, the single database-reaching source, the absence of any credential or session name, the YOKO transport-locator authority, the absence of any durable trust or freshness state, the offline projection shape, the migration's constraint contract, the inertness of the foundation and the unchanged public surface. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only MAX Channel-owned provider account foundation schema (two new tables with their constraints, guard functions and triggers) inside one explicit transaction through controlled migration tooling and touches no existing table and no historical MAX table; it stores no credential, token or session value; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "max_channel",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6"
     }
   ]
 }
