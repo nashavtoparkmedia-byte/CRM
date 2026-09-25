@@ -1300,6 +1300,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-push-v1-p2-native-workflow-repair-b5be1710-20260926",
+      "reviewed_at": "2026-09-26T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_V1_P2_NATIVE_WORKFLOW_REPAIR_EXECUTOR_REVIEW_20260926",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MOBILE_PUSH_V1_P2_SECOND_GOVERNANCE_AMENDMENT_AUTHORIZED_20260926",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment, and neither is its immediate predecessor mobile-push-v1-p2-native-main-42aad7cf-20260925, which continues to represent the candidate state it was derived from. This amendment records the next state rather than rewriting that one."
+      },
+      "reason": "Records a digest-only transition. Hosted verification of the Mobile Push v1 P2 candidate exposed a failure in the acceptance job's first push-phase step: killing the recorded process left the CRM's listener on port 3002 alive, so the push phase would have been served by a production-mode CRM that refuses every endpoint override. The bounded repair makes the port the authority, kills whatever holds it, and refuses to continue while anything is still listening; it also tightens the MAX webhook assertion, because that route answers 200 for events it decides to skip and a status check alone would have turned a fixture problem into an unexplained absence of any push several steps later. The repair changed the bytes of exactly one already-tracked executable surface, .github/workflows/android-acceptance-e2e.yml, whose lifecycle registry entry and the two DISPOSABLE_ACCEPTANCE_DATABASE_SETUP dispositions bound to those bytes are rebound with it; its reviewed sites keep their site signature, line and column, because every step this milestone adds sits below them in the file. Nothing else moves: the tracked path inventory keeps its cardinality of 2,624 with context-owned 1,395 and governed exclusions 1,229, no assignment is added, removed or semantically changed, no exact-inventory transition, lifecycle, functional owner or governed exclusion changes, no ownership is reassigned, no tracked executable path is added, no new unassigned tracked surface is attributed, and this amendment carries no source hash rebind. The current triple is the repository's own derivation over the repaired candidate tree: tracked inventory digest 638b607c -> 84ffa30f, surfaces and coverage digest unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "638b607ceeb1f23dd9dd3fbff706ca6491f368a564ee0b8d463f930111afbc1c",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "84ffa30f668c5e6ee8cce40671d8b14fbc1842001291651fd2b2f41845682b9c",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
