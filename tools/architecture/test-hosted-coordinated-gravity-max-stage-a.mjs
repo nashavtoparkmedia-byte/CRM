@@ -22,7 +22,7 @@ for (const args of commands) {
 }
 
 const workflow = readFileSync('.github/workflows/coordinated-gravity-max-c8ce34fe.yml', 'utf8')
-assert.match(workflow, /^name: Coordinated Gravity \+ MAX fb9fb30d$/mu)
+assert.match(workflow, /^name: Coordinated Gravity \+ MAX c8ce34fe$/mu)
 assert.match(workflow, /^      - codex\/coordinated-gravity-max-c8ce34fe$/mu)
 assert.doesNotMatch(workflow, /^\s*workflow_dispatch:/mu)
 assert.doesNotMatch(workflow, /^\s*pull_request:/mu)
