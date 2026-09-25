@@ -6,7 +6,7 @@ coordinated application pair:
 - application commit `c8ce34feae84e5674357df496be37d0cd8a457bb`;
 - coordinated profile `crm-c8ce34feae84-gravity-max-source-v1`;
 - Stage A builder `bfa68acaf2add2c53540d07bc1813e5235dad700`;
-- hosted artifact run `35840959933`, artifact `10741409277`;
+- hosted artifact run `36181901086`, artifact `10886075002`;
 - Gravity image `sha256:61373b30fc235222cc20b25d2d9772876e8f20f5c88ceeb60159dc7dad7fadd3`;
 - MAX scraper image `sha256:f1f3e5093efad1b0d1d0923ae8be3879e462a1c7e822f0d26a75637ac62eff20`.
 

@@ -30,12 +30,12 @@ ROLLBACK_SHA = "7aaeb8c11d3c7a0ddc2525a136f83e21459ac9b938e87dd3f063c0284c242490
 ROLLBACK_SEAL_SHA = "3f9c94fe975326c3955170d6dc31a6fee6700198d739861e910c21262fc35018"
 EPOCH = 1788307200
 ARTIFACT_FILES = {
-    "authoritative-ci-execution.json": {"sha256": "9def57d3f02c3fdee06d3623fc72ea0551564a5dc3385180cdcd36f081ed247d", "bytes": 5590},
-    "coordinated-release-manifest.json": {"sha256": "baf407d6565325434768f3b07388a033d66558e97621e13594505e726de00479", "bytes": 4414},
-    "gravity-image-attestation.json": {"sha256": "0d3972c8692d5a721e8f4bdf07d8795d4aba79a5ea57fff62a4e29e3c1cf8606", "bytes": 2525},
-    "gravity-image.docker.tar": {"sha256": "359ffa83e1883c0ddf7ba615e04da12168679fd8cbd1eb4aafa93f1af564e8ee", "bytes": 2527591936},
-    "max-scraper-image-attestation.json": {"sha256": "b23ecc9a87979780cc22129a519456bcb50962fd1c29d3956096439b255c96c1", "bytes": 4475},
-    "max-scraper-image.docker.tar": {"sha256": "d2f4c58166ab614247c31d6c7becda563c9c5ec7b86144f458f713cc859c40a2", "bytes": 2278232576},
+    "authoritative-ci-execution.json": {"sha256": "862b4eee9d4719f5b1fb5a0fb7ed60dc3e64efd88bb2eb65d3342bf3ff3cb7aa", "bytes": 5590},
+    "coordinated-release-manifest.json": {"sha256": "04ccf939e413edf3b205bca9d195bc34b6b93bc6de41520a2f7b319bc5cceef1", "bytes": 4411},
+    "gravity-image-attestation.json": {"sha256": "9f8c5e22fa5617df34176ad784157d8f78ae2643c6b55b7af7bef785e3feb928", "bytes": 2525},
+    "gravity-image.docker.tar": {"sha256": "c9e2aed79a35d263277efe4ad170ec7dc4385c8f884283970fd2a61ed3e40267", "bytes": 2527703040},
+    "max-scraper-image-attestation.json": {"sha256": "c19b3fb14c59bbc7f332046faaea848f7ee5dd80ca9a73268ab19e8ff0c3e37d", "bytes": 4475},
+    "max-scraper-image.docker.tar": {"sha256": "213332387945e731c28ea5c08cae118e54fcfc66f78afe25cbf817f63c11d001", "bytes": 2278232576},
 }
 
 
@@ -367,7 +367,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         "gravity_containerd_image_id": "sha256:5dfd9c27df26016170cb7cb3f1ed379a296f0cccacfc166af78485bbb4382560",
         "max_image_id": "sha256:f1f3e5093efad1b0d1d0923ae8be3879e462a1c7e822f0d26a75637ac62eff20",
         "max_containerd_image_id": "sha256:3954f5f5f406155de062edfbe95e05c1c756ab9b41b221846656bc86d7215cf5",
-        "combined_docker_archive_bytes": 4805824512,
+        "combined_docker_archive_bytes": 4805935616,
     }
     if result != expected_result:
         raise ValueError("Stage A content verifier result mismatch")
@@ -377,11 +377,11 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         or transport.get("application_commit") != APPLICATION_COMMIT
         or transport.get("builder_commit") != STAGE_A_COMMIT
         or transport.get("coordinated_profile") != PROFILE_ID
-        or transport.get("workflow_run") != {"head_branch": "codex/coordinated-gravity-max-fb9fb30d", "head_sha": STAGE_A_COMMIT, "id": 35840959933}
+        or transport.get("workflow_run") != {"head_branch": "codex/coordinated-gravity-max-c8ce34fe", "head_sha": STAGE_A_COMMIT, "id": 36181901086}
         or transport.get("source_artifact") != {
-            "bytes": 4805842610,
+            "bytes": 4805953711,
             "digest": "sha256:" + ARTIFACT_DIGEST,
-            "id": 10741409277,
+            "id": 10886075002,
             "name": "coordinated-gravity-max-c8ce34feae84-bfa68acaf2add2c53540d07bc1813e5235dad700",
         }
     ):
@@ -487,7 +487,7 @@ def main() -> None:
         "schema": "yoko.crm.coordinated-artifact-admission.v1",
         "profile_id": PROFILE_ID,
         "application_commit": APPLICATION_COMMIT,
-        "stage_a_artifact_id": 10741409277,
+        "stage_a_artifact_id": 10886075002,
         "stage_a_artifact_digest": "sha256:" + ARTIFACT_DIGEST,
         "content_verifier": artifact_result,
         "files": files,
@@ -526,10 +526,10 @@ def main() -> None:
         "stage_a": {
             "builder_commit": STAGE_A_COMMIT,
             "builder_tree": STAGE_A_TREE,
-            "run_id": 35840959933,
-            "artifact_id": 10741409277,
+            "run_id": 36181901086,
+            "artifact_id": 10886075002,
             "artifact_digest": "sha256:" + ARTIFACT_DIGEST,
-            "artifact_bytes": 4805842610,
+            "artifact_bytes": 4805953711,
             "content_verifier": artifact_result,
         },
         "artifact_admission": {"receipt_path": receipt_path, "receipt_sha256": receipt_sha, "files": files},

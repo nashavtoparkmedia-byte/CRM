@@ -147,11 +147,11 @@ def _load_profile(core: Any) -> dict[str, Any]:
     if stage_a != {
         "builder_commit": "bfa68acaf2add2c53540d07bc1813e5235dad700",
         "builder_tree": "b9a268673ce63a668c329c2f16c76847965770cf",
-        "run_id": 35840959933,
-        "artifact_id": 10741409277,
+        "run_id": 36181901086,
+        "artifact_id": 10886075002,
         "artifact_name": "coordinated-gravity-max-c8ce34feae84-bfa68acaf2add2c53540d07bc1813e5235dad700",
         "artifact_digest": "sha256:578574ab728149b02226e147b7622dc0024495e92ee88c2dce4c9774b0d43b51",
-        "artifact_bytes": 4805842610,
+        "artifact_bytes": 4805953711,
     }:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     deployment = _exact_dict(

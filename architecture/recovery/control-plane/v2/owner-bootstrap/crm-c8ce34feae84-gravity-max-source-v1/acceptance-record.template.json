@@ -4,10 +4,10 @@
   "application_tree": "6a1051c3fff1147090b7c3e37310e149a811ac80",
   "stage_a_builder_commit": "bfa68acaf2add2c53540d07bc1813e5235dad700",
   "stage_a_builder_tree": "b9a268673ce63a668c329c2f16c76847965770cf",
-  "stage_a_run_id": 35840959933,
-  "stage_a_artifact_id": 10741409277,
+  "stage_a_run_id": 36181901086,
+  "stage_a_artifact_id": 10886075002,
   "stage_a_artifact_digest": "sha256:578574ab728149b02226e147b7622dc0024495e92ee88c2dce4c9774b0d43b51",
-  "stage_a_artifact_bytes": 4805842610,
+  "stage_a_artifact_bytes": 4805953711,
   "accepted_max_invariants": [
     "PHONE_RESOLUTION_FAIL_CLOSED",
     "NO_SECOND_PROTOCOL_SEND_AFTER_UI_ATTEMPT",

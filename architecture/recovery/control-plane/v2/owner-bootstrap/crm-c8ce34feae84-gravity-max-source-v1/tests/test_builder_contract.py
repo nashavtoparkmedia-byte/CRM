@@ -65,7 +65,16 @@ class BuilderContractTests(unittest.TestCase):
         installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
         self.assertIn("test \"$#\" -eq 0", installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("HANDOFF='/opt/codex-work/yoko-stage-a-handoff-fb9fb30d/release-output'", installer)
+        # Derived from this profile's own directory name, never a literal. The
+        # previous generation pinned the string, so the suite kept certifying the
+        # predecessor's handoff after the profile had been rebound to a new
+        # candidate - the one defect that made every other stale identity
+        # invisible. Renaming the profile now moves this expectation with it.
+        application = ROOT.name.split("-")[1]
+        self.assertIn(
+            f"HANDOFF='/opt/codex-work/yoko-stage-a-handoff-{application[:8]}/release-output'",
+            installer,
+        )
         self.assertIn(".incoming-'+final.name", installer)
         self.assertIn("if [ -e \"$BOOTSTRAP_GUARD\" ]; then", installer)
         self.assertIn('/usr/bin/flock -x "$bootstrap_lock_fd"', installer)
