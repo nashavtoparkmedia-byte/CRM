@@ -506,7 +506,7 @@
       "reviewed_by": "CONTACT_IDENTITY_M2A2_MAX1A_CANDIDATE_OWNERSHIP_REVIEW_20260925",
       "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
       "authorization": "CURATOR_APPROVED_M2A2_MAX1A_MAX_PROVIDER_ACCOUNT_FOUNDATION_IMPLEMENTATION",
-      "reason": "M2A2-MAX1A adds exactly eight tracked executable surfaces and changes no existing ownership. Six sit under the max_channel owned path gravity-mvp/src/modules/max-channel: the domain gravity-mvp/src/modules/max-channel/internal/provider-account/max-account-identity.ts with its proof, the durable writer max-account-writer.ts, the owner-side intake max-account-intake.ts with its proof, and the isolated-PostgreSQL proof max-provider-account.postgres.test.ts. One is the boundary control tools/architecture/check-max-provider-account-boundary.mjs, placed by the established architecture-tooling cohort precedent. One is the expand-only source migration gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql, placed by the established migration cohort precedent. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted.",
+      "reason": "M2A2-MAX1A adds exactly eight tracked executable surfaces and changes no existing ownership. Six sit under the max_channel owned path gravity-mvp/src/modules/max-channel: the domain gravity-mvp/src/modules/max-channel/internal/provider-account/max-account-identity.ts with its proof, the durable writer max-account-writer.ts, the owner-side intake max-account-intake.ts with its proof, and the isolated-PostgreSQL proof max-provider-account.postgres.test.ts. One is the boundary control tools/architecture/check-max-provider-account-boundary.mjs, placed by the established architecture-tooling cohort precedent. One is the expand-only source migration gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql, placed by the established migration cohort precedent. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The reviewed inventory fingerprint is a digest over the surface objects rather than the path set, so it is rebound once the two lifecycle classifications for those same surfaces are recorded; the denominator, the coverage assignments and every semantic ownership field are unchanged.",
       "predecessor": {
         "tracked_executable_surfaces": 2535,
         "tracked_inventory_sha256": "79746cfbdd2dcc30650f6a732712a5d44842c19d436eccb383477179b82af93f",
@@ -514,7 +514,7 @@
       },
       "current": {
         "tracked_executable_surfaces": 2543,
-        "tracked_inventory_sha256": "4742136ef039bed367db1a1277baf1df9b1e97c2810a4adae9b5f8ea0b767960",
+        "tracked_inventory_sha256": "6639910c9efb68d3c4af6c0af9560457bf52a3f0d57fb4e769e9ed7cd3dc402c",
         "coverage_sha256": "cfc6af0efb879b7d022c3506980e8acc8c1eb3e5e80ec90db2c130733399c1a6"
       },
       "source_hash_rebinds": [],
