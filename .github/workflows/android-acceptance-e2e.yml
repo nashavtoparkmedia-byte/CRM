@@ -203,6 +203,9 @@ jobs:
             MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
             MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
             npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
+          # Recorded so the push phase can stop exactly this process rather
+          # than pattern-matching its way to something else on the runner.
+          echo $! > "$RUNNER_TEMP/crm-phase1.pid"
           for _ in $(seq 1 60); do
             curl -sf -o /dev/null http://127.0.0.1:3002/login/mobile && exit 0
             sleep 2
@@ -239,6 +242,60 @@ jobs:
             "$KS" > "$RUNNER_TEMP/keystore.properties"
           echo "YOKO_SHELL_KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
           echo "ephemeral keystore ready"
+
+      # Unit tests, which this job never ran before Mobile Push v1 P2. A Kotlin
+      # regression could previously only be caught by an emulator scenario, or
+      # not at all; these cost about a minute and cover the payload contract,
+      # the deduplication store, the registration state machine and every
+      # registrar outcome.
+      #
+      # Two tasks on purpose. The shared src/test suite pins the PRODUCTION
+      # origin, so it must run against a variant that carries it; the seed's own
+      # test moved into src/testAcceptance with the class it covers, which only
+      # the acceptance variant compiles.
+      - name: Run the JVM unit tests
+        timeout-minutes: 25
+        run: |
+          set -e
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon :app:testReleaseUnitTest
+          bash tools/bootstrap-gradle.sh --no-daemon :app:testAcceptanceUnitTest \
+            --tests 'ru.yokoone.crm.shell.TestNotificationSeedTest'
+
+      # The acceptance-only surfaces must be absent from a shipped artifact, and
+      # absence is asserted against the built APK rather than argued from the
+      # source layout. Before P2 the seed and its receiver were compiled into
+      # every variant, which is exactly the class of mistake a source-layout
+      # argument does not catch.
+      - name: Build the release artifact and prove the test surfaces are absent
+        timeout-minutes: 25
+        run: |
+          set -e
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon :app:assembleRelease
+          APK=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+          [ -n "$APK" ] || { echo "::error::no release APK was produced"; exit 1; }
+          echo "release artifact: $APK"
+
+          # Class and action names live in the DEX string pool and the binary
+          # manifest, whether or not anything reaches them at runtime.
+          for forbidden in TestNotificationSeed AcceptancePushInjection SEED_TEST_NOTIFICATION INJECT_PUSH SEED_PUSH_TOKEN; do
+            if unzip -p "$APK" 'classes*.dex' | grep -a -q "$forbidden"; then
+              echo "::error::release artifact contains $forbidden"
+              exit 1
+            fi
+          done
+
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | tail -1)
+          [ -n "$AAPT" ] || { echo "::error::aapt2 not found"; exit 1; }
+          "$AAPT" dump xmltree "$APK" --file AndroidManifest.xml > "$RUNNER_TEMP/release-manifest.txt"
+          for forbidden in TestNotificationSeed AcceptancePushInjection SEED_TEST_NOTIFICATION INJECT_PUSH SEED_PUSH_TOKEN; do
+            if grep -a -q "$forbidden" "$RUNNER_TEMP/release-manifest.txt"; then
+              echo "::error::release manifest declares $forbidden"
+              exit 1
+            fi
+          done
+          echo "release artifact carries no acceptance surface"
 
       - name: Build the acceptance APK and the test APK
         run: |
@@ -540,6 +597,418 @@ jobs:
       # before the upload step ever ran, so the evidence was destroyed by the
       # act of trying to collect it. Every adb call is now bounded, and the
       # step itself has a ceiling well under the job's.
+      # ── Push phase ───────────────────────────────────────────────────────
+      #
+      # Everything above ran against a production-mode CRM and is untouched by
+      # this milestone. P1 refuses MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE whenever
+      # NODE_ENV is production, and weakening that guard to make a test
+      # convenient was never an option, so the push phase restarts THE SAME
+      # BUILD with NODE_ENV=test instead.
+      #
+      # One CRM at a time, sequentially rather than side by side. Two processes
+      # would both run the outbox publisher and race for the same rows, and the
+      # one with push disabled could claim the intent and consume it silently -
+      # which would make this chain prove nothing on a bad day.
+      - name: Stop the production-mode CRM
+        run: |
+          set -e
+          # The push phase's own constants, published here rather than in the
+          # job's env block on purpose: everything above this point is reviewed
+          # evidence bound to exact line numbers, and a value added up there
+          # would move lines that governance records point at. Each is
+          # synthetic, lives for one job and authenticates to nothing beyond
+          # this runner. The FCM service-account key is NOT among them: it is
+          # generated per run into a 600 file and only ever read from it.
+          {
+            echo "MAX_SCRAPER_WEBHOOK_SECRET=yoko-acceptance-max-webhook-secret"
+            echo "PUSH_TOKEN=acceptance-push-token-0123456789"
+            echo "INBOUND_TEXT=YOKO acceptance push inbound"
+          } >> "$GITHUB_ENV"
+
+          PID=$(cat "$RUNNER_TEMP/crm-phase1.pid")
+          kill "$PID" 2>/dev/null || true
+          for _ in $(seq 1 30); do kill -0 "$PID" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$PID" 2>/dev/null; then kill -9 "$PID" || true; sleep 2; fi
+
+          # Prove the port is free rather than assume it. A survivor would serve
+          # the push phase in production mode and refuse every override, and the
+          # failure would look like a product defect.
+          for _ in $(seq 1 15); do
+            curl -sf -o /dev/null --max-time 2 http://127.0.0.1:3002/login/mobile || break
+            sleep 2
+          done
+          if curl -sf -o /dev/null --max-time 2 http://127.0.0.1:3002/login/mobile; then
+            echo "::error::something is still serving 3002 after the phase-1 CRM was stopped"
+            ss -ltnp 'sport = :3002' || true
+            exit 1
+          fi
+          echo "phase-1 CRM stopped"
+
+      # The stand-in already exists and is the CRM's own FCM contract test
+      # double: it verifies the RS256 service-account assertion, issues its own
+      # access token, and accepts only the exact data-only send shape a CRM push
+      # carries. Both legs of the provider conversation therefore terminate on
+      # 127.0.0.1, which is asserted below rather than assumed.
+      - name: Start the acceptance FCM stand-in
+        run: |
+          set -e
+          umask 077
+          openssl genrsa -out "$RUNNER_TEMP/fcm-private.pem" 2048 2>/dev/null
+          openssl rsa -in "$RUNNER_TEMP/fcm-private.pem" -pubout -out "$RUNNER_TEMP/fcm-public.pem" 2>/dev/null
+          umask 022
+          nohup node android/tools/acceptance-fcm-transport.mjs serve \
+            --port 3906 \
+            --public-key-file "$RUNNER_TEMP/fcm-public.pem" \
+            --project yoko-acceptance \
+            --log "$RUNNER_TEMP/fcm-transport.log" \
+            > "$RUNNER_TEMP/fcm-transport.out" 2>&1 &
+          echo $! > "$RUNNER_TEMP/fcm.pid"
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:3906/__control/requests && exit 0
+            sleep 1
+          done
+          echo "::error::the acceptance FCM stand-in did not start"
+          cat "$RUNNER_TEMP/fcm-transport.out" || true
+          exit 1
+
+      - name: Start the CRM again with push enabled
+        run: |
+          set -e
+          cd gravity-mvp
+          # The service-account key is the one generated for this run, read from
+          # its 600 file and never written anywhere else. P1 accepts a PEM whose
+          # newlines are escaped, which is how it reaches the process here.
+          FCM_KEY=$(awk 'BEGIN { ORS = "\\n" } { print }' "$RUNNER_TEMP/fcm-private.pem")
+          nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test \
+            DATABASE_URL="$DATABASE_URL" \
+            MAX_SCRAPER_URL="http://127.0.0.1:3905" \
+            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
+            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            MAX_SCRAPER_WEBHOOK_SECRET="$MAX_SCRAPER_WEBHOOK_SECRET" \
+            MOBILE_PUSH_ENABLED=true \
+            MOBILE_PUSH_FCM_PROJECT_ID="yoko-acceptance" \
+            MOBILE_PUSH_FCM_CLIENT_EMAIL="acceptance@yoko-acceptance.iam.gserviceaccount.com" \
+            MOBILE_PUSH_FCM_PRIVATE_KEY="$FCM_KEY" \
+            MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE="http://127.0.0.1:3906" \
+            npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm-push.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/crm-push.pid"
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3002/login/mobile && exit 0
+            sleep 2
+          done
+          echo "::error::the push-phase CRM did not become reachable"
+          cat "$RUNNER_TEMP/crm-push.log"
+          exit 1
+
+      # A real sign-in, then the token handed to the SAME entry point
+      # FirebaseMessagingService.onNewToken uses. Everything after that is the
+      # product: the session-generation state machine, WorkManager, the narrow
+      # registrar, the real endpoint and the real database row.
+      #
+      # There is no database assertion here, and none is needed: if no
+      # registration had landed, the fan-out below would find no device and the
+      # capture step would fail with nothing to capture.
+      - name: Seed a push registration through a real sign-in
+        timeout-minutes: 15
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.PushAcceptanceTest
+          out="$RUNNER_TEMP/scenario-test07.log"
+
+          timeout 60 "$ADB" shell pm clear "$PKG"
+          timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
+          timeout 60 "$ADB" logcat -c
+          timeout 600 "$ADB" shell am instrument -w -r \
+            -e class "$CLASS#test07_signInAndSeedThePushToken" \
+            -e pushToken "$PUSH_TOKEN" \
+            "$RUNNER" 2>&1 | tee "$out"
+
+          grep -q "OK (1 test)" "$out" || { echo "::error::test07 did not report OK"; exit 1; }
+          timeout 60 "$ADB" logcat -d -s YokoPushAcceptance:I > "$RUNNER_TEMP/logcat-push-seed.log" || true
+          grep -q "SEEDED_PUSH_TOKEN=accepted" "$RUNNER_TEMP/logcat-push-seed.log" \
+            || { echo "::error::the acceptance build did not accept the seeded token"; exit 1; }
+
+      # The inbound half of the chain, through the CRM's own MAX webhook into
+      # the conversation the fixture already seeds. Nothing is inserted into the
+      # database directly: this is the real ingress, the real persistence, the
+      # real notification intent written in the same transaction, the real
+      # outbox, the real fan-out and the real FCM HTTP adapter.
+      # The inbound half of the chain, through the CRM's own MAX webhook into
+      # the conversation the fixture already seeds. Nothing is written to the
+      # database directly: this is the real ingress, the real persistence, the
+      # real notification intent written in the same transaction, the real
+      # outbox, the real fan-out and the real FCM HTTP adapter.
+      - name: Deliver a synthetic inbound message and capture what FCM was sent
+        timeout-minutes: 10
+        run: |
+          set -e
+          EXT="acceptance-push-${GITHUB_RUN_ID}"
+          TS="$(date +%s)000"
+          printf '{"accountId":"%s","chatId":"%s","senderId":"%s","senderName":"%s","externalId":"%s","text":"%s","timestamp":%s,"messageType":"text"}' \
+            "acceptance-max-provider-0005" \
+            "max:acceptance-000000000005" \
+            "acceptance-max-sender-0005" \
+            "acceptance sender" \
+            "$EXT" \
+            "$INBOUND_TEXT" \
+            "$TS" > "$RUNNER_TEMP/max-inbound.json"
+
+          code=$(curl -s -o "$RUNNER_TEMP/max-webhook-response.json" -w '%{http_code}' \
+            -X POST http://127.0.0.1:3002/api/webhooks/max \
+            -H 'content-type: application/json' \
+            -H "x-max-scraper-webhook-secret: $MAX_SCRAPER_WEBHOOK_SECRET" \
+            --data @"$RUNNER_TEMP/max-inbound.json")
+          if [ "$code" != "200" ]; then
+            echo "::error::the MAX webhook answered $code"
+            cat "$RUNNER_TEMP/max-webhook-response.json" || true
+            exit 1
+          fi
+
+          # The relay polls every couple of seconds and the delivery is a second
+          # outbox hop, so this waits rather than assuming an instant.
+          COUNT=0
+          for _ in $(seq 1 40); do
+            curl -sf "http://127.0.0.1:3906/__control/requests" -o "$RUNNER_TEMP/fcm-requests.json" || true
+            COUNT=$(jq --arg t "$PUSH_TOKEN" '[.requests[]? | select(.kind=="send" and .token==$t)] | length' "$RUNNER_TEMP/fcm-requests.json" 2>/dev/null || echo 0)
+            [ "${COUNT:-0}" -ge 1 ] && break
+            sleep 3
+          done
+          if [ "${COUNT:-0}" -lt 1 ]; then
+            echo "::error::no FCM send for the registered token reached the stand-in"
+            tail -80 "$RUNNER_TEMP/crm-push.log" || true
+            cat "$RUNNER_TEMP/fcm-requests.json" || true
+            exit 1
+          fi
+
+          SEND=$(jq -c --arg t "$PUSH_TOKEN" '[.requests[] | select(.kind=="send" and .token==$t)] | last' "$RUNNER_TEMP/fcm-requests.json")
+          echo "captured send: $SEND"
+
+          # The exact contract, asserted against what the adapter really emitted
+          # rather than against what this file believes it emits.
+          KEYS=$(printf '%s' "$SEND" | jq -r '.data | keys | join(",")')
+          [ "$KEYS" = "channel,chatId,kind,messageId,v" ] \
+            || { echo "::error::the payload carried [$KEYS]"; exit 1; }
+          [ "$(printf '%s' "$SEND" | jq -r '.data.v')" = "1" ] \
+            || { echo "::error::unexpected payload version"; exit 1; }
+          [ "$(printf '%s' "$SEND" | jq -r '.data.kind')" = "chat_message" ] \
+            || { echo "::error::unexpected payload kind"; exit 1; }
+          [ "$(printf '%s' "$SEND" | jq -r '.android.priority')" = "HIGH" ] \
+            || { echo "::error::the send lost its HIGH priority"; exit 1; }
+
+          # Both legs of the provider conversation must have terminated on the
+          # loopback stand-in. An OAuth exchange that went anywhere else would
+          # mean the override was refused and something real was contacted.
+          OAUTH=$(jq '[.requests[]? | select(.kind=="oauth" and .accepted==true)] | length' "$RUNNER_TEMP/fcm-requests.json")
+          [ "${OAUTH:-0}" -ge 1 ] \
+            || { echo "::error::no accepted OAuth exchange reached the loopback stand-in"; exit 1; }
+
+          {
+            echo "PUSH_CHAT_ID=$(printf '%s' "$SEND" | jq -r '.data.chatId')"
+            echo "PUSH_MESSAGE_ID=$(printf '%s' "$SEND" | jq -r '.data.messageId')"
+            echo "PUSH_CHANNEL=$(printf '%s' "$SEND" | jq -r '.data.channel')"
+          } >> "$GITHUB_ENV"
+
+      # The captured payload, injected into the same handler a Firebase message
+      # would reach, in the two lifecycle states an app can be in while it is
+      # alive. The third - a process the system has killed - is below, because
+      # it cannot be driven from inside a test that lives in that process.
+      - name: Run the push scenarios
+        timeout-minutes: 25
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.PushAcceptanceTest
+          LOG="$RUNNER_TEMP/gradle-connected.log"
+          failed=0
+
+          for t in \
+            test08_aPushInTheForegroundOpensTheExactConversation \
+            test09_aPushWithTheAppInTheBackgroundOpensTheExactConversation
+          do
+            out="$RUNNER_TEMP/scenario-$t.log"
+            echo "===== $t =====" | tee -a "$LOG"
+            timeout 60 "$ADB" shell pm clear "$PKG" >> "$LOG" 2>&1
+            timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >> "$LOG" 2>&1
+            timeout 30 "$ADB" reverse tcp:3002 tcp:3002 >> "$LOG" 2>&1
+            timeout 60 "$ADB" logcat -c
+            timeout 600 "$ADB" shell am instrument -w -r \
+              -e class "$CLASS#$t" \
+              -e chatId "$PUSH_CHAT_ID" \
+              -e messageId "$PUSH_MESSAGE_ID" \
+              -e channel "$PUSH_CHANNEL" \
+              -e inboundText "$INBOUND_TEXT" \
+              -e pushToken "$PUSH_TOKEN" \
+              "$RUNNER" 2>&1 | tee -a "$LOG" > "$out"
+
+            if grep -q "OK (1 test)" "$out"; then
+              echo "SCENARIO OK: $t" | tee -a "$LOG"
+            else
+              echo "SCENARIO DID NOT REPORT OK: $t" | tee -a "$LOG"
+              failed=1
+            fi
+
+            timeout 60 "$ADB" logcat -d -v time >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null
+          done
+          exit $failed
+
+      # The cases that must produce nothing. They are proved from the handler's
+      # own outcome rather than from the screen, because the shell gives one
+      # conversation one notification id: a duplicate REPLACES the notification
+      # it duplicates, so two deliveries and one delivery look identical in the
+      # shade and counting there would prove nothing.
+      - name: Prove a duplicate, a malformed payload and a denied permission show nothing
+        timeout-minutes: 15
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          ACTION=ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH
+
+          # A broadcast does not reach a package in the stopped state, which is
+          # where pm clear leaves one, so the app is started first.
+          timeout 60 "$ADB" shell pm clear "$PKG"
+          timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
+          timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" > /dev/null
+          sleep 6
+
+          inject() {
+            timeout 60 "$ADB" logcat -c
+            timeout 60 "$ADB" shell am broadcast -a "$ACTION" -p "$PKG" "$@" > /dev/null
+            sleep 4
+            timeout 60 "$ADB" logcat -d -s YokoPushAcceptance:I | grep -o 'INJECTED_PUSH_OUTCOME=[^ ]*' | tail -1
+          }
+
+          expect() {
+            want="$1"; got="$2"; what="$3"
+            if [ "$got" != "$want" ]; then
+              echo "::error::$what expected $want, got '${got:-<nothing>}'"
+              exit 1
+            fi
+            echo "$what: $got"
+          }
+
+          first=$(inject --es v 1 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es messageId "$PUSH_MESSAGE_ID" --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Accepted(notificationPosted=true)" "$first" "the captured payload"
+
+          again=$(inject --es v 1 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es messageId "$PUSH_MESSAGE_ID" --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Duplicate" "$again" "the same message again"
+
+          wrong_version=$(inject --es v 2 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es messageId acc_msg_negative_1 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Rejected(reason=version)" "$wrong_version" "a future payload version"
+
+          wrong_kind=$(inject --es v 1 --es kind chat_read --es chatId "$PUSH_CHAT_ID" --es messageId acc_msg_negative_2 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Rejected(reason=kind)" "$wrong_kind" "an unknown payload kind"
+
+          no_chat=$(inject --es v 1 --es kind chat_message --es messageId acc_msg_negative_3 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Rejected(reason=chat_id)" "$no_chat" "a payload with no chat"
+
+          no_message=$(inject --es v 1 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Rejected(reason=message_id)" "$no_message" "a payload with no message"
+
+          malformed_id=$(inject --es v 1 --es kind chat_message --es chatId "../../etc/passwd" --es messageId acc_msg_negative_4 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Rejected(reason=chat_id)" "$malformed_id" "an identifier that is not an identifier"
+
+          # Permission denied: still accepted, still not shown, and deliberately
+          # NOT recorded as seen, so a redelivery can reach an operator who
+          # grants the permission afterwards.
+          timeout 60 "$ADB" shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS
+          timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" > /dev/null
+          sleep 6
+          denied=$(inject --es v 1 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es messageId acc_msg_negative_5 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Accepted(notificationPosted=false)" "$denied" "a push with notifications denied"
+          timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+
+          granted=$(inject --es v 1 --es kind chat_message --es chatId "$PUSH_CHAT_ID" --es messageId acc_msg_negative_5 --es channel "$PUSH_CHANNEL")
+          expect "INJECTED_PUSH_OUTCOME=Accepted(notificationPosted=true)" "$granted" "the same push once the permission is granted"
+
+      # Ordinary process death, which is NOT force-stop: force-stop also puts
+      # the package into the stopped state, where broadcast delivery follows
+      # different rules, and proving the wake-up under those rules would be
+      # proving something else. am kill takes the background process the way the
+      # system does under memory pressure.
+      - name: Prove a push wakes a process the system has killed
+        timeout-minutes: 20
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.PushAcceptanceTest
+          ACTION=ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH
+
+          timeout 60 "$ADB" shell pm clear "$PKG"
+          timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
+          timeout 60 "$ADB" logcat -c
+
+          out="$RUNNER_TEMP/scenario-test10.log"
+          timeout 600 "$ADB" shell am instrument -w -r \
+            -e class "$CLASS#test10_signInThenLeaveTheAppInTheBackground" \
+            -e chatId "$PUSH_CHAT_ID" -e messageId "$PUSH_MESSAGE_ID" \
+            -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
+            -e pushToken "$PUSH_TOKEN" \
+            "$RUNNER" 2>&1 | tee "$out"
+          grep -q "OK (1 test)" "$out" || { echo "::error::test10 did not report OK"; exit 1; }
+
+          alive=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
+          [ -n "$alive" ] || { echo "::error::the app was not running before the kill"; exit 1; }
+          echo "app process before the kill: $alive"
+
+          timeout 60 "$ADB" shell am kill "$PKG" || true
+          gone=""
+          for _ in $(seq 1 20); do
+            gone=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
+            [ -z "$gone" ] && break
+            sleep 1
+          done
+          if [ -n "$gone" ]; then
+            # Same-uid fallback: the acceptance build is debuggable, so run-as
+            # can kill it without the stopped-package semantics of force-stop.
+            timeout 30 "$ADB" shell run-as "$PKG" kill -9 "$gone" || true
+            for _ in $(seq 1 20); do
+              gone=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
+              [ -z "$gone" ] && break
+              sleep 1
+            done
+          fi
+          [ -z "$gone" ] || { echo "::error::the app process survived; pid $gone"; exit 1; }
+          echo "app process is gone"
+
+          timeout 60 "$ADB" logcat -c
+          timeout 60 "$ADB" shell am broadcast -a "$ACTION" -p "$PKG" \
+            --es v 1 --es kind chat_message \
+            --es chatId "$PUSH_CHAT_ID" --es messageId "$PUSH_MESSAGE_ID" \
+            --es channel "$PUSH_CHANNEL" > /dev/null
+          sleep 6
+
+          woken=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
+          [ -n "$woken" ] || { echo "::error::the broadcast did not start a process"; exit 1; }
+          echo "a fresh process was started to handle it: $woken"
+
+          timeout 60 "$ADB" logcat -d -s YokoPushAcceptance:I > "$RUNNER_TEMP/logcat-push-dead.log" || true
+          grep -q "INJECTED_PUSH_OUTCOME=Accepted(notificationPosted=true)" "$RUNNER_TEMP/logcat-push-dead.log" \
+            || { echo "::error::the woken process did not post the notification"; cat "$RUNNER_TEMP/logcat-push-dead.log"; exit 1; }
+          timeout 60 "$ADB" shell dumpsys notification --noredact | grep -q "yoko_chat_messages" \
+            || { echo "::error::no notification on the shell's channel is posted"; exit 1; }
+
+          # Nothing is cleared here: the tap must land in the session test10
+          # established, which is the point of the scenario.
+          out="$RUNNER_TEMP/scenario-test11.log"
+          timeout 600 "$ADB" shell am instrument -w -r \
+            -e class "$CLASS#test11_aPushAfterProcessDeathOpensTheExactConversation" \
+            -e chatId "$PUSH_CHAT_ID" -e messageId "$PUSH_MESSAGE_ID" \
+            -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
+            -e pushToken "$PUSH_TOKEN" \
+            "$RUNNER" 2>&1 | tee "$out"
+          grep -q "OK (1 test)" "$out" || { echo "::error::test11 did not report OK"; exit 1; }
+
       - name: Collect logcat, screenshots and the shell's own diagnostics
         if: always()
         timeout-minutes: 6

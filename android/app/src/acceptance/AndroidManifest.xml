@@ -2,12 +2,9 @@
 <!--
     Acceptance-only manifest.
 
-    The seed receiver lives here and nowhere else. It was declared in the main
-    manifest until Mobile Push v1 P2, which meant the class and its receiver
-    shipped in the release artifact even though nothing in a release build could
-    reach them. The boundary is now the build, not a runtime flag: the class
-    exists only in src/acceptance, this manifest is merged only into the
-    acceptance variant, and the release artifact is asserted to contain neither.
+    Both receivers below exist only in this variant. They were never in the
+    release artifact and the workflow asserts, on the built APK, that neither
+    the classes nor their actions are present in it.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -22,6 +19,21 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Deterministic push acceptance. Exported because the process-dead
+             scenario broadcasts to it from adb after the system has killed the
+             app, which is precisely the case an in-process call cannot reach.
+             The exposure is bounded by the build: this variant is a separate
+             application id that is never released, and the release artifact is
+             asserted to carry neither this class nor these actions. -->
+        <receiver
+            android:name=".push.AcceptancePushInjection"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH" />
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN" />
             </intent-filter>
         </receiver>
 
