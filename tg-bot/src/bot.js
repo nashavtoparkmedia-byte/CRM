@@ -3,6 +3,7 @@ const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const config = require('./config');
 const db = require('./database');
 const botRuntime = require('./services/botRuntime');
+const { observeBotPrincipalV1 } = require('./services/providerAccountAttestation');
 const logger = require('./utils/logger');
 const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
@@ -365,10 +366,12 @@ bot.use(async (ctx, next) => {
 
 async function isPollingHealthy() {
     try {
-        await Promise.race([
+        const me = await Promise.race([
             bot.telegram.getMe(),
             new Promise((_, rej) => setTimeout(() => rej(new Error('healthcheck timeout')), HEALTHCHECK_TIMEOUT_MS))
         ]);
+        // M2A2-TG2B: the heartbeat's live getMe also reports the principal.
+        observeBotPrincipalV1(me, 'polling_heartbeat');
         return true;
     } catch (e) {
         logger.warn(`[Heartbeat] getMe failed: ${e?.message || e}`);
@@ -403,6 +406,12 @@ Promise.all([
     userService.syncPendingCrmUsers()
 ]).then(() => {
     userService.startPeriodicCrmSync();
+
+    // M2A2-TG2B: one live observation at startup, so a restarted process
+    // reports its principal without waiting for the first watchdog tick.
+    bot.telegram.getMe()
+        .then((me) => observeBotPrincipalV1(me, 'startup'))
+        .catch((error) => logger.warn(`[provider-attestation] startup observation skipped: ${error?.message || error}`));
 
     // Webhook mode is opt-in. When BOT_UPDATE_MODE is webhook the runtime
     // registers the webhook with Telegram and re-asserts it if Telegram drops

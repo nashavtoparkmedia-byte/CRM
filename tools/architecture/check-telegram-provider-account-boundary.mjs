@@ -10,6 +10,12 @@
 // tests may reach the intake, nothing else may, the writer keeps exactly one
 // caller, the runtime hand-off can never fail into Telegram, and the ceremony
 // may never report a pending account it did not read back.
+//
+// TG2B added exactly one public capability, the authenticated ingress a bot
+// runtime reports through. It is the only public file that may reach the
+// intake, it may never re-export the writer or the projection, and it must
+// prove a reported statement authentic, well formed, fresh and unseen before
+// anything durable happens.
 
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -36,7 +42,16 @@ const MODULE_FILES = [
 // The runtime that observes live provider authentications, and its proof.
 const RUNTIME = 'gravity-mvp/src/app/tg-actions.ts'
 const RUNTIME_TEST = 'gravity-mvp/src/app/tg-actions.provider-account.test.ts'
-const APPROVED_IMPORTERS = [RUNTIME, RUNTIME_TEST]
+// The authenticated cross-process ingress. It lives in the application layer,
+// because a public facade may not reach its own context's internals; the public
+// surface re-exports it.
+const INGRESS = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.ts'
+const INGRESS_TEST = 'gravity-mvp/src/modules/telegram-channel/application/telegram-provider-account-attestation.test.ts'
+// The signed statement, the freshness window and the replay guard live behind
+// the composition: a module the public barrel reaches may export only narrow
+// business functions.
+const PROTOCOL = 'gravity-mvp/src/modules/telegram-channel/internal/bot-attestation/telegram-bot-attestation-protocol.ts'
+const APPROVED_IMPORTERS = [RUNTIME, RUNTIME_TEST, INGRESS]
 
 const MIGRATION = 'gravity-mvp/prisma/migrations/20260922120000_add_telegram_provider_account_foundation/migration.sql'
 const SCHEMA = 'gravity-mvp/prisma/schema.prisma'
@@ -164,8 +179,41 @@ export function assertApprovedImporters(importers) {
   for (const importer of importers) {
     assert.doesNotMatch(importer, /\/modules\/(?:contacts|messaging|max-channel|whatsapp-channel)\//u,
       'another domain must not reach the provider account foundation')
-    assert.doesNotMatch(importer, /\/public\//u, 'the provider account foundation must not be re-exported publicly')
+    assert.doesNotMatch(importer, /\/public\//u, 'a public facade may not reach the foundation; the application layer owns that composition')
   }
+}
+
+/** The signed statement, its key derivation and the bounded replay guard. */
+export function assertAttestationProtocol(source) {
+  const code = withoutComments(PROTOCOL, source)
+  assert.match(code, /timingSafeEqual/u, 'the signature comparison must be constant time')
+  assert.match(code, /createHash\('sha256'\)\.update\(`\$\{TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1\}\|\$\{secret\}`\)/u,
+    'the signing key must be derived from the shared secret')
+  assert.match(code, /digest\('base64url'\)/u, 'the signature encoding changed')
+  assert.match(code, /MAX_OBSERVATION_AGE_MS = 120000\b/u, 'the accepted observation age changed')
+  assert.match(code, /MAX_OBSERVATION_FUTURE_SKEW_MS = 30000\b/u, 'the accepted clock skew changed')
+  assert.match(code, /REPLAY_CACHE_MAXIMUM = 2048\b/u, 'the replay cache bound changed')
+  // Replay retention is derived from the payload's own validity, never from a
+  // separate duration whose correctness depends on two constants agreeing.
+  assert.match(code, /function latestValidAtV1\(observedAt: number\): number \{\s*return observedAt \+ MAX_OBSERVATION_AGE_MS;\s*\}/u,
+    'replay expiry must be derived from the last instant a payload stays fresh')
+  assert.doesNotMatch(code, /REPLAY_RETENTION_MS/u, 'replay retention must not become an independent duration again')
+  const guard = code.slice(code.indexOf('export class TelegramAttestationReplayCacheV1'))
+  assert.match(guard, /if \(nowMs > expiresAt\)\s*\n?\s*this\.seen\.delete\(id\);/u,
+    'an entry may be forgotten only strictly after its payload can no longer be fresh')
+  assert.doesNotMatch(guard, /nowMs >= expiresAt/u, 'forgetting at the last fresh instant reopens the replay boundary')
+  assert.match(guard, /while \(this\.seen\.size > this\.maximum\)/u, 'the replay cache must stay bounded')
+  const canonical = code.slice(code.indexOf('export function canonicalTelegramProviderAttestationV1'))
+  const order = ['TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1', 'TELEGRAM_PROVIDER_ATTESTATION_ACTION_V1',
+    'payload.providerUserId', 'payload.transportRef', 'payload.attestingInstanceId', 'payload.observedAt', 'payload.attestationId']
+  let previous = -1
+  for (const field of order) {
+    const at = canonical.indexOf(field)
+    assert(at > previous, `the canonical statement changed at: ${field}`)
+    previous = at
+  }
+  assert.match(canonical, /join\('\\n'\)/u, 'the canonical separator changed')
+  assert.doesNotMatch(code, /@\/lib\/prisma|@prisma\//u, 'the protocol must not reach a database')
 }
 
 /** The writer keeps exactly one production caller: the intake. */
@@ -182,6 +230,20 @@ export function assertWriterCallers(files) {
   ].sort(), 'only the intake and the foundation proofs may call the writer')
 }
 
+const INTAKE_METHOD_HEADERS = ['async observe(', 'async attestTransport(', 'async admit(', 'async describe(']
+
+/** One method of the intake factory, bounded by the next method or export. */
+function methodBody(code, header) {
+  const start = code.indexOf(header)
+  assert(start >= 0, `missing intake method: ${header}`)
+  const after = start + header.length
+  const ends = [
+    ...INTAKE_METHOD_HEADERS.map((candidate) => code.indexOf(candidate, after)),
+    code.indexOf('\nexport ', after),
+  ].filter((index) => index >= 0)
+  return code.slice(start, ends.length > 0 ? Math.min(...ends) : code.length)
+}
+
 function declarationBody(code, header) {
   const start = code.indexOf(header)
   assert(start >= 0, `missing declaration: ${header}`)
@@ -189,7 +251,7 @@ function declarationBody(code, header) {
   return code.slice(start, next < 0 ? code.length : next)
 }
 
-/** Two orchestration modes over one writer, each with its own contract. */
+/** Three orchestration modes over one writer, each with its own contract. */
 export function assertIntakeModes(source) {
   const code = withoutComments(INTAKE, source)
 
@@ -198,10 +260,10 @@ export function assertIntakeModes(source) {
   assert.match(runtime, /void intake\(\)\.observe\(input\)/u, 'the runtime hand-off must not be awaited')
   assert.match(runtime, /catch/u, 'the runtime hand-off must swallow every failure')
 
-  const observe = declarationBody(code, 'async observe(')
+  const observe = methodBody(code, 'async observe(')
   assert.match(observe, /catch/u, 'the runtime mode must swallow every failure')
 
-  const ceremony = declarationBody(code, 'async admit(')
+  const ceremony = methodBody(code, 'async admit(')
   const attested = ceremony.indexOf('await attest(input')
   const projected = ceremony.indexOf('deps.project(')
   const admitted = ceremony.indexOf('deps.admit(')
@@ -214,7 +276,12 @@ export function assertIntakeModes(source) {
       'a pending account may only be reported after the projection proved one exists')
   }
 
-  const display = declarationBody(code, 'async describe(')
+  const ingress = methodBody(code, 'async attestTransport(')
+  assert.match(ingress, /await attest\(input, 'ingress'\)/u, 'the ingress mode must attest in its own mode')
+  assert.doesNotMatch(ingress, /deps\.admit\(|deps\.project\(/u, 'the ingress mode must never admit or read back')
+  assert.doesNotMatch(ingress, /catch/u, 'the ingress mode must surface a failure to its caller')
+
+  const display = methodBody(code, 'async describe(')
   assert.doesNotMatch(display, /deps\.admit\(|deps\.record\(/u, 'the display read may never write or admit')
 }
 
@@ -286,7 +353,53 @@ export function assertNoPublicSurface(publicFiles, manifest) {
     'TelegramConnectionMetadataQuery.v1',
     'BotSurveyApi.v1',
     'BotUserProfileCommands.v1',
+    'TelegramProviderAccountAttestation.v1',
   ], 'telegram_channel public surface changed')
+}
+
+/**
+ * The ingress capability: one bounded reach into the foundation, and a fixed
+ * security order in which nothing durable happens before the statement is
+ * proven.
+ */
+export function assertIngressCapability(source) {
+  const code = withoutComments(INGRESS, source)
+
+  assert.doesNotMatch(INGRESS, /\/public\//u, 'the ingress must not be a public facade source')
+  const foundationImports = moduleReferences(INGRESS, source).filter((specifier) => /provider-account/u.test(specifier))
+  assert.deepEqual(foundationImports, ['../internal/provider-account/telegram-account-intake'],
+    'the ingress may reach the foundation only through the intake')
+  assert.doesNotMatch(code, /recordTelegramTransportAttestationV1|readProviderAccountProjectionV1|admitTelegramAccountV1|ProviderAccountProjectionV1/u,
+    'the ingress must not name the writer, the projection reader or the admission')
+  // The public barrel reaches this file, so it may export only functions.
+  const exported = [...code.matchAll(/^export (const|class|interface|enum|let|var|function|async function|type) /gmu)].map((match) => match[1])
+  assert.deepEqual([...new Set(exported)].sort(), ['async function', 'function'],
+    'a composition the public surface reaches may export only narrow business functions')
+
+  const entry = declarationBody(code, 'export async function attestTelegramProviderAccountFromBotV1')
+  const order = [
+    ['action', /input\.action !== TELEGRAM_PROVIDER_ATTESTATION_ACTION_V1/u],
+    ['shape', /parseTelegramProviderAttestationPayloadV1\(input\.payload\)/u],
+    ['signature', /signatureMatches\(expected, payload\.signature\)/u],
+    ['principal', /PROVIDER_USER_ID_PATTERN\.test\(payload\.providerUserId\)/u],
+    ['transport', /payload\.transportRef === payload\.providerUserId/u],
+    ['instance', /UUID_PATTERN\.test\(payload\.attestingInstanceId\)/u],
+    ['freshness', /age > MAX_OBSERVATION_AGE_MS/u],
+    ['replay', /deps\.replay\.admit\(payload\.attestationId, now, latestValidAtV1\(payload\.observedAt\)\)/u],
+    ['record', /await deps\.record\(/u],
+  ]
+  let previous = -1
+  for (const [label, pattern] of order) {
+    const match = entry.search(pattern)
+    assert(match >= 0, `the ingress no longer checks: ${label}`)
+    assert(match > previous, `the ingress security order changed at: ${label}`)
+    previous = match
+  }
+
+  const telemetry = code.match(/deps\.emit\(TELEGRAM_PROVIDER_ATTESTATION_EVENT_V1, \{[^}]*\}/u)
+  assert(telemetry, 'the ingress must report a bounded outcome')
+  assert.doesNotMatch(telemetry[0], /providerUserId|transportRef|signature|secret|attestationId|attestingInstanceId/u,
+    'ingress telemetry must carry no principal, locator, statement or credential')
 }
 
 // Current repository state.
@@ -303,6 +416,8 @@ assertApprovedImporters(importers)
 assertWriterCallers(files)
 assertIntakeModes(read(INTAKE))
 assertRuntimeHandOff(read(RUNTIME))
+assertIngressCapability(read(INGRESS))
+assertAttestationProtocol(read(PROTOCOL))
 for (const relative of SOURCES) assertModuleSource(relative, read(relative))
 assertExactProviderForm(read(IDENTITY))
 assertReadinessIsDerived(read(IDENTITY))
@@ -372,6 +487,43 @@ const rejected = {
     'let admission: TelegramAdmissionResultV1 = ', 'const admission: TelegramAdmissionResultV1 = ')),
   login_locator_falls_back_to_the_principal: () => assertRuntimeHandOff(read(RUNTIME).replace(
     'transportRef: persistedTransportRef,', 'transportRef: telegramId,')),
+  ingress_reaches_the_writer_directly: () => assertIngressCapability(read(INGRESS).replace(
+    "import { attestTelegramTransportV1 } from '../internal/provider-account/telegram-account-intake'",
+    "import { recordTelegramTransportAttestationV1 } from '../internal/provider-account/telegram-account-writer'")),
+  ingress_records_before_proving_the_signature: () => assertIngressCapability(read(INGRESS).replace(
+    '    const secret = deps.secret()',
+    '    await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    const secret = deps.secret()')),
+  ingress_records_before_the_replay_check: () => assertIngressCapability(read(INGRESS).replace(
+    '    if (!deps.replay.admit(',
+    '    const early = await deps.record({ transportKind: \'bot_runtime\', transportRef: payload.transportRef, accountKind: \'bot_api\', providerUserId: payload.providerUserId, attestingInstanceId: payload.attestingInstanceId })\n    if (!deps.replay.admit(')),
+  protocol_compares_the_signature_loosely: () => assertAttestationProtocol(read(PROTOCOL).replaceAll('timingSafeEqual', 'Object.is')),
+  protocol_widens_the_freshness_window: () => assertAttestationProtocol(read(PROTOCOL).replace('MAX_OBSERVATION_AGE_MS = 120_000', 'MAX_OBSERVATION_AGE_MS = 1_200_000')),
+  protocol_unbounds_the_replay_cache: () => assertAttestationProtocol(read(PROTOCOL).replace('REPLAY_CACHE_MAXIMUM = 2048', 'REPLAY_CACHE_MAXIMUM = 2_000_000')),
+  replay_forgets_at_the_last_fresh_instant: () => assertAttestationProtocol(read(PROTOCOL).replace('if (nowMs > expiresAt)', 'if (nowMs >= expiresAt)')),
+  replay_expiry_becomes_an_independent_duration: () => assertAttestationProtocol(read(PROTOCOL).replace(
+    'return observedAt + MAX_OBSERVATION_AGE_MS', 'return observedAt + REPLAY_RETENTION_MS')),
+  replay_cache_loses_its_bound: () => assertAttestationProtocol(read(PROTOCOL).replace(
+    'while (this.seen.size > this.maximum)', 'while (false)')),
+  ingress_admits_without_payload_validity: () => assertIngressCapability(read(INGRESS).replace(
+    'deps.replay.admit(payload.attestationId, now, latestValidAtV1(payload.observedAt))',
+    'deps.replay.admit(payload.attestationId, now)')),
+  protocol_reorders_the_canonical_statement: () => assertAttestationProtocol(read(PROTOCOL).replace('payload.providerUserId,\n        payload.transportRef,', 'payload.transportRef,\n        payload.providerUserId,')),
+  ingress_exports_more_than_functions: () => assertIngressCapability(read(INGRESS).replace(
+    'export async function attestTelegramProviderAccountFromBotV1', 'export const INGRESS_LIMIT = 1\nexport async function attestTelegramProviderAccountFromBotV1')),
+  protocol_signs_with_the_bearer_secret: () => assertAttestationProtocol(read(PROTOCOL).replace(
+    'createHash(\'sha256\').update(`${TELEGRAM_PROVIDER_ATTESTATION_DOMAIN_V1}|${secret}`).digest()',
+    'Buffer.from(secret)')),
+  ingress_telemetry_leaks_the_principal: () => assertIngressCapability(read(INGRESS).replace(
+    "{ channel: 'telegram', transportKind: 'bot_runtime', outcome }",
+    "{ channel: 'telegram', transportKind: 'bot_runtime', outcome, providerUserId: 'x' }")),
+  ingress_mode_admits: () => assertIntakeModes(read(INTAKE).replace(
+    "            return await attest(input, 'ingress')",
+    "            await deps.admit({ accountId: 'x', principalId: 'y' })\n            return await attest(input, 'ingress')")),
+  ingress_mode_swallows_failures: () => assertIntakeModes(read(INTAKE).replace(
+    "            return await attest(input, 'ingress')",
+    "            try { return await attest(input, 'ingress') } catch { throw new Error('x') }")),
+  public_importer_that_is_not_the_ingress: () => assertApprovedImporters(
+    [...APPROVED_IMPORTERS, 'gravity-mvp/src/modules/telegram-channel/public/v1/bot-message-delivery.ts'].sort()),
   stored_projection_admits: () => assertRuntimeHandOff(read(RUNTIME).replace(
     "return await describeTelegramProviderAccountV1('mtproto_session', transportRef)",
     "return await admitTelegramProviderAccountV1({}, 'anonymous')")),
@@ -407,6 +559,23 @@ const messages = {
   admission_without_an_operator: /admission must require an authenticated operator/u,
   login_fails_on_admission: /must not be able to fail because of the admission ceremony/u,
   login_locator_falls_back_to_the_principal: /locator must come from the persisted record/u,
+  ingress_reaches_the_writer_directly: /only through the intake/u,
+  ingress_records_before_proving_the_signature: /ingress security order changed/u,
+  ingress_records_before_the_replay_check: /ingress security order changed/u,
+  protocol_compares_the_signature_loosely: /signature comparison must be constant time/u,
+  protocol_widens_the_freshness_window: /accepted observation age changed/u,
+  protocol_unbounds_the_replay_cache: /replay cache bound changed/u,
+  replay_forgets_at_the_last_fresh_instant: /forgotten only strictly after its payload can no longer be fresh/u,
+  replay_expiry_becomes_an_independent_duration: /replay expiry must be derived from the last instant a payload stays fresh/u,
+  replay_cache_loses_its_bound: /replay cache must stay bounded/u,
+  ingress_admits_without_payload_validity: /ingress no longer checks: replay/u,
+  protocol_reorders_the_canonical_statement: /canonical statement changed/u,
+  ingress_exports_more_than_functions: /may export only narrow business functions/u,
+  protocol_signs_with_the_bearer_secret: /signing key must be derived/u,
+  ingress_telemetry_leaks_the_principal: /telemetry must carry no principal/u,
+  ingress_mode_admits: /ingress mode must never admit or read back/u,
+  ingress_mode_swallows_failures: /ingress mode must surface a failure/u,
+  public_importer_that_is_not_the_ingress: /only the reviewed Telegram runtime/u,
   stored_projection_admits: /stored projection may never admit an account/u,
   public_surface_grows: /public surface changed/u,
   foundation_binds_the_session_row: /must not relate to a transport row, a contact or a conversation/u,
@@ -425,7 +594,7 @@ console.log(JSON.stringify({
   approved_importers: APPROVED_IMPORTERS.length,
   writer_callers: 3,
   database_sources: 1,
-  orchestration_modes: 2,
-  public_surface_changes: 0,
+  orchestration_modes: 3,
+  public_surface_entries: 7,
   negative_probes: Object.keys(rejected).length,
 }, null, 2))

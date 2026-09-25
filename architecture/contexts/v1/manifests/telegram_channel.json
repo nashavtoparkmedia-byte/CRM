@@ -284,7 +284,8 @@
     "TelegramRuntimeOperations.v1",
     "TelegramConnectionMetadataQuery.v1",
     "BotSurveyApi.v1",
-    "BotUserProfileCommands.v1"
+    "BotUserProfileCommands.v1",
+    "TelegramProviderAccountAttestation.v1"
   ],
   "responsibility": "Telegram provider sessions, driver identities, bot survey product and its frontend.",
   "schema": "yoko.crm.module-manifest.v1",

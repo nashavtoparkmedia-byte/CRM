@@ -475,6 +475,7 @@
         "BotUserProfileCommands.v1",
         "TelegramConnectionMetadataQuery.v1",
         "TelegramDeliveryPort.v1",
+        "TelegramProviderAccountAttestation.v1",
         "TelegramReachability.v1",
         "TelegramRuntimeOperations.v1"
       ],
