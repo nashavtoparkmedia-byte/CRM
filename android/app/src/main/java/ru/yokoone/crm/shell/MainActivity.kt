@@ -117,7 +117,12 @@ class MainActivity : AppCompatActivity() {
         // whether it carried a target. safeUrl keeps the identifier out.
         ShellDiagnostics.write(
             "YOKO_NET fail push-open cold act=${shortName(intent?.action)}" +
-                " cats=${intent?.categories?.joinToString(",") { shortName(it) } ?: "none"}" +
+                // The flags say whose Intent this is. A launcher tap carries
+                // NEW_TASK|RESET_TASK_IF_NEEDED (0x10200000); the notification's
+                // carries NEW_TASK|CLEAR_TASK or NEW_TASK|CLEAR_TOP. That is the
+                // difference between an Intent that was never ours and one that
+                // was ours and arrived stripped.
+                " flags=0x${Integer.toHexString(intent?.flags ?: 0)}" +
                 " keys=${intent?.extras?.keySet()?.joinToString(",") { shortName(it) } ?: "none"}" +
                 " tgt=${ShellDiagnostics.safeUrl(fromNotification)}" +
                 " restored=${savedInstanceState != null}",

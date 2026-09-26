@@ -225,10 +225,12 @@ class PushAcceptanceTest {
         // got nowhere, and only the owner of the clicked object separates them.
         ShellDiagnostics.write(
             "YOKO_NET fail push-tap owner=${posted!!.applicationPackage}" +
-                " screenOn=${device.isScreenOn}" +
-                " at=${posted.visibleBounds.flattenToString()}",
+                " on=${device.currentPackageName}" +
+                " res=${posted.resourceName ?: "none"}",
         )
         posted.click()
+        device.waitForIdle()
+        ShellDiagnostics.write("YOKO_NET fail push-tap after=${device.currentPackageName}")
     }
 
     /** One shell command through the instrumentation, output discarded. */
@@ -304,10 +306,10 @@ class PushAcceptanceTest {
      */
     private fun startDiagnostics(): String = deviceLog()
         .lineSequence()
-        .filter { it.contains("push-open") }
+        .filter { it.contains("push-open") || it.contains("push-tap") }
         .map { it.substringAfter("YOKO_NET fail ").trim() }
         .toList()
-        .takeLast(2)
+        .takeLast(3)
         .joinToString(" | ")
         .ifEmpty { "<the shell logged no start at all>" }
 
