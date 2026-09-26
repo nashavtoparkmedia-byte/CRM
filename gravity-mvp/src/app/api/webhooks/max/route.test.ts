@@ -646,6 +646,80 @@ describe('MAX webhook provider-account admission', () => {
       .toBeLessThan(mocks.recordReachability.mock.invocationCallOrder[0])
   })
 
+  // --- cold cache on the PROVIDER-framed path ------------------------------------------
+  // The scraper derives chatKind from an in-memory cache that is empty after every container
+  // start, including the restart activation performs. The DOM path is protected from writing
+  // cache-derived values by `!domFallbackPeer`; the provider-framed path is not. So a cold
+  // `unknown` used to overwrite a stored `private` that had been proven from a DIALOG model,
+  // which then failed the next DOM inbound at `stored_chat_kind` and every outbound with
+  // CONTACT_CONVERSATION_NOT_PRIVATE.
+  function acceptedProviderInbound(storedMetadata: Record<string, unknown>) {
+    const chat = existingChat({
+      senderId: 'max-sender-42',
+      providerAccountId: 'max-account-b',
+      connectionId: 'max_scraper',
+      ...storedMetadata,
+    })
+    mocks.chatFindUnique.mockResolvedValue(chat)
+    mocks.chatFindMany.mockResolvedValue([])
+    mocks.patchConversation.mockResolvedValue({ conversation: chat })
+    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-in-1', chatId: chat.id } })
+    mocks.resolveContact.mockResolvedValue({
+      status: 'identity_reused',
+      isNew: false,
+      contact: { id: 'contact-b' },
+      identity: { id: 'identity-b' },
+    })
+    mocks.isResolvedContact.mockReturnValue(true)
+    return chat
+  }
+  const patchedChatKind = () => mocks.patchConversation.mock.calls
+    .find(([argument]) => argument?.patch?.metadata)?.[0].patch.metadata.chatKind
+
+  test.each([
+    ['private', 'private'],
+    // A stored group conversation is reachable here: with an incoming `unknown` the collision
+    // guard finds no concrete mismatch and no group authority breach, so it reaches this write.
+    ['group', 'group'],
+  ])('a cold-cache provider event does not downgrade a stored %s chat kind', async (stored, expected) => {
+    acceptedProviderInbound({ chatKind: stored })
+
+    const response = await POST(request({ chatKind: 'unknown' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe(expected)
+  })
+
+  test('a cold-cache provider event still records unknown when no concrete kind is stored', async () => {
+    acceptedProviderInbound({ chatKind: undefined })
+
+    const response = await POST(request({ chatKind: 'unknown' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe('unknown')
+  })
+
+  test('a concrete incoming private chat kind is still written unchanged', async () => {
+    acceptedProviderInbound({ chatKind: 'private' })
+
+    const response = await POST(request({ chatKind: 'private' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe('private')
+  })
+
+  test('an explicit incoming group against a stored private conversation is still refused', async () => {
+    // The concrete-mismatch branch of the collision guard answers this before any write, which
+    // is why preserving a concrete stored kind widens no accepted chat kind.
+    acceptedProviderInbound({ chatKind: 'private' })
+
+    const response = await POST(request({ chatKind: 'group' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expect(mocks.patchConversation).not.toHaveBeenCalled()
+  })
+
   test('does not confirm reachability for history even after exact private linkage', async () => {
     const chat = existingChat({
       senderId: 'max-sender-42',
@@ -1087,18 +1161,102 @@ describe('MAX webhook DOM-fallback peer binding', () => {
     expectNoDomMessage()
   })
 
+  // The INCOMING kind may legitimately be absent - the scraper's cache is transient, see the
+  // cold-cache block below. The DURABLE stored proof may not be, with or without it.
   test.each([
-    ['incoming kind unknown', { chatKind: 'unknown' }, {}, {}, []],
-    ['incoming kind missing', {}, {}, {}, ['chatKind']],
     ['stored kind missing', {}, { chatKind: undefined }, {}, []],
+    ['stored kind missing and the incoming kind is unknown too', { chatKind: 'unknown' }, { chatKind: undefined }, {}, []],
+    ['stored kind missing and the incoming kind is absent too', {}, { chatKind: undefined }, {}, ['chatKind']],
     ['stored kind group on a person-owned Chat', { chatKind: 'group' }, { chatKind: 'group' }, {}, []],
+    ['stored kind group while the incoming kind is unknown', { chatKind: 'unknown' }, { chatKind: 'group' }, {}, []],
     ['Chat column is not private', {}, {}, { chatType: 'group' }, []],
+    ['Chat column is not private while the incoming kind is unknown', { chatKind: 'unknown' }, {}, { chatType: 'group' }, []],
   ])('rejects without proof when %s', async (_label, event, storedMetadata, chatColumns, omit) => {
     chat = provenPrivateChat(chatColumns, storedMetadata)
     const response = await POST(domRequest(event, omit as string[]))
     expect(response.status).toBe(409)
     expect(mocks.upsertMessage).not.toHaveBeenCalled()
     expect(mocks.markIdentityConflict).toHaveBeenCalled()
+  })
+
+  // --- cold cache -------------------------------------------------------------------------
+  // The scraper derives the outgoing chatKind from an in-memory chatCache filled only by
+  // op48/op53 frames, which starts EMPTY on every container start - including the restart that
+  // activating a release performs. On 2026-09-26 production refused a real inbound here with
+  // `unknown` on a conversation whose stored state already proved it private, and the peer
+  // resolution never ran. Durable stored proof plus a valid attested route may stand in for the
+  // missing transient signal, and for nothing else.
+  test.each([
+    ['the scraper reports an unknown chat kind', { chatKind: 'unknown' }, []],
+    ['the scraper omits the chat kind entirely', {}, ['chatKind']],
+  ])('binds a cold-cache DOM-fallback event when %s', async (_label, event, omit) => {
+    await expectBound(await POST(domRequest(event, omit as string[])))
+
+    // the repair's own resolution must actually RUN, not merely "not 409"
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-c4',
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' }),
+    }))
+    // A cold cache must never overwrite the stored kind it just failed to report. The
+    // contact-resolution patch legitimately spreads the existing metadata forward, so the
+    // invariant is not "chatKind is absent" but "chatKind is still the stored private".
+    for (const call of mocks.patchConversation.mock.calls) {
+      const patched = call[0].patch?.metadata
+      if (patched && 'chatKind' in patched) expect(patched.chatKind).toBe('private')
+    }
+  })
+
+  test('a cold cache never widens group acceptance', async () => {
+    const response = await POST(domRequest({ chatKind: 'group' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('a cold-cache event still needs its exact attested route', async () => {
+    const response = await POST(domRequest({ chatKind: 'unknown', domRoute: attestedRoute({ verified: false }) }))
+
+    expect(response.status).toBe(409)
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('resolves the production topology under a cold cache', async () => {
+    // the shape that failed production: the Chat links the chat-key identity, the peer is a
+    // sibling identity of the same Contact, and the scraper reported no chat kind at all.
+    expect(chat.contactIdentityId).toBe(DOM_CHATKEY_IDENTITY)
+    expect(chat.contactIdentityId).not.toBe(DOM_PEER_IDENTITY)
+    expect(chat.metadata.senderId).toBe(DOM_PEER)
+
+    await expectBound(await POST(domRequest({ chatKind: 'unknown' })))
+
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+  })
+
+  test('replays a cold-cache event exactly once and does not re-prove it', async () => {
+    await expectBound(await POST(domRequest({ chatKind: 'unknown' })))
+    mocks.resolvePeerIdentity.mockClear()
+    mocks.upsertMessage.mockClear()
+    mocks.messageFindUnique.mockResolvedValue({ id: 'message-dom-1', chatId: 'chat-c4', externalId: DOM_EXTERNAL_ID, chat })
+
+    const replay = await POST(domRequest({ chatKind: 'unknown' }))
+
+    expect(replay.status).toBe(200)
+    await expect(replay.json()).resolves.toMatchObject({ deduped: true, messageId: 'message-dom-1' })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
   })
 
   test('rejects an unstamped legacy chat that claims the same peer', async () => {
