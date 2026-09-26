@@ -133,6 +133,9 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
             MOBILE_PUSH_FCM_CLIENT_EMAIL: 'push@yoko-acceptance.iam.gserviceaccount.com',
             MOBILE_PUSH_FCM_PRIVATE_KEY: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
             MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: base,
+            // The stand-in is a capability this suite asks for by name; nothing
+            // about the runtime grants it implicitly any more.
+            MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: 'true',
         })
         // Capture everything the process writes, to prove no token leaks into logs.
         for (const stream of [process.stdout, process.stderr]) {
