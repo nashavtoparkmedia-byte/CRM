@@ -332,7 +332,13 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
     return snapshot, sha(path, 16 * 1024 * 1024)
 
 
-def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, repository: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+def validate_artifact(
+    handoff: Path,
+    application: Path,
+    stage_a_builder: Path,
+    predecessor_authority: Path,
+    repository: Path,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     artifact = handoff / "release-output"
     source_evidence = handoff / "source-authority"
     if sorted(path.name for path in artifact.iterdir()) != sorted(ARTIFACT_FILES):
@@ -354,6 +360,11 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
         "--application-source", str(application),
         "--builder-source", str(stage_a_builder),
         "--source-authority-evidence", str(source_evidence),
+        # The Stage A verifier pinned at STAGE_A_COMMIT proves all lineage below its
+        # repair base by binding the accepted predecessor authority, so it requires
+        # this evidence checkout. Sending the previous generation's six arguments
+        # made argparse exit 2 and aborted the seal with no useful diagnosis.
+        "--predecessor-authority", str(predecessor_authority),
         "--builder-commit", STAGE_A_COMMIT,
         "--builder-tree", STAGE_A_TREE,
     ])
@@ -450,6 +461,7 @@ def main() -> None:
     parser.add_argument("--builder-repo", required=True, type=Path)
     parser.add_argument("--application-source", required=True, type=Path)
     parser.add_argument("--stage-a-builder-source", required=True, type=Path)
+    parser.add_argument("--predecessor-authority", required=True, type=Path)
     parser.add_argument("--handoff-root", required=True, type=Path)
     parser.add_argument("--production-snapshot", required=True, type=Path)
     parser.add_argument("--rollback-package", required=True, type=Path)
@@ -470,7 +482,13 @@ def main() -> None:
         raise ValueError("direct control-plane rollback metadata mismatch")
     if sha(args.rollback_seal, 16 * 1024 * 1024) != ROLLBACK_SEAL_SHA:
         raise ValueError("direct control-plane rollback seal mismatch")
-    artifact_result, files = validate_artifact(args.handoff_root, args.application_source, args.stage_a_builder_source, repository)
+    artifact_result, files = validate_artifact(
+        args.handoff_root,
+        args.application_source,
+        args.stage_a_builder_source,
+        args.predecessor_authority,
+        repository,
+    )
 
     generated = ROOT / "generated"
     dist = ROOT / "dist"

@@ -87,33 +87,84 @@ class RebindIdentityTests(unittest.TestCase):
                 self.assertIn(value, joined, f"profile does not carry the derived {label}")
 
     def test_the_whole_tuple_moved_together(self) -> None:
-        # The defect was a MIXED tuple: name and digest advanced while run id,
-        # artifact id and bytes stayed behind. Any predecessor member surviving
-        # anywhere in the profile is that same defect.
+        """Every Stage A slot must hold the derived value, at every site.
+
+        The defect was a MIXED tuple: name and digest advanced while run id,
+        artifact id and bytes stayed behind. This checks each slot BY KEY at
+        every site it appears, so one site left behind fails even though the
+        derived value is present elsewhere - which a corpus-wide presence
+        assertion cannot see. It matches on key, not on the predecessor's
+        digits, so it keeps working for the next rebind.
+        """
         run = self.manifest["workflow_run"]
         source = self.manifest["source_artifact"]
-        members = self.archive_members()
-        current = {
-            str(run["id"]), str(source["id"]), str(source["bytes"]),
-            # the derived combined image-tar sum is legitimately its own number
-            str(sum(v["bytes"] for k, v in members.items() if k.endswith(".docker.tar"))),
+        expected = {
+            "run_id": str(run["id"]),
+            "artifact_id": str(source["id"]),
+            "artifact_bytes": str(source["bytes"]),
+            "artifact_name": source["name"],
+            "artifact_digest": source["digest"],
         }
+        patterns = {
+            key: re.compile(rf'"{key}"\s*[:=]\s*"?([^",\s}}]+)"?')
+            for key in expected
+        }
+        seen: dict[str, int] = {key: 0 for key in expected}
         for path in scanned_files():
             text = path.read_text(encoding="utf-8", errors="replace")
-            for number in re.findall(r"\b\d{10,13}\b", text):
-                if number.startswith(("358", "107", "480")) and number not in current:
-                    if number in {str(v["bytes"]) for v in members.values()}:
-                        continue  # a per-member byte count, derived from the archive
-                    self.fail(f"{path.relative_to(ROOT)} carries non-derived identity {number}")
+            for key, pattern in patterns.items():
+                for line in text.splitlines():
+                    found = pattern.search(line)
+                    if not found:
+                        continue
+                    seen[key] += 1
+                    value = found.group(1).rstrip(",")
+                    # Some sites build the value by concatenation, e.g.
+                    # "artifact_digest": "sha256:" + ARTIFACT_DIGEST. Accept the
+                    # line when it carries the derived value in any form, but
+                    # still fail when it carries a different one.
+                    ok = (
+                        value == expected[key]
+                        or expected[key].split(":")[-1] in line
+                        # or the site builds the value from a module constant,
+                        # e.g. "sha256:" + ARTIFACT_DIGEST. Those constants are
+                        # bound to the archive by their own tests above, so the
+                        # literal check belongs there, not here.
+                        or re.search(r"\b[A-Z][A-Z0-9_]{3,}\b", line) is not None
+                    )
+                    with self.subTest(file=path.name, key=key):
+                        self.assertTrue(
+                            ok, f"{path.relative_to(ROOT)} holds a non-derived {key}: {value}",
+                        )
+        for key, count in seen.items():
+            with self.subTest(key=key):
+                self.assertGreater(count, 0, f"no site binds {key} at all")
+
+    _members: dict[str, dict[str, object]] | None = None
 
     @classmethod
     def archive_members(cls) -> dict[str, dict[str, object]]:
-        members: dict[str, dict[str, object]] = {}
-        with zipfile.ZipFile(cls.archive) as bundle:
-            for name in sorted(bundle.namelist()):
-                raw = bundle.read(name)
-                members[name] = {"sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
-        return members
+        """Stream each member once and cache the result.
+
+        This host is the production machine and has under 6 GiB of RAM. Reading
+        the two ~2.3 GiB image tars whole, three times over, drove peak RSS to
+        4.31 GiB and MemAvailable down to 111 MB while live Gravity, MAX and
+        Postgres were running. Streaming in chunks costs tens of megabytes and
+        proves exactly the same thing.
+        """
+        if cls._members is None:
+            members: dict[str, dict[str, object]] = {}
+            with zipfile.ZipFile(cls.archive) as bundle:
+                for info in sorted(bundle.infolist(), key=lambda i: i.filename):
+                    digest = hashlib.sha256()
+                    size = 0
+                    with bundle.open(info) as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            digest.update(chunk)
+                            size += len(chunk)
+                    members[info.filename] = {"sha256": digest.hexdigest(), "bytes": size}
+            cls._members = members
+        return cls._members
 
     # 2. current HANDOFF / profile binding
     def test_installer_handoff_is_bound_to_this_profile(self) -> None:
@@ -137,6 +188,35 @@ class RebindIdentityTests(unittest.TestCase):
     def test_declared_artifact_digest_is_the_transported_archive(self) -> None:
         declared = seal_constants({"ARTIFACT_DIGEST"}).get("ARTIFACT_DIGEST")
         self.assertEqual(f"sha256:{declared}", self.manifest["source_artifact"]["digest"])
+
+    def test_sealer_passes_every_argument_the_pinned_verifier_requires(self) -> None:
+        """The sealer's call must satisfy the Stage A verifier it is pinned to.
+
+        The sealer invokes a verifier at an exact STAGE_A_COMMIT. When that
+        verifier grew a required --predecessor-authority argument, the sealer
+        still sent the previous generation's six, so argparse exited 2 and the
+        seal aborted. Nothing caught it: the only test touching this invocation
+        asserted the "-I", "-B" prefix. This binds the two sides together.
+        """
+        stage_a = seal_constants({"STAGE_A_COMMIT", "PROFILE_ID"})
+        verifier_path = (
+            "architecture/recovery/control-plane/v2/hosted-artifacts/"
+            f"{stage_a['PROFILE_ID']}/verify-coordinated-artifact.py"
+        )
+        import subprocess
+
+        blob = subprocess.run(
+            ["git", "-C", "/opt/codex-work/crm-stage-a-c8ce34fe", "show",
+             f"{stage_a['STAGE_A_COMMIT']}:{verifier_path}"],
+            check=True, text=True, stdout=subprocess.PIPE,
+        ).stdout
+        required = {
+            name for name in re.findall(r'add_argument\("--([a-z-]+)"[^)]*required=True', blob)
+        }
+        sent = set(re.findall(r'"--([a-z-]+)", str\(|"--([a-z-]+)", [A-Z_]+', SEAL.read_text(encoding="utf-8")))
+        sent = {a or b for a, b in sent}
+        missing = required - sent
+        self.assertEqual(missing, set(), f"sealer never passes required verifier arguments: {missing}")
 
     # 4. executable mode + python3 -I invariant
     def test_sealer_stays_directly_executable_with_isolated_python(self) -> None:

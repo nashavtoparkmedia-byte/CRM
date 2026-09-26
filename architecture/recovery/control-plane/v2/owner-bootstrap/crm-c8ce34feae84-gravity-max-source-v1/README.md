@@ -51,8 +51,9 @@ read from runtime input and there is no list to extend.
   attaches one fixed source per service:
   `/var/lib/crm/release-staging/messaging-be6b8eb8/{gravity-mvp,max-web-scraper}.env`.
   The directory keeps the name it was staged under for the be6b8eb8 Messaging
-  release. The DOM-fallback repair fb9fb30d is that release plus the outbound
-  chatType fix plus this inbound repair, and needs the same single secret, so
+  release. The topology repair c8ce34fe is that release plus the outbound
+  chatType fix plus the inbound DOM-fallback repair plus this topology repair,
+  and needs the same single secret, so
   re-staging the material under a new name would be a production write with no
   benefit. It is a secret source path, not an
   artifact or image binding.
