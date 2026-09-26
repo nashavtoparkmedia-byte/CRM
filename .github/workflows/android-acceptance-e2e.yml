@@ -1140,13 +1140,29 @@ jobs:
           fi
 
           # What the tap actually delivered, from the shell's own record.
+          #
+          # The LAST push-open record, not the cold one. MainActivity is
+          # singleTask, so after process death the task is restored: onCreate
+          # legitimately logs act=null with no target, and the notification's
+          # Intent arrives afterwards at onNewIntent. Asserting on the cold line
+          # asserts against the one record that cannot carry the target here.
+          #
+          # And the proof is the target the shell built, never keys=.
+          # consumeDeepLinkUrl removes each extra from the Intent as it reads it,
+          # so that field is empty by construction. buildOpenChatUrl returns null
+          # unless the chat id is valid and appends msg only for a valid message
+          # id, so the origin, the /messages/open path and those two parameter
+          # names together are exactly the proof that both identifiers arrived
+          # and passed validation. safeUrl prints parameter names, never values,
+          # so nothing identifying reaches this log.
           timeout 60 "$ADB" logcat -d -s YokoShellDiag:E > "$RUNNER_TEMP/logcat-push-dead-shell.log" || true
-          start=$(grep -a "push-open cold" "$RUNNER_TEMP/logcat-push-dead-shell.log" | tail -1)
+          start=$(grep -a "push-open " "$RUNNER_TEMP/logcat-push-dead-shell.log" | tail -1)
           echo "::notice::process-dead start: $(printf '%s' "$start" | sed -e 's/.*YokoShellDiag: //' | head -c 200)"
-          printf '%s' "$start" | grep -q "tgt=(none)" \
-            && { echo "::error::the tap delivered no conversation to the shell"; exit 1; }
-          printf '%s' "$start" | grep -q "keys=CHAT_ID" \
-            || { echo "::error::the tap carried no conversation identifier"; exit 1; }
+          printf '%s' "$start" | grep -q "act=VIEW" \
+            || { echo "::error::the tap did not deliver ACTION_VIEW to the shell"; exit 1; }
+          printf '%s' "$start" | grep -qF "tgt=$EMULATOR_ORIGIN/messages/open?[chat,msg]" \
+            || { echo "::error::the tap delivered no conversation to the shell"; exit 1; }
+          echo "::notice::process-dead tap: ACTION_VIEW to $EMULATOR_ORIGIN/messages/open?[chat,msg]"
 
       - name: Collect logcat, screenshots and the shell's own diagnostics
         if: always()
