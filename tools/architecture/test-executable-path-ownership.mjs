@@ -253,6 +253,84 @@ rejects(
 )
 amendmentProbes.rebind_carries_exact_moving_fingerprints_and_a_decision = 'ENFORCED'
 
+// 16. REBIND-ONLY amendments. A change that moves only the BYTES of an already reviewed
+// surface moves no field of the triple - the inventory digest covers surface identity, and
+// a coverage record carries path, context, exclusion and lifecycle but no content hash -
+// so demanding a denominator movement would make such a change impossible to record at
+// all. It is admitted only when it carries nothing else, which is what keeps an unchanged
+// triple from smuggling an ownership change past the denominator rule. This relaxes the
+// denominator rule alone: binding a rebind to the reviewed assignment it extends, and to
+// the bytes actually on disk, belongs to the consuming validator, and the validator-level
+// negative probes in this file prove both of those rejections rather than assuming them.
+const chainOfMany = (...list) => ({
+  schema: 'yoko.crm.reviewed-executable-path-ownership-amendments.v1',
+  version: 1,
+  base: { decision_registry_path: REGISTRY_PATH, decision_registry_sha256: REGISTRY_DIGEST },
+  amendments: list,
+})
+const rebindOnlyAmendment = (overrides = {}) => chainOf({
+  ...baseAmendment(),
+  current: { ...historicalDecisions.current },
+  unassigned_tracked_surfaces: [],
+  invariants: { assignments_added: 0, assignments_removed: 0, lifecycle_changes: 0, functional_owner_changes: 0 },
+  ...overrides,
+})
+
+// 16.1 A valid rebind-only amendment resolves and moves the denominator nowhere.
+const rebindOnly = resolveProbe(rebindOnlyAmendment())
+assert.deepEqual(rebindOnly.current, historicalDecisions.current, 'a rebind-only amendment must leave the reviewed denominator exactly where it was')
+assert.equal(rebindOnly.rebinds.get('a/route.ts')?.previous_source_sha256, hash('f6'))
+assert.equal(rebindOnly.rebinds.get('a/route.ts')?.current_source_sha256, hash('07'))
+assert.equal(rebindOnly.unassigned.size, 0, 'a rebind-only amendment carries no unassigned surface')
+amendmentProbes.rebind_only_amendment_keeps_the_denominator = 'ACCEPTED'
+
+// 16.2 An unchanged triple with nothing to rebind is still the no-op bypass the rule refuses.
+rejects(rebindOnlyAmendment({ source_hash_rebinds: [] }), /does not move the reviewed denominator/u, 'an amendment that neither moves the denominator nor rebinds anything must fail')
+
+// 16.3 The fingerprint chain still binds: a later rebind must start from exactly the
+// fingerprint the earlier amendment approved, even when the denominator does not move.
+rejects(
+  chainOfMany(baseAmendment(), {
+    ...baseAmendment(),
+    amendment_id: 'probe-amendment-second',
+    predecessor: { ...amendedCurrent },
+    current: { ...amendedCurrent },
+    unassigned_tracked_surfaces: [],
+    invariants: { assignments_added: 0 },
+    source_hash_rebinds: [{ path: 'a/route.ts', previous_source_sha256: hash('99'), current_source_sha256: hash('aa'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }],
+  }),
+  /duplicate reviewed executable ownership amendment rebind/u,
+  'a rebind-only amendment must extend the fingerprint chain the earlier amendment approved',
+)
+
+// 16.4/16.5 The fingerprint shape rules are untouched by the relaxation.
+const rebindOnlyWith = (rebind) => rebindOnlyAmendment({
+  source_hash_rebinds: [{ path: 'a/route.ts', previous_source_sha256: hash('f6'), current_source_sha256: hash('07'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale, ...rebind }],
+})
+rejects(rebindOnlyWith({ previous_source_sha256: 'not-a-digest' }), /rebind invalid/u, 'a malformed previous fingerprint must still fail in a rebind-only amendment')
+rejects(rebindOnlyWith({ current_source_sha256: hash('f6') }), /rebind invalid/u, 'a rebind-only amendment whose bytes did not move must fail')
+
+// 16.6 An unchanged triple may not also change the tracked surface set.
+rejects(
+  rebindOnlyAmendment({ unassigned_tracked_surfaces: [{ path: 'a/route.test.ts', lifecycle: 'TEST', review_decision: 'APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT', review_rationale: rationale }] }),
+  /may not change the tracked surface set/u,
+  'a rebind-only amendment may not change the tracked surface set',
+)
+
+// 16.7 Every other declared delta must be zero, and declaring them is mandatory.
+rejects(rebindOnlyAmendment({ invariants: { assignments_added: 1 } }), /must declare every other delta zero/u, 'a rebind-only amendment carrying a non-zero delta must fail')
+rejects(rebindOnlyAmendment({ invariants: undefined }), /must declare its invariants/u, 'a rebind-only amendment must declare its invariants')
+rejects(rebindOnlyAmendment({ invariants: {} }), /must declare every other delta zero/u, 'a rebind-only amendment must declare at least one delta')
+
+// 16.9 A rebind-only amendment may not also compose accepted authorities.
+rejects(rebindOnlyAmendment({ amendment_kind: 'ACCEPTED_AUTHORITY_MERGE_COMPOSITION' }), /may not compose authorities/u, 'a rebind-only amendment may not compose authorities')
+
+// 16.8 A denominator-moving amendment is unaffected by the relaxation.
+const stillMoving = resolveProbe(chainOf(baseAmendment()))
+assert.deepEqual(stillMoving.current, amendedCurrent, 'a denominator-moving amendment must resolve exactly as it did before')
+assert.equal(stillMoving.rebinds.get('a/route.ts')?.current_source_sha256, hash('07'))
+amendmentProbes.denominator_moving_amendment_unaffected = 'ACCEPTED'
+
 // 5/6/7/8/14. An amendment may not carry reviewed ownership semantics at all.
 for (const forbidden of ['assignments', 'exact_inventory_changes', 'governed_exclusions', 'lifecycle_changes', 'functional_owner_changes']) {
   rejects(chainOf({ ...baseAmendment(), [forbidden]: [{ path: 'a/route.ts' }] }), /may not carry reviewed ownership semantics/u, `amendment must not carry ${forbidden}`)
@@ -287,8 +365,12 @@ amendmentProbes.historical_reviewer_restatement = 'REJECTED'
 
 // 15. An amendment that does not actually move the denominator is refused, so
 // the mechanism cannot be used as a silent bypass of ownership coverage.
+// A no-op amendment is one that moves the denominator nowhere AND rebinds nothing: with
+// nothing to rebind there is no lawful reason for it to exist, which is the case this
+// probe pins. An unchanged triple that DOES carry a rebind is the separate, bounded
+// rebind-only shape proved above, and it is constrained to carry nothing else.
 rejects(
-  chainOf({ ...baseAmendment(), current: { ...historicalDecisions.current } }),
+  chainOf({ ...baseAmendment(), current: { ...historicalDecisions.current }, source_hash_rebinds: [], unassigned_tracked_surfaces: [] }),
   /does not move the reviewed denominator/u,
   'amendment must not be usable as a no-op coverage bypass',
 )
