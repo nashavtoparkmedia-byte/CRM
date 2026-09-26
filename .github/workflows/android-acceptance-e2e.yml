@@ -663,6 +663,12 @@ jobs:
           fi
           echo "phase-1 CRM stopped"
 
+      # The capability the loopback override needs is asked for by name below.
+      # It used to be implied by NODE_ENV, which a built server reports as
+      # production whatever it is handed, so the override could never be used
+      # here at all - the first attempt at this phase proved it, refusing every
+      # delivery while the rest of the chain worked perfectly.
+      #
       # The stand-in already exists and is the CRM's own FCM contract test
       # double: it verifies the RS256 service-account assertion, issues its own
       # access token, and accepts only the exact data-only send shape a CRM push
@@ -709,6 +715,7 @@ jobs:
             MOBILE_PUSH_FCM_CLIENT_EMAIL="acceptance@yoko-acceptance.iam.gserviceaccount.com" \
             MOBILE_PUSH_FCM_PRIVATE_KEY="$FCM_KEY" \
             MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE="http://127.0.0.1:3906" \
+            MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE=true \
             npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm-push.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/crm-push.pid"
           for _ in $(seq 1 60); do
