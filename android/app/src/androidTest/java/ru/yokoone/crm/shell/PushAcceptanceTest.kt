@@ -214,9 +214,23 @@ class PushAcceptanceTest {
         val start = startDiagnostics()
         assertTrue("the tap started nothing; $start", started)
         assertTrue("the tap did not deliver ACTION_VIEW; $start", start.contains("act=VIEW"))
-        assertTrue("the tap carried no chat identifier; $start", start.contains("CHAT_ID"))
-        assertTrue("the tap carried no message identifier; $start", start.contains("MESSAGE_ID"))
-        assertTrue("the tap delivered no target URL; $start", !start.contains("tgt=(none)"))
+
+        // Read the identifiers from the target the shell built, not from the key
+        // set. consumeDeepLinkUrl removes each extra from the Intent as it reads
+        // it, so by the time the start is logged the key set is empty by
+        // construction - a fact about the product, not a missing identifier.
+        // buildOpenChatUrl returns null without a valid chat id and omits msg
+        // without a valid message id, so both parameter names appearing in the
+        // query is exactly the proof that both extras arrived and passed
+        // validation. safeUrl prints names only, never values.
+        //
+        // The LAST target, not the first: restoring the task logs a cold start
+        // with no target before the Intent arrives at onNewIntent.
+        val target = Regex("tgt=(\\S+)").findAll(start).lastOrNull()?.groupValues?.get(1).orEmpty()
+        assertTrue("the tap delivered no target; $start", target.isNotEmpty() && target != "(none)")
+        assertTrue("the target is not the server-side open gate; target=$target", target.contains("/messages/open?"))
+        assertTrue("the target carries no chat identifier; target=$target", target.contains("chat"))
+        assertTrue("the target carries no message identifier; target=$target", target.contains("msg"))
 
         // The tap created an Activity, so the hook ran. It must have declined.
         diag("push-clean post-tap aid-posts=${aidPostCount()} declined=${aidSuppressedCount()}")
