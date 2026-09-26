@@ -116,9 +116,11 @@ class MainActivity : AppCompatActivity() {
         // the same message as a preview - so the start has to say for itself
         // whether it carried a target. safeUrl keeps the identifier out.
         ShellDiagnostics.write(
-            "push-open cold action=${intent?.action} " +
-                "target=${ShellDiagnostics.safeUrl(fromNotification)} " +
-                "restored=${savedInstanceState != null}",
+            "YOKO_NET fail push-open cold action=${intent?.action}" +
+                " cats=${intent?.categories?.joinToString(",") ?: "none"}" +
+                " keys=${intent?.extras?.keySet()?.joinToString(",") ?: "none"}" +
+                " target=${ShellDiagnostics.safeUrl(fromNotification)}" +
+                " restored=${savedInstanceState != null}",
         )
         when {
             // A notification tap always wins over restored state: the operator
@@ -144,7 +146,9 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         val target = consumeDeepLinkUrl(intent)
         ShellDiagnostics.write(
-            "push-open new action=${intent.action} target=${ShellDiagnostics.safeUrl(target)}",
+            "YOKO_NET fail push-open new action=${intent.action}" +
+                " keys=${intent.extras?.keySet()?.joinToString(",") ?: "none"}" +
+                " target=${ShellDiagnostics.safeUrl(target)}",
         )
         if (target == null) return
         load(target)

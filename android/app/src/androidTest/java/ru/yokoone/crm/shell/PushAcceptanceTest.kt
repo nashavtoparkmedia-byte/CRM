@@ -198,6 +198,15 @@ class PushAcceptanceTest {
         waitUntil(NOTIFICATION_TIMEOUT) { outcomes() != "no-outcome-logged" }
         trace("injected ${outcomes()}")
 
+        // Every other scenario launches the app first, which wakes the device on
+        // the way. The scenario that runs after the process was killed does not,
+        // so it is the only one that can arrive at a dark or locked screen -
+        // where openNotification finds nothing and the object matched a moment
+        // later is whatever is behind the shade.
+        device.wakeUp()
+        runCatching { shell("wm dismiss-keyguard") }
+        device.waitForIdle()
+
         device.openNotification()
         var posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
         if (posted == null) {
@@ -210,7 +219,23 @@ class PushAcceptanceTest {
             "no push notification appeared; ${diagnostics()}",
             posted,
         )
-        posted!!.click()
+        // Name what is about to be clicked. A scenario that launches the app by
+        // some other route - a stray tap on the launcher, a notification owned by
+        // something else - looks exactly like a scenario that tapped the push and
+        // got nowhere, and only the owner of the clicked object separates them.
+        ShellDiagnostics.write(
+            "YOKO_NET fail push-tap owner=${posted!!.applicationPackage}" +
+                " screenOn=${device.isScreenOn}" +
+                " at=${posted.visibleBounds.flattenToString()}",
+        )
+        posted.click()
+    }
+
+    /** One shell command through the instrumentation, output discarded. */
+    private fun shell(command: String) {
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand(command)
+            .close()
     }
 
     /**
@@ -277,7 +302,7 @@ class PushAcceptanceTest {
      */
     private fun startDiagnostics(): String = deviceLog()
         .lineSequence()
-        .filter { it.contains("push-open") }
+        .filter { it.contains("push-open") || it.contains("push-tap") }
         .toList()
         .takeLast(3)
         .joinToString(" | ")
