@@ -529,6 +529,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 8
       }
+    },
+    {
+      "amendment_id": "contact-identity-m2a2-max1b0a-ws-generation-observation-20260926",
+      "reviewed_at": "2026-09-26T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A2_MAX1B0A_CANDIDATE_OWNERSHIP_REVIEW_20260926",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A2_MAX1B0A_WS_GENERATION_OBSERVABILITY_IMPLEMENTATION",
+      "reason": "M2A2-MAX1B0A adds exactly three tracked executable surfaces and changes no existing ownership. Two sit under the max_channel owned path max-web-scraper: the dependency-free decision module max-web-scraper/transport/ws-generation-observation.js and its proof max-web-scraper/test/max-ws-generation-observation.test.js, both classified by the existing inventory rules as APPLICATION_RUNTIME and TEST with no registry entry required. One is the boundary control tools/architecture/check-max-ws-generation-observation-boundary.mjs, placed by the established architecture-tooling cohort precedent and classified in the lifecycle registry as an ACTIVE OPERATIONAL_SCRIPT owned by architecture_recovery, which leaves no unreviewed operational surface. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The reviewed inventory fingerprint moves because the registry now classifies that control, and the denominator, the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2543,
+        "tracked_inventory_sha256": "6639910c9efb68d3c4af6c0af9560457bf52a3f0d57fb4e769e9ed7cd3dc402c",
+        "coverage_sha256": "cfc6af0efb879b7d022c3506980e8acc8c1eb3e5e80ec90db2c130733399c1a6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2546,
+        "tracked_inventory_sha256": "dcd527999d58b35334dbf6b2fbedc3f8354efe7f1007f40ce3bc4a4db33743e1",
+        "coverage_sha256": "d224c13a0c9e3982eac417f1b30f0d023f1201075778fbd1cd752e3c21e190cb"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 3
+      }
     }
   ]
 }
