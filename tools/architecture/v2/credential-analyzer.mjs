@@ -118,6 +118,16 @@ export const CREDENTIAL_ENTITY_POLICIES = Object.freeze([
     // The primary key is the bearer session token in the legacy worker ABI.
     sensitive_fields: ['id'],
   },
+  {
+    id: 'identity-access.mobile-device-registration.v1',
+    entity: 'MobileDeviceRegistration',
+    aliases: ['MobileDeviceRegistration', 'mobileDeviceRegistration'],
+    owner_context: 'identity_access',
+    // Mobile Push v1: the device's provider token. It addresses one app
+    // install and must never be logged, returned to a page, or copied into an
+    // outbox payload; only the send-time resolution reads it.
+    sensitive_fields: ['fcmToken'],
+  },
 ])
 
 export function parsePrismaRelations(schemaText) {

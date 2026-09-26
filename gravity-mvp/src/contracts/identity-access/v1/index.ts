@@ -40,3 +40,19 @@ export type {
     CrmUserQueryV1,
     CrmUserResultV1,
 } from './crm-user-query'
+
+export {
+    isMobilePushTokenV1,
+    MobilePushRegistrationContractError,
+    parseRegisterMobilePushDeviceBodyV1,
+    REGISTER_MOBILE_PUSH_DEVICE_COMMAND_V1,
+} from './mobile-push-registration'
+
+export type {
+    MobilePushEligibleDeviceV1,
+    MobilePushRegistrationFailureCodeV1,
+    MobilePushRegistrationResultV1,
+    MobilePushTargetResolutionV1,
+    MobilePushTargetSkipReasonV1,
+    RegisterMobilePushDeviceBodyV1,
+} from './mobile-push-registration'

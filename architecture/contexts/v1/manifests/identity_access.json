@@ -40,7 +40,8 @@
   "internal_surface": [
     "gravity-mvp/src/lib/users",
     "gravity-mvp/src/app/login",
-    "gravity-mvp/src/app/users"
+    "gravity-mvp/src/app/users",
+    "gravity-mvp/src/app/api/mobile"
   ],
   "owned_data": [
     {
@@ -52,6 +53,7 @@
     }
   ],
   "owned_paths": [
+    "gravity-mvp/src/app/api/mobile",
     "gravity-mvp/src/app/login",
     "gravity-mvp/src/app/users",
     "gravity-mvp/src/contracts/identity-access",

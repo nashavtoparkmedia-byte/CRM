@@ -1,7 +1,12 @@
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { callingOutboxPublishersV1 } from '@/modules/calling/public/v1'
+import { messagingOutboxPublishersV1 } from '@/modules/messaging/public/v1'
 import { prismaOutboxStoreV1 } from '@/infrastructure/outbox/prisma-outbox-store'
-import { normalizeOutboxErrorV1, publishOutboxBatchV1 } from '@/infrastructure/outbox/v1'
+import {
+    normalizeOutboxErrorV1,
+    publishOutboxBatchV1,
+    type OutboxPublisherRegistryV1,
+} from '@/infrastructure/outbox/v1'
 
 const configuredInterval = Number(process.env.DOMAIN_OUTBOX_POLL_MS ?? 2_000)
 const OUTBOX_POLL_MS = Number.isFinite(configuredInterval)
@@ -10,10 +15,32 @@ const OUTBOX_POLL_MS = Number.isFinite(configuredInterval)
 
 let tickRunning = false
 
+/**
+ * Every declared outbox flow's consumers, one handler per event type. The
+ * Calling flows are unchanged; Messaging adds the Mobile Push v1 flows. An
+ * event type claimed by two contexts would silently shadow a handler, so the
+ * composition refuses to start instead.
+ */
+function composeDomainOutboxPublishersV1(...registries: OutboxPublisherRegistryV1[]): OutboxPublisherRegistryV1 {
+    const composed: Record<string, OutboxPublisherRegistryV1[string]> = {}
+    for (const registry of registries) {
+        for (const [eventType, publisher] of Object.entries(registry)) {
+            if (Object.hasOwn(composed, eventType)) throw new Error(`DUPLICATE_OUTBOX_PUBLISHER:${eventType}`)
+            composed[eventType] = publisher
+        }
+    }
+    return Object.freeze(composed)
+}
+
+const domainOutboxPublishersV1 = composeDomainOutboxPublishersV1(
+    callingOutboxPublishersV1,
+    messagingOutboxPublishersV1,
+)
+
 export async function runDomainOutboxPublisherOnceV1() {
     return publishOutboxBatchV1({
         store: prismaOutboxStoreV1,
-        publishers: callingOutboxPublishersV1,
+        publishers: domainOutboxPublishersV1,
     })
 }
 

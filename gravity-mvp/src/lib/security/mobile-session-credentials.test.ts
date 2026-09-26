@@ -71,7 +71,12 @@ describe('mobile session token', () => {
             runtimeOperatorId: OPERATOR,
             deviceId: DEVICE,
             expiresAtSeconds: Math.floor(NOW / 1000) + MOBILE_SESSION_TTL_SECONDS,
+            // Server-issued instance id: this session, not just these facts.
+            sessionInstanceId: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
         })
+        // Two sessions minted from identical facts are still different sessions.
+        const second = verifyMobileSession(issueMobileSession(OPERATOR, DEVICE, dedicatedEnv, NOW), dedicatedEnv, NOW)
+        expect(second!.sessionInstanceId).not.toBe(principal!.sessionInstanceId)
     })
 
     test('expires, and does not accept a session minted in the future', () => {

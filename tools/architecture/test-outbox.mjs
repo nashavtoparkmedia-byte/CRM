@@ -17,6 +17,9 @@ const sources = [
     'gravity-mvp/src/modules/calling/internal/recording-ready.ts',
     'gravity-mvp/src/infrastructure/outbox/v1/outbox-publisher.ts',
     'gravity-mvp/src/infrastructure/outbox/v1/index.ts',
+    'gravity-mvp/src/contracts/messaging/v1/inbound-message-notification-requested-event.ts',
+    'gravity-mvp/src/contracts/messaging/v1/mobile-push-delivery-requested-event.ts',
+    'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-dispatch.ts',
 ].map((value) => path.join(root, value))
 
 const compile = spawnSync(process.execPath, [
@@ -42,6 +45,9 @@ const require = createRequire(import.meta.url)
 const contracts = require(path.join(output, 'contracts/calling/v1/index.js'))
 const recording = require(path.join(output, 'modules/calling/internal/recording-ready.js'))
 const outbox = require(path.join(output, 'infrastructure/outbox/v1/index.js'))
+const messagingIntent = require(path.join(output, 'contracts/messaging/v1/inbound-message-notification-requested-event.js'))
+const messagingDelivery = require(path.join(output, 'contracts/messaging/v1/mobile-push-delivery-requested-event.js'))
+const messagingDispatch = require(path.join(output, 'modules/messaging/internal/mobile-push/mobile-push-dispatch.js'))
 const checks = []
 
 async function check(name, action) {
@@ -258,6 +264,74 @@ try {
         const result = await outbox.publishOutboxBatchV1({ store, publishers: {}, now: fixedNow })
         assert.equal(result.recovered, 3)
         assert.equal(result.deadLetter, 1)
+    })
+
+    // ── Mobile Push v1 (MOBILE-PUSH-V1-P1): Messaging flows ──────────────
+    const pushToken = 'outbox-negative-token_0123456789:ABCDEFGHIJ'
+    const binding = 'a'.repeat(64)
+    const intentEvent = messagingIntent.makeInboundMessageNotificationRequestedEventV1({
+        messageId: 'msg-1', chatId: 'chat-1', channel: 'max', occurredAt: '2026-09-22T12:00:00.000Z',
+    })
+    const deliveryEvent = messagingDelivery.makeMobilePushDeliveryRequestedEventV1({
+        messageId: 'msg-1', chatId: 'chat-1', channel: 'max', registrationId: 'reg-1', sessionBindingId: binding,
+        occurredAt: '2026-09-22T12:00:00.000Z',
+    })
+    await check('Messaging intent and delivery identities are deterministic', async () => {
+        assert.equal(intentEvent.eventId, 'messaging.InboundMessageNotificationRequested.v1:msg-1')
+        assert.equal(deliveryEvent.eventId, 'messaging.MobilePushDeliveryRequested.v1:msg-1:reg-1')
+        assert.equal(messagingIntent.makeInboundMessageNotificationRequestedEventV1({
+            messageId: 'msg-1', chatId: 'chat-1', channel: 'max', occurredAt: '2026-09-23T00:00:00.000Z',
+        }).eventId, intentEvent.eventId)
+    })
+    await check('Messaging events refuse unknown fields, a token or content', async () => {
+        for (const extra of [{ token: pushToken }, { fcmToken: pushToken }, { content: 'text' }]) {
+            assert.throws(() => messagingIntent.parseInboundMessageNotificationRequestedEventV1({ ...intentEvent, data: { ...intentEvent.data, ...extra } }))
+            assert.throws(() => messagingDelivery.parseMobilePushDeliveryRequestedEventV1({ ...deliveryEvent, data: { ...deliveryEvent.data, ...extra } }))
+        }
+    })
+    await check('Messaging event version and identity cannot silently change', async () => {
+        assert.throws(() => messagingIntent.parseInboundMessageNotificationRequestedEventV1({ ...intentEvent, eventVersion: 2 }))
+        assert.throws(() => messagingDelivery.parseMobilePushDeliveryRequestedEventV1({ ...deliveryEvent, eventId: `${deliveryEvent.eventId}x` }))
+        assert.throws(() => messagingDelivery.parseMobilePushDeliveryRequestedEventV1({ ...deliveryEvent, data: { ...deliveryEvent.data, sessionBindingId: 'nope' } }))
+    })
+    const pushDispatch = (overrides = {}, outcome = { kind: 'delivered' }) => {
+        const sent = []
+        const dispatch = messagingDispatch.createMobilePushDispatchV1({
+            isEnabled: () => true,
+            now: () => new Date('2026-09-22T12:00:00.000Z'),
+            findChat: async (chatId) => ({ id: chatId, chatType: 'private' }),
+            listEligibleDevices: async () => [],
+            appendDeliveryEvents: async (events) => events.length,
+            resolveTarget: async () => ({ kind: 'send', token: pushToken }),
+            markTokenRejected: async () => ({ result: 'cleared' }),
+            revokeSenderMismatch: async () => ({ result: 'revoked' }),
+            transport: () => ({ ok: true, transport: { send: async (message) => { sent.push(message); return outcome } } }),
+            log: () => undefined,
+            ...overrides,
+        })
+        return { dispatch, sent }
+    }
+    await check('Messaging delivery under a stale session binding is skipped, never sent', async () => {
+        const { dispatch, sent } = pushDispatch({ resolveTarget: async () => ({ kind: 'skip', reason: 'stale_session' }) })
+        await dispatch.handleDeliveryRequested(deliveryEvent)
+        assert.equal(sent.length, 0)
+    })
+    await check('Messaging delivery awaiting a token retries instead of publishing', async () => {
+        const { dispatch } = pushDispatch({ resolveTarget: async () => ({ kind: 'await_token' }) })
+        await assert.rejects(dispatch.handleDeliveryRequested(deliveryEvent), /MOBILE_PUSH_AWAITING_TOKEN/)
+    })
+    await check('Messaging enabled-but-misconfigured is a visible retry, not a success', async () => {
+        const { dispatch } = pushDispatch({ transport: () => ({ ok: false, problem: 'missing_private_key' }) })
+        await assert.rejects(dispatch.handleDeliveryRequested(deliveryEvent), /MOBILE_PUSH_TRANSPORT_MISCONFIGURED/)
+    })
+    await check('Messaging delivery errors never carry the device token', async () => {
+        for (const outcome of [{ kind: 'token_unregistered' }, { kind: 'retryable', code: 'UNAVAILABLE' }, { kind: 'terminal', code: 'INVALID_ARGUMENT' }]) {
+            const { dispatch } = pushDispatch({}, outcome)
+            const error = await dispatch.handleDeliveryRequested(deliveryEvent).then(() => null, (thrown) => thrown)
+            assert.ok(error)
+            assert.equal(String(error).includes(pushToken), false)
+            assert.equal(outbox.normalizeOutboxErrorV1(error).includes(pushToken), false)
+        }
     })
 
     process.stdout.write(JSON.stringify({ status: 'PASS', checks }, null, 2) + '\n')

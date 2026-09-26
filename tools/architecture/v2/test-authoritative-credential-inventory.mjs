@@ -152,7 +152,7 @@ const reviewedCrossDomainAttempt = {
     approved_architecture_path: 'owner capability',
   }],
 }
-const fields = { records: Array.from({ length: 14 }, (_, index) => ({ id: index })) }
+const fields = { records: Array.from({ length: 15 }, (_, index) => ({ id: index })) }
 const inventory = {
   schema: 'yoko.crm.whole-repository-credential-database-access.v2',
   summary: {
@@ -879,7 +879,7 @@ const runtimeContext = {
 }
 assert.equal(
   verifyRuntimeBoundaryReviews(runtimeBoundaryReview, runtimeBoundaryReview.records, runtimeContext).runtime_boundary_accesses,
-  7,
+  8,
 )
 const runtimeFixtureFiles = [...new Set(runtimeBoundaryReview.runtime_boundary_reviews.flatMap((review) => [
   ...review.source_modules.map((module) => module.path),
@@ -1040,7 +1040,7 @@ const acceptanceFixtureRecord = {
 }
 const acceptanceCredentialEntities = [
   'Account', 'AiAgentConfig', 'AiProviderSetting', 'ApiConnection', 'Bot', 'MaxConnection',
-  'MessagingConnection', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
+  'MessagingConnection', 'MobileDeviceRegistration', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
   'avito_app_settings', 'avito_auth_sessions', 'avito_auth_users', 'cookies',
 ]
 const acceptanceFields = { records: acceptanceCredentialEntities.map((entity) => ({ entity, sensitive_fields: ['token'] })) }
@@ -1462,4 +1462,4 @@ assert.throws(
   'controlled schema operation still refuses a non-migration surface',
 )
 
-process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 44 disposable acceptance database properties (40 fail-closed); 2 synthetic production-secret paths; 7 exact runtime-boundary accesses)\n')
+process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 44 disposable acceptance database properties (40 fail-closed); 2 synthetic production-secret paths; 8 exact runtime-boundary accesses)\n')
