@@ -750,7 +750,7 @@ jobs:
           timeout 60 "$ADB" logcat -c
           timeout 600 "$ADB" shell am instrument -w -r \
             -e class "$CLASS#test07_signInAndSeedThePushToken" \
-            -e pushToken "$PUSH_TOKEN" \
+            -e pushToken "'$PUSH_TOKEN'" \
             "$RUNNER" 2>&1 | tee "$out"
 
           if ! grep -q "OK (1 test)" "$out"; then
@@ -867,6 +867,12 @@ jobs:
           LOG="$RUNNER_TEMP/gradle-connected.log"
           failed=0
 
+          # Every -e value is quoted twice on purpose: adb shell hands the
+          # command to a shell on the device, which splits it again, so a value
+          # with spaces arrives as several arguments and am instrument reads the
+          # leftovers as a component and a user id. That is the "Invalid userId
+          # -2" these scenarios failed with three times, before either of them
+          # had started.
           for t in \
             test08_aPushInTheForegroundOpensTheExactConversation \
             test09_aPushWithTheAppInTheBackgroundOpensTheExactConversation
@@ -879,11 +885,11 @@ jobs:
             timeout 60 "$ADB" logcat -c
             timeout 600 "$ADB" shell am instrument -w -r \
               -e class "$CLASS#$t" \
-              -e chatId "$PUSH_CHAT_ID" \
-              -e messageId "$PUSH_MESSAGE_ID" \
-              -e channel "$PUSH_CHANNEL" \
-              -e inboundText "$INBOUND_TEXT" \
-              -e pushToken "$PUSH_TOKEN" \
+              -e chatId "'$PUSH_CHAT_ID'" \
+              -e messageId "'$PUSH_MESSAGE_ID'" \
+              -e channel "'$PUSH_CHANNEL'" \
+              -e inboundText "'$INBOUND_TEXT'" \
+              -e pushToken "'$PUSH_TOKEN'" \
               "$RUNNER" 2>&1 | tee -a "$LOG" > "$out"
 
             if grep -q "OK (1 test)" "$out"; then
@@ -1002,9 +1008,9 @@ jobs:
           out="$RUNNER_TEMP/scenario-test10.log"
           timeout 600 "$ADB" shell am instrument -w -r \
             -e class "$CLASS#test10_signInThenLeaveTheAppInTheBackground" \
-            -e chatId "$PUSH_CHAT_ID" -e messageId "$PUSH_MESSAGE_ID" \
-            -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
-            -e pushToken "$PUSH_TOKEN" \
+            -e chatId "'$PUSH_CHAT_ID'" -e messageId "'$PUSH_MESSAGE_ID'" \
+            -e channel "'$PUSH_CHANNEL'" -e inboundText "'$INBOUND_TEXT'" \
+            -e pushToken "'$PUSH_TOKEN'" \
             "$RUNNER" 2>&1 | tee "$out"
           if ! grep -q "OK (1 test)" "$out"; then
             grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
@@ -1061,9 +1067,9 @@ jobs:
           out="$RUNNER_TEMP/scenario-test11.log"
           timeout 600 "$ADB" shell am instrument -w -r \
             -e class "$CLASS#test11_aPushAfterProcessDeathOpensTheExactConversation" \
-            -e chatId "$PUSH_CHAT_ID" -e messageId "$PUSH_MESSAGE_ID" \
-            -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
-            -e pushToken "$PUSH_TOKEN" \
+            -e chatId "'$PUSH_CHAT_ID'" -e messageId "'$PUSH_MESSAGE_ID'" \
+            -e channel "'$PUSH_CHANNEL'" -e inboundText "'$INBOUND_TEXT'" \
+            -e pushToken "'$PUSH_TOKEN'" \
             "$RUNNER" 2>&1 | tee "$out"
           if ! grep -q "OK (1 test)" "$out"; then
             grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
