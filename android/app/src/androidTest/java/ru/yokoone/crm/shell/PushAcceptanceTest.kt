@@ -1,7 +1,7 @@
 package ru.yokoone.crm.shell
 
+import android.app.Notification
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -161,6 +161,10 @@ class PushAcceptanceTest {
         launchApp()
         signIn()
         assertMessengerOpen()
+        // The older scenarios are done with the acceptance aid by now, and it is
+        // ongoing, so it would otherwise sit in the shade through the push proof.
+        dismissAcceptanceAid("pre-kill")
+        assertOnlyExpectedNotifications("pre-kill", expectChatNotification = false)
         device.pressHome()
         SystemClock.sleep(SETTLE_MS)
     }
@@ -172,117 +176,137 @@ class PushAcceptanceTest {
      * session it signs into is the one test10 established.
      */
     /**
-     * DIAGNOSTIC ONLY, and deliberately not the accepted scenario.
-     *
-     * Authorized 2026-09-26 to answer one question and nothing else: does the
-     * notification that is actually on the device at this moment still carry the
-     * PendingIntent ChatNotifications built for it? The system tap is bypassed
-     * on purpose, so a pass here is NOT process-dead acceptance - it only says
-     * which side of the tap the fault is on. The user-tap scenario is restored
-     * once that is known.
+     * Runs after the workflow has killed the process and broadcast the payload
+     * into it, so the notification on screen was posted by a process that did not
+     * exist a moment earlier. Nothing is cleared before this scenario: the session
+     * it taps into is the one test10 established.
      */
     @Test
     fun test11_aPushAfterProcessDeathOpensTheExactConversation() {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext
-        val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val active: Array<StatusBarNotification> = manager.activeNotifications
-
-        // Identity, not text. Matching on words is what let a chat-list preview
-        // pass for a conversation earlier in this milestone.
-        val wantedId = ChatNotifications.notificationIdFor(chatId)
-        val mine = active.filter {
-            it.id == wantedId && it.notification.channelId == ChatNotifications.CHANNEL_ID
-        }
-
-        val summaries = active.count {
-            it.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0
-        }
-        diag(
-            "push-diag active=${active.size} matching=${mine.size} summaries=$summaries" +
-                " ids=${active.joinToString("/") { it.id.toString() }}",
-        )
-        assertTrue(
-            "expected exactly one product notification with id $wantedId on channel " +
-                "${ChatNotifications.CHANNEL_ID}, found ${mine.size} among ${active.size} " +
-                "posted by this app; ${pushDiagnostics()}",
-            mine.size == 1,
-        )
-
-        val sbn = mine.single()
-        val content: PendingIntent? = sbn.notification.contentIntent
-        diag(
-            "push-diag id=${sbn.id} ch=${sbn.notification.channelId} pkg=${sbn.packageName}" +
-                " group=${sbn.notification.group ?: "none"} key=${sbn.groupKey ?: "none"}" +
-                " isGroup=${sbn.isGroup} age=${SystemClock.elapsedRealtime()}ms" +
-                " posted=${sbn.postTime}",
-        )
-        diag(
-            "push-diag content=${if (content == null) "absent" else "present"}" +
-                " creator=${content?.creatorPackage ?: "none"}" +
-                " activity=${
-                    if (content != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        content.isActivity.toString()
-                    } else {
-                        "unknown"
-                    }
-                }",
-        )
-
-        if (content == null) {
-            diag("push-diag CLASSIFICATION=ACTIVE_NOTIFICATION_CONTENT_INTENT_MISSING")
-            assertTrue(
-                "ACTIVE_NOTIFICATION_CONTENT_INTENT_MISSING: the notification on the device " +
-                    "carries no contentIntent, so no tap of it could ever open anything; " +
-                    "${pushDiagnostics()}",
-                false,
-            )
-            return
-        }
+        // Dismissed again, here in the fresh process the push woke. test10 already
+        // dismissed it, but the workflow relaunches MainActivity between that
+        // scenario and the kill - it needs a process to kill - and every Activity
+        // start re-posts the aid. The workflow is out of scope for this change, so
+        // the last word has to be taken on this side of it.
+        dismissAcceptanceAid("pre-tap")
+        val chat = assertOnlyExpectedNotifications("pre-tap", expectChatNotification = true)
+        assertProductContentIntent(chat)
 
         val startsBefore = startCount()
-        var cancelled = false
-        try {
-            content.send()
-        } catch (e: PendingIntent.CanceledException) {
-            cancelled = true
-        }
-        if (cancelled) {
-            diag("push-diag CLASSIFICATION=CONTENT_INTENT_CANCELLED")
-            assertTrue(
-                "CONTENT_INTENT_CANCELLED: the notification's contentIntent was cancelled " +
-                    "before it could be sent; ${pushDiagnostics()}",
-                false,
-            )
-            return
-        }
+        tapPushNotification()
 
-        // Did sending it start the shell at all? A background activity start that
-        // the system refuses would otherwise read as a lifecycle fault.
+        // What the tap delivered, before looking at any screen: a tap that opened
+        // the app without a target is the failure this milestone kept mistaking
+        // for a rendering problem.
         val started = waitUntil(ACTION_TIMEOUT) { startCount() > startsBefore }
-        diag("push-diag sent started=$started")
+        val start = startDiagnostics()
+        assertTrue("the tap started nothing; $start", started)
+        assertTrue("the tap did not deliver ACTION_VIEW; $start", start.contains("act=VIEW"))
+        assertTrue("the tap carried no chat identifier; $start", start.contains("CHAT_ID"))
+        assertTrue("the tap carried no message identifier; $start", start.contains("MESSAGE_ID"))
+        assertTrue("the tap delivered no target URL; $start", !start.contains("tgt=(none)"))
+
+        assertConversationOpen()
+    }
+
+    // ── notification hygiene ─────────────────────────────────────────────
+
+    /** Everything this package currently has posted. */
+    private fun activeNotifications(): Array<StatusBarNotification> {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return manager.activeNotifications
+    }
+
+    private fun isSummary(sbn: StatusBarNotification): Boolean =
+        sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0
+
+    /** Bounded: ids, channels and whether each is a generated summary. Never text. */
+    private fun inventory(active: Array<StatusBarNotification>): String = active
+        .joinToString(",") { "${it.id}/${it.notification.channelId}/${if (isSummary(it)) "summary" else "row"}" }
+        .ifEmpty { "none" }
+
+    /** Cancel the acceptance-only aid and wait for the shade to agree. */
+    private fun dismissAcceptanceAid(label: String) {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        TestNotificationSeed.dismissDiagnosticsNotification(app)
+        val gone = waitUntil(ACTION_TIMEOUT) {
+            activeNotifications().none { it.id == TestNotificationSeed.DIAGNOSTICS_NOTIFICATION_ID }
+        }
+        diag("push-clean $label aid-gone=$gone inv=${inventory(activeNotifications())}")
         assertTrue(
-            "CONTENT_INTENT_SEND_PRODUCED_NO_START: send() raised nothing and the shell " +
-                "recorded no new start, so this run cannot classify the contentIntent; " +
-                "${pushDiagnostics()}",
-            started,
+            "the acceptance diagnostics notification is still posted at $label; " +
+                "inventory ${inventory(activeNotifications())}",
+            gone,
+        )
+    }
+
+    /**
+     * Prove the shade holds nothing that could answer for the chat notification.
+     *
+     * Nothing unexpected is cleaned here on purpose. Contamination that the
+     * scenario hides is contamination the next run inherits, so anything beyond
+     * what is expected fails with its own bounded identity.
+     */
+    private fun assertOnlyExpectedNotifications(
+        label: String,
+        expectChatNotification: Boolean,
+    ): StatusBarNotification? {
+        val active = activeNotifications()
+        val inv = inventory(active)
+        diag("push-clean $label active=${active.size} inv=$inv")
+
+        assertTrue(
+            "a generated group summary is posted at $label - a row that carries no " +
+                "contentIntent and so opens nothing; inventory $inv",
+            active.none { isSummary(it) },
+        )
+        assertTrue(
+            "the acceptance-only diagnostics notification is posted at $label; inventory $inv",
+            active.none { it.id == TestNotificationSeed.DIAGNOSTICS_NOTIFICATION_ID },
         )
 
-        val text = device.wait(Until.hasObject(By.textContains(inboundText)), MESSENGER_TIMEOUT)
-        val header = device.wait(Until.hasObject(By.desc(BACK_TO_LIST)), ACTION_TIMEOUT) ||
-            device.hasObject(By.text(BACK_TO_LIST))
-        val start = startDiagnostics()
-        val product = start.contains("act=VIEW") && start.contains("keys=") &&
-            start.contains("CHAT_ID") && !start.contains("tgt=(none)")
-        val classification = if (product && text && header) {
-            "CONTENT_INTENT_VALID_SYSTEMUI_TAP_HARNESS_FAULT"
-        } else {
-            "CONTENT_INTENT_OR_PENDINGINTENT_LIFECYCLE_FAULT"
+        val wantedId = ChatNotifications.notificationIdFor(chatId)
+        val chat = active.filter {
+            it.id == wantedId && it.notification.channelId == ChatNotifications.CHANNEL_ID
         }
-        diag("push-diag CLASSIFICATION=$classification conversation=${text && header}")
         assertTrue(
-            "$classification | $start | conversation=${text && header}",
-            classification == "CONTENT_INTENT_VALID_SYSTEMUI_TAP_HARNESS_FAULT",
+            "expected ${if (expectChatNotification) 1 else 0} chat notification with id " +
+                "$wantedId on channel ${ChatNotifications.CHANNEL_ID} at $label, found " +
+                "${chat.size}; inventory $inv",
+            chat.size == (if (expectChatNotification) 1 else 0),
         )
+
+        val unexpected = active.filter { it.id != wantedId }
+        assertTrue(
+            "unexpected notifications at $label, which could answer for the chat " +
+                "notification when tapped; inventory $inv",
+            unexpected.isEmpty(),
+        )
+        return chat.firstOrNull()
+    }
+
+    /** The tap can only work if this notification still owns an Activity intent. */
+    private fun assertProductContentIntent(chat: StatusBarNotification?) {
+        assertNotNull("no chat notification to check", chat)
+        val content = chat!!.notification.contentIntent
+        val activity = if (content != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            content.isActivity.toString()
+        } else {
+            "unknown"
+        }
+        diag(
+            "push-clean intent content=${if (content == null) "absent" else "present"}" +
+                " creator=${content?.creatorPackage ?: "none"} activity=$activity",
+        )
+        assertNotNull("the chat notification carries no contentIntent", content)
+        assertTrue(
+            "the contentIntent was created by ${content!!.creatorPackage}, not $targetPackage",
+            content.creatorPackage == targetPackage,
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            assertTrue("the contentIntent does not start an Activity", content.isActivity)
+        }
     }
 
     /** How many starts the shell has recorded this run. */

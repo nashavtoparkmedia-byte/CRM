@@ -31,7 +31,8 @@ import androidx.core.app.NotificationManagerCompat
 object TestNotificationSeed {
 
     private const val DIAGNOSTICS_CHANNEL_ID = "yoko_shell_diagnostics"
-    private const val DIAGNOSTICS_NOTIFICATION_ID = 1
+    /** Public so a test can name it instead of hard-coding the number. */
+    const val DIAGNOSTICS_NOTIFICATION_ID = 1
 
     const val ACTION_SEED = "ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION"
 
@@ -64,6 +65,30 @@ object TestNotificationSeed {
             .build()
 
         runCatching { manager.notify(DIAGNOSTICS_NOTIFICATION_ID, notification) }
+    }
+
+    /**
+     * Cancel the diagnostics notification, and only that one.
+     *
+     * This aid is acceptance-only: it is posted by ShellTestHooks, which exists
+     * as a no-op in debug and release, so no shipped build ever has it. It is
+     * ongoing, so it sits in the shade for the whole run, and while it is there
+     * the app has two notifications and Android may fold them under a generated
+     * group summary - a row that carries no contentIntent of its own and so
+     * opens nothing when tapped. Measured on an API 34 emulator at process-dead
+     * tap time: three notifications posted by this package, one of them a summary
+     * at id 2147483647.
+     *
+     * Dismissing it before the process-dead push proof makes the acceptance
+     * runtime resemble production, where this notification does not exist. It is
+     * not a workaround for product behaviour: production grouping is untouched,
+     * and the older scenarios that rely on this aid keep posting and using it.
+     *
+     * Deliberately not cancelAll(): cancelling the app's other notifications
+     * would hide exactly the contamination the scenario has to expose.
+     */
+    fun dismissDiagnosticsNotification(context: Context) {
+        NotificationManagerCompat.from(context).cancel(DIAGNOSTICS_NOTIFICATION_ID)
     }
 
     /**
