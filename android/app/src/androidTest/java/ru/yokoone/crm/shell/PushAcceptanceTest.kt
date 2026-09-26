@@ -192,8 +192,19 @@ class PushAcceptanceTest {
     }
 
     private fun tapPushNotification() {
+        // The broadcast is asynchronous: wait for the handler's own outcome
+        // before judging the shade, then open it. A shade opened too early shows
+        // nothing and the retry below covers the rest.
+        waitUntil(NOTIFICATION_TIMEOUT) { outcomes() != "no-outcome-logged" }
+        trace("injected ${outcomes()}")
+
         device.openNotification()
-        val posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+        var posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+        if (posted == null) {
+            device.pressBack()
+            device.openNotification()
+            posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+        }
         if (posted == null) report("no-notification")
         assertNotNull(
             "no push notification appeared; ${diagnostics()}",
@@ -212,6 +223,10 @@ class PushAcceptanceTest {
      * device log. It carries a label, the handler's own outcome and a little of
      * what was on screen - never a token.
      */
+    private fun trace(label: String) {
+        ShellDiagnostics.write("YOKO_NET done POST push-step $label")
+    }
+
     private fun report(label: String) {
         ShellDiagnostics.write("YOKO_NET fail push-scenario $label ${outcomes()} | ${visibleText(90)}")
     }
@@ -241,9 +256,11 @@ class PushAcceptanceTest {
     }
 
     private fun assertMessengerOpen() {
+        val open = device.wait(Until.hasObject(By.textContains(MAX_CHAT)), MESSENGER_TIMEOUT)
+        if (open) trace("signed-in") else report("no-messenger")
         assertTrue(
             "the messenger did not open after sign-in; on screen: ${visibleText()}; tree: ${treeShape(300)}",
-            device.wait(Until.hasObject(By.textContains(MAX_CHAT)), MESSENGER_TIMEOUT),
+            open,
         )
     }
 
@@ -281,6 +298,7 @@ class PushAcceptanceTest {
     }
 
     private fun launchApp() {
+        trace("launching")
         device.pressHome()
         val context = InstrumentationRegistry.getInstrumentation().context
         val intent = context.packageManager.getLaunchIntentForPackage(targetPackage)
