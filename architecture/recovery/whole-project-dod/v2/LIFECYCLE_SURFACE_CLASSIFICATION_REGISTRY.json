@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 721,
-    "test": 38,
+    "total_entries": 724,
+    "test": 39,
     "dead_historical": 92,
-    "migration_only": 84,
-    "active_operational": 502,
+    "migration_only": 85,
+    "active_operational": 503,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -4998,6 +4998,15 @@
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-compensation-edge-perimeter-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It reads the edge_delivery nginx template and asserts the cash-compensation perimeter invariant; it writes nothing and does not gain business-data ownership.",
       "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
       "functional_owner": "architecture_recovery"
     },

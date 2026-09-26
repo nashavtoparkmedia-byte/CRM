@@ -26,6 +26,12 @@
 *.age
 # Exception: age PUBLIC key is safe in git
 !deploy/secrets/age-public.key
+# The compensation perimeter password file is host-managed and never
+# committed. It lives in deploy/nginx/templates/auth/ because that directory
+# is already mounted read-only into the nginx container and envsubst renders
+# only *.template. Only the credential itself is ignored, not the directory,
+# so any future non-secret file there stays visible to Git.
+deploy/nginx/templates/auth/compensation.htpasswd
 
 # IDE / Logs
 **/.vscode/

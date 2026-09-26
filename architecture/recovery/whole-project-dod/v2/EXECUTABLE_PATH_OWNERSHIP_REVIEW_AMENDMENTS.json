@@ -1266,6 +1266,48 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "compensation-edge-perimeter-boundary-main-42aad7cf-20260925",
+      "reviewed_at": "2026-09-25T00:00:00Z",
+      "reviewed_by": "COMPENSATION_EDGE_PERIMETER_RECONCILIATION_EXECUTOR_REVIEW_20260925",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_NGINX_SECURITY_BOUNDARY_MAIN_RECONCILIATION_20260925",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 42aad7cf, whose tail is mobile-push-v1-p1-main-baf2ecaa-20260924, and reviews only the one surface the cash-compensation edge perimeter adds. It supersedes an earlier review of the same surface anchored on main a8ac491f (compensation-edge-perimeter-boundary-main-a8ac491f-20260924), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the surface is reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the single tracked executable surface the cash-compensation edge perimeter adds on top of main 42aad7cf, tools/architecture/check-compensation-edge-perimeter-boundary.mjs: 2,624 + 1 = 2,625 surfaces, context-owned unchanged at 1,395 and governed exclusions 1,229 -> 1,230. It is a boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix with no exact inventory, so it receives no explicit exact-inventory assignment and no exact-inventory transition moves; the repository's own derivation over this tree reports no exact-inventory drift against the published coverage. It carries a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / POSSIBLE, functional owner architecture_recovery), matching every other boundary control, which is why this amendment's tracked inventory digest also carries that registered classification. The nginx template the control asserts over is not a tracked executable surface, so it moves no denominator of its own, and the host-managed credential file is ignored by Git and never tracked. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this reconciled tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "94b830f1f75c362a449de56c25c156f7ef8d128fe95a7016cddaca912cac1989",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "b154e113b4316d5a38166996391dca0dde59149fa50e0a0e931dded6af7e75e3",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "tools/architecture/check-compensation-edge-perimeter-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It reads the edge_delivery nginx template and asserts an invariant; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
