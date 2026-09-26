@@ -71,10 +71,18 @@ declare global {
 
 const STALE_CALL_GRACE_MS = 90_000
 const CALL_RECONCILE_INTERVAL_MS = 30_000
+/**
+ * The two windows above are evidence bounds other Calling code has to reason
+ * about — a recovery horizon that duplicated their literals could silently stop
+ * covering them. Exported as read-only facts; the loop itself is unchanged.
+ */
+export const STALE_CALL_RECONCILE_GRACE_MS_V1 = STALE_CALL_GRACE_MS
+export const STALE_CALL_RECONCILE_INTERVAL_MS_V1 = CALL_RECONCILE_INTERVAL_MS
 // Do not drain years of abandoned/scanner rows into the live phone-chat list.
 // Reconciliation is an operational safety net for terminal events missed by
 // the current process, so only recently created calls belong in its scope.
 const STALE_CALL_LOOKBACK_MS = 10 * 60_000
+export const STALE_CALL_RECONCILE_LOOKBACK_MS_V1 = STALE_CALL_LOOKBACK_MS
 
 // modesl is a CJS module — its `Connection` import is a runtime value, not a
 // TypeScript type. Type accessor expressions like `Connection | null` thus
@@ -172,6 +180,22 @@ function uuidExists(conn: any, fsUuid: string): Promise<boolean | null> {
             finish(null)
         }
     })
+}
+
+/**
+ * Does FreeSWITCH still have this channel?
+ *
+ * The same bounded probe `reconcileStaleCalls` uses, exposed for callers that
+ * must reason about one deterministic channel uuid. Tri-state on purpose:
+ * `true` proves the channel exists, `false` proves FreeSWITCH answered that it
+ * does not, and `null` proves nothing at all — no connection, no reply inside
+ * the bound, or an unparsable body. A caller must never read `null` or `false`
+ * as "no call ever happened".
+ */
+export async function channelExistsV1(fsUuid: string): Promise<boolean | null> {
+    const conn = getConnection()
+    if (!conn) return null
+    return uuidExists(conn, fsUuid)
 }
 
 /**

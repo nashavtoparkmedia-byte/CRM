@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto'
-import { isStrongMachineSecret } from './strong-machine-secret'
+import {
+    CALLING_E164,
+    callingTelephonyRuntimeConfiguration,
+    evaluateCallingRuntimeReadiness,
+    type CallingTelephonyRuntimeConfiguration,
+    type CallingVoiceProvider,
+} from './calling-runtime-readiness'
 
 export const CONTROLLED_REAL_CALL_CONFIRMATION = 'PLACE_ONE_CONTROLLED_REAL_AI_CALL' as const
 export const CONTROLLED_REAL_CALL_ATTEMPT_LIMIT = 1 as const
@@ -41,11 +47,10 @@ export function controlledRealCallHardLimit(maxAnsweredMs: number = CONTROLLED_R
     return { maxAnsweredMs, seconds: maxAnsweredMs / 1000 }
 }
 
-const E164 = /^\+[1-9]\d{7,14}$/
+const E164 = CALLING_E164
 const REQUEST_ID = /^[A-Za-z0-9_-]{16,128}$/
-const EXACT_MEGAFON_DIAL_TEMPLATE = 'sofia/gateway/megafon/${number}' as const
 
-export type ControlledVoiceProvider = 'openai' | 'yandex'
+export type ControlledVoiceProvider = CallingVoiceProvider
 
 export type ControlledRealCallBlocker =
     | 'live_mode_disabled'
@@ -75,21 +80,11 @@ export type ControlledRealCallBlocker =
     | 'audio_bridge_health_url_invalid'
     | 'audio_bridge_unreachable'
 
-export interface ControlledRealCallProviderConfiguration {
-    telephonyProvider: 'freeswitch'
-    sttProvider: ControlledVoiceProvider
-    ttsProvider: ControlledVoiceProvider
-    llmProvider: 'openai'
+export interface ControlledRealCallProviderConfiguration extends CallingTelephonyRuntimeConfiguration {
+    /** Manual one-shot admission: the single destination this gate allows. */
     allowedDestinationE164: string
+    /** Manual one-shot admission: the single Owner-approved request identity. */
     approvedRequestId: string
-    callerNumberE164: string
-    dialStringTemplate: typeof EXACT_MEGAFON_DIAL_TEMPLATE
-    parkExtension: string
-    esl: {
-        host: string
-        port: number
-        password: string
-    }
 }
 
 export interface ControlledRealCallReadiness {
@@ -146,27 +141,6 @@ export class ControlledRealCallInputError extends Error {
     }
 }
 
-function selectedVoiceProvider(value: string | undefined): ControlledVoiceProvider | null {
-    const normalized = value?.trim().toLowerCase()
-    return normalized === 'openai' || normalized === 'yandex' ? normalized : null
-}
-
-function configuredForVoiceProvider(
-    provider: ControlledVoiceProvider,
-    credentials: ControlledRealCallReadinessInput['credentials'],
-): boolean {
-    return provider === 'openai'
-        ? credentials.openaiConfigured
-        : credentials.yandexConfigured && credentials.yandexFolderConfigured
-}
-
-function verifiedForVoiceProvider(
-    provider: ControlledVoiceProvider,
-    credentials: ControlledRealCallReadinessInput['credentials'],
-): boolean {
-    return provider === 'openai' ? credentials.openaiVerified : credentials.yandexVerified
-}
-
 function maskE164(value: string): string {
     return `${value.slice(0, 3)}***${value.slice(-2)}`
 }
@@ -185,60 +159,49 @@ export function inspectControlledRealCallReadiness(
     const blockers: ControlledRealCallBlocker[] = []
     const allowedDestination = env.AI_CALL_CONTROLLED_DESTINATION_E164?.trim() ?? ''
     const approvedRequestId = env.AI_CALL_CONTROLLED_REQUEST_ID?.trim() ?? ''
-    const callerNumber = env.MEGAFON_NUMBER?.trim() ?? ''
-    const host = env.FS_ESL_HOST?.trim() ?? ''
-    const portText = env.FS_ESL_PORT?.trim() ?? ''
-    const port = Number(portText)
-    const password = env.FS_ESL_PASSWORD ?? ''
-    const parkExtension = env.AI_CALL_PARK_EXT?.trim() ?? ''
-    const sttProvider = selectedVoiceProvider(env.AI_CALL_STT_PROVIDER)
-    const ttsProvider = selectedVoiceProvider(env.AI_CALL_TTS_PROVIDER)
+    const runtime = evaluateCallingRuntimeReadiness({
+        env,
+        credentials,
+        telephony,
+        callbackAuthenticationConfigured,
+        audioBridgeReachable,
+    })
+    const sttProvider = runtime.sttProvider
+    const ttsProvider = runtime.ttsProvider
 
-    if (env.AI_CALL_LIVE_MODE !== 'true') blockers.push('live_mode_disabled')
+    if (!runtime.liveModeEnabled) blockers.push('live_mode_disabled')
     if (env.AI_CALL_CONTROLLED_REAL_CALL_ENABLED !== 'true') blockers.push('controlled_gate_disabled')
     if (!operatorAuthenticationConfigured) blockers.push('operator_auth_invalid')
     if (!REQUEST_ID.test(approvedRequestId)) blockers.push('approved_request_id_invalid')
-    if (env.AI_CALL_TELEPHONY_PROVIDER !== 'freeswitch') blockers.push('telephony_provider_not_freeswitch')
+    if (!runtime.telephonyProviderFreeswitch) blockers.push('telephony_provider_not_freeswitch')
     if (!E164.test(allowedDestination)) blockers.push('allowlisted_destination_invalid')
-    if (!E164.test(callerNumber)) blockers.push('caller_number_invalid')
-    if (env.AI_CALL_DIAL_STRING_TEMPLATE !== EXACT_MEGAFON_DIAL_TEMPLATE) blockers.push('dial_template_invalid')
-    if (!host) blockers.push('esl_host_missing')
-    if (!/^\d{1,5}$/.test(portText) || !Number.isSafeInteger(port) || port < 1 || port > 65_535) {
-        blockers.push('esl_port_invalid')
-    }
-    if (!isStrongMachineSecret(password, 16)) {
-        blockers.push('esl_password_invalid')
-    }
-    if (parkExtension !== '9999') blockers.push('park_extension_invalid')
-    if (env.RECORDINGS_HOST_PATH !== '/app/freeswitch-recordings') blockers.push('recording_path_invalid')
-    if (!callbackAuthenticationConfigured) blockers.push('callback_auth_invalid')
-    if (!credentials.openaiConfigured) blockers.push('openai_llm_not_configured')
-    else if (!credentials.openaiVerified) blockers.push('openai_llm_not_verified')
+    if (!runtime.callerNumberValid) blockers.push('caller_number_invalid')
+    if (!runtime.dialTemplateValid) blockers.push('dial_template_invalid')
+    if (!runtime.eslHostPresent) blockers.push('esl_host_missing')
+    if (!runtime.eslPortValid) blockers.push('esl_port_invalid')
+    if (!runtime.eslPasswordStrong) blockers.push('esl_password_invalid')
+    if (!runtime.parkExtensionValid) blockers.push('park_extension_invalid')
+    if (!runtime.recordingPathValid) blockers.push('recording_path_invalid')
+    if (!runtime.callbackAuthenticationConfigured) blockers.push('callback_auth_invalid')
+    if (!runtime.openaiConfigured) blockers.push('openai_llm_not_configured')
+    else if (!runtime.openaiVerified) blockers.push('openai_llm_not_verified')
     if (!sttProvider) blockers.push('stt_provider_not_selected')
-    else if (!configuredForVoiceProvider(sttProvider, credentials)) blockers.push('stt_provider_not_configured')
-    else if (!verifiedForVoiceProvider(sttProvider, credentials)) blockers.push('stt_provider_not_verified')
+    else if (!runtime.sttConfigured) blockers.push('stt_provider_not_configured')
+    else if (!runtime.sttVerified) blockers.push('stt_provider_not_verified')
     if (!ttsProvider) blockers.push('tts_provider_not_selected')
-    else if (!configuredForVoiceProvider(ttsProvider, credentials)) blockers.push('tts_provider_not_configured')
-    else if (!verifiedForVoiceProvider(ttsProvider, credentials)) blockers.push('tts_provider_not_verified')
-    if (!telephony.eslConnected) blockers.push('freeswitch_not_connected')
-    if (telephony.megafonRegistrationState !== 'REGED') blockers.push('megafon_gateway_not_registered')
-    if (env.AUDIO_BRIDGE_HEALTH_URL !== 'http://audio-bridge:3030/health') {
-        blockers.push('audio_bridge_health_url_invalid')
-    }
-    if (!audioBridgeReachable) blockers.push('audio_bridge_unreachable')
+    else if (!runtime.ttsConfigured) blockers.push('tts_provider_not_configured')
+    else if (!runtime.ttsVerified) blockers.push('tts_provider_not_verified')
+    if (!runtime.eslConnected) blockers.push('freeswitch_not_connected')
+    if (!runtime.megafonRegistered) blockers.push('megafon_gateway_not_registered')
+    if (!runtime.audioBridgeHealthUrlValid) blockers.push('audio_bridge_health_url_invalid')
+    if (!runtime.audioBridgeReachable) blockers.push('audio_bridge_unreachable')
 
     const ready = blockers.length === 0
-    const configuration = ready && sttProvider && ttsProvider ? {
-        telephonyProvider: 'freeswitch' as const,
-        sttProvider,
-        ttsProvider,
-        llmProvider: 'openai' as const,
+    const telephonyConfiguration = callingTelephonyRuntimeConfiguration(runtime)
+    const configuration = ready && telephonyConfiguration ? {
+        ...telephonyConfiguration,
         allowedDestinationE164: allowedDestination,
         approvedRequestId,
-        callerNumberE164: callerNumber,
-        dialStringTemplate: EXACT_MEGAFON_DIAL_TEMPLATE,
-        parkExtension,
-        esl: { host, port, password },
     } : null
 
     return {

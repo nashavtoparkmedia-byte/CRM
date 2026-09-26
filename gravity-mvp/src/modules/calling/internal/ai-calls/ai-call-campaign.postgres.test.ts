@@ -664,7 +664,12 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         `, callId)).resolves.toEqual([{ count: 1 }])
     })
 
-    it('keeps a crashed linked effect recoverable across admission deferral, pause, and cancel', async () => {
+    // C3a: a linked effect already owns its capacity, so reconciling it is no longer
+    // gated by the rate limiter it would otherwise have to wait behind. The recovery
+    // path this proof exercises therefore settles on the first post-crash cycle; the
+    // deferral half of the old expectation moved to the proof below it, which blocks a
+    // NOT-yet-dispatched attempt on the same rate gate.
+    it('reconciles a crashed linked effect without waiting on the rate gate, then settles cancellation', async () => {
         const campaignId = `${PREFIX}:cancel-recovery-blocked`
         const callId = `${PREFIX}:cancel-recovery-blocked:call`
         await prepareCampaign({ id: campaignId, targets: ['cancel-recovery'], ratePerMinute: 60_000 })
@@ -727,35 +732,10 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         await database.$executeRawUnsafe(`
             UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=$1 WHERE "id"='global'
         `, retryAt)
+        // The crashed attempt is linked and dispatched, so it already occupies its
+        // slot: the rate gate below applies to NEW first effects and must not hold its
+        // reconciliation. Cancellation lands first, and the running effect still settles.
         nowMs = BASE.getTime() + 101
-        await expect(worker()).resolves.toMatchObject({
-            kind: 'blocked', reason: 'rate', retryAt,
-        })
-        const deferred = await aiCallCampaignPrismaPort.getCampaign(campaignId)
-        expect(deferred?.campaign.state).toBe('running')
-        expect(deferred?.members[0]).toMatchObject({ state: 'running', nextEligibleAt: retryAt })
-        expect(deferred?.attempts[0]).toMatchObject({
-            state: 'running', claimRevision: 2, claimUntil: retryAt, dialExecutionCount: 1,
-            dispatchState: 'acceptance_unknown', callId,
-        })
-        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
-            SELECT COUNT(*)::int AS "count" FROM "AiCallAdmissionLease"
-            WHERE "attemptId"=$1 AND "releasedAt" IS NULL
-        `, deferred!.attempts[0].id)).resolves.toEqual([{ count: 0 }])
-        const deferredProjection = await aiCallCampaignProductPrismaPort.detail({
-            campaignId, memberLimit: 10,
-        })
-        expect(deferredProjection?.operations).toMatchObject({
-            activeLeases: 0,
-            unfinalizedLinkedCalls: 1,
-            staleUnfinalizedCalls: [{
-                callId,
-                attemptState: 'running',
-                recoveryReason: 'expired_claim',
-            }],
-        })
-
-        nowMs = BASE.getTime() + 102
         await expect(aiCallCampaignPrismaPort.pause(campaignId, new Date(nowMs)))
             .resolves.toMatchObject({ status: 'paused' })
         nowMs += 1
@@ -766,11 +746,15 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         expect(cancelling?.members[0].state).toBe('running')
         expect(cancelling?.attempts[0]).toMatchObject({ state: 'running', callId })
 
-        nowMs = retryAt.getTime()
+        nowMs += 1
         await expect(worker()).resolves.toMatchObject({
             kind: 'completed', memberState: 'cancelled', campaignState: 'cancelled',
         })
         expect(dialCount).toBe(2)
+        // The rate gate the reconciliation walked past is untouched by it.
+        await expect(database.$queryRawUnsafe<Array<{ nextAdmitAt: Date | null }>>(`
+            SELECT "nextAdmitAt" FROM "AiCallAdmissionControl" WHERE "id"='global'
+        `)).resolves.toEqual([{ nextAdmitAt: retryAt }])
         const settled = await aiCallCampaignPrismaPort.getCampaign(campaignId)
         expect(settled?.campaign.state).toBe('cancelled')
         expect(settled?.members[0].state).toBe('cancelled')
@@ -1108,5 +1092,261 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
             outcomeCode: 'qualified',
             now: new Date(nowMs + 1),
         })).rejects.toMatchObject({ code: 'attempt_terminal_conflict' })
+    })
+
+    // ── C3a: durable live-effect occupancy ────────────────────────────────────
+    //
+    // A worker lease expires in tens of seconds; a telephone call runs for minutes.
+    // Capacity therefore cannot be a lease — it is the attempt's own linked,
+    // dispatched, unsettled state, and these proofs hold that against real
+    // transactions, real lease expiry and two real workers.
+
+    /** Drives one attempt to "linked live effect" and leaves it unsettled. */
+    async function linkedLiveEffect(input: { campaignId: string; target: string; callId: string; nowMs: number }) {
+        const port: AiCallCampaignDialPort = {
+            async reconcile() { return null },
+            async dispatch(request) {
+                await prisma.$transaction(async (tx) => {
+                    await tx.call.upsert({
+                        where: { id: input.callId },
+                        create: {
+                            id: input.callId,
+                            direction: 'outbound',
+                            status: 'active',
+                            fromNumber: '+70000000000',
+                            toNumber: request.phoneE164,
+                            managerId: null,
+                            fsUuid: `${input.callId}:fs`,
+                            startedAt: new Date(input.nowMs),
+                        },
+                        update: {},
+                    })
+                    const linked = await tx.aiCallCampaignAttempt.updateMany({
+                        where: { launchId: request.launchId, OR: [{ callId: null }, { callId: input.callId }] },
+                        data: { callId: input.callId },
+                    })
+                    if (linked.count !== 1) throw new Error('LINK_FENCE_FAILED')
+                })
+                // Linked pending: a real conversation settles later.
+                return null
+            },
+        }
+        const worker = createAiCallCampaignWorkerRuntime({
+            dial: port,
+            workerId: `occupancy-worker:${input.target}`,
+            clock: () => new Date(input.nowMs),
+            claimLeaseMs: 100,
+            admissionLeaseMs: 100,
+        })
+        return { worker, port }
+    }
+
+    async function occupancyCount(): Promise<number> {
+        const rows = await database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM (
+                SELECT a."id" FROM "AiCallCampaignAttempt" a
+                 WHERE a."callId" IS NOT NULL AND a."dispatchState" <> 'not_dispatched'
+                   AND a."resultEventId" IS NULL
+                   AND a."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+                UNION
+                SELECT l."attemptId" FROM "AiCallAdmissionLease" l
+                  JOIN "AiCallCampaignAttempt" a2 ON a2."id"=l."attemptId"
+                 WHERE l."releasedAt" IS NULL AND a2."resultEventId" IS NULL
+                   AND a2."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+            ) occupancy
+        `)
+        return rows[0]?.count ?? 0
+    }
+
+    it('keeps a linked live effect occupying capacity after its worker lease expires', async () => {
+        const campaignId = `${PREFIX}:occupancy-survives-lease`
+        const callId = `${campaignId}:call`
+        await prepareCampaign({ id: campaignId, targets: ['live-effect'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        const nowMs = BASE.getTime()
+        const { worker } = await linkedLiveEffect({ campaignId, target: 'live-effect', callId, nowMs })
+
+        await expect(worker()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+
+        const attempt = (await aiCallCampaignPrismaPort.getCampaign(campaignId))!.attempts[0]
+        expect(attempt).toMatchObject({ state: 'running', callId, dispatchState: 'acceptance_unknown' })
+        // The pending deferral released the worker lease and stamped no failure: a call
+        // still in progress is not a broken one.
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "AiCallAdmissionLease"
+            WHERE "attemptId"=$1 AND "releasedAt" IS NULL
+        `, attempt.id)).resolves.toEqual([{ count: 0 }])
+        expect(attempt.failureCode ?? null).toBeNull()
+        // And the effect is still counted, with no lease at all.
+        await expect(occupancyCount()).resolves.toBe(1)
+    })
+
+    it('never admits more simultaneous live effects than the global limit, with two workers', async () => {
+        const campaignId = `${PREFIX}:occupancy-global-race`
+        const firstCall = `${campaignId}:call-1`
+        await prepareCampaign({ id: campaignId, targets: ['first-live', 'second-live'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        const nowMs = BASE.getTime()
+        const { worker: first } = await linkedLiveEffect({ campaignId, target: 'first-live', callId: firstCall, nowMs })
+        await expect(first()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+        await expect(occupancyCount()).resolves.toBe(1)
+
+        // A second worker, with every lease released, must still see the live effect.
+        // Kept inside the first attempt's own 250 ms recheck window so the claim on
+        // offer is the next member's first dispatch, not this attempt's reconciliation.
+        const laterMs = nowMs + 100
+        const secondCall = `${campaignId}:call-2`
+        const { worker: second } = await linkedLiveEffect({
+            campaignId, target: 'second-live', callId: secondCall, nowMs: laterMs,
+        })
+        const outcome = await second()
+
+        expect(outcome).toMatchObject({ kind: 'blocked' })
+        expect(['global_concurrency', 'campaign_concurrency']).toContain(
+            (outcome as { reason: string }).reason,
+        )
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "Call" WHERE "id"=$1
+        `, secondCall)).resolves.toEqual([{ count: 0 }])
+        await expect(occupancyCount()).resolves.toBe(1)
+    })
+
+    it('admits a linked attempt for reconciliation without a second slot or a rate advance', async () => {
+        const campaignId = `${PREFIX}:occupancy-reconcile-admission`
+        const callId = `${campaignId}:call`
+        await prepareCampaign({ id: campaignId, targets: ['reconcile-me'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        const { worker } = await linkedLiveEffect({ campaignId, target: 'reconcile-me', callId, nowMs })
+        await expect(worker()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+        const attemptId = (await aiCallCampaignPrismaPort.getCampaign(campaignId))!.attempts[0].id
+
+        // Pin both rate gates in the future: a first dispatch would be blocked by them.
+        const gate = new Date(nowMs + 10_000)
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=$1 WHERE "id"='global'
+        `, gate)
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallCampaign" SET "nextAdmitAt"=$2 WHERE "id"=$1
+        `, campaignId, gate)
+
+        nowMs += 300
+        const claim = await aiCallCampaignPrismaPort.claimNextLaunch({
+            workerId: 'reconcile-admission-worker', now: new Date(nowMs), leaseMs: 100,
+        })
+        expect(claim).toMatchObject({ attemptId, launchId: expect.any(String) })
+        const admission = await aiCallCampaignPrismaPort.acquireAdmission({
+            claim: claim!, now: new Date(nowMs), leaseMs: 100,
+        })
+
+        // Admitted: it already owns its capacity, and the gates are untouched.
+        expect(admission).toMatchObject({ kind: 'acquired' })
+        expect((admission as { grant: { replayed: boolean } }).grant.replayed).toBe(true)
+        await expect(database.$queryRawUnsafe<Array<{ nextAdmitAt: Date | null }>>(`
+            SELECT "nextAdmitAt" FROM "AiCallAdmissionControl" WHERE "id"='global'
+        `)).resolves.toEqual([{ nextAdmitAt: gate }])
+        await expect(database.$queryRawUnsafe<Array<{ nextAdmitAt: Date | null }>>(`
+            SELECT "nextAdmitAt" FROM "AiCallCampaign" WHERE "id"=$1
+        `, campaignId)).resolves.toEqual([{ nextAdmitAt: gate }])
+        // Exactly one lease row for the attempt: fencing, not a second slot.
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "AiCallAdmissionLease" WHERE "attemptId"=$1
+        `, attemptId)).resolves.toEqual([{ count: 1 }])
+        await expect(occupancyCount()).resolves.toBe(1)
+    })
+
+    it('releases occupancy atomically with the terminal result', async () => {
+        const campaignId = `${PREFIX}:occupancy-terminal-release`
+        const callId = `${campaignId}:call`
+        await prepareCampaign({ id: campaignId, targets: ['settle-me'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        const settling: AiCallCampaignDialPort = {
+            async dispatch() { return null },
+            async reconcile(request) {
+                return {
+                    callId,
+                    effectRef: `effect:${request.launchId}`,
+                    terminal: { eventId: `terminal:${request.launchId}`, kind: 'success' as const },
+                }
+            },
+        }
+        const { worker: link } = await linkedLiveEffect({ campaignId, target: 'settle-me', callId, nowMs })
+        await expect(link()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+        await expect(occupancyCount()).resolves.toBe(1)
+
+        nowMs += 300
+        const settlingWorker = createAiCallCampaignWorkerRuntime({
+            dial: settling,
+            workerId: 'settling-worker',
+            clock: () => new Date(nowMs),
+            claimLeaseMs: 100,
+            admissionLeaseMs: 100,
+        })
+        await expect(settlingWorker()).resolves.toMatchObject({ kind: 'completed', memberState: 'succeeded' })
+
+        await expect(occupancyCount()).resolves.toBe(0)
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "AiCallAdmissionLease"
+            WHERE "campaignId"=$1 AND "releasedAt" IS NULL
+        `, campaignId)).resolves.toEqual([{ count: 0 }])
+    })
+
+    it('keeps a cancelled campaign occupying capacity until its live effect settles', async () => {
+        const campaignId = `${PREFIX}:occupancy-cancel-settlement`
+        const callId = `${campaignId}:call`
+        await prepareCampaign({ id: campaignId, targets: ['cancel-live'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        const { worker } = await linkedLiveEffect({ campaignId, target: 'cancel-live', callId, nowMs })
+        await expect(worker()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+
+        nowMs += 10
+        await expect(aiCallCampaignPrismaPort.cancel(campaignId, new Date(nowMs)))
+            .resolves.toMatchObject({ status: 'cancelling' })
+        // Cancellation stops future launches; the running conversation is not hung up
+        // and keeps its slot.
+        await expect(occupancyCount()).resolves.toBe(1)
+        await expect(database.$queryRawUnsafe<Array<{ count: number; active: number }>>(`
+            SELECT COUNT(*)::int AS "count",
+                   COUNT(*) FILTER (WHERE "endedAt" IS NULL)::int AS "active"
+            FROM "Call" WHERE "id"=$1
+        `, callId)).resolves.toEqual([{ count: 1, active: 1 }])
+
+        nowMs += 300
+        const settling = createAiCallCampaignWorkerRuntime({
+            dial: {
+                async dispatch() { return null },
+                async reconcile(request) {
+                    await prisma.call.update({
+                        where: { id: callId },
+                        data: { status: 'completed', endedAt: new Date(nowMs) },
+                    })
+                    return {
+                        callId,
+                        effectRef: `effect:${request.launchId}`,
+                        terminal: { eventId: `terminal:${request.launchId}`, kind: 'success' as const },
+                    }
+                },
+            },
+            workerId: 'cancel-settling-worker',
+            clock: () => new Date(nowMs),
+            claimLeaseMs: 100,
+            admissionLeaseMs: 100,
+        })
+        await expect(settling()).resolves.toMatchObject({
+            kind: 'completed', memberState: 'cancelled', campaignState: 'cancelled',
+        })
+        await expect(occupancyCount()).resolves.toBe(0)
     })
 })

@@ -14,6 +14,7 @@ import {
     type AiCallCampaignDraftInput,
     type AiCallCampaignJson,
 } from '../../application/ai-call-campaign'
+import { campaignOccupancyRecheckMs } from '../../application/ai-call-campaign-live-dial'
 
 interface CampaignRow {
     id: string
@@ -326,6 +327,108 @@ async function updateCampaignTerminalState(tx: RawSqlExecutor, campaign: Campaig
         }, now)
     }
     return terminal
+}
+
+/**
+ * Durable live-effect occupancy.
+ *
+ * Capacity is allocated once, at admission, and released once, at the terminal. What
+ * changes in between is only which branch observes it:
+ *
+ *   L  a linked, dispatched, unsettled attempt — a telephone effect that may be
+ *      physically alive. It stays counted across lease expiry, worker crash, worker
+ *      restart and process restart, because it is attempt state and not a lease.
+ *   R  an unreleased worker/admission lease for an unsettled attempt — the
+ *      pre-effect reservation, which also covers the window between
+ *      `beginDialExecution` and the adapter's link commit (the execution heartbeat
+ *      keeps that lease alive while the adapter runs).
+ *
+ * UNION, not UNION ALL: an attempt in both branches is one occupant. The attempt
+ * being admitted is excluded — provably redundant for a genuine first dispatch,
+ * kept as an invariant guard.
+ *
+ * Correctness does not depend on this query being serialized by itself:
+ * `acquireAdmission` already holds `AiCallAdmissionControl id='global' FOR UPDATE`
+ * before it runs, so every competitor for a slot is serialized behind that row.
+ */
+const OCCUPANCY_SETTLED_STATES = "('succeeded','retryable_failure','permanent_failure','cancelled')"
+
+function occupancyCountQuery(campaignScoped: boolean): string {
+    const scopeL = campaignScoped ? 'AND a."campaignId"=$2' : ''
+    const scopeR = campaignScoped ? 'AND l."campaignId"=$2' : ''
+    return `
+        SELECT COUNT(*)::int AS "count", MIN(occupancy."retryAt") AS "retryAt" FROM (
+            SELECT a."id" AS "attemptId", NULL::timestamptz AS "retryAt"
+              FROM "AiCallCampaignAttempt" a
+             WHERE a."callId" IS NOT NULL
+               AND a."dispatchState" <> 'not_dispatched'
+               AND a."resultEventId" IS NULL
+               AND a."state" NOT IN ${OCCUPANCY_SETTLED_STATES}
+               ${scopeL}
+            UNION
+            SELECT l."attemptId" AS "attemptId", l."leaseUntil" AS "retryAt"
+              FROM "AiCallAdmissionLease" l
+              JOIN "AiCallCampaignAttempt" a2 ON a2."id"=l."attemptId"
+             WHERE l."releasedAt" IS NULL
+               AND a2."resultEventId" IS NULL
+               AND a2."state" NOT IN ${OCCUPANCY_SETTLED_STATES}
+               ${scopeR}
+        ) occupancy
+        WHERE occupancy."attemptId" <> $1
+    `
+}
+
+/**
+ * When to look again after being blocked by occupancy.
+ *
+ * A live telephone call has no lease TTL to wait on, so the cadence is a bounded
+ * poll; a pre-effect reservation still offers its own expiry, and the earlier of the
+ * two wins. Poll cadence only — never correctness.
+ */
+function occupancyRetryAt(reservationRetryAt: Date | null, now: Date): Date {
+    const poll = new Date(now.getTime() + campaignOccupancyRecheckMs())
+    if (reservationRetryAt === null) return poll
+    return reservationRetryAt.getTime() < poll.getTime() ? reservationRetryAt : poll
+}
+
+/**
+ * Arms (or re-arms) the one deterministic worker lease row for an attempt. Shared by
+ * the first-dispatch path and the reconciliation branch so the two cannot drift; the
+ * caller decides whether capacity was accounted for.
+ */
+async function armAdmissionLease(tx: RawSqlExecutor, input: {
+    attempt: AttemptRow
+    campaignId: string
+    workerId: string
+    now: Date
+    leaseUntil: Date
+}): Promise<{ leaseId: string; leaseFence: string; leaseUntil: Date }> {
+    const leaseId = leaseIdentity(input.attempt.id)
+    const leaseFence = sha256(
+        `${leaseId}\0${input.workerId}\0${input.now.toISOString()}\0${input.leaseUntil.toISOString()}`,
+    )
+    await tx.$executeRawUnsafe(`
+        INSERT INTO "AiCallAdmissionLease" (
+            "id", "attemptId", "campaignId", "memberId", "workerId", "leaseFence",
+            "acquiredAt", "leaseUntil", "releasedAt", "releaseReason", "createdAt", "updatedAt"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,NULL,$7,$7)
+        ON CONFLICT ("attemptId") DO UPDATE SET
+            "workerId"=EXCLUDED."workerId", "leaseFence"=EXCLUDED."leaseFence",
+            "acquiredAt"=EXCLUDED."acquiredAt", "leaseUntil"=EXCLUDED."leaseUntil",
+            "releasedAt"=NULL, "releaseReason"=NULL, "updatedAt"=EXCLUDED."updatedAt"
+    `,
+    leaseId,
+    input.attempt.id,
+    input.campaignId,
+    input.attempt.memberId,
+    input.workerId,
+    leaseFence,
+    input.now,
+    input.leaseUntil)
+    await tx.$executeRawUnsafe(`
+        UPDATE "AiCallCampaignAttempt" SET "admissionLeaseId"=$2, "updatedAt"=$3 WHERE "id"=$1
+    `, input.attempt.id, leaseId, input.now)
+    return { leaseId, leaseFence, leaseUntil: input.leaseUntil }
 }
 
 export const aiCallCampaignPrismaPort = {
@@ -928,6 +1031,21 @@ export const aiCallCampaignPrismaPort = {
         `, concurrentLimit, ratePerMinute, now)
     },
 
+    /**
+     * The Call this attempt is durably linked to, read fresh.
+     *
+     * `beginDialExecution` returns the link as it was BEFORE the adapter ran, so a
+     * first dispatch that linked its Call needs this to know it may defer instead of
+     * synthesising a not-accepted terminal.
+     */
+    async readLinkedCallId(attemptIdInput: string): Promise<string | null> {
+        const attemptId = bounded(attemptIdInput, 'attemptId')
+        const rows = await database.$queryRawUnsafe<Array<{ callId: string | null }>>(`
+            SELECT "callId" FROM "AiCallCampaignAttempt" WHERE "id"=$1
+        `, attemptId)
+        return rows[0]?.callId ?? null
+    },
+
     async acquireAdmission(input: {
         claim: AiCallCampaignLaunchClaim
         now: Date
@@ -987,12 +1105,30 @@ export const aiCallCampaignPrismaPort = {
                 }
             }
 
-            const globalCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(`
-                SELECT COUNT(*)::int AS "count", MIN("leaseUntil") AS "retryAt"
-                FROM "AiCallAdmissionLease" WHERE "releasedAt" IS NULL
-            `)
+            // A durably linked, already dispatched attempt owns its capacity through
+            // the occupancy predicate below — it is counted whether or not any lease
+            // exists. Re-admitting it must therefore establish worker fencing and
+            // nothing else: no second slot, no rate gate, and never the authority to
+            // start another first effect (beginDialExecution already refuses that).
+            if (attempt.callId !== null
+                && attempt.dispatchState !== 'not_dispatched'
+                && attempt.resultEventId === null) {
+                const reconciliationGrant = await armAdmissionLease(tx, {
+                    attempt,
+                    campaignId: campaign.id,
+                    workerId: input.claim.workerId,
+                    now: input.now,
+                    leaseUntil,
+                })
+                return { kind: 'acquired' as const, grant: { ...reconciliationGrant, replayed: true } }
+            }
+
+            const globalCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(
+                occupancyCountQuery(false),
+                attempt.id,
+            )
             if ((globalCounts[0]?.count ?? 0) >= control.concurrentLimit) {
-                const retryAt = globalCounts[0]?.retryAt ?? leaseUntil
+                const retryAt = occupancyRetryAt(globalCounts[0]?.retryAt ?? null, input.now)
                 await appendAudit(tx, campaign.id, {
                     eventId: `aicau_${sha256(`${attempt.id}\0${attempt.claimRevision}\0global-concurrency`)}`,
                     actorId: 'system:ai-call-campaign-runtime',
@@ -1005,12 +1141,13 @@ export const aiCallCampaignPrismaPort = {
                     retryAt,
                 }
             }
-            const campaignCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(`
-                SELECT COUNT(*)::int AS "count", MIN("leaseUntil") AS "retryAt"
-                FROM "AiCallAdmissionLease" WHERE "releasedAt" IS NULL AND "campaignId"=$1
-            `, campaign.id)
+            const campaignCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(
+                occupancyCountQuery(true),
+                attempt.id,
+                campaign.id,
+            )
             if ((campaignCounts[0]?.count ?? 0) >= campaign.concurrentLimit) {
-                const retryAt = campaignCounts[0]?.retryAt ?? leaseUntil
+                const retryAt = occupancyRetryAt(campaignCounts[0]?.retryAt ?? null, input.now)
                 await appendAudit(tx, campaign.id, {
                     eventId: `aicau_${sha256(`${attempt.id}\0${attempt.claimRevision}\0campaign-concurrency`)}`,
                     actorId: 'system:ai-call-campaign-runtime',
@@ -1037,29 +1174,13 @@ export const aiCallCampaignPrismaPort = {
                 return { kind: 'blocked' as const, reason: 'rate' as const, retryAt: rateReady }
             }
 
-            const leaseId = leaseIdentity(attempt.id)
-            const leaseFence = sha256(`${leaseId}\0${input.claim.workerId}\0${input.now.toISOString()}\0${leaseUntil.toISOString()}`)
-            await tx.$executeRawUnsafe(`
-                INSERT INTO "AiCallAdmissionLease" (
-                    "id", "attemptId", "campaignId", "memberId", "workerId", "leaseFence",
-                    "acquiredAt", "leaseUntil", "releasedAt", "releaseReason", "createdAt", "updatedAt"
-                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,NULL,$7,$7)
-                ON CONFLICT ("attemptId") DO UPDATE SET
-                    "workerId"=EXCLUDED."workerId", "leaseFence"=EXCLUDED."leaseFence",
-                    "acquiredAt"=EXCLUDED."acquiredAt", "leaseUntil"=EXCLUDED."leaseUntil",
-                    "releasedAt"=NULL, "releaseReason"=NULL, "updatedAt"=EXCLUDED."updatedAt"
-            `,
-            leaseId,
-            attempt.id,
-            campaign.id,
-            attempt.memberId,
-            input.claim.workerId,
-            leaseFence,
-            input.now,
-            leaseUntil)
-            await tx.$executeRawUnsafe(`
-                UPDATE "AiCallCampaignAttempt" SET "admissionLeaseId"=$2, "updatedAt"=$3 WHERE "id"=$1
-            `, attempt.id, leaseId, input.now)
+            const grant = await armAdmissionLease(tx, {
+                attempt,
+                campaignId: campaign.id,
+                workerId: input.claim.workerId,
+                now: input.now,
+                leaseUntil,
+            })
             const globalNext = new Date(input.now.getTime() + aiCallCampaignRateIntervalMs(control.ratePerMinute))
             const campaignNext = new Date(input.now.getTime() + aiCallCampaignRateIntervalMs(campaign.ratePerMinute))
             await tx.$executeRawUnsafe(`
@@ -1068,10 +1189,7 @@ export const aiCallCampaignPrismaPort = {
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaign" SET "nextAdmitAt"=$2, "updatedAt"=$3 WHERE "id"=$1
             `, campaign.id, campaignNext, input.now)
-            return {
-                kind: 'acquired' as const,
-                grant: { leaseId, leaseFence, leaseUntil, replayed: false },
-            }
+            return { kind: 'acquired' as const, grant: { ...grant, replayed: false } }
         })
     },
 
@@ -1224,7 +1342,7 @@ export const aiCallCampaignPrismaPort = {
         claimFence: string
         leaseFence: string
         retryAt: Date
-        reason: 'adapter_error' | 'missing_reconciliation_result'
+        reason: 'adapter_error' | 'missing_reconciliation_result' | 'dial_pending_linked_call'
         now: Date
     }) {
         return database.$transaction(async (tx) => {
@@ -1254,18 +1372,24 @@ export const aiCallCampaignPrismaPort = {
                 FOR UPDATE
             `, attempt.id, input.leaseFence)
             if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
+            // A live call still in progress is not a failure. Only the two error
+            // reasons stamp a failure code; the pending reason clears it, so a member
+            // whose call is simply still running does not read as broken.
+            const deferralFailureCode = input.reason === 'dial_pending_linked_call'
+                ? null
+                : 'dial_reconciliation_error'
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
-                SET "state"='running', "failureCode"='dial_reconciliation_error',
+                SET "state"='running', "failureCode"=$4,
                     "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=$2, "updatedAt"=$3
                 WHERE "id"=$1
-            `, attempt.id, input.retryAt, input.now)
+            `, attempt.id, input.retryAt, input.now, deferralFailureCode)
             const memberUpdated = await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignMember"
-                SET "state"='running', "failureCode"='dial_reconciliation_error',
+                SET "state"='running', "failureCode"=$5,
                     "nextEligibleAt"=$2, "updatedAt"=$3
                 WHERE "id"=$1 AND "activeAttemptId"=$4
-            `, attempt.memberId, input.retryAt, input.now, attempt.id)
+            `, attempt.memberId, input.retryAt, input.now, attempt.id, deferralFailureCode)
             if (memberUpdated !== 1) {
                 throw new AiCallCampaignConflictError('member_fenced', 'campaign member reconciliation is stale')
             }

@@ -18,6 +18,13 @@ export interface AiCallCampaignDialResult {
     effectRef: string
     /** Calling-owned Call row created by production-shaped adapters. */
     callId?: string
+    /**
+     * `false` when the adapter can prove no provider effect was accepted — a launch
+     * that never started, or a dial the switch refused. It keeps `dispatchState` off
+     * `accepted` for an attempt that never reached the provider. Omitted means
+     * accepted, which is what every settling adapter reports today.
+     */
+    providerAccepted?: boolean
     terminal: {
         eventId: string
         kind: 'success' | 'retryable_failure' | 'permanent_failure'
@@ -27,8 +34,17 @@ export interface AiCallCampaignDialResult {
 }
 
 export interface AiCallCampaignDialPort {
-    /** Starts the first provider effect for a durably authorized launch. */
-    dispatch(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult>
+    /**
+     * Starts the first provider effect for a durably authorized launch.
+     *
+     * `null` means LINKED PENDING: the effect was started and its Call is durably
+     * linked to this attempt, but a real telephone conversation has not settled yet.
+     * A live adapter must return that rather than awaiting the call — the claim and
+     * admission leases are measured in tens of seconds while a call runs for
+     * minutes, so awaiting one would turn every crash into a capacity hole. The
+     * attempt stays campaign-running and is reconciled later.
+     */
+    dispatch(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult | null>
     /** Read-only/provider-idempotent reconciliation; it must never initiate a first effect. */
     reconcile(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult | null>
 }
@@ -164,7 +180,7 @@ export function createAiCallCampaignWorkerRuntime(input: {
         let dialResult: AiCallCampaignDialResult | null
         let providerAccepted = true
         const deferLinkedCallReconciliation = async (
-            reason: 'adapter_error' | 'missing_reconciliation_result',
+            reason: 'adapter_error' | 'missing_reconciliation_result' | 'dial_pending_linked_call',
         ): Promise<AiCallCampaignWorkerCycleResult> => {
             const now = clock()
             const retryAt = reconciliationRetryAt(now, execution.dialExecutionCount)
@@ -208,7 +224,15 @@ export function createAiCallCampaignWorkerRuntime(input: {
         if (renewal) await renewal
         if (renewalFailure) throw renewalFailure
         if (dialResult === null) {
-            if (execution.callId) return deferLinkedCallReconciliation('missing_reconciliation_result')
+            const linkedCallId = execution.callId
+                ?? (await aiCallCampaignPrismaPort.readLinkedCallId(claim.attemptId))
+            if (linkedCallId) {
+                return deferLinkedCallReconciliation(
+                    execution.kind === 'initial_dispatch_authorized'
+                        ? 'dial_pending_linked_call'
+                        : 'missing_reconciliation_result',
+                )
+            }
             providerAccepted = false
             dialResult = {
                 effectRef: `not-accepted:${claim.launchId}`,
@@ -219,6 +243,7 @@ export function createAiCallCampaignWorkerRuntime(input: {
                 },
             }
         }
+        if (dialResult.providerAccepted === false) providerAccepted = false
         const terminal = await aiCallCampaignPrismaPort.recordAttemptResult({
             attemptId: claim.attemptId,
             resultEventId: dialResult.terminal.eventId,
