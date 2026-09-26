@@ -161,9 +161,10 @@ class PushAcceptanceTest {
         launchApp()
         signIn()
         assertMessengerOpen()
-        // The older scenarios are done with the acceptance aid by now, and it is
-        // ongoing, so it would otherwise sit in the shade through the push proof.
-        dismissAcceptanceAid("pre-kill")
+        // The transition from the Stage-1 acceptance aids to the P2 push proof.
+        // Persisted, not just cancelled: ShellTestHooks re-posts the aid on every
+        // Activity start, and the workflow starts one again before the kill.
+        disableAcceptanceAid("pre-kill")
         assertOnlyExpectedNotifications("pre-kill", expectChatNotification = false)
         device.pressHome()
         SystemClock.sleep(SETTLE_MS)
@@ -183,12 +184,23 @@ class PushAcceptanceTest {
      */
     @Test
     fun test11_aPushAfterProcessDeathOpensTheExactConversation() {
-        // Dismissed again, here in the fresh process the push woke. test10 already
-        // dismissed it, but the workflow relaunches MainActivity between that
-        // scenario and the kill - it needs a process to kill - and every Activity
-        // start re-posts the aid. The workflow is out of scope for this change, so
-        // the last word has to be taken on this side of it.
-        dismissAcceptanceAid("pre-tap")
+        // Nothing is dismissed here. The point is that test10's suppression
+        // survived everything since: the Activity the workflow started before the
+        // kill, the kill itself, and this fresh process the push woke.
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val suppressed = TestNotificationSeed.isDiagnosticsDisabled(app)
+        val recreated = aidPostCount()
+        diag("push-clean pre-tap suppressed=$suppressed aid-posts=$recreated")
+        assertTrue(
+            "the acceptance aid is not persistently disabled in the woken process, so " +
+                "any Activity start can put it back",
+            suppressed,
+        )
+        assertTrue(
+            "ShellTestHooks re-created the acceptance aid after the suppression point " +
+                "($recreated posts since the log was cleared)",
+            recreated == 0,
+        )
         val chat = assertOnlyExpectedNotifications("pre-tap", expectChatNotification = true)
         assertProductContentIntent(chat)
 
@@ -205,6 +217,13 @@ class PushAcceptanceTest {
         assertTrue("the tap carried no chat identifier; $start", start.contains("CHAT_ID"))
         assertTrue("the tap carried no message identifier; $start", start.contains("MESSAGE_ID"))
         assertTrue("the tap delivered no target URL; $start", !start.contains("tgt=(none)"))
+
+        // The tap created an Activity, so the hook ran. It must have declined.
+        diag("push-clean post-tap aid-posts=${aidPostCount()} declined=${aidSuppressedCount()}")
+        assertTrue(
+            "the acceptance aid came back when the tap created an Activity",
+            aidPostCount() == 0,
+        )
 
         assertConversationOpen()
     }
@@ -226,20 +245,29 @@ class PushAcceptanceTest {
         .joinToString(",") { "${it.id}/${it.notification.channelId}/${if (isSummary(it)) "summary" else "row"}" }
         .ifEmpty { "none" }
 
-    /** Cancel the acceptance-only aid and wait for the shade to agree. */
-    private fun dismissAcceptanceAid(label: String) {
+    /** Retire the acceptance-only aid for good, and wait for the shade to agree. */
+    private fun disableAcceptanceAid(label: String) {
         val app = InstrumentationRegistry.getInstrumentation().targetContext
-        TestNotificationSeed.dismissDiagnosticsNotification(app)
+        TestNotificationSeed.disableForPushAcceptance(app)
         val gone = waitUntil(ACTION_TIMEOUT) {
             activeNotifications().none { it.id == TestNotificationSeed.DIAGNOSTICS_NOTIFICATION_ID }
         }
-        diag("push-clean $label aid-gone=$gone inv=${inventory(activeNotifications())}")
+        val persisted = TestNotificationSeed.isDiagnosticsDisabled(app)
+        diag("push-clean $label aid-gone=$gone persisted=$persisted inv=${inventory(activeNotifications())}")
         assertTrue(
             "the acceptance diagnostics notification is still posted at $label; " +
                 "inventory ${inventory(activeNotifications())}",
             gone,
         )
+        assertTrue("the suppression did not persist at $label", persisted)
     }
+
+    /** Times the aid was posted since the log was cleared, which must be none. */
+    private fun aidPostCount(): Int =
+        deviceLog().lineSequence().count { it.contains("push-aid posted") }
+
+    private fun aidSuppressedCount(): Int =
+        deviceLog().lineSequence().count { it.contains("push-aid suppressed") }
 
     /**
      * Prove the shade holds nothing that could answer for the chat notification.

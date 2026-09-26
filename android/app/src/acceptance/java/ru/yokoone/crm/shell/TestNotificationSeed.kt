@@ -37,6 +37,12 @@ object TestNotificationSeed {
     const val ACTION_SEED = "ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION"
 
     fun ensureDiagnosticsNotification(context: Context) {
+        if (isDiagnosticsDisabled(context)) {
+            // Says so out loud: the proof that the hook ran and declined is what
+            // separates "suppression held" from "no Activity was ever created".
+            ShellDiagnostics.write("YOKO_NET fail push-aid suppressed")
+            return
+        }
         val manager = NotificationManagerCompat.from(context)
         manager.createNotificationChannel(
             NotificationChannel(
@@ -65,6 +71,7 @@ object TestNotificationSeed {
             .build()
 
         runCatching { manager.notify(DIAGNOSTICS_NOTIFICATION_ID, notification) }
+        ShellDiagnostics.write("YOKO_NET fail push-aid posted")
     }
 
     /**
@@ -89,6 +96,45 @@ object TestNotificationSeed {
      */
     fun dismissDiagnosticsNotification(context: Context) {
         NotificationManagerCompat.from(context).cancel(DIAGNOSTICS_NOTIFICATION_ID)
+    }
+
+    /** Acceptance-only state. Never touched by a shipped build, which has no seed. */
+    private const val STATE_PREFS = "yoko_acceptance_aid"
+    private const val KEY_DISABLED = "diagnostics_disabled"
+
+    /** True once the push phase has taken the aid out of circulation. */
+    fun isDiagnosticsDisabled(context: Context): Boolean = context
+        .getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        .getBoolean(KEY_DISABLED, false)
+
+    /**
+     * Retire the Stage-1 aid for the rest of this installation.
+     *
+     * Cancelling the notification is not enough on its own, and the previous
+     * attempt proved it: ShellTestHooks re-posts the aid on every Activity start,
+     * so any later start - the workflow relaunching the shell to have a process
+     * to kill, or the tap itself - puts it straight back. While two notifications
+     * are posted Android may fold them under a generated group summary, and that
+     * summary then SURVIVES the aid being cancelled again: measured at
+     * `active=2 inv=1934365641/yoko_chat_messages/row,2147483647/…/summary`, one
+     * real notification and a summary that carries no contentIntent of its own.
+     *
+     * So the state is persisted, not remembered: commit(), not apply(), because
+     * the very next thing this scenario expects is to have its process killed.
+     * It survives Activity recreation, process death and a fresh process start.
+     * A fresh install - every acceptance job does `pm clear` first - starts
+     * enabled again, so the Stage-1 scenarios are unaffected.
+     *
+     * Cancels only its own notification. Product chat notifications are never
+     * touched, and cancelAll() would hide the contamination the scenario exists
+     * to expose.
+     */
+    fun disableForPushAcceptance(context: Context) {
+        context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DISABLED, true)
+            .commit()
+        dismissDiagnosticsNotification(context)
     }
 
     /**
