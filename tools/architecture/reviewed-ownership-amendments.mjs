@@ -99,6 +99,7 @@ function assertAmendmentIdentity(amendment, id, historicalReviewer, historicalRe
 }
 
 function collectAmendmentDecisions(amendment, id, rebinds, unassigned) {
+  const ownRebinds = new Set()
   for (const rebind of amendment.source_hash_rebinds ?? []) {
     assert(typeof rebind?.path === 'string' && rebind.path.length > 0
       && SHA256.test(rebind.previous_source_sha256 ?? '')
@@ -107,8 +108,16 @@ function collectAmendmentDecisions(amendment, id, rebinds, unassigned) {
     assert(rebind.review_decision === AMENDMENT_REBIND_DECISION
       && typeof rebind.review_rationale === 'string'
       && rebind.review_rationale.length >= 48, `reviewed executable ownership amendment rebind lacks an explicit decision: ${rebind.path}`)
-    assert(!rebinds.has(rebind.path), `duplicate reviewed executable ownership amendment rebind: ${rebind.path}`)
-    rebinds.set(rebind.path, rebind)
+    assert(!ownRebinds.has(rebind.path), `duplicate reviewed executable ownership amendment rebind: ${rebind.path}`)
+    ownRebinds.add(rebind.path)
+    // A path an earlier amendment already rebound may move again only from the
+    // exact fingerprint that amendment approved, so the fingerprints stay one
+    // unbroken chain from the reviewed assignment to the file. The resolved
+    // rebind keeps the chain's first previous fingerprint, which is what the
+    // validator binds to the reviewed assignment, and its latest current one.
+    const earlier = rebinds.get(rebind.path)
+    assert(!earlier || rebind.previous_source_sha256 === earlier.current_source_sha256, `duplicate reviewed executable ownership amendment rebind: ${rebind.path}`)
+    rebinds.set(rebind.path, earlier ? { ...rebind, previous_source_sha256: earlier.previous_source_sha256 } : rebind)
   }
 
   for (const surface of amendment.unassigned_tracked_surfaces ?? []) {
