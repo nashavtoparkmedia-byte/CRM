@@ -1,8 +1,13 @@
 package ru.yokoone.crm.shell
 
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.service.notification.StatusBarNotification
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -166,10 +171,127 @@ class PushAcceptanceTest {
      * not exist a moment earlier. Nothing is cleared before this scenario: the
      * session it signs into is the one test10 established.
      */
+    /**
+     * DIAGNOSTIC ONLY, and deliberately not the accepted scenario.
+     *
+     * Authorized 2026-09-26 to answer one question and nothing else: does the
+     * notification that is actually on the device at this moment still carry the
+     * PendingIntent ChatNotifications built for it? The system tap is bypassed
+     * on purpose, so a pass here is NOT process-dead acceptance - it only says
+     * which side of the tap the fault is on. The user-tap scenario is restored
+     * once that is known.
+     */
     @Test
     fun test11_aPushAfterProcessDeathOpensTheExactConversation() {
-        tapPushNotification()
-        assertConversationOpen()
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val manager = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val active: Array<StatusBarNotification> = manager.activeNotifications
+
+        // Identity, not text. Matching on words is what let a chat-list preview
+        // pass for a conversation earlier in this milestone.
+        val wantedId = ChatNotifications.notificationIdFor(chatId)
+        val mine = active.filter {
+            it.id == wantedId && it.notification.channelId == ChatNotifications.CHANNEL_ID
+        }
+
+        val summaries = active.count {
+            it.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0
+        }
+        diag(
+            "push-diag active=${active.size} matching=${mine.size} summaries=$summaries" +
+                " ids=${active.joinToString("/") { it.id.toString() }}",
+        )
+        assertTrue(
+            "expected exactly one product notification with id $wantedId on channel " +
+                "${ChatNotifications.CHANNEL_ID}, found ${mine.size} among ${active.size} " +
+                "posted by this app; ${pushDiagnostics()}",
+            mine.size == 1,
+        )
+
+        val sbn = mine.single()
+        val content: PendingIntent? = sbn.notification.contentIntent
+        diag(
+            "push-diag id=${sbn.id} ch=${sbn.notification.channelId} pkg=${sbn.packageName}" +
+                " group=${sbn.notification.group ?: "none"} key=${sbn.groupKey ?: "none"}" +
+                " isGroup=${sbn.isGroup} age=${SystemClock.elapsedRealtime()}ms" +
+                " posted=${sbn.postTime}",
+        )
+        diag(
+            "push-diag content=${if (content == null) "absent" else "present"}" +
+                " creator=${content?.creatorPackage ?: "none"}" +
+                " activity=${
+                    if (content != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        content.isActivity.toString()
+                    } else {
+                        "unknown"
+                    }
+                }",
+        )
+
+        if (content == null) {
+            diag("push-diag CLASSIFICATION=ACTIVE_NOTIFICATION_CONTENT_INTENT_MISSING")
+            assertTrue(
+                "ACTIVE_NOTIFICATION_CONTENT_INTENT_MISSING: the notification on the device " +
+                    "carries no contentIntent, so no tap of it could ever open anything; " +
+                    "${pushDiagnostics()}",
+                false,
+            )
+            return
+        }
+
+        val startsBefore = startCount()
+        var cancelled = false
+        try {
+            content.send()
+        } catch (e: PendingIntent.CanceledException) {
+            cancelled = true
+        }
+        if (cancelled) {
+            diag("push-diag CLASSIFICATION=CONTENT_INTENT_CANCELLED")
+            assertTrue(
+                "CONTENT_INTENT_CANCELLED: the notification's contentIntent was cancelled " +
+                    "before it could be sent; ${pushDiagnostics()}",
+                false,
+            )
+            return
+        }
+
+        // Did sending it start the shell at all? A background activity start that
+        // the system refuses would otherwise read as a lifecycle fault.
+        val started = waitUntil(ACTION_TIMEOUT) { startCount() > startsBefore }
+        diag("push-diag sent started=$started")
+        assertTrue(
+            "CONTENT_INTENT_SEND_PRODUCED_NO_START: send() raised nothing and the shell " +
+                "recorded no new start, so this run cannot classify the contentIntent; " +
+                "${pushDiagnostics()}",
+            started,
+        )
+
+        val text = device.wait(Until.hasObject(By.textContains(inboundText)), MESSENGER_TIMEOUT)
+        val header = device.wait(Until.hasObject(By.desc(BACK_TO_LIST)), ACTION_TIMEOUT) ||
+            device.hasObject(By.text(BACK_TO_LIST))
+        val start = startDiagnostics()
+        val product = start.contains("act=VIEW") && start.contains("keys=") &&
+            start.contains("CHAT_ID") && !start.contains("tgt=(none)")
+        val classification = if (product && text && header) {
+            "CONTENT_INTENT_VALID_SYSTEMUI_TAP_HARNESS_FAULT"
+        } else {
+            "CONTENT_INTENT_OR_PENDINGINTENT_LIFECYCLE_FAULT"
+        }
+        diag("push-diag CLASSIFICATION=$classification conversation=${text && header}")
+        assertTrue(
+            "$classification | $start | conversation=${text && header}",
+            classification == "CONTENT_INTENT_VALID_SYSTEMUI_TAP_HARNESS_FAULT",
+        )
+    }
+
+    /** How many starts the shell has recorded this run. */
+    private fun startCount(): Int =
+        deviceLog().lineSequence().count { it.contains("push-open") }
+
+    /** One diagnostic line, in the shape the job lifts out of the device log. */
+    private fun diag(line: String) {
+        ShellDiagnostics.write("YOKO_NET fail $line")
     }
 
     // ── steps ────────────────────────────────────────────────────────────
