@@ -282,6 +282,7 @@ const moduleTests = {
     command('check-messaging-max-message-boundary.mjs'),
     command('check-messaging-max-attachments-boundary.mjs'),
     command('check-max-provider-account-boundary.mjs'),
+    command('check-max-ws-generation-observation-boundary.mjs'),
   ],
   messaging: [
     command('check-messaging-message-stream-boundary.mjs'),
