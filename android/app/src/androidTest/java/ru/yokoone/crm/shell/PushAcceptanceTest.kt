@@ -194,18 +194,45 @@ class PushAcceptanceTest {
     private fun tapPushNotification() {
         device.openNotification()
         val posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+        if (posted == null) report("no-notification")
         assertNotNull(
-            "no push notification appeared; on screen: ${visibleText()}",
+            "no push notification appeared; ${diagnostics()}",
             posted,
         )
         posted!!.click()
     }
 
+    /**
+     * Put one short line where the job can publish it.
+     *
+     * Reading an Actions job log needs admin rights on the repository, and the
+     * scenario log loses its budget to the six phase-one results, so a failing
+     * push scenario would otherwise be a silence. The shape matches the shell's
+     * other network lines because those are the ones the job lifts out of the
+     * device log. It carries a label, the handler's own outcome and a little of
+     * what was on screen - never a token.
+     */
+    private fun report(label: String) {
+        ShellDiagnostics.write("YOKO_NET fail push-scenario $label ${outcomes()} | ${visibleText(90)}")
+    }
+
+    private fun outcomes(): String = deviceLog()
+        .lineSequence()
+        .mapNotNull { line -> OUTCOME.find(line)?.value }
+        .toList()
+        .takeLast(2)
+        .joinToString(",")
+        .ifEmpty { "no-outcome-logged" }
+
+    private fun diagnostics(): String = "${outcomes()}; on screen: ${visibleText()}"
+
     private fun assertConversationOpen() {
+        val opened = device.wait(Until.hasObject(By.textContains(inboundText)), MESSENGER_TIMEOUT)
+        if (!opened) report("no-conversation")
         assertTrue(
             "the tap did not open the conversation carrying the pushed message; " +
-                "expected «$inboundText»; on screen: ${visibleText()}; tree: ${treeShape(300)}",
-            device.wait(Until.hasObject(By.textContains(inboundText)), MESSENGER_TIMEOUT),
+                "expected «$inboundText»; ${diagnostics()}; tree: ${treeShape(300)}",
+            opened,
         )
         assertTrue(
             "the conversation header is missing; on screen: ${visibleText()}",
@@ -223,7 +250,7 @@ class PushAcceptanceTest {
     /** Everything the shell has written to its diagnostics tag this run. */
     private fun deviceLog(): String = runCatching {
         val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
-            .executeShellCommand("logcat -d -s ${ShellDiagnostics.TAG}:E")
+            .executeShellCommand("logcat -d -s ${ShellDiagnostics.TAG}:E YokoPushAcceptance:I")
         ParcelFileDescriptor.AutoCloseInputStream(fd).use { it.readBytes().toString(Charsets.UTF_8) }
     }.getOrDefault("")
 
@@ -343,5 +370,8 @@ class PushAcceptanceTest {
         const val ACTION_INJECT_PUSH = "ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH"
         const val ACTION_SEED_TOKEN = "ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN"
         const val ACTION_REPORT_STATE = "ru.yokoone.crm.shell.acceptance.action.REPORT_PUSH_STATE"
+
+        /** What the acceptance receiver logs for each injected payload. */
+        val OUTCOME = Regex("INJECTED_PUSH_OUTCOME=\\S+")
     }
 }
