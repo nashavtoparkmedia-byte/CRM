@@ -398,6 +398,39 @@
         "e55a8048fbea69cbd91d5e7a0138b11813eb000143ee7ebdaa21a8e93aa24e1f",
         "fb5ff95710a9f33b89231fb986202031f40b764662ef3813bb597b64dbc3b2e7"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only MAX Channel-owned provider account foundation schema (two new tables with their constraints, guard functions and triggers) inside one explicit transaction through controlled migration tooling and touches no existing table and no historical MAX table; it stores no credential, token or session value; this review grants no application-runtime or production-application authority. The two TRUNCATE sites on the parsed target ON are the BEFORE TRUNCATE clauses of the two truncate guards, not truncations of any table.",
+      "expected_site_signatures": [
+        "0036522fe230311d79351c38d3b10e65e356da10c5a3642955ca1107e5edfba1",
+        "02f0b150a927220a348f37149ca66f2a5c6d4daae2b1feda1b7db809b637c4ed",
+        "035ff4eecae80f92d1cd87e32e152831b2cda3fc49644b2d61d020351df107ee",
+        "0c091f6ce7525d80436f6240f39bf0af6c6c6ff3f516a26f1865293ba49d4ef8",
+        "0e7abef82b77b7380158fb0edc62ddb5c49fe160c59e5ffef4cd793b6e4b1f3f",
+        "2daae57f1e21176250354b29a08c7618fbd781c2f8a6b968bbdeb503b865da51",
+        "32b22e078558acf377c96bb02311c3a59a58bf5d0905bb94b0e1d1de440279b9",
+        "417307a3e02d3b2fd27f24c094b1579a6c7ff8ce02be0c1d0dbeaeeedee5f2c1",
+        "44ac3993a75f8f70e37f395d322a213e71225dbe23dfae506625f7b506f450aa",
+        "69f110cbf93946c95b23e06ab79239ec4730777860ce78bb5deea3eb986181cc",
+        "6fd0a81b7baade3a28e931c6024fce167bf50343da848e73e46957930eebb675",
+        "80de2cdc5966b7622f6069bc48d9dfd6a4177ef8f196ca232ff4f9ee7f2a82a9",
+        "825f831f9eef260853c0d5a26f7183c6bf1627e600261b81215fe9c02298ee65",
+        "88249afe1d29083ed15883d8b2116cb5ee3d97a2626e4970ea242b04e50f4586",
+        "8bb5576e0181dac7e2b854a90c5d0b02f2efc55e54e8e80c3cf615a584709455",
+        "9c57064c70739e0bbce71e34198a700375e47e72a3285ac5c4194188c376c1b1",
+        "a70d8c93f2b06bae7e31a98db3b8503f601fc580592ee0c8fa99a2cb39e741ff",
+        "adac12314edc3828852aae06aa26d24ec648ad31f8d740ed7865e11eacecb763",
+        "ae9024ad0decc2a9b192213ee1043c36fc40e02c6ac061f53fa82f5e3cad3888",
+        "b0e486fe9020461525b3944c462ce7704e9dab01f1d25db674b9bf0f67ab9335",
+        "bd758dd3c2b94d365a2ba10e6c0d4905d7c5e024445a1c8ede929418927a3b0e",
+        "bf53c470d5a5132fd2486be476269ef53b3dba4b98f72ed42368f873af49ec6a",
+        "dbbbad3faafcd8e2fb1528c69660278dde30eae9ee467f361b7c710287851045",
+        "defa7fbcda8343efac57bb61463ea2e947fbf6bd84f006a482e57a78767120db"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -4064,6 +4097,438 @@
         }
       ],
       "review_rationale": "Expand-only statement of the Telegram provider account foundation migration: CREATE_TABLE on TelegramTransportBinding. It creates or constrains only Telegram Channel-owned foundation objects, touches no existing table and stores no credential."
+    },
+    {
+      "site_signature": "adac12314edc3828852aae06aa26d24ec648ad31f8d740ed7865e11eacecb763",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 13,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxAccount",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TABLE on MaxAccount. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "825f831f9eef260853c0d5a26f7183c6bf1627e600261b81215fe9c02298ee65",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 27,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "417307a3e02d3b2fd27f24c094b1579a6c7ff8ce02be0c1d0dbeaeeedee5f2c1",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 46,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxAccount",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_INDEX on MaxAccount. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "8bb5576e0181dac7e2b854a90c5d0b02f2efc55e54e8e80c3cf615a584709455",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 49,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxAccount",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_INDEX on MaxAccount. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "6fd0a81b7baade3a28e931c6024fce167bf50343da848e73e46957930eebb675",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 52,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_INDEX on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "80de2cdc5966b7622f6069bc48d9dfd6a4177ef8f196ca232ff4f9ee7f2a82a9",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 55,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_INDEX on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "dbbbad3faafcd8e2fb1528c69660278dde30eae9ee467f361b7c710287851045",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 58,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_INDEX on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "0e7abef82b77b7380158fb0edc62ddb5c49fe160c59e5ffef4cd793b6e4b1f3f",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 61,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "9c57064c70739e0bbce71e34198a700375e47e72a3285ac5c4194188c376c1b1",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 64,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "a70d8c93f2b06bae7e31a98db3b8503f601fc580592ee0c8fa99a2cb39e741ff",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 89,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxAccount",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxAccount. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "bf53c470d5a5132fd2486be476269ef53b3dba4b98f72ed42368f873af49ec6a",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 97,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxAccount",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxAccount. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "69f110cbf93946c95b23e06ab79239ec4730777860ce78bb5deea3eb986181cc",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 108,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "b0e486fe9020461525b3944c462ce7704e9dab01f1d25db674b9bf0f67ab9335",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 124,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "ae9024ad0decc2a9b192213ee1043c36fc40e02c6ac061f53fa82f5e3cad3888",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 135,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "88249afe1d29083ed15883d8b2116cb5ee3d97a2626e4970ea242b04e50f4586",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 144,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MaxTransportBinding",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: ALTER_TABLE on MaxTransportBinding. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "bd758dd3c2b94d365a2ba10e6c0d4905d7c5e024445a1c8ede929418927a3b0e",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 148,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "max_account_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_FUNCTION on max_account_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "32b22e078558acf377c96bb02311c3a59a58bf5d0905bb94b0e1d1de440279b9",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 194,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "MaxAccount_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TRIGGER on MaxAccount_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "02f0b150a927220a348f37149ca66f2a5c6d4daae2b1feda1b7db809b637c4ed",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 198,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "max_transport_binding_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_FUNCTION on max_transport_binding_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "2daae57f1e21176250354b29a08c7618fbd781c2f8a6b968bbdeb503b865da51",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 256,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "MaxTransportBinding_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TRIGGER on MaxTransportBinding_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "0036522fe230311d79351c38d3b10e65e356da10c5a3642955ca1107e5edfba1",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 260,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "max_provider_account_truncate_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_FUNCTION on max_provider_account_truncate_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "44ac3993a75f8f70e37f395d322a213e71225dbe23dfae506625f7b506f450aa",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 267,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "MaxAccount_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TRIGGER on MaxAccount_truncate_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "0c091f6ce7525d80436f6240f39bf0af6c6c6ff3f516a26f1865293ba49d4ef8",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 268,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: TRUNCATE on ON. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "035ff4eecae80f92d1cd87e32e152831b2cda3fc49644b2d61d020351df107ee",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 271,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "MaxTransportBinding_truncate_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: CREATE_TRIGGER on MaxTransportBinding_truncate_guard. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "defa7fbcda8343efac57bb61463ea2e947fbf6bd84f006a482e57a78767120db",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "line": 272,
+      "column": 8,
+      "method": "sql-script",
+      "functional_owner": "max_channel",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ON",
+          "operation": "TRUNCATE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the MAX provider account foundation migration: TRUNCATE on ON. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
     }
   ]
 }

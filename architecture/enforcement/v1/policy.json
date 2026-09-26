@@ -141,7 +141,8 @@
     "architecture/isolation/platform-shell/channel-delivery-runtime-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json",
     "architecture/isolation/whatsapp-channel/company-account-foundation-v1/module-manifest-amendments.json",
-    "architecture/isolation/telegram-channel/provider-account-foundation-v1/module-manifest-amendments.json"
+    "architecture/isolation/telegram-channel/provider-account-foundation-v1/module-manifest-amendments.json",
+    "architecture/isolation/max-channel/provider-account-foundation-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",

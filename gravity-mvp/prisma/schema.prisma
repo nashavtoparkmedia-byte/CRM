@@ -155,6 +155,59 @@ model MaxConnection {
   updatedAt DateTime @updatedAt
 }
 
+/// YOKO-owned MAX provider account (M2A2-MAX1A). `accountId` is an opaque
+/// internal id; the provider identity is `providerUserId`, exactly the principal
+/// the MAX runtime was authenticated as on its live WebSocket. The value is kept
+/// as the provider sent it and is never parsed as a number. Rows are never
+/// updated except by an explicit lifecycle transition, and never removed.
+/// Inert: nothing in the runtime reads or writes this yet.
+model MaxAccount {
+  accountId             String                @id @db.VarChar(64)
+  providerUserId        String                @unique @db.VarChar(64)
+  lifecycle             String                @db.VarChar(32)
+  lifecycleVersion      Int
+  lifecycleChangedAt    DateTime              @default(now()) @db.Timestamptz(3)
+  lifecycleChangedBy    String                @db.VarChar(128)
+  lifecycleChangeReason String                @db.VarChar(256)
+  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
+  bindings              MaxTransportBinding[]
+  attestations          MaxTransportBinding[] @relation("MaxBindingAttestedPrincipal")
+
+  @@unique([accountId, providerUserId])
+}
+
+/// Attested association of one runtime transport generation with one MAX
+/// provider account. `transportRef` is the YOKO locator of the configured
+/// transport with no foreign key, so no historical MAX table becomes an identity
+/// source. Rows are history: replacing a principal opens a new generation and
+/// never re-points an old one. `attestedProviderUserId` is mandatory and is
+/// bound by a composite foreign key to the principal its own account owns, so a
+/// binding can never attest an identity the account does not hold, and no
+/// separate trust state is needed. `openTransportKey` carries the
+/// one-open-binding-per-transport rule as a plain unique constraint: it is set
+/// while the binding is open and NULL once closed. MAX publishes no expiry, so
+/// `lastAttestedAt` is evidence only and no freshness state is derived from it.
+model MaxTransportBinding {
+  bindingId              String     @id @db.VarChar(64)
+  accountId              String     @db.VarChar(64)
+  transportKind          String     @db.VarChar(32)
+  transportRef           String     @db.VarChar(64)
+  transportGeneration    BigInt
+  attestedProviderUserId String     @db.VarChar(64)
+  attestingInstanceId    String     @db.VarChar(128)
+  lastAttestedAt         DateTime   @default(now()) @db.Timestamptz(3)
+  lastAuthEventKind      String     @db.VarChar(32)
+  openTransportKey       String?    @unique @db.VarChar(128)
+  openedAt               DateTime   @default(now()) @db.Timestamptz(3)
+  closedAt               DateTime?  @db.Timestamptz(3)
+  closeReason            String?    @db.VarChar(32)
+  account                MaxAccount @relation(fields: [accountId], references: [accountId], onDelete: Restrict, onUpdate: NoAction)
+  attestedPrincipal      MaxAccount @relation("MaxBindingAttestedPrincipal", fields: [accountId, attestedProviderUserId], references: [accountId, providerUserId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([transportKind, transportRef, transportGeneration])
+  @@index([accountId])
+}
+
 model DriverMax {
   id                String   @id @default(cuid())
   driverId          String   @unique

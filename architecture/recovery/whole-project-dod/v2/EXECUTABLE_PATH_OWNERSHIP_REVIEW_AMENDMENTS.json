@@ -131,7 +131,7 @@
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository\u2019s own tracked-surface inventory over that commit\u2019s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
@@ -498,6 +498,36 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 7
+      }
+    },
+    {
+      "amendment_id": "contact-identity-m2a2-max1a-max-provider-account-20260925",
+      "reviewed_at": "2026-09-25T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M2A2_MAX1A_CANDIDATE_OWNERSHIP_REVIEW_20260925",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M2A2_MAX1A_MAX_PROVIDER_ACCOUNT_FOUNDATION_IMPLEMENTATION",
+      "reason": "M2A2-MAX1A adds exactly eight tracked executable surfaces and changes no existing ownership. Six sit under the max_channel owned path gravity-mvp/src/modules/max-channel: the domain gravity-mvp/src/modules/max-channel/internal/provider-account/max-account-identity.ts with its proof, the durable writer max-account-writer.ts, the owner-side intake max-account-intake.ts with its proof, and the isolated-PostgreSQL proof max-provider-account.postgres.test.ts. One is the boundary control tools/architecture/check-max-provider-account-boundary.mjs, placed by the established architecture-tooling cohort precedent. One is the expand-only source migration gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql, placed by the established migration cohort precedent. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The reviewed inventory fingerprint is a digest over the surface objects rather than the path set, so it is rebound once the two lifecycle classifications for those same surfaces are recorded; the denominator, the coverage assignments and every semantic ownership field are unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2535,
+        "tracked_inventory_sha256": "79746cfbdd2dcc30650f6a732712a5d44842c19d436eccb383477179b82af93f",
+        "coverage_sha256": "b5866167321bd60306ee15cc9b886cb19060de71feb08d43963fca294d5e3bfe"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2543,
+        "tracked_inventory_sha256": "6639910c9efb68d3c4af6c0af9560457bf52a3f0d57fb4e769e9ed7cd3dc402c",
+        "coverage_sha256": "cfc6af0efb879b7d022c3506980e8acc8c1eb3e5e80ec90db2c130733399c1a6"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 8
       }
     }
   ]

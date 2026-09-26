@@ -9,13 +9,14 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "0f5aae68a64a76c615453a6c75b249cfe643c9a2135b2aa8cefbfdf681d2b48d",
-    "size": 168858,
+    "sha256": "4d2f7d0638b2f81cdd2b5b8c0c0d952c01baf353f431eee0509be0962153a785",
+    "size": 172033,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
     "fleet_operations",
+    "max_channel",
     "telegram_channel",
     "whatsapp_channel"
   ],
@@ -108,6 +109,24 @@
         "tables": [
           "TelegramAccount",
           "TelegramTransportBinding"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20260925120000_add_max_provider_account_foundation",
+      "path": "gravity-mvp/prisma/migrations/20260925120000_add_max_provider_account_foundation/migration.sql",
+      "sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6",
+      "size": 12451,
+      "owner_context": "max_channel",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/max-channel/internal/provider-account/max-provider-account.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "MaxAccount",
+          "MaxTransportBinding"
         ],
         "columns": [],
         "forbidden_indexes": []

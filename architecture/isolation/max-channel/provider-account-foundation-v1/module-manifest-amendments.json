@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CONTACT-IDENTITY-M2A2-MAX1A-MAX-PROVIDER-ACCOUNT-FOUNDATION",
+  "amendments": [
+    {
+      "context": "max_channel",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:MaxAccount",
+        "gravity-mvp/prisma/schema.prisma:MaxTransportBinding"
+      ],
+      "reason": "MAX Channel owns the YOKO-owned MAX provider account, the principal the live MAX runtime was authenticated as, its administrative lifecycle, and the attested binding of one transport generation to one account. MAX publishes no notion of an authentication that expires, so the binding carries evidence of when the principal was last observed and no freshness or trust state; a changed principal closes the generation instead. The transport locator is the YOKO configured-transport locator and carries no foreign key, so no historical MAX table becomes an identity source. These models are an inert expand-only foundation with no runtime writer or reader; they carry no credential, session value or bot token, and no relation to MaxConnection, Contacts or conversations. They are pending source state and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}

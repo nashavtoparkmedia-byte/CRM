@@ -1,0 +1,228 @@
+/**
+ * The M2A2-MAX1A decision table, proven without a database or a clock.
+ *
+ * Every case the writer can face is decided here, so the writer only has to be
+ * a correct client of the decision and of the database constraints.
+ */
+import { describe, expect, it } from 'vitest'
+
+import {
+    MAX_ATTESTATION_ACTIONS_V1,
+    MAX_ATTESTATION_OUTCOMES_V1,
+    MAX_AUTH_EVENT_KINDS_V1,
+    MAX_BINDING_CLOSE_REASONS_V1,
+    MAX_IDENTITY_STATES_V1,
+    MAX_TRANSPORT_KINDS_V1,
+    decideMaxTransportAttestationV1,
+    deriveIdentityStateV1,
+    isExactProviderUserIdV1,
+    isExactTransportRefV1,
+    isMaxAuthEventKindV1,
+    isMaxTransportKindV1,
+    isUsablePrincipalV1,
+    openTransportKeyV1,
+    type OpenBindingSnapshotV1,
+} from './max-account-identity'
+
+const REF = 'max-personal-0123456789abcdef01234567'
+const OTHER_REF = 'max-personal-fedcba9876543210fedcba98'
+/** A control character, written as an escape so this file stays a reviewable text diff. */
+const NUL = '\u0000'
+
+function openBinding(overrides: Partial<OpenBindingSnapshotV1> = {}): OpenBindingSnapshotV1 {
+    return {
+        bindingId: 'binding-1',
+        accountId: 'account-1',
+        accountProviderUserId: '902100000001',
+        attestedProviderUserId: '902100000001',
+        transportGeneration: 1,
+        ...overrides,
+    }
+}
+
+function decide(overrides: Partial<Parameters<typeof decideMaxTransportAttestationV1>[0]> = {}) {
+    return decideMaxTransportAttestationV1({
+        observed: { providerUserId: '902100000001' },
+        transportKind: 'web_session',
+        transportRef: REF,
+        openBinding: null,
+        ...overrides,
+    })
+}
+
+describe('MAX provider principal', () => {
+    it('accepts an opaque provider id in exact provider form', () => {
+        expect(isExactProviderUserIdV1('902100000001')).toBe(true)
+        expect(isExactProviderUserIdV1('user.id-42:x')).toBe(true)
+    })
+
+    it('never parses the principal as a number', () => {
+        // A value that would survive Number() but is not a valid principal, and a
+        // value that is a valid principal but is not numeric at all.
+        expect(isExactProviderUserIdV1(' 9021 ')).toBe(false)
+        expect(isExactProviderUserIdV1('abcDEF')).toBe(true)
+    })
+
+    it('refuses empty, untrimmed, control-bearing and over-long ids', () => {
+        expect(isExactProviderUserIdV1('')).toBe(false)
+        expect(isExactProviderUserIdV1(' 902100000001')).toBe(false)
+        expect(isExactProviderUserIdV1('902100000001 ')).toBe(false)
+        expect(isExactProviderUserIdV1(`9021${NUL}00001`)).toBe(false)
+        expect(isExactProviderUserIdV1('9021\n0001')).toBe(false)
+        expect(isExactProviderUserIdV1('a'.repeat(65))).toBe(false)
+        expect(isExactProviderUserIdV1('a'.repeat(64))).toBe(true)
+    })
+
+    it('refuses the sentinels the MAX runtime itself refuses', () => {
+        expect(isExactProviderUserIdV1('legacy')).toBe(false)
+        expect(isExactProviderUserIdV1('max-default')).toBe(false)
+    })
+
+    it('refuses a non-string principal', () => {
+        expect(isExactProviderUserIdV1(902100000001)).toBe(false)
+        expect(isExactProviderUserIdV1(null)).toBe(false)
+        expect(isUsablePrincipalV1(null)).toBe(false)
+        expect(isUsablePrincipalV1(undefined)).toBe(false)
+        expect(isUsablePrincipalV1({})).toBe(false)
+    })
+})
+
+describe('MAX transport vocabulary', () => {
+    it('knows exactly one transport kind today', () => {
+        expect([...MAX_TRANSPORT_KINDS_V1]).toEqual(['web_session'])
+        expect(isMaxTransportKindV1('web_session')).toBe(true)
+        expect(isMaxTransportKindV1('bot_runtime')).toBe(false)
+        expect(isMaxTransportKindV1('mtproto_session')).toBe(false)
+    })
+
+    it('knows exactly the two live auth frames', () => {
+        expect([...MAX_AUTH_EVENT_KINDS_V1]).toEqual(['ws_auth_op19', 'ws_owner_op53'])
+        expect(isMaxAuthEventKindV1('ws_auth_op19')).toBe(true)
+        expect(isMaxAuthEventKindV1('polling_heartbeat')).toBe(false)
+    })
+
+    it('knows exactly one close reason today', () => {
+        expect([...MAX_BINDING_CLOSE_REASONS_V1]).toEqual(['principal_changed'])
+    })
+
+    it('accepts only the YOKO locator shape', () => {
+        expect(isExactTransportRefV1(REF)).toBe(true)
+        expect(isExactTransportRefV1('max-personal-0123456789ABCDEF01234567')).toBe(false)
+        expect(isExactTransportRefV1('max-personal-0123456789abcdef0123456')).toBe(false)
+        expect(isExactTransportRefV1('max-personal-0123456789abcdef012345678')).toBe(false)
+        expect(isExactTransportRefV1('902100000001')).toBe(false)
+        expect(isExactTransportRefV1('conn-1')).toBe(false)
+        expect(isExactTransportRefV1(null)).toBe(false)
+    })
+
+    it('builds the open key from the transport, never from the principal', () => {
+        expect(openTransportKeyV1('web_session', REF)).toBe(`web_session:${REF}`)
+    })
+})
+
+describe('decideMaxTransportAttestationV1', () => {
+    it('refuses an unknown transport kind before anything else', () => {
+        expect(decide({ transportKind: 'bot_runtime' as never })).toEqual({
+            action: 'refuse', outcome: 'transport_kind_mismatch', closeReason: null,
+        })
+    })
+
+    it('refuses a malformed transport locator', () => {
+        expect(decide({ transportRef: '902100000001' })).toEqual({
+            action: 'refuse', outcome: 'transport_ref_malformed', closeReason: null,
+        })
+    })
+
+    it('refuses a locator that is the principal even when both are well formed', () => {
+        expect(decide({ transportRef: 'abcdef0123456789abcdef01' })).toEqual({
+            action: 'refuse', outcome: 'transport_ref_malformed', closeReason: null,
+        })
+    })
+
+    it('does nothing when no principal was proven', () => {
+        expect(decide({ observed: null })).toEqual({
+            action: 'none', outcome: 'principal_not_usable', closeReason: null,
+        })
+    })
+
+    it('does nothing when no principal was proven even with an open binding', () => {
+        expect(decide({ observed: null, openBinding: openBinding() })).toEqual({
+            action: 'none', outcome: 'principal_not_usable', closeReason: null,
+        })
+    })
+
+    it('opens the first generation when the transport has no open binding', () => {
+        expect(decide()).toEqual({
+            action: 'open_first_generation', outcome: 'opened_first_generation', closeReason: null,
+        })
+    })
+
+    it('re-attests the open generation when the principal is unchanged', () => {
+        expect(decide({ openBinding: openBinding() })).toEqual({
+            action: 'reattest_existing_generation', outcome: 'reattested', closeReason: null,
+        })
+    })
+
+    it('re-attests every time, because MAX publishes no expiry to wait for', () => {
+        const binding = openBinding()
+        expect(decide({ openBinding: binding })).toEqual(decide({ openBinding: binding }))
+        expect(decide({ openBinding: binding }).action).toBe('reattest_existing_generation')
+    })
+
+    it('replaces the generation when the principal behind the transport changed', () => {
+        expect(decide({ openBinding: openBinding({ accountProviderUserId: '902100000002' }) })).toEqual({
+            action: 'replace_on_principal_change',
+            outcome: 'replaced_on_principal_change',
+            closeReason: 'principal_changed',
+        })
+    })
+
+    it('decides from the account the binding names, not from its recorded attestation', () => {
+        // The attested value is deliberately stale here: identity comes from the
+        // account, so a stale attestation cannot suppress a real change.
+        expect(decide({
+            openBinding: openBinding({ accountProviderUserId: '902100000002', attestedProviderUserId: '902100000001' }),
+        }).action).toBe('replace_on_principal_change')
+    })
+
+    it('decides per transport, so another locator is a first generation', () => {
+        expect(decide({ transportRef: OTHER_REF, openBinding: null }).action).toBe('open_first_generation')
+    })
+
+    it('only ever returns declared actions and outcomes', () => {
+        for (const decision of [
+            decide(),
+            decide({ observed: null }),
+            decide({ openBinding: openBinding() }),
+            decide({ openBinding: openBinding({ accountProviderUserId: 'other' }) }),
+            decide({ transportKind: 'nope' as never }),
+            decide({ transportRef: 'nope' }),
+        ]) {
+            expect(MAX_ATTESTATION_ACTIONS_V1).toContain(decision.action)
+            expect(MAX_ATTESTATION_OUTCOMES_V1).toContain(decision.outcome)
+            expect(decision.closeReason === null || MAX_BINDING_CLOSE_REASONS_V1.includes(decision.closeReason)).toBe(true)
+        }
+    })
+})
+
+describe('deriveIdentityStateV1', () => {
+    it('reports no open transport before anything is bound', () => {
+        expect(deriveIdentityStateV1({ lifecycle: null, hasOpenBinding: false })).toBe('no_open_transport')
+        expect(deriveIdentityStateV1({ lifecycle: 'active', hasOpenBinding: false })).toBe('no_open_transport')
+    })
+
+    it('reports not admitted while the account is not active', () => {
+        for (const lifecycle of ['pending_approval', 'rejected', 'disabled', 'retired']) {
+            expect(deriveIdentityStateV1({ lifecycle, hasOpenBinding: true })).toBe('not_admitted')
+        }
+    })
+
+    it('reports identity established only for an active account with an open binding', () => {
+        expect(deriveIdentityStateV1({ lifecycle: 'active', hasOpenBinding: true })).toBe('identity_established')
+    })
+
+    it('never invents a freshness state, because MAX publishes no expiry', () => {
+        expect([...MAX_IDENTITY_STATES_V1]).toEqual(['no_open_transport', 'not_admitted', 'identity_established'])
+        expect(MAX_IDENTITY_STATES_V1.join(' ')).not.toContain('stale')
+    })
+})

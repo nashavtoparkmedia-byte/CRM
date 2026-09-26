@@ -1,0 +1,217 @@
+/**
+ * M2A2-MAX1A intake: the owner-side hand-off into the single MAX
+ * provider-account writer.
+ *
+ * MAX1A is inert. Nothing in the runtime calls this yet: the MAX runtime lives
+ * in a separate process and the authenticated transport that will carry its
+ * observations is MAX1B work. What exists here is the domain-level input shape
+ * and the one funnel every future caller must use, so that no second identity
+ * write path can appear later.
+ *
+ * Telemetry deliberately omits both the provider principal and the transport
+ * locator: the foundation reports shapes and outcomes, never identities.
+ */
+import { operationalLogV1 } from '@/infrastructure/operations/operational-log'
+
+import {
+    isExactTransportRefV1,
+    isMaxAuthEventKindV1,
+    isMaxTransportKindV1,
+    type MaxAuthEventKindV1,
+    type MaxTransportKindV1,
+} from './max-account-identity'
+import {
+    readMaxProviderAccountProjectionV1,
+    recordMaxTransportAttestationV1,
+    type AttestationResultV1,
+    type MaxProviderAccountProjectionV1,
+} from './max-account-writer'
+
+export const MAX_ACCOUNT_TELEMETRY_EVENT_V1 = 'max_provider_account_attestation'
+export const MAX_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1 = 'max_provider_account_attestation_rejected'
+
+/** One observation of a live provider authentication, as the MAX runtime saw it. */
+export interface ObservedAttestationV1 {
+    transportKind: MaxTransportKindV1
+    /** A YOKO locator only. It is read from configuration, never from the principal. */
+    transportRef: string
+    /** Exactly what the live auth frame reported. */
+    providerUserId: string
+    /** The runtime instance that observed it. Diagnostic only, never an identity source. */
+    attestingInstanceId: string
+    /** Epoch milliseconds the runtime observed the principal at. */
+    observedAt: number
+    /** Which live frame carried the principal. */
+    authEventKind: MaxAuthEventKindV1
+}
+
+export const MAX_OBSERVATION_OUTCOMES_V1 = [
+    'recorded',
+    'malformed',
+    'refused',
+    'unavailable',
+] as const
+export type MaxObservationOutcomeV1 = (typeof MAX_OBSERVATION_OUTCOMES_V1)[number]
+
+export interface MaxObservationResultV1 {
+    outcome: MaxObservationOutcomeV1
+    /** The writer's own outcome, when the writer was reached. */
+    action: AttestationResultV1['action'] | null
+}
+
+/** What an operator surface may learn about one transport's account. */
+export interface MaxProviderAccountStateV1 {
+    available: boolean
+    providerAccountId: string | null
+    lifecycle: string | null
+    identityState: MaxProviderAccountProjectionV1['identityState'] | null
+    lastAttestedAt: string | null
+}
+
+export interface AccountIntakeDependenciesV1 {
+    record(input: ObservedAttestationV1): Promise<AttestationResultV1>
+    project(transportKind: MaxTransportKindV1, transportRef: string): Promise<MaxProviderAccountProjectionV1>
+    emit(level: 'info' | 'warn', event: string, context: Readonly<Record<string, unknown>>): void
+    now(): number
+}
+
+function defaultDependencies(): AccountIntakeDependenciesV1 {
+    return {
+        record: (input) => recordMaxTransportAttestationV1({
+            transportKind: input.transportKind,
+            transportRef: input.transportRef,
+            providerUserId: input.providerUserId,
+            attestingInstanceId: input.attestingInstanceId,
+            authEventKind: input.authEventKind,
+        }),
+        project: readMaxProviderAccountProjectionV1,
+        emit: (level, event, context) => operationalLogV1(level, event, context),
+        now: () => Date.now(),
+    }
+}
+
+/**
+ * The bounded shape an observation must have before it may reach the writer.
+ * It is a domain guard, not a transport guard: proving that a caller is
+ * entitled to report at all belongs to whatever authenticated boundary a future
+ * runtime hand-off uses.
+ */
+export function isWellFormedObservationV1(input: ObservedAttestationV1): boolean {
+    if (!isMaxTransportKindV1(input.transportKind)) return false
+    if (!isExactTransportRefV1(input.transportRef)) return false
+    if (!isMaxAuthEventKindV1(input.authEventKind)) return false
+    if (typeof input.attestingInstanceId !== 'string') return false
+    if (input.attestingInstanceId !== input.attestingInstanceId.trim()) return false
+    if (input.attestingInstanceId.length < 1 || input.attestingInstanceId.length > 128) return false
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001F\u007F]/u.test(input.attestingInstanceId)) return false
+    if (!Number.isSafeInteger(input.observedAt) || input.observedAt <= 0) return false
+    return true
+}
+
+/** The bounded telemetry shape. It carries no principal and no locator. */
+function attestationTelemetry(input: {
+    transportKind: MaxTransportKindV1
+    authEventKind: MaxAuthEventKindV1
+    result: AttestationResultV1
+    durationMs: number
+}): Record<string, unknown> {
+    return {
+        channel: 'max',
+        transportKind: input.transportKind,
+        authEventKind: input.authEventKind,
+        action: input.result.action,
+        outcome: input.result.outcome,
+        accountLifecycle: input.result.accountLifecycle,
+        generation: input.result.generation,
+        principalChanged: input.result.principalChanged,
+        durationMs: input.durationMs,
+    }
+}
+
+export function createMaxAccountIntakeV1(deps: AccountIntakeDependenciesV1) {
+    return {
+        /**
+         * Records one observed attestation and reports a bounded outcome. It
+         * never surfaces a raw failure, so no caller can be tempted to branch on
+         * a database error.
+         */
+        async observe(input: ObservedAttestationV1): Promise<MaxObservationResultV1> {
+            if (!isWellFormedObservationV1(input)) {
+                try {
+                    deps.emit('warn', MAX_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1, { channel: 'max', reason: 'malformed' })
+                } catch {
+                    // Telemetry must not become a second failure path.
+                }
+                return { outcome: 'malformed', action: null }
+            }
+
+            const startedAt = deps.now()
+            let result: AttestationResultV1
+            try {
+                result = await deps.record(input)
+            } catch (error) {
+                const refused = (error as { name?: unknown } | null)?.name === 'MaxAccountRefusalV1'
+                try {
+                    deps.emit('warn', MAX_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1, {
+                        channel: 'max',
+                        transportKind: input.transportKind,
+                        reason: refused ? 'refused' : 'unavailable',
+                    })
+                } catch {
+                    // Telemetry must not become a second failure path.
+                }
+                return { outcome: refused ? 'refused' : 'unavailable', action: null }
+            }
+
+            deps.emit('info', MAX_ACCOUNT_TELEMETRY_EVENT_V1, attestationTelemetry({
+                transportKind: input.transportKind,
+                authEventKind: input.authEventKind,
+                result,
+                durationMs: Math.max(0, deps.now() - startedAt),
+            }))
+            return { outcome: 'recorded', action: result.action }
+        },
+
+        /** Operator display only. It never writes. */
+        async describe(transportKind: MaxTransportKindV1, transportRef: string): Promise<MaxProviderAccountStateV1> {
+            try {
+                const projection = await deps.project(transportKind, transportRef)
+                return {
+                    available: true,
+                    providerAccountId: projection.providerAccountId,
+                    lifecycle: projection.lifecycle,
+                    identityState: projection.identityState,
+                    lastAttestedAt: projection.lastAttestedAt,
+                }
+            } catch {
+                return { available: false, providerAccountId: null, lifecycle: null, identityState: null, lastAttestedAt: null }
+            }
+        },
+    }
+}
+
+const globalForAccountIntake = globalThis as unknown as {
+    __yokoMaxAccountIntakeV1?: ReturnType<typeof createMaxAccountIntakeV1>
+}
+
+function intake(): ReturnType<typeof createMaxAccountIntakeV1> {
+    return globalForAccountIntake.__yokoMaxAccountIntakeV1
+        ?? (globalForAccountIntake.__yokoMaxAccountIntakeV1 = createMaxAccountIntakeV1(defaultDependencies()))
+}
+
+/**
+ * Records one observed live authentication. The single owner-side entry point
+ * into the MAX provider-account foundation.
+ */
+export async function observeMaxProviderPrincipalV1(input: ObservedAttestationV1): Promise<MaxObservationResultV1> {
+    return await intake().observe(input)
+}
+
+/** Reads one transport's account state for an operator surface. Never throws. */
+export async function describeMaxProviderAccountV1(
+    transportKind: MaxTransportKindV1,
+    transportRef: string,
+): Promise<MaxProviderAccountStateV1> {
+    return await intake().describe(transportKind, transportRef)
+}

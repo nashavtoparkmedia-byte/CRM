@@ -1,0 +1,188 @@
+/**
+ * The M2A2-MAX1A intake, proven against injected dependencies.
+ *
+ * The intake is the one owner-side funnel into the writer. These tests prove it
+ * refuses a malformed observation before the writer is reached, bounds every
+ * failure into an outcome the caller can act on, and never puts a principal or a
+ * transport locator into telemetry.
+ */
+import { describe, expect, it, vi } from 'vitest'
+
+import {
+    MAX_ACCOUNT_TELEMETRY_EVENT_V1,
+    MAX_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1,
+    createMaxAccountIntakeV1,
+    isWellFormedObservationV1,
+    type ObservedAttestationV1,
+} from './max-account-intake'
+import type { AttestationResultV1, MaxProviderAccountProjectionV1 } from './max-account-writer'
+
+const REF = 'max-personal-0123456789abcdef01234567'
+const PRINCIPAL = '902100000001'
+/** A control character, written as an escape so this file stays a reviewable text diff. */
+const NUL = '\u0000'
+
+function observation(overrides: Partial<ObservedAttestationV1> = {}): ObservedAttestationV1 {
+    return {
+        transportKind: 'web_session',
+        transportRef: REF,
+        providerUserId: PRINCIPAL,
+        attestingInstanceId: 'instance-1',
+        observedAt: 1_700_000_000_000,
+        authEventKind: 'ws_owner_op53',
+        ...overrides,
+    }
+}
+
+function recorded(overrides: Partial<AttestationResultV1> = {}): AttestationResultV1 {
+    return {
+        action: 'open_first_generation',
+        outcome: 'opened_first_generation',
+        accountLifecycle: 'pending_approval',
+        generation: 1,
+        principalChanged: false,
+        ...overrides,
+    }
+}
+
+function projection(overrides: Partial<MaxProviderAccountProjectionV1> = {}): MaxProviderAccountProjectionV1 {
+    return {
+        channel: 'max',
+        providerAccountId: 'account-1',
+        lifecycle: 'pending_approval',
+        identityState: 'not_admitted',
+        lastAttestedAt: '2026-09-25T00:00:00.000Z',
+        capabilities: [],
+        ...overrides,
+    }
+}
+
+function harness(overrides: Partial<Parameters<typeof createMaxAccountIntakeV1>[0]> = {}) {
+    const emitted: Array<{ level: string; event: string; context: Record<string, unknown> }> = []
+    let clock = 1_000
+    const deps = {
+        record: vi.fn(async () => recorded()),
+        project: vi.fn(async () => projection()),
+        emit: (level: 'info' | 'warn', event: string, context: Readonly<Record<string, unknown>>) => {
+            emitted.push({ level, event, context: { ...context } })
+        },
+        now: () => (clock += 5),
+        ...overrides,
+    }
+    return { intake: createMaxAccountIntakeV1(deps), deps, emitted }
+}
+
+describe('isWellFormedObservationV1', () => {
+    it('accepts a well formed observation', () => {
+        expect(isWellFormedObservationV1(observation())).toBe(true)
+    })
+
+    it('refuses an unknown transport kind', () => {
+        expect(isWellFormedObservationV1(observation({ transportKind: 'bot_runtime' as never }))).toBe(false)
+    })
+
+    it('refuses a malformed transport locator', () => {
+        expect(isWellFormedObservationV1(observation({ transportRef: 'conn-1' }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ transportRef: PRINCIPAL }))).toBe(false)
+    })
+
+    it('refuses an unknown auth event kind', () => {
+        expect(isWellFormedObservationV1(observation({ authEventKind: 'ws_auth_op48' as never }))).toBe(false)
+    })
+
+    it('refuses an unusable attesting instance', () => {
+        expect(isWellFormedObservationV1(observation({ attestingInstanceId: '' }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ attestingInstanceId: ' instance-1' }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ attestingInstanceId: `a${NUL}b` }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ attestingInstanceId: 'a'.repeat(129) }))).toBe(false)
+    })
+
+    it('refuses an unusable observation timestamp', () => {
+        expect(isWellFormedObservationV1(observation({ observedAt: 0 }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ observedAt: -1 }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ observedAt: 1.5 }))).toBe(false)
+        expect(isWellFormedObservationV1(observation({ observedAt: Number.NaN }))).toBe(false)
+    })
+})
+
+describe('intake.observe', () => {
+    it('records a well formed observation and reports the writer action', async () => {
+        const { intake, deps } = harness()
+        await expect(intake.observe(observation())).resolves.toEqual({ outcome: 'recorded', action: 'open_first_generation' })
+        expect(deps.record).toHaveBeenCalledTimes(1)
+    })
+
+    it('never reaches the writer for a malformed observation', async () => {
+        const { intake, deps, emitted } = harness()
+        await expect(intake.observe(observation({ transportRef: 'conn-1' }))).resolves.toEqual({ outcome: 'malformed', action: null })
+        expect(deps.record).not.toHaveBeenCalled()
+        expect(emitted.map(entry => entry.event)).toEqual([MAX_ACCOUNT_TELEMETRY_REJECTED_EVENT_V1])
+    })
+
+    it('bounds a writer refusal into an outcome', async () => {
+        const refusal = Object.assign(new Error('refused'), { name: 'MaxAccountRefusalV1' })
+        const { intake } = harness({ record: vi.fn(async () => { throw refusal }) })
+        await expect(intake.observe(observation())).resolves.toEqual({ outcome: 'refused', action: null })
+    })
+
+    it('bounds an unavailable database into an outcome rather than a raw failure', async () => {
+        const { intake } = harness({ record: vi.fn(async () => { throw new Error('connection refused') }) })
+        await expect(intake.observe(observation())).resolves.toEqual({ outcome: 'unavailable', action: null })
+    })
+
+    it('survives telemetry that throws', async () => {
+        const { intake } = harness({ emit: () => { throw new Error('sink down') } })
+        await expect(intake.observe(observation({ transportRef: 'conn-1' }))).resolves.toEqual({ outcome: 'malformed', action: null })
+    })
+
+    it('emits neither the principal nor the transport locator', async () => {
+        const { intake, emitted } = harness({ record: vi.fn(async () => recorded({ action: 'replace_on_principal_change', outcome: 'replaced_on_principal_change', principalChanged: true, generation: 2 })) })
+        await intake.observe(observation())
+        expect(emitted).toHaveLength(1)
+        expect(emitted[0].event).toBe(MAX_ACCOUNT_TELEMETRY_EVENT_V1)
+        const serialized = JSON.stringify(emitted[0].context)
+        expect(serialized).not.toContain(PRINCIPAL)
+        expect(serialized).not.toContain(REF)
+        expect(serialized).not.toContain('max-personal-')
+        expect(emitted[0].context).toMatchObject({
+            channel: 'max',
+            transportKind: 'web_session',
+            authEventKind: 'ws_owner_op53',
+            action: 'replace_on_principal_change',
+            principalChanged: true,
+            generation: 2,
+        })
+    })
+
+    it('reports a bounded duration rather than the caller clock', async () => {
+        const { intake, emitted } = harness()
+        await intake.observe(observation())
+        expect(emitted[0].context.durationMs).toBeGreaterThanOrEqual(0)
+    })
+})
+
+describe('intake.describe', () => {
+    it('reports the durable projection', async () => {
+        const { intake } = harness()
+        await expect(intake.describe('web_session', REF)).resolves.toEqual({
+            available: true,
+            providerAccountId: 'account-1',
+            lifecycle: 'pending_approval',
+            identityState: 'not_admitted',
+            lastAttestedAt: '2026-09-25T00:00:00.000Z',
+        })
+    })
+
+    it('reports unavailable instead of throwing', async () => {
+        const { intake } = harness({ project: vi.fn(async () => { throw new Error('down') }) })
+        await expect(intake.describe('web_session', REF)).resolves.toEqual({
+            available: false, providerAccountId: null, lifecycle: null, identityState: null, lastAttestedAt: null,
+        })
+    })
+
+    it('never writes', async () => {
+        const { intake, deps } = harness()
+        await intake.describe('web_session', REF)
+        expect(deps.record).not.toHaveBeenCalled()
+    })
+})
