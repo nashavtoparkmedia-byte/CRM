@@ -116,10 +116,10 @@ class MainActivity : AppCompatActivity() {
         // the same message as a preview - so the start has to say for itself
         // whether it carried a target. safeUrl keeps the identifier out.
         ShellDiagnostics.write(
-            "YOKO_NET fail push-open cold action=${intent?.action}" +
-                " cats=${intent?.categories?.joinToString(",") ?: "none"}" +
-                " keys=${intent?.extras?.keySet()?.joinToString(",") ?: "none"}" +
-                " target=${ShellDiagnostics.safeUrl(fromNotification)}" +
+            "YOKO_NET fail push-open cold act=${shortName(intent?.action)}" +
+                " cats=${intent?.categories?.joinToString(",") { shortName(it) } ?: "none"}" +
+                " keys=${intent?.extras?.keySet()?.joinToString(",") { shortName(it) } ?: "none"}" +
+                " tgt=${ShellDiagnostics.safeUrl(fromNotification)}" +
                 " restored=${savedInstanceState != null}",
         )
         when {
@@ -146,9 +146,9 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         val target = consumeDeepLinkUrl(intent)
         ShellDiagnostics.write(
-            "YOKO_NET fail push-open new action=${intent.action}" +
-                " keys=${intent.extras?.keySet()?.joinToString(",") ?: "none"}" +
-                " target=${ShellDiagnostics.safeUrl(target)}",
+            "YOKO_NET fail push-open new act=${shortName(intent.action)}" +
+                " keys=${intent.extras?.keySet()?.joinToString(",") { shortName(it) } ?: "none"}" +
+                " tgt=${ShellDiagnostics.safeUrl(target)}",
         )
         if (target == null) return
         load(target)
@@ -491,6 +491,16 @@ class MainActivity : AppCompatActivity() {
      * back to whichever conversation they last tapped, losing wherever they had
      * navigated since. A notification opens a conversation once.
      */
+    /**
+     * Last dot-segment of a fully qualified constant name.
+     *
+     * The start lines have to survive a 200-character annotation and a
+     * 400-character assertion message, and the difference that matters is VIEW
+     * against MAIN, not the package they live in.
+     */
+    private fun shortName(value: String?): String =
+        value?.substringAfterLast('.') ?: "null"
+
     private fun consumeDeepLinkUrl(intent: Intent?): String? {
         val chatId = intent?.getStringExtra(ChatNotifications.EXTRA_CHAT_ID) ?: return null
         val url = CrmOrigin.buildOpenChatUrl(

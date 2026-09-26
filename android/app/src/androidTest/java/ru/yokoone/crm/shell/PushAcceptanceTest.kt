@@ -284,10 +284,12 @@ class PushAcceptanceTest {
             device.hasObject(By.text(BACK_TO_LIST))
         if (!header) report("no-conversation-header")
         assertTrue(
-            "the tap reached the message but not the conversation: the control that " +
-                "goes back to the list is absent, which is the chat list with the " +
-                "pushed message as a preview; shell: ${startDiagnostics()}; " +
-                "on screen: ${visibleText()}",
+            // Diagnostics first, deliberately: an annotation keeps 200 characters
+            // of a line and this message is cut at 400, and the sentence is worth
+            // less than the start it is describing.
+            "${startDiagnostics()} << no conversation: the back-to-list control is " +
+                "absent, so this is the chat list with the pushed message as a " +
+                "preview; screen: ${visibleText(60)}",
             header,
         )
     }
@@ -302,9 +304,10 @@ class PushAcceptanceTest {
      */
     private fun startDiagnostics(): String = deviceLog()
         .lineSequence()
-        .filter { it.contains("push-open") || it.contains("push-tap") }
+        .filter { it.contains("push-open") }
+        .map { it.substringAfter("YOKO_NET fail ").trim() }
         .toList()
-        .takeLast(3)
+        .takeLast(2)
         .joinToString(" | ")
         .ifEmpty { "<the shell logged no start at all>" }
 
