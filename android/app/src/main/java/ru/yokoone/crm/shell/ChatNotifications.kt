@@ -85,7 +85,7 @@ object ChatNotifications {
 
         val intent = Intent(context, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            flags = launchFlagsFor(LiveActivities.any)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_CHAT_ID, chatId)
             putExtra(EXTRA_CHANNEL_TAB, channelTab)
             putExtra(EXTRA_MESSAGE_ID, messageId)
@@ -97,15 +97,7 @@ object ChatNotifications {
             intent,
             // IMMUTABLE: another app must not be able to rewrite the extras and
             // aim this shell at a different conversation.
-            //
-            // CANCEL_CURRENT rather than UPDATE_CURRENT: two PendingIntents are
-            // "the same" by Intent.filterEquals, which ignores both extras AND
-            // flags. UPDATE_CURRENT would therefore hand back the one created
-            // for a live Activity, keeping its launch flags, and the decision
-            // below would silently have no effect. The notification is re-posted
-            // under the same id in the same breath, so nothing the operator can
-            // see is cancelled.
-            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -119,29 +111,6 @@ object ChatNotifications {
             .build()
 
         return runCatching { manager.notify(notificationId, notification) }.isSuccess
-    }
-
-    /**
-     * How the tap must start the Activity, given whether one exists.
-     *
-     * MainActivity is `singleTask`, so a notification tap normally reaches the
-     * one instance through onNewIntent and the task - including the WebView's
-     * history - is kept. That is the CLEAR_TOP case and it is left exactly as
-     * it was.
-     *
-     * When the system has destroyed the Activity but kept its task, that path
-     * loses the target completely: measured on an API 34 emulator, the tap
-     * relaunched the task's root from the task's OWN launcher intent
-     * (`act=MAIN cats=LAUNCHER keys=none`) and onNewIntent was never called, so
-     * the shell had nothing to aim at and fell back to the chat list. CLEAR_TASK
-     * is the answer there because the task is the thing that is stale: its
-     * Activity is gone and with it the WebView state that CLEAR_TOP exists to
-     * preserve, so clearing it costs nothing and makes the Intent that starts
-     * the Activity the one carrying the conversation.
-     */
-    internal fun launchFlagsFor(anyActivityAlive: Boolean): Int = when {
-        anyActivityAlive -> Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        else -> Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
     }
 
     /** Stable, collision-resistant enough id per conversation. */
