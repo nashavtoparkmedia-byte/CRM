@@ -1076,14 +1076,61 @@ jobs:
 
           # Nothing is cleared here: the tap must land in the session test10
           # established, which is the point of the scenario.
+          #
+          # --no-restart is what makes this scenario provable at all. Without it
+          # `am instrument` force-stops the target package before attaching, and a
+          # force-stop takes the package's PendingIntents with it: the notification
+          # stays in the shade but its contentIntent is gone, so the tap falls
+          # through to the system's "open the app" fallback. Measured on this
+          # workflow across six runs, the shell saw act=MAIN cats=LAUNCHER
+          # flags=0x10000000 - NEW_TASK alone, which is neither a launcher tap nor
+          # anything the shell builds - and never received the conversation. With
+          # --no-restart the instrumentation attaches to the process the push
+          # already woke, and the notification it posted keeps working.
+          #
+          # This applies to this invocation only. The foreground and background
+          # push scenarios post from the instrumented process itself, so nothing
+          # force-stops them and they are left exactly as they are.
           out="$RUNNER_TEMP/scenario-test11.log"
-          timeout 600 "$ADB" shell am instrument -w -r \
+          timeout 600 "$ADB" shell am instrument --no-restart -w -r \
             -e class "$CLASS#test11_aPushAfterProcessDeathOpensTheExactConversation" \
             -e chatId "'$PUSH_CHAT_ID'" -e messageId "'$PUSH_MESSAGE_ID'" \
             -e channel "'$PUSH_CHANNEL'" -e inboundText "'$INBOUND_TEXT'" \
             -e pushToken "'$PUSH_TOKEN'" \
-            "$RUNNER" 2>&1 | tee "$out"
-          if ! grep -q "OK (1 test)" "$out"; then
+            "$RUNNER" > "$out" 2>&1 &
+          instr=$!
+
+          # Sample the target PID while the instrumentation attaches. The whole
+          # point is that the process the push woke is the one that runs the test,
+          # so a changed PID means the repair did not take and the scenario would
+          # be proving something else.
+          seen=""
+          for _ in $(seq 1 20); do
+            now=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
+            [ -n "$now" ] && case " $seen " in *" $now "*) ;; *) seen="$seen $now";; esac
+            kill -0 "$instr" 2>/dev/null || break
+            sleep 1
+          done
+          echo "target PID(s) seen while instrumentation attached:$seen"
+
+          # Captured, not asserted here: a failing instrumentation must still
+          # reach the diagnostics below rather than ending the step at `wait`.
+          rc=0; wait "$instr" || rc=$?
+          cat "$out"
+
+          if grep -qE "Unknown option: --no-restart|Error: Unknown" "$out"; then
+            echo "::error::am instrument does not accept --no-restart on this image; not falling back to force-stop"
+            exit 1
+          fi
+
+          # One PID, and it is the one the push woke.
+          if [ "$(printf '%s' "$seen" | wc -w)" -ne 1 ] || [ "$seen" != " $woken" ]; then
+            echo "::error::instrumentation did not attach to the woken process: expected $woken, saw$seen"
+            exit 1
+          fi
+          echo "::notice::process-dead PID proof: killed, woken as $woken, instrumented in$seen"
+
+          if [ "$rc" -ne 0 ] || ! grep -q "OK (1 test)" "$out"; then
             grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
               | tail -6 | while IFS= read -r l; do
                 echo "::error::test11: $(printf '%s' "$l" | head -c 400)"
@@ -1091,6 +1138,15 @@ jobs:
             echo "::error::test11 did not report OK"
             exit 1
           fi
+
+          # What the tap actually delivered, from the shell's own record.
+          timeout 60 "$ADB" logcat -d -s YokoShellDiag:E > "$RUNNER_TEMP/logcat-push-dead-shell.log" || true
+          start=$(grep -a "push-open cold" "$RUNNER_TEMP/logcat-push-dead-shell.log" | tail -1)
+          echo "::notice::process-dead start: $(printf '%s' "$start" | sed -e 's/.*YokoShellDiag: //' | head -c 200)"
+          printf '%s' "$start" | grep -q "tgt=(none)" \
+            && { echo "::error::the tap delivered no conversation to the shell"; exit 1; }
+          printf '%s' "$start" | grep -q "keys=CHAT_ID" \
+            || { echo "::error::the tap carried no conversation identifier"; exit 1; }
 
       - name: Collect logcat, screenshots and the shell's own diagnostics
         if: always()

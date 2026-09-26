@@ -1470,6 +1470,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-push-p2-acceptance-composite-norestart-00e6297b-20260926",
+      "reviewed_at": "2026-09-26T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_P2_ACCEPTANCE_COMPOSITE_EXECUTOR_REVIEW_20260926",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MOBILE_PUSH_P2_PROCESS_DEAD_HARNESS_REPAIR_AUTHORIZED_20260926",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 and every amendment before this one are preserved byte for byte. Like its four predecessors, this record exists only on the temporary acceptance composite and on neither canonical branch."
+      },
+      "reason": "Records a digest-only transition on the acceptance-only composite for one bounded change to the process-dead acceptance invocation: am instrument now attaches with --no-restart. Without it the instrumentation force-stops the target package before attaching, and the force-stop takes the package's PendingIntents with it, so the notification the woken process posted stayed in the shade with nothing left to open; measured across six runs the shell was started instead by the system's fallback, act=MAIN cats=LAUNCHER flags=0x10000000, and never received the conversation. The same change carries the minimal proof that the repair took: the target process id is sampled while the instrumentation attaches and must still be the one the push woke, the flag being rejected by the image is refused rather than fallen back from, and the shell's own start line must carry a conversation identifier and a target. No other scenario is touched: the foreground and background push scenarios post from the instrumented process itself and are left as they are, and the phase-one scenarios are untouched. Only the bytes of .github/workflows/android-acceptance-e2e.yml change; its lifecycle registry entry is rebound with TEST/TEST_SUPPORT and production_capability NONE and its rationale unchanged, no environment name or phase moved, and the two reviewed credential dispositions bound to those bytes - the disposable acceptance database setup at lines 161 and 165, both TEST_SUPPORT under lifecycle TEST with production_capability NONE - are rebound with it across the three bound hashes each carries, keeping site signature, line and column. The denominator stays at 2,624 surfaces with context-owned 1,395 and governed exclusions 1,229, the coverage digest is unchanged, and no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion changes; no ownership is reassigned, no tracked path is added or removed, no unassigned surface is attributed and no source hash rebind is carried in this record.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "02cfd8f81d9098a1657b8f9ce8c0e82ee9384d28ec22c0f2d4772309730c186f",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "ef31532b27034f19d144d05d2505f4219628180266b95c16a51b10d8c51deb02",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
