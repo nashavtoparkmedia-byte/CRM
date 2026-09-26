@@ -1,8 +1,4 @@
 import { createHash } from 'node:crypto'
-import {
-    STALE_CALL_RECONCILE_INTERVAL_MS_V1,
-    STALE_CALL_RECONCILE_LOOKBACK_MS_V1,
-} from '@/lib/freeswitch/EslClient'
 import { CONTROLLED_REAL_CALL_MAX_ANSWERED_MS } from './controlled-real-ai-call'
 
 /**
@@ -57,9 +53,22 @@ export const EFFECT_OBSERVATION_MARGIN_MS = 120_000
  * a channel can still be legally alive until the physical bound, and the stale-call
  * repair can still write a durable terminal fact until its lookback plus one cycle.
  */
+/**
+ * The stale-call repair's own evidence window, mirrored.
+ *
+ * The authority is `STALE_CALL_RECONCILE_LOOKBACK_MS_V1` /
+ * `STALE_CALL_RECONCILE_INTERVAL_MS_V1` in the FreeSWITCH client, but this module is
+ * reachable from the Calling public facade and therefore may not import a provider
+ * implementation. So the two numbers are restated here as Calling-owned facts and a
+ * test asserts they still equal the exported ones — a drift fails the build instead
+ * of silently shortening the horizon.
+ */
+export const MIRRORED_STALE_CALL_LOOKBACK_MS = 600_000
+export const MIRRORED_STALE_CALL_RECONCILE_INTERVAL_MS = 30_000
+
 export const MIN_CAMPAIGN_EFFECT_HORIZON_MS = Math.max(
     MAX_PHYSICAL_EFFECT_MS + EFFECT_OBSERVATION_MARGIN_MS,
-    STALE_CALL_RECONCILE_LOOKBACK_MS_V1 + STALE_CALL_RECONCILE_INTERVAL_MS_V1 + EFFECT_OBSERVATION_MARGIN_MS,
+    MIRRORED_STALE_CALL_LOOKBACK_MS + MIRRORED_STALE_CALL_RECONCILE_INTERVAL_MS + EFFECT_OBSERVATION_MARGIN_MS,
 )
 
 /**

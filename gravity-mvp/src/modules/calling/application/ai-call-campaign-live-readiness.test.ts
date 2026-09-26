@@ -6,6 +6,14 @@ import {
     inspectAiCallCampaignLiveReadiness,
 } from './ai-call-campaign-live-readiness'
 import { inspectControlledRealCallReadiness } from './controlled-real-ai-call'
+import {
+    MIRRORED_STALE_CALL_LOOKBACK_MS,
+    MIRRORED_STALE_CALL_RECONCILE_INTERVAL_MS,
+} from './ai-call-campaign-live-dial'
+import {
+    STALE_CALL_RECONCILE_INTERVAL_MS_V1,
+    STALE_CALL_RECONCILE_LOOKBACK_MS_V1,
+} from '@/lib/freeswitch/EslClient'
 
 /**
  * Campaign live readiness fails closed on the machinery a real call needs, and on
@@ -158,5 +166,14 @@ describe('live campaign runtime is still unreachable', () => {
 
     it('still rejects every live mode value', () => {
         expect(mode).toContain("return 'unsupported_live'")
+    })
+})
+
+describe('mirrored evidence windows', () => {
+    it('still match the stale-call reconciliation constants they stand in for', () => {
+        // The horizon is derived from these; a drift must fail here rather than
+        // quietly leave the recovery window too short.
+        expect(MIRRORED_STALE_CALL_LOOKBACK_MS).toBe(STALE_CALL_RECONCILE_LOOKBACK_MS_V1)
+        expect(MIRRORED_STALE_CALL_RECONCILE_INTERVAL_MS).toBe(STALE_CALL_RECONCILE_INTERVAL_MS_V1)
     })
 })
