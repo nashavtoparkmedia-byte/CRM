@@ -1021,6 +1021,18 @@ jobs:
             exit 1
           fi
 
+          # The app's process ends with the instrumentation that established the
+          # session: am instrument -w tears down the process it ran in. So the
+          # app has to be brought back up, and put in the background, before
+          # anything can kill it - the scenario is about a process the system
+          # takes while the app is backgrounded, not about a process that was
+          # never there. The session itself is on disk, flushed when the shell
+          # was paused, so this launch signs into it rather than re-logging in.
+          timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" > /dev/null
+          sleep 10
+          timeout 60 "$ADB" shell input keyevent KEYCODE_HOME
+          sleep 4
+
           alive=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
           [ -n "$alive" ] || { echo "::error::the app was not running before the kill"; exit 1; }
           echo "app process before the kill: $alive"
