@@ -1368,6 +1368,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-push-p2-acceptance-composite-evidence-ab690af8-20260926",
+      "reviewed_at": "2026-09-26T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_P2_ACCEPTANCE_COMPOSITE_EXECUTOR_REVIEW_20260926",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MOBILE_PUSH_BOUNDED_P1_LOOPBACK_TEST_SEAM_REPAIR_AUTHORIZED_20260926",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 and every amendment before this one are preserved byte for byte. Like its immediate predecessor, this record exists only on the temporary acceptance composite and on neither canonical branch."
+      },
+      "reason": "Records a second digest-only transition on the acceptance-only composite. A push scenario that failed was twice reported as a silence: the shared evidence step publishes six lines from the combined scenario log and the six phase-one results fill that budget first, while reading the job log needs repository admin rights, so two runs ended with no statement of what failed. The push steps now annotate from their own scenario output and also accumulate the filtered device log the evidence step publishes. Only the bytes of .github/workflows/android-acceptance-e2e.yml change; its lifecycle registry entry is rebound with TEST/TEST_SUPPORT and production_capability NONE unchanged and its rationale untouched, because no environment name or phase changed, and the two DISPOSABLE_ACCEPTANCE_DATABASE_SETUP dispositions bound to those bytes are rebound with it, their sites keeping site signature, line and column. The denominator stays at 2,624 surfaces with context-owned 1,395 and governed exclusions 1,229, the coverage digest is unchanged, and no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion changes; no ownership is reassigned, no tracked path is added, no unassigned surface is attributed and no source hash rebind is carried. The current triple is the repository's own derivation over the composite tree: tracked inventory digest f3694631 -> 6e62daec.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "f3694631846426c655befc788c7355962d1db703995a30ed16858977cdfd1a3f",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "6e62daecf1e6aa8cc96bb8f7f939852a099aca696eadb6623298f68917ddd531",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

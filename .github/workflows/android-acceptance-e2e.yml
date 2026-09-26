@@ -753,7 +753,14 @@ jobs:
             -e pushToken "$PUSH_TOKEN" \
             "$RUNNER" 2>&1 | tee "$out"
 
-          grep -q "OK (1 test)" "$out" || { echo "::error::test07 did not report OK"; exit 1; }
+          if ! grep -q "OK (1 test)" "$out"; then
+            grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
+              | tail -6 | while IFS= read -r l; do
+                echo "::error::test07: $(printf '%s' "$l" | head -c 400)"
+              done
+            echo "::error::test07 did not report OK"
+            exit 1
+          fi
           timeout 60 "$ADB" logcat -d -s YokoPushAcceptance:I > "$RUNNER_TEMP/logcat-push-seed.log" || true
           grep -q "SEEDED_PUSH_TOKEN=accepted" "$RUNNER_TEMP/logcat-push-seed.log" \
             || { echo "::error::the acceptance build did not accept the seeded token"; exit 1; }
@@ -883,10 +890,21 @@ jobs:
               echo "SCENARIO OK: $t" | tee -a "$LOG"
             else
               echo "SCENARIO DID NOT REPORT OK: $t" | tee -a "$LOG"
+              # Annotate from this scenario's OWN output. The shared evidence
+              # step publishes six lines from the combined log and phase one's
+              # six results fill that budget, so a push scenario that fails was
+              # reported as a silence twice; reading the job log needs
+              # repository admin rights.
+              grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|FAILURES|No tests found|shortMsg" "$out" \
+                | tail -6 | while IFS= read -r l; do
+                  echo "::error::$t: $(printf '%s' "$l" | head -c 400)"
+                done
               failed=1
             fi
 
             timeout 60 "$ADB" logcat -d -v time >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E YokoPushAcceptance:I \
+              >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null
           done
           exit $failed
 
@@ -988,7 +1006,14 @@ jobs:
             -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
             -e pushToken "$PUSH_TOKEN" \
             "$RUNNER" 2>&1 | tee "$out"
-          grep -q "OK (1 test)" "$out" || { echo "::error::test10 did not report OK"; exit 1; }
+          if ! grep -q "OK (1 test)" "$out"; then
+            grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
+              | tail -6 | while IFS= read -r l; do
+                echo "::error::test10: $(printf '%s' "$l" | head -c 400)"
+              done
+            echo "::error::test10 did not report OK"
+            exit 1
+          fi
 
           alive=$(timeout 30 "$ADB" shell pidof "$PKG" | tr -d '\r')
           [ -n "$alive" ] || { echo "::error::the app was not running before the kill"; exit 1; }
@@ -1040,7 +1065,14 @@ jobs:
             -e channel "$PUSH_CHANNEL" -e inboundText "$INBOUND_TEXT" \
             -e pushToken "$PUSH_TOKEN" \
             "$RUNNER" 2>&1 | tee "$out"
-          grep -q "OK (1 test)" "$out" || { echo "::error::test11 did not report OK"; exit 1; }
+          if ! grep -q "OK (1 test)" "$out"; then
+            grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
+              | tail -6 | while IFS= read -r l; do
+                echo "::error::test11: $(printf '%s' "$l" | head -c 400)"
+              done
+            echo "::error::test11 did not report OK"
+            exit 1
+          fi
 
       - name: Collect logcat, screenshots and the shell's own diagnostics
         if: always()
