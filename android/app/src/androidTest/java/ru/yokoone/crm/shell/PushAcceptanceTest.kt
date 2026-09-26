@@ -208,11 +208,18 @@ class PushAcceptanceTest {
         device.waitForIdle()
 
         device.openNotification()
-        var posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+        // The body, not the title. The shell's own diagnostics notification is
+        // ongoing and shares the app, so by the time this scenario taps - a
+        // minute or more after the payload arrived, because am instrument has to
+        // start first - the two can be collapsed into one group whose summary row
+        // opens nothing. The body line belongs to the chat notification alone.
+        var posted = device.wait(Until.findObject(By.textContains(PUSH_BODY)), NOTIFICATION_TIMEOUT)
+            ?: device.findObject(By.textContains(PUSH_TITLE))
         if (posted == null) {
             device.pressBack()
             device.openNotification()
-            posted = device.wait(Until.findObject(By.textContains(PUSH_TITLE)), NOTIFICATION_TIMEOUT)
+            posted = device.wait(Until.findObject(By.textContains(PUSH_BODY)), NOTIFICATION_TIMEOUT)
+                ?: device.findObject(By.textContains(PUSH_TITLE))
         }
         if (posted == null) report("no-notification")
         assertNotNull(
@@ -223,12 +230,17 @@ class PushAcceptanceTest {
         // some other route - a stray tap on the launcher, a notification owned by
         // something else - looks exactly like a scenario that tapped the push and
         // got nowhere, and only the owner of the clicked object separates them.
+        // Click the row, not the text inside it. The Intent belongs to whatever
+        // ancestor is clickable; a tap on a child that happens to sit over a
+        // different row is how a notification opens something it never pointed at.
+        var row = posted
+        while (row != null && !row.isClickable) row = row.parent
         ShellDiagnostics.write(
-            "YOKO_NET fail push-tap owner=${posted!!.applicationPackage}" +
-                " on=${device.currentPackageName}" +
-                " res=${posted.resourceName ?: "none"}",
+            "YOKO_NET fail push-tap found=${posted!!.resourceName ?: "none"}" +
+                " row=${row?.resourceName ?: "none"}" +
+                " on=${device.currentPackageName}",
         )
-        posted.click()
+        (row ?: posted).click()
         device.waitForIdle()
         ShellDiagnostics.write("YOKO_NET fail push-tap after=${device.currentPackageName}")
     }
@@ -442,6 +454,15 @@ class PushAcceptanceTest {
 
         /** Exactly the copy in res/values/strings.xml. */
         const val PUSH_TITLE = "Новое сообщение"
+
+        /**
+         * The chat notification's body, also exactly as in strings.xml.
+         *
+         * Unlike the title, no other notification this app posts carries it: the
+         * diagnostics notification says something else and the seeded one says
+         * something else again.
+         */
+        const val PUSH_BODY = "Нажмите, чтобы открыть диалог"
 
         const val ACTION_INJECT_PUSH = "ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH"
         const val ACTION_SEED_TOKEN = "ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN"
