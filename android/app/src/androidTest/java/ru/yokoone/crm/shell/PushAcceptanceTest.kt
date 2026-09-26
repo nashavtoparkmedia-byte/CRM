@@ -249,11 +249,39 @@ class PushAcceptanceTest {
                 "expected «$inboundText»; ${diagnostics()}; tree: ${treeShape(300)}",
             opened,
         )
+        // The text alone is not proof of anything: the chat list shows the same
+        // message as a preview under the conversation's name, so a tap that only
+        // reached the list satisfies the wait above. The control that goes back
+        // to the list is the thing that only exists inside a conversation, and
+        // on a cold start it can render a moment after the text, so this waits
+        // for it rather than reading the screen once.
+        val header = device.wait(Until.hasObject(By.desc(BACK_TO_LIST)), ACTION_TIMEOUT) ||
+            device.hasObject(By.text(BACK_TO_LIST))
+        if (!header) report("no-conversation-header")
         assertTrue(
-            "the conversation header is missing; on screen: ${visibleText()}",
-            device.hasObject(By.desc(BACK_TO_LIST)) || device.hasObject(By.text(BACK_TO_LIST)),
+            "the tap reached the message but not the conversation: the control that " +
+                "goes back to the list is absent, which is the chat list with the " +
+                "pushed message as a preview; shell: ${startDiagnostics()}; " +
+                "on screen: ${visibleText()}",
+            header,
         )
     }
+
+    /**
+     * What the shell said about the start that the tap produced.
+     *
+     * Placed first in the failure message because it is the only line that
+     * separates "the notification never delivered its target" from "the target
+     * was delivered and the CRM answered with the list", and an Actions job log
+     * needs admin rights to read while an annotation does not.
+     */
+    private fun startDiagnostics(): String = deviceLog()
+        .lineSequence()
+        .filter { it.contains("push-open") }
+        .toList()
+        .takeLast(3)
+        .joinToString(" | ")
+        .ifEmpty { "<the shell logged no start at all>" }
 
     private fun assertMessengerOpen() {
         val open = device.wait(Until.hasObject(By.textContains(MAX_CHAT)), MESSENGER_TIMEOUT)

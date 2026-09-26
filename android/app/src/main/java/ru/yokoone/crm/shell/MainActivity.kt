@@ -110,6 +110,16 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
 
         val fromNotification = consumeDeepLinkUrl(intent)
+        // Name which of the three starts this was. A push that arrives after
+        // the system has taken the process is the one case where the target can
+        // go missing and the screen still looks plausible - the chat list shows
+        // the same message as a preview - so the start has to say for itself
+        // whether it carried a target. safeUrl keeps the identifier out.
+        ShellDiagnostics.write(
+            "push-open cold action=${intent?.action} " +
+                "target=${ShellDiagnostics.safeUrl(fromNotification)} " +
+                "restored=${savedInstanceState != null}",
+        )
         when {
             // A notification tap always wins over restored state: the operator
             // asked for a specific conversation.
@@ -132,7 +142,11 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val target = consumeDeepLinkUrl(intent) ?: return
+        val target = consumeDeepLinkUrl(intent)
+        ShellDiagnostics.write(
+            "push-open new action=${intent.action} target=${ShellDiagnostics.safeUrl(target)}",
+        )
+        if (target == null) return
         load(target)
     }
 
