@@ -267,7 +267,7 @@ function main() {
 
   // The proofs are what make these invariants behavioural, so this control runs
   // them rather than trusting that something else will.
-  const vitest = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--reporter=basic',
+  const vitest = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run',
     'src/modules/contacts/public/v1/contact-card-summary.test.ts',
     'src/modules/contacts/public/v1/client-ui/ContactCorePanel.test.tsx',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
