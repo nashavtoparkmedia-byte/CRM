@@ -54,7 +54,6 @@ describe('FCM configuration', () => {
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
     const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
     const complete: MobilePushEnvironmentV1 = {
-        NODE_ENV: 'test',
         MOBILE_PUSH_FCM_PROJECT_ID: 'yoko-acceptance',
         MOBILE_PUSH_FCM_CLIENT_EMAIL: 'push@yoko-acceptance.iam.gserviceaccount.com',
         MOBILE_PUSH_FCM_PRIVATE_KEY: pem.replace(/\n/g, '\\n'),
@@ -74,15 +73,76 @@ describe('FCM configuration', () => {
         expect(readFcmTransportConfigV1({ ...complete, MOBILE_PUSH_FCM_PRIVATE_KEY: 'not a key' })).toEqual({ ok: false, problem: 'invalid_private_key' })
     })
 
-    it('accepts an endpoint override only outside production and only on loopback', () => {
-        const loopback = readFcmTransportConfigV1({ ...complete, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: 'http://127.0.0.1:3907' })
-        expect(loopback.ok && loopback.config.sendUrl).toBe('http://127.0.0.1:3907/v1/projects/yoko-acceptance/messages:send')
-        expect(loopback.ok && loopback.config.oauthAudience).toBe('https://oauth2.googleapis.com/token')
-        for (const override of ['http://10.0.0.5:3907', 'https://evil.example', 'http://127.0.0.1:3907/?x=1', 'http://user:pw@127.0.0.1:1', 'file:///etc/passwd', 'nonsense']) {
-            expect(readFcmTransportConfigV1({ ...complete, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: override })).toEqual({ ok: false, problem: 'endpoint_override_refused' })
+    const refused = { ok: false, problem: 'endpoint_override_refused' }
+
+    it('targets Google when no override is set, whether or not the capability is granted', () => {
+        // The flag on its own must change nothing. It authorizes an override; it
+        // is not itself a request to redirect anything.
+        for (const env of [complete, { ...complete, MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: 'true' }]) {
+            const read = readFcmTransportConfigV1(env)
+            expect(read.ok && read.config.oauthTokenUrl).toBe('https://oauth2.googleapis.com/token')
+            expect(read.ok && read.config.sendUrl).toBe('https://fcm.googleapis.com/v1/projects/yoko-acceptance/messages:send')
+            expect(read.ok && read.config.overridden).toBe(false)
         }
-        expect(readFcmTransportConfigV1({ ...complete, NODE_ENV: 'production', MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: 'http://127.0.0.1:3907' }))
-            .toEqual({ ok: false, problem: 'endpoint_override_refused' })
+        expect(readFcmTransportConfigV1({ ...complete, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: '   ' }).ok).toBe(true)
+    })
+
+    it('refuses an override that was never authorized by name', () => {
+        // The authorization no longer comes from NODE_ENV, which a built server
+        // reports as production whatever it is given. It has to be asked for.
+        expect(readFcmTransportConfigV1({ ...complete, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: 'http://127.0.0.1:3907' }))
+            .toEqual(refused)
+        for (const flag of ['false', 'TRUE', '1', 'yes', '', 'true-ish']) {
+            expect(readFcmTransportConfigV1({
+                ...complete,
+                MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: flag,
+                MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: 'http://127.0.0.1:3907',
+            }), flag).toEqual(refused)
+        }
+        // Trimmed, like every other value this file reads.
+        expect(readFcmTransportConfigV1({
+            ...complete,
+            MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: ' true ',
+            MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: 'http://127.0.0.1:3907',
+        }).ok).toBe(true)
+    })
+
+    it('accepts a loopback override once the capability is granted', () => {
+        const allowed = { ...complete, MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: 'true' }
+        for (const override of ['http://127.0.0.1:3907', 'http://localhost:3907', 'http://[::1]:3907', 'https://127.0.0.1:3907']) {
+            const read = readFcmTransportConfigV1({ ...allowed, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: override })
+            expect(read.ok, override).toBe(true)
+            if (!read.ok) continue
+            // Both destinations move together, and the JWT audience does not:
+            // Google requires its own token endpoint as the assertion audience
+            // even when the request never leaves the machine.
+            expect(read.config.oauthTokenUrl).toBe(`${override}/token`)
+            expect(read.config.sendUrl).toBe(`${override}/v1/projects/yoko-acceptance/messages:send`)
+            expect(read.config.oauthAudience).toBe('https://oauth2.googleapis.com/token')
+            expect(read.config.overridden).toBe(true)
+        }
+    })
+
+    it('still refuses everything that is not a bare loopback URL, capability or not', () => {
+        const allowed = { ...complete, MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: 'true' }
+        const rejected = [
+            'http://10.0.0.5:3907',          // private but not loopback
+            'http://169.254.169.254/',       // link-local metadata
+            'https://evil.example',          // arbitrary remote host
+            'http://[::2]:3907',             // not the IPv6 loopback
+            'file:///etc/passwd',            // unsupported scheme
+            'ftp://127.0.0.1:21',            // unsupported scheme
+            'http://user@127.0.0.1:3907',    // userinfo
+            'http://user:pw@127.0.0.1:3907', // userinfo with password
+            'http://127.0.0.1:3907/?x=1',    // query
+            'http://127.0.0.1:3907/#frag',   // fragment
+            'nonsense',                      // not a URL
+            '://127.0.0.1',                  // malformed
+        ]
+        for (const override of rejected) {
+            expect(readFcmTransportConfigV1({ ...allowed, MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE: override }), override)
+                .toEqual(refused)
+        }
     })
 })
 
@@ -107,7 +167,7 @@ describe('real FCM adapter against the deterministic stand-in', () => {
         })
         base = `http://127.0.0.1:${port}`
         const read = readFcmTransportConfigV1({
-            NODE_ENV: 'test',
+            MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE: 'true',
             MOBILE_PUSH_FCM_PROJECT_ID: 'yoko-acceptance',
             MOBILE_PUSH_FCM_CLIENT_EMAIL: 'push@yoko-acceptance.iam.gserviceaccount.com',
             MOBILE_PUSH_FCM_PRIVATE_KEY: pair.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),

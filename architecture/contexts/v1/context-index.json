@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "309dac31a6c20401814066cfe6cb344f87a5a2627a83574b13e89e037b6c0058"
+      "sha256": "477e7b22875640ff7c07877c711b516b290fb1c5065859af3051b9332f9fd4d0"
     },
     {
       "context": "operations_observability",
