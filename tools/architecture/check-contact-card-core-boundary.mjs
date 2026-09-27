@@ -13,6 +13,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { stripVTControlCharacters } from 'node:util'
 
 import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 
@@ -71,6 +72,21 @@ function moduleReferences(relative, source) {
   }
   visit(parse(relative, source))
   return references
+}
+
+/**
+ * The passing-test count from a Vitest summary.
+ *
+ * Hosted runs decorate stdout with ANSI colour and cursor sequences, so the
+ * summary cannot be matched against raw output: locally this control read
+ * "Tests  19 passed (19)" and hosted it read the same text wrapped in escape
+ * codes, so it reported that no tests had passed while 19 actually had. Stripping
+ * terminal control characters first makes one parser serve both.
+ */
+export function passingProofCount(stdout) {
+  const plain = stripVTControlCharacters(String(stdout ?? ''))
+  const matched = /Tests\s+(\d+)\s+passed/u.exec(plain)
+  return matched === null ? null : Number(matched[1])
 }
 
 /** Members of one type alias, so the contract's shape is asserted, not grepped. */
@@ -265,6 +281,17 @@ function main() {
     assert(caught, `probe ${name} was not caught by ${checkName}`)
   }
 
+  // The summary parser is itself load-bearing: when it failed to see an
+  // ANSI-decorated hosted summary, this control reported "no passing tests" for a
+  // run in which all of them passed. Both shapes are pinned here so that can only
+  // regress loudly.
+  assert.equal(passingProofCount('\n Test Files  2 passed (2)\n      Tests  19 passed (19)\n'), 19,
+    'the plain Vitest summary is no longer parsed')
+  assert.equal(passingProofCount('\u001B[2K\u001B[1A\u001B[32m Test Files \u001B[39m 2 passed\u001B[90m (2)\u001B[39m\n\u001B[32m      Tests \u001B[39m 19 passed\u001B[90m (19)\u001B[39m\n'), 19,
+    'an ANSI-decorated Vitest summary is not parsed')
+  assert.equal(passingProofCount(''), null, 'an empty summary must not be read as a passing run')
+  assert.equal(passingProofCount('Tests  no tests'), null, 'a summary without a count must not be read as a passing run')
+
   // The proofs are what make these invariants behavioural, so this control runs
   // them rather than trusting that something else will.
   const vitest = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run',
@@ -272,15 +299,15 @@ function main() {
     'src/modules/contacts/public/v1/client-ui/ContactCorePanel.test.tsx',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
   assert.equal(vitest.status, 0, `the contact card core proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
-  const passed = /Tests\s+(\d+) passed/u.exec(vitest.stdout)
-  assert(passed !== null && Number(passed[1]) > 0, `the proofs reported no passing tests:\n${vitest.stdout}`)
+  const passed = passingProofCount(vitest.stdout)
+  assert(passed !== null && passed > 0, `the proofs reported no passing tests:\n${vitest.stdout}`)
 
   process.stdout.write(`${JSON.stringify({
     status: 'PASS',
     control: 'contact-card-core-boundary',
     checks: CHECKS.length,
     negative_probes: PROBES.length,
-    core_tests: Number(passed[1]),
+    core_tests: passed,
     summary_fields: SUMMARY_FIELDS.length,
     database_models_read: 4,
     composed_yet: false,
