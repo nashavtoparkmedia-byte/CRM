@@ -1,9 +1,10 @@
 "use client"
 
 import { Phone, PhoneOutgoing, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { toast } from "sonner"
+import { isRenderedInMobileShellV1 } from './mobile-shell-client'
 
 /**
  * Click-to-call button for driver / contact / lead cards.
@@ -23,10 +24,37 @@ import { toast } from "sonner"
  * inherits codec context from the a-leg — every attempt died with 488
  * INCOMPATIBLE_DESTINATION ~3s after the bridge action. The two-leg
  * originate sidesteps that entirely.
+ *
+ * In the Android shell this whole flow is unavailable and always was: the server
+ * refuses to hand the shell a SIP password, so the softphone never reaches
+ * `registered` and the button below is permanently disabled. There the operator
+ * gets a plain tel: link instead, which the shell hands to the system dialer, and
+ * the call runs on their own mobile subscription. No SIP credential, no
+ * microphone permission, no automatic placement - the dialer opens with the
+ * number filled in and the operator presses call themselves.
+ *
+ * Detected after mount rather than during render, because the server has no
+ * User-Agent while producing this markup and a mismatch would hydrate wrong.
  */
 export default function CallButton({ phoneNumber, label = 'Позвонить' }: { phoneNumber: string; label?: string }) {
     const { status, activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
     const [busy, setBusy] = useState(false)
+    const [inMobileShell, setInMobileShell] = useState(false)
+
+    useEffect(() => { setInMobileShell(isRenderedInMobileShellV1()) }, [])
+
+    if (inMobileShell) {
+        return (
+            <a
+                href={`tel:${phoneNumber}`}
+                title={`Позвонить ${phoneNumber}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-white hover:bg-primary/90 transition-colors"
+            >
+                <Phone className="h-3.5 w-3.5"/>
+                {label}
+            </a>
+        )
+    }
 
     const disabled = status !== 'registered' || !!activeCall || busy
     const title =
