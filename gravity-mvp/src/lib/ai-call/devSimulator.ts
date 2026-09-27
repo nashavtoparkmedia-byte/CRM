@@ -87,8 +87,11 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         function: {
             name: 'transfer_to_manager',
             description:
-                'Перевести разговор на живого менеджера. Используй, когда лид настойчиво ' +
-                'просит человека, или вопрос лида выходит за рамки сценария.',
+                'Зафиксировать запрос лида на менеджера и завершить этот разговор. ' +
+                'Используй, когда лид настойчиво просит человека, или вопрос лида ' +
+                'выходит за рамки сценария. Соединения с менеджером во время этого ' +
+                'звонка не происходит: не говори, что соединяешь, переводишь или что ' +
+                'менеджер перезвонит.',
             parameters: {
                 type: 'object',
                 properties: { reason: { type: 'string' } },
@@ -124,6 +127,7 @@ function buildSystemMessage(scenario: AiCallScenarioWithProject): string {
         '— После каждого внятного ответа лида вызывай save_lead_data.',
         '— Когда все вопросы закрыты — вызывай end_call с итогом.',
         '— Если лид агрессивен, требует человека или вопрос вне сценария — вызывай transfer_to_manager.',
+        '— Соединения с менеджером не происходит: не обещай перевод, ожидание на линии или обратный звонок — скажи, что зафиксировал запрос на менеджера, и заверши звонок.',
         '— Не сочиняй факты. Не отвечай на off-topic — мягко возвращай к вопросу.',
     ].join('\n')
 }
@@ -256,8 +260,11 @@ export async function simulateAiCall(opts: SimulateOptions): Promise<SimulationR
                     lead_data: leadData,
                 }
                 terminationReason = 'transferred'
-                // Bot's final line — mirrors call-session._dispatchTool.
-                transcript.push({ role: 'assistant', content: 'Соединяю вас с менеджером, оставайтесь на линии.' })
+                // Bot's final line — mirrors call-session._dispatchTool. The
+                // simulator has to represent the same product semantics as the
+                // bridge: the request is recorded and the call ends, with no live
+                // transfer and no promised callback.
+                transcript.push({ role: 'assistant', content: 'Спасибо. Я зафиксировал ваш запрос на менеджера. На этом завершу звонок.' })
                 break
             }
 

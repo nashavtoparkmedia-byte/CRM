@@ -930,6 +930,52 @@ test('the cap preempts a goodbye grace: one hangup, sent immediately', async () 
     assert.deepEqual(h.lifecycle.snapshot().terminationTimers, [], 'no wait is left behind')
 })
 
+test('the cap preempts a transfer grace exactly as it preempts a goodbye', async () => {
+    const h = harness()
+    const session = fakeSession()
+    h.sessions.set(X, session)
+    await answered(h)
+
+    // The lead asked for a manager: the session said so and the kill waits behind
+    // that phrase. The hard deadline must not queue up behind it either.
+    assert.equal(h.lifecycle.terminate(X, { reason: 'transferred', graceMs: 5000 }), 'scheduled')
+    await tick()
+    const grace = h.liveTimers(5000)
+    assert.equal(grace.length, 1)
+    assert.equal(h.kills().length, 0)
+
+    capTimers(h)[0].fn()
+    await tick()
+
+    assert.equal(grace[0].cleared, true, 'the pending transfer grace is cancelled, not fired')
+    assert.equal(grace[0].fired, false)
+    assert.deepEqual(h.kills(), [`uuid_kill ${X} ${DEFAULT_HANGUP_CAUSE}`], 'one hangup in total')
+    assert.deepEqual(h.calls.termination[2], {
+        kind: 'escalated',
+        callUuid: X,
+        reason: 'max_duration',
+        cause: DEFAULT_HANGUP_CAUSE,
+        graceMs: 0,
+        preempted_reason: 'transferred',
+        preempted_grace_ms: 5000,
+    })
+    assert.deepEqual(h.lifecycle.snapshot().terminationTimers, [], 'no wait is left behind')
+})
+
+test('a transfer on a channel the lead already dropped sends nothing', async () => {
+    const h = harness()
+    await answered(h)
+    h.lifecycle.handleEvent(ev('CHANNEL_HANGUP_COMPLETE', X, '9999', 'hangup'))
+    await tick()
+
+    assert.equal(h.lifecycle.terminate(X, { reason: 'transferred', graceMs: 5000 }), 'suppressed')
+    await tick()
+
+    assert.equal(h.kills().length, 0, 'zero ESL kills for a dead channel')
+    assert.equal(h.liveTimers(5000).length, 0, 'and no grace timer for one either')
+    assert.equal(h.calls.termination[1].detail, 'channel already hung up')
+})
+
 test('a request that wants a grace never preempts a pending one', async () => {
     const h = harness()
     await answered(h)
