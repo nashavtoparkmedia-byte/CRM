@@ -414,29 +414,15 @@ describe('ingestion modes', () => {
         expect(store.checkpoints.size).toBe(0)
     })
 
-    it('fetches and classifies in dry_run without writing orders, freshness or reconciliation', async () => {
-        const { runtime, store, fleet } = world('dry_run')
-        fleet.add(YOKO, { id: 'o1', bookedAt: ago(HOUR) })
-        fleet.add(YOKO, { id: 'o2', bookedAt: ago(30 * HOUR) })
-        const result = await settle(runtime.runTick())
-        expect(result.errors).toEqual([])
-        expect(fleet.requestsFor(YOKO).length).toBeGreaterThan(1)
-        expect(store.orders.size).toBe(0)
-        expect(store.writes).toEqual([])
-        expect(store.progress(YOKO)).toEqual({
-            lastHotSuccessAt: null,
-            reconciliationPassStartedAt: null,
-            reconciliationFloorBookedAt: null,
-            reconciliationCursorBookedAt: null,
-            lastReconciliationCompletedAt: null,
-        })
-        const checkpoint = store.checkpoints.get(YOKO) ?? store.checkpoints.get(OTHER)
-        expect(checkpoint).toBeDefined()
-        const reconciled = [...store.checkpoints.values()].find((row) => row.lastRunSummary?.dryRun)
-        expect(reconciled?.lastRunSummary?.dryRun).toMatchObject({ passStartedAt: expect.any(String), cursor: expect.any(String) })
-        expect(store.checkpoints.get(YOKO)).toMatchObject({ lastRunMode: 'dry_run', lastRunStatus: 'succeeded' })
-        expect(await runtime.requestHotRefresh(YOKO)).toEqual({ status: 'not_scheduled', reason: 'mode_not_write' })
-    })
+    // Retired 2026-09-25 together with the scheduled dry_run mode. This test
+    // pinned the contract "dry_run writes only its own progress" — that is, it
+    // asserted the very writes (checkpoint row, lastRunMode, lastRunStatus,
+    // lastRunSummary.dryRun) that made the mode unusable as a production
+    // preflight. The read-only authorization probe replaces it and is covered by
+    // cash-order-ingestion-preflight.test.ts, which asserts the opposite: that
+    // no persistence is attempted at all. The scheduler can no longer reach a
+    // dry run, which the config test in cash-order-ingestion-windows.test.ts
+    // asserts by resolving the retired value to off.
 
     it('writes orders, freshness and the initial backfill in write mode', async () => {
         const { runtime, store, fleet } = world('write', [YOKO])
@@ -707,15 +693,9 @@ describe('reconciliation', () => {
         expect(T.HOT_PARK_BUDGET_MAX_MS).toBe(40_000)
     })
 
-    it('never raises reconciliation age alarms in dry_run', async () => {
-        const { runtime, store } = world('dry_run', [YOKO])
-        await settle(runtime.runTick())
-        const row = store.checkpoints.get(YOKO) as CashOrderCheckpointV1
-        row.reconciliationPassStartedAt = ago(5 * HOUR)
-        row.lastReconciliationCompletedAt = ago(20 * HOUR)
-        await advance(2 * MINUTE)
-        expect((await settle(runtime.runTick())).errors).toEqual([])
-    })
+    // Retired 2026-09-25 with the scheduled dry_run mode: reconciliation age
+    // alarms are a write-mode concern and the mode this covered no longer
+    // exists. Write-mode alarm behaviour is covered above.
 })
 
 // ── Targeted hot refresh ──────────────────────────────────────────────────
