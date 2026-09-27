@@ -48,6 +48,8 @@ import {
 } from '../public/v1/driver-person-confirmation'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
+import { createContactCardSummaryHandlerV1 } from '../public/v1/contact-card-summary'
+import { legacyPrismaContactCardSummaryPortV1 } from '../public/v1/legacy-prisma-contact-card-summary-adapter'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -62,6 +64,7 @@ const resolveChannelContact = createResolveChannelContactHandlerV1(legacyPrismaC
 const prepareContactConversationIdentity = createPrepareContactConversationIdentityHandlerV1(legacyPrismaContactConversationPortV1)
 const getPreferredActiveContactPhone = createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
 const resolveContactLineage = createResolveContactLineageHandlerV1(legacyPrismaContactLineagePortV1)
+const getContactCardSummary = createContactCardSummaryHandlerV1(legacyPrismaContactCardSummaryPortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
 export const attachContactIdentityV1 = (...args: Parameters<typeof attachContactIdentity>) => attachContactIdentity(...args)
@@ -98,3 +101,4 @@ export function runDriverClusterContactOwnershipV1<T>(
     return runDriverClusterContactOwnership<T>(work)
 }
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)
+export const getContactCardSummaryV1 = (...args: Parameters<typeof getContactCardSummary>) => getContactCardSummary(...args)

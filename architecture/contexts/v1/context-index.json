@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "bf66f3ad13d6ae06561d912174753abdcb727f5c89e6457f33314273ce5dfec8"
+      "sha256": "bfbb6d54a019f40b8e3172f51ab3a86f66d881b6752af22c924b39d480fc01e0"
     },
     {
       "context": "edge_delivery",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "683e4fa42ed655a184a2c222fe9ba827c3546cf7771801e0278790e05e62f684"
+      "sha256": "47f850f058f601c78657cf23b7b597301cbc77ea36a0c050d1b10dfeec064907"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "b52cb3d941eae166e5f29468a58728db903e5e74a68efb3e8efb5f93e724552b"
+      "sha256": "485766402bf4c16d091315d00b8193769e8553ef0fe26fbd6dd87849a5523086"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",

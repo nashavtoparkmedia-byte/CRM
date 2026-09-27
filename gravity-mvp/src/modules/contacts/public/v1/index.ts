@@ -55,6 +55,7 @@ export {
     createFleetContactV1,
     deactivateContactPhoneV1,
     deleteContactForRetentionV1,
+    getContactCardSummaryV1,
     getContactParkCheckContextV1,
     getPreferredActiveContactPhoneV1,
     markTemporaryContactPhoneV1,
@@ -119,3 +120,14 @@ export type {
     ConfirmDriverPersonResultV1,
     ReconcileDriverClusterResultV1,
 } from './driver-person-confirmation'
+export {
+    buildContactCardSummaryV1,
+    createContactCardSummaryHandlerV1,
+} from './contact-card-summary'
+export type {
+    ContactCardChannelSummaryV1,
+    ContactCardConflictStateV1,
+    ContactCardSummaryPortV1,
+    ContactCardSummarySourceV1,
+    ContactCardSummaryV1,
+} from './contact-card-summary'
