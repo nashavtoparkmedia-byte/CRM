@@ -1,12 +1,17 @@
 import { createPrivateKey, type KeyObject } from 'node:crypto'
-import type { MobilePushTransportProblemV1 } from './mobile-push-ports'
+import type { MobilePushTransportProblemV1 } from '@/contracts/mobile-delivery/v1'
 
 /**
- * Mobile Push v1 configuration.
+ * Mobile Delivery v1 configuration.
  *
- * MOBILE_PUSH_ENABLED is off unless it is exactly `true`. Off is a deliberate
- * state: no intent is written, nothing is fanned out, no provider is called,
- * and Messaging behaves exactly as it did before push existed.
+ * Owned by mobile_delivery, and internal on purpose: no consuming context may
+ * read an environment value, a credential or an endpoint from here. They see
+ * only the narrow public capabilities in ../public/v1.
+ *
+ * MOBILE_PUSH_ENABLED is the one global mobile-delivery switch, off unless it
+ * is exactly `true`. Off is a deliberate state: no caller writes an intent,
+ * nothing is fanned out and no provider is called, so every context behaves
+ * exactly as it did before mobile delivery existed.
  *
  * On with missing or invalid FCM configuration is NOT off. It is operational
  * misconfiguration, reported as a named problem so deliveries fail visibly and
@@ -67,7 +72,7 @@ function loopbackOverrideAllowedV1(env: MobilePushEnvironmentV1): boolean {
     return env.MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE?.trim() === 'true'
 }
 
-export function isMobilePushEnabledV1(env: MobilePushEnvironmentV1 = currentEnvironment()): boolean {
+export function isMobileDeliveryEnabledV1(env: MobilePushEnvironmentV1 = currentEnvironment()): boolean {
     return env.MOBILE_PUSH_ENABLED?.trim() === 'true'
 }
 

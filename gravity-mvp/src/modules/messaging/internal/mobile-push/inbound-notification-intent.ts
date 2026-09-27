@@ -8,7 +8,7 @@ import {
     type InboundNotificationCandidateV1,
     type PersistedInboundMessageV1,
 } from './inbound-notification-policy'
-import { isMobilePushEnabledV1 } from './mobile-push-config'
+import { isMobileDeliveryEnabledV1 } from '@/modules/mobile-delivery/public/v1'
 
 /**
  * Mobile Push v1 — the intent side of the three Messaging persistence seams
@@ -25,7 +25,7 @@ import { isMobilePushEnabledV1 } from './mobile-push-config'
  */
 
 export function persistsWithNotificationIntentV1(input: InboundNotificationCandidateV1): boolean {
-    return isMobilePushEnabledV1() && isInboundNotificationCandidateV1(input)
+    return isMobileDeliveryEnabledV1() && isInboundNotificationCandidateV1(input)
 }
 
 export function inboundNotificationIntentV1(
