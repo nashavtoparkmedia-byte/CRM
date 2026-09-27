@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 718,
+    "total_entries": 719,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 84,
-    "active_operational": 502,
+    "active_operational": 503,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6591,6 +6591,15 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "max_channel",
       "source_sha256": "a4347b56b8e45c607da9738fdb69a2b58b73eccf5bd5137a14f8fed62cb371a6"
+    },
+    {
+      "path": "tools/architecture/check-max-ws-generation-observation-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the M2A2-MAX1B0A MAX WebSocket generation observation; approved path is a bounded read-only boundary control that pins the explicit per-socket frame generation minted by the browser hook, the rule that only the MAX keepalive classifies a generation as the data socket, the single solicited GET_CHATS budget per data generation, the low-level frame path that bypasses the history and webhook workflows, the (generation, seq) response correlation, the absence of any principal value in telemetry or status, the absence of any database or MAX1A writer reference, the unchanged product authority and inbound paths, and the unchanged public surface. It also executes the observation proof. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
     }
   ]
 }

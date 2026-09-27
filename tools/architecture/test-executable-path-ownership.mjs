@@ -106,7 +106,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2543,
+  denominator: 2546,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))

@@ -2,6 +2,13 @@
 
 const fs   = require('fs')
 const path = require('path')
+const {
+  MAX_WS_TELEMETRY_EVENTS_V1,
+  censusOwnerEvidenceV1,
+  createWsGenerationObservationV1,
+  diagnosticOutcomeForCensusV1,
+  isExactGenerationV1,
+} = require('./ws-generation-observation')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
@@ -364,20 +371,32 @@ const WS_INIT_SCRIPT = `(function () {
   }
 
   // ── Patch WebSocket in main thread ───────────────────────────────────────
+  // Socket identity exists only in here: Node receives every frame through one
+  // function and cannot otherwise tell which socket delivered it. So each MAX
+  // socket is given a monotonic generation, stamped on the socket itself and
+  // passed with every frame it delivers. Nothing downstream may infer the
+  // generation from "the newest socket" — several sockets coexist routinely.
   var _OrigWS = window.WebSocket;
+  window.__maxWsGenerationSeq = window.__maxWsGenerationSeq || 0;
   function PatchedWS(url, protocols) {
     var ws = protocols != null ? new _OrigWS(url, protocols) : new _OrigWS(url);
     if (url && (url.indexOf('ws-api.oneme.ru') !== -1 || url.indexOf('api.oneme.ru') !== -1)) {
+      var generation = ++window.__maxWsGenerationSeq;
+      try { ws.__maxWsGeneration = generation; } catch (eGen) {}
       window.__maxWs = ws;
+      window.__maxWsGeneration = generation;
       // Force ArrayBuffer mode so binary frames don't arrive as Blob (unreadable synchronously)
       ws.binaryType = 'arraybuffer';
-      try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"ws_created","url":"' + url + '"}'); } catch(e) {}
+      try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"ws_created","url":"' + url + '"}', generation); } catch(e) {}
+      ws.addEventListener('close', function () {
+        try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"ws_closed"}', generation); } catch(eClose) {}
+      });
       ws.addEventListener('message', function (event) {
         try {
           // Diagnostic: report that the message event fired (with data type)
           var dataType = typeof event.data;
           var isAB = event.data instanceof ArrayBuffer;
-          try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"msg_arrived","type":"' + dataType + '","ab":' + isAB + '}'); } catch(e2) {}
+          try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"msg_arrived","type":"' + dataType + '","ab":' + isAB + '}', generation); } catch(e2) {}
 
           var d = event.data;
           if (d instanceof ArrayBuffer) {
@@ -393,7 +412,7 @@ const WS_INIT_SCRIPT = `(function () {
           } else if (typeof d !== 'string') {
             d = '';
           }
-          if (window.__maxWsReceive) window.__maxWsReceive(d);
+          if (window.__maxWsReceive) window.__maxWsReceive(d, generation);
         } catch (e) {}
       });
     }
@@ -406,20 +425,34 @@ const WS_INIT_SCRIPT = `(function () {
   PatchedWS.CLOSED     = _OrigWS.CLOSED;
   window.WebSocket = PatchedWS;
 
-  window.__maxWsSend = function (data) {
+  // expectedGeneration is optional and, in MAX1B0A, is passed only by the
+  // principal diagnostic: its frame must leave on that exact socket generation or
+  // not at all. Product sends pass nothing and behave exactly as before.
+  function generationRefusal(ws, expectedGeneration) {
+    if (expectedGeneration == null) return null;
+    var actual = ws.__maxWsGeneration;
+    if (actual === expectedGeneration) return null;
+    return { ok: false, error: 'generation_superseded', generation: actual == null ? null : actual };
+  }
+
+  window.__maxWsSend = function (data, expectedGeneration) {
     var ws = window.__maxWs;
     if (!ws || ws.readyState !== 1) {
       return { ok: false, error: 'WS not ready (state ' + (ws ? ws.readyState : 'null') + ')' };
     }
+    var refusal = generationRefusal(ws, expectedGeneration);
+    if (refusal) return refusal;
     ws.send(data);
-    return { ok: true };
+    return { ok: true, generation: ws.__maxWsGeneration == null ? null : ws.__maxWsGeneration };
   };
 
-  window.__maxWsSendBinary = function (base64Data) {
+  window.__maxWsSendBinary = function (base64Data, expectedGeneration) {
     var ws = window.__maxWs;
     if (!ws || ws.readyState !== 1) {
       return { ok: false, error: 'WS not ready (state ' + (ws ? ws.readyState : 'null') + ')' };
     }
+    var refusal = generationRefusal(ws, expectedGeneration);
+    if (refusal) return refusal;
     try {
       var binStr = atob(base64Data);
       var bytes = new Uint8Array(binStr.length);
@@ -458,6 +491,9 @@ const OP = {
   // Legacy alias (keep for compat with old references)
   GET_UPLOAD_URL:        80,
 }
+
+/** Bounded budget for the one MAX1B0A principal diagnostic per data generation. */
+const MAX_WS_DIAGNOSTIC_TIMEOUT_MS = 10_000
 
 function normalizeUiText(value) {
   return String(value ?? '').replace(/\r\n/g, '\n')
@@ -530,6 +566,14 @@ class TransportInterceptor {
     this._pendingLooseMedia    = []
     this._activeUiChatId       = null
 
+    // ── M2A2-MAX1B0A observation state ──────────────────────────────────────
+    // Observation only: none of this authorizes a send, classifies a message or
+    // is persisted anywhere. `_myUserId` above remains the only identity the
+    // product reads, unchanged, until MAX1B0B.
+    this._wsGenerationObservation = createWsGenerationObservationV1()
+    this._cdpSocketLifecycle      = new Map()  // CDP requestId → {createdAt, closedAt}
+    this._generationPendingReqs   = new Map()  // `${generation}:${seq}` → diagnostic waiter
+
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
     try {
@@ -556,8 +600,8 @@ class TransportInterceptor {
 
     // JS-level bridge: browser calls window.__maxWsReceive(data) for every incoming
     // WS message; Node.js receives it here.
-    await page.exposeFunction('__maxWsReceive', (data) => {
-      try { this._handleFrame(String(data)) } catch {}
+    await page.exposeFunction('__maxWsReceive', (data, generation) => {
+      try { this._handleFrame(String(data), typeof generation === 'number' ? generation : null) } catch {}
     })
 
     await page.addInitScript(WS_INIT_SCRIPT)
@@ -577,7 +621,10 @@ class TransportInterceptor {
     this._cdpClient = await context.newCDPSession(page)
     await this._cdpClient.send('Network.enable')
 
-    this._cdpClient.on('Network.webSocketCreated', ({ url }) => {
+    this._cdpClient.on('Network.webSocketCreated', ({ requestId, url }) => {
+      // Chromium's own socket identity, kept as an independent observational view.
+      // It is deliberately never mapped onto a hook generation by arrival order.
+      this._noteCdpSocketCreated(requestId)
       console.log('[Transport] WS создан:', url)
     })
 
@@ -707,8 +754,11 @@ class TransportInterceptor {
       }
     })
 
-    this._cdpClient.on('Network.webSocketClosed', () => {
+    this._cdpClient.on('Network.webSocketClosed', ({ requestId }) => {
+      this._noteCdpSocketClosed(requestId)
       console.log('[Transport] WS закрыт')
+      // Unchanged on purpose. Readiness keeps today's collapsed semantics until
+      // MAX1B0B; the per-socket record above is observation, not authority.
       this._wsConnected = false
     })
 
@@ -726,10 +776,10 @@ class TransportInterceptor {
 
   // ─── Обработка входящих WS фреймов ──────────────────────────────────────
 
-  _handleFrame(raw) {
+  _handleFrame(raw, generation = null) {
     // Binary frames from new api.oneme.ru endpoint arrive base64-encoded
     if (raw.startsWith('b64:')) {
-      this._handleBinaryFrame(Buffer.from(raw.slice(4), 'base64'))
+      this._handleBinaryFrame(Buffer.from(raw.slice(4), 'base64'), generation)
       return
     }
 
@@ -742,7 +792,10 @@ class TransportInterceptor {
     // Diagnostic frames from WS_INIT_SCRIPT
     if (data.__diag) {
       if (data.__diag === 'ws_created') {
+        this._noteGenerationCreated(generation)
         console.log('[Transport DIAG] WS создан:', data.url)
+      } else if (data.__diag === 'ws_closed') {
+        this._noteGenerationClosed(generation)
       } else if (data.__diag === 'msg_arrived') {
         console.log('[Transport DIAG] message event СРАБОТАЛ — тип:', data.type, 'ab:', data.ab)
       } else if (data.__diag === 'worker_created') {
@@ -753,7 +806,7 @@ class TransportInterceptor {
       return
     }
 
-    this._processDecodedFrame(data)
+    this._processDecodedFrame(data, generation)
   }
 
   _isEmptyObject(value) {
@@ -923,7 +976,13 @@ class TransportInterceptor {
     }
   }
 
-  _processDecodedFrame(data) {
+  _processDecodedFrame(data, generation = null) {
+    // M2A2-MAX1B0A: record which generation delivered this frame, and resolve a
+    // generation-bound diagnostic response before any legacy handling. Neither
+    // step changes what the frame then does for the product.
+    this._observeGenerationFrame(generation, data.opcode)
+    if (this._resolveGenerationPendingReq(generation, data)) return
+
     // DEBUG: log all non-presence frames
     if (data.opcode !== OP.PRESENCE) {
       const preview = data.payload ? JSON.stringify(data.payload).slice(0, 200) : ''
@@ -1353,7 +1412,7 @@ class TransportInterceptor {
   //   Bytes 7-8: uint16 BE = request seq (for matching responses)
   //   Bytes 9+:  MessagePack-encoded payload object
   //
-  _handleBinaryFrame(buf) {
+  _handleBinaryFrame(buf, generation = null) {
     if (buf.length < 9) return
 
     if (buf[0] !== 0x0a) {
@@ -1422,7 +1481,7 @@ class TransportInterceptor {
     }
 
     // Feed into the common handler (reuse all existing opcode processing)
-    this._processDecodedFrame(data)
+    this._processDecodedFrame(data, generation)
   }
 
   // ─── Нормализация входящего MAX сообщения ────────────────────────────────
@@ -2132,35 +2191,44 @@ class TransportInterceptor {
    * @param {{ waitResponse?: boolean, timeoutMs?: number }} opts
    * @returns {Promise<object|void>}
    */
-  async sendFrame(opcode, payload, { waitResponse = false, timeoutMs = 10_000 } = {}) {
+  async sendFrame(opcode, payload, { waitResponse = false, timeoutMs = 10_000, expectedGeneration = null } = {}) {
     const seq  = ++this._localSeq
     const data = JSON.stringify({ ver: 11, cmd: 0, seq, opcode, payload })
+    // M2A2-MAX1B0A: only the principal diagnostic passes expectedGeneration. Its
+    // frame must leave on that exact socket generation and its response is keyed
+    // by (generation, seq). Product traffic keeps the seq-only path untouched.
+    const generationBound = isExactGenerationV1(expectedGeneration)
+    const send = generationBound
+      ? () => this._page.evaluate(([d, g]) => window.__maxWsSend(d, g), [data, expectedGeneration])
+      : () => this._page.evaluate(d => window.__maxWsSend(d), data)
+    const pending = generationBound ? this._generationPendingReqs : this._pendingReqs
+    const key     = generationBound ? `${expectedGeneration}:${seq}` : seq
 
     if (waitResponse) {
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          this._pendingReqs.delete(seq)
+          pending.delete(key)
           reject(new Error(`Timeout: opcode ${opcode} seq ${seq}`))
         }, timeoutMs)
 
-        this._pendingReqs.set(seq, { resolve, reject, timeout })
+        pending.set(key, { resolve, reject, timeout })
 
-        this._page.evaluate(d => window.__maxWsSend(d), data)
+        send()
           .then(r => {
             if (!r || !r.ok) {
               clearTimeout(timeout)
-              this._pendingReqs.delete(seq)
+              pending.delete(key)
               reject(new Error(`WS send failed: ${r?.error}`))
             }
           })
           .catch(e => {
             clearTimeout(timeout)
-            this._pendingReqs.delete(seq)
+            pending.delete(key)
             reject(e)
           })
       })
     } else {
-      const r = await this._page.evaluate(d => window.__maxWsSend(d), data)
+      const r = await send()
       if (!r || !r.ok) throw new Error(`WS send failed: ${r?.error}`)
     }
   }
@@ -2244,6 +2312,140 @@ class TransportInterceptor {
     }
 
     return false
+  }
+
+  // ─── M2A2-MAX1B0A: WS generation observation ─────────────────────────────
+  // Everything in this block is read-only observation. It never decides whether a
+  // send may proceed, never classifies a message and never reaches a database.
+
+  /** The additive diagnostic snapshot. Carries no principal and no locator. */
+  maxWsGenerationObservationV1() {
+    return this._wsGenerationObservation.snapshot()
+  }
+
+  /** Bounded structural telemetry: a fixed event set and a fixed field set. */
+  _emitGenerationTelemetry(event, fields = {}) {
+    if (!MAX_WS_TELEMETRY_EVENTS_V1.includes(event)) return
+    const bounded = {}
+    for (const name of [
+      'generation', 'supersededGeneration', 'role', 'outcome',
+      'chats', 'withOwner', 'ownerPresence', 'ownerConsistency', 'durationMs',
+    ]) {
+      if (fields[name] !== undefined) bounded[name] = fields[name]
+    }
+    console.log(`[MAX_WS_GENERATION] ${event} ${JSON.stringify(bounded)}`)
+  }
+
+  _noteCdpSocketCreated(requestId) {
+    if (typeof requestId !== 'string' || requestId === '') return
+    if (!this._cdpSocketLifecycle.has(requestId)) {
+      this._cdpSocketLifecycle.set(requestId, { createdAt: Date.now(), closedAt: null })
+    }
+  }
+
+  _noteCdpSocketClosed(requestId) {
+    if (typeof requestId !== 'string' || requestId === '') return
+    const record = this._cdpSocketLifecycle.get(requestId)
+    if (record === undefined) {
+      this._cdpSocketLifecycle.set(requestId, { createdAt: null, closedAt: Date.now() })
+      return
+    }
+    if (record.closedAt === null) record.closedAt = Date.now()
+  }
+
+  _noteGenerationCreated(generation) {
+    if (!this._wsGenerationObservation.noteSocketCreated(generation).accepted) return
+    this._emitGenerationTelemetry('generation_created', { generation })
+  }
+
+  _noteGenerationClosed(generation) {
+    const result = this._wsGenerationObservation.noteSocketClosed(generation)
+    if (!result.accepted) return
+    this._emitGenerationTelemetry('generation_closed', { generation, role: result.wasData ? 'data' : 'probe_candidate' })
+  }
+
+  /**
+   * Records a frame against its generation. The MAX keepalive — and only it —
+   * promotes a generation to the data socket, which is what then earns exactly
+   * one principal diagnostic.
+   */
+  _observeGenerationFrame(generation, opcode) {
+    const result = this._wsGenerationObservation.noteFrame(generation, opcode)
+    if (!result.accepted || !result.classifiedData) return
+    this._emitGenerationTelemetry('generation_classified_data', { generation, role: 'data' })
+    if (result.supersededGeneration !== null) {
+      this._emitGenerationTelemetry('generation_superseded', {
+        generation: result.supersededGeneration,
+        supersededGeneration: generation,
+      })
+    }
+    void this._runGenerationPrincipalDiagnosticV1(generation)
+  }
+
+  /** Resolves a diagnostic response by (generation, seq), never by seq alone. */
+  _resolveGenerationPendingReq(generation, data) {
+    if (this._generationPendingReqs.size === 0) return false
+    if (!isExactGenerationV1(generation) || data == null) return false
+    const key = `${generation}:${data.seq}`
+    const entry = this._generationPendingReqs.get(key)
+    if (entry === undefined) return false
+    this._generationPendingReqs.delete(key)
+    clearTimeout(entry.timeout)
+    if (data.cmd === 3 || data.payload?.error || data.payload?.localizedMessage) {
+      entry.reject(Object.assign(new Error('MAX error cmd=3'), { maxError: data.payload?.error }))
+      return true
+    }
+    entry.resolve(data.payload)
+    return true
+  }
+
+  /**
+   * One solicited GET_CHATS per data generation, purely to census whether the
+   * provider hands this generation an `owner` it could later be proved by.
+   *
+   * It is the low-level frame and nothing else: no history workflow, no webhook,
+   * no retry, no second attempt, and no product path awaits it.
+   */
+  async _runGenerationPrincipalDiagnosticV1(generation) {
+    const observation = this._wsGenerationObservation
+    if (!observation.shouldRunDiagnostic(generation)) return
+    if (!observation.markDiagnosticStarted(generation)) return
+    const startedAt = Date.now()
+    this._emitGenerationTelemetry('diagnostic_get_chats_started', { generation })
+    let outcome = 'error'
+    let census = null
+    try {
+      const payload = await this.sendFrame(OP.GET_CHATS, { chatIds: [] }, {
+        waitResponse: true,
+        timeoutMs: MAX_WS_DIAGNOSTIC_TIMEOUT_MS,
+        expectedGeneration: generation,
+      })
+      if (!observation.isCurrentDataGeneration(generation)) {
+        // A newer generation took over while we waited: this answer cannot speak
+        // for the current data socket, so it contributes no evidence.
+        outcome = 'generation_superseded'
+      } else {
+        census = censusOwnerEvidenceV1(payload)
+        outcome = diagnosticOutcomeForCensusV1(census)
+      }
+    } catch (error) {
+      const message = String(error?.message || '')
+      if (message.includes('generation_superseded')) outcome = 'refused'
+      else if (message.startsWith('Timeout:')) outcome = 'timeout'
+      else outcome = 'error'
+    }
+    observation.recordDiagnosticOutcome(generation, outcome, census)
+    this._emitGenerationTelemetry('diagnostic_get_chats_result', {
+      generation,
+      outcome,
+      durationMs: Date.now() - startedAt,
+      ...(census === null ? {} : {
+        chats: census.chats,
+        withOwner: census.withOwner,
+        ownerPresence: census.ownerPresence,
+        ownerConsistency: census.ownerConsistency,
+      }),
+    })
   }
 
   isAuthenticated() {

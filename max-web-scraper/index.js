@@ -6431,6 +6431,10 @@ app.get('/status', (req, res) => {
       authenticated: !!transport?.isAuthenticated?.(),
       myUserId:      transport?._myUserId || null,
     },
+    // M2A2-MAX1B0A runtime diagnostics. Additive and observational: every field
+    // above keeps its meaning, and this block carries no provider principal, so
+    // it is not a cross-domain contract.
+    transportObservation: transport?.maxWsGenerationObservationV1?.() ?? null,
   })
 })
 
