@@ -48,7 +48,7 @@ jobs:
       - name: Check out exact accepted predecessor authority
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: 19b631bc1d7026c4b8fe43f0713a57ef216d2ed9
+          ref: bfa68acaf2add2c53540d07bc1813e5235dad700
           fetch-depth: 1
           persist-credentials: false
           path: predecessor-authority
