@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 719,
+    "total_entries": 720,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 84,
-    "active_operational": 503,
+    "active_operational": 504,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6598,6 +6598,15 @@
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture control-plane surface for the M2A2-MAX1B0A MAX WebSocket generation observation; approved path is a bounded read-only boundary control that pins the explicit per-socket frame generation minted by the browser hook, the rule that only the MAX keepalive classifies a generation as the data socket, the single solicited GET_CHATS budget per data generation, the low-level frame path that bypasses the history and webhook workflows, the (generation, seq) response correlation, the absence of any principal value in telemetry or status, the absence of any database or MAX1A writer reference, the unchanged product authority and inbound paths, and the unchanged public surface. It also executes the observation proof. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-card-core-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the M3A1 Contact-owned card core; approved path is a bounded read-only boundary control that pins the exact ContactCardSummary.v1 field set, the absence of provider external ids, ProviderAccount and Transport ids, conversation, delivery, runtime and driver state in the contract and in the panel, the reuse of ContactDisplayPolicy.v1 instead of a duplicated title rule, the Contacts-owned model set the single adapter may read, the isolation of the client surface from any database client and any foreign domain, the absence of reachability probing and provider-account selection, the fact that nothing composes the core yet and that the existing drawer keeps its mount, and the declared capability and allowed dependencies of the contacts manifest. It also executes the core proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     }
