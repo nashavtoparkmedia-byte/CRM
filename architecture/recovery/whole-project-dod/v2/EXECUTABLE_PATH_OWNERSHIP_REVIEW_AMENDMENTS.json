@@ -1308,6 +1308,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-push-p2-native-final-main-6209eeb9-20260927",
+      "reviewed_at": "2026-09-27T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_P2_FINAL_INTEGRATION_EXECUTOR_REVIEW_20260927",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MOBILE_PUSH_V1_P2_FINAL_INTEGRATION_PREPARATION_AUTHORIZED_20260927",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 and every amendment before this one are preserved byte for byte. This is the first Mobile Push P2 record on a canonical branch: the six amendments that existed on the temporary acceptance composite were deliberately not carried, and this transition is derived against current main rather than reproduced from them."
+      },
+      "reason": "Records the single digest-only transition Mobile Push v1 P2 causes on main. P2 adds the Android native push implementation and its acceptance harness; none of it adds a tracked executable surface, because .kt, .kts and .xml are not tracked extensions. The tracked path inventory is therefore unchanged - 2,625 surfaces with an identical path-set digest measured on main and on this candidate - and the only tracked bytes that move are those of .github/workflows/android-acceptance-e2e.yml, which P2 extends with the two-phase push acceptance: the loopback capability env the landed P1 repair now requires by name, instrumentation arguments quoted for the device shell, self-annotating diagnostics, the process-dead kill/wake/same-process proof with am instrument --no-restart, and the final tap assertion that reads the last push-open record and requires ACTION_VIEW with the /messages/open chat and msg parameter names. Its lifecycle registry entry is rebound with TEST/TEST_SUPPORT and production_capability NONE and its rationale unchanged, no environment name or phase moved, and the two reviewed credential dispositions bound to those bytes - the disposable acceptance database setup, both TEST_SUPPORT under lifecycle TEST with production_capability NONE - are rebound with it across the three bound hashes each carries, keeping site signature, line and column. The denominator stays at 2,625 surfaces with context-owned and governed-exclusion counts as main has them, the coverage digest is unchanged, and no assignment, exact-inventory transition, lifecycle, functional owner or governed exclusion changes; no ownership is reassigned, no tracked path is added or removed, no unassigned surface is attributed and no source hash rebind is carried in this record. The P1 loopback repair is not duplicated here: it is already on main from pull request 126.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "b154e113b4316d5a38166996391dca0dde59149fa50e0a0e931dded6af7e75e3",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "5cec4c30da56f0e456bc72509b60fd65c364e3c05c81d81ef9a3c1ce4b663a20",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
