@@ -217,7 +217,7 @@ jobs:
         id: coordinated_upload
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: coordinated-gravity-max-ba90ed4bae84-${{ github.sha }}
+          name: coordinated-gravity-max-ba90ed4b6717-${{ github.sha }}
           path: |
             release-output/gravity-image.docker.tar
             release-output/gravity-image-attestation.json
@@ -249,7 +249,7 @@ jobs:
           import json, pathlib, sys
           artifact_id, digest, builder = sys.argv[1:]
           value = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
-          expected_name = f'coordinated-gravity-max-ba90ed4bae84-{builder}'
+          expected_name = f'coordinated-gravity-max-ba90ed4b6717-{builder}'
           if (
               value.get('id') != int(artifact_id)
               or value.get('name') != expected_name
@@ -369,7 +369,7 @@ jobs:
           workflow_run = value.get('workflow_run')
           if (
               value.get('id') != int(artifact_id)
-              or value.get('name') != f'coordinated-gravity-max-ba90ed4bae84-{builder}'
+              or value.get('name') != f'coordinated-gravity-max-ba90ed4b6717-{builder}'
               or value.get('digest') != f'sha256:{digest}'
               or value.get('expired') is not False
               or type(value.get('size_in_bytes')) is not int

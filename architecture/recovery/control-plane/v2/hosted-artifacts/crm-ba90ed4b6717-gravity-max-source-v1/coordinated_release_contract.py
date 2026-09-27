@@ -1359,7 +1359,7 @@ def gravity_materials(application: Path) -> dict[str, Any]:
 
 
 def max_materials(application: Path, builder: Path, probe: dict[str, Any]) -> dict[str, Any]:
-    release_root = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-c8ce34feae84-gravity-max-source-v1"
+    release_root = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-ba90ed4b6717-gravity-max-source-v1"
     dockerfile_path = f"{release_root}/build/max-scraper.Dockerfile"
     probe_path = f"{release_root}/build/max-runtime-probe.js"
     dockerfile_sha, _ = file_identity(builder / dockerfile_path)

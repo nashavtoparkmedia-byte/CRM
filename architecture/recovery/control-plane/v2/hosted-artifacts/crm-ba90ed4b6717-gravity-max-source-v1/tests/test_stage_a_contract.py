@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "ba90ed4b6717efb269b5e25fdf551cd82b99f335"
-BUILDER_COMMIT = "62c36f4165b0ef3152fab178f2f2d491eee0d5ce"
+BUILDER_COMMIT = "575d54dd017cb60c1c6305fa1a4ddff34303d1e8"
 BUILDER_BASE_COMMIT = "ba90ed4b6717efb269b5e25fdf551cd82b99f335"
 PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
 WORKFLOW = ".github/workflows/coordinated-gravity-max-ba90ed4b.yml"
@@ -273,7 +273,7 @@ class StageAContractTests(unittest.TestCase):
 
     def test_workflow_is_content_specific_and_has_minimal_permissions(self) -> None:
         workflow = (ROOT / WORKFLOW).read_text()
-        self.assertIn("codex/coordinated-gravity-max-c8ce34fe", workflow)
+        self.assertIn("codex/coordinated-gravity-max-ba90ed4b", workflow)
         self.assertNotIn("workflow_dispatch", workflow)
         self.assertNotIn("pull_request:", workflow)
         self.assertNotIn("inputs:", workflow)
