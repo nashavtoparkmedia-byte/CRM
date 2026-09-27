@@ -109,16 +109,37 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
 
     async prepareContactConversationIdentity(input) {
         return runContactOwnershipTransaction(async transaction => {
+            const identityExternalId = input.identityExternalId ?? null
             await lockContactOwnershipRows(transaction, {
                 contactIds: [input.contactId],
                 identityIds: input.identityId ? [input.identityId] : [],
                 phoneIds: input.phoneId ? [input.phoneId] : [],
+                ...(identityExternalId
+                    ? { identities: [{ channel: input.channel, externalId: identityExternalId }] }
+                    : {}),
             })
             const contact = await transaction.contact.findUnique({ where: { id: input.contactId } })
             if (!contact || contact.isArchived) return { status: 'contact_not_found' as const }
 
             let identity
-            if (input.identityId !== null) {
+            if (identityExternalId !== null) {
+                // EXACT selector. (channel, externalId) is globally unique, so at most one
+                // row can carry this identifier; scoping the read to this Contact proves
+                // same-Contact ownership in the same read, and a foreign, inactive,
+                // wrong-channel or absent row all report identically, disclosing nothing
+                // about another Contact. Returning here is what makes the selector exact:
+                // an external id that does not resolve can never fall through to a sibling
+                // identity of the Contact, to the ambiguity path, or to a phone.
+                identity = await transaction.contactIdentity.findFirst({
+                    where: {
+                        channel: input.channel,
+                        externalId: identityExternalId,
+                        contactId: input.contactId,
+                        isActive: true,
+                    },
+                })
+                if (!identity) return { status: 'identity_not_found' as const }
+            } else if (input.identityId !== null) {
                 identity = await transaction.contactIdentity.findFirst({
                 where: {
                     id: input.identityId,

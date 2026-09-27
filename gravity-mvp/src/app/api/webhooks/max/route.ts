@@ -271,7 +271,20 @@ async function proveMaxDomFallbackPeer(
   if (chat.channel !== 'max') return unproven('channel')
   if (chat.chatType !== 'private') return unproven('chat_type')
   if (metadata.chatKind !== 'private') return unproven('stored_chat_kind')
-  if (incomingChatKind !== 'private') return unproven('incoming_chat_kind')
+  // `incomingChatKind` is a TRANSIENT signal. The scraper derives it from an in-memory
+  // chatCache that is filled only by op48/op53 frames and starts EMPTY on every container
+  // start - including the restart that activating a release performs. A real production
+  // inbound was refused here with `unknown` while the stored conversation was provably
+  // private, and the peer resolution below never ran.
+  //
+  // The two guards immediately above already required the DURABLE proof: the stored Chat
+  // is private and its stored kind is private. Reaching this line therefore means CRM
+  // state already proves this exact conversation is private, and boundedMaxDomFallbackRoute
+  // has already validated the exact route binding and the page attestation. A MISSING
+  // transient signal may defer to that durable proof; an explicit `group` may not, so a
+  // conversation the provider currently calls a group is still refused and group
+  // acceptance never widens.
+  if (incomingChatKind === 'group') return unproven('incoming_chat_kind')
   if (concreteProviderAccountId(metadata) !== providerAccountId) return unproven('provider_account')
   const senderId = typeof metadata.senderId === 'string' && metadata.senderId.trim() !== '' ? metadata.senderId : null
   if (!senderId) return unproven('stored_sender')
@@ -826,7 +839,20 @@ export async function POST(request: Request) {
               ...(peerSenderIdString       ? { senderId: peerSenderIdString }       : {}),
               ...(effectivePeerSenderPhone ? { phone: effectivePeerSenderPhone } : {}),
               rawExternalChatId,
-              chatKind: maxChatKind,
+              // A provider-framed event carries the same TRANSIENT chat kind as a DOM one: the
+              // scraper derives it from a cache that is empty after every container start,
+              // including the restart activation performs. Writing it unconditionally lets a
+              // cold `unknown` overwrite a stored `private` that was proven from a DIALOG model,
+              // which then fails the next DOM inbound at `stored_chat_kind` and every outbound
+              // with CONTACT_CONVERSATION_NOT_PRIVATE. Only a CONCRETE stored kind is preserved,
+              // and only against a missing signal: a concrete incoming kind still wins, and a
+              // chat with no stored kind still records `unknown`. An incoming `group` against a
+              // stored `private` never reaches this write - the collision guard above answers it
+              // `chat_kind_mismatch` - so this widens no accepted chat kind.
+              chatKind: maxChatKind === 'unknown'
+                && (existingMetadata.chatKind === 'private' || existingMetadata.chatKind === 'group')
+                ? existingMetadata.chatKind
+                : maxChatKind,
               providerAccountId: maxProviderAccountId,
               connectionId: existingMetadata.connectionId || 'max_scraper',
             }

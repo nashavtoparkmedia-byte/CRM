@@ -131,7 +131,7 @@
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository\u2019s own tracked-surface inventory over that commit\u2019s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
@@ -378,6 +378,50 @@
         "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
       },
       "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
+    },
+    {
+      "amendment_id": "messaging-max-dom-fallback-cold-cache-repair-20260926",
+      "reviewed_at": "2026-09-26T00:00:00Z",
+      "reviewed_by": "MESSAGING_COLD_CACHE_REPAIR_IMPLEMENTER_20260926",
+      "role": "REPAIR_IMPLEMENTER_AFTER_PRODUCTION_ROLLBACK_WITH_COMPARATIVE_REGRESSION",
+      "authorization": "ORCHESTRATOR_BOUNDED_COLD_CACHE_PRODUCT_REPAIR_20260926_AFTER_PRODUCTION_ROLLBACK_OF_c8ce34fe",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "The cold-cache repair changes the bytes of one already assigned surface, the MAX webhook route, and adds no file and no import, so the reviewed denominator does not move at all: the inventory digest covers surface identity and a coverage record carries no content hash. A real production inbound was refused by that route on 2026-09-26 because the transient chatKind the scraper reports is derived from a cache that is empty after the restart activation performs; the guard now lets the durable stored private proof stand in for that missing signal and still refuses an explicit group. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and the gravity_runtime_remainder exclusion are unchanged, so the only mechanical consequence is this source fingerprint rebind, which extends the chain the 2026-09-22 amendment approved.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2506,
+        "tracked_inventory_sha256": "89cf58e48aaf59b26857f2565e2a509e8deedd37776d98cae8656d8bd36e7f73",
+        "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2506,
+        "tracked_inventory_sha256": "89cf58e48aaf59b26857f2565e2a509e8deedd37776d98cae8656d8bd36e7f73",
+        "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "3a2cf475f8c074cac8e57f1b2a4a6fda414b2f22a69dd3639b38e1a769655207",
+          "current_source_sha256": "b60f4e4935f11064614b1dc84b534a3d70ef35202d449781db7d855ffde97e70",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The cold-cache repair edits only the bytes of this already assigned MAX webhook route: the DOM-fallback peer proof now accepts a missing transient chatKind when the stored Chat is already proven private, and still refuses an explicit group. This rebind starts from exactly the fingerprint the 2026-09-22 amendment approved, so the chain from the reviewed assignment to the file stays unbroken. Lifecycle APPLICATION_RUNTIME, owner legacy_gravity_runtime and exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
       "invariants": {
         "assignments_added": 0,
         "assignments_removed": 0,

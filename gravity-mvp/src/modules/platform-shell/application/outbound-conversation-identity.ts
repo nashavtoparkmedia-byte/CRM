@@ -96,20 +96,37 @@ export async function prepareOutboundConversationV1(
     }
     const channel = channelValue
 
+    const metadata = record(chat.metadata)
+    // A MAX conversation is legitimately linked to one identity while the peer speaking in
+    // it is a different identity of the same Contact: production links the identity whose
+    // externalId is the conversation key, and records the peer in `metadata.senderId`.
+    // Addressing the linked identity therefore sends to the wrong row, or - because the two
+    // externalIds differ - refuses to send at all. The peer is known here only as a provider
+    // id, so it is selected by that id and Contacts applies every gate it already owns
+    // (same Contact, active, conflict, purpose-scoped reachability) to the row it selects.
+    // A MAX conversation with no recorded peer is refused rather than silently addressed by
+    // its conversation key.
+    const maxPeerExternalId = channel === 'max' ? exactNonEmptyString(metadata.senderId) : null
+    if (channel === 'max' && !maxPeerExternalId) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+    }
+
     const prepared = await prepareContactConversationIdentityV1({
         contract: PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
         // Replying inside a conversation already bound to this identity.
         purpose: 'send_in_bound_conversation',
         contactId,
         channel,
-        identityId: contactIdentityId,
+        // The two selector axes are mutually exclusive by contract, so a MAX send names the
+        // peer and every other channel keeps naming the conversation's linked identity.
+        identityId: maxPeerExternalId ? null : contactIdentityId,
+        identityExternalId: maxPeerExternalId,
         phoneId: null,
     })
     if (prepared.status !== 'ready') {
         throw new Error(`CONTACT_CONVERSATION_IDENTITY_NOT_SENDABLE:${prepared.status}`)
     }
 
-    const metadata = record(chat.metadata)
     if (
         (channel === 'max' || channel === 'telegram')
         && (chat.chatType !== 'private' || metadata.chatKind !== 'private')
@@ -184,9 +201,18 @@ export async function prepareOutboundConversationV1(
     // must address the peer that identity names. The provider-account clauses
     // that used to sit in this condition were removed with the rest of the
     // deferred account authority; they rejected every production identity.
+    // The identity this send is authorized as must be the one this layer asked for. Every
+    // channel but MAX asks for the conversation's linked identity, so that row id is the
+    // proof. MAX asks for the peer by provider id, and the peer is deliberately NOT the
+    // linked identity, so the proof there is that Contacts returned the exact provider id
+    // requested - which `targetMatches` below asserts against `metadata.senderId`. Keeping
+    // the row-id clause for MAX would re-assert the very assumption this repair removes.
+    const identityIsTheOneRequested = channel === 'max'
+        ? prepared.identity.externalId === maxPeerExternalId
+        : prepared.identity.id === contactIdentityId
     if (
         prepared.contact.id !== contactId
-        || prepared.identity.id !== contactIdentityId
+        || !identityIsTheOneRequested
         || prepared.identity.channel !== channel
         || !identityExternalId
         || !targetMatches
@@ -204,11 +230,21 @@ export async function prepareOutboundConversationV1(
         })
     }
 
+    // The send-authorized identity is the row Contacts selected, which for MAX is the peer
+    // rather than the conversation's linked identity. MessageService pairs this id with
+    // `identityTarget` when it records provider reachability after a delivery, so the two
+    // must describe the SAME identity; carrying the linked id here would record a delivered
+    // message against a row that does not own that provider target. `Chat.contactIdentityId`
+    // is left exactly as it is - it remains conversation topology, not the send target.
+    const sendAuthorizedIdentityId = channel === 'max'
+        ? exactNonEmptyString(prepared.identity.id) ?? contactIdentityId
+        : contactIdentityId
+
     return {
         chatId,
         channel,
         contactId,
-        contactIdentityId,
+        contactIdentityId: sendAuthorizedIdentityId,
         providerAccountId,
         connectionId: boundConnectionId,
         identityTarget: matchedWhatsAppIdentityExternalId ?? identityExternalId,
