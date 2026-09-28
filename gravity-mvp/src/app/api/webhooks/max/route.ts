@@ -202,6 +202,9 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 // read from. The scraper attests which page it read in `domRoute`
 // (max-web-scraper/lib/DomRouteAttestation.js); an unattested event is never bound.
 const MAX_DOM_FALLBACK_EXTERNAL_ID = /^max-dom-(\d{1,20})-([0-9a-f]{16})$/
+// Every synthetic id the scraper can mint. A provider-backed source that presented one
+// of these would be claiming provider evidence it does not have, so it is refused.
+const MAX_DOM_PLACEHOLDER_EXTERNAL_ID = /^(?:max-dom-|max-recovered-)/
 const MAX_DOM_ROUTE_ID = /^\d{1,20}$/
 // Bounded page for the competing-conversation scan; a full page fails closed.
 const MAX_DOM_FALLBACK_CLAIMANT_LIMIT = 25
@@ -240,13 +243,34 @@ function attestedMaxDomRoute(value: unknown): MaxDomFallbackRoute | null {
 }
 
 function boundedMaxDomFallbackRoute(event: MaxDomFallbackEvent): MaxDomFallbackRoute | null {
-  if (event.source !== 'dom_fallback') return null
+  // Both DOM-derived inbound sources are ONE trust class. The scraper picks between
+  // them on evidence it already has: `resolvedProviderId ? 'live_dom_recovery' :
+  // 'dom_fallback'`. So the BETTER-evidenced event - the one carrying a real provider
+  // id - was the one skipping this proof and being refused `sender_identity_unproven`,
+  // which then wedged the chat because its pending id was never confirmed. The proof
+  // below rests on durable CRM state and the exact route binding, neither of which
+  // depends on which of the two sources carried the event.
+  if (event.source !== 'dom_fallback' && event.source !== 'live_dom_recovery') return null
   if (event.isOutgoing || event.deleted || event.isHistoryReplay) return null
   if (!event.isTextProviderEvent || !event.trimmedText) return null
   if (event.attachments != null && (!Array.isArray(event.attachments) || event.attachments.length > 0)) return null
   if (event.senderId !== undefined && event.senderId !== null) return null
-  const match = event.externalId ? MAX_DOM_FALLBACK_EXTERNAL_ID.exec(event.externalId) : null
-  if (!match || match[1] !== event.externalChatId) return null
+  // Source-specific chat binding: two different kinds of evidence for the same fact,
+  // not a strict and a relaxed version of one rule.
+  if (event.source === 'dom_fallback') {
+    // The synthetic id is the one field the scraper fully controls, so this path keeps
+    // the chat binding INSIDE the id and stays exactly as strict as it was.
+    const match = event.externalId ? MAX_DOM_FALLBACK_EXTERNAL_ID.exec(event.externalId) : null
+    if (!match || match[1] !== event.externalChatId) return null
+  } else {
+    // `live_dom_recovery` carries the REAL provider message id. It embeds no chat id and
+    // must stay canonical so the provider path and DOM recovery dedupe against each
+    // other, so it cannot satisfy the synthetic invariant by design. Its chat binding is
+    // the exact chatId/rawChatId agreement and the attested route below instead. A
+    // synthetic id on this source is refused, so the binding cannot be bypassed by
+    // presenting a minted id and claiming provider evidence.
+    if (!event.externalId || MAX_DOM_PLACEHOLDER_EXTERNAL_ID.test(event.externalId)) return null
+  }
   if (String(event.chatId) !== event.externalChatId) return null
   if (String(event.rawChatId ?? event.chatId) !== event.externalChatId) return null
   return attestedMaxDomRoute(event.domRoute)
