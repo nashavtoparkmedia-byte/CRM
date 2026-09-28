@@ -178,6 +178,7 @@
     },
     {
       "capabilities": [
+        "ContactCardSummary.v1",
         "ContactDisplayPolicy.v1",
         "ContactIdentityMaintenance.v1",
         "ContactLookup.v1",
@@ -402,8 +403,7 @@
       "owner_context": "messaging",
       "source_roots": [
         "gravity-mvp/src/contracts/messaging",
-        "gravity-mvp/src/modules/messaging",
-        "gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline"
+        "gravity-mvp/src/modules/messaging"
       ],
       "status": "active",
       "verification": [
@@ -570,8 +570,7 @@
       "owner_context": "work_management",
       "source_roots": [
         "gravity-mvp/src/contracts/work-management",
-        "gravity-mvp/src/modules/work-management",
-        "gravity-mvp/src/modules/work-management/internal"
+        "gravity-mvp/src/modules/work-management"
       ],
       "status": "active",
       "verification": [
