@@ -59,7 +59,7 @@ class CaptureContractTests(unittest.TestCase):
                 seal.reopen_generated_review_for_cleanup(generated)
 
     def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/yoko-v20-seal-c8ce34fe/rollback-2.0.0-19/yoko-privileged-runtime_2.0.0-19_all.deb")
+        path = Path("/opt/codex-work/yoko-v21-seal-ba90ed4b/rollback-2.0.0-20/yoko-privileged-runtime_2.0.0-20_all.deb")
         self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
 
     def test_capture_plan_is_finite_and_read_only(self) -> None:
@@ -95,7 +95,7 @@ class CaptureContractTests(unittest.TestCase):
     def test_sealer_accepts_only_fresh_exact_predecessor_snapshot(self) -> None:
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
         sealing = {
-            "runtime_package_version": "2.0.0-19",
+            "runtime_package_version": "2.0.0-20",
             "runtime_profile_id": "crm-fb9fb30d9eb2-gravity-max-source-v1",
             "audit_record_count": 47,
             "audit_last_digest": "a" * 64,

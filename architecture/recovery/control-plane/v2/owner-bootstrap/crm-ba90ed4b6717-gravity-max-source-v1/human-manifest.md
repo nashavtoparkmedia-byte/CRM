@@ -1,6 +1,6 @@
 # Pre-seal status
 
-Runtime `2.0.0-20` coordinated Gravity + MAX builder is source-only and does
+Runtime `2.0.0-21` coordinated Gravity + MAX builder is source-only and does
 not itself authorize installation or production activation.
 
 Required before installation:
@@ -15,4 +15,4 @@ Required before installation:
 
 The accepted MAX application behavior and Contact/CNT1 ownership are outside
 this builder and must remain byte-identical to accepted application commit
-`c8ce34feae84e5674357df496be37d0cd8a457bb`.
+`ba90ed4b6717efb269b5e25fdf551cd82b99f335`.

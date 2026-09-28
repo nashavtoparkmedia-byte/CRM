@@ -206,7 +206,7 @@ class RebindIdentityTests(unittest.TestCase):
         import subprocess
 
         blob = subprocess.run(
-            ["git", "-C", "/opt/codex-work/crm-stage-a-c8ce34fe", "show",
+            ["git", "-C", "/opt/codex-work/crm-stage-a-ba90ed4b", "show",
              f"{stage_a['STAGE_A_COMMIT']}:{verifier_path}"],
             check=True, text=True, stdout=subprocess.PIPE,
         ).stdout
@@ -232,9 +232,9 @@ class RebindIdentityTests(unittest.TestCase):
     # 5. stale identity rejection for values that must be current-derived
     def test_no_predecessor_stage_a_identity_survives(self) -> None:
         stale = (
-            "35840959933", "10741409277", "4805842610", "4805824512",
-            "yoko-stage-a-handoff-fb9fb30d", "coordinated-gravity-max-fb9fb30d",
-            "9def57d3", "baf407d6", "0d3972c8", "359ffa83", "b23ecc9a", "d2f4c581",
+            "4805953711", "4805935616", "2527703040",
+            "yoko-stage-a-handoff-c8ce34fe", "coordinated-gravity-max-c8ce34fe",
+            "578574ab", "61373b30", "f1f3e509", "bfa68aca", "6a1051c3", "b9a26867",
         )
         for path in scanned_files():
             text = path.read_text(encoding="utf-8", errors="replace")
