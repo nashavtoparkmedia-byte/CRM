@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/mobile-delivery/v1'
+import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/identity-access/v1'
 import { createFcmHttpV1TransportV1 } from './fcm-http-v1-transport'
 import { readFcmTransportConfigV1, type FcmTransportConfigV1 } from './mobile-delivery-config'
 

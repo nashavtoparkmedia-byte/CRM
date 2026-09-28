@@ -8,7 +8,7 @@ import {
     type InboundNotificationCandidateV1,
     type PersistedInboundMessageV1,
 } from './inbound-notification-policy'
-import { isMobileDeliveryEnabledV1 } from '@/modules/mobile-delivery/public/v1'
+import { isMobileDeliveryEnabledV1 } from '@/modules/identity-access/public/v1/mobile-delivery'
 
 /**
  * Mobile Push v1 — the intent side of the three Messaging persistence seams

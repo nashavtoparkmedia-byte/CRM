@@ -4,7 +4,7 @@ import {
     parseCallAlertRequestedEventV1,
     type CallAlertKindV1,
 } from '@/contracts/calling/v1'
-import { isMobileDeliveryEnabledV1 } from '@/modules/mobile-delivery/public/v1'
+import { isMobileDeliveryEnabledV1 } from '@/modules/identity-access/public/v1/mobile-delivery'
 import { callAlertDispatchV1 } from '../internal/call-alerts/call-alert-runtime'
 import { prismaCallAlertOutboxV1 } from '../internal/call-alerts/call-alert-prisma-adapter'
 import {

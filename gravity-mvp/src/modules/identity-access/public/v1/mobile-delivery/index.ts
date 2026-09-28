@@ -10,19 +10,20 @@
  * context. A consumer learns only whether delivery is enabled, and either gets a
  * transport or a named problem.
  *
- * Device identity, eligibility and token state are NOT owned here - they belong
- * to identity_access, and callers reach them through its own public surface.
- * There is exactly one device registry.
+ * This is a code boundary, not a bounded context: identity_access owns it, which
+ * is why it sits inside that context's public surface. Device identity,
+ * eligibility and token state live beside it in the same context, and there is
+ * exactly one device registry.
  */
 
-export { isMobileDeliveryEnabledV1 } from '../../internal/mobile-delivery-config'
 export {
+    isMobileDeliveryEnabledV1,
     resolveMobileDeliveryTransportV1,
     type MobileDeliveryTransportResolutionV1,
-} from '../../internal/mobile-delivery-transport-capability'
+} from '../../../application/mobile-delivery-operations'
 export type {
     MobilePushMessageV1,
     MobilePushSendOutcomeV1,
     MobilePushTransportProblemV1,
     MobilePushTransportV1,
-} from '@/contracts/mobile-delivery/v1'
+} from '@/contracts/identity-access/v1'

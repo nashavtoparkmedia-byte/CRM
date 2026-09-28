@@ -5,7 +5,7 @@ import {
     type CallAlertDeliveryRequestedEventV1,
 } from '@/contracts/calling/v1'
 import type { MobilePushEligibleDeviceV1, MobilePushTargetResolutionV1 } from '@/contracts/identity-access/v1'
-import type { MobilePushSendOutcomeV1 } from '@/contracts/mobile-delivery/v1'
+import type { MobilePushSendOutcomeV1 } from '@/contracts/identity-access/v1'
 import { CallAlertRetryError, callAlertDataPayloadV1, createCallAlertDispatchV1 } from './call-alert-dispatch'
 
 const CALL = 'call_0001'

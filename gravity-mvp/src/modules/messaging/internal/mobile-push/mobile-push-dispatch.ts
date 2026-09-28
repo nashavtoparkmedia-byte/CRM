@@ -8,7 +8,7 @@ import type {
     MobilePushEligibleDeviceV1,
     MobilePushTargetResolutionV1,
 } from '../../../../contracts/identity-access/v1'
-import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/mobile-delivery/v1'
+import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/identity-access/v1'
 
 /**
  * Mobile Push v1 outbox consumers: intent → per-device deliveries → provider.

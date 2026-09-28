@@ -9,7 +9,7 @@ import { resolveMobilePushTargetV1 } from '@/modules/identity-access/public/v1/m
 import {
     isMobileDeliveryEnabledV1,
     resolveMobileDeliveryTransportV1,
-} from '@/modules/mobile-delivery/public/v1'
+} from '@/modules/identity-access/public/v1/mobile-delivery'
 import { createMobilePushDispatchV1 } from './mobile-push-dispatch'
 import { prismaMobilePushFanOutStoreV1 } from './push-fan-out-prisma-adapter'
 

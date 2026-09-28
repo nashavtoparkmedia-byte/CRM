@@ -1,5 +1,5 @@
 import { createPrivateKey, type KeyObject } from 'node:crypto'
-import type { MobilePushTransportProblemV1 } from '@/contracts/mobile-delivery/v1'
+import type { MobilePushTransportProblemV1 } from '@/contracts/identity-access/v1'
 
 /**
  * Mobile Delivery v1 configuration.

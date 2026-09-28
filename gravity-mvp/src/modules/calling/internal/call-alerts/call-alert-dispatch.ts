@@ -1,5 +1,5 @@
 import type { MobilePushEligibleDeviceV1, MobilePushTargetResolutionV1 } from '@/contracts/identity-access/v1'
-import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/mobile-delivery/v1'
+import type { MobilePushTransportProblemV1, MobilePushTransportV1 } from '@/contracts/identity-access/v1'
 import {
     makeCallAlertDeliveryRequestedEventV1,
     type CallAlertDeliveryRequestedEventV1,
