@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "99b1bc9bea57fb3eb475705a31240fbc72ba94925194e49baf25b4ed0ce1bcd0"
+      "sha256": "7a832c8d733978e8801fa531bff3163499184f00e075313a931a94deebd8741f"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "570926a7fcfb0346e29bb5e0e645859453f56a465d1887829b57ca39ea608509"
+      "sha256": "48f456f7253ded1994dd90895832d85842cf3c11a3e59c7c8c6cc0dceb482bf4"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -163,7 +163,7 @@
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
-      "sha256": "e99543897d33929246515e29beb7d1bde64bce26aa09ba550d7ff7e1c7822d77"
+      "sha256": "2878eebf13188bfe57bec0349f3295dc9e8ae2e29db06d45d3f5dca7b4dc45bb"
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",

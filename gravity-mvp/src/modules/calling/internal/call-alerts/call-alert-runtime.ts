@@ -17,9 +17,10 @@ import { prismaCallAlertOutboxV1 } from './call-alert-prisma-adapter'
  * Production wiring for call alerts.
  *
  * Every dependency crosses a context boundary through a public surface: device
- * eligibility and token state from identity_access, delivery enablement and the
- * provider transport from mobile_delivery. Calling holds no provider
- * configuration and no device registry of its own.
+ * eligibility, the push target and token state from identity_access, and
+ * delivery enablement and the provider transport from the mobile-delivery
+ * boundary identity_access owns. Calling holds no provider configuration and no
+ * device registry of its own.
  */
 
 export const callAlertDispatchV1 = createCallAlertDispatchV1({

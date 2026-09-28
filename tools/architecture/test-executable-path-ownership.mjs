@@ -106,7 +106,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2625,
+  denominator: 2642,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))
@@ -774,6 +774,141 @@ assert.equal(validatorSource.includes('pathToFileURL'), false)
   assert.match(validatorSource, /decisionChange\.previous_paths\.length === expectedChange\.previous_inventory\.path_count/u)
 }
 
+// ---------------------------------------------------------------------------
+// preview_reviewed_current_denominator
+//
+// Materialization only writes coverage once the reviewed chain already states
+// the exact current triple, and coverage_sha256 exists only as a product of the
+// derivation materialization performs. For a denominator that genuinely moved
+// that was circular. The preview operation breaks the circle by deriving the
+// triple and writing nothing; these probes pin that it stays read-only, that it
+// refuses anything but an exact clean candidate, and that the triple it derives
+// is the one the repository's published coverage actually carries.
+// ---------------------------------------------------------------------------
+const previewProbes = {}
+const PREVIEW = '--preview-reviewed-current-denominator'
+const git = async (args) => (await execFileAsync('git', ['-C', repositoryRoot, ...args], {
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+})).stdout
+const gitStatus = () => git(['status', '--porcelain=v1', '--untracked-files=all'])
+const headCommit = (await git(['rev-parse', 'HEAD^{commit}'])).trim()
+const previewRejects = (args, expected, label) => assert.rejects(
+  () => runNode([validatorRelative, ...args]),
+  (error) => error.code !== 0 && expected.test(error.stderr),
+  label,
+)
+
+// 1. Only one finite authority process operation may run at a time.
+await previewRejects([PREVIEW, '--generate-contexts'], /choose one finite authority process operation/u, 'preview may not run with context generation')
+await previewRejects([PREVIEW, '--materialize-reviewed-current-denominator'], /choose one finite authority process operation/u, 'preview may not run with materialization')
+previewProbes.conflicting_finite_operations = 'REJECTED'
+
+// 2. The candidate identity is mandatory and must be an exact 40-character commit.
+await previewRejects([PREVIEW], /preview requires explicit --candidate <full-40-character-commit>/u, 'preview must require a candidate')
+await previewRejects([PREVIEW, '--candidate', headCommit.slice(0, 12)], /preview requires explicit --candidate <full-40-character-commit>/u, 'preview must reject a short candidate')
+await previewRejects([PREVIEW, '--candidate', `${headCommit.slice(0, 39)}z`], /preview requires explicit --candidate <full-40-character-commit>/u, 'preview must reject a non-hexadecimal candidate')
+previewProbes.exact_candidate_identity_required = 'ENFORCED'
+
+// 3. A candidate that is not the checked-out HEAD fails closed.
+await previewRejects([PREVIEW, '--candidate', `${'0'.repeat(39)}1`], /preview candidate mismatch/u, 'preview must reject a candidate that is not HEAD')
+previewProbes.candidate_must_be_the_checkout = 'ENFORCED'
+
+// 4/5. A dirty worktree fails closed, and it does so BEFORE any authority
+// document is read. That ordering is what makes "malformed authority input" and
+// "invalid reviewed baseline" unreachable rather than merely rejected: editing
+// either document is itself a dirty worktree, so the operation refuses at the
+// checkout gate and never derives anything from the doctored bytes.
+const statusBeforeProbes = await gitStatus()
+const baselineRelative = 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json'
+const baselineAbsolute = path.join(repositoryRoot, baselineRelative)
+const baselineBytes = await readFile(baselineAbsolute)
+try {
+  await writeFile(baselineAbsolute, Buffer.concat([baselineBytes, Buffer.from('\n')]))
+  await previewRejects([PREVIEW, '--candidate', headCommit], /preview requires a clean exact candidate checkout; tracked_modified=1/u, 'a doctored reviewed baseline must fail at the checkout gate')
+} finally {
+  await writeFile(baselineAbsolute, baselineBytes)
+}
+assert.equal((await readFile(baselineAbsolute)).equals(baselineBytes), true, 'the reviewed baseline probe must restore the document byte-identically')
+previewProbes.doctored_authority_document_unreachable = 'REJECTED_AT_CHECKOUT_GATE'
+
+const untrackedAbsolute = path.join(repositoryRoot, 'architecture/contexts/v1/.preview-probe-untracked')
+try {
+  await writeFile(untrackedAbsolute, 'preview probe\n')
+  await previewRejects([PREVIEW, '--candidate', headCommit], /preview requires a clean exact candidate checkout; untracked_files=1/u, 'an untracked file must fail the preview checkout gate')
+} finally {
+  await rm(untrackedAbsolute, { force: true })
+}
+previewProbes.dirty_worktree = 'REJECTED'
+assert.equal(await gitStatus(), statusBeforeProbes, 'the failure probes must leave the worktree exactly as they found it')
+
+// 6. On an exact clean candidate the operation derives the triple, writes
+// nothing, and derives precisely the triple the published coverage carries —
+// which is the triple materialization accepted when it wrote that document.
+if (statusBeforeProbes.length === 0) {
+  const previewRun = await runNode([validatorRelative, PREVIEW, '--candidate', headCommit])
+  const preview = JSON.parse(previewRun.stdout)
+  assert.equal(await gitStatus(), '', 'preview must leave the worktree clean')
+  assert.deepEqual({
+    schema: preview.schema,
+    operation: preview.operation,
+    candidate: preview.candidate,
+    clean: preview.source_was_clean,
+    exports: preview.authority_capability_exports,
+    written: preview.repository_files_written,
+  }, {
+    schema: 'yoko.crm.single-authority-process-result.v1',
+    operation: 'preview_reviewed_current_denominator',
+    candidate: headCommit,
+    clean: true,
+    exports: 0,
+    written: 0,
+  })
+  const publishedCoverage = JSON.parse(await readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json'), 'utf8'))
+  assert.deepEqual({
+    tracked_executable_surfaces: preview.tracked_executable_surfaces,
+    tracked_inventory_sha256: preview.tracked_inventory_sha256,
+    coverage_sha256: preview.coverage_sha256,
+  }, {
+    tracked_executable_surfaces: publishedCoverage.source.tracked_executable_surfaces,
+    tracked_inventory_sha256: publishedCoverage.source.tracked_inventory_sha256,
+    coverage_sha256: publishedCoverage.coverage_sha256,
+  }, 'preview must derive the exact triple materialization accepted')
+  assert.equal(preview.tracked_executable_surfaces, validationResult.tracked_executable_surfaces, 'preview denominator must match the validated denominator')
+  // The reviewed chain must already stand at that triple, otherwise validation
+  // could not have passed; preview reports it so an amendment can be written
+  // against an exact predecessor rather than a guess.
+  assert.deepEqual(preview.reviewed_chain_current, {
+    tracked_executable_surfaces: publishedCoverage.source.tracked_executable_surfaces,
+    tracked_inventory_sha256: publishedCoverage.source.tracked_inventory_sha256,
+    coverage_sha256: publishedCoverage.coverage_sha256,
+  }, 'preview must report the resolved reviewed chain tail')
+  assert.deepEqual(preview.source_hash_rebinds_required, [], 'a validated tree requires no reviewed source-hash rebind')
+  assert.deepEqual(preview.exact_inventory_paths_without_reviewed_assignment, [], 'a validated tree has no exact-inventory path without a reviewed assignment')
+  previewProbes.derives_the_materialized_triple = 'PROVEN'
+  previewProbes.writes_zero_repository_files = 'PROVEN'
+} else {
+  previewProbes.derives_the_materialized_triple = 'SKIPPED_DIRTY_WORKTREE'
+  previewProbes.writes_zero_repository_files = 'SKIPPED_DIRTY_WORKTREE'
+}
+
+// 7. Preview is a declared finite operation and adds no authority API.
+assert.equal(validatorSource.includes("'preview_reviewed_current_denominator'"), true, 'preview must be a declared finite operation')
+{
+  const dependencies = JSON.parse(await readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json'), 'utf8'))
+  assert.deepEqual(dependencies.current_live.authority_boundary.operations, [
+    'validate', 'generate_contexts', 'preview_reviewed_current_denominator', 'materialize_reviewed_current_denominator',
+  ], 'declared authority operation set drift')
+  assert.equal(dependencies.current_live.authority_boundary.authority_capability_exports, 0, 'preview must not add an authority capability export')
+}
+// One derivation, two operations: preview and materialization must reach the
+// current triple through the same function, or a previewed value would be a
+// second opinion rather than the same answer.
+assert.match(validatorSource, /function deriveMaterializedCurrentDenominator\(inventory, manifests, coverage, changes, provisional\)/u)
+assert.equal((validatorSource.match(/deriveMaterializedCurrentDenominator\(/gu) ?? []).length, 3, 'the shared derivation must have exactly one definition and two callers')
+assert.equal((validatorSource.match(/resolveReviewedOwnershipAuthorityInputs\(/gu) ?? []).length, 3, 'preview and materialization must resolve authority inputs through one function')
+previewProbes.shared_derivation_no_duplicate_algorithm = 'ENFORCED'
+
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   authority_capability_exports: 0,
@@ -788,6 +923,7 @@ process.stdout.write(`${JSON.stringify({
     uppercase_file_import: 'CAPABILITY_ABSENT',
     aliased_commonjs_create_require: 'CAPABILITY_ABSENT',
   },
+  preview_reviewed_current_denominator: previewProbes,
   reviewed_ownership_amendments: amendmentProbes,
   accepted_authority_merge_composition: compositionProbes,
 })}\n`)
