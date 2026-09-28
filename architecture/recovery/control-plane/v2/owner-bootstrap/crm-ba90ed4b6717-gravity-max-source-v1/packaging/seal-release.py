@@ -301,7 +301,7 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         # The installed runtime being rolled back to still reports its own profile.
         # This mirrors what the live snapshot records, so it must not follow the
         # successor's profile id.
-        "runtime_profile_id": "crm-fb9fb30d9eb2-gravity-max-source-v1",
+        "runtime_profile_id": "crm-c8ce34feae84-gravity-max-source-v1",
         "gravity_image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
         "max_image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
         "max_volume_source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3",

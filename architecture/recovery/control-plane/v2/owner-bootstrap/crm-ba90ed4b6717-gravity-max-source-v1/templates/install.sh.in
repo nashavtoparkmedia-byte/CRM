@@ -33,7 +33,7 @@ runtime_json() {
 
 old_identity() {
     test "$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null)" = '2.0.0-20'
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-20" and e.get("activation_profile")=="crm-fb9fb30d9eb2-gravity-max-source-v1" else 1)'
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-20" and e.get("activation_profile")=="crm-c8ce34feae84-gravity-max-source-v1" else 1)'
     runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); raise SystemExit(0 if v.get("ok") is True else 1)'
 }
 

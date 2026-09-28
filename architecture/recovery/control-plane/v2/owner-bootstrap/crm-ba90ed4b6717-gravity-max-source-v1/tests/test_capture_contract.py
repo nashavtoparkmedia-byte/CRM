@@ -96,7 +96,7 @@ class CaptureContractTests(unittest.TestCase):
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
         sealing = {
             "runtime_package_version": "2.0.0-20",
-            "runtime_profile_id": "crm-fb9fb30d9eb2-gravity-max-source-v1",
+            "runtime_profile_id": "crm-c8ce34feae84-gravity-max-source-v1",
             "audit_record_count": 47,
             "audit_last_digest": "a" * 64,
             "predecessor_release_critical_identity_sha256": "b" * 64,

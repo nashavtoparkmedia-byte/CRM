@@ -14,7 +14,7 @@ RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # The snapshot describes the runtime that is installed right now, which is still
 # 2.0.0-20 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
-EXPECTED_PROFILE = "crm-fb9fb30d9eb2-gravity-max-source-v1"
+EXPECTED_PROFILE = "crm-c8ce34feae84-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
