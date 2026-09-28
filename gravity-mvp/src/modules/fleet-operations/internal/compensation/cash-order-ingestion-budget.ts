@@ -42,6 +42,13 @@ export const CASH_ORDER_INGESTION_TIMING_V1 = Object.freeze({
     SLICE_PAGE_CAP: 20,
     MAX_ENABLED_PARKS: 3,
     MAX_DEFERRAL_SECONDS: 3_600,
+    /**
+     * The one-shot read-only preflight is not a scheduler tick, so it is not
+     * bound by TICK_INTERVAL_MS. It still has to be bounded: one window per
+     * park gets this long, and the whole probe can never exceed its deadline.
+     */
+    PREFLIGHT_WINDOW_BUDGET_MS: 120_000,
+    PREFLIGHT_RUN_DEADLINE_MS: 600_000,
 })
 
 const T = CASH_ORDER_INGESTION_TIMING_V1

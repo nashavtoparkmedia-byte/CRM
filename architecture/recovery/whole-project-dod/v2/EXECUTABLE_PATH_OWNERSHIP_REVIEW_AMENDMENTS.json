@@ -1308,6 +1308,78 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-order-readonly-preflight-main-6209eeb9-20260928",
+      "reviewed_at": "2026-09-28T00:00:00Z",
+      "reviewed_by": "CASH_ORDER_READONLY_PREFLIGHT_RECONCILIATION_EXECUTOR_REVIEW_20260928",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_CASH_ORDER_READONLY_PREFLIGHT_MAIN_RECONCILIATION_20260928",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 6209eeb9, whose tail is compensation-edge-perimeter-boundary-main-42aad7cf-20260925, and reviews only the six surfaces the read-only cash-order preflight adds. It supersedes the earlier review of the same six surfaces anchored on main baf2ecaa (cash-order-readonly-preflight-main-baf2ecaa-20260925), which is deliberately not carried forward: that anchor's denominator of 2,592 no longer exists on main, so the surfaces are reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the six tracked executable surfaces the read-only cash-order preflight adds on top of main 6209eeb9: 2,625 + 6 = 2,631 surfaces, context-owned 1,395 -> 1,399 and governed exclusions 1,230 -> 1,232. Four live under gravity-mvp/src/modules/fleet-operations, which the fleet_operations context manifest owns by prefix: the one-shot preflight itself, the read-only store that is the whole persistence capability it holds, and two Vitest suites, one of them PostgreSQL-backed. The remaining two are the operator command and its argument test under gravity-mvp/scripts, which the gravity_scripts exclusion covers by prefix with no exact inventory. The command receives a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / CONFIRMED_MANUAL_OPERATOR, functional owner gravity_application_operations) because an operator runs it deliberately against a deployed environment; that classification grants no write authority, and the probe holds none. The repository's own derivation over this tree reports no exact-inventory drift, so no path needs an explicit exact-inventory assignment and no source fingerprint rebind is required. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale belonging to any other track is changed: the ownership state landed by Calling, Android, Mobile Push and the compensation edge perimeter is preserved exactly as published.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "b154e113b4316d5a38166996391dca0dde59149fa50e0a0e931dded6af7e75e3",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "4737f280c5fbbea610fdeda0bb8addf1ec287a9b7023775c622c1b6c16788140",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-preflight.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one-shot read-only authorization probe, under a path the fleet_operations context owns by prefix, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. It is composed with a persistence capability one read method wide and never passes through the generic operational job wrapper."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/read-only-cash-order-ingestion-store.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The whole persistence capability the probe holds: one real read method, and every mutating method of the ingestion store shape refused before a transaction. Context-owned by prefix under fleet_operations, so it needs no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-preflight.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Vitest suite for the probe's decisions and refusals, beside the module it covers, context-owned by prefix under fleet_operations. It drives in-process fakes only, opens no database connection and holds no credential."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-preflight.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "PostgreSQL-backed proof that a probe run leaves persistent state untouched, beside the module it covers, context-owned by prefix under fleet_operations. It runs only against a disposable database behind an explicit environment flag and never against production."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-cash-order-preflight.ts",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The operator command, under gravity-mvp/scripts which the gravity_scripts exclusion covers by prefix with no exact inventory, so it takes no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It writes no SQL and holds no credential; it calls the public owner operation."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-cash-order-preflight.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Argument-parsing test for the operator command, under the same gravity_scripts prefix exclusion with no exact inventory. It asserts that the command accepts a bounded park subset and no operator-supplied window, and it reaches nothing outside the process."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

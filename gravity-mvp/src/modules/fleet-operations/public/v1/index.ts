@@ -89,6 +89,7 @@ export {
 } from '../../application/fleet-operations'
 export {
   cashOrderIngestionScheduleV1,
+  preflightCashOrderIngestionV1,
   readCashOrderOrderConfirmationV1,
   readCashOrderParkAuthorityV1,
   requestCashOrderDayConfirmationV1,
@@ -99,6 +100,9 @@ export type {
   CashOrderIngestionScheduleV1,
   CashOrderOrderConfirmationDtoV1,
   CashOrderParkAuthorityDtoV1,
+  CashOrderPreflightDtoV1,
+  CashOrderPreflightParkDtoV1,
+  CashOrderPreflightWindowDtoV1,
   CashOrderRefreshRequestV1,
   ScheduledCashOrderIngestionResultV1,
 } from '../../application/cash-order-ingestion-operations'
