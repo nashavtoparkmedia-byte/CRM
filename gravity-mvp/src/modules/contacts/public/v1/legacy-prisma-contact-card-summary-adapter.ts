@@ -9,7 +9,7 @@
 import { prisma } from '@/lib/prisma'
 
 import type { ContactCardSummaryPortV1, ContactCardSummarySourceV1 } from './contact-card-summary'
-import { phoneEvidenceState } from './contact-evidence-state'
+import { confirmedPersonNameV1, phoneEvidenceState } from './contact-evidence-state'
 
 export const legacyPrismaContactCardSummaryPortV1: ContactCardSummaryPortV1 = {
   async findContactCardSummarySource(contactId): Promise<ContactCardSummarySourceV1 | null> {
@@ -65,8 +65,11 @@ export const legacyPrismaContactCardSummaryPortV1: ContactCardSummaryPortV1 = {
         displayName: identity.displayName,
       })),
       mergedFromCount,
-      // Contacts owns no source for a confirmed person name; see the contract.
-      confirmedPersonName: null,
+      // The confirmed person name is Contacts-owned evidence: the operator's
+      // recorded decision and the snapshot it was taken from both live in this
+      // contact's own customFields, so it is read through the Contacts accessor
+      // and costs no additional model. No Driver row is consulted.
+      confirmedPersonName: confirmedPersonNameV1(contact.customFields),
     }
   },
 }

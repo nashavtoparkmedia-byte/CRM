@@ -15,6 +15,7 @@ import {
   type ContactCardSummarySourceV1,
 } from './contact-card-summary'
 import { buildCanonicalContactSummary } from './contact-display-policy'
+import { confirmedPersonNameV1 } from './contact-evidence-state'
 
 const EXTERNAL_ID = '902100000001'
 const PROVIDER_ACCOUNT_ID = 'tg-bot-7712345678'
@@ -179,6 +180,122 @@ describe('buildContactCardSummaryV1', () => {
       expect(serialized).not.toContain(forbidden)
     }
     for (const forbidden of ['chatId', 'conversation', 'delivery', 'driver', 'task', 'reachab', 'readiness', 'externalId']) {
+      expect(serialized.toLowerCase()).not.toContain(forbidden.toLowerCase())
+    }
+  })
+})
+
+/** The Contacts-owned confirmation evidence exactly as the adapter reads it. */
+function confirmedPersonCustomFields(overrides: Record<string, unknown> = {}) {
+  return {
+    driverConfirmations: [{
+      id: 'confirmation-1',
+      profileClusterKey: 'vu:7700123456',
+      representativeDriverId: 'driver-a',
+      status: 'confirmed',
+      confirmedBy: 'operator-1',
+      confirmationBasis: 'operator_confirmation',
+      evidenceRoot: 'yandex:park-1:profile-driver-a',
+      evidenceSnapshot: {
+        profiles: [{
+          driverId: 'driver-a',
+          fullName: 'Иван Петров',
+          externalParkId: 'park-1',
+          externalDriverProfileId: 'profile-driver-a',
+          evidenceRoot: 'yandex:park-1:profile-driver-a',
+          sourceFreshness: 'fresh',
+          phones: ['79990000000'],
+        }],
+        warnings: [],
+      },
+      confirmedAt: '2026-09-01T00:00:00.000Z',
+    }],
+    ...overrides,
+  }
+}
+
+describe('confirmed person name in the card summary', () => {
+  it('titles the card with the confirmed person instead of a channel name', () => {
+    // This is the exact composition the persistence adapter performs: the
+    // accessor reads the contact's own customFields and the display policy
+    // decides. Nothing about a Driver row is involved.
+    const customFields = confirmedPersonCustomFields()
+    const summary = buildContactCardSummaryV1(source({
+      displayName: 'Контакт MAX',
+      displayNameSource: 'channel',
+      customFields,
+      confirmedPersonName: confirmedPersonNameV1(customFields),
+    }))
+    expect(summary.displayName).toBe('Иван Петров')
+    expect(summary.displayTitle).toBe('Иван Петров · +7 900 123-45-67')
+  })
+
+  it('keeps a manually pinned canonical name above the confirmed person name', () => {
+    const customFields = confirmedPersonCustomFields({ canonicalPinnedAt: '2026-09-02T00:00:00.000Z' })
+    const summary = buildContactCardSummaryV1(source({
+      displayName: 'Пётр Сидоров',
+      displayNameSource: 'channel',
+      customFields,
+      confirmedPersonName: confirmedPersonNameV1(customFields),
+    }))
+    expect(summary.displayName).toBe('Пётр Сидоров')
+  })
+
+  it('lets the display policy reject a technical confirmed name and fall through', () => {
+    // The accessor validates structure only; deciding that "Контакт MAX" is not
+    // a person stays with ContactDisplayPolicy.
+    const summary = buildContactCardSummaryV1(source({
+      displayName: 'Иван из чата',
+      displayNameSource: 'channel',
+      confirmedPersonName: 'Контакт MAX',
+    }))
+    expect(summary.displayName).toBe('Иван из чата')
+    expect(buildContactCardSummaryV1(source({
+      displayName: 'Контакт MAX',
+      displayNameSource: 'channel',
+      confirmedPersonName: '79001234567',
+    })).displayName).toBe('+7 900 123-45-67')
+  })
+
+  it('falls back to the ordinary cascade when the evidence is ambiguous', () => {
+    const customFields = confirmedPersonCustomFields({
+      identityConflicts: [{ conflictType: 'confirmed_driver_cluster_contradiction', status: 'open' }],
+    })
+    expect(confirmedPersonNameV1(customFields)).toBeNull()
+    const summary = buildContactCardSummaryV1(source({
+      displayName: 'Иван из чата',
+      displayNameSource: 'channel',
+      customFields,
+      confirmedPersonName: confirmedPersonNameV1(customFields),
+    }))
+    expect(summary.displayName).toBe('Иван из чата')
+  })
+
+  it('keeps the declared field set and leaks no confirmation evidence', () => {
+    const customFields = confirmedPersonCustomFields()
+    const summary = buildContactCardSummaryV1(source({
+      customFields,
+      confirmedPersonName: confirmedPersonNameV1(customFields),
+    }))
+    expect(Object.keys(summary).sort()).toEqual([
+      'channels',
+      'contactId',
+      'displayName',
+      'displayTitle',
+      'hasIdentityConflict',
+      'lineage',
+      'phoneCount',
+      'primaryPhone',
+      'source',
+    ])
+    const serialized = JSON.stringify(summary)
+    for (const forbidden of [
+      'driver-a', 'representativeDriverId', 'evidenceSnapshot', 'profileClusterKey',
+      'confirmationBasis', 'evidenceRoot', 'park-1', 'profile-driver-a', 'confirmedPersonName',
+    ]) {
+      expect(serialized).not.toContain(forbidden)
+    }
+    for (const forbidden of ['driver', 'fleet', 'park', 'confirmation']) {
       expect(serialized.toLowerCase()).not.toContain(forbidden.toLowerCase())
     }
   })
