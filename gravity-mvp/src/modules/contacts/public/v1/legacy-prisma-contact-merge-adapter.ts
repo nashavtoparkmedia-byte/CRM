@@ -525,7 +525,7 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
         })
       },
 
-      async composeContactState(sourceContactId, targetContactId) {
+      async composeContactState(sourceContactId, targetContactId, identityRemaps) {
         const [source, target] = await Promise.all([
           transaction.contact.findUnique({ where: { id: sourceContactId } }),
           transaction.contact.findUnique({ where: { id: targetContactId } }),
@@ -557,6 +557,7 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
               targetContactId,
               sourceFields,
               targetFields,
+              identityRemaps,
             }) as Prisma.InputJsonObject,
           },
         })

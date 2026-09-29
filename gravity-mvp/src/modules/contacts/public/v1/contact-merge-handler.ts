@@ -172,7 +172,17 @@ export interface ContactMergeContactsRepositoryV1
   repointIdentitiesToPhone(oldPhoneId: string, newPhoneId: string): Promise<void>
   movePhonesToContact(sourceContactId: string, targetContactId: string): Promise<void>
   reconcilePrimaryPhonesAfterMove(sourceContactId: string, targetContactId: string): Promise<void>
-  composeContactState(sourceContactId: string, targetContactId: string): Promise<void>
+  /**
+   * Composes the survivor's Contacts-owned state. `identityRemaps` is the exact
+   * deleted -> surviving identity table this merge just applied, so the composed
+   * conflict journal can keep pointing at the row that still represents the same
+   * provider identity. An empty table must compose exactly as before.
+   */
+  composeContactState(
+    sourceContactId: string,
+    targetContactId: string,
+    identityRemaps: ReadonlyArray<MergeIdentityRemapV1>,
+  ): Promise<void>
   recordMerge(input: {
     id: string
     survivorId: string
@@ -384,24 +394,63 @@ function automationSnapshot(contact: ContactMergeSourceV1): ContactAutomationSna
     ],
   }
 }
+/** One deleted source identity and the surviving row that represents it. */
+export type MergeIdentityRemapV1 = {
+  oldId: string
+  newId: string
+}
+
+type MergeIdentityDedupCandidateV1 = {
+  id: string
+  channel: string
+  providerAccountId: string
+  externalId: string
+}
+
+/**
+ * The merge's identity-dedup equivalence, in one place.
+ *
+ * A source identity is a duplicate of a target identity exactly when this key
+ * matches, so the key is also what makes the surviving row the same identity as
+ * the deleted one. Every consumer of that decision — the deletion, the Chat
+ * remap and the conflict-journal remap — must read it from here rather than
+ * rediscovering it, or they can disagree about which rows are the same identity.
+ */
+function mergeIdentityDedupKeyV1(identity: MergeIdentityDedupCandidateV1): string {
+  return `${identity.channel}:${identity.providerAccountId}:${identity.externalId}`
+}
+
+/**
+ * The deleted -> surviving identity table for this merge, in source order.
+ *
+ * Derived only from the dedup key above: never from channel alone, an external
+ * id alone, a display name, a phone or any provider guess. The result is the
+ * authority for the deletion itself, so nothing downstream can remap an identity
+ * the merge did not actually deduplicate.
+ */
+export function resolveMergeIdentityRemapV1(
+  sourceIdentities: ReadonlyArray<MergeIdentityDedupCandidateV1>,
+  targetIdentities: ReadonlyArray<MergeIdentityDedupCandidateV1>,
+): MergeIdentityRemapV1[] {
+  const survivingIdentityByKey = new Map(
+    targetIdentities.map(identity => [mergeIdentityDedupKeyV1(identity), identity.id]),
+  )
+  const remaps: MergeIdentityRemapV1[] = []
+  for (const identity of sourceIdentities) {
+    const survivingIdentityId = survivingIdentityByKey.get(mergeIdentityDedupKeyV1(identity))
+    if (survivingIdentityId) remaps.push({ oldId: identity.id, newId: survivingIdentityId })
+  }
+  return remaps
+}
+
 async function moveOwnedState(
   repositories: ContactMergeTransactionalRepositoriesV1,
   source: ContactMergeSourceV1,
   target: ContactMergeSurvivorV1,
-): Promise<void> {
+): Promise<MergeIdentityRemapV1[]> {
   const { contacts, messaging } = repositories
-  const targetIdentityMap = new Map(
-    target.identities.map(identity => [`${identity.channel}:${identity.providerAccountId}:${identity.externalId}`, identity.id]),
-  )
-  const duplicateIdentityIds: string[] = []
-  const identityRemaps: Array<{ oldId: string; newId: string }> = []
-  for (const identity of source.identities) {
-    const targetIdentityId = targetIdentityMap.get(`${identity.channel}:${identity.providerAccountId}:${identity.externalId}`)
-    if (targetIdentityId) {
-      duplicateIdentityIds.push(identity.id)
-      identityRemaps.push({ oldId: identity.id, newId: targetIdentityId })
-    }
-  }
+  const identityRemaps = resolveMergeIdentityRemapV1(source.identities, target.identities)
+  const duplicateIdentityIds = identityRemaps.map(remap => remap.oldId)
   for (const remap of identityRemaps) {
     await messaging.remapChatsToIdentity(remap.oldId, remap.newId)
   }
@@ -416,6 +465,7 @@ async function moveOwnedState(
   if (duplicatePhoneIds.length > 0) await contacts.deleteDuplicatePhones(duplicatePhoneIds)
   await contacts.movePhonesToContact(source.id, target.id)
   await contacts.reconcilePrimaryPhonesAfterMove(source.id, target.id)
+  return identityRemaps
 }
 
 export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDependenciesV1) {
@@ -521,8 +571,8 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
           })
         }
         const snapshot = makeSnapshot(loser, winner)
-        await moveOwnedState(repositories, loser, winner)
-        await contacts.composeContactState(loser.id, winner.id)
+        const identityRemaps = await moveOwnedState(repositories, loser, winner)
+        await contacts.composeContactState(loser.id, winner.id, identityRemaps)
         await messaging.moveChatsToDriverContact(loser.id, winner.id, driver.id)
         await messaging.attachUnlinkedContactChatsToDriver(winner.id, driver.id)
         await work.moveTasksToContact(loser.id, winner.id)
@@ -676,8 +726,8 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
       const winner = evaluation.survivorId === source.id ? source : target
       const loser = evaluation.mergedId === source.id ? source : target
       const snapshot = makeSnapshot(loser, winner)
-      await moveOwnedState(repositories, loser, winner)
-      await contacts.composeContactState(loser.id, winner.id)
+      const identityRemaps = await moveOwnedState(repositories, loser, winner)
+      await contacts.composeContactState(loser.id, winner.id, identityRemaps)
       const composedYandexDriverId = winner.yandexDriverId ?? loser.yandexDriverId
       const targetDriverId = composedYandexDriverId
         ? await fleet.findDriverIdByYandexDriverId(composedYandexDriverId)

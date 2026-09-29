@@ -8,6 +8,7 @@ import {
 import {
   ContactMergeErrorV1,
   createMergeContactsHandlerV1,
+  resolveMergeIdentityRemapV1,
   type ContactMergeDriverV1,
   type ContactMergeQueryRepositoriesV1,
   type ContactMergeSourceV1,
@@ -251,8 +252,8 @@ function makeHarness(options: HarnessOptions = {}) {
       async reconcilePrimaryPhonesAfterMove(sourceContactId, targetContactId) {
         await stage('contacts.reconcilePrimaryPhonesAfterMove', sourceContactId, targetContactId)
       },
-      async composeContactState(sourceContactId, targetContactId) {
-        await stage('contacts.composeContactState', sourceContactId, targetContactId)
+      async composeContactState(sourceContactId, targetContactId, identityRemaps) {
+        await stage('contacts.composeContactState', sourceContactId, targetContactId, identityRemaps)
       },
       async recordMerge(input) {
         await stage('contacts.recordMerge', input)
@@ -1598,5 +1599,100 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     const error = new ContactMergeErrorV1('INVALID_MERGE_STATE', 'invalid state')
     expect(error).toBeInstanceOf(Error)
     expect(error).toMatchObject({ name: 'MergeError', code: 'INVALID_MERGE_STATE', message: 'invalid state' })
+  })
+})
+
+// M3A4 S2 — the identity-dedup remap authority.
+//
+// The deletion, the Chat remap and the conflict-journal remap must all read the
+// same "these two rows are the same identity" decision. These cases pin that the
+// decision is the full dedup key and cannot be weakened, and that the table the
+// merge actually deleted by is the one handed to the composition.
+describe('Contact merge identity-dedup remap authority', () => {
+  function candidate(overrides: Partial<{
+    id: string
+    channel: string
+    providerAccountId: string
+    externalId: string
+  }> = {}) {
+    return {
+      id: 'identity-source',
+      channel: 'telegram',
+      providerAccountId: 'legacy',
+      externalId: 'shared-external',
+      ...overrides,
+    }
+  }
+
+  it('maps a source identity onto the target row with the same dedup key', () => {
+    expect(resolveMergeIdentityRemapV1(
+      [candidate()],
+      [candidate({ id: 'identity-target' })],
+    )).toEqual([{ oldId: 'identity-source', newId: 'identity-target' }])
+  })
+
+  it('does not match on channel alone', () => {
+    expect(resolveMergeIdentityRemapV1(
+      [candidate()],
+      [candidate({ id: 'identity-target', externalId: 'different-external' })],
+    )).toEqual([])
+  })
+
+  it('does not match on externalId alone', () => {
+    // providerAccountId is part of the current dedup authority, so an external id
+    // that matches under a different account is a different identity.
+    expect(resolveMergeIdentityRemapV1(
+      [candidate()],
+      [candidate({ id: 'identity-target', providerAccountId: 'telegram-account-b' })],
+    )).toEqual([])
+  })
+
+  it('does not match across channels that share an external id', () => {
+    expect(resolveMergeIdentityRemapV1(
+      [candidate()],
+      [candidate({ id: 'identity-target', channel: 'max' })],
+    )).toEqual([])
+  })
+
+  it('returns one entry per deduplicated source identity, in source order', () => {
+    expect(resolveMergeIdentityRemapV1(
+      [
+        candidate({ id: 'source-a', externalId: 'a' }),
+        candidate({ id: 'source-kept', externalId: 'kept' }),
+        candidate({ id: 'source-b', externalId: 'b' }),
+      ],
+      [
+        candidate({ id: 'target-b', externalId: 'b' }),
+        candidate({ id: 'target-a', externalId: 'a' }),
+      ],
+    )).toEqual([
+      { oldId: 'source-a', newId: 'target-a' },
+      { oldId: 'source-b', newId: 'target-b' },
+    ])
+  })
+
+  it('never maps an id onto itself, so the table is idempotent by construction', () => {
+    const remaps = resolveMergeIdentityRemapV1(
+      [candidate({ id: 'source-a', externalId: 'a' }), candidate({ id: 'source-b', externalId: 'b' })],
+      [candidate({ id: 'target-a', externalId: 'a' }), candidate({ id: 'target-b', externalId: 'b' })],
+    )
+    const deleted = new Set(remaps.map(remap => remap.oldId))
+    expect(remaps.some(remap => deleted.has(remap.newId))).toBe(false)
+  })
+
+  it('hands the composition exactly the table it deleted identities by', async () => {
+    const harness = makeHarness()
+    await harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'manager-1',
+    })
+
+    const deletion = harness.committed.find(call => call.name === 'contacts.deleteDuplicateIdentities')
+    const composition = harness.committed.find(call => call.name === 'contacts.composeContactState')
+    expect(deletion?.args[0]).toEqual(['identity-duplicate'])
+    expect(composition?.args[2]).toEqual([{ oldId: 'identity-duplicate', newId: 'survivor-identity' }])
   })
 })
