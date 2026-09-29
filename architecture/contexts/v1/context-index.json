@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "a11c389b90e4f58da9f5e211a3c3efb438f9371c89bf0069d6d102deeafc256a"
+      "sha256": "e33a4b1793ed58cfa5efe3112895f4a95a0e625374f7647e7f305a062a96fec7"
     },
     {
       "context": "whatsapp_channel",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "6684f5217d6f47b3f7896e4a4521fa8c5f785e97a6977ddacc1849a858c45278"
+      "sha256": "573e35db65ce2ba289debeeb550ea815b03baa7f8d96509ec41e1af0ce8ce424"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "d98a5709f23a5cf354435046c7480813863055f2c671fb1a8623bf67abfbdceb"
+      "sha256": "5f55ae0d139f6bf78ac9a9c2e75840657019ad2ff4b0292ae8f78eaff3ff08fd"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "bfbbd0ed82743e502b0da8061e11f0cde1f40e0e07bb8bac4e92dd246048bb5a"
+      "sha256": "a605d68ae2eadbc6fd3c2a07275deb7fddb4325ba2d1a53c187c33747c9baf99"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
