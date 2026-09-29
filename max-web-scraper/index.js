@@ -3168,8 +3168,10 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const externalId = isOutgoingCandidate
     ? stableDomMirrorMessageId(chatId, text, attachments, latest)
     : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
+  // Committed only once the CRM has accepted it, below. Marking it here made a refused
+  // message permanently unretryable and, for a provider-backed candidate, left the
+  // pending head both unconfirmed and already-seen - a per-chat inbound deadlock.
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
-  domFallbackSeen.add(externalId)
 
   const messageType = attachments[0]?.type || 'text'
   const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
@@ -3202,8 +3204,17 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
-  if (pendingProviderId && result.status >= 200 && result.status < 300 && !result.skipped) {
+  const webhookAccepted = result.status >= 200 && result.status < 300
+  const webhookStored = webhookAccepted && !result.skipped
+  if (webhookAccepted) domFallbackSeen.add(externalId)
+  if (pendingProviderId && webhookStored) {
     transport?.confirmPendingLiveTextIdForDomRecovery?.(chatId, pendingProviderId)
+  }
+  if (pendingProviderId && !webhookAccepted) {
+    // ONE pending provider id belongs to ONE candidate. This one was not accepted, so
+    // its id stays at the head for a later retry and the caller must not hand the same
+    // head to the next candidate.
+    return { skipped: 'pending_provider_not_accepted', providerBackedRetry: true, externalId, text, webhook: result }
   }
   if (!isOutgoingCandidate && reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
     rememberDomRecoveredText(chatId, text)
@@ -3415,6 +3426,9 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
       })
       if (result?.success) results.push(result)
       else if (result?.skipped) skipped[result.skipped] = (skipped[result.skipped] || 0) + 1
+      // A provider-backed candidate the CRM did not accept keeps the pending head, so
+      // no later candidate in this batch may be processed against that same head.
+      if (result?.providerBackedRetry) break
     }
     return {
       success: results.length > 0,

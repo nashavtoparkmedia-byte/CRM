@@ -433,6 +433,51 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "messaging-max-inbound-reliability-20260928",
+      "reviewed_at": "2026-09-28T00:00:00Z",
+      "reviewed_by": "MESSAGING_MAX_INBOUND_RELIABILITY_EXECUTOR_REVIEW_20260928",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_AUTHORIZED_MAX_INBOUND_RELIABILITY_REPAIR_20260928",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated. This amendment extends the chain whose tail is messaging-max-dom-fallback-cold-cache-repair-20260926, and reviews only the one surface this inbound reliability repair adds."
+      },
+      "reason": "Records the single tracked executable surface the MAX inbound reliability repair adds, max-web-scraper/test/max-inbound-pending-provider-queue-source.test.js: 2,506 + 1 = 2,507 surfaces. It is a scraper source-contract test beside the existing *-source tests in that directory, asserting the one-pending-provider-id-to-one-DOM-candidate invariant on a monolithic entrypoint that exports nothing. It reads source text and asserts; it writes nothing and has no runtime role. One reviewed exact-inventory assignment moves its bytes and is rebound as a CHAINED rebind, gravity-mvp/src/app/api/webhooks/max/route.ts, starting from the exact fingerprint the immediately preceding amendment approved (b60f4e49) and ending at the bytes now on disk. Its reviewed lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and exact_runtime_inventory kind are all unchanged; only the bytes move, carrying a source-specific chat binding so that live_dom_recovery reaches the SAME existing bounded peer proof as dom_fallback while dom_fallback keeps its synthetic-id invariant untouched. No assignment is added or removed, and no lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree from a clean checkout.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2506,
+        "tracked_inventory_sha256": "89cf58e48aaf59b26857f2565e2a509e8deedd37776d98cae8656d8bd36e7f73",
+        "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2507,
+        "tracked_inventory_sha256": "660afc5e457c133ba6ded416a151bde6f759bf93868713863dac501348bfb3d6",
+        "coverage_sha256": "4be90bd24fb7de213a88db6307fb20683b4aa5dd127657e374df1cc04b1a1b59"
+      },
+      "unassigned_tracked_surfaces": [],
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "b60f4e4935f11064614b1dc84b534a3d70ef35202d449781db7d855ffde97e70",
+          "current_source_sha256": "317946a4ff2ccfe7ab0f4ac56c7fe0d7f0b2810ec1417f6d0e199e39a4e567be",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The MAX webhook route keeps every reviewed ownership field. Only its bytes move, adding a source-specific route binding: dom_fallback still requires the synthetic max-dom-<externalChatId>-<hash> id with the embedded chat id matching, while live_dom_recovery - whose externalId is the real provider message id and so cannot satisfy that invariant by design - is bound by exact chatId/rawChatId agreement and the fully attested route, and is refused outright if it presents a synthetic id. Every downstream peer, provider-account, claimant and collision guard is unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
