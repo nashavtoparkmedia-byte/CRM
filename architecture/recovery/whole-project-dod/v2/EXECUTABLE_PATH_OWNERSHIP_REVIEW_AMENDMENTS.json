@@ -1380,6 +1380,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "mobile-push-p2-native-final-main-8824ece3-20260928",
+      "reviewed_at": "2026-09-28T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_V1_P2_RECONCILIATION_EXECUTOR_REVIEW_20260928",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_MOBILE_PUSH_V1_P2_FINAL_RECONCILIATION_20260928",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 8824ece3, whose tail is cash-order-readonly-preflight-main-6209eeb9-20260928. It supersedes the earlier P2 amendment anchored on main 6209eeb9 (mobile-push-p2-native-final-main-6209eeb9-20260927), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the same transition is recorded again against the published chain rather than replayed."
+      },
+      "reason": "Records the tracked executable inventory transition the Mobile Push v1 P2 reconciliation makes on top of main 8824ece3: 4737f280 -> 63cfa7bc with the denominator unchanged at 2,631 surfaces and the coverage digest unchanged at 54aff6e4. P2 adds no tracked executable surface at all. Its product is Android source and resources -- Kotlin, AndroidManifest and values XML -- and none of .kt, .xml or .kts is a tracked executable extension, so the twenty-seven Kotlin and two XML paths this reconciliation adds or retires are invisible to the inventory's path set; no file mode changes, and the context-owned and governed-exclusion path counts are untouched. The single input that moves is the reviewed lifecycle classification of .github/workflows/android-acceptance-e2e.yml, whose source_sha256 pin is rebound from bdff8bc2 to d082975f because P2 edits that workflow. registered_source_sha256 is an inventory identity input, which is why the inventory digest moves while every other field of the triple stands still. The two reviewed credential dispositions bound to those same workflow bytes are rebound in credential-unknown-access-resolution.json in the same movement, and the fresh credential verification passes over the combined tree with 0 new ambiguous and 0 new public risk. No ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no reviewed assignment's source fingerprint moves, so this amendment carries no rebind and records no unassigned surface. The current triple is the repository's own derivation over this exact tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "4737f280c5fbbea610fdeda0bb8addf1ec287a9b7023775c622c1b6c16788140",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "63cfa7bcf1885d86040933eb1133dd7e460acca72c33cc5f4c8e092ab1c642bb",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
