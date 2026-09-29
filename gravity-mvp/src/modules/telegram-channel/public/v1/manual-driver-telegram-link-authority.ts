@@ -222,8 +222,13 @@ export async function revalidatePreparedManualDriverTelegramLinkAuthorityV1(
  */
 export async function prepareDriverTelegramConversationAuthorityV1(
     input: { driverId: string; telegramId: bigint },
-    client: ManualDriverTelegramLinkAuthorityReadClientV1 = prisma,
 ): Promise<PreparedDriverTelegramConversationAuthorityV1> {
+    // Reads go through the module's own client. Accepting one as a parameter
+    // would put a @prisma/client type in this context's public signature and
+    // launder a private persistence type through the facade; the serialized
+    // re-read under CNT1 is `revalidate…` below, which is not part of the
+    // public surface.
+    const client: ManualDriverTelegramLinkAuthorityReadClientV1 = prisma
     const driverId = exactIdentifier(input.driverId)
     if (!driverId) throw new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED')
     if (input.telegramId <= 0n || input.telegramId > MAX_SIGNED_BIGINT) {
