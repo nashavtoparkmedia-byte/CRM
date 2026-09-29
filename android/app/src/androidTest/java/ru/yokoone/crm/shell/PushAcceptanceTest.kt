@@ -77,6 +77,9 @@ class PushAcceptanceTest {
     private val inboundText: String get() = required("inboundText")
     private val pushToken: String get() = required("pushToken")
 
+    /** Synthetic on purpose: a call alert carries an identifier and nothing the CRM has to have stored. */
+    private val callId: String get() = required("callId")
+
     private fun required(name: String): String {
         val value = arguments.getString(name)
         assertNotNull("instrumentation argument -e $name is required", value)
@@ -240,6 +243,82 @@ class PushAcceptanceTest {
         )
 
         assertConversationOpen()
+    }
+
+    // ── call alerts ──────────────────────────────────────────────────────
+    //
+    // The Call Alerts v1 wire contract is {v, kind, callId} and the tap target
+    // is fixed at /calls, so these scenarios prove the two titles an operator
+    // actually reads and that a tap reaches the calls screen on a real device.
+    // Nothing here needs the CRM to have stored the call: the alert carries an
+    // identifier, and the screen it opens is a list the operator already owns.
+
+    @Test
+    fun test12_anIncomingCallAlertOpensTheCallsScreen() {
+        launchApp()
+        signIn()
+        assertMessengerOpen()
+        disableAcceptanceAid("call-incoming-setup")
+
+        injectCallAlert(KIND_CALL_INCOMING)
+        assertOnlyCallAlerts("call-incoming", listOf(KIND_CALL_INCOMING))
+        tapNotificationWithTitle(CALL_INCOMING_TITLE)
+        assertCallsScreenOpen()
+    }
+
+    @Test
+    fun test13_aMissedCallAlertFromTheBackgroundOpensTheCallsScreen() {
+        launchApp()
+        signIn()
+        assertMessengerOpen()
+        disableAcceptanceAid("call-missed-setup")
+
+        device.pressHome()
+        assertTrue(
+            "the shell did not go to the background",
+            device.wait(Until.gone(By.pkg(targetPackage).depth(0)), ACTION_TIMEOUT),
+        )
+
+        injectCallAlert(KIND_CALL_MISSED)
+        assertOnlyCallAlerts("call-missed", listOf(KIND_CALL_MISSED))
+        tapNotificationWithTitle(CALL_MISSED_TITLE)
+        assertCallsScreenOpen()
+    }
+
+    /**
+     * The three payload rules, on the device, in one pass.
+     *
+     * A repeat of the same (callId, kind) must not add a second row; the other
+     * kind for the same call must; and a malformed alert must add nothing at
+     * all. Assertions only - no tap - so this costs a fraction of a scenario
+     * that drives the UI and adds no new flake surface.
+     */
+    @Test
+    fun test14_callAlertsDedupPerKindAndRefuseMalformedPayloads() {
+        launchApp()
+        signIn()
+        assertMessengerOpen()
+        disableAcceptanceAid("call-dedup-setup")
+
+        injectCallAlert(KIND_CALL_INCOMING)
+        assertOnlyCallAlerts("first-incoming", listOf(KIND_CALL_INCOMING))
+
+        injectCallAlert(KIND_CALL_INCOMING)
+        assertOnlyCallAlerts("repeated-incoming", listOf(KIND_CALL_INCOMING))
+
+        injectCallAlert(KIND_CALL_MISSED)
+        assertOnlyCallAlerts("incoming-then-missed", listOf(KIND_CALL_INCOMING, KIND_CALL_MISSED))
+
+        injectCallAlert(KIND_CALL_MISSED)
+        assertOnlyCallAlerts("repeated-missed", listOf(KIND_CALL_INCOMING, KIND_CALL_MISSED))
+
+        // Every way a call alert can be wrong, and none of them may post.
+        broadcast(callAlertIntent(KIND_CALL_INCOMING).putExtra("callId", ""))
+        broadcast(Intent(ACTION_INJECT_PUSH).putExtra("v", "1").putExtra("kind", KIND_CALL_INCOMING))
+        broadcast(callAlertIntent("call_answered"))
+        broadcast(callAlertIntent(KIND_CALL_INCOMING).putExtra("v", "2"))
+        SystemClock.sleep(SETTLE_MS)
+        assertOnlyCallAlerts("after-malformed", listOf(KIND_CALL_INCOMING, KIND_CALL_MISSED))
     }
 
     // ── notification hygiene ─────────────────────────────────────────────
@@ -431,6 +510,100 @@ class PushAcceptanceTest {
         (row ?: posted).click()
         device.waitForIdle()
         ShellDiagnostics.write("YOKO_NET fail push-tap after=${device.currentPackageName}")
+    }
+
+    private fun callAlertIntent(kind: String): Intent =
+        Intent(ACTION_INJECT_PUSH)
+            .putExtra("v", "1")
+            .putExtra("kind", kind)
+            .putExtra("callId", callId)
+
+    private fun injectCallAlert(kind: String) {
+        val before = outcomeCount()
+        broadcast(callAlertIntent(kind))
+        // The broadcast is asynchronous. Wait for the handler to report one more
+        // outcome than before rather than sleeping and hoping.
+        waitUntil(NOTIFICATION_TIMEOUT) { outcomeCount() > before }
+        trace("injected call alert $kind ${outcomes()}")
+    }
+
+    private fun outcomeCount(): Int = OUTCOME.findAll(deviceLog()).count()
+
+    /**
+     * The shade holds exactly the call alerts named, and nothing else.
+     *
+     * Identity is the deduplication key, not the call id: an incoming alert and
+     * a missed alert for one call are different notifications on purpose, and
+     * asserting the ids is what proves the second did not replace the first.
+     */
+    private fun assertOnlyCallAlerts(label: String, kinds: List<String>) {
+        val expected = kinds.map { ChatNotifications.notificationIdFor("$it:$callId") }.toSet()
+        val settled = waitUntil(NOTIFICATION_TIMEOUT) {
+            activeNotifications().filter { !isSummary(it) }.map { it.id }.toSet() == expected
+        }
+        val active = activeNotifications()
+        val inv = inventory(active)
+        diag("call-alert $label active=${active.size} inv=$inv")
+
+        assertTrue(
+            "a generated group summary is posted at $label - a row that carries no " +
+                "contentIntent and so opens nothing; inventory $inv",
+            active.none { isSummary(it) },
+        )
+        assertTrue(
+            "expected exactly ${kinds.size} call alert(s) ${kinds.joinToString()} with ids " +
+                "$expected on channel ${ChatNotifications.CALL_ALERT_CHANNEL_ID} at $label; inventory $inv",
+            settled,
+        )
+        assertTrue(
+            "a call alert was posted on the wrong channel at $label; inventory $inv",
+            active.all { it.notification.channelId == ChatNotifications.CALL_ALERT_CHANNEL_ID },
+        )
+    }
+
+    /**
+     * Open the shade and tap the row carrying this exact title.
+     *
+     * Deliberately a separate step from [tapPushNotification]: that one matches
+     * the chat body because the chat title is not unique among this app's
+     * notifications, while a call alert's title is the only text it has and is
+     * unique by construction.
+     */
+    private fun tapNotificationWithTitle(title: String) {
+        device.wakeUp()
+        runCatching { shell("wm dismiss-keyguard") }
+        device.waitForIdle()
+
+        device.openNotification()
+        var posted = device.wait(Until.findObject(By.textContains(title)), NOTIFICATION_TIMEOUT)
+        if (posted == null) {
+            device.pressBack()
+            device.openNotification()
+            posted = device.wait(Until.findObject(By.textContains(title)), NOTIFICATION_TIMEOUT)
+        }
+        if (posted == null) report("no-call-alert")
+        assertNotNull("no call alert titled «$title» appeared; ${diagnostics()}", posted)
+
+        var row = posted
+        while (row != null && !row.isClickable) row = row.parent
+        ShellDiagnostics.write(
+            "YOKO_NET fail call-alert-tap found=${posted!!.resourceName ?: "none"}" +
+                " row=${row?.resourceName ?: "none"}" +
+                " on=${device.currentPackageName}",
+        )
+        (row ?: posted).click()
+        device.waitForIdle()
+        ShellDiagnostics.write("YOKO_NET fail call-alert-tap after=${device.currentPackageName}")
+    }
+
+    private fun assertCallsScreenOpen() {
+        val opened = device.wait(Until.hasObject(By.textContains(CALLS_HEADING)), MESSENGER_TIMEOUT)
+        if (!opened) report("no-calls-screen")
+        assertTrue(
+            "the tap did not open the calls screen; expected «$CALLS_HEADING»; " +
+                "${diagnostics()}; tree: ${treeShape(300)}",
+            opened,
+        )
     }
 
     /** One shell command through the instrumentation, output discarded. */
@@ -651,6 +824,16 @@ class PushAcceptanceTest {
          * something else again.
          */
         const val PUSH_BODY = "Нажмите, чтобы открыть диалог"
+
+        /** Exactly the call alert copy in res/values/strings.xml. */
+        const val CALL_INCOMING_TITLE = "Входящий звонок"
+        const val CALL_MISSED_TITLE = "Пропущенный звонок"
+
+        const val KIND_CALL_INCOMING = "call_incoming"
+        const val KIND_CALL_MISSED = "call_missed"
+
+        /** The heading of the CRM's /calls screen, which is where a call alert lands. */
+        const val CALLS_HEADING = "Звонки"
 
         const val ACTION_INJECT_PUSH = "ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH"
         const val ACTION_SEED_TOKEN = "ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN"

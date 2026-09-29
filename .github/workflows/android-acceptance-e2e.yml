@@ -575,6 +575,63 @@ jobs:
           echo "scenarios failed: $failed" | tee -a "$LOG"
           exit $failed
 
+      # Call Alerts v1 notification UX. The wire contract is {v, kind, callId}
+      # and the tap target is fixed at /calls, so the call id is synthetic: the
+      # CRM does not have to have stored the call for an operator to be told one
+      # rang. Its own step and its own counter, so the message scenarios above
+      # keep their exact assertions.
+      - name: Run the call alert scenarios
+        timeout-minutes: 25
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.PushAcceptanceTest
+          LOG="$RUNNER_TEMP/call-alerts.log"
+          CALL_ID=acc-call-0001
+          failed=0
+
+          for t in \
+            test12_anIncomingCallAlertOpensTheCallsScreen \
+            test13_aMissedCallAlertFromTheBackgroundOpensTheCallsScreen \
+            test14_callAlertsDedupPerKindAndRefuseMalformedPayloads
+          do
+            out="$RUNNER_TEMP/scenario-$t.log"
+            echo "===== $t =====" | tee -a "$LOG"
+            timeout 60 "$ADB" shell pm clear "$PKG" >> "$LOG" 2>&1
+            timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS >> "$LOG" 2>&1
+            timeout 30 "$ADB" reverse tcp:3002 tcp:3002 >> "$LOG" 2>&1
+            timeout 60 "$ADB" logcat -c
+            timeout 600 "$ADB" shell am instrument -w -r \
+              -e class "$CLASS#$t" \
+              -e callId "'$CALL_ID'" \
+              "$RUNNER" 2>&1 | tee -a "$LOG" > "$out"
+
+            if grep -q "OK (1 test)" "$out"; then
+              echo "CALL ALERT SCENARIO OK: $t" | tee -a "$LOG"
+            else
+              echo "CALL ALERT SCENARIO DID NOT REPORT OK: $t" | tee -a "$LOG"
+              failed=1
+            fi
+
+            timeout 60 "$ADB" shell run-as "$PKG" cat files/diagnostics.log \
+              >> "$RUNNER_TEMP/shell-diagnostics-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E \
+              >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null
+            timeout 60 "$ADB" logcat -d -v time \
+              >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null
+          done
+
+          ran=$(grep -c '^CALL ALERT SCENARIO OK: ' "$LOG")
+          if [ "$ran" -ne 3 ]; then
+            echo "only $ran of 3 call alert scenarios reported OK" | tee -a "$LOG"
+            failed=1
+          fi
+
+          echo "call alert scenarios failed: $failed" | tee -a "$LOG"
+          exit $failed
+
       # test06 proves what the device showed. This proves what happened behind
       # it: exactly one physical send reached the transport, with the typed text,
       # the synthetic target and provider id, and the CRM persisted exactly one

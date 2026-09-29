@@ -507,13 +507,24 @@ class MainActivity : AppCompatActivity() {
         value?.substringAfterLast('.') ?: "null"
 
     private fun consumeDeepLinkUrl(intent: Intent?): String? {
-        val chatId = intent?.getStringExtra(ChatNotifications.EXTRA_CHAT_ID) ?: return null
-        val url = CrmOrigin.buildOpenChatUrl(
+        if (intent == null) return null
+        val callAlertKind = intent.getStringExtra(ChatNotifications.EXTRA_CALL_ALERT_KIND)
+        val chatId = intent.getStringExtra(ChatNotifications.EXTRA_CHAT_ID)
+        if (callAlertKind == null && chatId == null) return null
+
+        // The routing decision itself lives in CrmOrigin, where the pinned
+        // origin and the two compile-time paths are, and is a pure function so
+        // it can be asserted without an Activity. This method's job is the
+        // Intent: read the extras once, then clear them so a later restart
+        // cannot replay the same target.
+        val url = CrmOrigin.deepLinkTarget(
+            callAlertKind = callAlertKind,
             chatId = chatId,
             channelTab = intent.getStringExtra(ChatNotifications.EXTRA_CHANNEL_TAB),
             messageId = intent.getStringExtra(ChatNotifications.EXTRA_MESSAGE_ID),
         )
 
+        intent.removeExtra(ChatNotifications.EXTRA_CALL_ALERT_KIND)
         intent.removeExtra(ChatNotifications.EXTRA_CHAT_ID)
         intent.removeExtra(ChatNotifications.EXTRA_CHANNEL_TAB)
         intent.removeExtra(ChatNotifications.EXTRA_MESSAGE_ID)
