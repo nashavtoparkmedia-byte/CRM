@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     mirrorDriverActionResult: vi.fn(),
     recordDriverAction: vi.fn(),
     authorizeDriverTelegram: vi.fn(),
+    canonicalBotConnection: vi.fn(),
     providerFetch: vi.fn(),
 }))
 
@@ -42,10 +43,15 @@ vi.mock('@/modules/fleet-operations/public/v1/yandex-connection-capability', () 
 
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
     patchDriverTelegramLinkV1: mocks.patchDriverTelegramLink,
-    prepareManualDriverTelegramLinkAuthorityV1: mocks.authorizeDriverTelegram,
+    prepareDriverTelegramConversationAuthorityV1: mocks.authorizeDriverTelegram,
+    canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
     recordBotUserProfileV1: mocks.recordBotUserProfile,
     recordPendingBotLinkRequestV1: mocks.recordPendingBotLinkRequest,
 }))
+
+const BOT_CONNECTION = 'driver-bot-primary'
+/** The single production MTProto personal-account transport. */
+const MTPROTO_CONNECTION = '1982527911'
 
 vi.mock('@/modules/messaging/public/v1', () => ({
     sendMessageV1: mocks.sendMessage,
@@ -236,12 +242,15 @@ describe('driver-bot current Telegram authority', () => {
             telegramId: 123456n,
             activeParkId: 'park-1',
         })
+        // Person/conversation proof: it names no transport.
         mocks.authorizeDriverTelegram.mockResolvedValue({
             chatId: 'chat-1',
-            providerAccountId: 'telegram-bot-1',
-            connectionId: 'telegram-connection-1',
+            contactId: 'contact-1',
+            contactIdentityId: 'identity-1',
+            driverId: 'driver-1',
             target: '123456',
         })
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         vi.stubGlobal('fetch', mocks.providerFetch)
     })
 
@@ -272,8 +281,8 @@ describe('driver-bot current Telegram authority', () => {
             )
             const response = await POST(actionRequest(action, {
                 ...payload,
-                providerAccountId: 'telegram-bot-1',
-                connectionId: 'telegram-connection-1',
+                providerAccountId: '8447212640',
+                connectionId: BOT_CONNECTION,
             }))
 
             expect(response.status).toBe(409)
@@ -290,23 +299,108 @@ describe('driver-bot current Telegram authority', () => {
         },
     )
 
-    test('rejects an action whose incoming bot account differs from the admitted Chat', async () => {
-        mocks.authorizeDriverTelegram.mockResolvedValue({
-            chatId: 'chat-1',
-            providerAccountId: 'different-telegram-bot',
-            connectionId: 'telegram-connection-1',
-            target: '123456',
+    // The complete non-production change_limit contract: the bot's action binding
+    // (providerAccountId + connectionId) meets the Bot runtime authority, the
+    // person/Driver authority is proven separately, and the Yandex side effect is
+    // stubbed. No Chat.metadata transport ownership anywhere in the chain.
+    test('admits change_limit for a confirmed Driver on the canonical Bot transport', async () => {
+        mocks.getYandexConnectionCredentials.mockResolvedValue({
+            clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1',
+        })
+        mocks.findDriver.mockResolvedValue({ yandexDriverId: 'contractor-1', phone: '+70000000000' })
+        const profile = { account: { balance_limit: '0' }, person: { id: 'contractor-1' } }
+        mocks.providerFetch
+            // probe, then GET profile, then PUT
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify(profile) })
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify(profile) })
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify({ ...profile, account: { balance_limit: '5000' } }) })
+
+        const response = await POST(actionRequest('change_limit', {
+            telegramId: '123456',
+            limitValue: 5_000,
+            providerAccountId: '8447212640',
+            connectionId: BOT_CONNECTION,
+        }))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({ success: true, newLimit: 5_000 })
+        // Person authority is proven twice: once before the read, once immediately
+        // before the provider mutation.
+        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({
+            driverId: 'driver-1',
+            telegramId: 123456n,
+        })
+        expect(mocks.authorizeDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+        const put = mocks.providerFetch.mock.calls.at(-1)
+        expect(put?.[1]).toMatchObject({ method: 'PUT' })
+    })
+
+    test('rejects an action whose transport is not the canonical configured Bot connection', async () => {
+        const response = await POST(actionRequest('change_limit', {
+            telegramId: '123456',
+            limitValue: 5_000,
+            providerAccountId: '8447212640',
+            // The MTProto personal-account transport may never drive a Driver Bot
+            // action, even though a shared Chat legitimately carries it.
+            connectionId: MTPROTO_CONNECTION,
+        }))
+
+        expect(response.status).toBe(409)
+        await expect(response.json()).resolves.toEqual({
+            error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
+        })
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('rejects an action whose runtime provider account is not concrete', async () => {
+        const response = await POST(actionRequest('change_limit', {
+            telegramId: '123456',
+            limitValue: 5_000,
+            providerAccountId: 'legacy',
+            connectionId: BOT_CONNECTION,
+        }))
+
+        expect(response.status).toBe(409)
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('fails closed when the canonical Bot transport is unconfigured', async () => {
+        mocks.canonicalBotConnection.mockImplementation(() => {
+            throw new Error('TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN')
         })
 
         const response = await POST(actionRequest('change_limit', {
             telegramId: '123456',
             limitValue: 5_000,
-            providerAccountId: 'telegram-bot-1',
-            connectionId: 'telegram-connection-1',
+            providerAccountId: '8447212640',
+            connectionId: BOT_CONNECTION,
         }))
 
         expect(response.status).toBe(409)
-        expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('never compares the runtime transport against stored Chat metadata', () => {
+        const route = readFileSync(
+            resolve(process.cwd(), 'src/app/api/webhooks/bot/route.ts'),
+            'utf8',
+        )
+        const authority = route
+            .slice(
+                route.indexOf('async function requireCurrentBotDriverAuthority'),
+                route.indexOf('// Check if a Telegram user is linked to a driver'),
+            )
+            // Assert on executable code only: the prose explains why stored Chat
+            // metadata is excluded, so naming it in a comment must not fail this.
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\/\/.*$/gm, '')
+        expect(authority).toContain('canonicalTelegramBotConnectionIdV1()')
+        expect(authority).not.toContain('metadata')
+        expect(authority).not.toMatch(/\bchat\./)
+        expect(authority).not.toContain('prisma')
     })
 })
