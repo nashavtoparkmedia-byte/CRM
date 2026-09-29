@@ -76,6 +76,25 @@ const preflight = new CashOrderIngestionPreflightV1(
     },
 )
 
+export interface CashOrderPilotParkScopeDtoV1 {
+    mode: string
+    enabledParks: readonly string[]
+    configError: string | null
+}
+
+/**
+ * The configured pilot scope, as one value. It is the single authority for
+ * which parks compensation is enabled in: the same parsed configuration the
+ * runtime and the preflight use, never a second list.
+ */
+export function cashOrderPilotParkScopeV1(): CashOrderPilotParkScopeDtoV1 {
+    return {
+        mode: config.mode,
+        enabledParks: [...config.enabledParks],
+        configError: config.configError,
+    }
+}
+
 export interface CashOrderIngestionScheduleV1 {
     enabled: boolean
     intervalMs: number
