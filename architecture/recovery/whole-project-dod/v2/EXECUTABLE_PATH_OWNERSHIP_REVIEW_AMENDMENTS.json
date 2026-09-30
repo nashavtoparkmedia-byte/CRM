@@ -1528,6 +1528,168 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "call-alerts-v1-foundation-main-f9f4d75a-20260930",
+      "reviewed_at": "2026-09-30T00:00:00Z",
+      "reviewed_by": "CALL_ALERTS_V1_FOUNDATION_RECONCILIATION_EXECUTOR_REVIEW_20260930",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_CALL_ALERTS_V1_FOUNDATION_MAIN_INTEGRATION_20260930",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f9f4d75a, whose tail is compensation-pilot-readiness-main-55c52135-20260929. It supersedes the earlier foundation amendment anchored on main 6209eeb9 (call-alerts-v1-mobile-delivery-foundation-main-6209eeb9-20260928), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the same surfaces are reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the tracked executable surfaces the Call Alerts v1 backend foundation adds on top of main f9f4d75a: 2,644 + 17 = 2,661 surfaces, context-owned 1,410 -> 1,426 and governed exclusions 1,234 -> 1,235. Twenty-one paths become tracked and four retire. Twenty of the new paths are owned by a context manifest -- Calling's alert contracts, transition, dispatch, outbox adapter, runtime, application operations and mobile-shell client, and identity_access's mobile-delivery boundary, its public capability and the relocated provider transport contract -- so the coverage derivation gives each of them a context owner and none of them reaches a governed exclusion or an exact inventory. The twenty-first, tools/architecture/check-mobile-delivery-provider-boundary.mjs, is a boundary control under the architecture_controls governed exclusion, which covers tools/architecture by prefix with no exact inventory; it carries a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / POSSIBLE, functional owner architecture_recovery) matching every other boundary control, which is why this amendment's tracked inventory digest also carries that registered classification. Four of the new paths are relocations of surfaces that were tracked under the messaging context at the predecessor denominator: the FCM transport, its test, the delivery configuration and the provider-neutral transport contract now live inside identity_access's mobile-delivery boundary and in the identity-access contracts, and their four former messaging paths retire in the same movement, so that pair is denominator-neutral. The coverage digest moves because seventeen context-owned paths enter the record set; no reviewed exact-inventory assignment changes its source fingerprint, so this amendment carries no rebind, and the repository's own derivation over this tree reports all four exact-inventory transitions exactly as the historical review recorded them. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2644,
+        "tracked_inventory_sha256": "2d0b20b86d4507d07a14641130e0e091d7caf71bc8c48a4201c6d37be9317798",
+        "coverage_sha256": "5cedfb8db60fa368c5517569ff57f10e2e6639fadfe5d88bc629ad85edd6867f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2661,
+        "tracked_inventory_sha256": "241c56344ab3f5088c2b293ec44f7f8090c0e79bd6446f184b20627c7fa6231e",
+        "coverage_sha256": "9c335d03cceb03781c3c173f8120e0b8cf241cae93cd6a35e8277e7c3dbfaa38"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-delivery-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-events.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/identity-access/v1/mobile-notification-transport.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-ports.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/call-alert-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-dispatch.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-dispatch.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-transition.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-transition.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/mobile-shell-client.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/mobile-shell-client.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-delivery-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/fcm-http-v1-transport.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.test.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/fcm-http-v1-transport.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/mobile-delivery-config.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-config.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/mobile-delivery-transport-capability.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-delivery/index.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-delivery/mobile-delivery-public-surface.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "tools/architecture/check-mobile-delivery-provider-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the FCM provider adapter, its configuration and its credential environment names stay inside identity_access's mobile-delivery boundary; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
