@@ -13,7 +13,8 @@
 // ContactDisplayPolicy.v1, which already owns them.
 
 import { buildCanonicalContactSummary } from './contact-display-policy'
-import { contactAutomationState, identityEvidenceState } from './contact-evidence-state'
+import { contactAutomationState } from './contact-evidence-state'
+import { resolveContactIdentityConflictStateV1 } from './contact-identity-conflict-state'
 
 export type ContactCardConflictStateV1 = 'clear' | 'conflicted'
 
@@ -57,6 +58,15 @@ export type ContactCardSummarySourceV1 = {
     lifecycle?: string
   }>
   identities: Array<{
+    /**
+     * ContactIdentity.id and externalId are required by the canonical conflict
+     * projection: it joins journal entries to identities by id, and the
+     * transport-only classifier compares the recorded details to externalId.
+     * Neither value is ever carried into ContactCardSummaryV1 — the boundary
+     * control proves that, and the projection's own contract forbids it.
+     */
+    id: string
+    externalId: string
     channel: string
     isActive?: boolean
     /** ContactIdentity.metadata — read only through Contacts-owned accessors. */
@@ -86,9 +96,6 @@ function isCountablePhone(phone: ContactCardSummarySourceV1['phones'][number]): 
   return !REMOVED_PHONE_LIFECYCLES.has(String(phone.lifecycle ?? ''))
 }
 
-function conflictStateOf(metadata: unknown): ContactCardConflictStateV1 {
-  return identityEvidenceState(metadata).conflictState === 'conflicted' ? 'conflicted' : 'clear'
-}
 
 /**
  * Projects one contact into ContactCardSummary.v1.
@@ -118,23 +125,35 @@ export function buildContactCardSummaryV1(source: ContactCardSummarySourceV1): C
     currentChannel: null,
   })
 
+  // Conflict state is NOT decided here. One Contacts-owned projection reads both
+  // the journal and the identity latch, and this summary and the detailed
+  // ContactIdentityConflictView.v1 both read that same state — so the card's
+  // boolean can never disagree with the panel beside it. Before this, the summary
+  // saw only the latch, which no production identity carries.
+  const conflictState = resolveContactIdentityConflictStateV1({
+    customFields: source.customFields,
+    identities: source.identities,
+  })
+
   const byChannel = new Map<string, ContactCardChannelSummaryV1>()
   for (const identity of source.identities) {
     const channel = String(identity.channel)
-    const conflictState = conflictStateOf(identity.metadata)
     const existing = byChannel.get(channel)
     if (existing === undefined) {
       byChannel.set(channel, {
         channel,
         identityCount: 1,
         hasActiveIdentity: identity.isActive !== false,
-        conflictState,
+        conflictState: 'clear',
       })
       continue
     }
     existing.identityCount += 1
     if (identity.isActive !== false) existing.hasActiveIdentity = true
-    if (conflictState === 'conflicted') existing.conflictState = 'conflicted'
+  }
+  for (const [channel, counts] of Object.entries(conflictState.byChannel)) {
+    const existing = byChannel.get(channel)
+    if (existing !== undefined && counts.open > 0) existing.conflictState = 'conflicted'
   }
   const channels = [...byChannel.values()].sort((left, right) => left.channel.localeCompare(right.channel))
 
@@ -145,7 +164,10 @@ export function buildContactCardSummaryV1(source: ContactCardSummarySourceV1): C
     primaryPhone: canonical.primaryPhone,
     phoneCount: source.phones.filter(isCountablePhone).length,
     channels,
-    hasIdentityConflict: channels.some(channel => channel.conflictState === 'conflicted'),
+    // The Contact-level answer comes from the projection, not from the channel
+    // rows: a conflict can name an identity this Contact no longer has, which has
+    // no channel row to carry it but is still a real recorded conflict.
+    hasIdentityConflict: conflictState.hasOpenConflict,
     source: source.masterSource,
     lineage: { mergedFromCount: Math.max(0, Number(source.mergedFromCount) || 0) },
   }

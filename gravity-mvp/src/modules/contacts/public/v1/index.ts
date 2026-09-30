@@ -124,6 +124,29 @@ export {
     buildContactCardSummaryV1,
     createContactCardSummaryHandlerV1,
 } from './contact-card-summary'
+export { resolveContactIdentityConflictStateV1 } from './contact-identity-conflict-state'
+export type {
+    ContactIdentityConflictClassV1,
+    ContactIdentityConflictCountsV1,
+    ContactIdentityConflictIdentityV1,
+    ContactIdentityConflictOriginV1,
+    ContactIdentityConflictRecordV1,
+    ContactIdentityConflictScopeV1,
+    ContactIdentityConflictStateV1,
+    ContactIdentityConflictStatusV1,
+    ContactIdentityConflictTargetV1,
+} from './contact-identity-conflict-state'
+export {
+    buildContactIdentityConflictViewV1,
+    createContactIdentityConflictViewHandlerV1,
+} from './contact-identity-conflict-view'
+export type {
+    ContactIdentityConflictViewChannelV1,
+    ContactIdentityConflictViewEntryV1,
+    ContactIdentityConflictViewPortV1,
+    ContactIdentityConflictViewSourceV1,
+    ContactIdentityConflictViewV1,
+} from './contact-identity-conflict-view'
 export type {
     ContactCardChannelSummaryV1,
     ContactCardConflictStateV1,

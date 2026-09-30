@@ -15,7 +15,7 @@ import {
   lockContactOwnershipRows,
   runContactOwnershipTransaction,
 } from '../../internal/contact-ownership-coordinator'
-import { phoneEvidenceState } from './contact-evidence-state'
+import { hasOpenDriverPersonContradictionV1, phoneEvidenceState } from './contact-evidence-state'
 
 export { CONFIRM_DRIVER_PERSON_COMMAND_V1, RECONCILE_DRIVER_CLUSTER_COMMAND_V1 }
 export type {
@@ -329,17 +329,9 @@ export async function isContactConfirmedMainDriverV1(
       item.status === 'needs_reconciliation'
       || (item.status === 'confirmed' && item.representativeDriverId !== driverId)
     ))
-    const identityConflicts = Array.isArray(contactFields.identityConflicts)
-      ? contactFields.identityConflicts
-      : []
-    const hasOpenDriverContradiction = identityConflicts.some(item => {
-      const conflict = fields(item as Prisma.JsonValue)
-      return conflict.status === 'open'
-        && (
-          conflict.conflictType === 'confirmed_driver_cluster_contradiction'
-          || conflict.conflictType === 'fleet_authoritative_person_contradiction'
-        )
-    })
+    // The rule lives in ContactEvidenceState so this authority, the display
+    // read and the conflict projection cannot drift apart.
+    const hasOpenDriverContradiction = hasOpenDriverPersonContradictionV1(contact.customFields)
 
     return hasExactConfirmation
       && !hasUnresolvedConfirmation

@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 720,
+    "total_entries": 721,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 84,
-    "active_operational": 504,
+    "active_operational": 505,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6607,6 +6607,15 @@
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture control-plane surface for the M3A1 Contact-owned card core; approved path is a bounded read-only boundary control that pins the exact ContactCardSummary.v1 field set, the absence of provider external ids, ProviderAccount and Transport ids, conversation, delivery, runtime and driver state in the contract and in the panel, the reuse of ContactDisplayPolicy.v1 instead of a duplicated title rule, the Contacts-owned model set the single adapter may read, the isolation of the client surface from any database client and any foreign domain, the absence of reachability probing and provider-account selection, the fact that nothing composes the core yet and that the existing drawer keeps its mount, and the declared capability and allowed dependencies of the contacts manifest. It also executes the core proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-identity-conflict-view-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the M3A4 S1 Contacts identity-conflict semantic; approved path is a bounded read-only boundary control that pins the exact ContactIdentityConflictView.v1 field set and the absence of stored status from it, the unchanged ContactCardSummary.v1 field set, the absence of provider external ids, ProviderAccount, transport, connection, sender, peer and session values, of the stored evidenceRoot, details, reason and resolution payloads, and of conversation, delivery, driver and cluster state in both public contracts and in the client surface, the existence of a single canonical Contacts-owned conflict projection that both the card summary and the detailed view consume without interpreting either conflict store themselves, the reuse of the ContactEvidenceState blocking primitives by call form rather than by import, the unchanged signature of hasPersonBlockingIdentityConflictV1 and the unchanged shape of all three runtime deny-path call sites, the single Contacts-owned database reader and the two models it may touch, the isolation of the client surface from any database client, foreign domain and action affordance, the rule that it may never claim channel or delivery unavailability, and the absence of the journal-dedup and fail-closed-dangling-join repairs that belong to later slices. It also executes the conflict view proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     }

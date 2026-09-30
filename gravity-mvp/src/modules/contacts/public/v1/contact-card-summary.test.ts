@@ -29,7 +29,7 @@ function source(overrides: Partial<ContactCardSummarySourceV1> = {}): ContactCar
     primaryPhoneId: 'phone-1',
     customFields: {},
     phones: [{ id: 'phone-1', phone: '79001234567', isPrimary: true, isActive: true, lifecycle: 'current' }],
-    identities: [{ channel: 'telegram', isActive: true, metadata: {} }],
+    identities: [{ id: 'identity-1', externalId: 'ext-1', channel: 'telegram', isActive: true, metadata: {} }],
     mergedFromCount: 0,
     ...overrides,
   }
@@ -100,10 +100,10 @@ describe('buildContactCardSummaryV1', () => {
   it('aggregates several identities per channel', () => {
     const summary = buildContactCardSummaryV1(source({
       identities: [
-        { channel: 'telegram', isActive: true, metadata: {} },
-        { channel: 'telegram', isActive: false, metadata: {} },
-        { channel: 'max', isActive: false, metadata: {} },
-        { channel: 'whatsapp', isActive: true, metadata: {} },
+        { id: 'identity-3', externalId: 'ext-3', channel: 'telegram', isActive: true, metadata: {} },
+        { id: 'identity-4', externalId: 'ext-4', channel: 'telegram', isActive: false, metadata: {} },
+        { id: 'identity-5', externalId: 'ext-5', channel: 'max', isActive: false, metadata: {} },
+        { id: 'identity-6', externalId: 'ext-6', channel: 'whatsapp', isActive: true, metadata: {} },
       ],
     }))
     expect(summary.channels).toEqual([
@@ -116,9 +116,9 @@ describe('buildContactCardSummaryV1', () => {
   it('reports a conflicted channel and the contact-level flag', () => {
     const summary = buildContactCardSummaryV1(source({
       identities: [
-        { channel: 'telegram', isActive: true, metadata: { conflictState: 'conflicted' } },
-        { channel: 'telegram', isActive: true, metadata: {} },
-        { channel: 'max', isActive: true, metadata: {} },
+        { id: 'identity-10', externalId: 'ext-10', channel: 'telegram', isActive: true, metadata: { conflictState: 'conflicted' } },
+        { id: 'identity-11', externalId: 'ext-11', channel: 'telegram', isActive: true, metadata: {} },
+        { id: 'identity-12', externalId: 'ext-12', channel: 'max', isActive: true, metadata: {} },
       ],
     }))
     expect(summary.channels[1]).toEqual({
@@ -164,6 +164,10 @@ describe('buildContactCardSummaryV1', () => {
   it('never carries a provider id, an account id or foreign-domain state', () => {
     const summary = buildContactCardSummaryV1(source({
       identities: [{
+        // The leak test deliberately puts the real provider values on the source
+        // row, including the two the canonical conflict projection now requires.
+        id: 'identity-leak-probe',
+        externalId: EXTERNAL_ID,
         channel: 'telegram',
         isActive: true,
         displayName: '@ivan',
