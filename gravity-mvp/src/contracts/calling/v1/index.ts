@@ -18,3 +18,20 @@ export * from './ai-agent-profile-commands'
 export * from './ai-agent-config-commands'
 export * from './ai-intern-control'
 export * from './ai-call-campaign-management'
+export {
+    CALL_ALERT_REQUESTED_EVENT_V1,
+    CALL_ALERT_KINDS_V1,
+    CallAlertRequestedEventValidationError,
+    callAlertRequestedEventIdV1,
+    makeCallAlertRequestedEventV1,
+    parseCallAlertRequestedEventV1,
+} from './call-alert-requested-event'
+export type { CallAlertKindV1, CallAlertRequestedEventV1 } from './call-alert-requested-event'
+export {
+    CALL_ALERT_DELIVERY_REQUESTED_EVENT_V1,
+    CallAlertDeliveryRequestedEventValidationError,
+    callAlertDeliveryEventIdV1,
+    makeCallAlertDeliveryRequestedEventV1,
+    parseCallAlertDeliveryRequestedEventV1,
+} from './call-alert-delivery-requested-event'
+export type { CallAlertDeliveryRequestedEventV1 } from './call-alert-delivery-requested-event'

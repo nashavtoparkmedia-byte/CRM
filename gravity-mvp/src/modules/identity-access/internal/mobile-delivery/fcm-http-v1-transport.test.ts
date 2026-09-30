@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { classifyFcmSendResponseV1, createFcmHttpV1TransportV1 } from './fcm-http-v1-transport'
-import { readFcmTransportConfigV1, type FcmTransportConfigV1, type MobilePushEnvironmentV1 } from './mobile-push-config'
+import { readFcmTransportConfigV1, type FcmTransportConfigV1, type MobilePushEnvironmentV1 } from './mobile-delivery-config'
 
 const STAND_IN = path.resolve(__dirname, '../../../../../../android/tools/acceptance-fcm-transport.mjs')
 const FCM_ERROR = 'type.googleapis.com/google.firebase.fcm.v1.FcmError'

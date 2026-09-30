@@ -616,6 +616,7 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
     ],
     consumer_edges: [
       runtimeEdge('gravity-mvp/src/modules/identity-access/application/mobile-push-target-operations.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'OWNER_PUBLIC_CAPABILITY_REEXPORT', 'resolveMobilePushTargetV1', 'export'),
+      runtimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       runtimeEdge('gravity-mvp/src/modules/identity-access/public/v1/mobile-push-target-capability.ts', 'resolveMobilePushTargetV1', 'gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-runtime.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },
