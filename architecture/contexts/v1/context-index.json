@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "747b6847e26d05d0bc3c08c74f1446d89012cf8d4b65d0c726b460d0e55b1407"
+      "sha256": "a627078d98d9988c6c2881970bf8c305e922b9c5149b5f65d8bfb48be7309f41"
     },
     {
       "context": "edge_delivery",
