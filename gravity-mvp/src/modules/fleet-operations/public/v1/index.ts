@@ -108,10 +108,19 @@ export type {
 } from '../../application/cash-order-ingestion-operations'
 export {
   compensationPilotOrderCheckV1,
+  compensationPilotReadinessV1,
   compensationPilotRefreshV1,
   compensationPilotSectionV1,
   compensationPilotSubmitV1,
 } from '../../application/compensation-pilot-operations'
+export {
+  registerCompensationPilotTelegramLinkReaderV1,
+  requireCompensationPilotTelegramLinkReaderV1,
+} from './compensation-pilot-telegram-link-reader'
+export type {
+  CompensationPilotTelegramLinkReaderV1,
+  CompensationPilotTelegramLinkV1,
+} from './compensation-pilot-telegram-link-reader'
 export {
   compensationManagerActionV1,
   compensationManagerApplicationV1,

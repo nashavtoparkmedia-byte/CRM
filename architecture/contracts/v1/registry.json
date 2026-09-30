@@ -473,6 +473,7 @@
       "capabilities": [
         "BotSurveyApi.v1",
         "BotUserProfileCommands.v1",
+        "DriverTelegramParkLinkQuery.v1",
         "TelegramConnectionMetadataQuery.v1",
         "TelegramDeliveryPort.v1",
         "TelegramReachability.v1",

@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 725,
+    "total_entries": 726,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 85,
-    "active_operational": 504,
+    "active_operational": 505,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -3086,6 +3086,15 @@
       "disposition": "ACTIVE",
       "production_capability": "CONFIRMED_MANUAL_OPERATOR",
       "rationale": "Operator command that runs the read-only cash-order authorization preflight. An operator runs it deliberately against a deployed environment, so its production reachability is confirmed and manual, but it is read-only by construction: it writes no SQL, holds no credentials of its own, and calls the fleet_operations public owner operation, which is composed with a persistence capability that refuses every mutating method. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/compensation-pilot-readiness.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator command that proves the two pilot readiness gates, PILOT CANDIDATE READY and PILOT INPUT READY, against real data. An operator runs it deliberately against a deployed environment, so its production reachability is confirmed and manual, but it is read-only by construction: it performs no write, no provider request and no Telegram API request, writes no SQL of its own, holds no credentials, and calls the fleet_operations public readiness owner operation after binding telegram_channel's own bounded public driver-link read into the seam Fleet declares for it. Exit 0 requires the requested gate to be proven, so a population-truncated scan that found nothing is a non-success rather than a negative. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "gravity_application_operations"
     },

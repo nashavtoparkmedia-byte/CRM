@@ -2,6 +2,8 @@ export { PendingBotLinkRequestNotFoundError, createDismissBotLinkRequestHandlerV
 export type { BotChatMessagePersistencePortV1 } from './bot-chat-message-handler'
 export { createDeleteDriverTelegramLinkHandlerV1, createPatchDriverTelegramLinkHandlerV1, createReplaceDriverTelegramLinkHandlerV1, createUpsertDriverTelegramLinkHandlerV1 } from './driver-telegram-handler'
 export type { DriverTelegramPersistencePortV1 } from './driver-telegram-handler'
+export { createReadDriverTelegramParkLinksHandlerV1 } from './driver-telegram-park-link-handler'
+export type { DriverTelegramParkLinkReadPortV1 } from './driver-telegram-park-link-handler'
 export { createRemoveManualDriverTelegramLinkHandlerV1, createSaveManualDriverTelegramLinkHandlerV1 } from './manual-driver-telegram-link-handler'
 export type { ManualDriverTelegramLinkPersistencePortV1 } from './manual-driver-telegram-link-handler'
 export { createNotifyManualDriverTelegramLinkHandlerV1 } from './manual-driver-telegram-link-notification-handler'
@@ -21,6 +23,7 @@ export {
     dismissBotLinkRequestV1,
     notifyManualDriverTelegramLinkV1,
     patchDriverTelegramLinkV1,
+    readDriverTelegramParkLinksV1,
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
     removeManualDriverTelegramLinkV1,
