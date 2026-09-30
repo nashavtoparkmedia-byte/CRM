@@ -126,7 +126,8 @@
     "ContactResolution.v1",
     "ContactIdentityMaintenance.v1",
     "ContactCardSummary.v1",
-    "ContactIdentityConflictView.v1"
+    "ContactIdentityConflictView.v1",
+    "ContactReachabilityEvidenceView.v1"
   ],
   "responsibility": "Canonical people, phone/identity resolution, merges and channel-independent reachability identity.",
   "schema": "yoko.crm.module-manifest.v1",
@@ -168,7 +169,8 @@
       "node tools/architecture/check-contacts-reachability-boundary.mjs",
       "node tools/architecture/check-contact-conversation-api-boundary.mjs",
       "node tools/architecture/check-contact-card-core-boundary.mjs",
-      "node tools/architecture/check-contact-identity-conflict-view-boundary.mjs"
+      "node tools/architecture/check-contact-identity-conflict-view-boundary.mjs",
+      "node tools/architecture/check-contact-reachability-evidence-boundary.mjs"
     ]
   },
   "version": 1
