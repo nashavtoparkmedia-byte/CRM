@@ -1,4 +1,5 @@
 import { contactAutomationState, jsonRecord } from '../public/v1/contact-evidence-state'
+import type { MergeIdentityRemapV1 } from '../public/v1/contact-merge-handler'
 
 function mergeJsonArrays(sourceValue: unknown, targetValue: unknown, limit: number): unknown[] {
   const merged = new Map<string, unknown>()
@@ -13,6 +14,42 @@ function mergeJsonArrays(sourceValue: unknown, targetValue: unknown, limit: numb
     merged.set(key, item)
   }
   return [...merged.values()].slice(-limit)
+}
+
+/**
+ * Re-points conflict journal entries at the identity row that survived dedup.
+ *
+ * Person-blocking is an inner join between an immutable journal entry and a
+ * mutable ContactIdentity row on `identityId`. Merge dedup deletes one side of
+ * that join, and an empty join is read as "no conflict" — so without this the
+ * merge silently turns a blocking conflict into a non-blocking one. The deleted
+ * and surviving rows are the same identity by the merge's own dedup key, so the
+ * substitution is exact rather than inferred.
+ *
+ * Only `identityId` is rewritten. Nothing reclassifies the conflict: `id`,
+ * `conflictType`, `source`, `status`, `details`, `reason`, `detectedAt`,
+ * `otherContactIds` and any resolution payload are carried through untouched.
+ * Entries with no mapping, no `identityId`, or an id this merge did not
+ * deduplicate are returned unchanged, and an array in which nothing matched is
+ * returned by identity so a merge without dedup composes exactly as before.
+ */
+function withRemappedIdentityConflicts(
+  value: unknown,
+  survivingIdentityByDeletedId: ReadonlyMap<string, string>,
+): unknown {
+  if (!Array.isArray(value) || survivingIdentityByDeletedId.size === 0) return value
+  let remapped = false
+  const next = value.map(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item
+    const conflict = item as Record<string, unknown>
+    const identityId = conflict.identityId
+    if (typeof identityId !== 'string') return item
+    const survivingIdentityId = survivingIdentityByDeletedId.get(identityId)
+    if (survivingIdentityId === undefined || survivingIdentityId === identityId) return item
+    remapped = true
+    return { ...conflict, identityId: survivingIdentityId }
+  })
+  return remapped ? next : value
 }
 
 function confirmedClusterKeys(value: unknown): Set<string> {
@@ -65,6 +102,12 @@ export function composeContactCustomFieldsV1(input: {
   targetContactId: string
   sourceFields: unknown
   targetFields: unknown
+  /**
+   * The deleted -> surviving identity table this merge applied. Omitted by
+   * callers that compose no merge of their own — notably the automated recovery
+   * re-derivation, whose expected value must stay exactly what it was.
+   */
+  identityRemaps?: ReadonlyArray<MergeIdentityRemapV1>
 }): Record<string, unknown> {
   const sourceFields = jsonRecord(input.sourceFields)
   const targetFields = jsonRecord(input.targetFields)
@@ -83,6 +126,11 @@ export function composeContactCustomFieldsV1(input: {
     sourceConfirmedClusterKeys,
   )
   const hasConfirmations = Array.isArray(sourceConfirmations) || Array.isArray(targetConfirmations)
+  const survivingIdentityByDeletedId = new Map(
+    (input.identityRemaps ?? []).map(remap => [remap.oldId, remap.newId] as const),
+  )
+  const sourceConflicts = withRemappedIdentityConflicts(sourceFields.identityConflicts, survivingIdentityByDeletedId)
+  const targetConflicts = withRemappedIdentityConflicts(targetFields.identityConflicts, survivingIdentityByDeletedId)
   const hasConflicts = Array.isArray(sourceFields.identityConflicts) || Array.isArray(targetFields.identityConflicts)
   const hasAutomaticMergeBlocks = Array.isArray(sourceFields.automaticMergeBlocks)
     || Array.isArray(targetFields.automaticMergeBlocks)
@@ -110,8 +158,8 @@ export function composeContactCustomFieldsV1(input: {
     } : {}),
     ...(hasConflicts ? {
       identityConflicts: mergeJsonArrays(
-        sourceFields.identityConflicts,
-        targetFields.identityConflicts,
+        sourceConflicts,
+        targetConflicts,
         200,
       ),
     } : {}),
