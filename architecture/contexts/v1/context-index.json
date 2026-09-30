@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "47f850f058f601c78657cf23b7b597301cbc77ea36a0c050d1b10dfeec064907"
+      "sha256": "3cce1257ee3bb1a1815d51baf586fbcb9e4b8b4f0ca716dd23d4324871b4ca0c"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "72b416c9c0e1cdf3c34a333a06e0826326c3837b5894bdacc09ab1c604458854"
+      "sha256": "00f696fc05ed706327c0757421f5cb007350cec1d006c6d64f981b5be357ac3e"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "485766402bf4c16d091315d00b8193769e8553ef0fe26fbd6dd87849a5523086"
+      "sha256": "6878832cb1f26411e090930d81d4ad4b2bd114b90bfd2eee8f32b0c06327cafd"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -171,7 +171,7 @@
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "60bcff6b7bb4056a3523f9f8a1ec02abedbc9c49b29647a39af8ba67f87ccde8"
+      "sha256": "5ae1b6d71f0b12b1551acf26d8b0e92c22f7a7b66ca0f3776874d9f7f7e6825d"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
