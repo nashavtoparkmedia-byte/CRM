@@ -131,7 +131,7 @@
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository\u2019s own tracked-surface inventory over that commit\u2019s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
@@ -588,6 +588,36 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 6
+      }
+    },
+    {
+      "amendment_id": "contact-identity-m3a4-s1-conflict-view-20260930",
+      "reviewed_at": "2026-09-30T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A4_S1_CANDIDATE_OWNERSHIP_REVIEW_20260930",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M3A4_S1_CANONICAL_CONFLICT_SEMANTIC_IMPLEMENTATION",
+      "reason": "M3A4 S1 adds exactly eight tracked executable surfaces and changes no existing ownership. Seven sit under the contacts owned path gravity-mvp/src/modules/contacts: the canonical identity-conflict projection contact-identity-conflict-state.ts with its proof, the ContactIdentityConflictView.v1 contract and projection contact-identity-conflict-view.ts with its proof, that view's single database reader legacy-prisma-contact-identity-conflict-view-adapter.ts, and the second Contacts-owned client surface client-ui/ContactChannelStatePanel.tsx with its proof. One is the boundary control tools/architecture/check-contact-identity-conflict-view-boundary.mjs, placed by the established architecture-tooling cohort precedent and classified in the lifecycle registry as an ACTIVE OPERATIONAL_SCRIPT owned by architecture_recovery, which leaves no unreviewed operational surface. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The reviewed inventory fingerprint moves because the registry now classifies that control, and the denominator, the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2552,
+        "tracked_inventory_sha256": "ed33cf230f94d78d0d9661c1129608adba127f016b606f13d906dcded7fd8a21",
+        "coverage_sha256": "df1d8ed3c669abebfd51a55026f4e5a09367537dc4eb6eaf67e71f12c870da77"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2560,
+        "tracked_inventory_sha256": "c5c3e0d630ac02d1d48cb8dd20b9214f2c3b5500a3bee348949f952dd5265b52",
+        "coverage_sha256": "5613175aede5ecadccf921c8f225e121647c371660486e1601981a7b22543980"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 8
       }
     }
   ]

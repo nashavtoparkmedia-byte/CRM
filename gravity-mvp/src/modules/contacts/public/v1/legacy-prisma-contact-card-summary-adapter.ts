@@ -27,7 +27,9 @@ export const legacyPrismaContactCardSummaryPortV1: ContactCardSummaryPortV1 = {
           orderBy: { createdAt: 'asc' },
         },
         identities: {
-          select: { channel: true, isActive: true, metadata: true, displayName: true },
+          // id and externalId feed the canonical conflict projection only; the
+          // summary contract carries neither.
+          select: { id: true, channel: true, externalId: true, isActive: true, metadata: true, displayName: true },
           orderBy: { createdAt: 'asc' },
         },
       },
@@ -59,6 +61,8 @@ export const legacyPrismaContactCardSummaryPortV1: ContactCardSummaryPortV1 = {
         }).lifecycle,
       })),
       identities: contact.identities.map(identity => ({
+        id: identity.id,
+        externalId: identity.externalId,
         channel: String(identity.channel),
         isActive: identity.isActive,
         metadata: identity.metadata,

@@ -50,6 +50,8 @@ import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-linea
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 import { createContactCardSummaryHandlerV1 } from '../public/v1/contact-card-summary'
 import { legacyPrismaContactCardSummaryPortV1 } from '../public/v1/legacy-prisma-contact-card-summary-adapter'
+import { createContactIdentityConflictViewHandlerV1 } from '../public/v1/contact-identity-conflict-view'
+import { legacyPrismaContactIdentityConflictViewPortV1 } from '../public/v1/legacy-prisma-contact-identity-conflict-view-adapter'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -65,6 +67,7 @@ const prepareContactConversationIdentity = createPrepareContactConversationIdent
 const getPreferredActiveContactPhone = createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
 const resolveContactLineage = createResolveContactLineageHandlerV1(legacyPrismaContactLineagePortV1)
 const getContactCardSummary = createContactCardSummaryHandlerV1(legacyPrismaContactCardSummaryPortV1)
+const getContactIdentityConflictView = createContactIdentityConflictViewHandlerV1(legacyPrismaContactIdentityConflictViewPortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
 export const attachContactIdentityV1 = (...args: Parameters<typeof attachContactIdentity>) => attachContactIdentity(...args)
@@ -102,3 +105,4 @@ export function runDriverClusterContactOwnershipV1<T>(
 }
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)
 export const getContactCardSummaryV1 = (...args: Parameters<typeof getContactCardSummary>) => getContactCardSummary(...args)
+export const getContactIdentityConflictViewV1 = (...args: Parameters<typeof getContactIdentityConflictView>) => getContactIdentityConflictView(...args)

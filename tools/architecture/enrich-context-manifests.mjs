@@ -267,6 +267,7 @@ const moduleTests = {
     command('check-contacts-reachability-boundary.mjs'),
     command('check-contact-conversation-api-boundary.mjs'),
     command('check-contact-card-core-boundary.mjs'),
+    command('check-contact-identity-conflict-view-boundary.mjs'),
   ],
   edge_delivery: [command('check-calling-client-ui-boundary.mjs')],
   fleet_operations: [

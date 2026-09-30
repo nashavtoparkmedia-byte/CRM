@@ -180,6 +180,7 @@
       "capabilities": [
         "ContactCardSummary.v1",
         "ContactDisplayPolicy.v1",
+        "ContactIdentityConflictView.v1",
         "ContactIdentityMaintenance.v1",
         "ContactLookup.v1",
         "ContactReachability.v1",

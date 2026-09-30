@@ -316,22 +316,44 @@ export function isProvenTransportOnlyIdentityConflictV1(
 }
 
 /**
+ * Whether ONE persisted conflict entry blocks person-level operations for this
+ * exact identity.
+ *
+ * This is the entry-level primitive the whole Contacts conflict semantic is
+ * built from, extracted so the aggregate below and any read projection evaluate
+ * the identical rule rather than two that can drift. An open conflict blocks
+ * except a proven transport-only ingress collision: a transport problem fails
+ * its own conversation closed and never disables the person. Unclassifiable
+ * historical entries keep blocking, and a status that is not exactly 'open'
+ * does not block — both asymmetries are deliberate and are what the runtime
+ * already does.
+ */
+export function isPersonBlockingIdentityConflictEntryV1(
+  conflict: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const record = jsonRecord(conflict)
+  return record.status === 'open'
+    && record.identityId === identity.id
+    && !isProvenTransportOnlyIdentityConflictV1(record, identity)
+}
+
+/**
  * Whether an open conflict on this identity blocks person-level operations.
- * Every open conflict blocks except a proven transport-only ingress collision:
- * a transport problem fails its own conversation closed and never disables the
- * person. Unclassifiable historical entries keep blocking.
+ *
+ * The signature and the verdict are unchanged: reachability recording, contact
+ * conversation preparation and the Telegram driver link all call this exact
+ * shape, and one of those call sites is pinned byte-for-byte by
+ * check-contacts-reachability-boundary. Only the body is now expressed through
+ * the shared entry-level primitive.
  */
 export function hasPersonBlockingIdentityConflictV1(
   customFields: unknown,
   identity: PersonBlockingIdentityV1,
 ): boolean {
   const conflicts = jsonRecord(customFields).identityConflicts
-  return Array.isArray(conflicts) && conflicts.some(item => {
-    const conflict = jsonRecord(item)
-    return conflict.status === 'open'
-      && conflict.identityId === identity.id
-      && !isProvenTransportOnlyIdentityConflictV1(conflict, identity)
-  })
+  return Array.isArray(conflicts)
+    && conflicts.some(item => isPersonBlockingIdentityConflictEntryV1(item, identity))
 }
 
 /**
@@ -343,6 +365,24 @@ const CONFIRMED_PERSON_BLOCKING_CONFLICT_TYPES_V1: readonly string[] = [
   'confirmed_driver_cluster_contradiction',
   'fleet_authoritative_person_contradiction',
 ]
+
+/**
+ * Whether the Contact carries an open contradiction about WHICH person it is.
+ *
+ * Contact-scoped, not identity-scoped: neither writer records an identityId,
+ * because the contradiction is about the person cluster rather than one channel
+ * identity. The rule already existed inline in three places; this is the single
+ * definition they now share, with the verdict unchanged.
+ */
+export function hasOpenDriverPersonContradictionV1(customFields: unknown): boolean {
+  const conflicts = jsonRecord(customFields).identityConflicts
+  return Array.isArray(conflicts) && conflicts.some(item => {
+    const conflict = jsonRecord(item)
+    return conflict.status === 'open'
+      && typeof conflict.conflictType === 'string'
+      && CONFIRMED_PERSON_BLOCKING_CONFLICT_TYPES_V1.includes(conflict.conflictType)
+  })
+}
 
 const CONFIRMED_PERSON_NAME_MAX_LENGTH_V1 = 200
 
@@ -387,14 +427,7 @@ export function confirmedPersonNameV1(customFields: unknown): string | null {
   const stored = fields.driverConfirmations
   if (!Array.isArray(stored)) return null
 
-  const conflicts = fields.identityConflicts
-  const contradicted = Array.isArray(conflicts) && conflicts.some(item => {
-    const conflict = jsonRecord(item)
-    return conflict.status === 'open'
-      && typeof conflict.conflictType === 'string'
-      && CONFIRMED_PERSON_BLOCKING_CONFLICT_TYPES_V1.includes(conflict.conflictType)
-  })
-  if (contradicted) return null
+  if (hasOpenDriverPersonContradictionV1(customFields)) return null
 
   const records = stored.map(jsonRecord)
   // A pending pair reconciliation means the person question is still open for
