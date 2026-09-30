@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "881f1a6f771e24098fe21ea59369568de716c76e3ff362ce250d8a1eea9c209e"
+      "sha256": "eb0dd2cd063e97d6a989bcbb039ff5c19b2d13fca9d9c9b0c2429162c6d94d4a"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
