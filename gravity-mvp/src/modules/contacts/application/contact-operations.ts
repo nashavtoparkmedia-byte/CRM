@@ -47,6 +47,7 @@ import {
     reconcileDriverClusterContactV1 as reconcileDriverClusterContact,
     runDriverClusterContactOwnershipV1 as runDriverClusterContactOwnership,
 } from '../public/v1/driver-person-confirmation'
+import { pinCanonicalContactV1 as pinCanonicalContact } from '../public/v1/canonical-contact-pin'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 
@@ -91,6 +92,7 @@ export const cleanupGroupContactIdentitiesV1 = (...args: Parameters<typeof clean
 export const manageContactPhoneEvidenceV1 = (...args: Parameters<typeof manageContactPhoneEvidence>) => manageContactPhoneEvidence(...args)
 export const attachProviderIdentityAliasV1 = (...args: Parameters<typeof attachProviderIdentityAlias>) => attachProviderIdentityAlias(...args)
 export const confirmDriverPersonV1 = (...args: Parameters<typeof confirmDriverPerson>) => confirmDriverPerson(...args)
+export const pinCanonicalContactV1 = (...args: Parameters<typeof pinCanonicalContact>) => pinCanonicalContact(...args)
 export const getConfirmedContactForDriverClusterV1 = (...args: Parameters<typeof getConfirmedContactForDriverCluster>) => getConfirmedContactForDriverCluster(...args)
 export const isContactConfirmedMainDriverV1 = (...args: Parameters<typeof isContactConfirmedMainDriver>) => isContactConfirmedMainDriver(...args)
 export const reconcileDriverClusterContactV1 = (...args: Parameters<typeof reconcileDriverClusterContact>) => reconcileDriverClusterContact(...args)

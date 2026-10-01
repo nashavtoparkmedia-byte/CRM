@@ -26,6 +26,20 @@ export type {
 export { createResolveInboundConversationPeerIdentityHandlerV1 } from './inbound-conversation-peer-identity-handler'
 export type { InboundConversationPeerIdentityPersistencePortV1 } from './inbound-conversation-peer-identity-handler'
 export { ContactMergeErrorV1, createMergeContactsHandlerV1 } from './contact-merge-handler'
+export type { PinCanonicalContactResultV1 } from './canonical-contact-pin'
+export {
+  createRepairTelegramConversationPersonBindingV1,
+  RepairTelegramConversationPersonBindingRefusalV1,
+  REPAIR_PHASE_MODEL_V1,
+} from './telegram-conversation-person-binding-repair'
+export type {
+  RepairTelegramConversationPersonBindingInputV1,
+  RepairTelegramConversationPersonBindingResultV1,
+  RepairTelegramConversationPersonBindingDependenciesV1,
+  RepairPreconditionStateV1,
+  RepairFleetEvidenceV1,
+  RepairRefusalReasonV1,
+} from './telegram-conversation-person-binding-repair'
 export type {
     ContactMergeContactsQueryRepositoryV1,
     ContactMergeContactsRepositoryV1,
@@ -65,6 +79,7 @@ export {
     manageContactPhoneEvidenceV1,
     attachProviderIdentityAliasV1,
     confirmDriverPersonV1,
+    pinCanonicalContactV1,
     getConfirmedContactForDriverClusterV1,
     isContactConfirmedMainDriverV1,
     reconcileDriverClusterContactV1,
