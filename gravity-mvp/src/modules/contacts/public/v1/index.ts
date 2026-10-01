@@ -75,6 +75,7 @@ export {
     resolveChannelContactV1,
     resolveContactByPhoneV1,
     resolveContactV1,
+    searchContactsV1,
     setContactDisplayNameV1,
 } from '../../application/contact-operations'
 export {
@@ -144,6 +145,27 @@ export {
     buildContactReachabilityEvidenceViewV1,
     createContactReachabilityEvidenceViewHandlerV1,
 } from './contact-reachability-evidence-view'
+export {
+    CONTACT_LOOKUP_DEFAULT_LIMIT_V1,
+    CONTACT_LOOKUP_MAX_LIMIT_V1,
+    CONTACT_LOOKUP_MIN_PHONE_DIGITS_V1,
+    CONTACT_LOOKUP_MIN_TEXT_LENGTH_V1,
+    CONTACT_LOOKUP_RANK_CLASSES_V1,
+    buildContactLookupItemV1,
+    contactLookupCriteriaV1,
+    contactLookupLimitV1,
+    contactLookupRankClassesV1,
+    contactLookupSortKeyV1,
+    createSearchContactsHandlerV1,
+} from './contact-lookup'
+export type {
+    ContactLookupCriteriaV1,
+    ContactLookupItemV1,
+    ContactLookupPortV1,
+    ContactLookupRankClassV1,
+    ContactLookupResultV1,
+    ContactLookupSourceV1,
+} from './contact-lookup'
 export type {
     ContactReachabilityChannelEvidenceV1,
     ContactReachabilityEvidenceSourceV1,
