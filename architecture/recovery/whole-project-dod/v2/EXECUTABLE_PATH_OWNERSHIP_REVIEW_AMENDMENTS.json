@@ -491,6 +491,50 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "messaging-max-inbound-reliability-final-335cdae7-20261001",
+      "reviewed_at": "2026-10-01T00:00:00Z",
+      "reviewed_by": "MESSAGING_MAX_INBOUND_RELIABILITY_FINAL_RECONCILIATION_REVIEW_20261001",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_PRODUCTION_GRAVITY_FREEZE_FINAL_MAX_RECONCILIATION_20261001",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Records the MAX inbound reliability repair reconciled onto the frozen production Gravity baseline 335cdae7. The effective chain on that baseline is the historical registry, amendments 1-5 and current-review epoch 1 (2,511 -> 2,519); this amendment follows epoch 1 and continues from its exact tail. It adds one tracked executable surface, max-web-scraper/test/max-inbound-pending-provider-queue-source.test.js, a scraper source-contract test that is owned by its context through the accepted manifests and receives no explicit ownership assignment, so the denominator moves 2,519 -> 2,520. One reviewed exact-inventory assignment moves its bytes and is rebound as a CHAINED rebind, gravity-mvp/src/app/api/webhooks/max/route.ts, from the exact fingerprint the cold-cache amendment approved (b60f4e49) to the bytes now on disk; epoch 1 never touched this path. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no epoch is added or altered. Nothing is ported from the superseded 06e80099 or 3efe0216 lineages: the triple is this repository's own derivation over this tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2519,
+        "tracked_inventory_sha256": "b0551197b574567c4175fcb7bc743f7ff11549f73c116eadd643204919da9140",
+        "coverage_sha256": "9a75e618a6cd28b4ffad2806ada73ef83f7ef7d0e11453ae62100c961880b8ff"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2520,
+        "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab",
+        "coverage_sha256": "5b796ddbc65dc69e91e4fc31c60c7c1e5400ec0c738faf6a9a81c24f5784fd77"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "b60f4e4935f11064614b1dc84b534a3d70ef35202d449781db7d855ffde97e70",
+          "current_source_sha256": "317946a4ff2ccfe7ab0f4ac56c7fe0d7f0b2810ec1417f6d0e199e39a4e567be",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The MAX webhook route keeps every reviewed ownership field. Only its bytes move, adding a source-specific route binding: dom_fallback still requires the synthetic max-dom-<externalChatId>-<hash> id with the embedded chat id matching, while live_dom_recovery - whose externalId is the real provider message id - is bound by exact chatId/rawChatId agreement and the fully attested route, and is refused if it presents a synthetic id. Every downstream peer, provider-account, claimant and collision guard is unchanged. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and inventory kind exact_runtime_inventory are unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
