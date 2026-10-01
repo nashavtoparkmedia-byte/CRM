@@ -2,44 +2,45 @@
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OutboundCallingMode } from '@/infrastructure/ui/calling-client-capability'
+import {
+    OutboundCallingClientProvider,
+    type OutboundCallingClientCapability,
+    type OutboundCallingMode,
+} from '@/infrastructure/ui/calling-client-capability'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { isMobileShellUserAgentV1 } from './mobile-shell-client'
+import DriverCallButton from './DriverCallButton'
 
 /**
- * Calling's CallButton, driven through the mode its own SipProvider publishes.
+ * Fleet's driver-card call button, driven through the neutral capability seam.
  *
- * The provider is replaced by its hook so the mode can be supplied without
- * standing up a SIP stack. Fleet proves its twin in its own test, and
- * `check-calling-client-ui-boundary` proves the two are one implementation
- * modulo the capability seam - so no cross-context import is needed here.
+ * Fleet is told how outbound calling is presented and nothing about the client
+ * it runs in, so the mode is supplied here exactly as Calling's provider would
+ * supply it. `check-calling-client-ui-boundary` separately proves this button
+ * is Calling's button modulo the seam.
  */
-
-const sip = vi.hoisted(() => ({ current: {} as Record<string, unknown> }))
-
-vi.mock('@/modules/calling/public/v1/sip-client-context', () => ({
-    useSip: () => sip.current,
-}))
-
-import CallButton from './CallButton'
 
 const PHONE = '+79990000001'
 
-function useSipValue(outboundMode: OutboundCallingMode, overrides: Record<string, unknown> = {}) {
-    sip.current = {
+function capability(outboundMode: OutboundCallingMode, overrides: Partial<OutboundCallingClientCapability> = {}): OutboundCallingClientCapability {
+    return {
         status: 'registered',
         outboundMode,
-        activeCall: null,
+        hasActiveCall: false,
         startPlaceholderOutbound: vi.fn(),
         cancelPlaceholderOutbound: vi.fn(),
         setActiveCallFsUuid: vi.fn(),
         ...overrides,
     }
-    return sip.current
 }
 
-const renderCallButton = () => render(<CallButton phoneNumber={PHONE}/>)
+function renderDriverButton(value: OutboundCallingClientCapability) {
+    return render(
+        <OutboundCallingClientProvider value={value}>
+            <DriverCallButton phoneNumber={PHONE}/>
+        </OutboundCallingClientProvider>,
+    )
+}
 
 describe('outbound calling presented as the system dialer', () => {
     let fetchSpy: ReturnType<typeof vi.fn>
@@ -61,29 +62,24 @@ describe('outbound calling presented as the system dialer', () => {
     })
 
     it('offers a tel: link the device can hand to its own dialer', () => {
-        useSipValue('system_dialer')
-        renderCallButton()
+        renderDriverButton(capability('system_dialer'))
 
         const link = screen.getByRole('link', { name: /Позвонить/ })
         expect(link.getAttribute('href')).toBe(`tel:${PHONE}`)
-        // A link, not a button: nothing to disable and nothing to submit.
         expect(screen.queryByRole('button')).toBeNull()
     })
 
     it('offers the dialer even with no softphone registration and no active call state', () => {
-        // This is the whole point: in the shell the softphone can never register,
-        // so a disabled button would be the only thing an operator ever saw.
         for (const status of ['idle', 'connecting', 'unregistered', 'failed', 'disabled', 'identity-required'] as const) {
-            useSipValue('system_dialer', { status })
-            renderCallButton()
+            renderDriverButton(capability('system_dialer', { status }))
             expect(screen.getByRole('link', { name: /Позвонить/ }).getAttribute('href')).toBe(`tel:${PHONE}`)
             cleanup()
         }
     })
 
     it('places no call itself: no originate, no microphone, no placeholder SIP state', () => {
-        const value = useSipValue('system_dialer')
-        renderCallButton()
+        const value = capability('system_dialer')
+        renderDriverButton(value)
 
         screen.getByRole('link', { name: /Позвонить/ }).click()
 
@@ -94,11 +90,8 @@ describe('outbound calling presented as the system dialer', () => {
     })
 
     it('carries the number in the link and nothing else', () => {
-        useSipValue('system_dialer')
-        renderCallButton()
+        renderDriverButton(capability('system_dialer'))
         const link = screen.getByRole('link', { name: /Позвонить/ })
-        // No telephony permission, no auto-dial attribute, no target that could
-        // navigate the shell away from the CRM.
         expect(link.getAttribute('href')).toBe(`tel:${PHONE}`)
         expect(link.getAttribute('target')).toBeNull()
         expect(link.getAttribute('download')).toBeNull()
@@ -109,8 +102,7 @@ describe('outbound calling presented as the softphone', () => {
     afterEach(cleanup)
 
     it('keeps the registered browser path: an enabled button, no tel: link', () => {
-        useSipValue('softphone', { status: 'registered' })
-        renderCallButton()
+        renderDriverButton(capability('softphone', { status: 'registered' }))
 
         const button = screen.getByRole('button', { name: /Позвонить/ }) as HTMLButtonElement
         expect(button.disabled).toBe(false)
@@ -119,8 +111,7 @@ describe('outbound calling presented as the softphone', () => {
     })
 
     it('keeps the unregistered browser path disabled with its existing explanation', () => {
-        useSipValue('softphone', { status: 'unregistered' })
-        renderCallButton()
+        renderDriverButton(capability('softphone', { status: 'unregistered' }))
 
         const button = screen.getByRole('button', { name: /Позвонить/ }) as HTMLButtonElement
         expect(button.disabled).toBe(true)
@@ -129,8 +120,7 @@ describe('outbound calling presented as the softphone', () => {
     })
 
     it('keeps the active-call path disabled with its existing explanation', () => {
-        useSipValue('softphone', { status: 'registered', activeCall: { fsUuid: 'active' } })
-        renderCallButton()
+        renderDriverButton(capability('softphone', { status: 'registered', hasActiveCall: true }))
 
         const button = screen.getByRole('button', { name: /Позвонить/ }) as HTMLButtonElement
         expect(button.disabled).toBe(true)
@@ -138,32 +128,13 @@ describe('outbound calling presented as the softphone', () => {
     })
 })
 
-describe('where the mode comes from', () => {
-    const read = (file: string) => readFileSync(path.join(__dirname, file), 'utf8')
-
-    it('the button reads the mode and never detects the shell for itself', () => {
-        const button = read('CallButton.tsx')
+describe('Fleet learns the mode and never the platform', () => {
+    it('depends on the neutral seam only, with no reach into Calling and no shell token', () => {
+        const button = readFileSync(path.join(__dirname, 'DriverCallButton.tsx'), 'utf8')
+        expect(button).toContain("from '@/infrastructure/ui/calling-client-capability'")
+        expect(button).not.toContain('@/modules/calling/')
+        expect(button).not.toContain('YokoShell/')
         expect(button).not.toContain('isRenderedInMobileShell')
         expect(button).not.toContain('navigator.userAgent')
-        expect(button).toContain('outboundMode')
-    })
-
-    it('the provider derives the mode once, after mount, and publishes it on both values', () => {
-        const provider = read('../sip-client-context.tsx')
-        // Hydration safety: 'softphone' is what the server renders, because it has
-        // no User-Agent, and the correction happens in an effect after mount.
-        expect(provider).toContain("useState<OutboundCallingMode>('softphone')")
-        expect(provider).toMatch(/useEffect\(\(\) => \{\s*if \(isRenderedInMobileShellV1\(\)\) setOutboundMode\('system_dialer'\)\s*\}, \[\]\)/)
-        // Calling's own context and the neutral capability read the same decision.
-        expect(provider).toContain('<SipContext.Provider value={{ status, outboundMode,')
-        expect(provider).toContain('<OutboundCallingClientProvider value={{ status, outboundMode,')
-        // Exactly one detector call in the whole provider.
-        expect(provider.match(/isRenderedInMobileShellV1\(\)/gu)?.length).toBe(1)
-    })
-
-    it('the shell User-Agent is what selects the system dialer', () => {
-        // The mapping the provider applies, proven on its input.
-        expect(isMobileShellUserAgentV1('Mozilla/5.0 (Linux; Android 14) YokoShell/0.1.0')).toBe(true)
-        expect(isMobileShellUserAgentV1('Mozilla/5.0 (Linux; Android 14; SM-S918B) Chrome/128.0')).toBe(false)
     })
 })
