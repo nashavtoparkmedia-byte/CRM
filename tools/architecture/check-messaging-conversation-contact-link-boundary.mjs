@@ -60,7 +60,13 @@ const consumerModel = new Map([
   ['gravity-mvp/src/app/api/webhook/telegram/route.ts', {
     count: 1,
     chatIds: ['unifiedChat.id'],
-    placements: ['try/try/try/function:POST'],
+    // One lexical try fewer than before. Persist-before-enrichment moved the
+    // identity work into a single non-fatal enrichment phase, so the contact
+    // block no longer catches for itself and is now a bare block. The call is
+    // byte-identical - one awaited reachable call, one object argument, the same
+    // field set and the same unifiedChat.id/contactResult mapping - and it now
+    // runs only after the provider event is already durable.
+    placements: ['try/try/function:POST'],
   }],
   ['gravity-mvp/src/app/tg-actions.ts', {
     count: 1,

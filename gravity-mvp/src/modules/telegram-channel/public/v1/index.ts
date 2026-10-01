@@ -13,8 +13,9 @@ export type { BotUserProfilePersistencePortV1, PendingBotLinkRequest } from './b
 export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-delivery-capability'
 export { sendExactTelegramBotMessageV1 } from './bot-message-delivery'
 export type { TelegramBotInlineButtonV1, TelegramBotInlineKeyboardV1 } from './bot-message-delivery'
-export { prepareManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
-export type { PreparedManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
+export { canonicalTelegramBotConnectionIdV1, TELEGRAM_BOT_CONNECTION_ENV_NAME } from './bot-transport-config'
+export { prepareDriverTelegramConversationAuthorityV1, prepareManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
+export type { PreparedDriverTelegramConversationAuthorityV1, PreparedManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
 export {
     deleteDriverTelegramLinkV1,
     dismissBotLinkRequestV1,

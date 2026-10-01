@@ -58,9 +58,18 @@ check(
   'manual link authority retained',
   authority.includes('externalChatId: `telegram:${target}`')
     && authority.includes("chat.chatType !== 'private'")
-    && authority.includes("metadata.chatKind !== 'private'")
-    && authority.includes('prepareOutboundConversationV1(chat)')
-    && authority.includes('isContactConfirmedMainDriverV1(outbound.contactId, driverId)')
+    // Chat.chatType is the single canonical private/group source. metadata.chatKind
+    // must NOT be a second source: no production row carries it and the conversation
+    // adapter never writes metadata onto an existing row, so requiring it refused
+    // every conversation forever.
+    && !authority.includes("metadata.chatKind !== 'private'")
+    // Proving a person must not call an outbound routing proof: a Chat is the shared
+    // peer identity, so person authority may not depend on a transport.
+    && !authority.includes('prepareOutboundConversationV1(chat)')
+    && authority.includes('isContactConfirmedMainDriverV1(contactId, driverId)')
+    // The manual link authority takes its transport from Telegram-owned
+    // configuration, never from the shared Chat.
+    && authority.includes('canonicalTelegramBotConnectionIdV1()')
     && authority.includes('revalidatePreparedManualDriverTelegramLinkAuthorityV1')
     && manualAdapter.indexOf('prepareManualDriverTelegramLinkAuthorityV1(input)') < manualAdapter.indexOf('transaction.driverTelegram.create')
     && manualAdapter.includes('CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1')
@@ -97,13 +106,18 @@ check(
 )
 check(
   'bot Driver mutations reauthorize current person and transport',
-  telegramWebhook.includes('prepareManualDriverTelegramLinkAuthorityV1')
+  telegramWebhook.includes('prepareDriverTelegramConversationAuthorityV1')
     && (telegramWebhook.match(/requireCurrentDriverTelegramAuthority\(/g) || []).length >= 7
     && telegramWebhook.indexOf('requireCurrentDriverTelegramAuthority({') < telegramWebhook.indexOf('prisma.driverTelegram.update')
-    && webhook.includes('prepareManualDriverTelegramLinkAuthorityV1')
+    && telegramWebhook.includes('canonicalTelegramBotConnectionIdV1()')
+    && webhook.includes('prepareDriverTelegramConversationAuthorityV1')
     && webhook.includes("error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED'")
-    && webhook.includes('authority.providerAccountId !== providerAccountId')
-    && webhook.includes('authority.connectionId !== connectionId')
+    // The Bot runtime transport is proven against configuration. Comparing it to
+    // the shared Chat's stored binding is the defect this boundary now forbids:
+    // that binding may legitimately name the MTProto personal account.
+    && webhook.includes('connectionId !== canonicalTelegramBotConnectionIdV1()')
+    && !webhook.includes('authority.providerAccountId !== providerAccountId')
+    && !webhook.includes('authority.connectionId !== connectionId')
     && (webhook.match(/requireCurrentBotDriverAuthority\(/g) || []).length >= 14
     && botDriverActionCallers.every(source => source.includes('exactTelegramActionBinding(ctx)')),
   'bot Driver mutation authority drift',

@@ -433,6 +433,109 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "telegram-bot-contract-skew-incident-repair-20260929",
+      "reviewed_at": "2026-09-29T00:00:00Z",
+      "reviewed_by": "TELEGRAM_INCIDENT_REPAIR_IMPLEMENTER_20260929",
+      "role": "INCIDENT_REPAIR_IMPLEMENTER_AFTER_PRODUCTION_BOT_CONTRACT_SKEW",
+      "authorization": "ORCHESTRATOR_ACCELERATED_TELEGRAM_INCIDENT_HOTFIX_20260929",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Production Gravity was activated on 2026-09-28 from a lineage whose Telegram bot contract the still-running bot image does not implement, so every driver action answered 409 and every inbound driver message was refused 401 and dropped. The repair separates the person/conversation proof from the Bot runtime transport proof, makes the Bot conversation CREATE transport-neutral, and persists an authenticated provider event before any identity enrichment. It edits the bytes of three already assigned runtime surfaces and adds five new files: the Telegram Bot transport configuration helper and its test, the ported manager order-failure diagnostics and its test, and the CRM forwarding-outcome test. The five additions are owned by their contexts through the accepted manifests and receive no explicit ownership assignment here, so the denominator moves 2506 to 2511 while every reviewed assignment, lifecycle, functional owner and governed exclusion is carried forward untouched.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2506,
+        "tracked_inventory_sha256": "89cf58e48aaf59b26857f2565e2a509e8deedd37776d98cae8656d8bd36e7f73",
+        "coverage_sha256": "cd295e4b0cc9a8b2c3fa7e8cc69419b0308bda4d8a737983b7d2fd8734bc8f4a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2511,
+        "tracked_inventory_sha256": "b61b0e39b7c12ae2db6d647e1385d7cf2100b3fdd0164770a8c713b9a4f06978",
+        "coverage_sha256": "4fc6619ba285c7c676e195e0f1d106f417f89742216e7087b8ee7f21c1524cc1"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "91228a9e7e2178298539eac5c0a58ad88b944da87cc523ab186d4cb703dde7c4",
+          "current_source_sha256": "a6a01bdd864620d46c37f11142d36fc88b0667f60d01595aae74f6b04e1aa8f5",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot action route now proves the person and the Bot runtime transport independently: the transport is checked against Telegram-owned configuration instead of the shared Chat's stored binding, which may legitimately name the MTProto personal account. This surface carries no rebind in any earlier amendment, so the chain starts from exactly the fingerprint the 2026-08-13 reviewed assignment carries. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and inventory kind exact_runtime_inventory are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "previous_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
+          "current_source_sha256": "b0f69ce069fd76a05bd4696c942ee276a94bedf23ce7c8a080e91bffd8e79ef2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The Telegram ingress route now admits a shared conversation without claiming transport ownership, creates a Bot-first conversation transport-neutrally, and persists the authenticated provider event before Contact, identity and Driver enrichment so a contradictory person can no longer discard a delivered message. This rebind starts from exactly the fingerprint the 2026-09-14 composition amendment approved, so the chain stays unbroken. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "9b8174b6dad9a8fde1289c7f85ffb8c5ac757a41ca616e1c98a8601e69498a4a",
+          "current_source_sha256": "3420851428ea5e7c04112dc74c18f10f2ef0b2f1d3f6e5e76d9bc44f456b80d6",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Explicit Bot delivery no longer constrains the live bot by the legacy provider account stored on a shared Chat, and takes its transport from Telegram-owned configuration; the existing exact delivery response proof is unchanged and no fallback to MTProto is introduced. This rebind starts from exactly the fingerprint the 2026-09-14 composition amendment approved. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
+    },
+    {
+      "amendment_id": "messaging-max-inbound-reliability-reconciled-06e80099-20261001",
+      "reviewed_at": "2026-10-01T00:00:00Z",
+      "reviewed_by": "MESSAGING_MAX_INBOUND_RELIABILITY_RECONCILIATION_EXECUTOR_REVIEW_20261001",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_AUTHORIZED_MAX_RECONCILIATION_ONTO_TELEGRAM_SUCCESSOR_20261001",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated. This amendment extends the chain whose tail is telegram-bot-contract-skew-incident-repair-20260929, the live Telegram production successor, and reviews only the one surface the reconciled MAX repair adds."
+      },
+      "reason": "Records the single tracked executable surface the MAX inbound reliability repair adds when reconciled onto the live Telegram production successor 06e80099: 2,511 + 1 = 2,512 surfaces. The surface is max-web-scraper/test/max-inbound-pending-provider-queue-source.test.js, a scraper source-contract test beside the existing *-source tests in that directory, asserting the one-pending-provider-id-to-one-DOM-candidate invariant on a monolithic entrypoint that exports nothing; it reads source text and asserts, writes nothing and has no runtime role. One reviewed exact-inventory assignment moves its bytes and is rebound as a CHAINED rebind, gravity-mvp/src/app/api/webhooks/max/route.ts, starting from the exact fingerprint the cold-cache amendment approved (b60f4e49) and ending at the bytes now on disk. That chain is unbroken on this lineage because ba90ed4b is an ancestor of the Telegram successor and no Telegram commit touched this path. Its reviewed lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and exact_runtime_inventory kind are unchanged; only the bytes move, carrying the source-specific chat binding that lets live_dom_recovery reach the SAME existing bounded peer proof as dom_fallback while dom_fallback keeps its synthetic-id invariant. No assignment is added or removed, and no lifecycle, functional owner, governed exclusion or reviewed rationale changes. No governance evidence was ported from the superseded 3efe0216 lineage: this triple is the repository's own derivation over this tree from a clean checkout.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2511,
+        "tracked_inventory_sha256": "b61b0e39b7c12ae2db6d647e1385d7cf2100b3fdd0164770a8c713b9a4f06978",
+        "coverage_sha256": "4fc6619ba285c7c676e195e0f1d106f417f89742216e7087b8ee7f21c1524cc1"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2512,
+        "tracked_inventory_sha256": "25cba907f36b1d9ab698269bd7d2a1868c5922edae935a8bc371c084d1d93ece",
+        "coverage_sha256": "15122071dd0a4a81eedddc5170fbfdd540933d93ca250ecc45ec8a1c6438b0bd"
+      },
+      "unassigned_tracked_surfaces": [],
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "b60f4e4935f11064614b1dc84b534a3d70ef35202d449781db7d855ffde97e70",
+          "current_source_sha256": "317946a4ff2ccfe7ab0f4ac56c7fe0d7f0b2810ec1417f6d0e199e39a4e567be",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The MAX webhook route keeps every reviewed ownership field. Only its bytes move, adding a source-specific route binding: dom_fallback still requires the synthetic max-dom-<externalChatId>-<hash> id with the embedded chat id matching, while live_dom_recovery - whose externalId is the real provider message id and so cannot satisfy that invariant by design - is bound by exact chatId/rawChatId agreement and the fully attested route, and is refused outright if it presents a synthetic id. Every downstream peer, provider-account, claimant and collision guard is unchanged, and the Telegram restoration's own change to the shared outbound identity surface is MAX-neutral and untouched here."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
