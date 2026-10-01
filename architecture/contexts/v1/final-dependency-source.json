@@ -5,7 +5,7 @@
     "policy_sha256": "efbce61b4ff61990d885123212f2799265760d7f8405210acdd1e06ffbc8c978"
   },
   "observed": {
-    "architecture_findings": 1,
+    "architecture_findings": 0,
     "cross_context_imports": 915,
     "cross_context_imports_sha256": "8a4f9f23ae3ad89bb5331ab74e562fd788b4d095c56855692360956af793391b",
     "scanned_files": 1624

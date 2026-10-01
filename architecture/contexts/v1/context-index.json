@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "a627078d98d9988c6c2881970bf8c305e922b9c5149b5f65d8bfb48be7309f41"
+      "sha256": "60fbaef8080b29e2a1b789042908e9ca7615ccbc6d86bb9d504d2e2fe637b8ca"
     },
     {
       "context": "edge_delivery",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "2346c12b2a9de85dd5705711bc915be114b43937896086e2e3b75ebd2ff2965a"
+      "sha256": "a74a72d084b78bbd029d81fd2c49a1bcca0c56e7e08dfe7d8c019aeea1f436d7"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "d7558c6e3c6541c1eb7bcb58dd3b8afe993a218c4601b421e3cb042db90a653c"
+      "sha256": "333f6e6da1c9921980cf998c73b044375a6d74d481ce97a9ee7a019a8fb4d36d"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "4b56f58a4962cab4e324807ab374cebb03ebfb3ad77b92c6a96455f2b45adea7"
+      "sha256": "1d83c97733808c201dffffa8586d0985b1c2c1aa8954bc02e38d6f9fa5e1182a"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
