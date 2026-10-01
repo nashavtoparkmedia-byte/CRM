@@ -1,10 +1,9 @@
 "use client"
 
 import { Phone, PhoneOutgoing, Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { toast } from "sonner"
-import { isRenderedInMobileShellV1 } from './mobile-shell-client'
 
 /**
  * Click-to-call button for driver / contact / lead cards.
@@ -25,25 +24,22 @@ import { isRenderedInMobileShellV1 } from './mobile-shell-client'
  * INCOMPATIBLE_DESTINATION ~3s after the bridge action. The two-leg
  * originate sidesteps that entirely.
  *
- * In the Android shell this whole flow is unavailable and always was: the server
- * refuses to hand the shell a SIP password, so the softphone never reaches
- * `registered` and the button below is permanently disabled. There the operator
- * gets a plain tel: link instead, which the shell hands to the system dialer, and
- * the call runs on their own mobile subscription. No SIP credential, no
- * microphone permission, no automatic placement - the dialer opens with the
- * number filled in and the operator presses call themselves.
+ * Where the calling client reports `system_dialer` this whole flow is
+ * unavailable and always was: that client is never handed a SIP password, so the
+ * softphone cannot reach `registered` and the button below would sit permanently
+ * disabled. The operator gets a plain tel: link instead, which the device hands
+ * to its own dialer, and the call runs on their own mobile subscription. No SIP
+ * credential, no microphone permission, no automatic placement - the dialer opens
+ * with the number filled in and the operator presses call themselves.
  *
- * Detected after mount rather than during render, because the server has no
- * User-Agent while producing this markup and a mismatch would hydrate wrong.
+ * The mode is decided once by the calling client, never here, which is what lets
+ * this button and the Fleet driver button remain one implementation.
  */
 export default function CallButton({ phoneNumber, label = 'Позвонить' }: { phoneNumber: string; label?: string }) {
-    const { status, activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
+    const { status, activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
     const [busy, setBusy] = useState(false)
-    const [inMobileShell, setInMobileShell] = useState(false)
 
-    useEffect(() => { setInMobileShell(isRenderedInMobileShellV1()) }, [])
-
-    if (inMobileShell) {
+    if (outboundMode === 'system_dialer') {
         return (
             <a
                 href={`tel:${phoneNumber}`}
