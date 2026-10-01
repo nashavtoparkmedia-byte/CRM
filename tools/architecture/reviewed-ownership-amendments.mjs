@@ -322,3 +322,324 @@ export function resolveReviewedOwnershipExtension(decisions, amendments, context
 
   return { current: previous, rebinds, unassigned, amendments: amendments.amendments.length, compositions }
 }
+
+// NEW EXECUTABLE SURFACE ASSIGNMENT
+//
+// An amendment can move the denominator and rebind an already reviewed
+// fingerprint, but it can never assign ownership to a path no reviewer has ever
+// examined: `FORBIDDEN_AMENDMENT_KEYS` rejects `assignments` outright, and a
+// source-hash rebind is checked against an assignment that must already exist.
+// That is deliberate, and it leaves one legitimate movement unrepresentable —
+// a genuinely new executable surface, such as a new API route, which must be
+// reviewed by whoever is reviewing today and never backdated into a dated
+// historical record.
+//
+// A current-review epoch is that representation. It is append-only, and it adds
+// only paths that no earlier authority assigned. It cannot alter, weaken or
+// remove any existing assignment, because it may only introduce paths absent
+// from every predecessor, and it carries its own present-day reviewer identity
+// which may never restate the historical one.
+//
+// ORDERING. Amendments and epochs are two append-only streams merged into ONE
+// chain. Each epoch anchors to the amendment prefix it follows — the exact count
+// and a content digest of those amendments — rather than to the bytes of the
+// whole amendment document. So an amendment appended later never invalidates an
+// earlier epoch, a forked amendment history still fails the prefix digest, and
+// the appended amendment simply continues the chain from the effective tail:
+//   immutable historical registry
+//     -> amendments[0 .. a1) -> epoch 1
+//       -> amendments[a1 .. a2) -> epoch 2 -> ... -> remaining amendments
+// with no "latest document wins" anywhere in it. Amendment semantics are not
+// changed: every segment is resolved by `resolveReviewedOwnershipExtension`.
+//
+// REBIND != NEW OWNERSHIP REVIEW. The two live in different documents with
+// different keys and different decision constants, and an epoch that tries to
+// carry `source_hash_rebinds` is rejected: a fingerprint movement can never be
+// the act that creates ownership. Stage order also binds rebinds: a rebind from
+// an amendment that precedes an epoch never touches a surface that epoch
+// reviews, and a later rebind of such a surface must start from the exact
+// fingerprint its reviewer approved.
+
+export const CURRENT_REVIEWS_SCHEMA = 'yoko.crm.executable-path-ownership-current-reviews.v1'
+export const NEW_SURFACE_ASSIGNMENT_DECISION = 'APPROVED_NEW_SURFACE_ASSIGNMENT'
+export const EXACT_INVENTORY_ADMISSION_DECISION = 'APPROVED_NEW_SURFACE_EXACT_INVENTORY_ADMISSION'
+
+// Keys that belong exclusively to the historical review or to the amendment
+// chain. An epoch carrying any of them would be claiming a different authority's
+// power under its own identity.
+const FORBIDDEN_EPOCH_KEYS = [
+  'assignments',
+  'exact_inventory_changes',
+  'governed_exclusions',
+  'lifecycle_changes',
+  'functional_owner_changes',
+  'source_hash_rebinds',
+  'unassigned_tracked_surfaces',
+  'amendment_kind',
+  'authority_composition',
+]
+
+const ASSIGNMENT_FIELDS = ['path', 'lifecycle', 'functional_owner', 'exclusion', 'inventory_kind', 'source_sha256']
+
+const isExactInventory = (inventory) => Number.isInteger(inventory?.path_count)
+  && inventory.path_count >= 0
+  && SHA256.test(inventory?.path_sha256 ?? '')
+
+const sameInventory = (left, right) => left?.path_count === right?.path_count
+  && left?.path_sha256 === right?.path_sha256
+
+const inventoryKey = (exclusion, inventoryKind) => `${exclusion}|${inventoryKind}`
+
+function assertEpochIdentity(epoch, id, historicalReviewer, historicalReviewRole) {
+  for (const forbidden of FORBIDDEN_EPOCH_KEYS) {
+    assert(epoch[forbidden] === undefined, `current ownership review epoch may not carry foreign authority semantics: ${id}.${forbidden}`)
+  }
+  assert(typeof epoch.reviewed_by === 'string' && epoch.reviewed_by.length > 0
+    && epoch.reviewed_by !== historicalReviewer, `current ownership review epoch may not restate the historical reviewer: ${id}`)
+  assert(typeof epoch.role === 'string' && epoch.role.length > 0
+    && epoch.role !== historicalReviewRole, `current ownership review epoch may not restate the historical review role: ${id}`)
+  assert(typeof epoch.reviewed_at === 'string' && epoch.reviewed_at.length > 0, `current ownership review epoch date missing: ${id}`)
+  assert(typeof epoch.authorization === 'string' && epoch.authorization.length > 0, `current ownership review epoch authorization missing: ${id}`)
+  assert(typeof epoch.reason === 'string' && epoch.reason.length >= 48, `current ownership review epoch lacks an explicit reason: ${id}`)
+}
+
+// Chains per-segment rebinds of one path in stage order. Each segment's entry is
+// already merged by `resolveReviewedOwnershipExtension`, so across segments the
+// same rule applies: a later rebind must start from the fingerprint the earlier
+// one approved, and the result keeps the first previous and the last current.
+function chainRebinds(entries) {
+  let merged = null
+  for (const rebind of entries) {
+    if (merged) {
+      assert(rebind.previous_source_sha256 === merged.current_source_sha256, `duplicate reviewed executable ownership amendment rebind: ${rebind.path}`)
+    }
+    merged = merged ? { ...rebind, previous_source_sha256: merged.previous_source_sha256 } : rebind
+  }
+  return merged
+}
+
+/**
+ * Pure, IO-free resolution of the one effective ownership state: the immutable
+ * historical registry, the amendment chain and the ordered current-review
+ * epochs, merged into a single chain by each epoch's amendment anchor.
+ *
+ * `context` carries the trust anchors the caller read from authoritative
+ * source: the historical registry path and digest, the historical reviewer
+ * identity and role that may never be restated, the accepted composition
+ * anchors, and the amendment document path (undefined when none exists).
+ *
+ * With no current-review document the result is exactly
+ * `resolveReviewedOwnershipExtension`, so historical and amendment behaviour is
+ * unchanged wherever no epoch exists.
+ */
+export function resolveEffectiveOwnershipState(decisions, amendments, currentReviews, context = {}) {
+  const {
+    decisionRegistryPath,
+    decisionRegistrySha256,
+    historicalReviewer,
+    historicalReviewRole,
+    acceptedAuthorityAnchors,
+    amendmentsPath,
+  } = context
+  const amendmentContext = { decisionRegistryPath, decisionRegistrySha256, historicalReviewer, historicalReviewRole, acceptedAuthorityAnchors }
+
+  if (currentReviews === null || currentReviews === undefined) {
+    const extension = resolveReviewedOwnershipExtension(decisions, amendments, amendmentContext)
+    return { ...extension, epochs: 0, epochAssignments: new Map(), admissions: new Map(), epochRebinds: new Map() }
+  }
+
+  assert(typeof decisionRegistryPath === 'string' && decisionRegistryPath.length > 0, 'current ownership review context requires the authoritative decision registry path')
+  assert(SHA256.test(decisionRegistrySha256 ?? ''), 'current ownership review context requires the exact decision registry digest')
+  assert(typeof historicalReviewer === 'string' && historicalReviewer.length > 0, 'current ownership review context requires the historical reviewer identity')
+  assert(typeof historicalReviewRole === 'string' && historicalReviewRole.length > 0, 'current ownership review context requires the historical review role')
+  assert(isExactTriple(decisions?.current), 'historical reviewed executable ownership denominator is not an exact triple')
+  assert(Array.isArray(decisions.assignments) && Array.isArray(decisions.exact_inventory_changes), 'current ownership review requires the historical assignments and exact inventory state')
+
+  assert(currentReviews.schema === CURRENT_REVIEWS_SCHEMA && currentReviews.version === 1, 'current ownership review registry identity mismatch')
+  assert(currentReviews.base?.decision_registry_path === decisionRegistryPath
+    && currentReviews.base?.decision_registry_sha256 === decisionRegistrySha256, 'current ownership reviews do not pin the exact immutable historical review bytes')
+  assert(Array.isArray(currentReviews.epochs) && currentReviews.epochs.length > 0, 'current ownership review epoch chain is empty')
+
+  const chain = amendments === null || amendments === undefined ? [] : amendments.amendments
+  assert(Array.isArray(chain), 'reviewed executable ownership amendment chain is malformed')
+  // The chain is resolved in segments, so identity uniqueness is enforced across
+  // the whole document here rather than per segment.
+  const amendmentIds = new Set()
+  for (const amendment of chain) {
+    assert(!amendmentIds.has(amendment?.amendment_id), `duplicate reviewed executable ownership amendment: ${amendment?.amendment_id}`)
+    amendmentIds.add(amendment?.amendment_id)
+  }
+
+  const assignedPaths = new Set(decisions.assignments.map((assignment) => assignment.path))
+  const inventories = new Map(decisions.exact_inventory_changes
+    .map((change) => [inventoryKey(change.exclusion, change.inventory_kind), change.current_inventory]))
+  const epochAssignments = new Map()
+  const admissions = new Map()
+  const unassigned = new Map()
+  const segments = []
+  let previous = decisions.current
+  let applied = 0
+  let compositions = 0
+  let stage = 0
+
+  // Resolves the amendments between the last applied index and `until` with the
+  // unchanged amendment resolver, continuing the chain from the effective tail.
+  const applyAmendments = (until) => {
+    if (until <= applied) return
+    const segment = resolveReviewedOwnershipExtension(
+      { ...decisions, current: previous },
+      { ...amendments, amendments: chain.slice(applied, until) },
+      amendmentContext,
+    )
+    previous = segment.current
+    compositions += segment.compositions
+    for (const [surfacePath, surface] of segment.unassigned) {
+      assert(!unassigned.has(surfacePath), `duplicate reviewed executable ownership amendment unassigned surface: ${surfacePath}`)
+      unassigned.set(surfacePath, surface)
+    }
+    segments.push({ stage: stage++, rebinds: segment.rebinds })
+    applied = until
+  }
+
+  for (const [index, epoch] of currentReviews.epochs.entries()) {
+    const expectedEpoch = index + 1
+    const id = `epoch:${epoch?.epoch}`
+    // Ordinals are contiguous from one, so a skipped, duplicated or reordered
+    // epoch is rejected before any of its content is honoured.
+    assert(epoch?.epoch === expectedEpoch, `current ownership review epoch is not the next ordinal: expected ${expectedEpoch}, found ${epoch?.epoch}`)
+    assertEpochIdentity(epoch, id, historicalReviewer, historicalReviewRole)
+    // The epoch names the exact amendment prefix it follows. A content digest of
+    // that prefix, not of the whole document, is what makes a forked amendment
+    // history fail while an amendment appended later leaves this epoch valid.
+    const anchor = epoch.amendment_anchor
+    assert(anchor && typeof anchor === 'object', `current ownership review epoch does not anchor the amendment chain it follows: ${id}`)
+    assert(anchor.amendments_path === amendmentsPath, `current ownership review epoch anchors a different amendment document: ${id}`)
+    assert(Number.isInteger(anchor.amendment_count) && anchor.amendment_count >= applied && anchor.amendment_count <= chain.length, `current ownership review epoch amendment anchor is out of order or out of range: ${id}`)
+    assert(anchor.amendments_prefix_sha256 === canonicalDigest(chain.slice(0, anchor.amendment_count)), `current ownership review epoch does not follow the exact amendment chain prefix it names: ${id}`)
+    applyAmendments(anchor.amendment_count)
+    assert(sameTriple(epoch.predecessor, previous), `current ownership review epoch does not extend its exact predecessor: ${id}`)
+    const epochStage = stage++
+    assert(isExactTriple(epoch.current), `current ownership review epoch current denominator invalid: ${id}`)
+    // An epoch exists to admit new surfaces, so it must move the denominator.
+    assert(epoch.current.tracked_executable_surfaces > epoch.predecessor.tracked_executable_surfaces, `current ownership review epoch must advance the executable denominator: ${id}`)
+
+    const admitted = epoch.exact_inventory_admissions ?? []
+    assert(Array.isArray(admitted), `current ownership review epoch exact inventory admissions must be an array: ${id}`)
+    const ownAdmissions = new Set()
+    const ownGrowth = new Map()
+    for (const admission of admitted) {
+      assert(typeof admission?.exclusion === 'string' && admission.exclusion.length > 0
+        && typeof admission?.inventory_kind === 'string' && admission.inventory_kind.length > 0, `current ownership review exact inventory admission is unidentified: ${id}`)
+      const key = inventoryKey(admission.exclusion, admission.inventory_kind)
+      assert(!ownAdmissions.has(key), `duplicate current ownership review exact inventory admission: ${key}`)
+      ownAdmissions.add(key)
+      assert(admission.review_decision === EXACT_INVENTORY_ADMISSION_DECISION
+        && typeof admission.review_rationale === 'string'
+        && admission.review_rationale.length >= 48, `current ownership review exact inventory admission lacks an explicit decision: ${key}`)
+      assert(isExactInventory(admission.previous_inventory) && isExactInventory(admission.current_inventory), `current ownership review exact inventory admission is malformed: ${key}`)
+      // The admission must continue the exact membership an earlier authority
+      // pinned, so a stale admission cannot silently replace current state.
+      const pinned = inventories.get(key)
+      assert(pinned, `current ownership review admits an exact inventory no authority pins: ${key}`)
+      assert(sameInventory(admission.previous_inventory, pinned), `current ownership review exact inventory admission does not extend the pinned membership: ${key}`)
+      // Membership may only grow: an admission is an addition of new surfaces,
+      // never a removal of reviewed ones.
+      assert(admission.current_inventory.path_count > admission.previous_inventory.path_count, `current ownership review exact inventory admission must admit new surfaces: ${key}`)
+      ownGrowth.set(key, admission.current_inventory.path_count - admission.previous_inventory.path_count)
+      inventories.set(key, admission.current_inventory)
+      // Successive epochs may admit into the same inventory. The summary keeps
+      // the chain ORIGIN — which must equal what the historical registry pinned —
+      // and the LATEST membership, which must equal the derived inventory.
+      const earlier = admissions.get(key)
+      admissions.set(key, {
+        exclusion: admission.exclusion,
+        inventory_kind: admission.inventory_kind,
+        previous_inventory: earlier ? earlier.previous_inventory : admission.previous_inventory,
+        current_inventory: admission.current_inventory,
+        epochs: [...(earlier?.epochs ?? []), expectedEpoch],
+      })
+    }
+
+    const surfaces = epoch.new_surface_assignments ?? []
+    assert(Array.isArray(surfaces) && surfaces.length > 0, `current ownership review epoch assigns no new surface: ${id}`)
+    const ownPaths = new Set()
+    const admittedCounts = new Map()
+    for (const surface of surfaces) {
+      for (const field of ASSIGNMENT_FIELDS) {
+        assert(typeof surface?.[field] === 'string' && surface[field].length > 0, `current ownership review new surface assignment field missing: ${id}.${field}`)
+      }
+      assert(SHA256.test(surface.source_sha256), `current ownership review new surface assignment source hash invalid: ${surface.path}`)
+      assert(surface.review_decision === NEW_SURFACE_ASSIGNMENT_DECISION
+        && typeof surface.review_rationale === 'string'
+        && surface.review_rationale.length >= 48, `current ownership review new surface assignment lacks an explicit decision: ${surface.path}`)
+      assert(!ownPaths.has(surface.path), `conflicting current ownership review assignment within one epoch: ${surface.path}`)
+      ownPaths.add(surface.path)
+      // The decisive rule. An epoch may only ADD a path no earlier authority
+      // assigned, which is simultaneously what forbids a duplicate assignment,
+      // a conflicting reassignment and any weakening of reviewed ownership:
+      // there is no expressible way to reach an already assigned path.
+      assert(!assignedPaths.has(surface.path), `current ownership review may not reassign an already reviewed surface: ${surface.path}`)
+      assert(!epochAssignments.has(surface.path), `duplicate current ownership review assignment: ${surface.path}`)
+      // Explicit ownership assignment exists only for reviewed exact inventories;
+      // every other surface is owned by its context or governed by a pattern and
+      // never needed an assignment. So an epoch may only assign a surface that
+      // joins a reviewed exact inventory, and only when this same epoch declares
+      // that inventory's membership movement — no directory-wide admission.
+      const key = inventoryKey(surface.exclusion, surface.inventory_kind)
+      assert(inventories.has(key), `current ownership review may only assign a surface that joins a reviewed exact inventory: ${surface.path}`)
+      assert(ownAdmissions.has(key), `current ownership review assigns into a reviewed exact inventory without admitting its membership: ${surface.path}`)
+      admittedCounts.set(key, (admittedCounts.get(key) ?? 0) + 1)
+      epochAssignments.set(surface.path, { ...surface, epoch: expectedEpoch, stage: epochStage })
+    }
+    // Every admitted membership movement must be accounted for, path for path,
+    // by assignments in the same epoch, so an admission can never carry an
+    // extra path that no reviewer assigned.
+    for (const key of ownAdmissions) {
+      assert(admittedCounts.get(key) === ownGrowth.get(key), `current ownership review admission growth is not exactly the reviewed new surfaces: ${key}`)
+    }
+
+    previous = epoch.current
+  }
+
+  // Amendments appended after the last epoch continue the chain from its tail.
+  applyAmendments(chain.length)
+
+  // Stage-ordered rebinds. A surface the historical registry assigned is rebound
+  // by every segment in order, exactly as a single amendment chain did. A surface
+  // an epoch reviewed is rebound only by amendments that FOLLOW that epoch, and
+  // only from the fingerprint its reviewer approved; an earlier rebind naming the
+  // same path is an orphan and stays as inert as orphan rebinds always were.
+  const byPath = new Map()
+  for (const segment of segments) {
+    for (const [surfacePath, rebind] of segment.rebinds) {
+      if (!byPath.has(surfacePath)) byPath.set(surfacePath, [])
+      byPath.get(surfacePath).push({ stage: segment.stage, rebind })
+    }
+  }
+  const rebinds = new Map()
+  const epochRebinds = new Map()
+  for (const [surfacePath, entries] of byPath) {
+    const reviewed = epochAssignments.get(surfacePath)
+    if (!reviewed) {
+      rebinds.set(surfacePath, chainRebinds(entries.map((entry) => entry.rebind)))
+      continue
+    }
+    const later = entries.filter((entry) => entry.stage > reviewed.stage).map((entry) => entry.rebind)
+    if (later.length === 0) continue
+    const merged = chainRebinds(later)
+    assert(merged.previous_source_sha256 === reviewed.source_sha256, `reviewed executable ownership amendment rebind does not extend the current-review fingerprint: ${surfacePath}`)
+    epochRebinds.set(surfacePath, merged)
+  }
+
+  return {
+    current: previous,
+    rebinds,
+    unassigned,
+    amendments: chain.length,
+    compositions,
+    epochs: currentReviews.epochs.length,
+    epochAssignments,
+    admissions,
+    epochRebinds,
+  }
+}

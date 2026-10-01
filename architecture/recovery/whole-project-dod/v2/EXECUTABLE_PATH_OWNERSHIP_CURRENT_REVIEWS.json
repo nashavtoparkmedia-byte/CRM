@@ -1,0 +1,72 @@
+{
+  "schema": "yoko.crm.executable-path-ownership-current-reviews.v1",
+  "version": 1,
+  "policy": "A current-review epoch admits genuinely new executable surfaces into the reviewed executable ownership state under a present-day review identity, extending the exact amendment chain tail it pins without rewriting the dated historical review or any amendment. It may only add paths no earlier authority assigned, only into a reviewed exact inventory whose membership movement it declares and accounts for path for path, and it can never carry a source-hash rebind: a fingerprint movement is never the act that creates ownership.",
+  "base": {
+    "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
+    "decision_registry_sha256": "5c826321943cdbdd43dfa73d9cd68ad351b5197c89b3c469f77f7d0f8f1ada5e"
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "reviewed_at": "2026-10-01T00:00:00Z",
+      "reviewed_by": "OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20261001",
+      "role": "PRODUCT_OWNER_AUTHORIZED_REVIEW",
+      "authorization": "PRODUCT_OWNER_AUTHORIZED_EXECUTABLE_OWNERSHIP_REVIEW_EXTENSION",
+      "reason": "Admits the two new Gravity runtime surfaces introduced by the bounded Telegram conversation person-binding repair into the reviewed executable ownership state under a present-day review, because the 2026-08-13 internal executor review predates both paths and may never be rewritten to claim it examined them.",
+      "amendment_anchor": {
+        "amendments_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+        "amendment_count": 5,
+        "amendments_prefix_sha256": "02177c49df5e3d83d43ca768957e5b9e2e5ae8f6bf0550b98418ad77d639acb6"
+      },
+      "predecessor": {
+        "tracked_executable_surfaces": 2511,
+        "tracked_inventory_sha256": "b61b0e39b7c12ae2db6d647e1385d7cf2100b3fdd0164770a8c713b9a4f06978",
+        "coverage_sha256": "4fc6619ba285c7c676e195e0f1d106f417f89742216e7087b8ee7f21c1524cc1"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2519,
+        "tracked_inventory_sha256": "b0551197b574567c4175fcb7bc743f7ff11549f73c116eadd643204919da9140",
+        "coverage_sha256": "9a75e618a6cd28b4ffad2806ada73ef83f7ef7d0e11453ae62100c961880b8ff"
+      },
+      "exact_inventory_admissions": [
+        {
+          "exclusion": "gravity_runtime_remainder",
+          "inventory_kind": "exact_runtime_inventory",
+          "previous_inventory": {
+            "path_count": 247,
+            "path_sha256": "b1e4d2a6685836d59e046d75dbf4411044dde69dd17023543c78711347a9ea10"
+          },
+          "current_inventory": {
+            "path_count": 249,
+            "path_sha256": "8b21dead65357a5e3a9fc0d92732b0f4d2e25f98172bc45c3948d36edadcc945"
+          },
+          "review_decision": "APPROVED_NEW_SURFACE_EXACT_INVENTORY_ADMISSION",
+          "review_rationale": "The reviewed Gravity runtime remainder legitimately enumerates every API route and shared-infrastructure module that no bounded context owns; the two admitted paths are exactly such surfaces, and the membership digest advances by those two paths and nothing else."
+        }
+      ],
+      "new_surface_assignments": [
+        {
+          "path": "gravity-mvp/src/app/api/contacts/[id]/telegram-person-binding-repair/route.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "functional_owner": "legacy_gravity_runtime",
+          "exclusion": "gravity_runtime_remainder",
+          "inventory_kind": "exact_runtime_inventory",
+          "source_sha256": "750c92551e6df117391240194e8c24b719deaa4791bcf89b3a1e022d2381344f",
+          "review_decision": "APPROVED_NEW_SURFACE_ASSIGNMENT",
+          "review_rationale": "Bounded integration-admin repair entry point for one Telegram conversation person binding; it holds no Prisma client and delegates every mutation to accepted Contacts owner capabilities, so it carries the same application runtime lifecycle and finite legacy runtime owner as the API routes already in this inventory."
+        },
+        {
+          "path": "gravity-mvp/src/infrastructure/telegram-conversation-person-binding-repair-composition.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "functional_owner": "legacy_gravity_runtime",
+          "exclusion": "gravity_runtime_remainder",
+          "inventory_kind": "exact_runtime_inventory",
+          "source_sha256": "c4c4b8acb26226d1e84972dd5f86f93160b0565a5487f7cffb194c6ab903946b",
+          "review_decision": "APPROVED_NEW_SURFACE_ASSIGNMENT",
+          "review_rationale": "Shared-infrastructure composition that binds the Contacts canonical pin, the one composed cross-owner contact merge and the driver-person confirmation for the repair; it is the same kind of surface as contact-merge-composition.ts, which this inventory already enumerates under the identical lifecycle and owner."
+        }
+      ]
+    }
+  ]
+}
