@@ -54,6 +54,8 @@ import { createContactIdentityConflictViewHandlerV1 } from '../public/v1/contact
 import { legacyPrismaContactIdentityConflictViewPortV1 } from '../public/v1/legacy-prisma-contact-identity-conflict-view-adapter'
 import { createContactReachabilityEvidenceViewHandlerV1 } from '../public/v1/contact-reachability-evidence-view'
 import { legacyPrismaContactReachabilityEvidenceViewPortV1 } from '../public/v1/legacy-prisma-contact-reachability-evidence-view-adapter'
+import { createSearchContactsHandlerV1 } from '../public/v1/contact-lookup'
+import { legacyPrismaContactLookupPortV1 } from '../public/v1/legacy-prisma-contact-lookup-adapter'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -71,6 +73,7 @@ const resolveContactLineage = createResolveContactLineageHandlerV1(legacyPrismaC
 const getContactCardSummary = createContactCardSummaryHandlerV1(legacyPrismaContactCardSummaryPortV1)
 const getContactIdentityConflictView = createContactIdentityConflictViewHandlerV1(legacyPrismaContactIdentityConflictViewPortV1)
 const getContactReachabilityEvidenceView = createContactReachabilityEvidenceViewHandlerV1(legacyPrismaContactReachabilityEvidenceViewPortV1)
+const searchContacts = createSearchContactsHandlerV1(legacyPrismaContactLookupPortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
 export const attachContactIdentityV1 = (...args: Parameters<typeof attachContactIdentity>) => attachContactIdentity(...args)
@@ -110,3 +113,4 @@ export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContac
 export const getContactCardSummaryV1 = (...args: Parameters<typeof getContactCardSummary>) => getContactCardSummary(...args)
 export const getContactIdentityConflictViewV1 = (...args: Parameters<typeof getContactIdentityConflictView>) => getContactIdentityConflictView(...args)
 export const getContactReachabilityEvidenceViewV1 = (...args: Parameters<typeof getContactReachabilityEvidenceView>) => getContactReachabilityEvidenceView(...args)
+export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => searchContacts(...args)

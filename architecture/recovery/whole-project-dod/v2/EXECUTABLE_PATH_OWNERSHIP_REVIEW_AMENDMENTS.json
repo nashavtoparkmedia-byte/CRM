@@ -649,6 +649,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 4
       }
+    },
+    {
+      "amendment_id": "contact-identity-m3a6a-contact-lookup-20261001",
+      "reviewed_at": "2026-10-01T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A6A_CANDIDATE_OWNERSHIP_REVIEW_20261001",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M3A6A_CONTACT_LOOKUP_FOUNDATION_IMPLEMENTATION",
+      "reason": "M3A6A adds exactly four tracked executable surfaces and changes no existing ownership. Three sit under the contacts owned path gravity-mvp/src/modules/contacts: the ContactLookup.v1 contract and projection contact-lookup.ts with its proof, and the single database reader behind it, legacy-prisma-contact-lookup-adapter.ts. One is the boundary control tools/architecture/check-contact-lookup-boundary.mjs, placed by the established architecture-tooling cohort precedent and classified in the lifecycle registry as an ACTIVE OPERATIONAL_SCRIPT owned by architecture_recovery, which leaves no unreviewed operational surface. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The capability materialized is the already-declared ContactLookup.v1, so the contacts public surface gains no entry and no duplicate selector concept is introduced. Four existing surfaces changed bytes without changing ownership: contact-display-policy.ts gains the provider-neutral display projection beside the unchanged canonical summary, index.ts and contact-operations.ts export and wire the capability, and the contacts manifest declares the new module test; none of them carries a reviewed source-hash binding, and the legacy contact-search route and hook are byte-identical. The reviewed inventory fingerprint moves because the registry now classifies that control and because four paths joined the inventory, and the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2564,
+        "tracked_inventory_sha256": "c8550d097e6b9fdae9a1311ed3116a1f0671eb1699ce0bf33aa690a84fb0fc22",
+        "coverage_sha256": "ef872e32755f14ae569c2d8a3389e1a56fe11377cfe5f6f12e0a37390a835e3f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2568,
+        "tracked_inventory_sha256": "b12c12099e10214f68b8a3277a84f88caba5a9ad97d63b01e915d08bb9ecc23f",
+        "coverage_sha256": "95cab10f06decc5f40d1357ce020e3edc1c8fdbe3b094b921157218c490eec0f"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 4
+      }
     }
   ]
 }
