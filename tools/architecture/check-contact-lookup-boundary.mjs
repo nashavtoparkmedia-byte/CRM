@@ -14,6 +14,14 @@
 // Contact, ContactPhone and ContactIdentity; that no reachability, conflict,
 // provider or runtime semantic is introduced; that the legacy search route and
 // hook stay byte-identical; and that no schema, migration or Messaging import moves.
+//
+// M3A6B extends it to the client presentation of the same capability,
+// ContactSelector, rather than adding a second control with no new ownership
+// boundary: the selector is a client component living only in Contacts client-ui,
+// importing nothing but React and ContactLookup.v1, owning no transport, gating
+// queries with contactLookupCriteriaV1, rendering the lookup title as given and
+// reimplementing no ranking, ordering, phone or display policy; it is not
+// re-exported through the server-oriented barrel and no consumer adopts it yet.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -36,6 +44,12 @@ const PUBLIC_INDEX = `${MODULE_DIR}/index.ts`
 const MANIFEST = 'architecture/contexts/v1/manifests/contacts.json'
 const LEGACY_ROUTE = 'gravity-mvp/src/app/api/contacts/search/route.ts'
 const LEGACY_HOOK = 'gravity-mvp/src/app/messages/hooks/useContactSearch.ts'
+const CLIENT_UI_DIR = `${MODULE_DIR}/client-ui`
+const SELECTOR = `${CLIENT_UI_DIR}/ContactSelector.tsx`
+const SELECTOR_PROOF = `${CLIENT_UI_DIR}/ContactSelector.test.tsx`
+// Every tracked file under gravity-mvp/src, outside Contacts client-ui, that names
+// the selector. Held with the sources so a probe can simulate an early adopter.
+const SELECTOR_CONSUMERS = '<git-grep:ContactSelector outside contacts client-ui>'
 
 // The exact public contract. Anything else is a boundary change.
 const ITEM_FIELDS = ['contactId', 'displayName', 'displayTitle', 'primaryPhone', 'channels']
@@ -251,6 +265,72 @@ function assertNoSchemaSurface(sources) {
   }
 }
 
+/** 11. The selector is a Contacts client surface that owns no transport and no foreign state. */
+function assertSelectorClientSurface(sources) {
+  const selector = sources[SELECTOR]
+  assert(selector.startsWith('"use client"'), 'ContactSelector is not a client component')
+  const specifiers = [...new Set([...selector.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
+  assert.deepEqual(specifiers, ['../contact-lookup', 'react'],
+    `ContactSelector imports something other than React and ContactLookup.v1: ${specifiers.join(', ')}`)
+  const code = withoutComments(selector)
+  assert(code.includes('contactLookupCriteriaV1('), 'ContactSelector does not gate queries with contactLookupCriteriaV1')
+  assert(code.includes('ContactLookupItemV1') && code.includes('ContactLookupResultV1'),
+    'ContactSelector does not consume the ContactLookup.v1 types')
+  for (const forbidden of [
+    'fetch(', '/api/', 'axios', 'XMLHttpRequest', 'useContactSearch', '@/lib/prisma', 'prisma.', 'server-only',
+    '@/modules/', '@/infrastructure', 'app/messages', 'platform-shell',
+  ]) {
+    assert(!code.includes(forbidden), `ContactSelector owns transport, server or foreign state: ${forbidden}`)
+  }
+  assert(!sources[PUBLIC_INDEX].includes('ContactSelector'),
+    'the client selector is re-exported through the server-oriented Contacts barrel')
+  assert.equal(sources[SELECTOR_CONSUMERS].trim(), '',
+    `ContactSelector is referenced outside Contacts client-ui; consumer adoption is a later slice: ${sources[SELECTOR_CONSUMERS].trim()}`)
+}
+
+/** 12. The selector reimplements no lookup, ranking, ordering, phone or display policy. */
+function assertSelectorNoPolicy(sources) {
+  const code = withoutComments(sources[SELECTOR])
+  for (const forbidden of [
+    'stripToDigits', 'formatContactPhone', 'isTechnicalProviderName', 'buildProviderNeutralContactDisplayV1',
+    'buildCanonicalContactSummary', 'contactLookupSortKeyV1', 'localeCompare', "normalize('NFKC')", '.sort(',
+    'phone_exact', 'phone_substring', 'name_prefix', 'name_substring', 'CONTACT_LOOKUP_MAX_LIMIT_V1',
+    'replace(/\\D', 'canonicalPinnedAt', 'displayNameSource',
+  ]) {
+    assert(!code.includes(forbidden), `ContactSelector reimplements a ContactLookup.v1 policy: ${forbidden}`)
+  }
+  // The lookup owns the title; the selector renders it and never composes one.
+  assert(code.includes('{item.displayTitle}'), 'ContactSelector does not render the lookup title')
+  assert(!/\.primaryPhone\b/u.test(code), 'ContactSelector reads primaryPhone to compose its own text')
+  assert(!/\.displayName\b/u.test(code), 'ContactSelector reads displayName to compose its own text')
+}
+
+/** 13. No provider, chat, reachability or availability vocabulary reaches the selector. */
+function assertSelectorVocabulary(sources) {
+  const code = withoutComments(sources[SELECTOR])
+  for (const forbidden of FORBIDDEN_VOCABULARY) {
+    assert(!code.includes(forbidden), `ContactSelector carries ${forbidden}`)
+  }
+  for (const claim of ['Доступен', 'доступен', 'Онлайн', 'онлайн', 'Написать', 'Доставлено', 'online', 'ready']) {
+    assert(!code.includes(claim), `ContactSelector makes a communication claim: ${claim}`)
+  }
+}
+
+/** 14. The single-select combobox semantics are present, not just tested. */
+function assertSelectorAccessibility(sources) {
+  const code = withoutComments(sources[SELECTOR])
+  for (const required of [
+    'role="combobox"', 'aria-autocomplete="list"', 'aria-expanded=', 'aria-controls=', 'aria-activedescendant=',
+    'role="listbox"', 'role="option"', 'aria-selected=', 'role="status"', 'aria-live="polite"', 'role="alert"',
+    'htmlFor=', "'ArrowDown'", "'ArrowUp'", "'Home'", "'End'", "'Enter'", "'Escape'",
+  ]) {
+    assert(code.includes(required), `ContactSelector lost combobox semantics: ${required}`)
+  }
+  // Tab and blur must keep native behaviour: no handler may select on them.
+  assert(!/case 'Tab'/u.test(code), 'ContactSelector intercepts Tab')
+  assert(!/onBlur=\{[^}]*select\(/u.test(code), 'ContactSelector selects on blur')
+}
+
 const CHECKS = [
   ['contract_shape', assertContractShape],
   ['no_foreign_vocabulary', assertNoForeignVocabulary],
@@ -262,6 +342,10 @@ const CHECKS = [
   ['governance_declared', assertGovernanceDeclared],
   ['legacy_unchanged', assertLegacyUnchanged],
   ['no_schema_surface', assertNoSchemaSurface],
+  ['selector_client_surface', assertSelectorClientSurface],
+  ['selector_no_policy', assertSelectorNoPolicy],
+  ['selector_vocabulary', assertSelectorVocabulary],
+  ['selector_accessibility', assertSelectorAccessibility],
 ]
 
 const PROBES = [
@@ -297,12 +381,35 @@ const PROBES = [
   ['legacy_route_touched', 'legacy_unchanged', (s) => ({ ...s, [LEGACY_ROUTE]: `${s[LEGACY_ROUTE]}\n// touched\n` })],
   ['legacy_hook_touched', 'legacy_unchanged', (s) => ({ ...s, [LEGACY_HOOK]: `${s[LEGACY_HOOK]}\n// touched\n` })],
   ['adapter_runs_raw_sql', 'no_schema_surface', (s) => ({ ...s, [ADAPTER]: s[ADAPTER].replace('    if (contactIds.length === 0) return []', '    if (contactIds.length === 0) return []\n    await prisma.$queryRaw`select 1`') })],
+  ['selector_server_component', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('"use client"\n', '') })],
+  ['selector_fetches_legacy_route', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const runLookup = useCallback(', "  const legacy = (q: string) => fetch('/api/contacts/search?q=' + q)\n  const runLookup = useCallback(") })],
+  ['selector_uses_legacy_hook', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { useContactSearch } from '../../../../../app/messages/hooks/useContactSearch'") })],
+  ['selector_imports_prisma', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { prisma } from '@/lib/prisma'") })],
+  ['selector_imports_messaging', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { searchConversations } from '@/modules/messaging/public/v1'") })],
+  ['selector_skips_criteria', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('if (contactLookupCriteriaV1(text) === null) return', 'if (text.trim().length < 2) return') })],
+  ['selector_reexported_from_barrel', 'selector_client_surface', (s) => ({ ...s, [PUBLIC_INDEX]: `${s[PUBLIC_INDEX]}\nexport { default as ContactSelector } from './client-ui/ContactSelector'\n` })],
+  ['selector_adopted_by_consumer', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: 'gravity-mvp/src/app/messages/components/NewChatPopover.tsx\n' })],
+  ['selector_sorts_results', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const items = result?.items ?? []', '  const items = [...(result?.items ?? [])].sort()') })],
+  ['selector_normalizes_phone', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('    setInputText(text)\n    resetLookup()', "    const digits = text.replace(/\\D/g, '')\n    setInputText(text)\n    resetLookup()") })],
+  ['selector_composes_title', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('{item.displayTitle}</span>', '{item.displayName} · {item.primaryPhone}</span>') })],
+  ['selector_reads_phone', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('{item.displayTitle}</span>', '{item.displayTitle}{item.primaryPhone}</span>') })],
+  ['selector_shows_reachability', 'selector_vocabulary', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('{item.displayTitle}</span>', '{item.displayTitle}{(item as any).reachabilityStatus}</span>') })],
+  ['selector_claims_availability', 'selector_vocabulary', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('{item.displayTitle}</span>', '{item.displayTitle} — Доступен</span>') })],
+  ['selector_drops_combobox_role', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('role="combobox"', '') })],
+  ['selector_drops_live_region', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('aria-live="polite"', '') })],
+  ['selector_drops_active_descendant', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('aria-activedescendant={activeDescendant}', '') })],
+  ['selector_selects_on_tab', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("      case 'Escape': {", "      case 'Tab': {\n        if (items[0]) select(items[0])\n        return\n      }\n      case 'Escape': {") })],
 ]
 
 function main() {
   const relatives = [LOOKUP, ADAPTER, PROOF, POLICY, POLICY_PROOF, OPERATIONS, PUBLIC_INDEX, MANIFEST,
-    LEGACY_ROUTE, LEGACY_HOOK]
+    LEGACY_ROUTE, LEGACY_HOOK, SELECTOR, SELECTOR_PROOF]
   const sources = Object.fromEntries(relatives.map((relative) => [relative, read(relative)]))
+  // git grep exits 1 when nothing matches; only a status above 1 is a failure.
+  const consumers = spawnSync('git', ['-c', 'safe.directory=*', 'grep', '-l', 'ContactSelector', '--',
+    'gravity-mvp/src', `:(exclude)${CLIENT_UI_DIR}`], { cwd: root, encoding: 'utf8' })
+  assert(consumers.status === 0 || consumers.status === 1, `the selector consumer scan failed: ${consumers.stderr}`)
+  sources[SELECTOR_CONSUMERS] = consumers.stdout
   const checks = new Map(CHECKS)
   for (const [, check] of CHECKS) check(sources)
 
@@ -323,10 +430,13 @@ function main() {
 
   // The proofs are what make these invariants behavioural, so this control runs
   // them rather than trusting that something else will. The display-policy proofs
-  // are included because the provider-id refusal lives there.
+  // are included because the provider-id refusal lives there, and the selector
+  // proofs because its race, keyboard, accessibility and leak guarantees are
+  // behaviour, not text.
   const vitest = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run',
     'src/modules/contacts/public/v1/contact-lookup.test.ts',
     'src/modules/contacts/public/v1/contact-display-policy.test.ts',
+    'src/modules/contacts/public/v1/client-ui/ContactSelector.test.tsx',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
   assert.equal(vitest.status, 0, `the contact lookup proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
   const passed = passingProofCount(vitest.stdout)
@@ -344,6 +454,9 @@ function main() {
     provider_id_display_fallback: false,
     duplicate_capability: false,
     legacy_search_surface_unchanged: true,
+    selector_client_surface: true,
+    selector_owns_transport: false,
+    selector_consumers: 0,
   }, null, 2)}\n`)
 }
 
