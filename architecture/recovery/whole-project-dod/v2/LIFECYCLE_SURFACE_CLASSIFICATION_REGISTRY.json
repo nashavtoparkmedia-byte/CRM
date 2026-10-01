@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 722,
+    "total_entries": 723,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 84,
-    "active_operational": 506,
+    "active_operational": 507,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6625,6 +6625,15 @@
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture control-plane surface for the M3A5 Contacts reachability-evidence read; approved path is a bounded read-only boundary control that pins the exact ContactReachabilityEvidenceView.v1 field sets, the three-member recorded_* evidence vocabulary and the absence of any stored or superseded spelling from it, the absence of any availability, readiness, deliverability or permission word anywhere in the read (compared against identifier words rather than substrings so a camelCase claim cannot slip through), the absence of a channel-level verdict field, the restriction of identityState to Contacts lifecycle only, the absence of provider external ids, provider account and target ids, transport, connection, session and foreign-domain values from the contract, the absence of any TTL, derived age or freshness notion beside the evidence timestamp, the fact that the canonical identity-conflict semantic is neither imported nor re-derived here, the single Contacts-owned database reader and the two models it may touch, the absence of any write or provider probe in either the projection or the adapter, the unchanged single-capability ContactReachability.v1 write facade, the byte-identical runtime reachability writer, the absence of schema, migration and UI-surface changes, and the declared capability and allowed dependencies of the contacts manifest. It also executes the evidence-read proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-lookup-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the M3A6A reusable Contacts lookup; approved path is a bounded read-only boundary control that pins the exact ContactLookupItemV1 and ContactLookupResultV1 field sets, the absence of any unbounded count, the absence of provider external id, provider account and target ids, transport, connection, session, conversation route, chat, message, reachability, conflict and raw metadata vocabulary from both the contract and its adapter, the reuse of the canonical Contacts display policy, confirmed-person accessor, phone evidence and phone normalization rather than a second implementation of any of them, the existence of the provider-neutral display projection inside ContactDisplayPolicy together with the absence of the provider-external-id fallback from its cascade and the unchanged legacy fallback of the canonical summary, the single shared name-precedence helper and its two generic-fallback consumers, the declared rank-class precedence with collection bounded at limit plus one so a lower class cannot hide a higher one before truncation, the locale-independent NFKC sort key, the single Contacts-owned database reader and the three models it may touch, the absence of any write, raw SQL, schema reference or provider probe, the absence of any Messaging or foreign-domain import, the materialization of the already-declared ContactLookup.v1 capability with no duplicate ContactSelector.v1 concept, the wiring of the capability to its Contacts adapter, and the byte-identical legacy contact-search route and hook including their operator-only external-id search. It also executes the lookup and display-policy proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     }
