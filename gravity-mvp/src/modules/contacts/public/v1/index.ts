@@ -140,6 +140,19 @@ export {
     buildContactIdentityConflictViewV1,
     createContactIdentityConflictViewHandlerV1,
 } from './contact-identity-conflict-view'
+export {
+    buildContactReachabilityEvidenceViewV1,
+    createContactReachabilityEvidenceViewHandlerV1,
+} from './contact-reachability-evidence-view'
+export type {
+    ContactReachabilityChannelEvidenceV1,
+    ContactReachabilityEvidenceSourceV1,
+    ContactReachabilityEvidenceStatusV1,
+    ContactReachabilityEvidenceViewPortV1,
+    ContactReachabilityEvidenceViewV1,
+    ContactReachabilityIdentityEvidenceV1,
+    ContactReachabilityIdentityStateV1,
+} from './contact-reachability-evidence-view'
 export type {
     ContactIdentityConflictViewChannelV1,
     ContactIdentityConflictViewEntryV1,
