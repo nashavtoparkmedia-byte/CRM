@@ -36,7 +36,9 @@ security options, init, stop signal and grace period, published ports and
 tmpfs, restart policy, mounts, networks, and the environment (names and
 values, compared internally, never emitted). The comparison is closed-world:
 any resolved service field outside that set (other than `build` and
-`depends_on`) is refused rather than ignored. The
+`depends_on`) is refused rather than ignored, and so is any per-network
+configuration (aliases, addresses) and any mount sub-key beyond `type`,
+`source`, `target`, `read_only`, an empty `volume` and the default `bind`. The
 environment is compared last, so a reported name condition means every other
 semantic already reconstructed.
 

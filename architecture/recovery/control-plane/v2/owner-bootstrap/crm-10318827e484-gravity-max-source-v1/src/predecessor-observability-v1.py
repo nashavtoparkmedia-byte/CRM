@@ -52,6 +52,10 @@ OVERLAY_COMMENT = re.compile(r" *#[^\x00-\x1f\x7f-\x9f\u2028\u2029]*")
 IMAGE_REFERENCE = re.compile(
     r"[a-z0-9][a-z0-9._/-]{0,254}(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?"
 )
+# A pin must name a tag or a digest, so no YAML null/bool/number can pass as one.
+IMAGE_PIN = re.compile(
+    r"[a-z0-9][a-z0-9._/-]{0,254}(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}(?:@sha256:[0-9a-f]{64})?|@sha256:[0-9a-f]{64})"
+)
 LAYER_LABEL = "com.docker.compose.project.config_files"
 WORKING_DIRECTORY_LABEL = "com.docker.compose.project.working_dir"
 ENVIRONMENT_FILE_LABEL = "com.docker.compose.project.environment_file"
@@ -325,13 +329,43 @@ def _image_only_overlay(core: Any, path: str, raw: bytes) -> dict[str, str]:
             current = service.group(1)
             continue
         image = OVERLAY_IMAGE.fullmatch(line)
-        if image and current is not None and current not in images and IMAGE_REFERENCE.fullmatch(image.group(1)):
+        if image and current is not None and current not in images and IMAGE_PIN.fullmatch(image.group(1)):
             images[current] = image.group(1)
             continue
         _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
     if not images or current not in images:
         _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
     return dict(sorted(images.items()))
+
+
+def _path_reference(path: str) -> dict[str, Any]:
+    return {"path_sha256": hashlib.sha256(path.encode("utf-8", "surrogateescape")).hexdigest(), "path_bytes": len(path)}
+
+
+def _layer_chain_trusted(core: Any, path: str) -> bool:
+    """True only if the caller can neither write nor re-permission any component.
+
+    Ownership decides, not the current permission bits: a caller-owned
+    directory chmod-ed read-only is still the caller's.
+    """
+    caller = getattr(core, "CALLER_UID", None)
+    current = core.mapped("/")
+    try:
+        components = [current]
+        for part in Path(path).parts[1:]:
+            current = current / part
+            components.append(current)
+        for component in components:
+            value = component.lstat()
+            if stat.S_ISLNK(value.st_mode) or value.st_uid == caller or stat.S_IMODE(value.st_mode) & 0o022:
+                return False
+    except OSError:
+        _fault(core, "PREDECESSOR_LAYER_MISSING", {"path": path})
+    try:
+        core.assert_noncaller_writable_chain(core.mapped(path))
+    except core.RuntimeFault:
+        return False
+    return True
 
 
 def _layer_stack(core: Any, labels: Any) -> tuple[tuple[str, ...], dict[str, str], list[dict[str, Any]]]:
@@ -363,14 +397,10 @@ def _layer_stack(core: Any, labels: Any) -> tuple[tuple[str, ...], dict[str, str
             compose_files.append(path)
             continue
         if not OVERLAY_PATH.fullmatch(path) or any(part in {".", ".."} for part in path.split("/")[1:]):
-            _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
+            _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", _path_reference(path))
         raw = _read_overlay_once(core, path)
         pins = _image_only_overlay(core, path, raw)
-        try:
-            core.assert_noncaller_writable_chain(core.mapped(path))
-            caller_writable = False
-        except core.RuntimeFault:
-            caller_writable = True
+        caller_writable = not _layer_chain_trusted(core, path)
         records.append({
             "path": path,
             "role": "image-only-overlay",
@@ -855,6 +885,9 @@ def _resolved_argv(core: Any, value: Any, default: Any, code: str) -> list[str]:
     return list(chosen)
 
 
+MOUNT_FIELDS = frozenset({"type", "source", "target", "read_only", "volume", "bind"})
+
+
 def _expected_mounts(core: Any, compose: dict[str, Any], service: dict[str, Any]) -> list[tuple[str, str, str, bool]]:
     declared = service.get("volumes") or []
     top_level = compose.get("volumes") or {}
@@ -864,6 +897,14 @@ def _expected_mounts(core: Any, compose: dict[str, Any], service: dict[str, Any]
     for item in declared:
         if not isinstance(item, dict) or not isinstance(item.get("target"), str):
             _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+        # Closed-world below the top level too: only the reproduced mount shape.
+        if (
+            not set(item) <= MOUNT_FIELDS
+            or item.get("volume") not in (None, {})
+            or item.get("bind") not in (None, {}, {"create_host_path": True})
+            or not isinstance(item.get("read_only", False), bool)
+        ):
+            _fault(core, "RESOLVED_SERVICE_FIELD_UNSUPPORTED", {"service": service.get("container_name"), "fields": ["volumes"]})
         kind = item.get("type")
         read_write = item.get("read_only") is not True
         if kind == "volume":
@@ -891,6 +932,9 @@ def _expected_networks(core: Any, compose: dict[str, Any], service: dict[str, An
         _fault(core, "RESOLVED_NETWORK_CONFIGURATION_INVALID")
     names = []
     for key in declared:
+        if declared[key] not in (None, {}):
+            # Per-network aliases, addresses or priorities are not reproduced here.
+            _fault(core, "RESOLVED_SERVICE_FIELD_UNSUPPORTED", {"service": service.get("container_name"), "fields": ["networks"]})
         definition = top_level.get(key)
         if not isinstance(definition, dict) or not isinstance(definition.get("name"), str):
             _fault(core, "RESOLVED_NETWORK_CONFIGURATION_INVALID")

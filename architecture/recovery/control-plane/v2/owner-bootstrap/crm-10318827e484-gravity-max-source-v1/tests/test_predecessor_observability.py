@@ -69,6 +69,7 @@ def image_object(image_id: str, entrypoint: list[str], command: list[str]) -> di
 class FakeCore:
     RuntimeFault = CORE.RuntimeFault
     DOCKER = "/usr/bin/docker"
+    CALLER_UID = -1
 
     def __init__(self, *, layered: bool = True) -> None:
         self.calls: list[list[str]] = []
@@ -125,6 +126,11 @@ class FakeCore:
     def write(self, path: str, text: str, mode: int) -> None:
         target = self.mapped(path)
         target.parent.mkdir(parents=True, exist_ok=True)
+        # independent of the test runner's umask: a 0755 chain like production
+        current = self.root
+        for part in Path(path).parts[1:-1]:
+            current = current / part
+            current.chmod(0o755)
         if target.exists():
             target.chmod(0o600)
         target.write_text(text, encoding="utf-8")
@@ -357,7 +363,10 @@ class PredecessorObservationV2Tests(unittest.TestCase):
         for path in ("/tmp/../etc/x.compose.yml", "/opt/crm/deploy/x.yml", "relative.compose.yml"):
             core = FakeCore()
             core.containers["crm-gravity-mvp"]["Config"]["Labels"]["com.docker.compose.project.config_files"] = BASE + "," + path
-            self.assertEqual(self.fault(core).code, "PREDECESSOR_LAYER_UNTRUSTED", path)
+            fault = self.fault(core)
+            self.assertEqual(fault.code, "PREDECESSOR_LAYER_UNTRUSTED", path)
+            # a path that fails the grammar is referenced by digest, never echoed
+            self.assertNotIn(path, json.dumps(fault.details))
         # A recorded layer whose content changed after creation no longer
         # reconstructs the running container.
         core = FakeCore()
@@ -523,6 +532,10 @@ class PredecessorObservationV2Tests(unittest.TestCase):
             "services:\n  gravity-mvp:\n    image: a:b\n    # note\x0b    privileged: true\n",
             "services:\n  gravity-mvp:\n    image: a:b\n\x0c\n",
             "services:\n  gravity-mvp:\n    image: a:b\n\u3000\n",
+            # a pin must name a tag or digest: YAML null/bool/number never pass
+            "services:\n  gravity-mvp:\n    image: null\n",
+            "services:\n  gravity-mvp:\n    image: 123\n",
+            "services:\n  gravity-mvp:\n    image: yoko/gravity\n",
             "",
         ):
             with self.assertRaises(CORE.RuntimeFault, msg=text) as captured:
@@ -557,6 +570,19 @@ class PredecessorObservationV2Tests(unittest.TestCase):
             self.assertEqual(fault.code, "HOST_SEMANTIC_RECONSTRUCTION_DRIFT", field)
             self.assertEqual(fault.details["field"], field if field != "cap_add" else "cap_add")
 
+    def test_nested_network_and_mount_configuration_is_refused(self) -> None:
+        mutations = {
+            "network aliases": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["tg-bot"].update(networks={"crm_internal": {"aliases": ["x"]}}),
+            "network address": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["gravity-mvp"].update(networks={"crm_internal": {"ipv4_address": "172.19.0.9"}}),
+            "volume nocopy": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["max-web-scraper"]["volumes"][0].update(volume={"nocopy": True}),
+            "bind propagation": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["max-web-scraper"]["volumes"][0].update(bind={"propagation": "rshared"}),
+            "mount consistency": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["max-web-scraper"]["volumes"][0].update(consistency="cached"),
+        }
+        for label, mutate in mutations.items():
+            core = FakeCore()
+            mutate(core)
+            self.assertEqual(self.fault(core).code, "RESOLVED_SERVICE_FIELD_UNSUPPORTED", label)
+
     def test_caller_writable_image_layer_is_recorded_not_trusted(self) -> None:
         core = FakeCore()
 
@@ -571,6 +597,27 @@ class PredecessorObservationV2Tests(unittest.TestCase):
         self.assertIs(layers[IMAGE_OVERLAY]["caller_writable_chain"], True)
         self.assertNotIn("caller_writable_chain", layers[PREDECESSOR_OVERLAY])
         self.assertIs(OBSERVATION.observe(FakeCore(), POLICY)["compose_source"]["overlay_layers"][0]["caller_writable_chain"], False)
+        # Ownership decides: a caller-owned directory stays untrusted even read-only.
+        core = FakeCore()
+        core.CALLER_UID = os.getuid()  # type: ignore[misc]
+        directory = core.mapped("/opt/crm/deploy")
+        directory.chmod(0o555)
+        try:
+            result = OBSERVATION.observe(core, POLICY)
+        finally:
+            directory.chmod(0o755)
+        layers = {layer["path"]: layer for layer in result["compose_source"]["overlay_layers"]}
+        self.assertIs(layers[IMAGE_OVERLAY]["caller_writable_chain"], True)
+        # A group- or other-writable component is untrusted as well.
+        core = FakeCore()
+        directory = core.mapped("/opt/crm")
+        directory.chmod(0o777)
+        try:
+            result = OBSERVATION.observe(core, POLICY)
+        finally:
+            directory.chmod(0o755)
+        layers = {layer["path"]: layer for layer in result["compose_source"]["overlay_layers"]}
+        self.assertIs(layers[IMAGE_OVERLAY]["caller_writable_chain"], True)
 
     def test_unknown_policy_resource_is_rejected(self) -> None:
         policy = json.loads(json.dumps(POLICY))

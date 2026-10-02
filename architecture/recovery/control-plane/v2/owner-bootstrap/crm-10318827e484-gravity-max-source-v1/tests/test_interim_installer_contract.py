@@ -85,6 +85,16 @@ class InterimInstallerContractTests(unittest.TestCase):
         self.assertIn("trap 'exit 129' HUP INT TERM", INSTALLER)
         self.assertIn('if [ "$rc" -ne 0 ] && [ "$attempted" = 1 ] && [ "$handled" = 0 ]; then', INSTALLER)
 
+    def test_rollback_cannot_be_interrupted_and_copies_are_bounded(self) -> None:
+        fail = INSTALLER[INSTALLER.index("fail() {"):]
+        self.assertTrue(fail.split("\n")[1].strip() == "trap '' HUP INT TERM")
+        on_exit = INSTALLER[INSTALLER.index("on_exit() {"):INSTALLER.index("trap on_exit EXIT")]
+        self.assertLess(on_exit.index("trap '' HUP INT TERM"), on_exit.index("rollback_exact"))
+        self.assertIn("PREDECESSOR_OBSERVABILITY_V2_NOT_INSTALLED", on_exit)
+        self.assertIn("value.st_size>MAXIMUM", INSTALLER)
+        self.assertIn("if total>MAXIMUM", INSTALLER)
+        self.assertIn("/usr/bin/head -c 1048576 -- '$INSTALLER'", BUILDER)
+
     def test_store_is_published_atomically_and_forgotten_on_rollback(self) -> None:
         self.assertIn('mktemp -d "$STORE/.interim-staging.XXXXXX"', INSTALLER)
         self.assertIn('/usr/bin/mv -T -- "$staging" "$INTERIM_STORE"', INSTALLER)
@@ -92,7 +102,7 @@ class InterimInstallerContractTests(unittest.TestCase):
 
     def test_owner_command_runs_a_verified_root_owned_copy(self) -> None:
         self.assertIn("/usr/bin/mktemp -d /root/yoko-observer-v2-install.XXXXXX", BUILDER)
-        self.assertIn("/usr/bin/install -o root -g root -m 0500", BUILDER)
+        self.assertIn('/usr/bin/chmod 0500 \\"\\$D/install.sh\\"', BUILDER)
         self.assertNotIn("&& /bin/sh '$INSTALLER'", BUILDER)
 
     def test_every_template_token_is_rendered(self) -> None:

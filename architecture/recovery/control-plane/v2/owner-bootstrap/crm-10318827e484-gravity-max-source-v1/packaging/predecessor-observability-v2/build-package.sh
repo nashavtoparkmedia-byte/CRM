@@ -29,7 +29,7 @@ PROFILE_MANIFEST_SHA256='743e22164a8101a2a1d049b1581cf39da0b36c200b9303dab0af29b
 PROFILE_JSON_SHA256='97dd62ea7fba53a3d7c382b723bf131b63a3dc091688de1bf4882471d4c65274'
 SEALED_INPUTS_SHA256='fd87a49e428f0099372edd3e37cef3bd8a7cb7731c615e83ed22e033b702745a'
 # The one new control.
-NEW_OBSERVER_SHA256='047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533'
+NEW_OBSERVER_SHA256='1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a'
 CONTROL_SHA256='33bb0361a12314fe42cb8575c7e502a304cb9ba2d64644c2809b31251fea8c8d'
 POSTINST_SHA256='fb0945ca51dcb6d6a96890569a3a1be26f9242d1c1e01cd3707b75696a182456'
 
@@ -223,7 +223,7 @@ PY
 /usr/bin/mv -f "$WORK/installer" "$INSTALLER"
 INSTALLER_SHA256=$(/usr/bin/sha256sum "$INSTALLER" | /usr/bin/cut -d ' ' -f 1)
 # Root runs a verified root-owned copy, never the file in this unprivileged tree.
-OWNER_COMMAND="D=\$(/usr/bin/mktemp -d /root/yoko-observer-v2-install.XXXXXX) && /usr/bin/install -o root -g root -m 0500 '$INSTALLER' \"\$D/install.sh\" && /usr/bin/test \"\$(/usr/bin/sha256sum \"\$D/install.sh\" | /usr/bin/cut -d ' ' -f 1)\" = '$INSTALLER_SHA256' && /bin/sh \"\$D/install.sh\"; rc=\$?; /usr/bin/rm -rf -- \"\$D\"; exit \$rc"
+OWNER_COMMAND="D=\$(/usr/bin/mktemp -d /root/yoko-observer-v2-install.XXXXXX) && /usr/bin/head -c 1048576 -- '$INSTALLER' > \"\$D/install.sh\" && /usr/bin/chmod 0500 \"\$D/install.sh\" && /usr/bin/test \"\$(/usr/bin/sha256sum \"\$D/install.sh\" | /usr/bin/cut -d ' ' -f 1)\" = '$INSTALLER_SHA256' && /bin/sh \"\$D/install.sh\"; rc=\$?; /usr/bin/rm -rf -- \"\$D\"; exit \$rc"
 
 /usr/bin/python3 -I - "$WORK/package-manifest.json" "$SOURCE_COMMIT" "$SOURCE_TREE" "$PACKAGE_SHA256" "$INSTALLER_SHA256" "$RUNTIME_SHA256" "$NEW_OBSERVER_SHA256" "$INSTALL_MANIFEST_SHA256" "$ROLLBACK_DEB_SHA256" <<'PY'
 import json,pathlib,sys
