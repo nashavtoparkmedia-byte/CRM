@@ -153,9 +153,9 @@ The installer also requires the already-installed 2.0.0-21 interim package
 (`packaging/predecessor-observability-v2/`: the byte-identical
 `crm-ba90ed4b6717` profile plus predecessor observation v2) at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367`; the
+`7249823882e87e7953c3af68ee78a66d4bc6bab83f3528fe4a4f5bb645fdfce0`; the
 installed predecessor must report observer
-`065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346`.
+`047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533`.
 Any successor installation failure restores that exact package automatically.
 The original 2.0.0-21 DEB `17b97c40…` stays in the store as that interim
 package's own rollback.

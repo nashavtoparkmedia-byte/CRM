@@ -16,9 +16,9 @@ RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # capture would refuse the very predecessor it exists to record.
 EXPECTED_PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
 # The installed observer is the interim predecessor observation v2 (same-version 2.0.0-21
-# interim package 0095ce04...). It reconstructs every predecessor from the layered stack the
+# interim package 72498238...). It reconstructs every predecessor from the layered stack the
 # container recorded at creation; the snapshot pins that stack by role and digest.
-PREDECESSOR_OBSERVER_SHA256 = "065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346"
+PREDECESSOR_OBSERVER_SHA256 = "047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533"
 OBSERVATION_SCHEMA = "yoko.crm.predecessor-recreation-observation.v2"
 BASE_COMPOSE = "/opt/crm/deploy/docker-compose.production.yml"
 BASE_COMPOSE_SHA256 = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
@@ -33,6 +33,9 @@ PREDECESSOR_LAYERS = [
             "gravity-mvp": "yoko/crm-gravity-mvp:335cdae7391d-driver-authority-repair-v1",
             "tg-bot": "crm/tg-bot:2808af7ecbf1-telegram-bot-delivery-contract-v1",
         },
+        # /opt/codex-work is caller-owned: this layer's digest is evidence; its pins are
+        # re-proven by the observer against the running containers.
+        "caller_writable_chain": True,
     },
     {
         "path": TELEGRAM_HOTFIX_OVERLAY, "role": "image-only-overlay",
@@ -41,6 +44,7 @@ PREDECESSOR_LAYERS = [
             "gravity-mvp": "yoko/crm-gravity-mvp:06e80099f1c3-telegram-contract-skew-hotfix-v1",
             "tg-bot": "crm/tg-bot:2808af7ecbf1-telegram-bot-delivery-contract-v1",
         },
+        "caller_writable_chain": False,
     },
     {
         "path": RUNTIME_OVERLAY, "role": "runtime-profile-overlay",

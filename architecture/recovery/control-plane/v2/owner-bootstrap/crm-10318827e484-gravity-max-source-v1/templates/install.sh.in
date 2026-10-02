@@ -16,7 +16,7 @@ NEW_DEB='yoko-privileged-runtime_2.0.0-22_all.deb'
 NEW_DEB_SHA='@NEW_DEB_SHA256@'
 NEW_DEB_STORE="$BOOTSTRAP_STORE/$NEW_DEB_SHA"
 OLD_DEB='yoko-privileged-runtime_2.0.0-21_all.deb'
-OLD_DEB_SHA='0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367'
+OLD_DEB_SHA='7249823882e87e7953c3af68ee78a66d4bc6bab83f3528fe4a4f5bb645fdfce0'
 OLD_DEB_STORE="$BOOTSTRAP_STORE/$OLD_DEB_SHA"
 OLD_DEB_PATH="$OLD_DEB_STORE/$OLD_DEB"
 EXPECTED_AUDIT_RECORDS='@AUDIT_RECORD_COUNT@'
@@ -34,7 +34,7 @@ runtime_json() {
 old_identity() {
     test "$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null)" = '2.0.0-21'
     runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-21" and e.get("activation_profile")=="crm-ba90ed4b6717-gravity-max-source-v1" else 1)'
-    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("predecessor_observability_sha256")=="065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346" else 1)'
+    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("predecessor_observability_sha256")=="047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533" else 1)'
 }
 
 new_identity() {
@@ -151,7 +151,7 @@ manifest=json.loads((root/'payload-manifest.json').read_text(encoding='ascii'))
 if set(manifest)!={"schema","profile_id","new_package","direct_rollback","files"}: raise SystemExit('payload manifest keys')
 if manifest["schema"]!='yoko.crm.coordinated-owner-bootstrap-payload.v1' or manifest["profile_id"]!='crm-10318827e484-gravity-max-source-v1': raise SystemExit('payload identity')
 if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-22","architecture":"all"}: raise SystemExit('successor identity')
-if manifest["direct_rollback"]!={"name":"yoko-privileged-runtime","version":"2.0.0-21","sha256":"0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367/yoko-privileged-runtime_2.0.0-21_all.deb"}: raise SystemExit('rollback identity')
+if manifest["direct_rollback"]!={"name":"yoko-privileged-runtime","version":"2.0.0-21","sha256":"7249823882e87e7953c3af68ee78a66d4bc6bab83f3528fe4a4f5bb645fdfce0","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/7249823882e87e7953c3af68ee78a66d4bc6bab83f3528fe4a4f5bb645fdfce0/yoko-privileged-runtime_2.0.0-21_all.deb"}: raise SystemExit('rollback identity')
 if set(manifest["files"]) != set(expected)-{"payload-manifest.json"}: raise SystemExit('payload file registry')
 for name,mode in expected.items():
  path=root/name; value=path.lstat()
