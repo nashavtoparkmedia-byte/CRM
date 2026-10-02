@@ -1,4 +1,4 @@
-import { sendMaxTransportTextV1 } from '@/modules/max-channel/application/messaging-transport'
+import { maxTextSendFailureMessageV1, sendMaxTransportTextV1 } from '@/modules/max-channel/application/messaging-transport'
 import {
     registerMaxChannelDeliveryV1,
     type MaxChannelDeliveryV1,
@@ -56,6 +56,29 @@ function isRealMaxMessageId(value: unknown): value is string {
     return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
 }
 
+/**
+ * A reply goes out as a reply or not at all. The quoted message must carry a
+ * real MAX provider id; a synthetic DOM-recovery id, or a quoted row with no id
+ * at all (its context arrives without an id), is refused before anything is
+ * dispatched instead of being sent as plain text.
+ */
+function assertMaxReplyTargetAddressableV1(options: {
+    quotedMsgId?: string
+    quotedText?: string
+    quotedSentAt?: string
+    quotedDirection?: string
+}): void {
+    const quotedMsgId = optionalString(options.quotedMsgId)
+    const quotedContext = Boolean(
+        optionalString(options.quotedText)
+        || optionalString(options.quotedSentAt)
+        || optionalString(options.quotedDirection),
+    )
+    if (quotedMsgId ? !isRealMaxMessageId(quotedMsgId) : quotedContext) {
+        throw new Error(maxTextSendFailureMessageV1('MAX_REPLY_TARGET_NOT_ADDRESSABLE') ?? 'MAX_REPLY_TARGET_NOT_ADDRESSABLE')
+    }
+}
+
 function validateMaxTextDeliveryResultV1(
     raw: unknown,
     expected: { clientMessageId?: string; providerAccountId: string },
@@ -84,20 +107,14 @@ function validateMaxTextDeliveryResultV1(
         && raw.deliveryConfirmed === true
         && raw.deliveryStatus === 'delivered'
 
-    const proof = isRecord(raw.deliveryProof) ? raw.deliveryProof : null
-    const expectedClientMessageId = optionalString(expected.clientMessageId)
-    const validatedUiProof = Boolean(
-        !externalId
-        && confirmationFieldsAgree
-        && expectedClientMessageId
-        && proof?.kind === 'ui_send_action'
-        && proof.actionConfirmed === true
-        && proof.clientMessageId === expectedClientMessageId,
-    )
+    // Only a provider id correlated to this send confirms it. A UI action -
+    // the compose box clearing - is not proof that anything left the page: on
+    // 2026-10-02 a message typed while the socket was down was recorded
+    // delivered and never sent. Such an answer stays pending.
     const validatedProviderProof = Boolean(externalId && confirmationFieldsAgree)
 
     return {
-        outcome: validatedProviderProof || validatedUiProof ? 'delivered' : 'pending',
+        outcome: validatedProviderProof ? 'delivered' : 'pending',
         externalId,
         resolvedChatId,
     }
@@ -130,6 +147,7 @@ const capability: MaxChannelDeliveryV1 = {
             isPersonal: input.options.isPersonal === true,
         })
         const providerAccountId = requireMaxTransportAccountV1(input.options.providerAccountId)
+        assertMaxReplyTargetAddressableV1(input.options)
         const raw = await sendMaxTransportTextV1({
             target: input.target,
             content: input.content,

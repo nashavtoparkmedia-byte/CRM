@@ -89,42 +89,32 @@ test('MAX outbound text delivery consumes only MAX-owned validated semantic outc
   const maxCapability = read('gravity-mvp/src/modules/max-channel/public/v1/messaging-delivery-capability.ts')
   const deliveryRuntime = read('gravity-mvp/src/modules/messaging/public/v1/channel-delivery-runtime.ts')
 
-  assert.match(scraper, /deliveryConfirmed: sendResult\.deliveryConfirmed/)
-  assert.match(scraper, /deliveryStatus: sendResult\.deliveryStatus/)
-  assert.match(scraper, /deliveryProof: sendResult\.deliveryProof/)
-  assert.match(scraper, /kind: 'ui_send_action'/)
-  assert.match(scraper, /ackId && isRealMaxMessageId\(ackId\)/)
+  // The scraper reports delivered only with a provider id correlated to this send.
+  assert.match(scraper, /case 'accepted':[\s\S]*?deliveryConfirmed: true,[\s\S]*?deliveryStatus: 'delivered',/)
+  assert.doesNotMatch(scraper, /kind: 'ui_send_action'/)
+  assert.doesNotMatch(scraper, /waitForUiSendAck/)
 
   assert.match(deliveryRuntime, /outcome: 'delivered' \| 'pending'/)
   assert.match(maxCapability, /function validateMaxTextDeliveryResultV1/)
   assert.match(maxCapability, /hasExplicitFailure \|\| hasExplicitError/)
-  assert.match(maxCapability, /proof\.clientMessageId === expectedClientMessageId/)
+  assert.match(maxCapability, /outcome: validatedProviderProof \? 'delivered' : 'pending'/)
+  assert.doesNotMatch(maxCapability, /ui_send_action/)
   assert.match(messageService, /const maxDeliveryConfirmed = maxRes\.outcome === 'delivered'/)
   assert.match(messageService, /const maxDeliveryConfirmed = retryMaxRes\.outcome === 'delivered'/)
   assert.doesNotMatch(messageService, /\(maxRes as any\)\?\.deliveryStatus/)
   assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
 })
 
-test('MAX phone UI send binds the chat id to the send action or reports none', () => {
+test('MAX text send to a phone target fails closed before anything is typed', () => {
   const scraper = read('max-web-scraper/index.js')
+  const handler = scraper.slice(scraper.indexOf("app.post('/send-message'"), scraper.indexOf('// Поставить/снять emoji-реакцию'))
 
-  // Only the SPA route change and our own message echo are tied to the send.
-  assert.match(scraper, /boundChatIdSource = 'ui_route_url'/)
-  assert.match(scraper, /boundChatIdSource = 'op128_self_echo'/)
-  assert.match(scraper, /String\(sender\) !== String\(transport\._myUserId\)/)
-  assert.doesNotMatch(scraper, /UI send confirmed by op:64/)
-  assert.doesNotMatch(scraper, /op:198 chatId after UI send/)
-  assert.doesNotMatch(scraper, /op:71 chatId after UI send/)
-
-  // An attempted UI send is terminal even when no bound signal supplied a chat id.
-  assert.match(scraper, /uiSendAttempted: true/)
-  assert.match(scraper, /source: liveId \? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'/)
-  assertBeforeAfter(
-    scraper,
-    'const liveResult = await resolvePhoneLive(digits, message)',
-    'if (uiSendAttempted) {',
-    'const sendResult = normalizeTextSendResult',
-    'an attempted phone UI send must return before the protocol send path can duplicate it',
+  assert.doesNotMatch(handler, /resolvePhoneLive\(/)
+  assertBefore(
+    handler,
+    "code: 'MAX_ROUTE_UNRESOLVED', reason: digits ? 'phone_target' : 'invalid_target'",
+    'enqueueSend(() => sendText(',
+    'a phone target must be refused before anything can be typed',
   )
 })
 
@@ -287,51 +277,42 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
 //M1_REBUILD_TRIGGER_AFTER_DOM_RECOVERY
 
 
-test('MAX UI text fallback does not depend on browser clipboard permission', () => {
+test('MAX compose send does not depend on browser clipboard permission and acts once', () => {
   const scraper = read('max-web-scraper/index.js')
-  const start = scraper.indexOf('async function sendTextViaUi')
-  assert.notEqual(start, -1, 'missing sendTextViaUi')
-  const end = scraper.indexOf('function waitForUiSendAck', start)
-  assert.notEqual(end, -1, 'missing waitForUiSendAck anchor')
+  const start = scraper.indexOf('async function submitTextThroughCompose')
+  assert.notEqual(start, -1, 'missing submitTextThroughCompose')
+  const end = scraper.indexOf('async function submitReplyThroughPage', start)
+  assert.notEqual(end, -1, 'missing submitReplyThroughPage anchor')
   const block = scraper.slice(start, end)
 
   assert.doesNotMatch(block, /navigator\.clipboard\.writeText/)
   assert.match(scraper, /async function fillEditableText\(locator, value\)/)
   assert.match(block, /fillEditableText\(composeEl, text\)/)
   assert.match(scraper, /page\.keyboard\.insertText\(text\)/)
-  assert.match(block, /page\.keyboard\.press\('Enter'\)/)
+  assert.equal((block.match(/page\.keyboard\.press\('Enter'\)/g) || []).length, 1)
+  assert.doesNotMatch(block, /page\.goto\(/)
 })
-
 
 test('MAX reply text uses MAX Web store with a real provider target and is not downgraded to plain UI text', () => {
   const scraper = read('max-web-scraper/index.js')
   const bridge = read('max-web-scraper/lib/MaxWebReplyBridge.js')
   const start = scraper.indexOf('async function sendText')
   assert.notEqual(start, -1, 'missing sendText')
-  const end = scraper.indexOf('async function fillEditableText', start)
-  assert.notEqual(end, -1, 'missing fillEditableText anchor')
+  const end = scraper.indexOf('function maskPhoneForLog', start)
+  assert.notEqual(end, -1, 'missing maskPhoneForLog anchor')
   const block = scraper.slice(start, end)
+  const reply = scraper.slice(scraper.indexOf('async function submitReplyThroughPage'), start)
 
-  assert.match(block, /const wsChatId = chatId/)
-  assert.doesNotMatch(block, /replyToMessageId && directUiRouteId \? Number\(directUiRouteId\) : chatId/)
-  assert.match(block, /reply via MAX Web store chatId=\$\{chatId\}/)
-  assert.match(block, /const ackPromise = waitForUiSendAck\(transport, timeoutMs\)/)
-  assert.match(block, /const replyResult = await replyBridge\.sendReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
-  assert.match(block, /const storeConfirmedId = isRealMaxMessageId\(replyResult\?\.providerMessageId\)/)
-  assert.match(block, /const maxMsgId = storeConfirmedId \|\| await ackPromise/)
-  assert.match(block, /replyBridge\.resolveProviderId\([\s\S]*?quotedMessageContext \|\| \{\},[\s\S]*?\{ uiChatId: directUiRouteId \},[\s\S]*?\)/)
-  assert.match(block, /resolvedReplyChatId = resolved\.providerChatId \|\| null/)
+  assert.match(block, /new MaxWebReplyBridge\(page\)\.resolveProviderId\([\s\S]*?quotedMessageContext \|\| \{\},[\s\S]*?\{ uiChatId: route\.uiRouteId \},[\s\S]*?\)/)
+  assert.match(block, /return \{ outcome: 'refused', code: 'MAX_REPLY_TARGET_NOT_ADDRESSABLE'/)
+  assert.match(block, /performAction: replyProviderId\s*\? \(\) => submitReplyThroughPage\(protocolChatId, text, replyProviderId, cid, route\.uiRouteId\)\s*: \(\) => submitTextThroughCompose\(route\.uiRouteId, text\)/)
+  assert.match(reply, /const replyResult = await replyBridge\.sendReply\(protocolChatId, text, replyProviderId, cid, \{ uiChatId: uiRouteId \}\)/)
+  assert.match(reply, /const storeConfirmedId = isRealMaxMessageId\(replyResult\?\.providerMessageId\)/)
+  assert.doesNotMatch(reply, /submitTextThroughCompose|keyboard\.press/)
   assert.match(bridge, /await core\.module\.ro\(\{ chat, from: historyFrom \}\)/)
   assert.match(bridge, /await core\.module\.\$i\(\{ chat, message: pending \}\)/)
   assert.match(bridge, /pending\.id = BigInt\(args\.cid\)/)
   assert.match(bridge, /Reply requires real MAX provider message id/)
-  assert.match(block, /reply send failed without MAX confirmation; not downgrading to plain UI text/)
-  assertBefore(
-    block,
-    'if (replyToMessageId) {',
-    'const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId',
-    'reply failures must stop before plain UI fallback can send an unquoted message',
-  )
 })
 
 test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-composed bubbles', () => {
@@ -356,16 +337,15 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
   )
 })
 
-test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
+test('MAX text send endpoint answers from the decided outcome only', () => {
   const scraper = read('max-web-scraper/index.js')
 
-  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(/)
+  assert.match(scraper, /result = await enqueueSend\(\(\) => sendText\(/)
   assert.match(scraper, /\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
-  assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
-  assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
+  assert.match(scraper, /const answer = textSendHttpAnswer\(result, \{ chatId: digits, providerAccountId \}\)/)
+  assert.match(scraper, /externalId: result\.providerMessageId,/)
+  assert.doesNotMatch(scraper, /normalizeTextSendResult/)
   assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
-  assert.match(scraper, /const hasExplicitFailure = result\.success === false \|\| result\.failed === true \|\| result\.failure === true/)
-  assert.match(scraper, /if \(hasExplicitFailure \|\| hasExplicitError\)/)
 })
 
 test('CRM MAX delivery path never writes non-string send-result object as message externalId', () => {
@@ -408,26 +388,24 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
   assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
 })
 
-test('MAX reply timeout does one quick retry on stable WS before falling back to background retry', () => {
+test('MAX text send makes at most one physical action per call and injects no op:64 of its own', () => {
   const scraper = read('max-web-scraper/index.js')
   const start = scraper.indexOf('async function sendText')
   assert.notEqual(start, -1, 'missing sendText')
-  const end = scraper.indexOf('async function fillEditableText', start)
-  assert.notEqual(end, -1, 'missing fillEditableText anchor')
+  const end = scraper.indexOf('function maskPhoneForLog', start)
   const block = scraper.slice(start, end)
+  const textSection = scraper.slice(scraper.indexOf('// ─── Отправка текста ──'), end)
 
-  assert.match(block, /const sendProtocolText = async \(timeoutMs\) =>/)
-  assert.match(block, /return await sendProtocolText\(30_000\)/)
-  assert.match(block, /const isOpcode64Timeout = \/Timeout: \(\?:opcode 64\|MAX Web reply\)\/i\.test\(String\(e\.message \|\| ''\)\)/)
-  assert.match(block, /reply send timed out; waiting for stable WS and retrying once with same cid/)
-  assert.match(block, /await transport\.waitForStableWs\(800, 8_000\)/)
-  assert.match(block, /return await sendProtocolText\(15_000\)/)
-  assertBefore(
-    block,
-    'return await sendProtocolText(15_000)',
-    'reply send failed without MAX confirmation; not downgrading to plain UI text',
-    'reply quick retry must happen before handing the failed message to the background retry worker',
-  )
+  // No protocol send, no UI fallback after it, no reply quick retry: a timed-out
+  // first action used to be followed by a second physical send inside one call.
+  // (Native media sends keep their own op:64 frames; they are not text.)
+  assert.notEqual(textSection.length, 0)
+  assert.doesNotMatch(textSection, /sendFrame\(/)
+  assert.doesNotMatch(scraper, /sendProtocolText/)
+  assert.doesNotMatch(scraper, /retrying once with same cid/)
+  assert.doesNotMatch(scraper, /UI fallback sent chatId/)
+  assert.equal((block.match(/runSingleMaxTextSend\(/g) || []).length, 1)
+  assert.equal((scraper.match(/runSingleMaxTextSend\(/g) || []).length, 1)
 })
 
 test('MAX failed reply retains quoted message identity for background retry', () => {
@@ -450,4 +428,71 @@ test('MAX failed reply retains quoted message identity for background retry', ()
   assert.match(messageService, /quotedText: retryQuotedText/)
   assert.match(messageService, /quotedSentAt: retryQuotedSentAt/)
   assert.match(messageService, /quotedDirection: retryQuotedDirection/)
+})
+
+test('M1 inbound: a message is seen only after the CRM stored it, and the live path sends no op:32', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const handle = scraper.slice(scraper.indexOf('async function handleIncoming('), scraper.indexOf('function inboundChatKey('))
+  const forward = scraper.slice(scraper.indexOf('async function forwardIncomingMessage('), scraper.indexOf('// ─── Отправка текста ──'))
+
+  // N0: the op:32 phone lookup closed the socket 39 ms after "1" arrived, and
+  // "3","3","4" were never pushed. Inbound enrichment is cache-only.
+  assert.doesNotMatch(handle + forward, /getContactPhone\(/)
+  assert.doesNotMatch(handle, /messageSync\.markSeen\(msg\)/)
+  assert.match(handle, /if \(ledgerId && !inboundLedger\.beginForward\(ledgerId\)\) return/)
+  assert.match(handle, /finally \{\n\s*if \(ledgerId\) inboundLedger\.releaseForward\(ledgerId\)/)
+  assertBefore(
+    forward,
+    'const result = await forwardWithBoundedRetry(forwardToWebhook, payload)',
+    'messageSync.markSeen(msg)',
+    'seen is marked only after the CRM answered',
+  )
+  assertBefore(
+    forward,
+    'if (result.status >= 200 && result.status < 300) {',
+    'rememberRecentDirectInboundText(payload.chatId, payload.text, payload.externalId, payload.timestamp)',
+    'DOM recovery may yield only to a row the CRM stored',
+  )
+  assert.equal((scraper.match(/rememberRecentDirectInboundText\(payload\.chatId/g) || []).length, 1)
+})
+
+test('M1 inbound: pushes are stored per chat in arrival order and acknowledged pushes reach the ledger', () => {
+  const scraper = read('max-web-scraper/index.js')
+  assert.match(scraper, /transport\.onMessage\(msg => \{\n\s*inboundLedger\.enqueue\(inboundChatKey\(msg\?\.chatId\), \(\) => handleIncoming\(msg, mediaPipeline, sync, transport\)\)/)
+  assert.match(scraper, /transport\.onBrowserMessageAck\(\(\{ chatId, messageId \}\) => \{\n\s*inboundLedger\.noteBrowserAck\(chatId, messageId\)/)
+  assert.match(scraper, /const inboundLedger = new InboundDeliveryLedger\(\{\n\s*graceMs: 4000,\n\s*onUnpersisted: event => \{\n\s*recoverUnpersistedLiveMessage\(event\)/)
+})
+
+test('M1 socket: no automatic history request is injected into MAX\'s binary socket', () => {
+  const scraper = read('max-web-scraper/index.js')
+  assert.match(scraper, /const SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED = false\n/)
+  const auth = scraper.slice(scraper.indexOf('transport.onWsAuth(async (userId) => {'), scraper.indexOf('session.onLogout('))
+  assertBefore(
+    auth,
+    'if (!SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED) {',
+    "const result = await initialSync.runIfNeeded('from_connection_time')",
+    'reconnect catch-up is gated before it can send op:49',
+  )
+  assert.match(auth, /if \(SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED\) await runBidirectionalHistoryRecoverySafely\(\)/)
+  assert.match(auth, /if \(SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED \|\| !\['from_connection_time', 'none'\]\.includes\(HISTORY_IMPORT_MODE\)\) \{/)
+})
+
+test('M1 socket: frames are read with the MAX Web layout in both directions', () => {
+  const transport = read('max-web-scraper/transport/TransportInterceptor.js')
+  const binary = transport.slice(transport.indexOf('\n  _handleBinaryFrame(buf) {'), transport.indexOf('\n  _normalizeMaxMsg(payload) {'))
+  assert.match(binary, /const frame = decodeMaxBinaryFrame\(buf\)/)
+  assert.doesNotMatch(binary, /buf\.slice\(9\)|mappedCmd|skip <= 5/)
+  assert.match(transport, /const outgoing = decodeMaxBinaryFrame\(buf\)/)
+  assert.doesNotMatch(transport, /maxMsgpackDecodeAll\(buf\.slice\(12\)\)/)
+})
+
+test('M1 outbound: only an attested route is used and the send is gated on an authenticated socket', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const route = scraper.slice(scraper.indexOf('function resolveAttestedTextSendRoute('), scraper.indexOf('function isPageOnWebRoute('))
+  assert.match(route, /const attested = UI_CHAT_ID_OVERRIDES\[String\(chatId \?\? ''\)\]/)
+  assert.match(route, /if \(!attested\) return \{ route: null, reason: 'route_unresolved' \}/)
+  assert.match(route, /if \(requested && requested !== String\(attested\)\) return \{ route: null, reason: 'route_conflict' \}/)
+  const surface = scraper.slice(scraper.indexOf('async function prepareTextSendSurface('), scraper.indexOf('async function findComposeInput('))
+  assert.match(surface, /if \(needsComposeRoute && !isPageOnWebRoute\(uiRouteId\)\) \{/)
+  assert.match(surface, /return transport\.waitForSendReadySocket\(\{ stableMs: 1200, timeoutMs: 20_000 \}\)/)
 })

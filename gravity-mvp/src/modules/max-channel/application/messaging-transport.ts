@@ -23,6 +23,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * The MAX text-send failure contract. The scraper answers every failed send
+ * with one of these codes; the CRM's retry policy classifies the error by its
+ * prefix, so the message text is fixed here rather than taken from the peer:
+ *   *_NOT_DISPATCHED     nothing reached MAX - safe to send again
+ *   *_SEND_OUTCOME_UNKNOWN  an action was taken without proof either way -
+ *                        never sent again automatically
+ *   *_REFUSED            refused before or by MAX - terminal
+ */
+const MAX_TEXT_SEND_FAILURES: Readonly<Record<string, string>> = Object.freeze({
+    MAX_SEND_NOT_DISPATCHED: 'MAX_SEND_NOT_DISPATCHED: nothing reached MAX; the message can be sent again',
+    MAX_SEND_OUTCOME_UNKNOWN: 'MAX_SEND_OUTCOME_UNKNOWN: MAX may have received the message; it must not be sent again automatically',
+    MAX_ROUTE_UNRESOLVED: 'MAX_ROUTE_UNRESOLVED: no attested MAX Web route for this chat; nothing was dispatched (MAX_SEND_REFUSED)',
+    MAX_SEND_REJECTED: 'MAX_SEND_REJECTED: MAX refused the message (MAX_SEND_REFUSED)',
+    MAX_REPLY_TARGET_NOT_ADDRESSABLE: 'MAX_REPLY_TARGET_NOT_ADDRESSABLE: the quoted message has no MAX provider id; nothing was dispatched (MAX_SEND_REFUSED)',
+})
+
+/** The fixed failure message for a MAX text-send code, or null for any other code. */
+export function maxTextSendFailureMessageV1(code: string): string | null {
+    return MAX_TEXT_SEND_FAILURES[code] ?? null
+}
+
+function maxTextSendFailure(payload: Record<string, unknown>, fallback: string): Error {
+    const code = typeof payload.code === 'string' ? payload.code.trim() : ''
+    return new Error(maxTextSendFailureMessageV1(code) ?? fallback)
+}
+
+/**
  * MAX-owned, server-only transport boundary. The personal scraper must prove
  * that the requested account is the authenticated live MAX Web account.
  */
@@ -73,7 +100,7 @@ export async function sendMaxTransportTextV1(input: MaxTransportTextInputV1): Pr
             : payload.error !== null && payload.error !== undefined)
     const hasExplicitFailure = payload.success === false || payload.failed === true || payload.failure === true
     if (!response.ok || hasExplicitFailure || hasExplicitError) {
-        throw new Error(error || (response.ok ? 'MAX text delivery failed' : 'Failed to send message via Scraper'))
+        throw maxTextSendFailure(payload, error || (response.ok ? 'MAX text delivery failed' : 'Failed to send message via Scraper'))
     }
     if (exactProviderAccountId(payload.providerAccountId) !== providerAccountId) {
         throw new Error('MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH')

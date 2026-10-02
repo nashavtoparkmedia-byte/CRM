@@ -90,6 +90,8 @@ test('index.js wires the attestation into the DOM read, every page user and the 
   const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8')
   assert.match(source, /require\('\.\/lib\/DomRouteAttestation'\)/)
   assert.match(source, /page\.on\('framenavigated'/)
+  // Every page user bumps the epoch: a text send (compose or reply, claimed
+  // once for the whole call), the media send and the phone lookup dialog.
   assert.equal((source.match(/uiSendInProgress = true\n\s*uiSendEpoch \+= 1/g) || []).length, 3)
   assert.match(source, /const readPathname = location\.pathname/)
   assert.match(source, /isMessageWrapper: message\.matches\('\[class\*="messageWrapper"\]'\)/)
