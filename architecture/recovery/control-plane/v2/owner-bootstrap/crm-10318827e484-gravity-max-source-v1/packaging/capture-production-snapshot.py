@@ -16,9 +16,9 @@ RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # capture would refuse the very predecessor it exists to record.
 EXPECTED_PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
 # The installed observer is the interim predecessor observation v2 (same-version 2.0.0-21
-# interim package 72498238...). It reconstructs every predecessor from the layered stack the
+# interim package 619f4ebe...). It reconstructs every predecessor from the layered stack the
 # container recorded at creation; the snapshot pins that stack by role and digest.
-PREDECESSOR_OBSERVER_SHA256 = "047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533"
+PREDECESSOR_OBSERVER_SHA256 = "1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a"
 OBSERVATION_SCHEMA = "yoko.crm.predecessor-recreation-observation.v2"
 BASE_COMPOSE = "/opt/crm/deploy/docker-compose.production.yml"
 BASE_COMPOSE_SHA256 = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
