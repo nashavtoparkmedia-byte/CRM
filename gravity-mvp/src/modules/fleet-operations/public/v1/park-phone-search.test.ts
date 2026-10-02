@@ -91,8 +91,13 @@ describe('manual Telegram link multi-park wiring', () => {
         // written onto a Driver that already exists and already carries this
         // exact Yandex profile, and the route creates no Driver to make the
         // link possible.
-        expect(route).toContain('driver.yandexDriverId !== profile.id')
-        expect(route).toContain('Confirm the driver person on an existing CRM Driver before linking Telegram')
+        // The Driver proves the exact profile either by its legacy raw provider id
+        // or by the park-qualified external pair the Fleet reconciler writes.
+        expect(route).toContain('driver.yandexDriverId === profile.id')
+        expect(route).toContain('driver.externalDriverProfileId === profile.id && driver.externalParkId === parkId')
+        expect(route).toContain('return NextResponse.json(DRIVER_PROFILE_UNVERIFIED, { status: 409 })')
+        // An identity mismatch is not a person decision and must not say it is.
+        expect(route).not.toContain('Confirm the driver person on an existing CRM Driver before linking Telegram')
         expect(route).toContain('saveConfirmedTelegramLink(driver.id, telegramId)')
         expect(route).not.toContain('upsertParkMatchedDriverV1(')
     })
