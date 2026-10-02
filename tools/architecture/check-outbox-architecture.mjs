@@ -678,6 +678,7 @@ const MESSAGING_FAN_OUT_WRITER = 'gravity-mvp/src/modules/messaging/internal/mob
 const APPROVED_OUTBOX_WRITERS = [
     'gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts',
     'gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts',
+    'gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-prisma-adapter.ts',
     ...MESSAGING_INTENT_WRITERS,
     MESSAGING_FAN_OUT_WRITER,
 ]

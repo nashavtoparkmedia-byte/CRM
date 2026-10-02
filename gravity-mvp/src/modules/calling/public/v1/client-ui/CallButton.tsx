@@ -23,10 +23,34 @@ import { toast } from "sonner"
  * inherits codec context from the a-leg — every attempt died with 488
  * INCOMPATIBLE_DESTINATION ~3s after the bridge action. The two-leg
  * originate sidesteps that entirely.
+ *
+ * Where the calling client reports `system_dialer` this whole flow is
+ * unavailable and always was: that client is never handed a SIP password, so the
+ * softphone cannot reach `registered` and the button below would sit permanently
+ * disabled. The operator gets a plain tel: link instead, which the device hands
+ * to its own dialer, and the call runs on their own mobile subscription. No SIP
+ * credential, no microphone permission, no automatic placement - the dialer opens
+ * with the number filled in and the operator presses call themselves.
+ *
+ * The mode is decided once by the calling client, never here, which is what lets
+ * this button and the Fleet driver button remain one implementation.
  */
 export default function CallButton({ phoneNumber, label = 'Позвонить' }: { phoneNumber: string; label?: string }) {
-    const { status, activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
+    const { status, activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
     const [busy, setBusy] = useState(false)
+
+    if (outboundMode === 'system_dialer') {
+        return (
+            <a
+                href={`tel:${phoneNumber}`}
+                title={`Позвонить ${phoneNumber}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-white hover:bg-primary/90 transition-colors"
+            >
+                <Phone className="h-3.5 w-3.5"/>
+                {label}
+            </a>
+        )
+    }
 
     const disabled = status !== 'registered' || !!activeCall || busy
     const title =

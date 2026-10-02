@@ -296,6 +296,7 @@
         "CurrentUserQuery.v1",
         "IntegrationAdminAuthorization.v1",
         "ListUserIdentitiesQuery.v1",
+        "MobileNotificationDelivery.v1",
         "UserIdentity.v1"
       ],
       "commands": [

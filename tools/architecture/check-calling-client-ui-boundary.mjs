@@ -37,7 +37,7 @@ assert.doesNotMatch(driverPage, /@\/components\/sip\//)
 const callingUi = {
   ActiveCallPopup: 'f7700d253b859ee01b43f89cc7ba8af0fb068a13f49042b8c1fd18a56490fdf3',
   AiMockCallButton: '0f43b263af489520593cb4548bf65431ac6d10632099242f1b0a6d664874983b',
-  CallButton: 'b9f554840500cead890682042236df2568fb8d3024a72ea163b88df32942d51e',
+  CallButton: 'cbd06d8c974b4e0d1d685d64bf5af4ab8b2f3266e3a69d57af9c49d565e70a35',
   CallToolbar: '20a7882a3baf097e68058bef84d95cf7c51d6e76f3a86831e73a6cd75001544e',
   CallsList: 'a3170cf9229a7f5f209da37973bd220da5824b76468a8046cff198ec9e016303',
   IncomingCallPopup: '204e10ff13102736b2ea13eab60d98d9d9c57a29a3a47045a69fd5bcdaf9c6a7',
@@ -70,7 +70,7 @@ assert.match(audioShim, /@\/modules\/calling\/public\/v1\/call-alert-audio/)
 assert.doesNotMatch(audioShim, /export \*/)
 
 const bridge = read('gravity-mvp/src/infrastructure/ui/calling-client-capability.tsx')
-assert.equal(sha256(bridge), 'a6d98724fcad0474b6f024242d744a1bcc8117de70fda6c2762ce86fa35c9823')
+assert.equal(sha256(bridge), 'b50aa96fb0ad5d0cf5624d9ae011620b98d9940eff0d5ffde9d52f1a76a96b08')
 assert.match(bridge, /interface OutboundCallingClientCapability/)
 assert.match(bridge, /hasActiveCall: boolean/)
 assert.match(bridge, /startPlaceholderOutbound\(phoneNumber: string, displayName\?: string \| null\): void/)
@@ -79,7 +79,7 @@ assert.match(bridge, /setActiveCallFsUuid\(fsUuid: string\): void/)
 assert.doesNotMatch(bridge, /fetch\(|@\/modules\/|@\/lib\/prisma|answer\(|hangup\(|toggleMute/)
 
 const sipProvider = read('gravity-mvp/src/modules/calling/public/v1/sip-client-context.tsx')
-assert.match(sipProvider, /<OutboundCallingClientProvider value=\{\{ status, hasActiveCall: !!activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid \}\}>/)
+assert.match(sipProvider, /<OutboundCallingClientProvider value=\{\{ status, outboundMode, hasActiveCall: !!activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid \}\}>/)
 
 const fleetButton = read('gravity-mvp/src/modules/fleet-operations/internal/client-ui/DriverCallButton.tsx')
 assert.match(fleetButton, /useOutboundCallingClient/)
@@ -87,7 +87,7 @@ assert.doesNotMatch(fleetButton, /@\/modules\/calling\//)
 assert.equal(
   fleetButton
     .replace("import { useOutboundCallingClient } from '@/infrastructure/ui/calling-client-capability'", "import { useSip } from '@/modules/calling/public/v1/sip-client-context'")
-    .replace('const { status, hasActiveCall: activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useOutboundCallingClient()', 'const { status, activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()'),
+    .replace('const { status, hasActiveCall: activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useOutboundCallingClient()', 'const { status, activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()'),
   read('gravity-mvp/src/modules/calling/public/v1/client-ui/CallButton.tsx'),
 )
 assert.equal(

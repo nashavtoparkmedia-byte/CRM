@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { broadcastCall } from '@/modules/calling/internal/call-stream'
+import { recordCallStateTransitionV1 } from '@/modules/calling/application/call-alert-operations'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { isResolvedChannelContactResultV1, resolveContactByPhoneV1 } from '@/modules/contacts/public/v1'
@@ -235,6 +236,15 @@ export async function reconcileStaleCalls(): Promise<number> {
             const updated = await prisma.call.findUnique({ where: { id: call.id } })
             if (!updated) continue
             recovered++
+            // The same rule as the live hangup path. `missed` is reached from
+            // here too, which is exactly why the alert hangs off the transition
+            // rather than off either call site. The guarded updateMany above means
+            // only one winner reaches this line.
+            await offerCallAlertTransition(
+                updated.id,
+                { direction: call.direction, status: call.status, isSimulation: call.isSimulation },
+                { direction: updated.direction, status: updated.status, isSimulation: updated.isSimulation },
+            )
             opsLog('warn', 'stale_call_recovered', {
                 operation: 'call',
                 callId: updated.id,
@@ -431,11 +441,48 @@ async function handleChannelCreate(evt: any): Promise<void> {
                     displayName,
                 },
             })
+            await offerCallAlertTransition(call.id, null, {
+                direction: 'inbound',
+                status: call.status,
+                isSimulation: call.isSimulation,
+            })
         }
     } catch (err: any) {
         // P2002 = unique constraint (fsUuid already exists) — dedupe is intentional
         if (err.code === 'P2002') return
         throw err
+    }
+}
+
+/**
+ * Offer a call-state transition to the alert rule.
+ *
+ * Wrapped because an alert must never break call handling: the call is the
+ * product, the notification is a convenience. A failure here is logged and the
+ * call proceeds, which does mean a lost append is a lost alert rather than a
+ * retried one - the outbox can only retry what it received.
+ */
+async function offerCallAlertTransition(
+    callId: string,
+    before: { direction: string, status: string, isSimulation: boolean } | null,
+    after: { direction: string, status: string, isSimulation: boolean },
+): Promise<void> {
+    try {
+        const kind = await recordCallStateTransitionV1({
+            before: before === null ? null : {
+                direction: before.direction as 'inbound' | 'outbound',
+                status: before.status,
+                isSimulation: before.isSimulation,
+            },
+            after: {
+                direction: after.direction as 'inbound' | 'outbound',
+                status: after.status,
+                isSimulation: after.isSimulation,
+            },
+        }, callId)
+        if (kind) opsLog('info', 'call_alert_requested', { operation: 'call', callId, kind })
+    } catch (err: any) {
+        opsLog('error', 'call_alert_request_failed', { operation: 'call', callId, error: err?.message ?? 'unknown' })
     }
 }
 
@@ -514,6 +561,12 @@ async function handleChannelHangup(evt: any): Promise<void> {
             hangupCause: cause,
         },
     })
+
+    await offerCallAlertTransition(
+        updated.id,
+        { direction: call.direction, status: call.status, isSimulation: call.isSimulation },
+        { direction: updated.direction, status: updated.status, isSimulation: updated.isSimulation },
+    )
 
     opsLog('info', 'call_ended', {
         operation: 'call',

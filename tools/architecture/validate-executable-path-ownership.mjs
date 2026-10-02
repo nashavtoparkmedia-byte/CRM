@@ -267,7 +267,7 @@ function validateExecutablePathOwnershipDependencies(value, options = {}) {
     && boundary.authority_paths_private_to_orchestrator === true,
   'single executable ownership authority boundary declaration mismatch')
   assert(JSON.stringify(boundary.operations) === JSON.stringify([
-    'validate', 'generate_contexts', 'materialize_reviewed_current_denominator',
+    'validate', 'generate_contexts', 'preview_reviewed_current_denominator', 'materialize_reviewed_current_denominator',
   ]), 'single executable ownership authority operation set mismatch')
   exactRolePaths(boundary.authority_sources, AUTHORITY_SOURCE_ROLES, 'single executable ownership authority sources')
   assert(Array.isArray(boundary.reusable_helpers) && boundary.reusable_helpers.length === 2
@@ -337,21 +337,21 @@ function dirtySourceSummary(statusBytes) {
     .join(', ')
 }
 
-async function assertCleanExactCandidateCheckout(repositoryRoot, expectedCommit) {
-  assert(SHA1.test(expectedCommit ?? ''), 'materialization requires explicit --candidate <full-40-character-commit>')
+async function assertCleanExactCandidateCheckout(repositoryRoot, expectedCommit, operationLabel = 'materialization') {
+  assert(SHA1.test(expectedCommit ?? ''), `${operationLabel} requires explicit --candidate <full-40-character-commit>`)
   const { stdout: headBytes } = await execFileAsync('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD^{commit}'], {
     encoding: 'buffer',
     maxBuffer: 1024 * 1024,
   })
   const head = headBytes.toString('ascii').trim()
-  assert(head === expectedCommit, `materialization candidate mismatch: expected ${expectedCommit}, checkout HEAD is ${head}`)
+  assert(head === expectedCommit, `${operationLabel} candidate mismatch: expected ${expectedCommit}, checkout HEAD is ${head}`)
   const { stdout: statusBytes } = await execFileAsync('git', ['-C', repositoryRoot, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
     encoding: 'buffer',
     maxBuffer: 64 * 1024 * 1024,
   })
   if (statusBytes.length > 0) {
     const summary = dirtySourceSummary(statusBytes) || 'unclassified_dirty_state=1'
-    throw new Error(`materialization requires a clean exact candidate checkout; ${summary}; no source was cleaned or materialized`)
+    throw new Error(`${operationLabel} requires a clean exact candidate checkout; ${summary}; no source was cleaned or materialized`)
   }
   return { candidate: head, status_porcelain_bytes: 0 }
 }
@@ -579,15 +579,25 @@ function validateReviewedExactInventoryDecisions(coverage, derived, decisions, o
   return { changes, reviewedAssignments: actualByPath.size }
 }
 
+// The one mechanical step that turns a reviewed baseline plus its accepted
+// exact-inventory transitions into the current denominator. Materialization
+// writes what this returns; the read-only preview returns it and writes nothing.
+// Both operations therefore derive one triple through one implementation, so a
+// previewed triple cannot differ from the triple materialization later accepts.
+function deriveMaterializedCurrentDenominator(inventory, manifests, coverage, changes, provisional) {
+  const refreshed = structuredClone(coverage)
+  for (const change of changes) refreshed.governed_exclusions.find((rule) => rule.id === change.exclusion)[change.inventory_kind] = { ...change.current_inventory }
+  const derived = deriveExecutablePathOwnershipCoverage(inventory, manifests, refreshed)
+  assert(derived.coverage_sha256 === provisional.coverage_sha256, 'mechanical executable ownership materialization changed reviewed assignments')
+  return { refreshed, derived }
+}
+
 function materializeReviewedExecutablePathOwnershipCoverage(inventory, manifests, coverage, decisions, options = {}) {
   const provisional = deriveExecutablePathOwnershipCoverage(inventory, manifests, coverage, { allowExactInventoryRefresh: true })
   const review = validateReviewedExactInventoryDecisions(coverage, provisional, decisions, options)
   assert(typeof options.decisionRegistryPath === 'string' && options.decisionRegistryPath.length > 0, 'reviewed executable ownership decision registry path is required')
   assert(typeof options.decisionRegistrySha256 === 'string' && SHA256.test(options.decisionRegistrySha256), 'reviewed executable ownership decision registry hash is required')
-  const refreshed = structuredClone(coverage)
-  for (const change of review.changes) refreshed.governed_exclusions.find((rule) => rule.id === change.exclusion)[change.inventory_kind] = { ...change.current_inventory }
-  const derived = deriveExecutablePathOwnershipCoverage(inventory, manifests, refreshed)
-  assert(derived.coverage_sha256 === provisional.coverage_sha256, 'mechanical executable ownership materialization changed reviewed assignments')
+  const { refreshed, derived } = deriveMaterializedCurrentDenominator(inventory, manifests, coverage, review.changes, provisional)
   refreshed.source = {
     tracked_executable_surfaces: derived.tracked_executable_surfaces,
     tracked_inventory_sha256: derived.tracked_inventory_sha256,
@@ -615,6 +625,90 @@ function materializeReviewedExecutablePathOwnershipCoverage(inventory, manifests
       : {}),
   }
   return refreshed
+}
+
+// Both finite operations that work from the reviewed baseline read the same
+// authority documents under the same trust anchors. Resolving them once keeps
+// preview and materialization on one set of inputs instead of two that could
+// drift apart.
+async function resolveReviewedOwnershipAuthorityInputs(repositoryRoot, inventory, manifests, operationLabel) {
+  const { bytes: decisionBytes, value: decisions } = await readReviewedOwnershipDecisions(repositoryRoot)
+  assert(typeof decisions.baseline?.coverage_path === 'string' && decisions.baseline.coverage_path.length > 0, 'reviewed executable ownership baseline path missing')
+  const baselineCoveragePath = repositoryRelative(path.resolve(repositoryRoot, decisions.baseline.coverage_path))
+  assert(baselineCoveragePath === REVIEWED_BASELINE_PATH, `${operationLabel} requires authoritative baseline at ${REVIEWED_BASELINE_PATH}`)
+  const { bytes: baselineBytes, value: baselineCoverage } = await readHistoricalOwnershipBaseline(repositoryRoot)
+  assert(byteDigest(baselineBytes) === REVIEWED_BASELINE_SHA256, 'reviewed executable ownership baseline trust anchor mismatch')
+  assert(baselineCoverage.schema === REVIEWED_BASELINE_SCHEMA && baselineCoverage.version === 1, 'reviewed executable ownership baseline identity mismatch')
+  const provisional = deriveExecutablePathOwnershipCoverage(inventory, manifests, baselineCoverage, { allowExactInventoryRefresh: true })
+  const changes = exactInventoryDrift(baselineCoverage, provisional)
+  const sourceSha256ByPath = new Map(await Promise.all(changes
+    .flatMap((change) => change.records.map((record) => record.path))
+    .map(async (relativePath) => [relativePath, byteDigest(await readFile(path.join(repositoryRoot, relativePath)))])))
+  const amendmentsInput = await readReviewedOwnershipAmendmentsIfPresent(repositoryRoot)
+  const extension = reviewedOwnershipExtension(decisions, amendmentsInput?.value ?? null, byteDigest(decisionBytes))
+  return {
+    amendmentsInput,
+    baselineBytes,
+    baselineCoverage,
+    baselineCoveragePath,
+    changes,
+    decisionBytes,
+    decisions,
+    extension,
+    provisional,
+    sourceSha256ByPath,
+  }
+}
+
+// Read-only preview of the reviewed current denominator.
+//
+// Materialization only writes coverage once the reviewed chain already states
+// the exact current triple, and one member of that triple, coverage_sha256,
+// exists only as a product of this derivation. For a denominator that genuinely
+// moved that is circular: the amendment cannot be written without the value,
+// and the value was obtainable only by running the operation the amendment
+// gates. This operation closes the gap by deriving the triple through exactly
+// the functions materialization uses and writing nothing at all. It is not a
+// second authority: it exports nothing, reads no input materialization does not
+// read, and produces no artifact any control consumes.
+//
+// It also reports the bounded exact-inventory delta an amendment needs — which
+// governed exclusions moved, and which reviewed assignments have a source
+// fingerprint the tree no longer matches. It reports fingerprints and paths
+// only; no file content, credential value or provider secret is read out.
+function previewReviewedCurrentDenominator(inventory, manifests, authority) {
+  const { baselineCoverage, changes, decisions, extension, provisional, sourceSha256ByPath } = authority
+  const { derived } = deriveMaterializedCurrentDenominator(inventory, manifests, baselineCoverage, changes, provisional)
+  const assignments = new Map((decisions.assignments ?? []).map((assignment) => [assignment.path, assignment]))
+  const rebindsRequired = []
+  const withoutReviewedAssignment = []
+  for (const change of changes) {
+    for (const record of change.records) {
+      const assignment = assignments.get(record.path)
+      if (!assignment) {
+        withoutReviewedAssignment.push(record.path)
+        continue
+      }
+      // The reviewed fingerprint an amendment must extend is the latest one the
+      // chain already approved, not the historical assignment's, so a path that
+      // was rebound before is reported from where that rebind left it.
+      const reviewed = extension.rebinds.get(record.path)?.current_source_sha256 ?? assignment.source_sha256
+      const current = sourceHash(sourceSha256ByPath, record.path)
+      if (reviewed !== current) rebindsRequired.push({ path: record.path, previous_source_sha256: reviewed, current_source_sha256: current })
+    }
+  }
+  return {
+    tracked_executable_surfaces: derived.tracked_executable_surfaces,
+    tracked_inventory_sha256: derived.tracked_inventory_sha256,
+    coverage_sha256: derived.coverage_sha256,
+    context_owned_paths: derived.context_owned_paths,
+    governed_exclusion_paths: derived.governed_exclusion_paths,
+    reviewed_chain_current: extension.current,
+    reviewed_chain_amendments: extension.amendments,
+    exact_inventory_delta: changes.map(({ records: _records, ...summary }) => summary),
+    source_hash_rebinds_required: rebindsRequired.sort((left, right) => comparePaths(left.path, right.path)),
+    exact_inventory_paths_without_reviewed_assignment: canonicalPathOrder(withoutReviewedAssignment),
+  }
 }
 
 function option(name) {
@@ -703,9 +797,11 @@ async function validateExecutablePathOwnershipProvenance(repositoryRoot, coverag
 async function main() {
   const materializing = process.argv.includes('--materialize-reviewed-current-denominator')
   const generatingContexts = process.argv.includes('--generate-contexts')
-  assert(!(materializing && generatingContexts), 'choose one finite authority process operation')
-  const candidateArgument = materializing ? option('--candidate') : null
+  const previewing = process.argv.includes('--preview-reviewed-current-denominator')
+  assert([materializing, generatingContexts, previewing].filter(Boolean).length <= 1, 'choose one finite authority process operation')
+  const candidateArgument = materializing || previewing ? option('--candidate') : null
   if (materializing) await assertCleanExactCandidateCheckout(root, candidateArgument)
+  if (previewing) await assertCleanExactCandidateCheckout(root, candidateArgument, 'preview')
   const [registry, coverageInput, dependencyInput, index] = await Promise.all([
     readFile(path.join(root, REGISTRY_PATH), 'utf8').then(JSON.parse),
     readCurrentOwnershipCoverage(root),
@@ -734,25 +830,31 @@ async function main() {
   const coverage = coverageInput.value
   const manifests = await Promise.all(index.contexts.map(async (entry) => JSON.parse(await readFile(path.join(root, entry.path), 'utf8'))))
   const inventory = await inventoryTrackedSurfaces(root, { registry })
+  if (previewing) {
+    const authority = await resolveReviewedOwnershipAuthorityInputs(root, inventory, manifests, 'preview')
+    const preview = previewReviewedCurrentDenominator(inventory, manifests, authority)
+    // Re-asserting the clean exact checkout after the derivation is what makes
+    // "this operation wrote nothing" an observed fact rather than a claim.
+    await assertCleanExactCandidateCheckout(root, candidateArgument, 'preview')
+    process.stdout.write(`${JSON.stringify({
+      schema: 'yoko.crm.single-authority-process-result.v1',
+      operation: 'preview_reviewed_current_denominator',
+      candidate: candidateArgument,
+      source_was_clean: true,
+      authority_capability_exports: 0,
+      repository_files_written: 0,
+      ...preview,
+    })}\n`)
+    return
+  }
   if (materializing) {
     const decisionArgument = option('--reviewed-decisions')
     assert(decisionArgument, 'explicit --reviewed-decisions <registry.json> input is required for materialization')
     const decisionPath = path.resolve(root, decisionArgument)
     const decisionRegistryPath = repositoryRelative(decisionPath)
     assert(decisionRegistryPath === REVIEWED_DECISION_PATH, `materialization requires authoritative reviewed decisions at ${REVIEWED_DECISION_PATH}`)
-    const { bytes: decisionBytes, value: decisions } = await readReviewedOwnershipDecisions(root)
-    assert(typeof decisions.baseline?.coverage_path === 'string' && decisions.baseline.coverage_path.length > 0, 'reviewed executable ownership baseline path missing')
-    const baselinePath = path.resolve(root, decisions.baseline.coverage_path)
-    const baselineCoveragePath = repositoryRelative(baselinePath)
-    assert(baselineCoveragePath === REVIEWED_BASELINE_PATH, `materialization requires authoritative baseline at ${REVIEWED_BASELINE_PATH}`)
-    const { bytes: baselineBytes, value: baselineCoverage } = await readHistoricalOwnershipBaseline(root)
-    assert(byteDigest(baselineBytes) === REVIEWED_BASELINE_SHA256, 'reviewed executable ownership baseline trust anchor mismatch')
-    assert(baselineCoverage.schema === REVIEWED_BASELINE_SCHEMA && baselineCoverage.version === 1, 'reviewed executable ownership baseline identity mismatch')
-    const provisional = deriveExecutablePathOwnershipCoverage(inventory, manifests, baselineCoverage, { allowExactInventoryRefresh: true })
-    const changedPaths = exactInventoryDrift(baselineCoverage, provisional).flatMap((change) => change.records.map((record) => record.path))
-    const sourceSha256ByPath = new Map(await Promise.all(changedPaths.map(async (relativePath) => [relativePath, byteDigest(await readFile(path.join(root, relativePath)))])))
-    const amendmentsInput = await readReviewedOwnershipAmendmentsIfPresent(root)
-    const extension = reviewedOwnershipExtension(decisions, amendmentsInput?.value ?? null, byteDigest(decisionBytes))
+    const authority = await resolveReviewedOwnershipAuthorityInputs(root, inventory, manifests, 'materialization')
+    const { amendmentsInput, baselineBytes, baselineCoverage, baselineCoveragePath, decisionBytes, decisions, extension, sourceSha256ByPath } = authority
     const refreshed = materializeReviewedExecutablePathOwnershipCoverage(inventory, manifests, baselineCoverage, decisions, {
       baselineCoveragePath,
       baselineCoverageSha256: byteDigest(baselineBytes),
