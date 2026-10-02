@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import path from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -231,4 +235,76 @@ describe('a truncated population is reported as unproven, not as a negative', ()
         expect(serialized).not.toContain('driver-profile-secret')
         expect(serialized).not.toContain('conn-secret-1')
     })
+})
+
+/**
+ * The command must load in the real application runtime, not only under Vitest.
+ *
+ * This suite deliberately does not exercise the module by importing it: Vitest's
+ * config stubs `server-only` with a sentinel plugin, so an in-process import
+ * proves nothing about production. Instead it runs the documented invocation in a
+ * child process, where that stub does not apply, and asserts the whole import
+ * closure resolves against the same node_modules the application image ships.
+ *
+ * The regression this guards is real and was found by rehearsal: importing
+ * telegram_channel's public barrel pulls in the messaging delivery capability,
+ * whose closure reaches `import 'server-only'` — a module Next resolves at build
+ * time and which is absent from the image. The command then died with
+ * `Cannot find module 'server-only'` before doing anything.
+ */
+describe('the command loads in the production runtime', () => {
+    const gravityRoot = path.resolve(__dirname, '..')
+
+    it('runs with server-only genuinely absent, as in the application image', () => {
+        // If this ever starts resolving, the test below stops proving anything, so
+        // assert the precondition rather than assuming it.
+        const requireFromRoot = createRequire(path.join(gravityRoot, 'package.json'))
+        expect(() => requireFromRoot.resolve('server-only')).toThrow()
+
+        // `--require bogus` fails argument parsing and returns before any database
+        // connection, so this loads the entire closure and touches nothing.
+        let status = 0
+        let stdout = ''
+        let stderr = ''
+        try {
+            stdout = execFileSync(
+                process.execPath,
+                ['node_modules/.bin/jiti', 'scripts/compensation-pilot-readiness.ts', '--require', 'bogus'],
+                {
+                    cwd: gravityRoot,
+                    encoding: 'utf8',
+                    env: { ...process.env, JITI_ALIAS: JSON.stringify({ '@': path.join(gravityRoot, 'src') }) },
+                },
+            )
+        } catch (error) {
+            const failure = error as { status?: number; stdout?: string; stderr?: string }
+            status = failure.status ?? 1
+            stdout = failure.stdout ?? ''
+            stderr = failure.stderr ?? ''
+        }
+
+        // The command reached its own argument check, which only the loaded module can print.
+        expect(stdout).toContain('--require must be candidate or input')
+        expect(status).toBe(1)
+        // And it did not die on an unresolvable module on the way there.
+        expect(stderr).not.toContain('server-only')
+        expect(stderr).not.toContain('MODULE_NOT_FOUND')
+    }, 120_000)
+
+    it('reaches the published Telegram read by file, not through the public barrel', () => {
+        const source = requireSource()
+        // The two published files the owner's own PostgreSQL proof binds.
+        expect(source).toContain("public/v1/driver-telegram-park-link-handler.js'")
+        expect(source).toContain("public/v1/legacy-prisma-driver-telegram-adapter.js'")
+        // The barrel is what dragged in server-only; it must not come back.
+        expect(source).not.toContain("modules/telegram-channel/public/v1/index.js'")
+        // The contract it speaks is unchanged.
+        expect(source).toContain('READ_DRIVER_TELEGRAM_PARK_LINKS_QUERY_V1')
+    })
+
+    function requireSource(): string {
+        const requireFromRoot = createRequire(path.join(gravityRoot, 'package.json'))
+        const fs = requireFromRoot('node:fs') as typeof import('node:fs')
+        return fs.readFileSync(path.join(gravityRoot, 'scripts/compensation-pilot-readiness.ts'), 'utf8')
+    }
 })

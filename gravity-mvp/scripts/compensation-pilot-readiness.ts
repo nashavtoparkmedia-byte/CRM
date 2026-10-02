@@ -57,7 +57,14 @@ import {
     compensationPilotReadinessV1,
     registerCompensationPilotTelegramLinkReaderV1,
 } from '../src/modules/fleet-operations/public/v1/index.js'
-import { readDriverTelegramParkLinksV1 } from '../src/modules/telegram-channel/public/v1/index.js'
+// Imported by file rather than through telegram_channel's public barrel. The
+// barrel re-exports the messaging delivery capability, whose closure reaches
+// `import 'server-only'` — a module Next resolves at build time and which is not
+// installed in the application image, so loading the barrel outside a Next build
+// fails. These are the same two published files the owner's own PostgreSQL proof
+// binds, so the contract this command speaks is unchanged.
+import { createReadDriverTelegramParkLinksHandlerV1 } from '../src/modules/telegram-channel/public/v1/driver-telegram-park-link-handler.js'
+import { legacyPrismaDriverTelegramParkLinkReadPortV1 } from '../src/modules/telegram-channel/public/v1/legacy-prisma-driver-telegram-adapter.js'
 
 type RequiredGateV1 = 'candidate' | 'input'
 
@@ -192,6 +199,9 @@ async function main(): Promise<void> {
     // Fleet owns the seam; Telegram channel owns the read. Binding them here
     // keeps the manifest dependency graph acyclic and leaves the decision in
     // the owner operation, which this command does not duplicate.
+    const readDriverTelegramParkLinksV1 = createReadDriverTelegramParkLinksHandlerV1(
+        legacyPrismaDriverTelegramParkLinkReadPortV1,
+    )
     registerCompensationPilotTelegramLinkReaderV1(async (driverIds) => {
         const result = await readDriverTelegramParkLinksV1({
             contract: READ_DRIVER_TELEGRAM_PARK_LINKS_QUERY_V1,
