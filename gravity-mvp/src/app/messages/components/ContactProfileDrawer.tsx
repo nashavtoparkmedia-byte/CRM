@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search, Copy } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
-import { useContactSearch } from "../hooks/useContactSearch"
 import { normalizeParkCheckViewStatus, useContact, type Contact, type ContactIdentity, type ParkCheckViewStatus } from "../hooks/useContact"
 import { useChannelStatus } from "../hooks/useChannelStatus"
 import { AlertCircle } from "lucide-react"
@@ -12,6 +11,9 @@ import DriverTasksWidget from "./DriverTasksWidget"
 import { WorkTaskCreateModalV1 as TaskCreateModal } from '@/modules/work-management/public/v1/task-view'
 import CallButton from "@/modules/calling/public/v1/client-ui/CallButton"
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
+import ContactSelector from '@/modules/contacts/public/v1/client-ui/ContactSelector'
+import { createHttpContactLookupClientV1 } from '@/modules/contacts/public/v1/client-ui/http-contact-lookup-client'
+import type { ContactLookupItemV1 } from '@/modules/contacts/public/v1/contact-lookup'
 import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner'
 import LinkContactModal from './LinkContactModal'
 import DriverPersonSearchModal from './DriverPersonSearchModal'
@@ -225,6 +227,10 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, cont
     )
 }
 
+// The merge picker finds a Contact through Contacts' own lookup capability; one
+// stable client keeps ContactSelector's request sequencing intact across renders.
+const contactLookupClient = createHttpContactLookupClientV1()
+
 export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
@@ -247,13 +253,25 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [showTagInput, setShowTagInput] = useState(false)
     const [showMoreMenu, setShowMoreMenu] = useState(false)
     const [showMergeDialog, setShowMergeDialog] = useState(false)
-    const [mergeSearch, setMergeSearch] = useState("")
-    const [mergeTarget, setMergeTarget] = useState<any>(null)
+    const [mergeTarget, setMergeTarget] = useState<ContactLookupItemV1 | null>(null)
+    const [mergeSelfSelected, setMergeSelfSelected] = useState(false)
     const [mergeMode, setMergeMode] = useState<'contact' | null>(null)
     const [mergeLoading, setMergeLoading] = useState(false)
     const [mergeError, setMergeError] = useState<string | null>(null)
     const [mergeSuccess, setMergeSuccess] = useState(false)
-    const { results: mergeSearchResults, loading: mergeSearchLoading } = useContactSearch(showMergeDialog ? mergeSearch : '')
+    // ContactSelector only answers "which Contact did the operator pick". The
+    // current Contact can never be its own merge target, so picking it commits
+    // nothing; the Contacts server's SELF_MERGE guard stays the real backstop.
+    const selectMergeTarget = (selected: ContactLookupItemV1 | null) => {
+        const currentContactId = contact?.id || chat?.contactId
+        if (selected !== null && selected.contactId === currentContactId) {
+            setMergeTarget(null)
+            setMergeSelfSelected(true)
+            return
+        }
+        setMergeSelfSelected(false)
+        setMergeTarget(selected)
+    }
     const [customFields, setCustomFields] = useState<CustomField[]>(defaultCustomFields)
     const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
     const [editingFieldValue, setEditingFieldValue] = useState("")
@@ -728,7 +746,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         <UserCheck size={11} /> Назначить
                     </button>
                     <button
-                        onClick={() => { setShowMergeDialog(true); setMergeMode(null); setMergeTarget(null); setMergeError(null); setMergeSuccess(false); setMergeSearch('') }}
+                        onClick={() => { setShowMergeDialog(true); setMergeMode(null); setMergeTarget(null); setMergeError(null); setMergeSuccess(false); setMergeSelfSelected(false) }}
                         className="flex-1 h-[30px] bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
                         title="Объединить контакт"
                     >
@@ -1635,8 +1653,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             try {
                                                 const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1] || 'system'
                                                 // contact-to-contact: if current is driver-linked, current is target (survivor)
-                                                const sourceId = contact?.yandexDriverId ? mergeTarget.id : (contact?.id || chat?.contactId)
-                                                const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.id
+                                                const sourceId = contact?.yandexDriverId ? mergeTarget.contactId : (contact?.id || chat?.contactId)
+                                                const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.contactId
                                                 const res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
                                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({ mergedBy: userId }),
@@ -1664,53 +1682,21 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             /* Search */
                             <div className="flex flex-col min-h-0">
                                 <div className="px-3 py-[2px] shrink-0">
-                                    <div className="relative">
-                                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                                        <input
-                                            type="text"
-                                            value={mergeSearch}
-                                            onChange={e => setMergeSearch(e.target.value)}
-                                            placeholder="Поиск контакта (имя, телефон)..."
-                                            className="w-full h-[32px] bg-[#F4F5F7] rounded-lg pl-[8px] pr-3 text-[12px] outline-none placeholder:text-gray-400"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <button onClick={() => { setMergeMode(null); setMergeSearch('') }} className="text-[11px] text-[#3390EC] mt-1 hover:underline">
+                                    <ContactSelector
+                                        label="Контакт для объединения"
+                                        placeholder="Поиск контакта (имя, телефон)..."
+                                        lookup={contactLookupClient}
+                                        value={mergeTarget}
+                                        onChange={selectMergeTarget}
+                                    />
+                                    {mergeSelfSelected && (
+                                        <p role="status" className="mt-1 text-[11px] text-amber-700">
+                                            Это текущий контакт — выберите другой.
+                                        </p>
+                                    )}
+                                    <button onClick={() => { setMergeMode(null); setMergeSelfSelected(false) }} className="text-[11px] text-[#3390EC] mt-1 hover:underline">
                                         ← Назад к выбору типа
                                     </button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto max-h-[280px]">
-                                    {mergeSearchLoading && mergeSearch.length >= 2 && (
-                                        <div className="px-[4px] py-3 text-[11px] text-gray-400 flex items-center gap-[2px]">
-                                            <Loader2 size={12} className="animate-spin" /> Поиск...
-                                        </div>
-                                    )}
-                                    {mergeSearch.length >= 2 && !mergeSearchLoading && mergeSearchResults.length === 0 && (
-                                        <div className="px-[4px] py-6 text-center text-[12px] text-gray-400">Ничего не найдено</div>
-                                    )}
-                                    {mergeSearchResults.filter(r => r.id !== contact?.id).map(result => {
-                                        const phone = result.phones?.[0]?.phone
-                                        return (
-                                            <button
-                                                key={result.id}
-                                                onClick={() => setMergeTarget(result)}
-                                                className="w-full px-3 py-[2px] text-left flex items-center gap-2.5 transition-colors hover:bg-blue-50 cursor-pointer"
-                                            >
-                                                <div className="h-[36px] w-[36px] rounded-full bg-[#E3E8ED] text-[#6B7A8D] flex items-center justify-center font-bold text-[12px] shrink-0">
-                                                    {(result.displayName || '?')[0].toUpperCase()}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-[12px] font-semibold text-[#111] truncate">{result.displayName || 'Без имени'}</div>
-                                                    <div className="text-[10px] text-gray-400 flex items-center gap-1">
-                                                        {phone && <span className="font-mono">{phone}</span>}
-                                                        {result.channels?.map((ch: string) => (
-                                                            <span key={ch} className="text-[8px] font-bold bg-gray-100 px-1 py-px rounded">{ch === 'whatsapp' ? 'WA' : ch === 'telegram' ? 'TG' : ch.toUpperCase()}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        )
-                                    })}
                                 </div>
                             </div>
                         )}
