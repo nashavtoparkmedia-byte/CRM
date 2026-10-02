@@ -35,8 +35,13 @@ test-root mode, and emits a checksum-bound installer and `package-manifest.json`
 under ignored `dist/`.
 
 The root installer takes no arguments and holds the coordinated bootstrap
-lock. It is idempotent and accepts only the exact original 2.0.0-21 as its
-prestate. It stores the interim DEB at its content-addressed path under
+lock. It never acts on the package inside the unprivileged builder tree: it
+copies it once (`O_NOFOLLOW`, regular file) into a root-private `0700` work
+directory and verifies, stores and installs only that copy. The Owner command
+likewise installs a root-owned `0500` copy of the installer into a fresh
+root-only directory and verifies its digest there before executing it.
+The installer is idempotent and accepts only the exact original 2.0.0-21 as
+its prestate. It stores the interim DEB at its content-addressed path under
 `/var/lib/yoko-privileged-runtime/activation-bootstraps/`, where a successor
 Runtime requires its direct rollback package. It requires Gravity, tg-bot,
 MAX, PostgreSQL and the audit ledger to be identical before and after. On any

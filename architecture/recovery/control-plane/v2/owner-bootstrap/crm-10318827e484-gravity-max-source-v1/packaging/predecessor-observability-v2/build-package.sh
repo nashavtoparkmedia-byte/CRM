@@ -222,7 +222,8 @@ PY
 /usr/bin/chmod 0555 "$WORK/installer"
 /usr/bin/mv -f "$WORK/installer" "$INSTALLER"
 INSTALLER_SHA256=$(/usr/bin/sha256sum "$INSTALLER" | /usr/bin/cut -d ' ' -f 1)
-OWNER_COMMAND="/usr/bin/test \"\$(/usr/bin/sha256sum '$INSTALLER' | /usr/bin/cut -d ' ' -f 1)\" = '$INSTALLER_SHA256' && /bin/sh '$INSTALLER'"
+# Root runs a verified root-owned copy, never the file in this unprivileged tree.
+OWNER_COMMAND="D=\$(/usr/bin/mktemp -d /root/yoko-observer-v2-install.XXXXXX) && /usr/bin/install -o root -g root -m 0500 '$INSTALLER' \"\$D/install.sh\" && /usr/bin/test \"\$(/usr/bin/sha256sum \"\$D/install.sh\" | /usr/bin/cut -d ' ' -f 1)\" = '$INSTALLER_SHA256' && /bin/sh \"\$D/install.sh\"; rc=\$?; /usr/bin/rm -rf -- \"\$D\"; exit \$rc"
 
 /usr/bin/python3 -I - "$WORK/package-manifest.json" "$SOURCE_COMMIT" "$SOURCE_TREE" "$PACKAGE_SHA256" "$INSTALLER_SHA256" "$RUNTIME_SHA256" "$NEW_OBSERVER_SHA256" "$INSTALL_MANIFEST_SHA256" "$ROLLBACK_DEB_SHA256" <<'PY'
 import json,pathlib,sys

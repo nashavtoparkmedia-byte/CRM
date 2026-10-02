@@ -52,8 +52,30 @@ hash_is() {
 }
 
 package_identity_ok() {
-    hash_is "$PACKAGE_PATH" "$PACKAGE_SHA256" \
-        && [ "$(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Package) $(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Version) $(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Architecture)" = "yoko-privileged-runtime $VERSION all" ]
+    hash_is "$1" "$PACKAGE_SHA256" \
+        && [ "$(/usr/bin/dpkg-deb -f "$1" Package) $(/usr/bin/dpkg-deb -f "$1" Version) $(/usr/bin/dpkg-deb -f "$1" Architecture)" = "yoko-privileged-runtime $VERSION all" ]
+}
+
+# PACKAGE_PATH lives in the unprivileged builder's tree. Copy it once into a
+# root-private directory and verify and use only that copy, so the bytes that
+# are checked are the bytes that are stored and installed.
+private_copy() {
+    /usr/bin/python3 -I - "$1" "$2" <<'PY'
+import os,stat,sys
+source,destination=sys.argv[1:]
+src=os.open(source,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK)
+try:
+    if not stat.S_ISREG(os.fstat(src).st_mode): raise SystemExit('package source is not a regular file')
+    dst=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_CLOEXEC|os.O_NOFOLLOW,0o400)
+    try:
+        while chunk:=os.read(src,1024*1024):
+            os.write(dst,chunk)
+        os.fchown(dst,0,0); os.fchmod(dst,0o400); os.fsync(dst)
+    finally:
+        os.close(dst)
+finally:
+    os.close(src)
+PY
 }
 
 stored_exact() {
@@ -121,7 +143,7 @@ store_interim() {
         return
     fi
     /usr/bin/mkdir -m 0700 "$INTERIM_STORE"
-    /usr/bin/python3 -I - "$PACKAGE_PATH" "$INTERIM_DEB" <<'PY'
+    /usr/bin/python3 -I - "$PRIVATE_PACKAGE" "$INTERIM_DEB" <<'PY'
 import os,sys
 source,destination=sys.argv[1:]
 src=os.open(source,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
@@ -142,7 +164,20 @@ rollback_exact() {
         && old_state_ok && self_check_is "$OLD_OBSERVER_SHA256"
 }
 
-if ! package_identity_ok; then
+WORK=$(/usr/bin/mktemp -d /var/tmp/yoko-predecessor-observability-v2-install.XXXXXX)
+cleanup() {
+    case "$WORK" in
+        /var/tmp/yoko-predecessor-observability-v2-install.*)
+            /usr/bin/find "$WORK" -type f -exec /usr/bin/unlink {} \;
+            /usr/bin/rmdir "$WORK"
+            ;;
+    esac
+}
+trap cleanup EXIT HUP INT TERM
+[ "$(/usr/bin/stat -c '%u:%g:%a' "$WORK")" = '0:0:700' ] || { echo 'PRIVATE_WORK_DIRECTORY_UNSAFE' >&2; exit 78; }
+PRIVATE_PACKAGE="$WORK/package.deb"
+private_copy "$PACKAGE_PATH" "$PRIVATE_PACKAGE" || { echo 'OBSERVABILITY_PACKAGE_COPY_FAILED' >&2; exit 78; }
+if ! package_identity_ok "$PRIVATE_PACKAGE"; then
     echo 'OBSERVABILITY_PACKAGE_IDENTITY_INVALID' >&2
     exit 78
 fi
@@ -172,17 +207,6 @@ if ! old_state_ok || ! self_check_is "$OLD_OBSERVER_SHA256"; then
     exit 78
 fi
 
-WORK=$(/usr/bin/mktemp -d /var/tmp/yoko-predecessor-observability-v2-install.XXXXXX)
-cleanup() {
-    case "$WORK" in
-        /var/tmp/yoko-predecessor-observability-v2-install.*)
-            /usr/bin/find "$WORK" -type f -exec /usr/bin/unlink {} \;
-            /usr/bin/rmdir "$WORK"
-            ;;
-    esac
-}
-trap cleanup EXIT HUP INT TERM
-
 fail() {
     reason=$1
     if rollback_exact && capture_identity "$WORK/rolled-back" && /usr/bin/cmp -s "$WORK/before" "$WORK/rolled-back"; then
@@ -195,7 +219,8 @@ fail() {
 
 capture_identity "$WORK/before"
 store_interim || { echo 'INTERIM_PACKAGE_STORE_FAILED' >&2; exit 74; }
-DEBIAN_FRONTEND=noninteractive /usr/bin/dpkg --install "$PACKAGE_PATH" >/dev/null || fail OBSERVABILITY_INSTALL_FAILED
+package_identity_ok "$PRIVATE_PACKAGE" || fail OBSERVABILITY_PACKAGE_IDENTITY_CHANGED
+DEBIAN_FRONTEND=noninteractive /usr/bin/dpkg --install "$PRIVATE_PACKAGE" >/dev/null || fail OBSERVABILITY_INSTALL_FAILED
 { new_state_ok && self_check_is "$NEW_OBSERVER_SHA256"; } || fail OBSERVABILITY_INSTALL_VERIFICATION_FAILED
 capture_identity "$WORK/after"
 /usr/bin/cmp -s "$WORK/before" "$WORK/after" || fail PRODUCTION_OR_AUDIT_IDENTITY_CHANGED
