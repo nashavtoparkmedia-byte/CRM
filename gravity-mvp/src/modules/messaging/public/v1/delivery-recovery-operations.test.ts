@@ -53,6 +53,10 @@ describe('Messaging delivery recovery operations', () => {
         expect(sql).toContain("status = 'failed'")
         expect(sql).toContain("direction = 'outbound'")
         expect(sql).toContain("metadata->>'retryable'")
+        // Only the current taxonomy's explicit safe outcome is a candidate: a
+        // v1 row marked retryable, or an unknown/terminal outcome, never is.
+        expect(sql).toContain("metadata->>'deliveryOutcome' = 'safe_to_redeliver'")
+        expect(sql).toContain("THEN (metadata->>'errorSchemaVersion')::int ELSE 0 END >= 2")
         expect(sql).toContain("INTERVAL '24 hours'")
         expect(sql).toContain('ORDER BY "sentAt" ASC')
         expect(sql).toContain('LIMIT 10')

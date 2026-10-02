@@ -353,6 +353,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -404,6 +406,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -446,6 +450,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -476,7 +482,10 @@ describe('MessageService MAX outbound delivery', () => {
         })
     })
 
-    it('keeps pending MAX delivery retryable through recovery and reuses the same Message row', async () => {
+    // A send_requested row is one the transport accepted without proof: the
+    // contact may already have it. Recovery therefore records the outcome as
+    // unknown, and nothing — the retry job or an operator — may resend it.
+    it('records a pending MAX delivery as outcome-unknown through recovery and never redelivers it', async () => {
         const storedMessage: any = {
             id: 'message-recovery-retry',
             chatId: 'chat-max',
@@ -526,22 +535,28 @@ describe('MessageService MAX outbound delivery', () => {
             metadata: {
                 maxDelivery: expect.objectContaining({ status: 'send_requested' }),
                 errorCode: 'TIMEOUT',
-                retryable: true,
+                retryable: false,
+                deliveryOutcome: 'unknown',
             },
         })
 
-        await expect(MessageService.retrySend(storedMessage.id)).resolves.toEqual({ success: true })
+        await expect(MessageService.retrySend(storedMessage.id)).resolves.toEqual({
+            success: false,
+            error: 'Not retryable',
+        })
+        await expect(MessageService.retrySend(storedMessage.id, { operatorInitiated: true })).resolves.toEqual({
+            success: false,
+            error: 'Not retryable',
+        })
 
+        expect(mocks.maxSendText).not.toHaveBeenCalled()
         expect(storedMessage).toMatchObject({
             id: 'message-recovery-retry',
-            status: 'sent',
+            status: 'failed',
             metadata: {
-                maxDelivery: expect.objectContaining({
-                    status: 'send_requested',
-                    deliveryConfirmed: false,
-                }),
-                retryable: true,
-                retryAttempt: 1,
+                maxDelivery: expect.objectContaining({ status: 'send_requested' }),
+                retryable: false,
+                deliveryOutcome: 'unknown',
             },
         })
         expect(mocks.messageCreate).not.toHaveBeenCalled()
@@ -563,6 +578,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2020-01-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
@@ -619,6 +636,8 @@ describe('MessageService MAX outbound delivery', () => {
             updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
+                deliveryOutcome: 'safe_to_redeliver',
+                errorSchemaVersion: 2,
                 retryAttempt: 0,
                 maxRetries: 3,
                 lastFailedAt: '2020-01-01T00:00:00.000Z',
