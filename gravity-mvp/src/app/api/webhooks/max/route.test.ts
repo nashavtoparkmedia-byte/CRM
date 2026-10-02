@@ -1567,4 +1567,63 @@ describe('MAX webhook DOM-fallback peer binding', () => {
     expect(mocks.resolveContact).toHaveBeenCalledOnce()
     expect(mocks.recordReachability).toHaveBeenCalledOnce()
   })
+  // `live_dom_recovery` is the SAME trust class as `dom_fallback`, reached by different
+  // evidence. Its externalId is the real provider message id - canonical so the provider
+  // path and DOM recovery dedupe against each other - which embeds no chat id and so cannot
+  // satisfy the synthetic invariant by design. In production that made the better-evidenced
+  // inbound the one skipping this proof, and the refusal then left the pending provider id
+  // unconfirmed, wedging every later inbound on the chat.
+  const LIVE_PROVIDER_ID = 'd301a0e7130fd21954'
+
+  test('accepts a live_dom_recovery inbound bound by provider id and attested route', async () => {
+    await expectBound(await POST(domRequest({ source: 'live_dom_recovery', externalId: LIVE_PROVIDER_ID })))
+
+    // the EXISTING peer proof ran, unchanged
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-c4',
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-c4',
+      metadata: expect.objectContaining({ senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' }),
+    }))
+  })
+
+  test('refuses a live_dom_recovery inbound whose chat binding does not agree', async () => {
+    await expectUnproven(await POST(domRequest({
+      source: 'live_dom_recovery',
+      externalId: LIVE_PROVIDER_ID,
+      rawChatId: '902400000777',
+    })))
+  })
+
+  test('refuses a live_dom_recovery inbound whose route is not fully attested', async () => {
+    await expectUnproven(await POST(domRequest({
+      source: 'live_dom_recovery',
+      externalId: LIVE_PROVIDER_ID,
+      domRoute: attestedRoute({ verified: false }),
+    })))
+  })
+
+  test('refuses a live_dom_recovery inbound whose peer cannot be proven', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-other', externalChatId: '902400000777' })])
+    await expectUnproven(await POST(domRequest({ source: 'live_dom_recovery', externalId: LIVE_PROVIDER_ID })))
+  })
+
+  test('never binds a live_dom_recovery inbound that presents a synthetic id', async () => {
+    // Claiming provider evidence while carrying a minted id must not reach the
+    // provider-backed binding. Such an event is dropped as an unrecoverable placeholder on
+    // this source - it is not stored and the peer proof never runs for it.
+    await POST(domRequest({ source: 'live_dom_recovery' }))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.createConversation).not.toHaveBeenCalled()
+  })
+
+  test('still refuses a dom_fallback inbound carrying a real provider id', async () => {
+    // The synthetic-id invariant on the dom_fallback path is untouched.
+    await expectUnproven(await POST(domRequest({ externalId: LIVE_PROVIDER_ID })))
+  })
 })

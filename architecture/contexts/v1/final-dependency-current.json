@@ -1,10 +1,10 @@
 {
   "generated_from": "architecture/contexts/v1/final-dependency-source.json",
-  "source_sha256": "6d2e8322e457eec644ae4424b384c6d1230d10716336861f6de6f10823e927b2",
+  "source_sha256": "d401023a89c78433bbe44e5084ff7beab6d69bc3e3e1224e07b5ded26ed1bba8",
   "schema": "yoko.crm.final-dependency-current.v1",
   "summary": {
     "architecture_findings": 0,
-    "cross_context_imports": 903,
+    "cross_context_imports": 908,
     "forbidden_dependencies": 0,
     "public_surface_migrations": 0,
     "relationships": 73

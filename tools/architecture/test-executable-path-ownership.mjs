@@ -13,6 +13,10 @@ import {
   AMENDMENT_MERGE_COMPOSITION_KIND,
   COMPOSITION_ANCHOR_AUTHORITY,
   COMPOSITION_MERGED_AUTHORITY,
+  CURRENT_REVIEWS_SCHEMA,
+  EXACT_INVENTORY_ADMISSION_DECISION,
+  NEW_SURFACE_ASSIGNMENT_DECISION,
+  resolveEffectiveOwnershipState,
   resolveReviewedOwnershipExtension,
 } from './reviewed-ownership-amendments.mjs'
 
@@ -106,7 +110,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2506,
+  denominator: 2520,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))
@@ -763,6 +767,383 @@ rejectsComposed(
 )
 compositionProbes.carried_evidence_is_anchored = 'ENFORCED'
 
+// ---------------------------------------------------------------------------
+// New executable surface assignment (current-review epochs).
+//
+// An amendment may never assign ownership to a path no reviewer examined, and a
+// dated historical review may never be rewritten to claim it did. A genuinely
+// new executable surface that joins a reviewed exact inventory is therefore
+// admitted by an append-only current-review epoch carrying its own present-day
+// reviewer. These probes pin that the epoch anchors the exact amendment prefix
+// it follows, pins the historical registry, adds only never-assigned paths,
+// accounts for every admitted inventory path, can never carry a rebind, and
+// that amendments appended after it keep composing from the effective tail.
+// ---------------------------------------------------------------------------
+const currentReviewProbes = {}
+const INVENTORY_KEY = 'gravity_runtime_remainder|exact_runtime_inventory'
+const pinnedInventory = { path_count: 10, path_sha256: hash('93') }
+const admittedInventory = { path_count: 12, path_sha256: hash('a4') }
+const reviewedCurrent = { tracked_executable_surfaces: 103, tracked_inventory_sha256: hash('71'), coverage_sha256: hash('82') }
+const secondReviewedCurrent = { tracked_executable_surfaces: 104, tracked_inventory_sha256: hash('7a'), coverage_sha256: hash('8b') }
+const ALREADY_ASSIGNED = 'gravity-mvp/src/app/api/existing/route.ts'
+// The historical registry as the resolver reads it: its denominator, the paths it
+// assigned and the exact-inventory membership it pinned.
+const reviewDecisions = {
+  ...historicalDecisions,
+  assignments: [{ path: ALREADY_ASSIGNED }],
+  exact_inventory_changes: [{ exclusion: 'gravity_runtime_remainder', inventory_kind: 'exact_runtime_inventory', current_inventory: { ...pinnedInventory } }],
+}
+// The epoch chain starts at the resolved amendment tail, so the three authority
+// stages compose: historical registry -> amendment -> epoch.
+const reviewAmendments = chainOf(baseAmendment())
+const reviewTail = resolveProbe(reviewAmendments).current
+// The resolver's own canonical form: object keys sorted, array order preserved.
+const prefixDigest = (list) => createHash('sha256').update(JSON.stringify(canonical(list))).digest('hex')
+const anchorFor = (count, list = reviewAmendments.amendments) => ({
+  amendments_path: PROBE_AMENDMENTS_PATH,
+  amendment_count: count,
+  amendments_prefix_sha256: prefixDigest(list.slice(0, count)),
+})
+const reviewContext = (overrides = {}) => ({
+  decisionRegistryPath: REGISTRY_PATH,
+  decisionRegistrySha256: REGISTRY_DIGEST,
+  historicalReviewer: HISTORICAL_REVIEWER,
+  historicalReviewRole: HISTORICAL_ROLE,
+  amendmentsPath: PROBE_AMENDMENTS_PATH,
+  ...overrides,
+})
+const newSurface = (surfacePath, overrides = {}) => ({
+  path: surfacePath,
+  lifecycle: 'APPLICATION_RUNTIME',
+  functional_owner: 'legacy_gravity_runtime',
+  exclusion: 'gravity_runtime_remainder',
+  inventory_kind: 'exact_runtime_inventory',
+  source_sha256: hash('b5'),
+  review_decision: NEW_SURFACE_ASSIGNMENT_DECISION,
+  review_rationale: rationale,
+  ...overrides,
+})
+const admission = (overrides = {}) => ({
+  exclusion: 'gravity_runtime_remainder',
+  inventory_kind: 'exact_runtime_inventory',
+  previous_inventory: { ...pinnedInventory },
+  current_inventory: { ...admittedInventory },
+  review_decision: EXACT_INVENTORY_ADMISSION_DECISION,
+  review_rationale: rationale,
+  ...overrides,
+})
+const NEW_ROUTE = 'gravity-mvp/src/app/api/new/route.ts'
+const NEW_COMPOSITION = 'gravity-mvp/src/infrastructure/new-composition.ts'
+const epochOf = (overrides = {}) => ({
+  epoch: 1,
+  reviewed_at: '2026-10-01T00:00:00Z',
+  reviewed_by: 'OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20261001',
+  role: 'PRODUCT_OWNER_AUTHORIZED_REVIEW',
+  authorization: 'PRODUCT_OWNER_AUTHORIZED_EXECUTABLE_OWNERSHIP_REVIEW_EXTENSION',
+  reason: rationale,
+  amendment_anchor: anchorFor(1),
+  predecessor: { ...reviewTail },
+  current: { ...reviewedCurrent },
+  exact_inventory_admissions: [admission()],
+  new_surface_assignments: [newSurface(NEW_ROUTE), newSurface(NEW_COMPOSITION, { source_sha256: hash('c6') })],
+  ...overrides,
+})
+const reviewsOf = (...epochs) => ({
+  schema: CURRENT_REVIEWS_SCHEMA,
+  version: 1,
+  base: {
+    decision_registry_path: REGISTRY_PATH,
+    decision_registry_sha256: REGISTRY_DIGEST,
+  },
+  epochs,
+})
+const resolveReview = (reviews, { decisions = reviewDecisions, amendments = reviewAmendments, context = reviewContext() } = {}) => (
+  resolveEffectiveOwnershipState(decisions, amendments, reviews, context)
+)
+const rejectsReview = (reviews, expected, label, options) => assert.throws(() => resolveReview(reviews, options), expected, label)
+
+// R1. No current-review document resolves to the amendment tail exactly, so
+// historical and amendment behaviour is untouched when nothing is admitted.
+const unreviewed = resolveReview(null)
+assert.deepEqual(unreviewed.current, reviewTail, 'absent current reviews must resolve to the exact amendment tail')
+assert.equal(unreviewed.epochs, 0)
+assert.equal(unreviewed.epochAssignments.size, 0)
+assert.equal(unreviewed.admissions.size, 0)
+// With no current-review document the effective state IS the unchanged
+// amendment extension, field for field.
+const unchangedExtension = resolveProbe(reviewAmendments)
+for (const field of ['current', 'rebinds', 'unassigned', 'amendments', 'compositions']) {
+  assert.deepEqual(unreviewed[field], unchangedExtension[field], `absent current reviews must leave the amendment ${field} exactly as before`)
+}
+assert.deepEqual(unchangedExtension.current, amendedCurrent, 'the amendment chain must resolve exactly as before')
+currentReviewProbes.absent_reviews_leave_history_and_amendments_unchanged = 'PRESERVED'
+
+// R2. A valid epoch assigns exactly its new surfaces and advances the denominator.
+const reviewed = resolveReview(reviewsOf(epochOf()))
+assert.deepEqual(reviewed.current, reviewedCurrent, 'a valid epoch must advance the effective denominator')
+assert.deepEqual([...reviewed.epochAssignments.keys()].sort(), [NEW_COMPOSITION, NEW_ROUTE].sort(), 'a valid epoch must assign exactly its reviewed surfaces')
+assert.equal(reviewed.epochAssignments.get(NEW_ROUTE)?.epoch, 1)
+assert.equal(reviewed.epochAssignments.get(NEW_ROUTE)?.reviewed_by, undefined, 'an assignment inherits no reviewer field of its own')
+assert.deepEqual(reviewed.admissions.get(INVENTORY_KEY)?.current_inventory, admittedInventory, 'the admitted exact inventory must advance')
+currentReviewProbes.present_day_review_assigns_exact_new_surfaces = 'ACCEPTED'
+
+// R3. Ordered epochs chain: the second extends exactly the first's tail.
+const secondEpoch = epochOf({
+  epoch: 2,
+  predecessor: { ...reviewedCurrent },
+  current: { ...secondReviewedCurrent },
+  exact_inventory_admissions: [admission({ previous_inventory: { ...admittedInventory }, current_inventory: { path_count: 13, path_sha256: hash('d7') } })],
+  new_surface_assignments: [newSurface('gravity-mvp/src/app/api/third/route.ts', { source_sha256: hash('e8') })],
+})
+const chained = resolveReview(reviewsOf(epochOf(), secondEpoch))
+assert.deepEqual(chained.current, secondReviewedCurrent, 'ordered epochs must resolve to the last exact tail')
+assert.equal(chained.epochs, 2)
+assert.equal(chained.epochAssignments.size, 3)
+currentReviewProbes.ordered_epochs_chain_exactly = 'ACCEPTED'
+
+// B. Both epochs admit into the SAME exact inventory. The summary the validator
+// consumes keeps the chain ORIGIN — the membership the historical registry
+// pinned — and the LATEST membership, so a second epoch is compared with the
+// registry it actually extends, never with its own immediate predecessor.
+const chainedAdmission = chained.admissions.get(INVENTORY_KEY)
+assert.deepEqual(chainedAdmission?.previous_inventory, pinnedInventory, 'a second epoch must still compare against the chain origin the registry pinned')
+assert.deepEqual(chainedAdmission?.current_inventory, { path_count: 13, path_sha256: hash('d7') }, 'the admission summary must carry the latest membership')
+assert.deepEqual(chainedAdmission?.epochs, [1, 2], 'the admission summary must name every epoch that admitted into the inventory')
+currentReviewProbes.second_epoch_same_inventory_compares_against_chain_origin = 'ACCEPTED'
+
+// N1. An admitted inventory path that no reviewer assigned fails closed.
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE)] })),
+  /admission growth is not exactly the reviewed new surfaces/u,
+  'a new exact-inventory path without a current review must fail',
+)
+currentReviewProbes.unreviewed_new_path = 'REJECTED'
+
+// N2. A current review may never claim historical reviewer provenance.
+rejectsReview(reviewsOf(epochOf({ reviewed_by: HISTORICAL_REVIEWER })), /may not restate the historical reviewer/u, 'historical reviewer provenance must fail')
+rejectsReview(reviewsOf(epochOf({ role: HISTORICAL_ROLE })), /may not restate the historical review role/u, 'historical review role must fail')
+for (const field of ['reviewed_by', 'role', 'reviewed_at', 'authorization']) {
+  rejectsReview(reviewsOf(epochOf({ [field]: '' })), /may not restate|date missing|authorization missing/u, `an epoch must carry its own ${field}`)
+}
+rejectsReview(reviewsOf(epochOf({ reason: 'too short' })), /lacks an explicit reason/u, 'an epoch must carry an explicit reason')
+currentReviewProbes.historical_provenance_claim = 'REJECTED'
+
+// N3. Wrong predecessor documents fail closed.
+rejectsReview({ ...reviewsOf(epochOf()), base: { ...reviewsOf().base, decision_registry_sha256: hash('99') } }, /do not pin the exact immutable historical review bytes/u, 'a wrong registry digest must fail')
+currentReviewProbes.wrong_or_forked_predecessor_documents = 'REJECTED'
+
+// D. The amendment prefix an epoch anchors is content-addressed: a wrong digest,
+// or a forked amendment history under an unchanged anchor, fails closed.
+rejectsReview(
+  reviewsOf(epochOf({ amendment_anchor: { ...anchorFor(1), amendments_prefix_sha256: hash('99') } })),
+  /does not follow the exact amendment chain prefix it names/u,
+  'a wrong amendment-prefix digest must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf()),
+  /does not follow the exact amendment chain prefix it names/u,
+  'a forked amendment history under an unchanged anchor must fail',
+  { amendments: chainOf({ ...baseAmendment(), reason: `${rationale} Rewritten after the epoch anchored it.` }) },
+)
+currentReviewProbes.wrong_amendment_prefix_digest = 'REJECTED'
+
+// E. An anchor must name the real amendment document and an in-range,
+// non-decreasing prefix length.
+rejectsReview(reviewsOf(epochOf({ amendment_anchor: anchorFor(2) })), /out of order or out of range/u, 'an anchor beyond the amendment chain must fail')
+rejectsReview(reviewsOf(epochOf({ amendment_anchor: { ...anchorFor(1), amendment_count: -1 } })), /out of order or out of range/u, 'a negative anchor must fail')
+rejectsReview(reviewsOf(epochOf({ amendment_anchor: { ...anchorFor(1), amendment_count: 0.5 } })), /out of order or out of range/u, 'a fractional anchor must fail')
+rejectsReview(reviewsOf(epochOf(), { ...secondEpoch, amendment_anchor: anchorFor(0) }), /out of order or out of range/u, 'an anchor that moves backwards must fail')
+rejectsReview(reviewsOf(epochOf({ amendment_anchor: undefined })), /does not anchor the amendment chain it follows/u, 'an epoch without an anchor must fail')
+rejectsReview(reviewsOf(epochOf({ amendment_anchor: { ...anchorFor(1), amendments_path: 'architecture/does/not/exist.json' } })), /anchors a different amendment document/u, 'an anchor naming another document must fail')
+rejectsReview(reviewsOf(epochOf()), /anchors a different amendment document/u, 'anchoring an absent amendment document must fail', { amendments: null, context: reviewContext({ amendmentsPath: undefined }) })
+currentReviewProbes.out_of_range_amendment_anchor = 'REJECTED'
+
+// N4. A stale predecessor triple fails closed.
+rejectsReview(reviewsOf(epochOf({ predecessor: { ...reviewTail, tracked_executable_surfaces: 99 } })), /does not extend its exact predecessor/u, 'a stale predecessor denominator must fail')
+rejectsReview(reviewsOf(epochOf({ predecessor: { ...reviewTail, coverage_sha256: hash('99') } })), /does not extend its exact predecessor/u, 'a stale predecessor coverage digest must fail')
+currentReviewProbes.stale_predecessor = 'REJECTED'
+
+// N5. Forked, skipped and reordered epochs fail closed: there is no latest-file-wins.
+rejectsReview(reviewsOf(epochOf(), epochOf({ predecessor: { ...reviewTail } })), /is not the next ordinal/u, 'two epochs claiming ordinal one must fail')
+rejectsReview(reviewsOf(epochOf(), { ...secondEpoch, predecessor: { ...reviewTail } }), /does not extend its exact predecessor/u, 'a forked second epoch must fail')
+rejectsReview(reviewsOf(epochOf(), { ...secondEpoch, epoch: 3 }), /is not the next ordinal/u, 'a skipped epoch must fail')
+rejectsReview(reviewsOf(secondEpoch, epochOf()), /is not the next ordinal/u, 'reordered epochs must fail')
+rejectsReview({ ...reviewsOf(), epochs: [] }, /epoch chain is empty/u, 'an empty epoch chain must fail')
+currentReviewProbes.forked_skipped_or_reordered_epoch = 'REJECTED'
+
+// N6. Duplicate and conflicting assignments fail closed.
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE), newSurface(NEW_ROUTE, { functional_owner: 'contacts' })] })),
+  /conflicting current ownership review assignment within one epoch/u,
+  'one path assigned twice in one epoch must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf(), { ...secondEpoch, new_surface_assignments: [newSurface(NEW_ROUTE)] }),
+  /duplicate current ownership review assignment/u,
+  'a path reassigned by a later epoch must fail',
+)
+currentReviewProbes.duplicate_or_conflicting_assignment = 'REJECTED'
+
+// N7. An epoch can never reach an already reviewed surface, so ownership cannot be weakened.
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE), newSurface(ALREADY_ASSIGNED, { lifecycle: 'TEST' })] })),
+  /may not reassign an already reviewed surface/u,
+  'weakening an already reviewed assignment must fail',
+)
+currentReviewProbes.ownership_weakening = 'REJECTED'
+
+// N8. REBIND != NEW OWNERSHIP REVIEW: an epoch may never carry a rebind or any
+// other authority's semantics, and its decisions use their own constants.
+for (const forbidden of ['source_hash_rebinds', 'assignments', 'exact_inventory_changes', 'unassigned_tracked_surfaces', 'authority_composition']) {
+  rejectsReview(reviewsOf(epochOf({ [forbidden]: [{ path: NEW_ROUTE }] })), /may not carry foreign authority semantics/u, `an epoch must not carry ${forbidden}`)
+}
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE, { review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND' }), newSurface(NEW_COMPOSITION)] })),
+  /new surface assignment lacks an explicit decision/u,
+  'a rebind decision can never create ownership',
+)
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE, { review_decision: 'APPROVED_CURRENT_ASSIGNMENT' }), newSurface(NEW_COMPOSITION)] })),
+  /new surface assignment lacks an explicit decision/u,
+  'the historical assignment decision may not be borrowed',
+)
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [admission({ review_decision: 'APPROVED_EXACT_INVENTORY_TRANSITION' })] })),
+  /admission lacks an explicit decision/u,
+  'the historical inventory transition decision may not be borrowed',
+)
+currentReviewProbes.rebind_as_review = 'REJECTED'
+
+// N9. Stale exact-inventory membership fails closed.
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [admission({ previous_inventory: { path_count: 10, path_sha256: hash('99') } })] })),
+  /does not extend the pinned membership/u,
+  'an admission that does not extend the pinned membership must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [admission({ current_inventory: { path_count: 9, path_sha256: hash('a4') } })] })),
+  /must admit new surfaces/u,
+  'an admission that shrinks the inventory must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [admission({ exclusion: 'unpinned_exclusion' })], new_surface_assignments: [newSurface(NEW_ROUTE, { exclusion: 'unpinned_exclusion' }), newSurface(NEW_COMPOSITION, { exclusion: 'unpinned_exclusion' })] })),
+  /admits an exact inventory no authority pins/u,
+  'admitting an inventory no authority pins must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [admission(), admission()] })),
+  /duplicate current ownership review exact inventory admission/u,
+  'admitting one inventory twice in an epoch must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf({ exact_inventory_admissions: [] })),
+  /without admitting its membership/u,
+  'assigning into an exact inventory without admitting it must fail',
+)
+currentReviewProbes.stale_exact_inventory = 'REJECTED'
+
+// N10. Stale or malformed denominator and digests fail closed.
+rejectsReview(reviewsOf(epochOf({ current: { ...reviewTail } })), /must advance the executable denominator/u, 'an epoch that does not advance the denominator must fail')
+rejectsReview(reviewsOf(epochOf({ current: { ...reviewedCurrent, tracked_inventory_sha256: 'not-a-digest' } })), /current denominator invalid/u, 'a malformed tracked inventory digest must fail')
+rejectsReview(reviewsOf(epochOf({ current: { ...reviewedCurrent, coverage_sha256: undefined } })), /current denominator invalid/u, 'a missing coverage digest must fail')
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE, { source_sha256: 'not-a-digest' }), newSurface(NEW_COMPOSITION)] })),
+  /source hash invalid/u,
+  'a malformed surface fingerprint must fail',
+)
+currentReviewProbes.stale_or_malformed_denominator_and_digests = 'REJECTED'
+
+// N11. A current review may contain no path beyond the exact surfaces it admits.
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE), newSurface(NEW_COMPOSITION), newSurface('gravity-mvp/src/app/api/unrelated/route.ts', { source_sha256: hash('f9') })] })),
+  /admission growth is not exactly the reviewed new surfaces/u,
+  'an unrelated extra path inside the admitted inventory must fail',
+)
+rejectsReview(
+  reviewsOf(epochOf({ new_surface_assignments: [newSurface(NEW_ROUTE), newSurface(NEW_COMPOSITION), newSurface('gravity-mvp/src/modules/contacts/unrelated.ts', { exclusion: 'contacts', inventory_kind: 'context_owned' })] })),
+  /may only assign a surface that joins a reviewed exact inventory/u,
+  'an unrelated extra path outside any reviewed exact inventory must fail',
+)
+rejectsReview(reviewsOf(epochOf({ new_surface_assignments: [] })), /assigns no new surface/u, 'an epoch that assigns nothing must fail')
+currentReviewProbes.unrelated_additional_path = 'REJECTED'
+
+// N12. Document identity fails closed.
+rejectsReview({ ...reviewsOf(epochOf()), schema: 'yoko.crm.something-else.v1' }, /registry identity mismatch/u, 'a foreign schema must fail')
+rejectsReview({ ...reviewsOf(epochOf()), version: 2 }, /registry identity mismatch/u, 'an unknown version must fail')
+currentReviewProbes.document_identity = 'ENFORCED'
+
+// A. Amendments appended AFTER an epoch keep composing from the effective tail
+// without rewriting the epoch: the prefix it anchors is unchanged, so epoch 1
+// stays valid while the new amendments chain from its tail.
+const afterEpochCurrent = { tracked_executable_surfaces: 105, tracked_inventory_sha256: hash('9c'), coverage_sha256: hash('ad') }
+const denominatorAfterEpoch = {
+  ...baseAmendment(),
+  amendment_id: 'probe-amendment-after-epoch',
+  predecessor: { ...reviewedCurrent },
+  current: { ...afterEpochCurrent },
+  unassigned_tracked_surfaces: [{ path: 'b/later.test.ts', lifecycle: 'TEST', review_decision: 'APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT', review_rationale: rationale }],
+  source_hash_rebinds: [
+    { path: 'a/route.ts', previous_source_sha256: hash('07'), current_source_sha256: hash('2d'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale },
+    { path: NEW_ROUTE, previous_source_sha256: hash('b5'), current_source_sha256: hash('1c'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale },
+  ],
+}
+const appended = resolveReview(reviewsOf(epochOf()), { amendments: chainOfMany(baseAmendment(), denominatorAfterEpoch) })
+assert.deepEqual(appended.current, afterEpochCurrent, 'an amendment appended after an epoch must continue the chain from the epoch tail')
+assert.equal(appended.amendments, 2)
+assert.equal(appended.epochs, 1)
+assert.equal(appended.rebinds.get('a/route.ts')?.previous_source_sha256, hash('f6'), 'a historical rebind must chain across the epoch exactly as within one amendment chain')
+assert.equal(appended.rebinds.get('a/route.ts')?.current_source_sha256, hash('2d'))
+assert.equal(appended.epochRebinds.get(NEW_ROUTE)?.previous_source_sha256, hash('b5'), 'a later rebind of a reviewed surface must start from the fingerprint its reviewer approved')
+assert.equal(appended.epochRebinds.get(NEW_ROUTE)?.current_source_sha256, hash('1c'))
+assert.equal(appended.rebinds.has(NEW_ROUTE), false, 'a reviewed new surface is never rebound through the historical map')
+assert.equal(appended.unassigned.has('b/later.test.ts'), true)
+// A rebind-only amendment after the epoch — the case that previously had no
+// append-only representation at all.
+const rebindOnlyAfterEpoch = {
+  ...baseAmendment(),
+  amendment_id: 'probe-rebind-only-after-epoch',
+  predecessor: { ...reviewedCurrent },
+  current: { ...reviewedCurrent },
+  unassigned_tracked_surfaces: [],
+  invariants: { assignments_added: 0, assignments_removed: 0, lifecycle_changes: 0, functional_owner_changes: 0 },
+  source_hash_rebinds: [{ path: NEW_COMPOSITION, previous_source_sha256: hash('c6'), current_source_sha256: hash('4f'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }],
+}
+const rebindAfter = resolveReview(reviewsOf(epochOf()), { amendments: chainOfMany(baseAmendment(), rebindOnlyAfterEpoch) })
+assert.deepEqual(rebindAfter.current, reviewedCurrent, 'a rebind-only amendment after an epoch must leave the denominator where the epoch put it')
+assert.equal(rebindAfter.epochRebinds.get(NEW_COMPOSITION)?.current_source_sha256, hash('4f'))
+// Appending may not fork the chain: an amendment that ignores the epoch and
+// extends the old amendment tail is rejected.
+rejectsReview(
+  reviewsOf(epochOf()),
+  /does not extend its exact predecessor/u,
+  'an amendment appended after an epoch must extend the epoch tail, not the old amendment tail',
+  { amendments: chainOfMany(baseAmendment(), { ...denominatorAfterEpoch, predecessor: { ...reviewTail } }) },
+)
+currentReviewProbes.amendments_appended_after_epoch_remain_composable = 'ACCEPTED'
+
+// C. A rebind from an amendment that PRECEDES an epoch never applies to a surface
+// that epoch reviews — even one crafted to land on the reviewed fingerprint — and
+// a later rebind must start from the fingerprint the reviewer approved.
+const preEpochOrphan = {
+  ...baseAmendment(),
+  source_hash_rebinds: [
+    ...baseAmendment().source_hash_rebinds,
+    { path: NEW_ROUTE, previous_source_sha256: hash('3e'), current_source_sha256: hash('b5'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale },
+  ],
+}
+const orphanChain = chainOf(preEpochOrphan)
+const orphaned = resolveReview(reviewsOf(epochOf({ amendment_anchor: anchorFor(1, orphanChain.amendments) })), { amendments: orphanChain })
+assert.equal(orphaned.epochRebinds.has(NEW_ROUTE), false, 'a pre-epoch rebind must not apply to a newly reviewed surface')
+assert.equal(orphaned.rebinds.has(NEW_ROUTE), false, 'a pre-epoch rebind of a reviewed surface stays an inert orphan')
+assert.equal(orphaned.rebinds.get('a/route.ts')?.current_source_sha256, hash('07'), 'unrelated historical rebinds are unaffected')
+rejectsReview(
+  reviewsOf(epochOf()),
+  /does not extend the current-review fingerprint/u,
+  'a later rebind of a reviewed surface must start from the fingerprint its reviewer approved',
+  { amendments: chainOfMany(baseAmendment(), { ...denominatorAfterEpoch, source_hash_rebinds: [{ path: NEW_ROUTE, previous_source_sha256: hash('3e'), current_source_sha256: hash('1c'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }] }) },
+)
+currentReviewProbes.pre_epoch_rebind_never_applies_to_reviewed_surface = 'ENFORCED'
+
 assert.equal(validatorSource.includes('directRequireLoaderNames'), false)
 assert.equal(validatorSource.includes('trackedModuleSpecifierIdentity'), false)
 assert.equal(validatorSource.includes('validateAcceptanceSourceLanguage'), false)
@@ -850,4 +1231,5 @@ process.stdout.write(`${JSON.stringify({
   },
   reviewed_ownership_amendments: amendmentProbes,
   accepted_authority_merge_composition: compositionProbes,
+  current_review_new_surface_assignment: currentReviewProbes,
 })}\n`)
