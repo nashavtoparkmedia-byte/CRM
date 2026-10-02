@@ -535,6 +535,57 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "telegram-driver-linking-person-confirmation-ux-10318827-20261002",
+      "reviewed_at": "2026-10-02T00:00:00Z",
+      "reviewed_by": "TELEGRAM_DRIVER_LINKING_RECONCILIATION_IMPLEMENTER_20261002",
+      "role": "BOUNDED_PRODUCT_REPAIR_IMPLEMENTER",
+      "authorization": "ORCHESTRATOR_TELEGRAM_DRIVER_LINKING_FINAL_PRODUCTION_RECONCILIATION_10318827_EXISTING_SOURCE_HASH_REBIND_MECHANISM",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Records the Telegram driver-linking person-confirmation repair (verified on 335cdae7 as 681d1bfa) reconciled onto the production successor 10318827. It follows the MAX inbound reliability amendment and continues from its exact tail triple. The repair changes the bytes of two already assigned runtime surfaces and adds no file, so the reviewed denominator does not move: the inventory digest covers surface identity and a coverage record carries no content hash. Neither path was touched by 335cdae7..10318827, so both rebinds start from the same fingerprints the historical review approved. The bot-link route now proves a Fleet-created Driver's exact provider profile through its park-qualified external pair as well as the legacy raw id, returns the Fleet person state already computed by the search, and maps the unchanged Telegram link authority's refusals to operator codes. The bot-users route additionally exposes each pending request's Chat Contact. Lifecycle, functional owner, governed exclusion and inventory kind of both surfaces are unchanged, so the only mechanical consequence is these two source fingerprint rebinds.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2520,
+        "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab",
+        "coverage_sha256": "5b796ddbc65dc69e91e4fc31c60c7c1e5400ec0c738faf6a9a81c24f5784fd77"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2520,
+        "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab",
+        "coverage_sha256": "5b796ddbc65dc69e91e4fc31c60c7c1e5400ec0c738faf6a9a81c24f5784fd77"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "previous_source_sha256": "9ebd71b247c6fc323b362bfa662096949d2b00146fb0e657dfd0680eb4977c62",
+          "current_source_sha256": "a495ab236e266ca26a72d69d0fccd4c3640a40ed2882d6738d5b9ecf7bc91bc2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The manual Telegram driver-link route now accepts a Fleet-created Driver whose yandexDriverId is park-qualified when its externalDriverProfileId and externalParkId equal the verified provider profile and park, alongside the unchanged legacy raw-id proof, and fails closed with its own Driver-identity code otherwise. Its search rows carry the profileClusterKey, cluster Contact and review flag the Fleet owner already computed, and Telegram link authority refusals are mapped to operator codes without weakening that authority. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/bot-users/route.ts",
+          "previous_source_sha256": "6bdfcbd6bee170c00c9e206eb1718a21c303e3c2728e7697c2f4bbd221dce69b",
+          "current_source_sha256": "033822e46e87060ef3d85bc77e28f3b89e1f079e028c39c196787cc8dda49ad7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The bot user administration route additionally selects the Chat contactId it already reads and attaches it to each pending link request, so the operator flow can record a driver confirmation through the Contacts-owned route on the exact Contact the Telegram link authority later requires. It adds no write and no new model access. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
