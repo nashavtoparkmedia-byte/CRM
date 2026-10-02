@@ -160,6 +160,14 @@ Any successor installation failure restores that exact package automatically.
 The original 2.0.0-21 DEB `17b97c40…` stays in the store as that interim
 package's own rollback.
 
+The predecessor is the MAX-normalized live pair proven by the Phase 3 authority
+snapshot `17b8ead7543c3cf54ab58976b65c9e6d480fee0a077a3eaf2d396649bfabacf7`
+(predecessor identity `f48c638e…`). The sealer pins every semantic identity of
+that snapshot's `sealing` block (images, container ids, config hashes, volume,
+database, ledger, audit and unrelated-service fingerprint) and still requires a
+capture younger than 15 minutes, so a seal uses a fresh recapture that must
+reproduce Phase 3 exactly; only capture timestamps may differ.
+
 Generated material under `generated/` and `dist/` is untracked. Sealing must
 start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and

@@ -324,6 +324,20 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         # can no longer re-derive it. Pinning the known predecessor value keeps an independent check
         # here, instead of trusting whatever a hand-edited snapshot document happens to carry.
         "migration_rows_sha256": "78de9c8e61312c0a28669eeedba76f3626d2c41e7df3ae6bf9f2c1270c51b27c",
+        # The normalized predecessor proven by the Phase 3 authority snapshot (sha256
+        # 17b8ead7543c3cf54ab58976b65c9e6d480fee0a077a3eaf2d396649bfabacf7). The seal takes a fresh
+        # capture (freshness above is not relaxed), and that capture must reproduce every semantic
+        # identity of this exact predecessor; only capture timestamps may differ.
+        "predecessor_release_critical_identity_sha256": "f48c638e3fc5f86ebf587295d4ea45f7e1dc151769140c91efeaf0bdc7589d03",
+        "gravity_container_id": "8e390c7cb046d0e14960c4ad4f90325b4f98e60f674055a41eb56088e8126c04",
+        "gravity_compose_config_hash": "69cf25f7430b70bc8e72481b95175aeff365e0e26d1cc27ee9fd664a17dfd4e7",
+        "max_container_id": "4d013ae7c4798e48938d48d32bf33755afca0823d6c12d47267310ff1094a16d",
+        "max_compose_config_hash": "de6e3c8d968d4988d7f61f5c810568f9e60f822699551359eced52929c1a4574",
+        "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
+        "unrelated_semantic_fingerprint_sha256": "9ff36f84caf5e8d594041880ed811b75a6e3137bec1cca293d176c7563269f7f",
+        "audit_record_count": 85,
+        "audit_last_digest": "12bec2fd6bbc279ae50ec4b7fb74ebf7582530abc08c8f4260a8ef5775cff7f2",
+        "applied_migration_count": 63,
     }
     if any(sealing.get(key) != value for key, value in fixed.items()):
         raise ValueError("production predecessor drifted")
