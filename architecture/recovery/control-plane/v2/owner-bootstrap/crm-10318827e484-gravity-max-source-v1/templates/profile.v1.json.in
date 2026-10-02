@@ -1,23 +1,23 @@
 {
   "schema": "yoko.crm.coordinated-pair-activation-profile.v1",
-  "profile_id": "crm-ba90ed4b6717-gravity-max-source-v1",
+  "profile_id": "crm-10318827e484-gravity-max-source-v1",
   "host": "jvxthcorvm",
   "runtime_abi": "2.0.0",
-  "package_version": "2.0.0-21",
+  "package_version": "2.0.0-22",
   "accepted_application": {
-    "commit": "ba90ed4b6717efb269b5e25fdf551cd82b99f335",
-    "tree": "9ce54751afd0babd4570bdd31cf87d5d6c4db6e8",
-    "gravity_subtree": "9f12a0ab6aa185df67c4d50773a5b608db7f21b7",
-    "max_subtree": "44e64cdf9e77671875f0681cb483a5b660c84b8a"
+    "commit": "10318827e484fec466ba994a2a7b7ffe070f7336",
+    "tree": "b1ba84f39bf1037416b8ae94d61c64ce174e39fa",
+    "gravity_subtree": "6d69f52c8d9501069e4efe6eded125ab1933fb54",
+    "max_subtree": "40350ce0ee163fbdfa6f760faffb9760931ee96d"
   },
   "stage_a": {
-    "builder_commit": "8d811c38a408c8f0348f4d5d9d1db87f250d5cb5",
-    "builder_tree": "d92af9af0d5c181ce7de63cfe8af3daeb34e1630",
-    "run_id": 36350586234,
-    "artifact_id": 10942803566,
-    "artifact_name": "coordinated-gravity-max-ba90ed4b6717-8d811c38a408c8f0348f4d5d9d1db87f250d5cb5",
-    "artifact_digest": "sha256:5d8db18085c98c5533d5ae523cfb93bc39cb48588958b39dc0961693e1f68139",
-    "artifact_bytes": 4805993644
+    "builder_commit": "46e6107187776929db52ca127061b0c99a21ce71",
+    "builder_tree": "9b9d4009275d4cbc413f643fb063a7368ef53bff",
+    "run_id": 36978099367,
+    "artifact_id": 11215210912,
+    "artifact_name": "coordinated-gravity-max-10318827e484-46e6107187776929db52ca127061b0c99a21ce71",
+    "artifact_digest": "sha256:29c52cbbdb86aa8d8766e05aa5c7d856ec1d692e2133edab511d025d918b5da0",
+    "artifact_bytes": 4806116003
   },
   "artifact_admission": {
     "receipt_path": "@ARTIFACT_RECEIPT_PATH@",
@@ -42,15 +42,15 @@
     "unrelated_semantic_fingerprint_sha256": "@UNRELATED_FINGERPRINT@",
     "gravity": {
       "container_id": "@PREDECESSOR_GRAVITY_CONTAINER@",
-      "image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
+      "image_id": "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c",
       "compose_config_hash": "@PREDECESSOR_GRAVITY_CONFIG_HASH@",
-      "rollback_reference": "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
+      "rollback_reference": "yoko/crm-gravity-mvp:rollback-4dbe322a88fb5a635ffa5abc2d1d22071ba941fc"
     },
     "max_scraper": {
       "container_id": "@PREDECESSOR_MAX_CONTAINER@",
-      "image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
+      "image_id": "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6",
       "compose_config_hash": "@PREDECESSOR_MAX_CONFIG_HASH@",
-      "rollback_reference": "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9",
+      "rollback_reference": "yoko/crm-max-scraper:rollback-ede5efb412d462a01bb9965f97a698a2c4b4bd3f",
       "volume": {
         "name": "crm_max_user_data",
         "target": "/app/user_data",
@@ -61,15 +61,15 @@
   },
   "target": {
     "gravity": {
-      "reference": "yoko/crm-gravity-mvp:ba90ed4b6717-8d811c38a408c8f0348f4d5d9d1db87f250d5cb5-coordinated-v1",
-      "image_id": "sha256:22d8ab405794939d5ba73a50ad3db3c21d284da15401424e59e3fbf862ed2bc0",
-      "containerd_image_id": "sha256:549818cba404619aea1582ba17872bdd83d87e79c21dfb2fcddd88233908e2ee",
+      "reference": "yoko/crm-gravity-mvp:10318827e484-46e6107187776929db52ca127061b0c99a21ce71-coordinated-v1",
+      "image_id": "sha256:0247864ab320fa86498da0d69610ce9a910a46d92ded420091b7c4d6b0aa6152",
+      "containerd_image_id": "sha256:f72e18febe4928cac7394805efe4f7029cd3c11ced8451ecb5c6f3c56a7f04e5",
       "runtime_command_override": ["npm", "run", "start"]
     },
     "max_scraper": {
-      "reference": "yoko/crm-max-scraper:ba90ed4b6717-8d811c38a408c8f0348f4d5d9d1db87f250d5cb5-coordinated-v1",
-      "image_id": "sha256:c502470b4875db471b9b02d2271be7f8c23a9eefecda9e67f4114027c3b5df74",
-      "containerd_image_id": "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6"
+      "reference": "yoko/crm-max-scraper:10318827e484-46e6107187776929db52ca127061b0c99a21ce71-coordinated-v1",
+      "image_id": "sha256:f9e09bd8c2dcc98c309e440b82f7e8586aac406f2510bbaf9be90d98908b252a",
+      "containerd_image_id": "sha256:26acfcfab7304d30285c9990dfccaa8a9e148b3b294633d8ae48ce4c8d633da2"
     }
   },
   "database": {

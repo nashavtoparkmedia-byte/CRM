@@ -12,9 +12,9 @@ from typing import Any
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # The snapshot describes the runtime that is installed right now, which is still
-# 2.0.0-20 under its own profile. This must not follow the successor's id or the
+# 2.0.0-21 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
-EXPECTED_PROFILE = "crm-c8ce34feae84-gravity-max-source-v1"
+EXPECTED_PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
@@ -100,7 +100,7 @@ def main() -> None:
     postgres = records["docker-inspect:crm.container.postgres"]["evidence"]
     database = records["database-status"]["evidence"]
     provenance = records["docker-provenance"]["evidence"]
-    if version.get("package_version") != "2.0.0-20" or version.get("activation_profile") != EXPECTED_PROFILE:
+    if version.get("package_version") != "2.0.0-21" or version.get("activation_profile") != EXPECTED_PROFILE:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
@@ -112,8 +112,8 @@ def main() -> None:
     ):
         raise ValueError("predecessor observation mismatch")
     expected_resources = {
-        "gravity": (gravity, "crm.container.gravity_mvp", "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c"),
-        "max": (maximum, "crm.container.max_scraper", "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365"),
+        "gravity": (gravity, "crm.container.gravity_mvp", "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c"),
+        "max": (maximum, "crm.container.max_scraper", "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6"),
         "postgres": (postgres, "crm.container.postgres", "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"),
     }
     for label, (record, logical, image) in expected_resources.items():
@@ -121,7 +121,7 @@ def main() -> None:
             raise ValueError(f"{label} predecessor mismatch")
     if maximum.get("mounts") != [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}]:
         raise ValueError("MAX persistent volume mismatch")
-    # The installed 2.0.0-20 profile was sealed against the same 63-row ledger this successor pins
+    # The installed 2.0.0-21 profile was sealed against the same 63-row ledger this successor pins
     # (the 2.0.0-16 profile before it reported that ledger as DRIFTED from its 62-row baseline, so
     # both states stay accepted). The successor pins the ledger exactly: the count, the ledger digest
     # (re-derived read-only from the database, independently of this runtime) and the database

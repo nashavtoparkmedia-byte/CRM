@@ -59,7 +59,7 @@ class CaptureContractTests(unittest.TestCase):
                 seal.reopen_generated_review_for_cleanup(generated)
 
     def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/yoko-v21-seal-ba90ed4b/rollback-2.0.0-20/yoko-privileged-runtime_2.0.0-20_all.deb")
+        path = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21/yoko-privileged-runtime_2.0.0-21_all.deb")
         self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
 
     def test_capture_plan_is_finite_and_read_only(self) -> None:
@@ -95,16 +95,16 @@ class CaptureContractTests(unittest.TestCase):
     def test_sealer_accepts_only_fresh_exact_predecessor_snapshot(self) -> None:
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
         sealing = {
-            "runtime_package_version": "2.0.0-20",
-            "runtime_profile_id": "crm-c8ce34feae84-gravity-max-source-v1",
+            "runtime_package_version": "2.0.0-21",
+            "runtime_profile_id": "crm-ba90ed4b6717-gravity-max-source-v1",
             "audit_record_count": 47,
             "audit_last_digest": "a" * 64,
             "predecessor_release_critical_identity_sha256": "b" * 64,
             "gravity_container_id": "g",
-            "gravity_image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
+            "gravity_image_id": "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c",
             "gravity_compose_config_hash": "c" * 64,
             "max_container_id": "m",
-            "max_image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
+            "max_image_id": "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6",
             "max_compose_config_hash": "d" * 64,
             "max_volume_source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3",
             "postgres_container_id": "p",
