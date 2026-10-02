@@ -16,10 +16,44 @@ configuration mutation. The installed Runtime exposes only the fixed
 zero-argument `database-status`, `release-preflight`, `release-activate`, and
 `rollback` operations plus the existing read-only `predecessor-observe`.
 
-The trusted Runtime core, predecessor observer, base policy, and sudoers file
-are byte-identical to the current Runtime v10 authority. Runtime 2.0.0-21,
+The trusted Runtime core, base policy, and sudoers file are byte-identical to
+the current Runtime v10 authority. The predecessor observer is version 2
+(`yoko.crm.predecessor-recreation-observation.v2`, see below); it keeps the
+v1 install slot because the pinned core fixes the install-manifest file set. Runtime 2.0.0-21,
 the installed predecessor, is the exact direct control-plane rollback and is not
 modified by this builder.
+
+## Predecessor observation v2
+
+`predecessor-observe` reconstructs each predecessor container (Gravity,
+tg-bot and, since v2, the MAX scraper) from the Compose layer stack that the
+container itself recorded at creation
+(`com.docker.compose.project.config_files`) and requires every
+release-critical semantic to equal that reconstruction: image reference and
+image id, entrypoint, command, restart policy, mounts, networks, and the
+environment (names and values, compared internally, never emitted). The
+environment is compared last, so a reported name condition means every other
+semantic already reconstructed.
+
+- The base compose and `.env.production` keep the v1 fixed-file checks.
+- A Runtime profile overlay (`/var/lib/yoko-privileged-runtime/profiles/
+  crm-<12 hex>-gravity-max-source-v1/{activate,rollback}.compose.yml`) must be
+  a root-owned `0400` file in the root-only store. It is passed to Compose
+  and its digest is bound. At most one, and it precedes every image pin.
+- Any other recorded layer is untrusted input. It is read once (bounded,
+  regular file, no final-component symlink), never handed to Compose, and
+  admitted only if it matches the strict image-pin grammar
+  (`services:` / `  <service>:` / `    image: <reference>`, plus comments).
+  Its pins override the resolved image; its digest is bound.
+- No other file can enter the reconstruction: a candidate overlay that the
+  running container did not record is never read, and substituting one
+  resolves the candidate's image, which the predecessor does not run.
+- The Compose config hash is recorded but not recomputed: Compose 5.1.4's
+  `config --hash` does not reproduce the `up` label for these stacks
+  (measured on production Gravity), so it cannot bind anything.
+
+Every layer path, role and digest is part of `compose_source.overlay_layers`
+and therefore of `release_critical_identity_sha256`.
 
 ## Pair state model
 

@@ -1,9 +1,18 @@
 #!/usr/bin/python3 -I
-"""Finite, secret-safe, read-only predecessor recreation observation.
+"""Finite, secret-safe, read-only predecessor recreation observation (v2).
 
 This module is loaded only by the integrity-pinned Runtime wrapper.  Every
-Docker object and host path is derived from fixed project policy or the two
-fixed rollback-target containers.  The caller supplies no arguments.
+Docker object and host path is derived from fixed project policy, the fixed
+rollback-target containers, and the Compose files those containers record as
+their own creation stack.  The caller supplies no arguments.
+
+Version 2 replaces the base-only model.  A predecessor created through a
+sealed Runtime profile overlay (and optionally an image-only production
+overlay) is reconstructed from exactly the layers its container was created
+from, and every release-critical semantic is compared with that
+reconstruction.  The installed slot keeps the v1 file name because the pinned
+Runtime core fixes the install-manifest file set; the control version is the
+observation schema below and this file's digest.
 """
 from __future__ import annotations
 
@@ -15,18 +24,37 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA = "yoko.crm.predecessor-recreation-observation.v1"
+SCHEMA = "yoko.crm.predecessor-recreation-observation.v2"
 COMPOSE_PATH = "/opt/crm/deploy/docker-compose.production.yml"
 ENVIRONMENT_PATH = "/opt/crm/.env.production"
 PROJECT_DIRECTORY = "/opt/crm/deploy"
 COMPOSE_PROJECT = "crm"
 MAX_COMPOSE_JSON = 4 * 1024 * 1024
+MAX_LAYERS = 4
+MAX_OVERLAY_BYTES = 64 * 1024
 SHA64 = re.compile(r"[0-9a-f]{64}")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@/+\-]{0,1023}")
 SECRET_ASSIGNMENT = re.compile(
     r"(?i)(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)\s*[:=]"
 )
+# A layer written by a sealed Runtime activation profile into the root-only
+# Runtime store.  Its content is bound by digest in the observation.
+RUNTIME_PROFILE_OVERLAY = re.compile(
+    r"/var/lib/yoko-privileged-runtime/profiles/crm-[0-9a-f]{12}-gravity-max-source-v1/(?:activate|rollback)\.compose\.yml"
+)
+# Any other recorded layer is untrusted input: it is read once, never handed
+# to Compose, and admitted only when it pins service images and nothing else.
+OVERLAY_PATH = re.compile(r"(?:/[A-Za-z0-9._-]{1,128}){1,16}\.compose\.yml")
+OVERLAY_SERVICE = re.compile(r"  ([a-z0-9][a-z0-9_-]{0,63}):")
+OVERLAY_IMAGE = re.compile(r"    image: ([!-~]{1,512})")
+OVERLAY_COMMENT = re.compile(r" *#[^\x00-\x1f\x7f]*")
+IMAGE_REFERENCE = re.compile(
+    r"[a-z0-9][a-z0-9._/-]{0,254}(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?"
+)
+LAYER_LABEL = "com.docker.compose.project.config_files"
+WORKING_DIRECTORY_LABEL = "com.docker.compose.project.working_dir"
+ENVIRONMENT_FILE_LABEL = "com.docker.compose.project.environment_file"
 
 TARGETS = (
     {
@@ -45,6 +73,13 @@ TARGETS = (
         "compose_service": "tg-bot",
         "allowed_entrypoints": (("/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"),),
         "allowed_commands": (("node", "start.js"),),
+    },
+    {
+        "logical_resource": "crm.container.max_scraper",
+        "container_name": "crm-max-scraper",
+        "compose_service": "max-web-scraper",
+        "allowed_entrypoints": (("/usr/bin/tini", "--"),),
+        "allowed_commands": (("node", "index.js"),),
     },
 )
 
@@ -176,13 +211,15 @@ def _environment_map(core: Any, value: Any, source: str) -> dict[str, str]:
     return output
 
 
-def _compose_command() -> list[str]:
-    return [
+def _compose_command(files: tuple[str, ...]) -> list[str]:
+    command = [
         "compose",
         "--project-directory", PROJECT_DIRECTORY,
         "--env-file", ENVIRONMENT_PATH,
-        "-f", COMPOSE_PATH,
     ]
+    for path in files:
+        command.extend(["-f", path])
+    return command
 
 
 def _fixed_production_file(core: Any, path: str, mode: int, maximum: int) -> os.stat_result:
@@ -216,26 +253,128 @@ def _fixed_production_file(core: Any, path: str, mode: int, maximum: int) -> os.
     return value
 
 
-def _compose_hash(core: Any, policy: dict[str, Any], service: str) -> str:
-    completed = core.run_fixed([
-        core.DOCKER, *_compose_command(), "config", "--hash", service,
-    ], timeout=int(policy["limits"]["command_timeout_seconds"]))
-    if completed.returncode != 0 or len(completed.stdout) > 1024:
-        _fault(core, "PREDECESSOR_COMPOSE_HASH_FAILED", {"service": service})
+def _runtime_overlay(core: Any, path: str) -> str:
+    """Bind one root-only overlay written by a sealed Runtime activation profile."""
     try:
-        output = completed.stdout.decode("ascii").strip().split()
+        core.secure_file(path, 0o400, maximum=MAX_OVERLAY_BYTES)
+    except core.RuntimeFault:
+        _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
+    except OSError:
+        _fault(core, "PREDECESSOR_LAYER_MISSING", {"path": path})
+    return core.hash_file(core.mapped(path), maximum=MAX_OVERLAY_BYTES)
+
+
+def _read_overlay_once(core: Any, path: str) -> bytes:
+    """Read an untrusted recorded layer exactly once, as a bounded regular file."""
+    try:
+        fd = os.open(core.mapped(path), os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        _fault(core, "PREDECESSOR_LAYER_MISSING", {"path": path})
+    try:
+        value = os.fstat(fd)
+        if not stat.S_ISREG(value.st_mode) or value.st_size > MAX_OVERLAY_BYTES:
+            _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
+        chunks = []
+        total = 0
+        while True:
+            chunk = os.read(fd, 16 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_OVERLAY_BYTES:
+                _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
+            chunks.append(chunk)
+    finally:
+        os.close(fd)
+    return b"".join(chunks)
+
+
+def _image_only_overlay(core: Any, path: str, raw: bytes) -> dict[str, str]:
+    """Parse the strict image-pin grammar; anything else is not admitted.
+
+    services:
+      <service>:
+        image: <reference>
+
+    plus comment and blank lines.  The grammar is a strict subset of YAML with
+    one meaning, so the parsed pins are exactly what Compose merged.
+    """
+    try:
+        # Comments may carry UTF-8 prose; every non-comment line is matched
+        # against ASCII-only patterns below.
+        text = raw.decode("utf-8")
     except UnicodeError:
-        _fault(core, "PREDECESSOR_COMPOSE_HASH_INVALID", {"service": service})
-    if len(output) != 2 or output[0] != service or not SHA64.fullmatch(output[1]):
-        _fault(core, "PREDECESSOR_COMPOSE_HASH_INVALID", {"service": service})
-    return output[1]
+        _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
+    if "\t" in text or "\r" in text:
+        _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
+    images: dict[str, str] = {}
+    in_services = False
+    current: str | None = None
+    for line in text.split("\n"):
+        if not line.strip() or OVERLAY_COMMENT.fullmatch(line):
+            continue
+        if line == "services:" and not in_services:
+            in_services = True
+            continue
+        service = OVERLAY_SERVICE.fullmatch(line)
+        if service and in_services and service.group(1) not in images and (current is None or current in images):
+            current = service.group(1)
+            continue
+        image = OVERLAY_IMAGE.fullmatch(line)
+        if image and current is not None and current not in images and IMAGE_REFERENCE.fullmatch(image.group(1)):
+            images[current] = image.group(1)
+            continue
+        _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
+    if not images or current not in images:
+        _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
+    return dict(sorted(images.items()))
 
 
-def _compose_config(core: Any, policy: dict[str, Any]) -> tuple[dict[str, Any], str, dict[str, str]]:
-    compose_value = _fixed_production_file(core, COMPOSE_PATH, 0o644, 4 * 1024 * 1024)
-    _fixed_production_file(core, ENVIRONMENT_PATH, 0o600, 4 * 1024 * 1024)
+def _layer_stack(core: Any, labels: Any) -> tuple[tuple[str, ...], dict[str, str], list[dict[str, Any]]]:
+    """Return the Compose files to resolve, the image pins, and the bound layer records.
+
+    The stack is the one the container itself recorded at creation.  Nothing
+    else can enter it: no candidate overlay, no file chosen by the caller.
+    """
+    if not isinstance(labels, dict):
+        _fault(core, "COMPOSE_LABELS_INVALID")
+    if labels.get(WORKING_DIRECTORY_LABEL) != PROJECT_DIRECTORY or labels.get(ENVIRONMENT_FILE_LABEL) != ENVIRONMENT_PATH:
+        _fault(core, "PREDECESSOR_PROJECT_SOURCE_MISMATCH")
+    recorded = labels.get(LAYER_LABEL)
+    if not isinstance(recorded, str) or not recorded:
+        _fault(core, "PREDECESSOR_LAYER_STACK_MISSING")
+    paths = recorded.split(",")
+    if len(paths) > MAX_LAYERS or len(set(paths)) != len(paths) or paths[0] != COMPOSE_PATH:
+        _fault(core, "PREDECESSOR_LAYER_STACK_UNSUPPORTED")
+    compose_files = [COMPOSE_PATH]
+    images: dict[str, str] = {}
+    records: list[dict[str, Any]] = []
+    for path in paths[1:]:
+        if RUNTIME_PROFILE_OVERLAY.fullmatch(path):
+            if len(compose_files) != 1 or images:
+                # One Runtime overlay, before every image pin: the order in
+                # which Compose merged them is then fixed and reproducible.
+                _fault(core, "PREDECESSOR_LAYER_STACK_UNSUPPORTED")
+            records.append({"path": path, "role": "runtime-profile-overlay", "sha256": _runtime_overlay(core, path)})
+            compose_files.append(path)
+            continue
+        if not OVERLAY_PATH.fullmatch(path) or any(part in {".", ".."} for part in path.split("/")[1:]):
+            _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
+        raw = _read_overlay_once(core, path)
+        pins = _image_only_overlay(core, path, raw)
+        records.append({
+            "path": path,
+            "role": "image-only-overlay",
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "image_pins": pins,
+        })
+        images.update(pins)
+    return tuple(compose_files), images, records
+
+
+def _resolve_stack(core: Any, policy: dict[str, Any], files: tuple[str, ...]) -> dict[str, Any]:
     completed = core.run_fixed([
-        core.DOCKER, *_compose_command(), "config", "--format", "json",
+        core.DOCKER, *_compose_command(files), "config", "--format", "json",
     ], timeout=int(policy["limits"]["command_timeout_seconds"]))
     if completed.returncode != 0:
         _fault(core, "PREDECESSOR_COMPOSE_CONFIG_FAILED")
@@ -244,14 +383,9 @@ def _compose_config(core: Any, policy: dict[str, Any]) -> tuple[dict[str, Any], 
     value = core.parse_json(completed.stdout, maximum=MAX_COMPOSE_JSON)
     if not isinstance(value, dict) or not isinstance(value.get("services"), dict):
         _fault(core, "PREDECESSOR_COMPOSE_CONFIG_INVALID")
-    project = value.get("name")
-    if project not in (None, COMPOSE_PROJECT):
+    if value.get("name") not in (None, COMPOSE_PROJECT):
         _fault(core, "PREDECESSOR_COMPOSE_PROJECT_MISMATCH")
-    hashes = {
-        target["compose_service"]: _compose_hash(core, policy, target["compose_service"])
-        for target in TARGETS
-    }
-    return value, core.hash_file(core.mapped(COMPOSE_PATH), maximum=compose_value.st_size + 1), hashes
+    return value
 
 
 def _service_projection(core: Any, service: dict[str, Any], environment_keys: list[str]) -> dict[str, Any]:
@@ -570,13 +704,69 @@ def _compose_labels(core: Any, labels: Any, service: str) -> dict[str, str]:
     return output
 
 
+def _resolved_argv(core: Any, value: Any, default: Any, code: str) -> list[str]:
+    """The argv Docker applies: the resolved service value, else the image default."""
+    chosen = default if value is None else value
+    if chosen is None:
+        return []
+    if isinstance(chosen, str):
+        # Compose normalises string forms to lists; a bare string here is not
+        # a shape this observer can compare exactly.
+        _fault(core, code)
+    if not isinstance(chosen, list) or len(chosen) > 32 or not all(isinstance(item, str) for item in chosen):
+        _fault(core, code)
+    return list(chosen)
+
+
+def _expected_mounts(core: Any, compose: dict[str, Any], service: dict[str, Any]) -> list[tuple[str, str, str, bool]]:
+    declared = service.get("volumes") or []
+    top_level = compose.get("volumes") or {}
+    if not isinstance(declared, list) or not isinstance(top_level, dict) or len(declared) > 128:
+        _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+    output = []
+    for item in declared:
+        if not isinstance(item, dict) or not isinstance(item.get("target"), str):
+            _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+        kind = item.get("type")
+        read_write = item.get("read_only") is not True
+        if kind == "volume":
+            definition = top_level.get(item.get("source"))
+            if not isinstance(definition, dict) or not isinstance(definition.get("name"), str):
+                _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+            output.append(("volume", definition["name"], item["target"], read_write))
+        elif kind == "bind":
+            if not isinstance(item.get("source"), str):
+                _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+            output.append(("bind", item["source"], item["target"], read_write))
+        elif kind == "tmpfs":
+            output.append(("tmpfs", "", item["target"], True))
+        else:
+            _fault(core, "RESOLVED_MOUNT_CONFIGURATION_INVALID")
+    return sorted(output)
+
+
+def _expected_networks(core: Any, compose: dict[str, Any], service: dict[str, Any]) -> list[str]:
+    if service.get("network_mode") is not None:
+        _fault(core, "RESOLVED_NETWORK_MODE_UNSUPPORTED")
+    declared = service.get("networks") or {}
+    top_level = compose.get("networks") or {}
+    if not isinstance(declared, dict) or not isinstance(top_level, dict) or not declared:
+        _fault(core, "RESOLVED_NETWORK_CONFIGURATION_INVALID")
+    names = []
+    for key in declared:
+        definition = top_level.get(key)
+        if not isinstance(definition, dict) or not isinstance(definition.get("name"), str):
+            _fault(core, "RESOLVED_NETWORK_CONFIGURATION_INVALID")
+        names.append(definition["name"])
+    return sorted(names)
+
+
 def _observe_target(
     core: Any,
     policy: dict[str, Any],
-    compose_service: dict[str, Any],
     target: dict[str, Any],
-    resolved_compose_hash: str,
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    resolutions: dict[tuple[str, ...], dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     logical = target["logical_resource"]
     record = policy.get("resources", {}).get(logical)
     if (
@@ -602,10 +792,69 @@ def _observe_target(
     network_settings = raw.get("NetworkSettings")
     if not isinstance(config, dict) or not isinstance(host, dict) or not isinstance(network_settings, dict):
         _fault(core, "TARGET_CONTAINER_CONFIGURATION_INVALID")
-    image = core.docker_json(["image", "inspect", image_id], policy)
-    if image.get("Id") != image_id or not isinstance(image.get("Config"), dict):
-        _fault(core, "TARGET_IMAGE_IDENTITY_MISMATCH")
+    labels = _compose_labels(core, config.get("Labels"), target["compose_service"])
 
+    # Reconstruct the effective service from the container's own creation stack.
+    files, image_pins, layers = _layer_stack(core, config.get("Labels"))
+    if files not in resolutions:
+        resolutions[files] = _resolve_stack(core, policy, files)
+    compose = resolutions[files]
+    compose_service = compose["services"].get(target["compose_service"])
+    if not isinstance(compose_service, dict):
+        _fault(core, "RESOLVED_COMPOSE_SERVICE_MISSING", {"service": target["compose_service"]})
+    compose_service = dict(compose_service)
+    if target["compose_service"] in image_pins:
+        compose_service["image"] = image_pins[target["compose_service"]]
+
+    # Image: the reconstructed reference must be the one the container was
+    # created from and must still name exactly the running image.
+    configured_image = _text(core, config.get("Image"), "CONFIGURED_IMAGE_REFERENCE_INVALID", 1024)
+    reconstructed_image = _text(core, compose_service.get("image"), "RESOLVED_IMAGE_REFERENCE_INVALID", 1024)
+    if not IMAGE_REFERENCE.fullmatch(reconstructed_image) or configured_image != reconstructed_image:
+        _fault(core, "TARGET_IMAGE_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+    image = core.docker_json(["image", "inspect", reconstructed_image], policy)
+    if image.get("Id") != image_id or not isinstance(image.get("Config"), dict):
+        _fault(core, "TARGET_IMAGE_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+
+    entrypoint = _argv(core, config.get("Entrypoint"), target["allowed_entrypoints"], "ENTRYPOINT_CONFIGURATION_INVALID")
+    expected_entrypoint = _resolved_argv(core, compose_service.get("entrypoint"), image["Config"].get("Entrypoint"), "ENTRYPOINT_CONFIGURATION_INVALID")
+    if entrypoint != expected_entrypoint:
+        _fault(core, "ENTRYPOINT_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+    command = _argv(core, config.get("Cmd"), target["allowed_commands"], "COMMAND_CONFIGURATION_INVALID")
+    expected_command = _resolved_argv(core, compose_service.get("command"), image["Config"].get("Cmd"), "COMMAND_CONFIGURATION_INVALID")
+    if command != expected_command:
+        _fault(core, "COMMAND_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+
+    host_projection = _host_config(core, host)
+    expected_restart = compose_service.get("restart") or "no"
+    if (host_projection["restart_policy"]["name"] or "no") != expected_restart:
+        _fault(core, "RESTART_POLICY_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+
+    mounts, volumes = _mounts(core, policy, raw.get("Mounts"))
+    actual_mounts = sorted(
+        (item["type"], item.get("name", item.get("source", "")), item["target"], item["read_write"])
+        for item in mounts
+    )
+    if actual_mounts != _expected_mounts(core, compose, compose_service):
+        _fault(core, "MOUNT_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+    if target["compose_service"] == "tg-bot":
+        required_volume = [item for item in mounts if item.get("name") == "crm_tg_bot_data"]
+        if required_volume != [{
+            "type": "volume", "target": "/app/data", "read_write": True,
+            "propagation": "", "name": "crm_tg_bot_data",
+        }]:
+            _fault(core, "TELEGRAM_PERSISTENT_VOLUME_CONTRACT_INVALID")
+    if target["compose_service"] == "max-web-scraper":
+        required_volume = [item for item in mounts if item.get("name") == "crm_max_user_data"]
+        if len(required_volume) != 1 or required_volume[0]["target"] != "/app/user_data" or required_volume[0]["read_write"] is not True:
+            _fault(core, "MAX_PERSISTENT_VOLUME_CONTRACT_INVALID")
+
+    attachments, networks = _networks(core, policy, network_settings.get("Networks"))
+    if sorted(item["name"] for item in attachments) != _expected_networks(core, compose, compose_service):
+        _fault(core, "NETWORK_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
+
+    # Environment last: every other semantic has already been reconstructed
+    # when a known name-set condition is reported.
     actual_environment = _environment_map(core, config.get("Env"), "container")
     image_environment = _environment_map(core, image["Config"].get("Env"), "image")
     compose_environment = _environment_map(core, compose_service.get("environment"), "compose")
@@ -615,32 +864,18 @@ def _observe_target(
         if key == "HOSTNAME" and actual_environment[key] == config.get("Hostname"):
             injected_keys.append(key)
             continue
-        _fault(core, "EFFECTIVE_ENVIRONMENT_KEY_DRIFT", {"unexpected_key": key})
+        _fault(core, "EFFECTIVE_ENVIRONMENT_KEY_DRIFT", {"service": target["compose_service"], "unexpected_key": key})
     comparable_actual = {key: value for key, value in actual_environment.items() if key not in injected_keys}
     if set(comparable_actual) != set(expected_environment):
         _fault(core, "EFFECTIVE_ENVIRONMENT_KEY_DRIFT", {
+            "service": target["compose_service"],
             "missing_keys": sorted(set(expected_environment) - set(comparable_actual)),
         })
     if comparable_actual != expected_environment:
-        _fault(core, "EFFECTIVE_ENVIRONMENT_VALUE_DRIFT")
-
-    entrypoint = _argv(core, config.get("Entrypoint"), target["allowed_entrypoints"], "ENTRYPOINT_CONFIGURATION_INVALID")
-    command = _argv(core, config.get("Cmd"), target["allowed_commands"], "COMMAND_CONFIGURATION_INVALID")
-    labels = _compose_labels(core, config.get("Labels"), target["compose_service"])
-    mounts, volumes = _mounts(core, policy, raw.get("Mounts"))
-    attachments, networks = _networks(core, policy, network_settings.get("Networks"))
-    if target["compose_service"] == "tg-bot":
-        required_volume = [item for item in mounts if item.get("name") == "crm_tg_bot_data"]
-        if required_volume != [{
-            "type": "volume", "target": "/app/data", "read_write": True,
-            "propagation": "", "name": "crm_tg_bot_data",
-        }]:
-            _fault(core, "TELEGRAM_PERSISTENT_VOLUME_CONTRACT_INVALID")
+        _fault(core, "EFFECTIVE_ENVIRONMENT_VALUE_DRIFT", {"service": target["compose_service"]})
 
     service_environment_keys = sorted(compose_environment)
     service_projection = _service_projection(core, compose_service, service_environment_keys)
-    configured_image = _text(core, config.get("Image"), "CONFIGURED_IMAGE_REFERENCE_INVALID", 1024)
-    resolved_image = _text(core, compose_service.get("image"), "RESOLVED_IMAGE_REFERENCE_INVALID", 1024)
     repo_digests = _string_list(core, image.get("RepoDigests"), "IMAGE_REPOSITORY_DIGEST_INVALID")
     for digest in repo_digests:
         if "@sha256:" not in digest:
@@ -663,8 +898,8 @@ def _observe_target(
         "image": {
             "id": image_id,
             "configured_reference": configured_image,
-            "base_compose_reference": resolved_image,
-            "base_compose_reference_matches_container": configured_image == resolved_image,
+            "reconstructed_reference": reconstructed_image,
+            "reconstructed_reference_matches_container": True,
             "repository_digests": repo_digests,
             "created": _optional_text(core, image.get("Created"), "IMAGE_CREATED_INVALID", 128),
             "platform": {
@@ -683,7 +918,7 @@ def _observe_target(
             "compose_key_set": service_environment_keys,
             "image_default_key_set": sorted(image_environment),
             "docker_injected_key_set": injected_keys,
-            "effective_values_match_resolved_compose_and_image": True,
+            "effective_values_match_reconstructed_compose_and_image": True,
             "binding_method": "ROOT_INTERNAL_EXACT_EQUALITY_NO_VALUE_DIGEST",
             "plaintext_values_emitted": False,
             "value_digests_emitted": False,
@@ -691,19 +926,26 @@ def _observe_target(
         "mounts": mounts,
         "network_attachments": attachments,
         "published_ports": core.semantic_published_ports(network_settings.get("Ports")),
-        "host_config": _host_config(core, host),
+        "host_config": host_projection,
         "lifecycle": lifecycle,
         "compose": {
             "project": labels["com.docker.compose.project"],
             "service": labels["com.docker.compose.service"],
             "container_creation_config_hash": labels["com.docker.compose.config-hash"],
-            "base_resolved_config_hash": resolved_compose_hash,
-            "base_matches_container_creation": labels["com.docker.compose.config-hash"] == resolved_compose_hash,
-            "config_hash_binding_method": "DOCKER_COMPOSE_CONFIG_HASH",
+            "config_hash_binding_method": "RECORDED_NOT_RECOMPUTED",
             "labels": labels,
             "secret_free_resolved_service_shape": service_projection,
         },
-    }, volumes, networks)
+        "reconstruction": {
+            "model": "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK",
+            "layers": [{"path": COMPOSE_PATH, "role": "base-compose"}, *layers],
+            "compose_files_resolved": list(files),
+            "verified": [
+                "image", "entrypoint", "command", "restart_policy", "mounts",
+                "networks", "environment_names", "environment_values",
+            ],
+        },
+    }, volumes, networks, layers)
 
 
 def _release_critical_service(service: dict[str, Any]) -> dict[str, Any]:
@@ -730,17 +972,17 @@ def _release_critical_service(service: dict[str, Any]) -> dict[str, Any]:
 
 def observe(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
     """Return one bounded observation without writing host or Docker state."""
-    compose, compose_sha, compose_hashes = _compose_config(core, policy)
-    services = compose["services"]
+    compose_value = _fixed_production_file(core, COMPOSE_PATH, 0o644, 4 * 1024 * 1024)
+    _fixed_production_file(core, ENVIRONMENT_PATH, 0o600, 4 * 1024 * 1024)
+    compose_sha = core.hash_file(core.mapped(COMPOSE_PATH), maximum=compose_value.st_size + 1)
+    resolutions: dict[tuple[str, ...], dict[str, Any]] = {}
     observations = []
     volumes: dict[str, dict[str, Any]] = {}
     networks: dict[str, dict[str, Any]] = {}
+    layers: dict[str, dict[str, Any]] = {}
     for target in TARGETS:
-        service = services.get(target["compose_service"])
-        if not isinstance(service, dict):
-            _fault(core, "RESOLVED_COMPOSE_SERVICE_MISSING", {"service": target["compose_service"]})
-        observation, target_volumes, target_networks = _observe_target(
-            core, policy, service, target, compose_hashes[target["compose_service"]],
+        observation, target_volumes, target_networks, target_layers = _observe_target(
+            core, policy, target, resolutions,
         )
         observations.append(observation)
         for volume in target_volumes:
@@ -751,6 +993,10 @@ def observe(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
             existing = networks.setdefault(network["name"], network)
             if existing != network:
                 _fault(core, "NETWORK_OBSERVATION_INCONSISTENT")
+        for layer in target_layers:
+            existing = layers.setdefault(layer["path"], layer)
+            if existing != layer:
+                _fault(core, "PREDECESSOR_LAYER_OBSERVATION_INCONSISTENT")
     output = {
         "schema": SCHEMA,
         "state_partition": {
@@ -766,7 +1012,9 @@ def observe(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
             "environment_file": ENVIRONMENT_PATH,
             "environment_file_plaintext_emitted": False,
             "environment_file_digest_emitted": False,
-            "environment_binding": "ROOT_INTERNAL_EXACT_EQUALITY_TO_RESOLVED_SERVICES",
+            "environment_binding": "ROOT_INTERNAL_EXACT_EQUALITY_TO_RECONSTRUCTED_SERVICES",
+            "reconstruction_model": "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK",
+            "overlay_layers": [layers[key] for key in sorted(layers)],
         },
         "services": observations,
         "volumes": [volumes[key] for key in sorted(volumes)],
@@ -774,7 +1022,7 @@ def observe(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
         "secret_values_emitted": False,
         "production_mutated": False,
         "read_only_primitives": [
-            "docker compose config", "docker compose config --hash",
+            "docker compose config",
             "docker container inspect",
             "docker image inspect", "docker network inspect", "docker volume inspect",
         ],

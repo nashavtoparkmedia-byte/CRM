@@ -609,7 +609,7 @@ def main() -> None:
     copy_exact(ROOT / "templates/crm-activation-profile.py.in", generated / "crm-activation-profile.py", 0o444)
     trusted = {
         "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
-        "predecessor_observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+        "predecessor_observer_sha256": "065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346",
         "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
         "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     }
