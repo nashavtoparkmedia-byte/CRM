@@ -1,0 +1,12 @@
+Package: yoko-privileged-runtime
+Version: 2.0.0-21
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), sudo (>= 1.9.9), util-linux, docker-ce-cli
+Maintainer: YOKO Control Plane <noreply@example.invalid>
+Description: Exact coordinated Gravity and MAX privileged release profile
+ This same-version interim package preserves the installed 2.0.0-21
+ activation profile byte-identically and replaces only the read-only
+ predecessor observer (observation v2), its wrapper pin and the install
+ manifest.
