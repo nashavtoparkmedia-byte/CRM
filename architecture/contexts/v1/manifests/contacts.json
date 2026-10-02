@@ -56,7 +56,8 @@
   "internal_surface": [
     "gravity-mvp/src/lib/contacts",
     "gravity-mvp/src/lib/ContactService.ts",
-    "gravity-mvp/src/lib/ContactMergeService.ts"
+    "gravity-mvp/src/lib/ContactMergeService.ts",
+    "gravity-mvp/src/app/api/contacts/lookup"
   ],
   "owned_data": [
     {
@@ -103,6 +104,7 @@
     }
   ],
   "owned_paths": [
+    "gravity-mvp/src/app/api/contacts/lookup",
     "gravity-mvp/src/contracts/contacts",
     "gravity-mvp/src/lib/ContactMergeService.ts",
     "gravity-mvp/src/lib/ContactService.ts",

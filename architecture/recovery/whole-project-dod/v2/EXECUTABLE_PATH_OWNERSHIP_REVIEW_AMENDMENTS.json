@@ -709,6 +709,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 2
       }
+    },
+    {
+      "amendment_id": "contact-identity-m3a6c-merge-picker-lookup-transport-20261002",
+      "reviewed_at": "2026-10-02T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A6C_CANDIDATE_OWNERSHIP_REVIEW_20261002",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M3A6C_BOUNDED_OWNERSHIP_MANIFEST_FIX",
+      "reason": "M3A6C adds exactly five tracked executable surfaces and moves no existing surface between owners. The ContactLookup.v1 browser transport gravity-mvp/src/app/api/contacts/lookup/route.ts and its proof route.test.ts are placed by the contacts owned path gravity-mvp/src/app/api/contacts/lookup, which the contacts manifest gains through its maintained internal_surface and the context-manifest generator derives into owned_paths, the same mechanism that owns the telegram pending-link-requests route; the owned path names exactly that route directory, so no other contacts API route, including the legacy contact search and the merge command, changes owner, and the route never enters the gravity_runtime_remainder exact inventory. The HTTP lookup client client-ui/http-contact-lookup-client.ts and its proof sit under the existing contacts owned path gravity-mvp/src/modules/contacts, and the merge-picker proof ContactProfileDrawer.merge-picker.test.tsx sits under the existing messaging owned path gravity-mvp/src/app/messages. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and the gravity_runtime_remainder inventory is unchanged at its reviewed 247 paths. Two existing surfaces changed bytes without changing ownership and with no reviewed source-hash binding: the messaging-owned ContactProfileDrawer.tsx, whose merge picker now selects through the Contacts ContactSelector, and the boundary control tools/architecture/check-contact-lookup-boundary.mjs, which keeps its ACTIVE OPERATIONAL_SCRIPT classification under architecture_recovery. The reviewed inventory fingerprint moves only because five paths joined the inventory, and the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2570,
+        "tracked_inventory_sha256": "c3be7003c8796f8071ae0c14285e8741f7ccb71336659916b40b9055ab8ac619",
+        "coverage_sha256": "d8b9f2aae99d46478670cd4eac09e0ef7fd59c5da7b7a4c97fd6996a5dd09310"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2575,
+        "tracked_inventory_sha256": "abe8784aeac38d13568bb9825dff77dade6aca2f32f85a46e0a3d42be7223079",
+        "coverage_sha256": "38a59ea478574dbc93236a008d3768506a28dd321cb186bd3845e71cc8a4616b"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 5
+      }
     }
   ]
 }

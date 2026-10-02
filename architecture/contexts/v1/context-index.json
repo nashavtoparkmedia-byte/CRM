@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "60fbaef8080b29e2a1b789042908e9ca7615ccbc6d86bb9d504d2e2fe637b8ca"
+      "sha256": "fda4813da2520bfd4737287f43eb7791fd896ba5d3b2ea84bcff560d1b5299b9"
     },
     {
       "context": "edge_delivery",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "79f07e3b39d4743e648b34e5db07c2e1a77cb8859ac6f933e58c900da1c9aabe"
+      "sha256": "1c67f1007d83b2ef84c2e630a21a89b276a7f1f744443e62e220216b3a2c0f70"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "276013955caf8d1a71edbd2ddb95aeb77da09a6a1909f0c15ba0cc8b747ae826"
+      "sha256": "e14d560837676d90fdba85cb67fa0ac4982fb7b9a02f8786f1a370e22f0bebcc"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "0a12db015666ab7579a00a921652d56c7ed6dd77a9974ac3eed3b3ef6c6bcc19"
+      "sha256": "9f84de2abcab6717ae1e0bf9e39af528b6912fa8507e5d9c4c6e53400dfe6c09"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

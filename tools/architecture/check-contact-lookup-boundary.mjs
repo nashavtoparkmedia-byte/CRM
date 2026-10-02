@@ -21,7 +21,16 @@
 // importing nothing but React and ContactLookup.v1, owning no transport, gating
 // queries with contactLookupCriteriaV1, rendering the lookup title as given and
 // reimplementing no ranking, ordering, phone or display policy; it is not
-// re-exported through the server-oriented barrel and no consumer adopts it yet.
+// re-exported through the server-oriented barrel.
+//
+// M3A6C adds the browser transport and the first adopter. GET
+// /api/contacts/lookup and createHttpContactLookupClientV1 are pass-throughs to
+// searchContactsV1 with no Prisma, ranking, display or provider semantics of
+// their own; the client keeps only the declared item fields. The only authorized
+// consumer is the ContactProfileDrawer merge picker, which reaches the lookup
+// through that client and no longer through the legacy search hook; its merge
+// direction, confirmation, command and refresh are proven by its focused test,
+// which this control runs.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -50,6 +59,14 @@ const SELECTOR_PROOF = `${CLIENT_UI_DIR}/ContactSelector.test.tsx`
 // Every tracked file under gravity-mvp/src, outside Contacts client-ui, that names
 // the selector. Held with the sources so a probe can simulate an early adopter.
 const SELECTOR_CONSUMERS = '<git-grep:ContactSelector outside contacts client-ui>'
+const LOOKUP_ROUTE = 'gravity-mvp/src/app/api/contacts/lookup/route.ts'
+const LOOKUP_ROUTE_PROOF = 'gravity-mvp/src/app/api/contacts/lookup/route.test.ts'
+const HTTP_CLIENT = `${CLIENT_UI_DIR}/http-contact-lookup-client.ts`
+const HTTP_CLIENT_PROOF = `${CLIENT_UI_DIR}/http-contact-lookup-client.test.ts`
+const DRAWER = 'gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx'
+const DRAWER_PROOF = 'gravity-mvp/src/app/messages/components/ContactProfileDrawer.merge-picker.test.tsx'
+// The only authorized adopters of the selector: the merge picker and its proof.
+const AUTHORIZED_SELECTOR_CONSUMERS = [DRAWER_PROOF, DRAWER].sort()
 
 // The exact public contract. Anything else is a boundary change.
 const ITEM_FIELDS = ['contactId', 'displayName', 'displayTitle', 'primaryPhone', 'channels']
@@ -284,8 +301,9 @@ function assertSelectorClientSurface(sources) {
   }
   assert(!sources[PUBLIC_INDEX].includes('ContactSelector'),
     'the client selector is re-exported through the server-oriented Contacts barrel')
-  assert.equal(sources[SELECTOR_CONSUMERS].trim(), '',
-    `ContactSelector is referenced outside Contacts client-ui; consumer adoption is a later slice: ${sources[SELECTOR_CONSUMERS].trim()}`)
+  const consumers = sources[SELECTOR_CONSUMERS].split('\n').map((line) => line.trim()).filter(Boolean).sort()
+  assert.deepEqual(consumers, AUTHORIZED_SELECTOR_CONSUMERS,
+    `ContactSelector is adopted outside the authorized merge picker: ${consumers.join(', ')}`)
 }
 
 /** 12. The selector reimplements no lookup, ranking, ordering, phone or display policy. */
@@ -331,6 +349,47 @@ function assertSelectorAccessibility(sources) {
   assert(!/onBlur=\{[^}]*select\(/u.test(code), 'ContactSelector selects on blur')
 }
 
+/** 15. The browser transport is a pass-through to searchContactsV1 and nothing more. */
+function assertLookupTransport(sources) {
+  const route = withoutComments(sources[LOOKUP_ROUTE])
+  const routeSpecifiers = [...new Set([...route.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
+  assert.deepEqual(routeSpecifiers, ['@/modules/contacts/public/v1', 'next/server'],
+    `the lookup route imports something other than the Contacts public surface: ${routeSpecifiers.join(', ')}`)
+  assert(route.includes('searchContactsV1({ query, limit })'), 'the lookup route does not delegate to searchContactsV1')
+  assert(/export async function GET\(/u.test(route), 'the lookup route is not a GET read')
+  assert(!/export async function (POST|PUT|PATCH|DELETE)\b/u.test(route), 'the lookup route exposes a mutation')
+  const client = withoutComments(sources[HTTP_CLIENT])
+  const clientSpecifiers = [...new Set([...client.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
+  assert.deepEqual(clientSpecifiers, ['../contact-lookup', './ContactSelector'],
+    `the lookup client imports something other than the ContactLookup contract: ${clientSpecifiers.join(', ')}`)
+  assert(!/^import (?!type )/mu.test(client), 'the lookup client imports runtime code instead of types only')
+  assert(client.includes("CONTACT_LOOKUP_ENDPOINT_V1 = '/api/contacts/lookup'"), 'the lookup client targets another endpoint')
+  assert.equal(client.match(/\/api\//gu)?.length, 1, 'the lookup client reaches more than the lookup endpoint')
+  for (const source of [route, client]) {
+    for (const forbidden of [
+      'prisma', '.sort(', 'localeCompare', 'stripToDigits', 'formatContactPhone', 'isTechnicalProviderName',
+      'buildProviderNeutralContactDisplayV1', 'contactLookupSortKeyV1', '/api/contacts/search', '@/modules/messaging',
+      'app/messages', ...FORBIDDEN_VOCABULARY,
+    ]) {
+      assert(!source.includes(forbidden), `the lookup transport carries ${forbidden}`)
+    }
+  }
+}
+
+/** 16. The authorized merge picker reaches the lookup only through the Contacts client. */
+function assertMergePickerAdoption(sources) {
+  const drawer = withoutComments(sources[DRAWER])
+  assert(drawer.includes("from '@/modules/contacts/public/v1/client-ui/ContactSelector'"),
+    'the merge picker does not use ContactSelector')
+  assert(drawer.includes("from '@/modules/contacts/public/v1/client-ui/http-contact-lookup-client'"),
+    'the merge picker does not reach the lookup through the Contacts client')
+  assert(!drawer.includes('useContactSearch'), 'the merge picker still uses the legacy contact search hook')
+  assert(!drawer.includes('/api/contacts/search'), 'the merge picker calls the legacy contact search route')
+  assert(drawer.includes('selected.contactId === currentContactId'),
+    'the merge picker does not refuse the current Contact as its own target')
+  assert(sources[DRAWER_PROOF].includes('ContactSelector'), 'the merge picker proof is missing')
+}
+
 const CHECKS = [
   ['contract_shape', assertContractShape],
   ['no_foreign_vocabulary', assertNoForeignVocabulary],
@@ -346,6 +405,8 @@ const CHECKS = [
   ['selector_no_policy', assertSelectorNoPolicy],
   ['selector_vocabulary', assertSelectorVocabulary],
   ['selector_accessibility', assertSelectorAccessibility],
+  ['lookup_transport', assertLookupTransport],
+  ['merge_picker_adoption', assertMergePickerAdoption],
 ]
 
 const PROBES = [
@@ -388,7 +449,8 @@ const PROBES = [
   ['selector_imports_messaging', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { searchConversations } from '@/modules/messaging/public/v1'") })],
   ['selector_skips_criteria', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('if (contactLookupCriteriaV1(text) === null) return', 'if (text.trim().length < 2) return') })],
   ['selector_reexported_from_barrel', 'selector_client_surface', (s) => ({ ...s, [PUBLIC_INDEX]: `${s[PUBLIC_INDEX]}\nexport { default as ContactSelector } from './client-ui/ContactSelector'\n` })],
-  ['selector_adopted_by_consumer', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: 'gravity-mvp/src/app/messages/components/NewChatPopover.tsx\n' })],
+  ['selector_adopted_by_consumer', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: `${s[SELECTOR_CONSUMERS]}gravity-mvp/src/app/messages/components/NewChatPopover.tsx\n` })],
+  ['selector_adopter_dropped', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: `${DRAWER_PROOF}\n` })],
   ['selector_sorts_results', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const items = result?.items ?? []', '  const items = [...(result?.items ?? [])].sort()') })],
   ['selector_normalizes_phone', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('    setInputText(text)\n    resetLookup()', "    const digits = text.replace(/\\D/g, '')\n    setInputText(text)\n    resetLookup()") })],
   ['selector_composes_title', 'selector_no_policy', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('{item.displayTitle}</span>', '{item.displayName} · {item.primaryPhone}</span>') })],
@@ -399,11 +461,25 @@ const PROBES = [
   ['selector_drops_live_region', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('aria-live="polite"', '') })],
   ['selector_drops_active_descendant', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('aria-activedescendant={activeDescendant}', '') })],
   ['selector_selects_on_tab', 'selector_accessibility', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("      case 'Escape': {", "      case 'Tab': {\n        if (items[0]) select(items[0])\n        return\n      }\n      case 'Escape': {") })],
+  ['route_reads_prisma', 'lookup_transport', (s) => ({ ...s, [LOOKUP_ROUTE]: s[LOOKUP_ROUTE].replace("import { searchContactsV1 } from '@/modules/contacts/public/v1'", "import { searchContactsV1 } from '@/modules/contacts/public/v1'\nimport { prisma } from '@/lib/prisma'") })],
+  ['route_skips_capability', 'lookup_transport', (s) => ({ ...s, [LOOKUP_ROUTE]: s[LOOKUP_ROUTE].replace('searchContactsV1({ query, limit })', 'searchContactsV1({ query })') })],
+  ['route_filters_results', 'lookup_transport', (s) => ({ ...s, [LOOKUP_ROUTE]: s[LOOKUP_ROUTE].replace('return NextResponse.json(result)', 'return NextResponse.json({ ...result, items: [...result.items].sort() })') })],
+  ['route_accepts_mutation', 'lookup_transport', (s) => ({ ...s, [LOOKUP_ROUTE]: `${s[LOOKUP_ROUTE]}\nexport async function POST() { return new Response(null) }\n` })],
+  ['route_imports_messaging', 'lookup_transport', (s) => ({ ...s, [LOOKUP_ROUTE]: s[LOOKUP_ROUTE].replace("import { searchContactsV1 } from '@/modules/contacts/public/v1'", "import { searchContactsV1 } from '@/modules/contacts/public/v1'\nimport { listConversations } from '@/modules/messaging/public/v1'") })],
+  ['client_targets_legacy_search', 'lookup_transport', (s) => ({ ...s, [HTTP_CLIENT]: s[HTTP_CLIENT].replace("CONTACT_LOOKUP_ENDPOINT_V1 = '/api/contacts/lookup'", "CONTACT_LOOKUP_ENDPOINT_V1 = '/api/contacts/search'") })],
+  ['client_imports_runtime', 'lookup_transport', (s) => ({ ...s, [HTTP_CLIENT]: s[HTTP_CLIENT].replace("import type { ContactLookupItemV1, ContactLookupResultV1 } from '../contact-lookup'", "import { contactLookupCriteriaV1, type ContactLookupItemV1, type ContactLookupResultV1 } from '../contact-lookup'") })],
+  ['client_passes_extra_fields', 'lookup_transport', (s) => ({ ...s, [HTTP_CLIENT]: s[HTTP_CLIENT].replace('    channels: [...record.channels],\n  }', '    channels: [...record.channels],\n    externalId: record.externalId,\n  }') })],
+  ['client_sorts_results', 'lookup_transport', (s) => ({ ...s, [HTTP_CLIENT]: s[HTTP_CLIENT].replace('const valid = items as ContactLookupItemV1[]', 'const valid = (items as ContactLookupItemV1[]).sort()') })],
+  ['picker_keeps_legacy_hook', 'merge_picker_adoption', (s) => ({ ...s, [DRAWER]: s[DRAWER].replace("import ContactSelector from '@/modules/contacts/public/v1/client-ui/ContactSelector'", "import ContactSelector from '@/modules/contacts/public/v1/client-ui/ContactSelector'\nimport { useContactSearch } from \"../hooks/useContactSearch\"") })],
+  ['picker_drops_selector', 'merge_picker_adoption', (s) => ({ ...s, [DRAWER]: s[DRAWER].replace("import ContactSelector from '@/modules/contacts/public/v1/client-ui/ContactSelector'\n", '') })],
+  ['picker_bypasses_client', 'merge_picker_adoption', (s) => ({ ...s, [DRAWER]: s[DRAWER].replace("import { createHttpContactLookupClientV1 } from '@/modules/contacts/public/v1/client-ui/http-contact-lookup-client'\n", '') })],
+  ['picker_allows_self_target', 'merge_picker_adoption', (s) => ({ ...s, [DRAWER]: s[DRAWER].replace('selected.contactId === currentContactId', 'false') })],
 ]
 
 function main() {
   const relatives = [LOOKUP, ADAPTER, PROOF, POLICY, POLICY_PROOF, OPERATIONS, PUBLIC_INDEX, MANIFEST,
-    LEGACY_ROUTE, LEGACY_HOOK, SELECTOR, SELECTOR_PROOF]
+    LEGACY_ROUTE, LEGACY_HOOK, SELECTOR, SELECTOR_PROOF, LOOKUP_ROUTE, LOOKUP_ROUTE_PROOF, HTTP_CLIENT,
+    HTTP_CLIENT_PROOF, DRAWER, DRAWER_PROOF]
   const sources = Object.fromEntries(relatives.map((relative) => [relative, read(relative)]))
   // git grep exits 1 when nothing matches; only a status above 1 is a failure.
   const consumers = spawnSync('git', ['-c', 'safe.directory=*', 'grep', '-l', 'ContactSelector', '--',
@@ -437,6 +513,9 @@ function main() {
     'src/modules/contacts/public/v1/contact-lookup.test.ts',
     'src/modules/contacts/public/v1/contact-display-policy.test.ts',
     'src/modules/contacts/public/v1/client-ui/ContactSelector.test.tsx',
+    'src/modules/contacts/public/v1/client-ui/http-contact-lookup-client.test.ts',
+    'src/app/api/contacts/lookup/route.test.ts',
+    'src/app/messages/components/ContactProfileDrawer.merge-picker.test.tsx',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
   assert.equal(vitest.status, 0, `the contact lookup proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
   const passed = passingProofCount(vitest.stdout)
@@ -456,7 +535,9 @@ function main() {
     legacy_search_surface_unchanged: true,
     selector_client_surface: true,
     selector_owns_transport: false,
-    selector_consumers: 0,
+    selector_consumers: AUTHORIZED_SELECTOR_CONSUMERS.length - 1,
+    lookup_transport_pass_through: true,
+    merge_picker_on_lookup: true,
   }, null, 2)}\n`)
 }
 
