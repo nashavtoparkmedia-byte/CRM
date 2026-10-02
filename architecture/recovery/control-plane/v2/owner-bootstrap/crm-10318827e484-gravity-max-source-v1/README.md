@@ -149,6 +149,13 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
+Before the Owner install, the Stage A handoff `release-output/` must be
+normalized to a `0700` directory with `0444` members; the installer refuses
+any other mode ("unsafe handoff directory") before anything is admitted. An
+interrupted or failed install after `dpkg -i` reinstalls the exact predecessor
+package; if that rollback itself fails, the bootstrap guard is kept so every
+activation verb refuses until the predecessor is restored.
+
 The installer also requires the already-installed 2.0.0-21 interim package
 (`packaging/predecessor-observability-v2/`: the byte-identical
 `crm-ba90ed4b6717` profile plus predecessor observation v2) at its exact

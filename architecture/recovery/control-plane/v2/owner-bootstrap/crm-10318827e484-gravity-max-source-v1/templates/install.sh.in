@@ -31,39 +31,41 @@ runtime_json() {
     /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime "$@"
 }
 
+# Every helper below is also called from conditions (`||`, `if`), where bash
+# disables errexit inside the function; each step therefore returns explicitly.
 old_identity() {
-    test "$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null)" = '2.0.0-21'
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-21" and e.get("activation_profile")=="crm-ba90ed4b6717-gravity-max-source-v1" else 1)'
-    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("predecessor_observability_sha256")=="1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a" else 1)'
+    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-21' || return 1
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-21" and e.get("activation_profile")=="crm-ba90ed4b6717-gravity-max-source-v1" else 1)' || return 1
+    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("predecessor_observability_sha256")=="1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a" else 1)' || return 1
 }
 
 new_identity() {
-    test "$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null)" = '2.0.0-22'
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-22" and e.get("activation_profile")=="crm-10318827e484-gravity-max-source-v1" else 1)'
-    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("coordinated_pair")==["gravity-mvp","max-web-scraper"] else 1)'
+    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-22' || return 1
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-22" and e.get("activation_profile")=="crm-10318827e484-gravity-max-source-v1" else 1)' || return 1
+    runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("coordinated_pair")==["gravity-mvp","max-web-scraper"] else 1)' || return 1
 }
 
 audit_exact() {
-    runtime_json audit-status | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("state")=="VALID" and e.get("record_count")==int(sys.argv[2]) and e.get("last_digest")==sys.argv[1] else 1)' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS"
+    runtime_json audit-status | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("state")=="VALID" and e.get("record_count")==int(sys.argv[2]) and e.get("last_digest")==sys.argv[1] else 1)' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS" || return 1
 }
 
 stored_deb_exact() {
     local root=$1 name=$2 expected=$3
     local path="$root/$name"
-    test -d "$root" && test ! -L "$root"
-    test "$(/usr/bin/stat -c '%u:%g:%a' "$root")" = '0:0:700'
-    test "$(/usr/bin/find "$root" -mindepth 1 -maxdepth 1 -printf '%f\n')" = "$name"
-    test -f "$path" && test ! -L "$path"
-    test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$path")" = '0:0:400:1'
-    test "$(/usr/bin/sha256sum "$path" | /usr/bin/cut -d ' ' -f 1)" = "$expected"
+    test -d "$root" && test ! -L "$root" || return 1
+    test "$(/usr/bin/stat -c '%u:%g:%a' "$root")" = '0:0:700' || return 1
+    test "$(/usr/bin/find "$root" -mindepth 1 -maxdepth 1 -printf '%f\n')" = "$name" || return 1
+    test -f "$path" && test ! -L "$path" || return 1
+    test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$path")" = '0:0:400:1' || return 1
+    test "$(/usr/bin/sha256sum "$path" | /usr/bin/cut -d ' ' -f 1)" = "$expected" || return 1
 }
 
 clear_guard() {
     if [ "$guard_owned" -eq 1 ]; then
-        test -f "$BOOTSTRAP_GUARD" && test ! -L "$BOOTSTRAP_GUARD"
-        test "$(/usr/bin/stat -c '%u:%g:%a:%h:%s' "$BOOTSTRAP_GUARD")" = '0:0:400:1:0'
-        test "$(/usr/bin/stat -c '%d:%i' "$BOOTSTRAP_GUARD")" = "$guard_identity"
-        /usr/bin/unlink "$BOOTSTRAP_GUARD"
+        test -f "$BOOTSTRAP_GUARD" && test ! -L "$BOOTSTRAP_GUARD" || return 1
+        test "$(/usr/bin/stat -c '%u:%g:%a:%h:%s' "$BOOTSTRAP_GUARD")" = '0:0:400:1:0' || return 1
+        test "$(/usr/bin/stat -c '%d:%i' "$BOOTSTRAP_GUARD")" = "$guard_identity" || return 1
+        /usr/bin/unlink "$BOOTSTRAP_GUARD" || return 1
         guard_owned=0
         guard_identity=''
     fi
@@ -83,22 +85,37 @@ print(f"{value.st_dev}:{value.st_ino}")' "$BOOTSTRAP_GUARD")
 }
 
 rollback_previous() {
-    stored_deb_exact "$OLD_DEB_STORE" "$OLD_DEB" "$OLD_DEB_SHA"
-    DEBIAN_FRONTEND=noninteractive /usr/bin/dpkg -i "$OLD_DEB_PATH" >/dev/null
-    old_identity
-    audit_exact
+    stored_deb_exact "$OLD_DEB_STORE" "$OLD_DEB" "$OLD_DEB_SHA" || return 1
+    DEBIAN_FRONTEND=noninteractive /usr/bin/dpkg -i "$OLD_DEB_PATH" >/dev/null || return 1
+    old_identity || return 1
+    audit_exact || return 1
 }
 
 on_exit() {
     local rc=$?
+    trap '' INT TERM HUP QUIT
     trap - EXIT
     if [ "$rc" -ne 0 ] && [ "$new_attempted" -eq 1 ]; then
-        rollback_previous || true
+        if rollback_previous; then
+            clear_guard || true
+            echo "OWNER_BOOTSTRAP_FAILED_ROLLED_BACK exit=$rc" >&2 || true
+        else
+            # The guard stays: activation verbs refuse until a fresh install or
+            # an operator restores the exact predecessor.
+            echo "OWNER_BOOTSTRAP_FAILED_ROLLBACK_FAILED_GUARD_KEPT exit=$rc" >&2 || true
+        fi
+        exit "$rc"
     fi
     clear_guard || true
     exit "$rc"
 }
 trap on_exit EXIT
+# A signal must leave through the EXIT trap with a failure status, so an
+# interrupted install is rolled back rather than reported as rc=0.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 131' QUIT
+trap 'exit 143' TERM
 
 test "$#" -eq 0
 test "$(/usr/bin/id -u)" = '0'
