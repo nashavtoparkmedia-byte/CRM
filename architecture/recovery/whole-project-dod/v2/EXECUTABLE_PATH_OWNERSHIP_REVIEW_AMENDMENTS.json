@@ -679,6 +679,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 4
       }
+    },
+    {
+      "amendment_id": "contact-identity-m3a6b-contact-selector-ui-20261002",
+      "reviewed_at": "2026-10-02T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A6B_CANDIDATE_OWNERSHIP_REVIEW_20261002",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "CURATOR_APPROVED_M3A6B_CONTACT_SELECTOR_UI_IMPLEMENTATION",
+      "reason": "M3A6B adds exactly two tracked executable surfaces and changes no existing ownership. Both sit under the contacts owned path gravity-mvp/src/modules/contacts: the reusable ContactSelector client component client-ui/ContactSelector.tsx and its proof client-ui/ContactSelector.test.tsx, beside the existing Contacts client surfaces. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. The selector is the client presentation of the already-landed ContactLookup.v1, so the contacts public surface gains no entry and no new capability, route, adapter or server operation is introduced. One existing surface changed bytes without changing ownership: the boundary control tools/architecture/check-contact-lookup-boundary.mjs gains the selector checks and keeps its ACTIVE OPERATIONAL_SCRIPT classification under architecture_recovery, with no reviewed source-hash binding. The legacy contact-search route, its hook, NewChatPopover, ChatList and ContactProfileDrawer are byte-identical. The reviewed inventory fingerprint moves only because two paths joined the inventory, and the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2568,
+        "tracked_inventory_sha256": "b12c12099e10214f68b8a3277a84f88caba5a9ad97d63b01e915d08bb9ecc23f",
+        "coverage_sha256": "95cab10f06decc5f40d1357ce020e3edc1c8fdbe3b094b921157218c490eec0f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2570,
+        "tracked_inventory_sha256": "c3be7003c8796f8071ae0c14285e8741f7ccb71336659916b40b9055ab8ac619",
+        "coverage_sha256": "d8b9f2aae99d46478670cd4eac09e0ef7fd59c5da7b7a4c97fd6996a5dd09310"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 2
+      }
     }
   ]
 }
