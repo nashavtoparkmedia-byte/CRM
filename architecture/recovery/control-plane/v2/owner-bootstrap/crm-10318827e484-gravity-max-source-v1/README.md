@@ -30,8 +30,13 @@ tg-bot and, since v2, the MAX scraper) from the Compose layer stack that the
 container itself recorded at creation
 (`com.docker.compose.project.config_files`) and requires every
 release-critical semantic to equal that reconstruction: image reference and
-image id, entrypoint, command, restart policy, mounts, networks, and the
-environment (names and values, compared internally, never emitted). The
+image id, entrypoint, command, container name, extra hosts, logging,
+healthcheck, user, working directory, privileged/read-only, capabilities,
+security options, init, stop signal and grace period, published ports and
+tmpfs, restart policy, mounts, networks, and the environment (names and
+values, compared internally, never emitted). The comparison is closed-world:
+any resolved service field outside that set (other than `build` and
+`depends_on`) is refused rather than ignored. The
 environment is compared last, so a reported name condition means every other
 semantic already reconstructed.
 
@@ -44,7 +49,12 @@ semantic already reconstructed.
   regular file, no final-component symlink), never handed to Compose, and
   admitted only if it matches the strict image-pin grammar
   (`services:` / `  <service>:` / `    image: <reference>`, plus comments).
-  Its pins override the resolved image; its digest is bound.
+  Every line must be a single line under Python's and YAML's line-break rules
+  (no NEL, LS, PS, VT or FF anywhere), so a comment cannot hide a key from
+  this parser that Compose would apply. Its pins override the resolved image;
+  its digest is bound, and the layer records whether its path chain is
+  caller-writable (its digest is then evidence, not authority: the pins are
+  re-proven against the running container).
 - No other file can enter the reconstruction: a candidate overlay that the
   running container did not record is never read, and substituting one
   resolves the candidate's image, which the predecessor does not run.

@@ -128,22 +128,25 @@ capture_identity() {
 import json,sys
 v=json.load(sys.stdin); e=v["evidence"]
 assert v["ok"] is True and v["primitive"]=="docker-inspect" and v["resource"]==sys.argv[1]
-print(json.dumps({k:e[k] for k in ("logical_resource","container_id","image_id","created","started_at","restart_count","mounts","entrypoint","cmd")} | {"config_hash":e["compose_labels"]["com.docker.compose.config-hash"]},sort_keys=True,separators=(",",":")))' "$resource" >> "$destination"
+print(json.dumps({k:e[k] for k in ("logical_resource","container_id","image_id","created","started_at","restart_count","mounts","entrypoint","cmd")} | {"config_hash":e["compose_labels"]["com.docker.compose.config-hash"]},sort_keys=True,separators=(",",":")))' "$resource" >> "$destination" || return 1
     done
     runtime_json audit-status | /usr/bin/python3 -I -c '
 import json,sys
 v=json.load(sys.stdin); e=v["evidence"]
 assert v["ok"] is True and e["state"]=="VALID"
-print(json.dumps({"audit_records":e["record_count"],"audit_last":e["last_digest"]},sort_keys=True))' >> "$destination"
+print(json.dumps({"audit_records":e["record_count"],"audit_last":e["last_digest"]},sort_keys=True))' >> "$destination" || return 1
 }
 
 store_interim() {
-    if [ -e "$INTERIM_STORE" ]; then
-        stored_exact "$INTERIM_STORE" "$INTERIM_DEB" "$PACKAGE_SHA256"
-        return
+    if [ -e "$INTERIM_STORE" ] || [ -L "$INTERIM_STORE" ]; then
+        stored_exact "$INTERIM_STORE" "$INTERIM_DEB" "$PACKAGE_SHA256" || return 1
+        return 0
     fi
-    /usr/bin/mkdir -m 0700 "$INTERIM_STORE"
-    /usr/bin/python3 -I - "$PRIVATE_PACKAGE" "$INTERIM_DEB" <<'PY'
+    # Publish atomically: build and verify in a root-only staging directory in
+    # the same store, then rename. A partial copy never occupies the
+    # content-addressed name.
+    staging=$(/usr/bin/mktemp -d "$STORE/.interim-staging.XXXXXX") || return 1
+    if ! /usr/bin/python3 -I - "$PRIVATE_PACKAGE" "$staging/yoko-privileged-runtime_2.0.0-21_all.deb" <<'PY'
 import os,sys
 source,destination=sys.argv[1:]
 src=os.open(source,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
@@ -155,7 +158,25 @@ try:
 finally:
     os.close(src); os.close(dst)
 PY
-    stored_exact "$INTERIM_STORE" "$INTERIM_DEB" "$PACKAGE_SHA256"
+    then
+        /usr/bin/rm -rf -- "$staging"
+        return 1
+    fi
+    if ! stored_exact "$staging" "$staging/yoko-privileged-runtime_2.0.0-21_all.deb" "$PACKAGE_SHA256" \
+        || ! /usr/bin/mv -T -- "$staging" "$INTERIM_STORE"; then
+        /usr/bin/rm -rf -- "$staging"
+        return 1
+    fi
+    stored_this_run=1
+    stored_exact "$INTERIM_STORE" "$INTERIM_DEB" "$PACKAGE_SHA256" || return 1
+}
+
+forget_store() {
+    # Only an entry this run created, and only after the original is back:
+    # store presence then always means the interim package was installed.
+    if [ "$stored_this_run" = 1 ] && stored_exact "$INTERIM_STORE" "$INTERIM_DEB" "$PACKAGE_SHA256"; then
+        /usr/bin/unlink "$INTERIM_DEB" && /usr/bin/rmdir "$INTERIM_STORE" && stored_this_run=0
+    fi
 }
 
 rollback_exact() {
@@ -164,7 +185,10 @@ rollback_exact() {
         && old_state_ok && self_check_is "$OLD_OBSERVER_SHA256"
 }
 
-WORK=$(/usr/bin/mktemp -d /var/tmp/yoko-predecessor-observability-v2-install.XXXXXX)
+attempted=0
+handled=0
+stored_this_run=0
+WORK=''
 cleanup() {
     case "$WORK" in
         /var/tmp/yoko-predecessor-observability-v2-install.*)
@@ -173,8 +197,29 @@ cleanup() {
             ;;
     esac
 }
-trap cleanup EXIT HUP INT TERM
-[ "$(/usr/bin/stat -c '%u:%g:%a' "$WORK")" = '0:0:700' ] || { echo 'PRIVATE_WORK_DIRECTORY_UNSAFE' >&2; exit 78; }
+on_exit() {
+    rc=$?
+    trap - EXIT
+    if [ "$rc" -ne 0 ] && [ "$attempted" = 1 ] && [ "$handled" = 0 ]; then
+        handled=1
+        if rollback_exact; then
+            forget_store || true
+            echo 'INTERRUPTED_ROLLED_BACK' >&2
+        else
+            echo 'INTERRUPTED_ROLLBACK_FAILED' >&2
+        fi
+    fi
+    cleanup
+    exit "$rc"
+}
+trap on_exit EXIT
+trap 'exit 129' HUP INT TERM
+
+WORK=$(/usr/bin/mktemp -d /var/tmp/yoko-predecessor-observability-v2-install.XXXXXX)
+if [ "$(/usr/bin/stat -c '%u:%g:%a' "$WORK")" != '0:0:700' ]; then
+    echo 'PRIVATE_WORK_DIRECTORY_UNSAFE' >&2
+    exit 78
+fi
 PRIVATE_PACKAGE="$WORK/package.deb"
 private_copy "$PACKAGE_PATH" "$PRIVATE_PACKAGE" || { echo 'OBSERVABILITY_PACKAGE_COPY_FAILED' >&2; exit 78; }
 if ! package_identity_ok "$PRIVATE_PACKAGE"; then
@@ -186,19 +231,36 @@ if ! stored_exact "$STORE/$ROLLBACK_DEB_SHA256" "$ROLLBACK_DEB" "$ROLLBACK_DEB_S
     exit 78
 fi
 
-# Serialise with every coordinated bootstrap installer.
-[ -d "$BOOTSTRAP_LOCK_DIR" ] || /usr/bin/mkdir -m 0700 "$BOOTSTRAP_LOCK_DIR"
-[ "$(/usr/bin/stat -c '%u:%g:%a' "$BOOTSTRAP_LOCK_DIR")" = '0:0:700' ] && [ ! -L "$BOOTSTRAP_LOCK_DIR" ]
+# BEGIN BOOTSTRAP LOCK
+# Serialise with every coordinated bootstrap installer. /run/lock is
+# world-writable, so the directory must be proven root-owned 0700 and not a
+# link before anything is opened inside it; each gate is its own aborting test.
+if [ ! -e "$BOOTSTRAP_LOCK_DIR" ] && [ ! -L "$BOOTSTRAP_LOCK_DIR" ]; then
+    /usr/bin/mkdir -m 0700 "$BOOTSTRAP_LOCK_DIR" || { echo 'BOOTSTRAP_LOCK_DIRECTORY_UNSAFE' >&2; exit 78; }
+fi
+if [ -L "$BOOTSTRAP_LOCK_DIR" ] || [ ! -d "$BOOTSTRAP_LOCK_DIR" ]; then
+    echo 'BOOTSTRAP_LOCK_DIRECTORY_UNSAFE' >&2
+    exit 78
+fi
+if [ "$(/usr/bin/stat -c '%u:%g:%a' "$BOOTSTRAP_LOCK_DIR")" != '0:0:700' ]; then
+    echo 'BOOTSTRAP_LOCK_DIRECTORY_UNSAFE' >&2
+    exit 78
+fi
 exec 9>"$BOOTSTRAP_LOCK"
-/usr/bin/flock -x -w 30 9
-if [ -e "$BOOTSTRAP_GUARD" ]; then
+if [ -L "$BOOTSTRAP_LOCK" ] || [ "$(/usr/bin/stat -c '%u:%g:%a:%h' "$BOOTSTRAP_LOCK")" != '0:0:600:1' ]; then
+    echo 'BOOTSTRAP_LOCK_FILE_UNSAFE' >&2
+    exit 78
+fi
+/usr/bin/flock -x -w 30 9 || { echo 'BOOTSTRAP_LOCK_BUSY' >&2; exit 75; }
+# END BOOTSTRAP LOCK
+if [ -e "$BOOTSTRAP_GUARD" ] || [ -L "$BOOTSTRAP_GUARD" ]; then
     echo 'ACTIVATION_BOOTSTRAP_IN_PROGRESS' >&2
     exit 75
 fi
 
 if new_state_ok; then
-    self_check_is "$NEW_OBSERVER_SHA256"
-    store_interim
+    self_check_is "$NEW_OBSERVER_SHA256" || { echo 'INSTALLED_INTERIM_SELF_CHECK_FAILED' >&2; exit 78; }
+    store_interim || { echo 'INTERIM_PACKAGE_STORE_FAILED' >&2; exit 74; }
     echo "PREDECESSOR_OBSERVABILITY_V2_ALREADY_INSTALLED source=$SOURCE_COMMIT package=$PACKAGE_SHA256"
     exit 0
 fi
@@ -209,7 +271,9 @@ fi
 
 fail() {
     reason=$1
+    handled=1
     if rollback_exact && capture_identity "$WORK/rolled-back" && /usr/bin/cmp -s "$WORK/before" "$WORK/rolled-back"; then
+        forget_store || true
         echo "${reason}_ROLLED_BACK" >&2
     else
         echo "${reason}_ROLLBACK_FAILED" >&2
@@ -217,12 +281,14 @@ fail() {
     exit 74
 }
 
-capture_identity "$WORK/before"
+capture_identity "$WORK/before" || { echo 'PRODUCTION_IDENTITY_CAPTURE_FAILED' >&2; exit 74; }
 store_interim || { echo 'INTERIM_PACKAGE_STORE_FAILED' >&2; exit 74; }
+attempted=1
 package_identity_ok "$PRIVATE_PACKAGE" || fail OBSERVABILITY_PACKAGE_IDENTITY_CHANGED
 DEBIAN_FRONTEND=noninteractive /usr/bin/dpkg --install "$PRIVATE_PACKAGE" >/dev/null || fail OBSERVABILITY_INSTALL_FAILED
 { new_state_ok && self_check_is "$NEW_OBSERVER_SHA256"; } || fail OBSERVABILITY_INSTALL_VERIFICATION_FAILED
-capture_identity "$WORK/after"
+capture_identity "$WORK/after" || fail PRODUCTION_IDENTITY_CAPTURE_FAILED
 /usr/bin/cmp -s "$WORK/before" "$WORK/after" || fail PRODUCTION_OR_AUDIT_IDENTITY_CHANGED
+attempted=0
 
 echo "PREDECESSOR_OBSERVABILITY_V2_INSTALLED source=$SOURCE_COMMIT package=$PACKAGE_SHA256 stored=$INTERIM_DEB production_mutated=false"

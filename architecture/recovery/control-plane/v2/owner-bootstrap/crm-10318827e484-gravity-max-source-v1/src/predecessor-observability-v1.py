@@ -48,7 +48,7 @@ RUNTIME_PROFILE_OVERLAY = re.compile(
 OVERLAY_PATH = re.compile(r"(?:/[A-Za-z0-9._-]{1,128}){1,16}\.compose\.yml")
 OVERLAY_SERVICE = re.compile(r"  ([a-z0-9][a-z0-9_-]{0,63}):")
 OVERLAY_IMAGE = re.compile(r"    image: ([!-~]{1,512})")
-OVERLAY_COMMENT = re.compile(r" *#[^\x00-\x1f\x7f]*")
+OVERLAY_COMMENT = re.compile(r" *#[^\x00-\x1f\x7f-\x9f\u2028\u2029]*")
 IMAGE_REFERENCE = re.compile(
     r"[a-z0-9][a-z0-9._/-]{0,254}(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-f]{64})?"
 )
@@ -311,7 +311,11 @@ def _image_only_overlay(core: Any, path: str, raw: bytes) -> dict[str, str]:
     in_services = False
     current: str | None = None
     for line in text.split("\n"):
-        if not line.strip() or OVERLAY_COMMENT.fullmatch(line):
+        # Compose's YAML parser also breaks lines at NEL, LS, PS, VT and FF; a
+        # "comment" carrying one would hide a real key from this parser.
+        if line and line.splitlines() != [line]:
+            _fault(core, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY", {"path": path})
+        if not line.strip(" ") or OVERLAY_COMMENT.fullmatch(line):
             continue
         if line == "services:" and not in_services:
             in_services = True
@@ -362,11 +366,20 @@ def _layer_stack(core: Any, labels: Any) -> tuple[tuple[str, ...], dict[str, str
             _fault(core, "PREDECESSOR_LAYER_UNTRUSTED", {"path": path})
         raw = _read_overlay_once(core, path)
         pins = _image_only_overlay(core, path, raw)
+        try:
+            core.assert_noncaller_writable_chain(core.mapped(path))
+            caller_writable = False
+        except core.RuntimeFault:
+            caller_writable = True
         records.append({
             "path": path,
             "role": "image-only-overlay",
             "sha256": hashlib.sha256(raw).hexdigest(),
             "image_pins": pins,
+            # Only the image pins are consumed, and each is re-proven against the
+            # running container; the digest of a caller-writable layer is evidence,
+            # not authority.
+            "caller_writable_chain": caller_writable,
         })
         images.update(pins)
     return tuple(compose_files), images, records
@@ -704,6 +717,130 @@ def _compose_labels(core: Any, labels: Any, service: str) -> dict[str, str]:
     return output
 
 
+SUPPORTED_SERVICE_FIELDS = frozenset({
+    # ordering/build only: no effect on the recreated container
+    "build", "depends_on",
+    # compared below
+    "container_name", "image", "entrypoint", "command", "environment", "restart",
+    "volumes", "networks", "extra_hosts", "logging", "healthcheck", "user",
+    "working_dir", "privileged", "read_only", "cap_add", "cap_drop",
+    "security_opt", "init", "stop_signal", "stop_grace_period",
+})
+GO_DURATION = re.compile(r"(?:[0-9]+(?:\.[0-9]+)?(?:h|m|s|ms|us|ns))+")
+GO_DURATION_PART = re.compile(r"([0-9]+(?:\.[0-9]+)?)(ms|us|ns|h|m|s)")
+DURATION_UNITS = {"h": 3600 * 10**9, "m": 60 * 10**9, "s": 10**9, "ms": 10**6, "us": 10**3, "ns": 1}
+
+
+def _duration(core: Any, value: Any) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    if not isinstance(value, str) or not GO_DURATION.fullmatch(value):
+        _fault(core, "RESOLVED_DURATION_INVALID")
+    return int(sum(float(amount) * DURATION_UNITS[unit] for amount, unit in GO_DURATION_PART.findall(value)))
+
+
+def _host_pairs(core: Any, value: Any, separator: str) -> list[tuple[str, str]]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        pairs = []
+        for host, addresses in value.items():
+            for address in addresses if isinstance(addresses, list) else [addresses]:
+                pairs.append((host, address))
+        return sorted(pairs)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        _fault(core, "EXTRA_HOSTS_CONFIGURATION_INVALID")
+    pairs = []
+    for item in value:
+        mark = separator if separator in item else ":"
+        host, _, address = item.partition(mark)
+        if not host or not address:
+            _fault(core, "EXTRA_HOSTS_CONFIGURATION_INVALID")
+        pairs.append((host, address))
+    return sorted(pairs)
+
+
+def _healthcheck_projection(core: Any, value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        _fault(core, "HEALTHCHECK_CONFIGURATION_INVALID")
+    return {key: value.get(key) or (0 if key != "Test" else None) for key in ("Test", "Interval", "Timeout", "StartPeriod", "StartInterval", "Retries")}
+
+
+def _resolved_healthcheck(core: Any, value: Any, image_default: Any) -> Any:
+    if value is None:
+        return _healthcheck_projection(core, image_default)
+    if not isinstance(value, dict):
+        _fault(core, "RESOLVED_HEALTHCHECK_INVALID")
+    if value.get("disable") is True:
+        return _healthcheck_projection(core, {"Test": ["NONE"]})
+    test = value.get("test")
+    if isinstance(test, str):
+        test = ["CMD-SHELL", test]
+    retries = value.get("retries")
+    return _healthcheck_projection(core, {
+        "Test": test,
+        "Interval": _duration(core, value.get("interval")),
+        "Timeout": _duration(core, value.get("timeout")),
+        "StartPeriod": _duration(core, value.get("start_period")),
+        "StartInterval": _duration(core, value.get("start_interval")),
+        "Retries": retries if isinstance(retries, int) else 0,
+    })
+
+
+def _compare_host_semantics(
+    core: Any, target: dict[str, Any], service: dict[str, Any], image_config: dict[str, Any],
+    config: dict[str, Any], host: dict[str, Any],
+) -> None:
+    """Every resolved field must be one this observer reproduces, and must equal live."""
+    name = target["compose_service"]
+    unsupported = sorted(set(service) - SUPPORTED_SERVICE_FIELDS)
+    if unsupported:
+        _fault(core, "RESOLVED_SERVICE_FIELD_UNSUPPORTED", {"service": name, "fields": unsupported})
+
+    def drift(field: str) -> None:
+        _fault(core, "HOST_SEMANTIC_RECONSTRUCTION_DRIFT", {"service": name, "field": field})
+
+    if service.get("container_name") != target["container_name"]:
+        drift("container_name")
+    if _host_pairs(core, service.get("extra_hosts"), "=") != _host_pairs(core, host.get("ExtraHosts"), ":"):
+        drift("extra_hosts")
+    logging = service.get("logging")
+    live_logging = host.get("LogConfig")
+    if (
+        not isinstance(logging, dict) or not isinstance(live_logging, dict)
+        or (logging.get("driver") or "json-file") != live_logging.get("Type")
+        or (logging.get("options") or {}) != (live_logging.get("Config") or {})
+    ):
+        drift("logging")
+    if _resolved_healthcheck(core, service.get("healthcheck"), image_config.get("Healthcheck")) != _healthcheck_projection(core, config.get("Healthcheck")):
+        drift("healthcheck")
+    if (service.get("user") or image_config.get("User") or "") != (config.get("User") or ""):
+        drift("user")
+    if (service.get("working_dir") or image_config.get("WorkingDir") or "") != (config.get("WorkingDir") or ""):
+        drift("working_dir")
+    if bool(service.get("privileged")) != (host.get("Privileged") is True):
+        drift("privileged")
+    if bool(service.get("read_only")) != (host.get("ReadonlyRootfs") is True):
+        drift("read_only")
+    for field, live in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop"), ("security_opt", "SecurityOpt")):
+        if sorted(service.get(field) or []) != sorted(host.get(live) or []):
+            drift(field)
+    if bool(service.get("init")) != (host.get("Init") is True):
+        drift("init")
+    if (service.get("stop_signal") or image_config.get("StopSignal") or "") != (config.get("StopSignal") or ""):
+        drift("stop_signal")
+    grace = service.get("stop_grace_period")
+    expected_timeout = None if grace is None else _duration(core, grace) // 10**9
+    if config.get("StopTimeout") != expected_timeout:
+        drift("stop_grace_period")
+    if host.get("PortBindings") or host.get("Tmpfs"):
+        drift("ports_or_tmpfs")
+
+
 def _resolved_argv(core: Any, value: Any, default: Any, code: str) -> list[str]:
     """The argv Docker applies: the resolved service value, else the image default."""
     chosen = default if value is None else value
@@ -825,6 +962,7 @@ def _observe_target(
     if command != expected_command:
         _fault(core, "COMMAND_RECONSTRUCTION_DRIFT", {"service": target["compose_service"]})
 
+    _compare_host_semantics(core, target, compose_service, image["Config"], config, host)
     host_projection = _host_config(core, host)
     expected_restart = compose_service.get("restart") or "no"
     if (host_projection["restart_policy"]["name"] or "no") != expected_restart:
@@ -941,9 +1079,14 @@ def _observe_target(
             "layers": [{"path": COMPOSE_PATH, "role": "base-compose"}, *layers],
             "compose_files_resolved": list(files),
             "verified": [
-                "image", "entrypoint", "command", "restart_policy", "mounts",
-                "networks", "environment_names", "environment_values",
+                "image", "entrypoint", "command", "container_name", "extra_hosts",
+                "logging", "healthcheck", "user", "working_dir", "privileged",
+                "read_only", "capabilities", "security_options", "init",
+                "stop_signal", "stop_grace_period", "ports_and_tmpfs",
+                "restart_policy", "mounts", "networks", "environment_names",
+                "environment_values",
             ],
+            "unsupported_resolved_fields_refused": True,
         },
     }, volumes, networks, layers)
 

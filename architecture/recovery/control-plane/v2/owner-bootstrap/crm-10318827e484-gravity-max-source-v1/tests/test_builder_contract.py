@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = ROOT.parents[5]
 TRUSTED = {
     "src/yoko-privileged-runtime-core.py": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
-    "src/predecessor-observability-v1.py": "065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346",
+    "src/predecessor-observability-v1.py": "047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533",
     "src/policy.v2.base.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
     "packaging/92-yoko-privileged-runtime": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
 }

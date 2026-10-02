@@ -25,7 +25,7 @@ for file in \
 done
 
 test "$(/usr/bin/sha256sum "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" | /usr/bin/cut -d ' ' -f 1)" = '0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa'
-test "$(/usr/bin/sha256sum "$PROJECT_ROOT/src/predecessor-observability-v1.py" | /usr/bin/cut -d ' ' -f 1)" = '065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346'
+test "$(/usr/bin/sha256sum "$PROJECT_ROOT/src/predecessor-observability-v1.py" | /usr/bin/cut -d ' ' -f 1)" = '047a6d9717db1378825b6d69916dbc6ad601fa703df5ca3114799c6d0e997533'
 test "$(/usr/bin/sha256sum "$PROJECT_ROOT/src/policy.v2.base.json" | /usr/bin/cut -d ' ' -f 1)" = '8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0'
 test "$(/usr/bin/sha256sum "$PROJECT_ROOT/packaging/92-yoko-privileged-runtime" | /usr/bin/cut -d ' ' -f 1)" = '3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7'
 /usr/bin/python3 -I -m py_compile "$GENERATED/crm-activation-profile.py" "$PROJECT_ROOT/templates/yoko-privileged-runtime.in" "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" "$PROJECT_ROOT/src/predecessor-observability-v1.py"

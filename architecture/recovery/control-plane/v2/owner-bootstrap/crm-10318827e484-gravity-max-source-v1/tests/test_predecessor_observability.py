@@ -60,7 +60,8 @@ def image_object(image_id: str, entrypoint: list[str], command: list[str]) -> di
         "Id": image_id, "Created": "2026-09-01T00:00:00Z", "Os": "linux", "Architecture": "amd64",
         "RepoDigests": [], "Config": {
             "Env": ["PATH=/usr/local/bin:/usr/bin:/bin"],
-            "Entrypoint": entrypoint, "Cmd": command,
+            "Entrypoint": entrypoint, "Cmd": command, "WorkingDir": "/app",
+            "Healthcheck": {"Test": ["CMD", "node", "healthcheck.js"], "Interval": 30 * 10**9, "Timeout": 10 * 10**9, "Retries": 3},
         },
     }
 
@@ -135,8 +136,10 @@ class FakeCore:
 
     @staticmethod
     def resolved(*, overlay: bool) -> dict[str, Any]:
-        def service(image: str, volumes: list[tuple[str, str, bool]], environment: dict[str, str], command: Any = None) -> dict[str, Any]:
+        def service(image: str, volumes: list[tuple[str, str, bool]], environment: dict[str, str], command: Any = None, name: str = "") -> dict[str, Any]:
             return {
+                "container_name": name, "build": {"context": "."}, "depends_on": {"postgres": {"condition": "service_healthy"}},
+                "logging": {"driver": "json-file", "options": {"max-file": "5", "max-size": "20m"}},
                 "image": image, "command": command, "entrypoint": None, "restart": "unless-stopped",
                 "environment": environment,
                 "networks": {"crm_internal": None},
@@ -151,9 +154,12 @@ class FakeCore:
                     [("gravity_recordings", "/app/recordings", False), ("freeswitch_recordings", "/app/freeswitch-recordings", True)],
                     {"SHARED_SECRET": SHARED_SECRET, **release},
                     ["npm", "run", "start"] if overlay else None,
-                ),
-                "tg-bot": service("crm/tg-bot:current", [("tg_bot_data", "/app/data", False)], {"SHARED_SECRET": SHARED_SECRET}),
-                "max-web-scraper": service("yoko/max:predecessor", [("max_user_data", "/app/user_data", False)], {"SHARED_SECRET": SHARED_SECRET, **release}),
+                    "crm-gravity-mvp",
+                ) | {"extra_hosts": ["host.docker.internal=host-gateway"]},
+                "tg-bot": service("crm/tg-bot:current", [("tg_bot_data", "/app/data", False)], {"SHARED_SECRET": SHARED_SECRET}, name="crm-tg-bot"),
+                "max-web-scraper": service("yoko/max:predecessor", [("max_user_data", "/app/user_data", False)], {"SHARED_SECRET": SHARED_SECRET, **release}, name="crm-max-scraper") | {
+                    "healthcheck": {"test": ["CMD-SHELL", "pgrep -f 'node.*index' >/dev/null"], "interval": "1m0s", "timeout": "5s", "retries": 3, "start_period": "1m0s"},
+                },
                 "postgres": {"image": "postgres:16"},
             },
             "volumes": {
@@ -167,6 +173,7 @@ class FakeCore:
     def host() -> dict[str, Any]:
         return {
             "Init": None, "NetworkMode": "crm_internal", "Privileged": False, "ReadonlyRootfs": False,
+            "LogConfig": {"Type": "json-file", "Config": {"max-file": "5", "max-size": "20m"}}, "PortBindings": {},
             "RestartPolicy": {"Name": "unless-stopped", "MaximumRetryCount": 0},
             "ExtraHosts": [], "Dns": [], "DnsOptions": [], "DnsSearch": [], "Ulimits": [],
         }
@@ -204,11 +211,11 @@ class FakeCore:
                     "com.docker.compose.project.working_dir": "/opt/crm/deploy",
                     "com.docker.compose.project.environment_file": "/opt/crm/.env.production",
                 },
-                "Healthcheck": None,
-                "StopSignal": "SIGTERM",
-                "StopTimeout": 10,
+                "Healthcheck": {"Test": ["CMD-SHELL", "pgrep -f 'node.*index' >/dev/null"], "Interval": 60 * 10**9, "Timeout": 5 * 10**9, "StartPeriod": 60 * 10**9, "Retries": 3} if service == "max-web-scraper" else self.images[reference]["Config"].get("Healthcheck"),
+                "StopSignal": None,
+                "StopTimeout": None,
             },
-            "HostConfig": self.host(),
+            "HostConfig": self.host() | ({"ExtraHosts": ["host.docker.internal:host-gateway"]} if service == "gravity-mvp" else {}),
             "NetworkSettings": {
                 "Ports": {},
                 "Networks": {"crm_internal": {"NetworkID": "e" * 64, "EndpointID": "f" * 64, "Aliases": [service], "DNSNames": [name]}},
@@ -491,7 +498,9 @@ class PredecessorObservationV2Tests(unittest.TestCase):
                     self.assertEqual(call[2], "inspect")
         self.assertEqual(
             [call[1] for call in core.calls if call[0] == "assert-noncaller-writable-chain"],
-            [str(core.mapped(BASE)), str(core.mapped(OBSERVATION.ENVIRONMENT_PATH))],
+            # the image-only layer is shared by Gravity and tg-bot: classified once per
+            # target, and the two reads must agree (PREDECESSOR_LAYER_OBSERVATION_INCONSISTENT)
+            [str(core.mapped(BASE)), str(core.mapped(OBSERVATION.ENVIRONMENT_PATH))] + [str(core.mapped(IMAGE_OVERLAY))] * 2,
         )
 
     def test_image_only_grammar_is_strict(self) -> None:
@@ -507,11 +516,61 @@ class PredecessorObservationV2Tests(unittest.TestCase):
             "services:\n  gravity-mvp:\n    image: -flag\n",
             "x-anchor: &a\nservices:\n  gravity-mvp:\n    image: a:b\n",
             "services:\n  gravity-mvp:\n    image: a:b # trailing\n",
+            # Compose's YAML parser breaks lines at NEL, LS, PS, VT and FF.
+            "services:\n  gravity-mvp:\n    image: a:b\n    # note\u2028    privileged: true\n",
+            "services:\n  gravity-mvp:\n    image: a:b\n    # note\u2029    privileged: true\n",
+            "services:\n  gravity-mvp:\n    image: a:b\n    # note\x85    privileged: true\n",
+            "services:\n  gravity-mvp:\n    image: a:b\n    # note\x0b    privileged: true\n",
+            "services:\n  gravity-mvp:\n    image: a:b\n\x0c\n",
+            "services:\n  gravity-mvp:\n    image: a:b\n\u3000\n",
             "",
         ):
             with self.assertRaises(CORE.RuntimeFault, msg=text) as captured:
                 OBSERVATION._image_only_overlay(core, IMAGE_OVERLAY, text.encode())
             self.assertEqual(captured.exception.code, "PREDECESSOR_OVERLAY_NOT_IMAGE_ONLY")
+
+    def test_every_resolved_field_is_reproduced_or_refused(self) -> None:
+        core = FakeCore()
+        core.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["max-web-scraper"]["ports"] = ["3005:3005"]
+        fault = self.fault(core)
+        self.assertEqual((fault.code, fault.details), ("RESOLVED_SERVICE_FIELD_UNSUPPORTED", {"service": "max-web-scraper", "fields": ["ports"]}))
+        drifts = {
+            "extra_hosts": lambda c: c.containers["crm-gravity-mvp"]["HostConfig"].update(ExtraHosts=[]),
+            "logging": lambda c: c.containers["crm-tg-bot"]["HostConfig"].update(LogConfig={"Type": "json-file", "Config": {}}),
+            "healthcheck": lambda c: c.containers["crm-max-scraper"]["Config"]["Healthcheck"].update(Retries=5),
+            "user": lambda c: c.containers["crm-max-scraper"]["Config"].update(User="root"),
+            "working_dir": lambda c: c.containers["crm-gravity-mvp"]["Config"].update(WorkingDir="/"),
+            "privileged": lambda c: c.containers["crm-max-scraper"]["HostConfig"].update(Privileged=True),
+            "read_only": lambda c: c.containers["crm-tg-bot"]["HostConfig"].update(ReadonlyRootfs=True),
+            "cap_add": lambda c: c.containers["crm-gravity-mvp"]["HostConfig"].update(CapAdd=["SYS_ADMIN"]),
+            "security_opt": lambda c: c.containers["crm-gravity-mvp"]["HostConfig"].update(SecurityOpt=["seccomp=unconfined"]),
+            "init": lambda c: c.containers["crm-max-scraper"]["HostConfig"].update(Init=True),
+            "stop_signal": lambda c: c.containers["crm-max-scraper"]["Config"].update(StopSignal="SIGKILL"),
+            "stop_grace_period": lambda c: c.containers["crm-max-scraper"]["Config"].update(StopTimeout=1),
+            "ports_or_tmpfs": lambda c: c.containers["crm-tg-bot"]["HostConfig"].update(PortBindings={"3001/tcp": [{"HostPort": "3001"}]}),
+            "container_name": lambda c: c.resolutions[(BASE, PREDECESSOR_OVERLAY)]["services"]["tg-bot"].update(container_name="other"),
+        }
+        for field, mutate in drifts.items():
+            core = FakeCore()
+            mutate(core)
+            fault = self.fault(core)
+            self.assertEqual(fault.code, "HOST_SEMANTIC_RECONSTRUCTION_DRIFT", field)
+            self.assertEqual(fault.details["field"], field if field != "cap_add" else "cap_add")
+
+    def test_caller_writable_image_layer_is_recorded_not_trusted(self) -> None:
+        core = FakeCore()
+
+        def chain(path: Path) -> None:
+            core.calls.append(["assert-noncaller-writable-chain", str(path)])
+            if str(path) == str(core.mapped(IMAGE_OVERLAY)):
+                raise CORE.RuntimeFault("RESOURCE_CALLER_WRITABLE", 74)
+
+        core.assert_noncaller_writable_chain = chain  # type: ignore[method-assign]
+        result = OBSERVATION.observe(core, POLICY)
+        layers = {layer["path"]: layer for layer in result["compose_source"]["overlay_layers"]}
+        self.assertIs(layers[IMAGE_OVERLAY]["caller_writable_chain"], True)
+        self.assertNotIn("caller_writable_chain", layers[PREDECESSOR_OVERLAY])
+        self.assertIs(OBSERVATION.observe(FakeCore(), POLICY)["compose_source"]["overlay_layers"][0]["caller_writable_chain"], False)
 
     def test_unknown_policy_resource_is_rejected(self) -> None:
         policy = json.loads(json.dumps(POLICY))
