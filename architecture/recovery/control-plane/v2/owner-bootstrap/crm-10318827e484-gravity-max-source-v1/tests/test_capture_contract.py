@@ -59,8 +59,73 @@ class CaptureContractTests(unittest.TestCase):
                 seal.reopen_generated_review_for_cleanup(generated)
 
     def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21/yoko-privileged-runtime_2.0.0-21_all.deb")
+        path = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21-interim/yoko-privileged-runtime_2.0.0-21_all.deb")
         self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
+
+    def test_rollback_package_is_the_exact_interim_observer_package(self) -> None:
+        directory = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21-interim")
+        package = directory / "yoko-privileged-runtime_2.0.0-21_all.deb"
+        self.assertEqual(seal.sha(package), seal.ROLLBACK_SHA)
+        self.assertEqual(seal.sha(directory / "package-manifest.json"), seal.ROLLBACK_SEAL_SHA)
+        manifest = json.loads((directory / "package-manifest.json").read_text(encoding="ascii"))
+        self.assertEqual(manifest["package"]["sha256"], seal.ROLLBACK_SHA)
+        self.assertEqual(manifest["observer"]["sha256"], capture.PREDECESSOR_OBSERVER_SHA256)
+        profile, digest = seal.predecessor_sealed_profile(package)
+        self.assertEqual(digest, "97dd62ea7fba53a3d7c382b723bf131b63a3dc091688de1bf4882471d4c65274")
+        self.assertEqual(profile["profile_id"], seal.ROLLBACK_PROFILE_ID)
+
+    @staticmethod
+    def layered_observation() -> dict:
+        services = []
+        for name, stack in capture.PREDECESSOR_STACKS.items():
+            services.append({
+                "compose_service": name,
+                "reconstruction": {
+                    "model": "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK",
+                    "layers": [{"path": stack[0], "role": "base-compose"}] + [
+                        {"path": path} for path in stack[1:]
+                    ],
+                },
+                "environment": {
+                    "effective_key_set": ["CRM_TELEGRAM_CONNECTION_ID", "PATH"],
+                    "effective_values_match_reconstructed_compose_and_image": True,
+                    "plaintext_values_emitted": False,
+                },
+            })
+        return {
+            "schema": capture.OBSERVATION_SCHEMA,
+            "production_mutated": False,
+            "secret_values_emitted": False,
+            "compose_source": {
+                "compose_file_sha256": capture.BASE_COMPOSE_SHA256,
+                "reconstruction_model": "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK",
+                "overlay_layers": json.loads(json.dumps(capture.PREDECESSOR_LAYERS)),
+            },
+            "services": services,
+            "release_critical_identity_sha256": "f" * 64,
+        }
+
+    def test_capture_accepts_only_the_pinned_layered_normalized_predecessor(self) -> None:
+        capture.validate_predecessor(self.layered_observation())
+        mutations = {
+            "v1 base-only observation": lambda v: v.update(schema="yoko.crm.predecessor-recreation-observation.v1"),
+            "digest-mismatched overlay": lambda v: v["compose_source"]["overlay_layers"][0].update(sha256="0" * 64),
+            "changed image pin": lambda v: v["compose_source"]["overlay_layers"][1]["image_pins"].update({"tg-bot": "crm/tg-bot:other"}),
+            "future candidate overlay": lambda v: v["compose_source"]["overlay_layers"].append({
+                "path": "/var/lib/yoko-privileged-runtime/profiles/crm-10318827e484-gravity-max-source-v1/activate.compose.yml",
+                "role": "runtime-profile-overlay", "sha256": "1" * 64,
+            }),
+            "base compose drift": lambda v: v["compose_source"].update(compose_file_sha256="2" * 64),
+            "MAX stack drift": lambda v: v["services"][2]["reconstruction"]["layers"].append({"path": capture.DRIVER_AUTHORITY_OVERLAY}),
+            "MAX not normalized": lambda v: v["services"][2]["environment"].update(effective_key_set=["PATH"]),
+            "service missing": lambda v: v["services"].pop(1),
+            "environment not reconstructed": lambda v: v["services"][0]["environment"].update(effective_values_match_reconstructed_compose_and_image=False),
+        }
+        for label, mutate in mutations.items():
+            value = self.layered_observation()
+            mutate(value)
+            with self.assertRaises(ValueError, msg=label):
+                capture.validate_predecessor(value)
 
     def test_capture_plan_is_finite_and_read_only(self) -> None:
         self.assertEqual(capture.COMMANDS, (

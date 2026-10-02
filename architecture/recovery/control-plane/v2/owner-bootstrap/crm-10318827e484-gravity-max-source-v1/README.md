@@ -149,10 +149,16 @@ the only fixed `docker image load` operations. A lifetime-held exclusive lock
 serializes bootstrap installers and binds guard cleanup to the owning inode.
 This is not a generic artifact or path capability.
 
-The installer also requires the already-installed 2.0.0-21 DEB at its exact
+The installer also requires the already-installed 2.0.0-21 interim package
+(`packaging/predecessor-observability-v2/`: the byte-identical
+`crm-ba90ed4b6717` profile plus predecessor observation v2) at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`17b97c4048fb8cce2ab5d43aff23e7542397678c8abd7c8b8790cca26db2f35a`.
+`0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367`; the
+installed predecessor must report observer
+`065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346`.
 Any successor installation failure restores that exact package automatically.
+The original 2.0.0-21 DEB `17b97c40…` stays in the store as that interim
+package's own rollback.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
 start from a clean exact builder commit, a fresh read-only production snapshot,

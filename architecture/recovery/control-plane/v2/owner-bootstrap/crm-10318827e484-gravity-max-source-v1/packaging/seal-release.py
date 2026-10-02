@@ -28,8 +28,11 @@ STAGE_A_TREE = "9b9d4009275d4cbc413f643fb063a7368ef53bff"
 ARTIFACT_DIGEST = "29c52cbbdb86aa8d8766e05aa5c7d856ec1d692e2133edab511d025d918b5da0"
 ARTIFACT_STORE = f"/var/lib/yoko-privileged-runtime/coordinated-artifacts/{ARTIFACT_DIGEST}"
 ROLLBACK_VERSION = "2.0.0-21"
-ROLLBACK_SHA = "17b97c4048fb8cce2ab5d43aff23e7542397678c8abd7c8b8790cca26db2f35a"
-ROLLBACK_SEAL_SHA = "2d255f264b899e8635b24ec6246c9ec3740ef6d621a01be3cfd0e5d8d0709c04"
+# Direct control-plane rollback: the installed same-version 2.0.0-21 interim package that carries
+# predecessor observation v2 and the byte-identical crm-ba90ed4b6717 profile. Its seal is that
+# package's build manifest (package-manifest.json).
+ROLLBACK_SHA = "0095ce04ce0aa9587883b944e201fbe2ade9524c74458e54dd3c550fc8f72367"
+ROLLBACK_SEAL_SHA = "6d283a4bd950947cedfd86fc80ddb551368de83153828746c5f134d8f44efbfe"
 # The predecessor being rolled back to, and where its OWN sealed profile lives inside its package.
 ROLLBACK_PROFILE_ID = "crm-ba90ed4b6717-gravity-max-source-v1"
 ROLLBACK_PROFILE_MEMBER = f"./usr/local/share/yoko-privileged-runtime/profiles/{ROLLBACK_PROFILE_ID}/profile.v1.json"

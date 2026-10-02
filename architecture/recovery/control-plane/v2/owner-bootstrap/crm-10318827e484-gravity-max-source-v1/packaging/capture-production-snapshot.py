@@ -15,6 +15,46 @@ RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # 2.0.0-21 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
 EXPECTED_PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
+# The installed observer is the interim predecessor observation v2 (same-version 2.0.0-21
+# interim package 0095ce04...). It reconstructs every predecessor from the layered stack the
+# container recorded at creation; the snapshot pins that stack by role and digest.
+PREDECESSOR_OBSERVER_SHA256 = "065fa50989b48ed8b49c76a4ddfc9e3df0b956e3362022c8a906f807085c8346"
+OBSERVATION_SCHEMA = "yoko.crm.predecessor-recreation-observation.v2"
+BASE_COMPOSE = "/opt/crm/deploy/docker-compose.production.yml"
+BASE_COMPOSE_SHA256 = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
+RUNTIME_OVERLAY = "/var/lib/yoko-privileged-runtime/profiles/crm-ba90ed4b6717-gravity-max-source-v1/activate.compose.yml"
+DRIVER_AUTHORITY_OVERLAY = "/opt/codex-work/.release-prep/driver-authority-335cdae7/activate.driver-authority-335cdae7.compose.yml"
+TELEGRAM_HOTFIX_OVERLAY = "/opt/crm/deploy/activate.telegram-hotfix-06e80099.compose.yml"
+PREDECESSOR_LAYERS = [
+    {
+        "path": DRIVER_AUTHORITY_OVERLAY, "role": "image-only-overlay",
+        "sha256": "b42611d09358ae21f75d7ec0c4f3398459dec19d6a3ef3efbf57d3577a47b84c",
+        "image_pins": {
+            "gravity-mvp": "yoko/crm-gravity-mvp:335cdae7391d-driver-authority-repair-v1",
+            "tg-bot": "crm/tg-bot:2808af7ecbf1-telegram-bot-delivery-contract-v1",
+        },
+    },
+    {
+        "path": TELEGRAM_HOTFIX_OVERLAY, "role": "image-only-overlay",
+        "sha256": "15733b79728e49535f8ed410b09b50de0aeddb22fa937ee73848bb80aa6e25ae",
+        "image_pins": {
+            "gravity-mvp": "yoko/crm-gravity-mvp:06e80099f1c3-telegram-contract-skew-hotfix-v1",
+            "tg-bot": "crm/tg-bot:2808af7ecbf1-telegram-bot-delivery-contract-v1",
+        },
+    },
+    {
+        "path": RUNTIME_OVERLAY, "role": "runtime-profile-overlay",
+        "sha256": "39648e2b8f07a2f5a42d26ca77fbec96c6c907465981c965005e8fe5b1f1d6cb",
+    },
+]
+PREDECESSOR_STACKS = {
+    "gravity-mvp": [BASE_COMPOSE, RUNTIME_OVERLAY, DRIVER_AUTHORITY_OVERLAY],
+    "tg-bot": [BASE_COMPOSE, RUNTIME_OVERLAY, TELEGRAM_HOTFIX_OVERLAY],
+    "max-web-scraper": [BASE_COMPOSE, RUNTIME_OVERLAY],
+}
+# MAX was recreated once from its own two-file stack (normalization) so that it carries
+# the name .env.production gained after its previous creation; Gravity already did.
+NORMALIZED_ENVIRONMENT_NAME = "CRM_TELEGRAM_CONNECTION_ID"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
@@ -83,6 +123,37 @@ def run(primitive: str, resource: str | None) -> dict[str, Any]:
     return value
 
 
+def validate_predecessor(predecessor: dict[str, Any]) -> None:
+    """Accept only the v2 layered observation of exactly the pinned predecessor stack."""
+    source = predecessor.get("compose_source")
+    services = predecessor.get("services")
+    if (
+        predecessor.get("schema") != OBSERVATION_SCHEMA
+        or predecessor.get("production_mutated") is not False
+        or predecessor.get("secret_values_emitted") is not False
+        or not isinstance(source, dict)
+        or source.get("compose_file_sha256") != BASE_COMPOSE_SHA256
+        or source.get("reconstruction_model") != "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK"
+        or source.get("overlay_layers") != PREDECESSOR_LAYERS
+        or not isinstance(services, list)
+        or [item.get("compose_service") for item in services if isinstance(item, dict)] != list(PREDECESSOR_STACKS)
+    ):
+        raise ValueError("predecessor observation mismatch")
+    for service in services:
+        reconstruction = service.get("reconstruction") or {}
+        environment = service.get("environment") or {}
+        if (
+            [layer.get("path") for layer in reconstruction.get("layers", [])] != PREDECESSOR_STACKS[service["compose_service"]]
+            or reconstruction.get("model") != "EFFECTIVE_LAYERED_CONTAINER_CREATION_STACK"
+            or environment.get("effective_values_match_reconstructed_compose_and_image") is not True
+            or environment.get("plaintext_values_emitted") is not False
+            or NORMALIZED_ENVIRONMENT_NAME not in environment.get("effective_key_set", [])
+        ):
+            raise ValueError(f"predecessor reconstruction mismatch: {service['compose_service']}")
+    if not isinstance(predecessor.get("release_critical_identity_sha256"), str) or len(predecessor["release_critical_identity_sha256"]) != 64:
+        raise ValueError("predecessor observation identity missing")
+
+
 def main() -> None:
     if len(sys.argv) != 1:
         raise SystemExit("capture accepts no arguments")
@@ -104,13 +175,9 @@ def main() -> None:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
-    if (
-        predecessor.get("schema") != "yoko.crm.predecessor-recreation-observation.v1"
-        or predecessor.get("production_mutated") is not False
-        or predecessor.get("secret_values_emitted") is not False
-        or predecessor.get("compose_source", {}).get("compose_file_sha256") != "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
-    ):
-        raise ValueError("predecessor observation mismatch")
+    if records["self-check"]["evidence"].get("predecessor_observability_sha256") != PREDECESSOR_OBSERVER_SHA256:
+        raise ValueError("installed predecessor observer is not observation v2")
+    validate_predecessor(predecessor)
     expected_resources = {
         "gravity": (gravity, "crm.container.gravity_mvp", "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c"),
         "max": (maximum, "crm.container.max_scraper", "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6"),
@@ -121,6 +188,9 @@ def main() -> None:
             raise ValueError(f"{label} predecessor mismatch")
     if maximum.get("mounts") != [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}]:
         raise ValueError("MAX persistent volume mismatch")
+    for label, record in (("gravity", gravity), ("max", maximum)):
+        if NORMALIZED_ENVIRONMENT_NAME not in (record.get("semantic") or {}).get("environment_names", []):
+            raise ValueError(f"{label} predecessor is not normalized")
     # The installed 2.0.0-21 profile was sealed against the same 63-row ledger this successor pins
     # (the 2.0.0-16 profile before it reported that ledger as DRIFTED from its 62-row baseline, so
     # both states stay accepted). The successor pins the ledger exactly: the count, the ledger digest
