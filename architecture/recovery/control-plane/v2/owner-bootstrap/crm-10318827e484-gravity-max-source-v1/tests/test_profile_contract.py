@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from __future__ import annotations
 
+import json
 import importlib.machinery
 import importlib.util
 import os
@@ -37,6 +38,23 @@ def load_profile():
     return module
 
 
+def bare_rollback(gravity_command, max_command):
+    """Sealed rollback projection of a BARE predecessor: recorded commands, no release source."""
+    return {
+        "release_environment_name": "MAX_SCRAPER_WEBHOOK_SECRET",
+        "services": {
+            "gravity-mvp": {"command": list(gravity_command), "release_environment_source": None},
+            "max-web-scraper": {"command": list(max_command), "release_environment_source": None},
+        },
+        "provenance": {
+            "predecessor_package_sha256": "a" * 64,
+            "predecessor_profile_id": "crm-predecessor-fixture",
+            "predecessor_profile_sha256": "b" * 64,
+            "semantic_source": "production-snapshot docker-inspect semantic",
+        },
+    }
+
+
 class ProfileContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -50,6 +68,7 @@ class ProfileContractTests(unittest.TestCase):
                     "image_id": "old-max",
                     "volume": {"source_sha256": "v" * 64},
                 },
+                "rollback_semantic": bare_rollback(["sh", "-c", "migrate && start"], ["node", "index.js"]),
             },
             "target": {
                 "gravity": {"image_id": "new-gravity"},
@@ -103,10 +122,16 @@ class ProfileContractTests(unittest.TestCase):
 
     def test_overlays_are_fixed_pair_only_and_activation_disables_migration_command(self) -> None:
         activation = self.runtime._compose_overlay(self.runtime.TARGET_GRAVITY, self.runtime.TARGET_MAX, activate=True).decode("ascii")
-        rollback = self.runtime._compose_overlay(self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX, activate=False).decode("ascii")
+        rollback = self.runtime._compose_overlay(
+            self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX, activate=False,
+            rollback=self.runtime._predecessor_rollback(SimpleNamespace(RuntimeFault=RuntimeFault), self.profile()),
+        ).decode("ascii")
         self.assertIn('command: ["npm", "run", "start"]', activation)
         self.assertNotIn("prisma", activation)
-        self.assertNotIn("command:", rollback)
+        # Rollback reproduces the recorded predecessor commands; a bare predecessor gets no source.
+        self.assertIn('command: ["sh", "-c", "migrate && start"]', rollback)
+        self.assertIn('command: ["node", "index.js"]', rollback)
+        self.assertNotIn("env_file", rollback)
         self.assertEqual(activation.count("image:"), 2)
         self.assertEqual(rollback.count("image:"), 2)
         with self.assertRaisesRegex(RuntimeError, "IMAGE_REFERENCE_INVALID"):
@@ -464,6 +489,7 @@ class TargetImageIdentityTests(unittest.TestCase):
         import re
         raw = (ROOT / "templates/profile.v1.json.in").read_text(encoding="utf-8")
         rendered = raw.replace("@ARTIFACT_FILES_JSON@", "{}")
+        rendered = rendered.replace("@PREDECESSOR_ROLLBACK_SEMANTIC_JSON@", json.dumps(bare_rollback(["sh", "-c", "migrate && start"], ["node", "index.js"])))
         rendered = re.sub(r'"@[A-Z_]+@"', '"placeholder"', rendered)
         target = json.loads(rendered)["target"]
         self.assertEqual(target["gravity"]["image_id"], GRAVITY_CONFIG)

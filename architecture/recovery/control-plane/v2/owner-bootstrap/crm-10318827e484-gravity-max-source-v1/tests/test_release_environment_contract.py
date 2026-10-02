@@ -32,6 +32,23 @@ RELEASED_NAMES = sorted([*PREDECESSOR_NAMES, NAME])
 MIGRATION_COMMAND = ["sh", "-c", "npx prisma migrate deploy && npm run start"]
 
 
+def bare_rollback(gravity_command, max_command):
+    """Sealed rollback projection of a BARE predecessor: recorded commands, no release source."""
+    return {
+        "release_environment_name": "MAX_SCRAPER_WEBHOOK_SECRET",
+        "services": {
+            "gravity-mvp": {"command": list(gravity_command), "release_environment_source": None},
+            "max-web-scraper": {"command": list(max_command), "release_environment_source": None},
+        },
+        "provenance": {
+            "predecessor_package_sha256": "a" * 64,
+            "predecessor_profile_id": "crm-predecessor-fixture",
+            "predecessor_profile_sha256": "b" * 64,
+            "semantic_source": "production-snapshot docker-inspect semantic",
+        },
+    }
+
+
 class RuntimeFault(Exception):
     def __init__(self, code: str, exit_code: int = 70, details: dict[str, object] | None = None) -> None:
         super().__init__(code)
@@ -98,6 +115,7 @@ class ReleaseEnvironmentBase(unittest.TestCase):
             "predecessor": {
                 "gravity": {"image_id": "old-gravity"},
                 "max_scraper": {"image_id": "old-max", "volume": {"source_sha256": "v" * 64}},
+                "rollback_semantic": bare_rollback(MIGRATION_COMMAND, ["node", "index.js"]),
             },
             "target": {"gravity": {"image_id": "new-gravity"}, "max_scraper": {"image_id": "new-max"}},
             "deployment": {
@@ -318,10 +336,17 @@ class RollbackInvariantTests(ReleaseEnvironmentBase):
         release.assert_not_called()
 
     def test_rollback_overlay_attaches_no_environment_source(self) -> None:
-        rollback = self.runtime._compose_overlay(self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX, activate=False).decode("ascii")
+        # A BARE predecessor: rollback reproduces its recorded command and attaches no source.
+        semantic = self.runtime._predecessor_rollback(self.core, self.profile)
+        rollback = self.runtime._compose_overlay(
+            self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX, activate=False, rollback=semantic,
+        ).decode("ascii")
         self.assertNotIn("env_file", rollback)
         self.assertNotIn("release-staging", rollback)
-        self.assertNotIn("command:", rollback)
+        self.assertEqual(
+            re.findall(r"^    command: (.+)$", rollback, re.MULTILINE),
+            [json.dumps(MIGRATION_COMMAND), json.dumps(["node", "index.js"])],
+        )
 
 
 
@@ -416,8 +441,14 @@ class ProjectionTests(ReleaseEnvironmentBase):
         candidate = copy.deepcopy(base)
         candidate["services"]["gravity-mvp"]["image"] = self.runtime.ROLLBACK_GRAVITY
         candidate["services"]["max-web-scraper"]["image"] = self.runtime.ROLLBACK_MAX
+        # The rollback render carries exactly the predecessor's recorded commands.
+        candidate["services"]["gravity-mvp"]["command"] = MIGRATION_COMMAND
+        candidate["services"]["max-web-scraper"]["command"] = ["node", "index.js"]
         release = self.project(base, candidate, activate=False, value=None)
         release.assert_not_called()
+        drifted = copy.deepcopy(candidate)
+        drifted["services"]["gravity-mvp"]["command"] = ["npm", "run", "start"]
+        self.assertFault("ROLLBACK_COMMAND_PROJECTION_DRIFT", self.project, base, drifted, activate=False)
         candidate = copy.deepcopy(candidate)
         candidate["services"]["gravity-mvp"]["environment"][NAME] = SECRET
         self.assertFault("PAIR_COMPOSE_PROJECTION_DRIFT", self.project, base, candidate, activate=False)
@@ -460,6 +491,7 @@ class OverlayAndProfileTests(ReleaseEnvironmentBase):
     def rendered_profile(self) -> dict[str, object]:
         raw = (ROOT / "templates/profile.v1.json.in").read_text(encoding="utf-8")
         rendered = raw.replace("@ARTIFACT_FILES_JSON@", "{}")
+        rendered = rendered.replace("@PREDECESSOR_ROLLBACK_SEMANTIC_JSON@", json.dumps(bare_rollback(MIGRATION_COMMAND, ["node", "index.js"])))
         rendered = re.sub(r'"@[A-Z_]+@"', '"placeholder"', rendered)
         return json.loads(rendered)
 
@@ -847,7 +879,7 @@ class RealComposeRenderTests(unittest.TestCase):
             "compose_path": str(root / "deploy/docker-compose.production.yml"),
             "environment_path": str(self.environment),
             "project_directory": str(root / "deploy"),
-        }}
+        }, "predecessor": {"rollback_semantic": bare_rollback(MIGRATION_COMMAND, ["node", "index.js"])}}
         self.core = SimpleNamespace(
             RuntimeFault=RuntimeFault,
             mapped=lambda path: Path(path),
@@ -864,7 +896,8 @@ class RealComposeRenderTests(unittest.TestCase):
     def overlay(self, activate: bool, extra: str = "") -> str:
         target = self.root / ("activate.yml" if activate else "rollback.yml")
         references = (self.runtime.TARGET_GRAVITY, self.runtime.TARGET_MAX) if activate else (self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX)
-        target.write_bytes(self.runtime._compose_overlay(*references, activate=activate) + extra.encode("ascii"))
+        rollback = None if activate else self.runtime._predecessor_rollback(self.core, self.profile)
+        target.write_bytes(self.runtime._compose_overlay(*references, activate=activate, rollback=rollback) + extra.encode("ascii"))
         return str(target)
 
     def test_real_render_adds_the_name_to_exactly_the_two_services(self) -> None:
@@ -916,7 +949,7 @@ class PreflightBindingTests(unittest.TestCase):
     def test_preflight_refuses_before_loading_when_release_sources_are_invalid(self) -> None:
         core = SimpleNamespace(RuntimeFault=RuntimeFault, audit_status=lambda: {"state": "VALID"}, now=lambda: "2026-09-16T00:00:00Z")
         profile = {
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(MIGRATION_COMMAND, ["node", "index.js"])},
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
         with (
@@ -944,6 +977,7 @@ class PreflightBindingTests(unittest.TestCase):
             "predecessor": {
                 "gravity": {"image_id": "old-g", "container_id": "cg", "compose_config_hash": "hg"},
                 "max_scraper": {"image_id": "old-m", "container_id": "cm", "compose_config_hash": "hm"},
+                "rollback_semantic": bare_rollback(MIGRATION_COMMAND, ["node", "index.js"]),
             },
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
@@ -964,6 +998,219 @@ class PreflightBindingTests(unittest.TestCase):
                 self.runtime._predecessor_identity(core, {}, profile, {"phase": "UNINITIALIZED"})
         self.assertEqual(raised.exception.code, "RELEASE_ENVIRONMENT_ALREADY_PRESENT")
         database.assert_not_called()
+
+
+
+PREDECESSOR_SOURCES = {
+    "gravity-mvp": "/var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env",
+    "max-web-scraper": "/var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env",
+}
+FOREIGN_PREDECESSOR_SOURCES = {
+    "gravity-mvp": "/var/lib/crm/release-staging/predecessor-v21/gravity-mvp.env",
+    "max-web-scraper": "/var/lib/crm/release-staging/predecessor-v21/max-web-scraper.env",
+}
+ACTIVE_COMMAND = ["npm", "run", "start"]
+
+
+def activated_rollback(sources=PREDECESSOR_SOURCES, gravity_command=ACTIVE_COMMAND):
+    """Sealed rollback projection of an ACTIVATED predecessor: active command + its own sources."""
+    value = bare_rollback(gravity_command, ["node", "index.js"])
+    for service, path in sources.items():
+        value["services"][service]["release_environment_source"] = path
+    return value
+
+
+def load_sealer():
+    loader = importlib.machinery.SourceFileLoader("yoko_v22_sealer_tests", str(ROOT / "packaging/seal-release.py"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[loader.name] = module
+    loader.exec_module(module)
+    return module
+
+
+class PredecessorRollbackSemanticTests(ReleaseEnvironmentBase):
+    """The Owner ruling: rollback = observed predecessor semantic + predecessor sealed provenance."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.seal = load_sealer()
+
+    def use_activated_predecessor(self, sources=PREDECESSOR_SOURCES) -> None:
+        self.profile["predecessor"]["rollback_semantic"] = activated_rollback(sources)
+        self.state["gravity_semantic"] = semantic("old-gravity", "gravity-mvp", ACTIVE_COMMAND, RELEASED_NAMES, "o" * 64)
+        self.state["max_semantic"] = semantic("old-max", "max-web-scraper", ["node", "index.js"], RELEASED_NAMES, "p" * 64)
+        self.state["predecessor_release_environment_sha256"] = "9" * 64
+
+    def overlay(self) -> str:
+        return self.runtime._compose_overlay(
+            self.runtime.ROLLBACK_GRAVITY, self.runtime.ROLLBACK_MAX, activate=False,
+            rollback=self.runtime._predecessor_rollback(self.core, self.profile),
+        ).decode("ascii")
+
+    def snapshot(self, gravity_names, max_names, gravity_command=ACTIVE_COMMAND):
+        return {
+            "sealing": {"gravity_image_id": "sha256:" + "1" * 64, "max_image_id": "sha256:" + "2" * 64},
+            "commands": {
+                "docker-inspect:crm.container.gravity_mvp": {"evidence": {"semantic": {
+                    "image_id": "sha256:" + "1" * 64, "command": gravity_command, "environment_names": gravity_names}}},
+                "docker-inspect:crm.container.max_scraper": {"evidence": {"semantic": {
+                    "image_id": "sha256:" + "2" * 64, "command": ["node", "index.js"], "environment_names": max_names}}},
+            },
+        }
+
+    def predecessor_profile(self, sources=PREDECESSOR_SOURCES):
+        return {"profile_id": "crm-ba90ed4b6717-gravity-max-source-v1", "release_environment": {
+            "name": NAME, "sources": dict(sources), "attached_by": "release-activate", "attached_on_rollback": False}}
+
+    def rollback_projection(self, candidate_command, release_value):
+        base = {"name": "crm", "services": {
+            "gravity-mvp": {"image": "crm/gravity-mvp:base", "environment": {"NODE_ENV": "production"}},
+            "max-web-scraper": {"image": "crm/max-web-scraper:base", "environment": {"NODE_ENV": "production"}},
+            "tg-bot": {"image": "crm/tg-bot:latest"}}}
+        candidate = copy.deepcopy(base)
+        candidate["services"]["gravity-mvp"].update(image=self.runtime.ROLLBACK_GRAVITY, command=candidate_command)
+        candidate["services"]["max-web-scraper"].update(image=self.runtime.ROLLBACK_MAX, command=["node", "index.js"])
+        for service in ("gravity-mvp", "max-web-scraper"):
+            candidate["services"][service]["environment"][NAME] = SECRET
+        with mock.patch.object(self.runtime, "_compose_config", side_effect=[base, candidate]):
+            self.runtime._validate_projection(self.core, self.profile, "/rollback", activate=False, release_value=release_value)
+
+    # 1 ------------------------------------------------------------------------------------------
+    def test_r1_bare_predecessor_rollback_attaches_no_environment(self) -> None:
+        overlay = self.overlay()
+        self.assertNotIn("env_file", overlay)
+        with mock.patch.object(self.runtime, "_release_environment_for", side_effect=AssertionError("bare rollback read a source")):
+            self.assertIsNone(self.runtime._predecessor_release_environment(self.core, self.profile))
+            self.assertIsNone(self.runtime._validate_predecessor_release_environment(self.core, self.profile, {"predecessor_release_environment_sha256": None}))
+        self.assertFault("PREDECESSOR_RELEASE_ENVIRONMENT_IDENTITY_DRIFT",
+                         self.runtime._validate_predecessor_release_environment, self.core, self.profile, {"predecessor_release_environment_sha256": "9" * 64})
+
+    # 2 ------------------------------------------------------------------------------------------
+    def test_r2_activated_predecessor_rollback_uses_the_recorded_active_command(self) -> None:
+        self.use_activated_predecessor()
+        commands = re.findall(r"^    command: (.+)$", self.overlay(), re.MULTILINE)
+        self.assertEqual(commands, [json.dumps(ACTIVE_COMMAND), json.dumps(["node", "index.js"])])
+        self.assertNotIn("prisma", self.overlay())
+        self.rollback_projection(ACTIVE_COMMAND, SECRET)
+        self.assertFault("ROLLBACK_COMMAND_PROJECTION_DRIFT", self.rollback_projection, MIGRATION_COMMAND, SECRET)
+
+    # 3 ------------------------------------------------------------------------------------------
+    def test_r3_activated_predecessor_rollback_attaches_its_own_sealed_source(self) -> None:
+        self.use_activated_predecessor()
+        self.assertEqual(re.findall(r"^      - (.+)$", self.overlay(), re.MULTILINE), [PREDECESSOR_SOURCES["gravity-mvp"], PREDECESSOR_SOURCES["max-web-scraper"]])
+        reader = mock.Mock(return_value={"sha256": "9" * 64, "value": SECRET})
+        with mock.patch.object(self.runtime, "_release_environment_for", reader):
+            release = self.runtime._validate_predecessor_release_environment(self.core, self.profile, self.state)
+        self.assertEqual(release["value"], SECRET)
+        self.assertEqual(reader.call_args.args[1], PREDECESSOR_SOURCES)
+        with mock.patch.object(self.runtime, "_release_environment_for", return_value={"sha256": "8" * 64, "value": SECRET}):
+            self.assertFault("PREDECESSOR_RELEASE_ENVIRONMENT_IDENTITY_DRIFT",
+                             self.runtime._validate_predecessor_release_environment, self.core, self.profile, self.state)
+        written, projected = {}, []
+        with (
+            mock.patch.object(self.runtime, "_write_fixed_file", side_effect=lambda _c, path, raw, _m: written.__setitem__(path, raw)),
+            mock.patch.object(self.runtime, "_validate_projection", side_effect=lambda *a, **k: projected.append(k)),
+            mock.patch.object(self.runtime, "_compose_hash", return_value="h" * 64),
+        ):
+            self.runtime._derive_compose_domains(self.core, self.profile, SECRET, SECRET)
+        self.assertIn(PREDECESSOR_SOURCES["gravity-mvp"].encode(), written[self.runtime.ROLLBACK_OVERLAY])
+        self.assertEqual([item["release_value"] for item in projected], [SECRET, SECRET])
+        self.assertEqual([item["activate"] for item in projected], [True, False])
+
+    # 4 ------------------------------------------------------------------------------------------
+    def test_r4_successor_source_under_the_same_name_is_never_used_for_rollback(self) -> None:
+        self.use_activated_predecessor(FOREIGN_PREDECESSOR_SOURCES)
+        overlay = self.overlay()
+        self.assertIn("predecessor-v21/gravity-mvp.env", overlay)
+        self.assertNotIn(self.runtime.RELEASE_ENVIRONMENT_DIRECTORY, overlay)
+        reader = mock.Mock(return_value={"sha256": "9" * 64, "value": SECRET})
+        with mock.patch.object(self.runtime, "_release_environment_for", reader):
+            self.runtime._validate_predecessor_release_environment(self.core, self.profile, self.state)
+        self.assertEqual(reader.call_args.args[1], FOREIGN_PREDECESSOR_SOURCES)
+        self.assertNotEqual(reader.call_args.args[1], dict(self.runtime.RELEASE_ENVIRONMENT_SOURCES))
+        derived = self.seal.derive_predecessor_rollback_semantic(
+            self.snapshot(RELEASED_NAMES, RELEASED_NAMES), self.predecessor_profile(FOREIGN_PREDECESSOR_SOURCES), "c" * 64)
+        self.assertEqual({s: i["release_environment_source"] for s, i in derived["services"].items()}, FOREIGN_PREDECESSOR_SOURCES)
+
+    # 5 ------------------------------------------------------------------------------------------
+    def test_r5_missing_predecessor_sealed_source_fails_closed(self) -> None:
+        only_max = {"max-web-scraper": PREDECESSOR_SOURCES["max-web-scraper"]}
+        with self.assertRaisesRegex(ValueError, "refusing to seal"):
+            self.seal.derive_predecessor_rollback_semantic(self.snapshot(RELEASED_NAMES, RELEASED_NAMES), self.predecessor_profile(only_max), "c" * 64)
+        with self.assertRaisesRegex(ValueError, "refusing to seal"):
+            self.seal.derive_predecessor_rollback_semantic(self.snapshot(RELEASED_NAMES, PREDECESSOR_NAMES), {"profile_id": "x"}, "c" * 64)
+        # Runtime side: the live predecessor must still match what the sealed projection reproduces.
+        self.assertFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", self.runtime._expected_pair_semantic,
+                         self.core, "gravity-mvp", {**self.state["gravity_semantic"], "environment_names": RELEASED_NAMES}, target=True, carried=False)
+        sealed = activated_rollback()["services"]["gravity-mvp"]
+        self.assertFault("PREDECESSOR_ROLLBACK_ENVIRONMENT_DRIFT", self.runtime._predecessor_rollback_consistent,
+                         self.core, "gravity-mvp", semantic("old-gravity", "gravity-mvp", ACTIVE_COMMAND, PREDECESSOR_NAMES, "o" * 64), sealed)
+        self.assertFault("PREDECESSOR_ROLLBACK_COMMAND_DRIFT", self.runtime._predecessor_rollback_consistent,
+                         self.core, "gravity-mvp", semantic("old-gravity", "gravity-mvp", MIGRATION_COMMAND, RELEASED_NAMES, "o" * 64), sealed)
+
+    # 6 ------------------------------------------------------------------------------------------
+    def test_r6_no_secret_value_enters_the_sealed_projection(self) -> None:
+        derived = self.seal.derive_predecessor_rollback_semantic(self.snapshot(RELEASED_NAMES, RELEASED_NAMES), self.predecessor_profile(), "c" * 64)
+        raw = json.dumps(derived)
+        self.assertNotIn(SECRET, raw)
+        self.assertEqual(set(derived), {"release_environment_name", "services", "provenance"})
+        for item in derived["services"].values():
+            self.assertEqual(set(item), {"command", "release_environment_source"})
+        smuggled = activated_rollback()
+        smuggled["services"]["gravity-mvp"]["value"] = SECRET
+        self.profile["predecessor"]["rollback_semantic"] = smuggled
+        self.assertFault("ACTIVATION_PROFILE_INVALID", self.runtime._predecessor_rollback, self.core, self.profile)
+
+    # 7 ------------------------------------------------------------------------------------------
+    def test_r7_rollback_postcheck_equals_the_recorded_predecessor_semantic(self) -> None:
+        self.use_activated_predecessor()
+        exact = (container("old-gravity", "gravity-mvp", ACTIVE_COMMAND, RELEASED_NAMES, "o" * 64),
+                 container("old-max", "max-web-scraper", ["node", "index.js"], RELEASED_NAMES, "p" * 64))
+        self.assertEqual(self.postcheck(exact, "PREDECESSOR_PAIR")["pair_state"], "PREDECESSOR_PAIR")
+        without_secret = (container("old-gravity", "gravity-mvp", ACTIVE_COMMAND, PREDECESSOR_NAMES, "o" * 64), exact[1])
+        self.assertFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", self.postcheck, without_secret, "PREDECESSOR_PAIR")
+        migrating = (container("old-gravity", "gravity-mvp", MIGRATION_COMMAND, RELEASED_NAMES, "o" * 64), exact[1])
+        self.assertFault("ROLLBACK_RUNTIME_COMMAND_DRIFT", self.postcheck, migrating, "PREDECESSOR_PAIR")
+
+    # 8 ------------------------------------------------------------------------------------------
+    def test_r8_historical_v21_predecessor_case_remains_valid(self) -> None:
+        snapshot = json.loads(Path("/opt/codex-work/yoko-v21-seal-ba90ed4b/production-snapshot.json").read_text())
+        deb = "/opt/codex-work/yoko-v21-seal-ba90ed4b/rollback-2.0.0-20/yoko-privileged-runtime_2.0.0-20_all.deb"
+        member = "./usr/local/share/yoko-privileged-runtime/profiles/crm-c8ce34feae84-gravity-max-source-v1/profile.v1.json"
+        raw = subprocess.run(["dpkg-deb", "--fsys-tarfile", deb], capture_output=True, check=True).stdout
+        import io, tarfile
+        with tarfile.open(fileobj=io.BytesIO(raw)) as archive:
+            profile = json.loads(archive.extractfile(member).read())
+        derived = self.seal.derive_predecessor_rollback_semantic(snapshot, profile, "c" * 64)
+        self.assertEqual(derived["services"]["gravity-mvp"], {"command": MIGRATION_COMMAND, "release_environment_source": None})
+        self.assertEqual(derived["services"]["max-web-scraper"], {"command": ["node", "index.js"], "release_environment_source": None})
+        self.profile["predecessor"]["rollback_semantic"] = derived
+        overlay = self.overlay()
+        self.assertNotIn("env_file", overlay)
+        self.assertIn("command: " + json.dumps(MIGRATION_COMMAND), overlay)
+
+    # 9 ------------------------------------------------------------------------------------------
+    def test_r9_target_activation_semantics_are_unchanged(self) -> None:
+        activation = self.runtime._compose_overlay(self.runtime.TARGET_GRAVITY, self.runtime.TARGET_MAX, activate=True).decode("ascii")
+        self.assertEqual(activation, (
+            "services:\n  gravity-mvp:\n"
+            f"    image: {self.runtime.TARGET_GRAVITY}\n"
+            '    command: ["npm", "run", "start"]\n'
+            "    env_file:\n      - /var/lib/crm/release-staging/messaging-be6b8eb8/gravity-mvp.env\n"
+            "  max-web-scraper:\n"
+            f"    image: {self.runtime.TARGET_MAX}\n"
+            "    env_file:\n      - /var/lib/crm/release-staging/messaging-be6b8eb8/max-web-scraper.env\n"))
+        with self.assertRaisesRegex(RuntimeError, "ROLLBACK_SEMANTIC_UNEXPECTED"):
+            self.runtime._compose_overlay(self.runtime.TARGET_GRAVITY, self.runtime.TARGET_MAX, activate=True, rollback=activated_rollback()["services"])
+        bare = self.runtime._expected_pair_semantic(self.core, "gravity-mvp", self.state["gravity_semantic"], target=True)
+        self.assertEqual(bare["environment_names"], RELEASED_NAMES)
+        self.use_activated_predecessor()
+        carried = self.runtime._expected_pair_semantic(self.core, "gravity-mvp", self.state["gravity_semantic"], target=True, carried=True)
+        self.assertEqual(carried["environment_names"], RELEASED_NAMES)
+        self.assertEqual(self.postcheck(self.target_pair(), "TARGET_PAIR")["pair_state"], "TARGET_PAIR")
+        self.assertFault("TARGET_RUNTIME_COMMAND_DRIFT", self.postcheck, self.target_pair(gravity_command=MIGRATION_COMMAND), "TARGET_PAIR")
 
 
 if __name__ == "__main__":

@@ -47,8 +47,9 @@ ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-ede5efb412d462a01bb9965f97a698a2c4
 #
 # The value never enters the shared production env file. Activation attaches one fixed root-only
 # source per service through the generated overlay, so no other Compose service can receive it.
-# Rollback never reads these sources and never attaches them, so the predecessor images -- which
-# do not reference this variable -- are recreated with exactly their original environment.
+# Rollback never attaches these SUCCESSOR sources. It reproduces the predecessor's own recorded
+# semantic instead (PREDECESSOR ROLLBACK SEMANTIC below): it attaches a source only where the
+# predecessor's own sealed profile attached one, never one inferred from a variable name.
 RELEASE_ENVIRONMENT_NAME = "MAX_SCRAPER_WEBHOOK_SECRET"
 RELEASE_ENVIRONMENT_DIRECTORY = "/var/lib/crm/release-staging/messaging-be6b8eb8"
 RELEASE_ENVIRONMENT_SOURCES: Mapping[str, str] = MappingProxyType({
@@ -66,6 +67,18 @@ RELEASE_ENVIRONMENT_CONTRACT = MappingProxyType({
     "attached_by": "release-activate",
     "attached_on_rollback": False,
 })
+
+# PREDECESSOR ROLLBACK SEMANTIC. Rollback must recreate the predecessor exactly as it actually ran,
+# not as its bare image would run. The profile carries a sealed projection, derived at seal time
+# from two authorities only: the production snapshot's recorded semantic (command and environment
+# names) and the predecessor's OWN sealed profile (its release_environment source mapping). It holds
+# commands, source paths and provenance digests, never a value. A bare predecessor resolves to its
+# recorded command and no source; an activated predecessor to its active command and the sources
+# its own sealed authority attached.
+PAIR_SERVICES = ("gravity-mvp", "max-web-scraper")
+RELEASE_STAGING_ROOT = "/var/lib/crm/release-staging"
+PREDECESSOR_SOURCE = re.compile(r"/var/lib/crm/release-staging/[a-z0-9][a-z0-9-]{0,62}/(gravity-mvp|max-web-scraper)\.env")
+COMMAND_ARGUMENT = re.compile(r"[ !#-\[\]-~]{1,512}")
 
 
 def _canonical(value: Any) -> bytes:
@@ -178,7 +191,59 @@ def _load_profile(core: Any) -> dict[str, Any]:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     if profile["predecessor"].get("gravity", {}).get("rollback_reference") != ROLLBACK_GRAVITY or profile["predecessor"].get("max_scraper", {}).get("rollback_reference") != ROLLBACK_MAX:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    _predecessor_rollback(core, profile)
     return profile
+
+
+def _predecessor_rollback(core: Any, profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The sealed predecessor rollback projection, validated exactly; see PREDECESSOR ROLLBACK SEMANTIC."""
+    semantic = _exact_dict(
+        core, profile["predecessor"].get("rollback_semantic"),
+        {"release_environment_name", "services", "provenance"}, "ACTIVATION_PROFILE_INVALID",
+    )
+    provenance = _exact_dict(
+        core, semantic["provenance"],
+        {"predecessor_package_sha256", "predecessor_profile_id", "predecessor_profile_sha256", "semantic_source"},
+        "ACTIVATION_PROFILE_INVALID",
+    )
+    if (
+        semantic["release_environment_name"] != RELEASE_ENVIRONMENT_NAME
+        or not SHA256.fullmatch(str(provenance["predecessor_package_sha256"]))
+        or not SHA256.fullmatch(str(provenance["predecessor_profile_sha256"]))
+        or not isinstance(provenance["predecessor_profile_id"], str)
+        or provenance["predecessor_profile_id"] == PROFILE_ID
+        or provenance["semantic_source"] != "production-snapshot docker-inspect semantic"
+    ):
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    services = _exact_dict(core, semantic["services"], set(PAIR_SERVICES), "ACTIVATION_PROFILE_INVALID")
+    output: dict[str, dict[str, Any]] = {}
+    for service in PAIR_SERVICES:
+        item = _exact_dict(core, services[service], {"command", "release_environment_source"}, "ACTIVATION_PROFILE_INVALID")
+        command = item["command"]
+        if (
+            not isinstance(command, list) or not command or len(command) > 32
+            or any(not isinstance(argument, str) or COMMAND_ARGUMENT.fullmatch(argument) is None for argument in command)
+        ):
+            raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+        source = item["release_environment_source"]
+        if source is not None:
+            match = PREDECESSOR_SOURCE.fullmatch(source) if isinstance(source, str) else None
+            if match is None or match.group(1) != service:
+                raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+        output[service] = {"command": list(command), "release_environment_source": source}
+    attached = {os.path.dirname(item["release_environment_source"]) for item in output.values() if item["release_environment_source"]}
+    if len(attached) > 1:
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    return output
+
+
+def _predecessor_rollback_consistent(core: Any, service: str, semantic: Any, sealed: dict[str, Any]) -> None:
+    """The live predecessor must still be exactly what the sealed rollback projection reproduces."""
+    names = _environment_names(core, semantic, "RELEASE_ENVIRONMENT_PREDECESSOR_INVALID")
+    if semantic.get("command") != sealed["command"]:
+        raise core.RuntimeFault("PREDECESSOR_ROLLBACK_COMMAND_DRIFT", 74, {"service": service})
+    if (RELEASE_ENVIRONMENT_NAME in names) != (sealed["release_environment_source"] is not None):
+        raise core.RuntimeFault("PREDECESSOR_ROLLBACK_ENVIRONMENT_DRIFT", 74, {"service": service})
 
 
 def _ensure_roots(core: Any) -> None:
@@ -761,6 +826,11 @@ def _validate_compose_inputs(core: Any, profile: dict[str, Any], state: dict[str
 
 
 def _release_environment(core: Any) -> dict[str, Any]:
+    """Read and bind the sealed successor release environment sources for activation."""
+    return _release_environment_for(core, RELEASE_ENVIRONMENT_SOURCES)
+
+
+def _release_environment_for(core: Any, sources: Mapping[str, str]) -> dict[str, Any]:
     """Read and bind the sealed release environment sources for activation only.
 
     Each source must be a fixed root-owned 0600 regular file below a non-caller-writable chain,
@@ -768,16 +838,20 @@ def _release_environment(core: Any) -> dict[str, Any]:
     both services must receive identical material. The value is returned only for the in-memory
     projection comparison; no fault raised here carries it, and callers persist only the digest.
     """
+    directories = {os.path.dirname(path) for path in sources.values()}
+    if not sources or len(directories) != 1 or os.path.dirname(next(iter(directories))) != RELEASE_STAGING_ROOT:
+        raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": "directory"})
+    directory = next(iter(directories))
     values: dict[str, bytes] = {}
     digests: dict[str, str] = {}
     try:
         # Root-owned 0700 directory whose every ancestor is root-owned and not group/other
         # writable: no non-root principal can replace a source between validation and Compose.
-        core.secure_directory(RELEASE_ENVIRONMENT_DIRECTORY, 0o700)
+        core.secure_directory(directory, 0o700)
     except (core.RuntimeFault, OSError) as exc:
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": "directory"}) from exc
-    for service, path in sorted(RELEASE_ENVIRONMENT_SOURCES.items()):
-        if os.path.dirname(path) != RELEASE_ENVIRONMENT_DIRECTORY:
+    for service, path in sorted(sources.items()):
+        if service not in PAIR_SERVICES or path != f"{directory}/{service}.env":
             raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_UNSAFE", 74, {"service": service})
         try:
             expected = _fixed_production_file(core, path, 0o600, RELEASE_ENVIRONMENT_SOURCE_MAXIMUM)
@@ -804,10 +878,28 @@ def _release_environment(core: Any) -> dict[str, Any]:
             raise core.RuntimeFault("RELEASE_ENVIRONMENT_SOURCE_INVALID", 74, {"service": service})
         values[service] = value
         digests[service] = hashlib.sha256(raw).hexdigest()
-    first, second = (values[service] for service in sorted(values))
-    if not hmac.compare_digest(first, second):
+    first = values[sorted(values)[0]]
+    if any(not hmac.compare_digest(first, value) for value in values.values()):
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_MATERIAL_MISMATCH", 74)
     return {"sha256": _digest(digests), "value": first.decode("ascii")}
+
+
+def _predecessor_release_environment(core: Any, profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Bind the predecessor's OWN sealed release sources, or None for a predecessor that had none."""
+    sources = {service: item["release_environment_source"] for service, item in _predecessor_rollback(core, profile).items() if item["release_environment_source"]}
+    return _release_environment_for(core, sources) if sources else None
+
+
+def _validate_predecessor_release_environment(core: Any, profile: dict[str, Any], state: dict[str, Any]) -> dict[str, Any] | None:
+    release = _predecessor_release_environment(core, profile)
+    bound = state.get("predecessor_release_environment_sha256")
+    if release is None:
+        if bound is not None:
+            raise core.RuntimeFault("PREDECESSOR_RELEASE_ENVIRONMENT_IDENTITY_DRIFT", 74)
+        return None
+    if not SHA256.fullmatch(str(bound or "")) or not hmac.compare_digest(release["sha256"], bound):
+        raise core.RuntimeFault("PREDECESSOR_RELEASE_ENVIRONMENT_IDENTITY_DRIFT", 74)
+    return release
 
 
 def _validate_release_environment(core: Any, state: dict[str, Any]) -> dict[str, Any]:
@@ -830,13 +922,16 @@ def _environment_names(core: Any, semantic: Any, code: str) -> list[str]:
     return names
 
 
-def _expected_pair_semantic(core: Any, service: str, predecessor: dict[str, Any], *, target: bool) -> dict[str, Any]:
+def _expected_pair_semantic(
+    core: Any, service: str, predecessor: dict[str, Any], *, target: bool, carried: bool = False
+) -> dict[str, Any]:
     """The exact runtime semantic a pair container must show after a release transition.
 
     Rollback expects the predecessor semantic unchanged. Activation expects the predecessor
     semantic plus exactly the one sealed environment name, and only for the two admitted
-    services; the name must not already be present. Any other added, removed or renamed
-    environment variable therefore still differs from the expectation and fails closed.
+    services; the name must not already be present -- unless the predecessor's OWN sealed profile
+    attached it (carried), in which case activation keeps the names unchanged. Any other added,
+    removed or renamed environment variable therefore still differs from the expectation.
     """
     if not target:
         return predecessor
@@ -844,6 +939,8 @@ def _expected_pair_semantic(core: Any, service: str, predecessor: dict[str, Any]
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_SERVICE_NOT_ADMITTED", 74, {"service": service})
     names = _environment_names(core, predecessor, "RELEASE_ENVIRONMENT_PREDECESSOR_INVALID")
     if RELEASE_ENVIRONMENT_NAME in names:
+        if carried:
+            return predecessor
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_ALREADY_PRESENT", 74, {"service": service})
     return {**predecessor, "environment_names": sorted([*names, RELEASE_ENVIRONMENT_NAME])}
 
@@ -876,13 +973,19 @@ def _admit_release_environment_projection(
         actual.pop("environment", None)
 
 
-def _compose_overlay(gravity: str, maximum: str, *, activate: bool) -> bytes:
+def _compose_overlay(
+    gravity: str, maximum: str, *, activate: bool, rollback: Mapping[str, Any] | None = None
+) -> bytes:
     if (gravity, maximum) != ((TARGET_GRAVITY, TARGET_MAX) if activate else (ROLLBACK_GRAVITY, ROLLBACK_MAX)):
         raise RuntimeError("IMAGE_REFERENCE_INVALID")
-    command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
+    if not activate:
+        return _rollback_overlay(gravity, maximum, rollback)
+    if rollback is not None:
+        raise RuntimeError("ROLLBACK_SEMANTIC_UNEXPECTED")
+    command = "    command: [\"npm\", \"run\", \"start\"]\n"
 
     def environment(service: str) -> str:
-        return f"    env_file:\n      - {RELEASE_ENVIRONMENT_SOURCES[service]}\n" if activate else ""
+        return f"    env_file:\n      - {RELEASE_ENVIRONMENT_SOURCES[service]}\n"
 
     return (
         "services:\n"
@@ -893,6 +996,29 @@ def _compose_overlay(gravity: str, maximum: str, *, activate: bool) -> bytes:
         "  max-web-scraper:\n"
         f"    image: {maximum}\n"
         f"{environment('max-web-scraper')}"
+    ).encode("ascii")
+
+
+def _rollback_overlay(gravity: str, maximum: str, rollback: Mapping[str, Any] | None) -> bytes:
+    """Recreate each predecessor with its recorded command and its own sealed sources, nothing else."""
+    if rollback is None or set(rollback) != set(PAIR_SERVICES):
+        raise RuntimeError("ROLLBACK_SEMANTIC_REQUIRED")
+
+    def block(service: str) -> str:
+        item = rollback[service]
+        text = "    command: " + json.dumps(list(item["command"]), ensure_ascii=True) + "\n"
+        if item["release_environment_source"]:
+            text += f"    env_file:\n      - {item['release_environment_source']}\n"
+        return text
+
+    return (
+        "services:\n"
+        "  gravity-mvp:\n"
+        f"    image: {gravity}\n"
+        f"{block('gravity-mvp')}"
+        "  max-web-scraper:\n"
+        f"    image: {maximum}\n"
+        f"{block('max-web-scraper')}"
     ).encode("ascii")
 
 
@@ -933,8 +1059,11 @@ def _validate_projection(
     if _canonical({key: value for key, value in base["services"].items() if key not in changed}) != _canonical({key: value for key, value in candidate["services"].items() if key not in changed}):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
     # Activation compares the render against the value already bound to the preflight digest;
-    # rollback takes no release value at all.
-    if activate != isinstance(release_value, str) or (activate and RELEASE_ENVIRONMENT_VALUE.fullmatch(release_value.encode("ascii", "replace")) is None):
+    # rollback takes a value exactly when the predecessor's own sealed authority attached a source.
+    rollback = None if activate else _predecessor_rollback(core, profile)
+    attached = set() if rollback is None else {service for service, item in rollback.items() if item["release_environment_source"]}
+    binds = activate or bool(attached)
+    if binds != isinstance(release_value, str) or (binds and RELEASE_ENVIRONMENT_VALUE.fullmatch(release_value.encode("ascii", "replace")) is None):
         raise core.RuntimeFault("RELEASE_ENVIRONMENT_BINDING_INVALID", 78)
     expected = {
         "gravity-mvp": TARGET_GRAVITY if activate else ROLLBACK_GRAVITY,
@@ -946,8 +1075,15 @@ def _validate_projection(
         if actual.get("image") != expected[name]:
             raise core.RuntimeFault("PAIR_COMPOSE_IMAGE_DRIFT", 74)
         actual["image"] = original.get("image")
-        if release_value is not None:
+        if activate or name in attached:
             _admit_release_environment_projection(core, name, original, actual, release_value)
+        if rollback is not None:
+            if actual.get("command") != rollback[name]["command"]:
+                raise core.RuntimeFault("ROLLBACK_COMMAND_PROJECTION_DRIFT", 74, {"service": name})
+            if "command" in original:
+                actual["command"] = original["command"]
+            else:
+                actual.pop("command", None)
         if activate and name == "gravity-mvp":
             if actual.get("command") != ["npm", "run", "start"]:
                 raise core.RuntimeFault("GRAVITY_SAFE_COMMAND_DRIFT", 74)
@@ -982,11 +1118,14 @@ def _compose_hash(core: Any, profile: dict[str, Any], overlay: str, service: str
     return parts[1]
 
 
-def _derive_compose_domains(core: Any, profile: dict[str, Any], release_value: str) -> dict[str, str]:
+def _derive_compose_domains(
+    core: Any, profile: dict[str, Any], release_value: str, predecessor_value: str | None = None
+) -> dict[str, str]:
+    rollback = _predecessor_rollback(core, profile)
     _write_fixed_file(core, ACTIVATE_OVERLAY, _compose_overlay(TARGET_GRAVITY, TARGET_MAX, activate=True), 0o400)
-    _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_GRAVITY, ROLLBACK_MAX, activate=False), 0o400)
+    _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_GRAVITY, ROLLBACK_MAX, activate=False, rollback=rollback), 0o400)
     _validate_projection(core, profile, ACTIVATE_OVERLAY, activate=True, release_value=release_value)
-    _validate_projection(core, profile, ROLLBACK_OVERLAY, activate=False)
+    _validate_projection(core, profile, ROLLBACK_OVERLAY, activate=False, release_value=predecessor_value)
     return {
         "target_gravity_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "gravity-mvp"),
         "target_max_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "max-web-scraper"),
@@ -1126,8 +1265,13 @@ def _predecessor_identity(
     _max_volume_exact(core, profile, maximum)
     # Refuse before anything is loaded if the predecessors already carry the release name or their
     # environment projection is unusable: the activation expectation could not then be exact.
-    _expected_pair_semantic(core, "gravity-mvp", gravity["semantic"], target=True)
-    _expected_pair_semantic(core, "max-web-scraper", maximum["semantic"], target=True)
+    rollback = _predecessor_rollback(core, profile)
+    for service, current in (("gravity-mvp", gravity), ("max-web-scraper", maximum)):
+        _expected_pair_semantic(
+            core, service, current["semantic"], target=True,
+            carried=rollback[service]["release_environment_source"] is not None,
+        )
+        _predecessor_rollback_consistent(core, service, current["semantic"], rollback[service])
     database = _database_status(core, profile)
     if database["state"] != "EXACT":
         raise core.RuntimeFault("DATABASE_PREDECESSOR_IDENTITY_DRIFT", 74)
@@ -1179,9 +1323,13 @@ def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overl
     _validate_compose_inputs(core, profile, state)
     release_value = None
     if activate:
-        # Only activation attaches the release environment, so only activation depends on it.
-        # A rollback must stay possible even if these sources were removed after a failure.
         release_value = _validate_release_environment(core, state)["value"]
+    else:
+        # Rollback reproduces the predecessor: it reads a source exactly when the predecessor's own
+        # sealed profile attached one, bound by digest at preflight. A bare predecessor reads none,
+        # so its rollback stays possible even if every release source was removed after a failure.
+        predecessor = _validate_predecessor_release_environment(core, profile, state)
+        release_value = None if predecessor is None else predecessor["value"]
     _validate_projection(core, profile, overlay, activate=activate, release_value=release_value)
     log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
@@ -1227,8 +1375,15 @@ def _postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state
         raise core.RuntimeFault("PAIR_POSTCHECK_IDENTITY_DRIFT", 74)
     _max_volume_exact(core, profile, maximum)
     target = expected == "TARGET_PAIR"
-    expected_gravity = _expected_pair_semantic(core, "gravity-mvp", state["gravity_semantic"], target=target)
-    expected_max = _expected_pair_semantic(core, "max-web-scraper", state["max_semantic"], target=target)
+    rollback = _predecessor_rollback(core, profile)
+    expected_gravity = _expected_pair_semantic(
+        core, "gravity-mvp", state["gravity_semantic"], target=target,
+        carried=rollback["gravity-mvp"]["release_environment_source"] is not None,
+    )
+    expected_max = _expected_pair_semantic(
+        core, "max-web-scraper", state["max_semantic"], target=target,
+        carried=rollback["max-web-scraper"]["release_environment_source"] is not None,
+    )
     if _preserved_semantic(gravity["semantic"]) != _preserved_semantic(expected_gravity):
         raise core.RuntimeFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", 74)
     if _preserved_semantic(maximum["semantic"]) != _preserved_semantic(expected_max):
@@ -1343,6 +1498,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74)
         identity = _predecessor_identity(core, policy, profile, state)
         release_environment = _release_environment(core)
+        predecessor_release = _predecessor_release_environment(core, profile)
         receipt = _artifact_receipt(core, profile)
         for name in sorted(receipt["files"]):
             _artifact_path(core, profile, name, hash_content=True)
@@ -1370,7 +1526,10 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
         storage = _storage_guard(core, profile, [], "post_load")
         _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
         _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
-        domains = _derive_compose_domains(core, profile, release_environment["value"])
+        domains = _derive_compose_domains(
+            core, profile, release_environment["value"],
+            None if predecessor_release is None else predecessor_release["value"],
+        )
         next_state = {
             "schema": STATE_SCHEMA,
             "profile_id": PROFILE_ID,
@@ -1378,6 +1537,7 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             "preflight_at": core.now(),
             "environment_sha256": identity["environment_sha256"],
             "release_environment_sha256": release_environment["sha256"],
+            "predecessor_release_environment_sha256": None if predecessor_release is None else predecessor_release["sha256"],
             "gravity_semantic": identity["gravity_semantic"],
             "max_semantic": identity["max_semantic"],
             "unrelated_semantic_fingerprint_sha256": identity["unrelated_semantic_fingerprint_sha256"],

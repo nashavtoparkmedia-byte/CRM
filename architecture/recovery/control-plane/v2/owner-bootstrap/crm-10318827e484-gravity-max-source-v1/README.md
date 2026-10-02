@@ -69,11 +69,24 @@ read from runtime input and there is no list to extend.
   the image, the Gravity command, and that one name with the bound value.
   Unrelated services must render identically.
 - The target postcheck expects each pair container's environment names to be
-  the predecessor's names plus exactly that one name, which must not already
-  be present. Any other added, removed or renamed variable still fails closed.
-- Rollback never reads or attaches these sources, and its postcheck still
-  requires the unchanged predecessor semantic. The predecessor images do not
-  reference the variable, so they are recreated exactly as they ran before.
+  the predecessor's names plus exactly that one name. The name may already be
+  present only where the predecessor's OWN sealed profile attached it (an
+  activated predecessor); then the names stay unchanged. Any other added,
+  removed or renamed variable still fails closed.
+- Rollback reproduces the predecessor exactly as it ran, from two authorities
+  only (Owner ruling, predecessor sealed authority): the production snapshot's
+  recorded semantic (command, environment names) and the predecessor's own
+  sealed profile, read at seal time from inside its digest-verified package.
+  The sealer binds that projection into `predecessor.rollback_semantic` -- the
+  recorded command per service and the predecessor's own source path where it
+  consumed the name; paths and digests only, never a value. Sealing fails closed
+  if the predecessor consumed the name but its sealed profile has no source for
+  it; a successor source is never substituted. A bare predecessor resolves to
+  its recorded command and no source, so its rollback reads nothing; an
+  activated predecessor's rollback re-attaches its own source, bound by digest
+  at preflight. Preflight refuses if the live predecessor no longer matches the
+  sealed projection, and the rollback postcheck requires the unchanged
+  predecessor semantic, command included.
 
 ## Large artifact admission
 

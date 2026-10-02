@@ -22,6 +22,23 @@ class RuntimeFault(Exception):
         self.details = details or {}
 
 
+
+def bare_rollback(gravity_command, max_command):
+    """Sealed rollback projection of a BARE predecessor: recorded commands, no release source."""
+    return {
+        "release_environment_name": "MAX_SCRAPER_WEBHOOK_SECRET",
+        "services": {
+            "gravity-mvp": {"command": list(gravity_command), "release_environment_source": None},
+            "max-web-scraper": {"command": list(max_command), "release_environment_source": None},
+        },
+        "provenance": {
+            "predecessor_package_sha256": "a" * 64,
+            "predecessor_profile_id": "crm-predecessor-fixture",
+            "predecessor_profile_sha256": "b" * 64,
+            "semantic_source": "production-snapshot docker-inspect semantic",
+        },
+    }
+
 def load_profile():
     loader = importlib.machinery.SourceFileLoader(
         "yoko_coordinated_state_machine_tests",
@@ -47,7 +64,7 @@ class StateMachineTests(unittest.TestCase):
             now=lambda: "2026-09-02T00:00:00Z",
         )
         self.profile = {
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
         self.invocation = SimpleNamespace(primitive="release-activate", resource=None, relative_path=None)
@@ -495,7 +512,7 @@ class ReleaseCapacityTests(unittest.TestCase):
         )
         profile = {
             **self.profile,
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
         }
         profile["artifact_admission"]["receipt_sha256"] = "r" * 64
         writes: list[dict[str, object]] = []
@@ -537,7 +554,7 @@ class ReleaseCapacityTests(unittest.TestCase):
         )
         profile = {
             **self.profile,
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
         }
         profile["artifact_admission"]["receipt_sha256"] = "r" * 64
         writes: list[dict[str, object]] = []
@@ -576,7 +593,7 @@ class ReleaseCapacityTests(unittest.TestCase):
         )
         profile = {
             **self.profile,
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
         profile["artifact_admission"]["receipt_sha256"] = "r" * 64
@@ -625,6 +642,7 @@ class PredecessorRetryTests(unittest.TestCase):
                 "gravity": {"image_id": "old-g", "container_id": "cg0", "compose_config_hash": "hg0"},
                 "max_scraper": {"image_id": "old-m", "container_id": "cm0", "compose_config_hash": "hm0"},
                 "unrelated_semantic_fingerprint_sha256": "u" * 64,
+                "rollback_semantic": bare_rollback(["run"], ["run"]),
             },
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
@@ -638,7 +656,7 @@ class PredecessorRetryTests(unittest.TestCase):
             "running": True,
             "health": "healthy",
             "restart_count": 0,
-            "semantic": {"name": container_id, "environment_names": ["NODE_ENV", "PATH"]},
+            "semantic": {"name": container_id, "command": ["run"], "environment_names": ["NODE_ENV", "PATH"]},
         }
         record.update(overrides)
         return record
@@ -941,7 +959,7 @@ class RollbackImageIdentityTests(unittest.TestCase):
     def setUp(self) -> None:
         self.core = SimpleNamespace(RuntimeFault=RuntimeFault)
         self.profile = {
-            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
             "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
         }
 
@@ -1015,7 +1033,7 @@ class ActivationDiagnosticsTests(unittest.TestCase):
                 mapped=lambda value: root / Path(value).name,
             )
             profile = {
-                "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+                "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}, "rollback_semantic": bare_rollback(["run"], ["run"])},
                 "target": {"gravity": {"image_id": "new-g"}, "max_scraper": {"image_id": "new-m"}},
             }
             writes: list[dict[str, object]] = []

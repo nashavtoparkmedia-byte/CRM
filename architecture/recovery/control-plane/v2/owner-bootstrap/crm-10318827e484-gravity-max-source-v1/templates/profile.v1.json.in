@@ -39,6 +39,7 @@
     "capture_completed_at": "@CAPTURE_COMPLETED_AT@",
     "release_critical_identity_sha256": "@PREDECESSOR_RELEASE_IDENTITY@",
     "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
+    "rollback_semantic": @PREDECESSOR_ROLLBACK_SEMANTIC_JSON@,
     "unrelated_semantic_fingerprint_sha256": "@UNRELATED_FINGERPRINT@",
     "gravity": {
       "container_id": "@PREDECESSOR_GRAVITY_CONTAINER@",

@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import io
 import json
 import os
 import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,14 @@ ARTIFACT_STORE = f"/var/lib/yoko-privileged-runtime/coordinated-artifacts/{ARTIF
 ROLLBACK_VERSION = "2.0.0-21"
 ROLLBACK_SHA = "17b97c4048fb8cce2ab5d43aff23e7542397678c8abd7c8b8790cca26db2f35a"
 ROLLBACK_SEAL_SHA = "2d255f264b899e8635b24ec6246c9ec3740ef6d621a01be3cfd0e5d8d0709c04"
+# The predecessor being rolled back to, and where its OWN sealed profile lives inside its package.
+ROLLBACK_PROFILE_ID = "crm-ba90ed4b6717-gravity-max-source-v1"
+ROLLBACK_PROFILE_MEMBER = f"./usr/local/share/yoko-privileged-runtime/profiles/{ROLLBACK_PROFILE_ID}/profile.v1.json"
+RELEASE_ENVIRONMENT_NAME = "MAX_SCRAPER_WEBHOOK_SECRET"
+PAIR_INSPECTIONS = (
+    ("gravity-mvp", "docker-inspect:crm.container.gravity_mvp", "gravity_image_id"),
+    ("max-web-scraper", "docker-inspect:crm.container.max_scraper", "max_image_id"),
+)
 EPOCH = 1788307200
 ARTIFACT_FILES = {
     "authoritative-ci-execution.json": {"sha256": "f1493cdc1b2e71bf5743862de42c6782feb6a394f577381b55e9d4b75269d905", "bytes": 5590},
@@ -401,13 +411,92 @@ def validate_artifact(
     return result, files
 
 
-def render_profile(snapshot: dict[str, Any], files: dict[str, dict[str, Any]], receipt_path: str, receipt_sha: str) -> bytes:
+def predecessor_sealed_profile(package: Path) -> tuple[dict[str, Any], str]:
+    """The predecessor's OWN sealed profile, read from inside its digest-verified package."""
+    if sha(package) != ROLLBACK_SHA:
+        raise ValueError("direct control-plane rollback package mismatch")
+    stream = command(["dpkg-deb", "--fsys-tarfile", str(package)]).stdout
+    with tarfile.open(fileobj=io.BytesIO(stream), mode="r:") as archive:
+        members = [member for member in archive.getmembers() if member.name == ROLLBACK_PROFILE_MEMBER]
+        if len(members) != 1 or not members[0].isfile() or members[0].size > 1024 * 1024:
+            raise ValueError("predecessor sealed profile missing from its package")
+        handle = archive.extractfile(members[0])
+        if handle is None:
+            raise ValueError("predecessor sealed profile unreadable")
+        raw = handle.read()
+    profile = json.loads(raw, object_pairs_hook=duplicate_safe)
+    if profile.get("profile_id") != ROLLBACK_PROFILE_ID or profile.get("package_version") != ROLLBACK_VERSION:
+        raise ValueError("predecessor sealed profile identity mismatch")
+    return profile, hashlib.sha256(raw).hexdigest()
+
+
+def derive_predecessor_rollback_semantic(
+    snapshot: dict[str, Any], predecessor_profile: dict[str, Any], predecessor_profile_sha: str
+) -> dict[str, Any]:
+    """Rollback reproduces the predecessor from two authorities only.
+
+    1. The production snapshot's recorded semantic for each pair container: its active command and
+       its environment names, bound to the sealed predecessor image identity.
+    2. The predecessor's OWN sealed profile: the release_environment source mapping it attached.
+
+    A recorded release-environment name is reproduced only from the predecessor's own source for
+    that service. If the snapshot shows the predecessor consuming the name but its sealed authority
+    has no source for it, sealing FAILS CLOSED: no successor source and no name-based inference is
+    ever substituted. The projection carries commands, paths and digests, never a value.
+    """
+    sealing = snapshot["sealing"]
+    commands = snapshot.get("commands")
+    release = predecessor_profile.get("release_environment")
+    sources: dict[str, Any] = {}
+    if release is not None:
+        if not isinstance(release, dict) or release.get("name") != RELEASE_ENVIRONMENT_NAME or not isinstance(release.get("sources"), dict):
+            raise ValueError("predecessor release environment authority invalid")
+        sources = release["sources"]
+    services: dict[str, Any] = {}
+    for service, key, image_key in PAIR_INSPECTIONS:
+        record = commands.get(key) if isinstance(commands, dict) else None
+        evidence = record.get("evidence") if isinstance(record, dict) else None
+        semantic = evidence.get("semantic") if isinstance(evidence, dict) else None
+        if not isinstance(semantic, dict) or semantic.get("image_id") != sealing[image_key]:
+            raise ValueError(f"recorded predecessor semantic for {service} is not the sealed predecessor")
+        active = semantic.get("command")
+        names = semantic.get("environment_names")
+        if not isinstance(active, list) or not active or any(not isinstance(argument, str) or not argument for argument in active):
+            raise ValueError(f"recorded predecessor command for {service} is invalid")
+        if not isinstance(names, list) or any(not isinstance(name, str) or not name for name in names):
+            raise ValueError(f"recorded predecessor environment names for {service} are invalid")
+        source = None
+        if RELEASE_ENVIRONMENT_NAME in names:
+            source = sources.get(service)
+            if not isinstance(source, str) or not source:
+                raise ValueError(
+                    f"predecessor {service} consumes {RELEASE_ENVIRONMENT_NAME} but its own sealed profile "
+                    "provides no source for it: rollback cannot reproduce it, refusing to seal"
+                )
+        services[service] = {"command": list(active), "release_environment_source": source}
+    return {
+        "release_environment_name": RELEASE_ENVIRONMENT_NAME,
+        "services": services,
+        "provenance": {
+            "predecessor_package_sha256": ROLLBACK_SHA,
+            "predecessor_profile_id": ROLLBACK_PROFILE_ID,
+            "predecessor_profile_sha256": predecessor_profile_sha,
+            "semantic_source": "production-snapshot docker-inspect semantic",
+        },
+    }
+
+
+def render_profile(
+    snapshot: dict[str, Any], files: dict[str, dict[str, Any]], receipt_path: str, receipt_sha: str,
+    rollback_semantic: dict[str, Any],
+) -> bytes:
     sealing = snapshot["sealing"]
     text = (ROOT / "templates/profile.v1.json.in").read_text(encoding="ascii")
     replacements = {
         "@ARTIFACT_RECEIPT_PATH@": receipt_path,
         "@ARTIFACT_RECEIPT_SHA256@": receipt_sha,
         "@ARTIFACT_FILES_JSON@": canonical(files).decode("ascii"),
+        "@PREDECESSOR_ROLLBACK_SEMANTIC_JSON@": canonical(rollback_semantic).decode("ascii"),
         "@CAPTURE_COMPLETED_AT@": snapshot["completed_at"],
         "@PREDECESSOR_RELEASE_IDENTITY@": sealing["predecessor_release_critical_identity_sha256"],
         "@UNRELATED_FINGERPRINT@": sealing["unrelated_semantic_fingerprint_sha256"],
@@ -482,6 +571,8 @@ def main() -> None:
         raise ValueError("direct control-plane rollback metadata mismatch")
     if sha(args.rollback_seal, 16 * 1024 * 1024) != ROLLBACK_SEAL_SHA:
         raise ValueError("direct control-plane rollback seal mismatch")
+    predecessor_profile, predecessor_profile_sha = predecessor_sealed_profile(args.rollback_package)
+    rollback_semantic = derive_predecessor_rollback_semantic(snapshot, predecessor_profile, predecessor_profile_sha)
     artifact_result, files = validate_artifact(
         args.handoff_root,
         args.application_source,
@@ -513,7 +604,7 @@ def main() -> None:
     }
     write_json(generated / "artifact-admission.v1.json", receipt)
     receipt_sha = sha(generated / "artifact-admission.v1.json")
-    profile_raw = render_profile(snapshot, files, receipt_path, receipt_sha)
+    profile_raw = render_profile(snapshot, files, receipt_path, receipt_sha, rollback_semantic)
     write(generated / "profile.v1.json", profile_raw, 0o444)
     copy_exact(ROOT / "templates/crm-activation-profile.py.in", generated / "crm-activation-profile.py", 0o444)
     trusted = {
