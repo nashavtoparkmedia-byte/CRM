@@ -27,6 +27,10 @@ import { CASH_ORDER_PROVIDER_V1 } from '../internal/compensation/cash-order-inge
 import { legacyPrismaCashOrderIngestionStoreV1 } from '../internal/compensation/legacy-prisma-cash-order-ingestion-adapter'
 import { loadYandexCashOrderCredentialsV1 } from '../internal/compensation/yandex-cash-order-credentials'
 import { createYandexCashOrderPageFetcherV1 } from '../internal/compensation/yandex-cash-order-source'
+import {
+    CashOrderIngestionPreflightV1,
+    type CashOrderPreflightInputV1,
+} from '../internal/compensation/cash-order-ingestion-preflight'
 
 const config = parseCashOrderIngestionConfigV1({
     mode: process.env.YOKO_CASH_ORDER_INGESTION_MODE,
@@ -52,6 +56,44 @@ const runtime = new CashOrderIngestionRuntimeV1(
         log: (level, event, fields) => console[level](JSON.stringify({ event, ...fields })),
     },
 )
+
+// Built once at load beside the runtime, and for the same reason: nothing here
+// does I/O until a run starts. The probe is given a reader rather than the
+// store, and wraps it in a store that refuses every write, so this composition
+// holds no write capability for cash orders at all.
+const preflight = new CashOrderIngestionPreflightV1(
+    config,
+    {
+        reader: { readAuthoritySnapshot: () => legacyPrismaCashOrderIngestionStoreV1.readAuthoritySnapshot() },
+        loadCredentials: loadYandexCashOrderCredentialsV1,
+        fetchPage: createYandexCashOrderPageFetcherV1(),
+        clock: { nowMs: () => performance.now() },
+        wallNowMs: () => Date.now(),
+        sleep: (durationMs) => new Promise((resolve) => {
+            setTimeout(resolve, durationMs).unref?.()
+        }),
+        random: Math.random,
+    },
+)
+
+export interface CashOrderPilotParkScopeDtoV1 {
+    mode: string
+    enabledParks: readonly string[]
+    configError: string | null
+}
+
+/**
+ * The configured pilot scope, as one value. It is the single authority for
+ * which parks compensation is enabled in: the same parsed configuration the
+ * runtime and the preflight use, never a second list.
+ */
+export function cashOrderPilotParkScopeV1(): CashOrderPilotParkScopeDtoV1 {
+    return {
+        mode: config.mode,
+        enabledParks: [...config.enabledParks],
+        configError: config.configError,
+    }
+}
 
 export interface CashOrderIngestionScheduleV1 {
     enabled: boolean
@@ -221,4 +263,105 @@ export async function readCashOrderParkAuthorityV1(externalParkId: string): Prom
     return authority.status === 'authoritative'
         ? { status: 'authoritative', connectionId: authority.connectionId }
         : { status: 'failed', code: authority.code }
+}
+
+export interface CashOrderPreflightWindowDtoV1 {
+    kind: string
+    from: string
+    to: string
+    status: string
+    failure: string | null
+    pages: number
+}
+
+export interface CashOrderPreflightParkDtoV1 {
+    externalParkId: string
+    authority: string
+    credential: string
+    windows: CashOrderPreflightWindowDtoV1[]
+    provider: string
+    pages: number
+    ordersObserved: number
+    accepted: number
+    rejected: number
+    rejectedByReason: Record<string, number>
+    removed: number
+    removedByReason: Record<string, number>
+    collapsedDuplicates: number
+    http429: number
+    retries429: number
+    retries5xx: number
+    timeouts: number
+    truncated: boolean
+    sufficient: boolean
+    reasons: string[]
+}
+
+export interface CashOrderPreflightDtoV1 {
+    ok: boolean
+    mode: string
+    configError: string | null
+    refusal: string | null
+    parksAttempted: string[]
+    parks: CashOrderPreflightParkDtoV1[]
+    sufficientToAuthorizeWriteMode: boolean
+    reasons: string[]
+}
+
+/**
+ * The read-only authorization probe of the release sequence
+ * off → preflight → write.
+ *
+ * It is composed with a persistence capability that is one read method wide:
+ * the authority snapshot. Everything else the ingestion slice might reach for
+ * is refused before it can touch a transaction, so this operation cannot
+ * create a checkpoint, take a lease, record progress, finish a run, persist a
+ * deferral or log cron health. It also does not pass through the operational
+ * job wrapper, which would do the last of those on its own.
+ *
+ * The result is assembled field by field so what leaves this composition root
+ * is a stated report and never a value carrying a persistence handle.
+ */
+export async function preflightCashOrderIngestionV1(
+    input: CashOrderPreflightInputV1 = {},
+): Promise<CashOrderPreflightDtoV1> {
+    const report = await preflight.run(input)
+    return {
+        ok: report.ok,
+        mode: report.mode,
+        configError: report.configError,
+        refusal: report.refusal,
+        parksAttempted: [...report.parksAttempted],
+        parks: report.parks.map((park) => ({
+            externalParkId: park.externalParkId,
+            authority: park.authority,
+            credential: park.credential,
+            windows: park.windows.map((window) => ({
+                kind: window.kind,
+                from: window.from,
+                to: window.to,
+                status: window.status,
+                failure: window.failure,
+                pages: window.pages,
+            })),
+            provider: park.provider,
+            pages: park.pages,
+            ordersObserved: park.ordersObserved,
+            accepted: park.accepted,
+            rejected: park.rejected,
+            rejectedByReason: { ...park.rejectedByReason },
+            removed: park.removed,
+            removedByReason: { ...park.removedByReason },
+            collapsedDuplicates: park.collapsedDuplicates,
+            http429: park.http429,
+            retries429: park.retries429,
+            retries5xx: park.retries5xx,
+            timeouts: park.timeouts,
+            truncated: park.truncated,
+            sufficient: park.sufficient,
+            reasons: [...park.reasons],
+        })),
+        sufficientToAuthorizeWriteMode: report.sufficientToAuthorizeWriteMode,
+        reasons: [...report.reasons],
+    }
 }

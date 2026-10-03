@@ -90,6 +90,18 @@ object CrmOrigin {
     }
 
     /**
+     * Whether an identifier carried by a notification payload is one this shell
+     * will act on at all.
+     *
+     * The single identifier pin in the app. A remote push validates its chat
+     * and message ids against this before anything is posted, so there is one
+     * shape to reason about rather than a second regex living beside the
+     * payload parser and drifting from this one. It matches the server's own
+     * SAFE_ID in gravity-mvp/src/app/messages/open/route.ts.
+     */
+    fun isSafeId(value: String?): Boolean = SAFE_ID.matches(value?.trim().orEmpty())
+
+    /**
      * Build the server-side open-chat URL for a notification target, or null if
      * the payload is not something this shell is willing to act on.
      *

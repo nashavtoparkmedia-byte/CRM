@@ -71,13 +71,23 @@
   "approved_infrastructure_writers": [
     {
       "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts",
+      "reason": "same transaction as Calling terminal aggregate write; declared by YOKO-AI-CALLS-STAGE-5 recovery manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-prisma-adapter.ts",
+      "reason": "call alert intent and per-device fan-out; flows calling.call-alert and calling.call-alert-delivery declared by the outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
       "reason": "same transaction as Calling aggregate write; declared by CRM-ARCH-005 outbox manifest"
     },
     {
       "model": "DomainOutboxEvent",
-      "file": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts",
-      "reason": "same transaction as Calling terminal aggregate write; declared by YOKO-AI-CALLS-STAGE-5 recovery manifest"
+      "file": "gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts",
+      "reason": "per-device delivery events appended by the Messaging fan-out consumer; flow messaging.mobile-push-delivery in the CRM-ARCH-005 outbox manifest"
     },
     {
       "model": "DomainOutboxEvent",
@@ -93,11 +103,6 @@
       "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts",
       "reason": "same transaction as the inbound Message create; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
-    },
-    {
-      "model": "DomainOutboxEvent",
-      "file": "gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts",
-      "reason": "per-device delivery events appended by the Messaging fan-out consumer; flow messaging.mobile-push-delivery in the CRM-ARCH-005 outbox manifest"
     }
   ],
   "manifest_amendments": [

@@ -30,7 +30,7 @@ assert.doesNotMatch(shim, /export \*/)
 const capability = read('gravity-mvp/src/modules/calling/public/v1/sip-client-context.tsx')
 assert.equal(
   createHash('sha256').update(capability).digest('hex'),
-  '6cf74f4cb7d0d6b1701cba99f7d77ec38c812c4cee31254b33b3c22f40353009',
+  '8ba16abfba14c2ceb6c916cf825ba56f73c74ae2ee733c69f8d26b07413ecbe8',
 )
 assert.match(capability, /CODEC_PRIORITY = \['PCMA', 'PCMU', 'telephone-event', 'CN'\]/)
 assert.match(capability, /export function SipProvider/)
@@ -54,7 +54,7 @@ assert.equal(registry.exceptions.filter((entry) =>
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   consumers: consumers.length,
-  implementation_sha256: '6cf74f4cb7d0d6b1701cba99f7d77ec38c812c4cee31254b33b3c22f40353009',
+  implementation_sha256: '8ba16abfba14c2ceb6c916cf825ba56f73c74ae2ee733c69f8d26b07413ecbe8',
   current_findings: scan.findings.length,
   registry_entries: registry.exceptions.length,
 }, null, 2)}\n`)

@@ -11,8 +11,26 @@ export type CallingClientRegistrationStatus =
     | 'disabled'
     | 'identity-required'
 
+/**
+ * How outbound calling is presented on this client, which is NOT the same
+ * question as which platform it runs on.
+ *
+ * `softphone` is the browser path: the registered WebRTC softphone places the
+ * call through the server's originate endpoint. `system_dialer` means this
+ * client has no usable softphone and the operator is handed the number to dial
+ * on their own device instead.
+ *
+ * Consumers outside Calling learn the mode and nothing else. They do not learn
+ * the platform, the User-Agent or how the mode was decided, so a second shell
+ * detector can never grow on this side of the seam.
+ */
+export type OutboundCallingMode =
+    | 'softphone'
+    | 'system_dialer'
+
 export interface OutboundCallingClientCapability {
     status: CallingClientRegistrationStatus
+    outboundMode: OutboundCallingMode
     hasActiveCall: boolean
     startPlaceholderOutbound(phoneNumber: string, displayName?: string | null): void
     cancelPlaceholderOutbound(): void

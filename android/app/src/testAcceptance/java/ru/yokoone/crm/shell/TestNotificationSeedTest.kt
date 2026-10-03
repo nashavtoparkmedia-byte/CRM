@@ -6,13 +6,25 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
+/**
+ * Unit tests for the acceptance seed.
+ *
+ * They live in src/testAcceptance rather than src/test because the class under
+ * test is compiled only into the acceptance variant now; a shared unit test
+ * referencing it would stop the release and debug variants compiling, which is
+ * precisely the boundary this milestone introduced.
+ *
+ * The in-origin URLs are built from CrmOrigin.ORIGIN instead of the production
+ * host, because that is what the variant under test pins. The off-origin case
+ * stays a literal: it must be refused whatever the pin happens to be.
+ */
 @RunWith(RobolectricTestRunner::class)
 class TestNotificationSeedTest {
 
     @Test
     fun `the open conversation supplies the test target`() {
         val target = TestNotificationSeed.currentChatTarget(
-            "https://yokoone.ru/messages?id=chat_42&channel=max",
+            "${CrmOrigin.ORIGIN}/messages?id=chat_42&channel=max",
         )
         assertEquals("chat_42", target?.first)
         assertEquals("max", target?.second)
@@ -20,7 +32,7 @@ class TestNotificationSeedTest {
 
     @Test
     fun `the chat list has no target and does not invent one`() {
-        assertNull(TestNotificationSeed.currentChatTarget("https://yokoone.ru/messages"))
+        assertNull(TestNotificationSeed.currentChatTarget("${CrmOrigin.ORIGIN}/messages"))
     }
 
     @Test

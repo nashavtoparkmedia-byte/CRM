@@ -41,6 +41,9 @@ const mockState = {
     llmCalls: [],
     // Optional promise that tts.synthesize awaits before returning.
     synthGate: null,
+    // Every phrase handed to TTS, in order. This is what the lead hears, so
+    // the lead-facing wording contract is asserted against it.
+    spoken: [],
 }
 
 function stub(relPath, exports) {
@@ -59,7 +62,8 @@ stub('../stt-router', {
 stub('../tts-router', {
     enabled: () => true,
     // Minimal WAV header — broadcastWav doesn't inspect it.
-    synthesize: async () => {
+    synthesize: async (text) => {
+        mockState.spoken.push(String(text))
         if (mockState.synthGate) await mockState.synthGate
         return Buffer.alloc(44)
     },
@@ -118,6 +122,7 @@ function resetMocks() {
     mockState.llmReturn = { kind: 'text', content: '(stub bot reply)' }
     mockState.llmCalls = []
     mockState.synthGate = null
+    mockState.spoken = []
 }
 
 // ---- Acceptance #1: listening arms the silence timer ----------------------
@@ -533,19 +538,142 @@ test('a WS close while the channel is still alive requests termination', (t) => 
     assert.deepEqual(events.termination[0], { reason: 'closed', graceMs: 0 })
 })
 
-test('transfer_to_manager stays outside the termination path', async (t) => {
+// A live transfer does not exist in this product, and no recipient type is
+// guaranteed a manager callback, so the lead-facing phrase may promise neither.
+// Asserted as a contract rather than one exact sentence: a later rewording is
+// free, reintroducing a promise is not.
+const FORBIDDEN_TRANSFER_CLAIMS = [
+    /соединя/i,          // «соединяю вас с менеджером»
+    /оставайтесь/i,      // «оставайтесь на линии»
+    /на линии/i,
+    /перевед|перевож/i,  // «сейчас переведу»
+    /перезвон/i,         // «менеджер вам перезвонит»
+    /свяж/i,             // «менеджер с вами свяжется»
+]
+
+function transferTurn(s, reason = 'лид просит менеджера') {
+    return s._dispatchTool('transfer_to_manager', { reason }, 'call-2')
+}
+
+test('transfer_to_manager says what actually happens: request recorded, call ending', async (t) => {
+    resetMocks()
+    const { s, cleanup } = makeSession()
+    t.after(cleanup)
+
+    await transferTurn(s)
+
+    assert.equal(mockState.spoken.length, 1, 'exactly one phrase reaches the lead')
+    const line = mockState.spoken[0]
+    assert.match(line, /зафиксировал/i, 'the lead is told the request was recorded')
+    assert.match(line, /заверш/i, 'and that this conversation is ending')
+    for (const claim of FORBIDDEN_TRANSFER_CLAIMS) {
+        assert.ok(!claim.test(line), `the handoff line must not promise ${claim}: "${line}"`)
+    }
+})
+
+test('transfer_to_manager still produces the same finalize payload', async (t) => {
     resetMocks()
     const { s, events, cleanup } = makeSession()
     t.after(cleanup)
 
-    await s._dispatchTool('transfer_to_manager', { reason: 'лид просит менеджера' }, 'call-2')
+    await transferTurn(s, 'вопрос по условиям')
 
     assert.equal(s.state, 'ended')
-    assert.equal(events.finalize.length, 1)
-    assert.equal(events.finalize[0].reason, 'transferred')
-    // C1a must not change what the lead experiences after «оставайтесь на линии»:
-    // the honest semantics of that promise are a separate bounded follow-up.
-    assert.deepEqual(events.termination, [], 'a transfer does not end the channel here')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'transferred', 'the terminal reason is unchanged')
+    assert.equal(s.terminalReason, 'transferred')
+    // Manager-task semantics are deliberately untouched by the UX change: CRM
+    // decides what to do with this, and only a driver recipient gets a task.
+    assert.deepEqual(s.finalResult, {
+        qualification_status: 'unclear',
+        lead_summary: 'Лид запросил живого менеджера.',
+        reason: 'вопрос по условиям',
+        manager_task: {
+            should_create: true,
+            summary: 'Перезвонить лиду — запросил живого менеджера: вопрос по условиям',
+            priority: 'high',
+        },
+        transfer_reason: 'вопрос по условиям',
+    })
+})
+
+test('a transfer ends the channel exactly once, after its phrase has played', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({ broadcastWav: async () => 4000 })
+    t.after(cleanup)
+
+    await transferTurn(s)
+
+    assert.equal(events.termination.length, 1, 'exactly one termination request')
+    assert.equal(events.termination[0].reason, 'transferred', 'the request carries the terminal reason')
+    const { graceMs } = events.termination[0]
+    // Same oracle as the goodbye: _speak returns as soon as uuid_broadcast was
+    // issued, so the handoff line is still on the wire when the session ends.
+    assert.ok(graceMs > 4000, `grace ${graceMs} must outlast the estimated playback`)
+    assert.ok(graceMs <= 5000, `grace ${graceMs} must not exceed playback plus the margin`)
+})
+
+test('a transfer phrase that never reached FreeSWITCH is not waited for', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({ broadcastWav: async () => null })
+    t.after(cleanup)
+
+    await transferTurn(s)
+
+    assert.equal(events.termination.length, 1)
+    assert.equal(events.termination[0].graceMs, 0, 'nothing is playing, so nothing is waited for')
+})
+
+test('a lead who hangs up during the transfer phrase keeps the earlier reason and one request', async (t) => {
+    resetMocks()
+    let releaseSynth = null
+    mockState.synthGate = new Promise(resolve => { releaseSynth = resolve })
+    let broadcasts = 0
+    const { s, events, cleanup } = makeSession({
+        broadcastWav: async () => { broadcasts++; return 1000 },
+    })
+    t.after(cleanup)
+
+    const turn = transferTurn(s)
+    s.stop()          // CHANNEL_HANGUP_COMPLETE path, while TTS is still running
+    releaseSynth()
+    await turn
+
+    assert.equal(broadcasts, 0, 'the handoff phrase is never handed to FreeSWITCH')
+    assert.equal(events.finalize.length, 1, 'finalized exactly once')
+    assert.equal(events.finalize[0].reason, 'closed', 'the hangup got there first and owns the reason')
+    assert.equal(s.terminalReason, 'closed')
+    assert.equal(events.termination.length, 1, 'exactly one termination request')
+    assert.equal(events.termination[0].reason, 'closed')
+})
+
+test('a transfer whose termination request throws keeps the terminal semantics', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession({
+        requestTermination: () => { throw new Error('esl unavailable') },
+    })
+    t.after(cleanup)
+
+    await transferTurn(s)
+
+    assert.equal(s.state, 'ended')
+    assert.equal(events.finalize.length, 1, 'the canonical finalize already happened and stands')
+    assert.equal(s.terminalReason, 'transferred', 'a telephony failure cannot relabel the reason')
+})
+
+test('a transfer after the session already ended adds no phrase, finalize or request', async (t) => {
+    resetMocks()
+    const { s, events, cleanup } = makeSession()
+    t.after(cleanup)
+
+    await endCallTurn(s)
+    const spokenAfterGoodbye = mockState.spoken.length
+    await transferTurn(s)
+
+    assert.equal(s.terminalReason, 'completed', 'the first terminal reason still wins')
+    assert.equal(events.finalize.length, 1, 'still exactly one finalize')
+    assert.equal(events.termination.length, 1, 'still exactly one termination request')
+    assert.equal(mockState.spoken.length, spokenAfterGoodbye, 'no phrase for an ended session')
 })
 
 test('a finalize that throws still ends the physical call', async (t) => {

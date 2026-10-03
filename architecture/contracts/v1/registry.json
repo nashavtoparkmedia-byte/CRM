@@ -296,6 +296,7 @@
         "CurrentUserQuery.v1",
         "IntegrationAdminAuthorization.v1",
         "ListUserIdentitiesQuery.v1",
+        "MobileNotificationDelivery.v1",
         "UserIdentity.v1"
       ],
       "commands": [
@@ -473,6 +474,7 @@
       "capabilities": [
         "BotSurveyApi.v1",
         "BotUserProfileCommands.v1",
+        "DriverTelegramParkLinkQuery.v1",
         "TelegramConnectionMetadataQuery.v1",
         "TelegramDeliveryPort.v1",
         "TelegramReachability.v1",
