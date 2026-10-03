@@ -111,12 +111,33 @@ bot.use(async (ctx, next) => {
     }
 
     // FORWARD EVERYTHING TO CRM WEBHOOK (Unless it's an inline callback, which we handle next)
+    //
+    // The forward is AWAITED to a terminal outcome before this phase completes.
+    // Fire-and-forget lost the update whenever the process moved on — the bot
+    // answered Telegram while the CRM write was still in flight, so a transient
+    // failure had no one left to observe it. Awaiting keeps the forward inside
+    // the update's own lifetime, which is the only window Telegraf gives us.
+    //
+    // A terminal outcome is never fatal to the update: the handlers below still
+    // run. `terminal_4xx` means the CRM refused the event on its own terms and
+    // resending would not change that; `retry_exhausted_transient` means the
+    // transport stayed unavailable for the whole bounded budget. Both are
+    // reported, neither blocks this or any later update.
     try {
-        crmIntegration.forwardMessageToCrm(ctx, 'INCOMING').catch(e => {
-            console.error('Failed to pre-forward to CRM:', e);
-        });
+        const forwarding = await crmIntegration.forwardMessageToCrm(ctx, 'INCOMING');
+        const OUTCOME = crmIntegration.CRM_FORWARD_OUTCOME;
+        const failed = forwarding && (
+            forwarding.outcome === OUTCOME.TERMINAL_4XX
+            || forwarding.outcome === OUTCOME.RETRY_EXHAUSTED_TRANSIENT
+            || forwarding.outcome === OUTCOME.UNBOUND
+        );
+        if (failed) {
+            logger.warn(`[CRM IN] Forward finished as ${forwarding.outcome}`
+                + `${forwarding.status ? ` (status ${forwarding.status})` : ''}`);
+        }
     } catch (e) {
-        console.error('Failed to pre-forward to CRM:', e);
+        // Defensive only: forwardMessageToCrm resolves rather than rejects.
+        logger.error(`[CRM IN] Forward raised unexpectedly: ${e && e.message ? e.message : e}`);
     }
 
     return next();

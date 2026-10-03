@@ -4,6 +4,8 @@ const logger = require('../utils/logger');
 const DEFAULT_ALLOWED_UPDATES = ['message', 'callback_query'];
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
 const RECENT_UPDATE_LIMIT = 2_000;
+const IDENTITY_STARTUP_ATTEMPTS = 3;
+const IDENTITY_RETRY_DELAY_MS = 1_000;
 
 function deriveWebhookSecret(botToken) {
     return crypto
@@ -40,7 +42,15 @@ function createBotRuntime(options = {}) {
     let lastRepairAt = null;
     let lastRepairReason = null;
     let lastRuntimeError = null;
-    const recentUpdateIds = new Map();
+    let botIdentity = null;
+    // An update_id is recorded as COMPLETED only after its handler chain has
+    // finished successfully. While it runs it lives in `inFlightUpdates`, whose
+    // entry is the single owner execution; a concurrent delivery of the same id
+    // joins that promise instead of executing anything itself. A failure removes
+    // the in-flight entry and records nothing, so Telegram's retry is free to
+    // execute the update again.
+    const completedUpdateIds = new Map();
+    const inFlightUpdates = new Map();
 
     function attach(instance) {
         bot = instance;
@@ -67,26 +77,87 @@ function createBotRuntime(options = {}) {
         return safeEqual(value, webhookSecret);
     }
 
-    function rememberUpdate(updateId) {
-        if (updateId === undefined || updateId === null) return true;
-        const key = String(updateId);
-        if (recentUpdateIds.has(key)) return false;
-        recentUpdateIds.set(key, Date.now());
-        if (recentUpdateIds.size > RECENT_UPDATE_LIMIT) {
-            const oldest = recentUpdateIds.keys().next().value;
-            recentUpdateIds.delete(oldest);
+    function updateKey(updateId) {
+        if (updateId === undefined || updateId === null) return null;
+        return String(updateId);
+    }
+
+    function markCompleted(key) {
+        completedUpdateIds.set(key, Date.now());
+        while (completedUpdateIds.size > RECENT_UPDATE_LIMIT) {
+            const oldest = completedUpdateIds.keys().next().value;
+            completedUpdateIds.delete(oldest);
         }
-        return true;
+    }
+
+    /**
+     * Establish Telegraf's `botInfo` once, from a proven getMe.
+     *
+     * Telegraf 4.16.3 fills `botInfo` lazily inside `handleUpdate` and memoises
+     * the call in `botInfoCall`, which it never clears. So the first update that
+     * arrives without `botInfo` triggers a getMe, and if that getMe rejects the
+     * rejected promise stays cached and every later update rejects with it until
+     * the process restarts. Webhook mode never calls `launch()`, so nothing else
+     * populates it. We therefore set `botInfo` ourselves before accepting
+     * updates, and never cache a failed attempt.
+     */
+    async function ensureBotIdentity() {
+        const instance = requireBot();
+        if (botIdentity) return botIdentity;
+        if (instance.botInfo && Number.isInteger(instance.botInfo.id) && instance.botInfo.username) {
+            botIdentity = instance.botInfo;
+            return botIdentity;
+        }
+        const me = await instance.telegram.getMe();
+        if (!me || !Number.isInteger(me.id) || !me.username) {
+            throw new Error('TELEGRAM_BOT_IDENTITY_UNPROVEN');
+        }
+        instance.botInfo = me;
+        botIdentity = me;
+        return botIdentity;
+    }
+
+    function identityEstablished() {
+        return Boolean(botIdentity);
     }
 
     async function handleUpdate(update) {
         const instance = requireBot();
-        if (!rememberUpdate(update?.update_id)) {
-            return { duplicate: true };
+        // Fail closed until identity is proven, so no update can fall into
+        // Telegraf's lazy getMe. The watchdog keeps retrying, so this clears
+        // without a restart.
+        if (!identityEstablished()) {
+            throw new Error('TELEGRAM_BOT_IDENTITY_UNPROVEN');
         }
-        lastUpdateAt = new Date().toISOString();
-        await instance.handleUpdate(update);
-        return { duplicate: false };
+
+        const key = updateKey(update?.update_id);
+        if (key === null) {
+            // Nothing to deduplicate on. Run it, but never record a reservation
+            // that a later update could collide with.
+            lastUpdateAt = new Date().toISOString();
+            await instance.handleUpdate(update);
+            return { duplicate: false };
+        }
+
+        if (completedUpdateIds.has(key)) return { duplicate: true };
+
+        const owner = inFlightUpdates.get(key);
+        if (owner) return owner;
+
+        // The reservation is installed synchronously with creating the promise:
+        // there is no await between the two, so no concurrent delivery can slip
+        // past it and start a second execution.
+        const execution = (async () => {
+            lastUpdateAt = new Date().toISOString();
+            await instance.handleUpdate(update);
+            markCompleted(key);
+            return { duplicate: false };
+        })();
+        inFlightUpdates.set(key, execution);
+        execution.catch(() => {}).then(() => {
+            inFlightUpdates.delete(key);
+        });
+        return execution;
     }
 
     async function readTelegramStatus() {
@@ -150,6 +221,9 @@ function createBotRuntime(options = {}) {
     async function checkAndRepair() {
         if (mode !== 'webhook') return getStatus();
         try {
+            // Identity first: while it is missing every update is refused, so
+            // recovering it is the most valuable thing this tick can do.
+            await ensureBotIdentity();
             const { info } = await readTelegramStatus();
             const reason = webhookNeedsRepair(info);
             if (reason) await ensureWebhook(reason);
@@ -209,6 +283,31 @@ function createBotRuntime(options = {}) {
         const instance = requireBot();
         if (mode === 'webhook') {
             assertWebhookConfig();
+            // Bounded attempt to prove identity before any update is accepted.
+            // A flaky egress must not wedge startup: if every attempt fails we
+            // still arm the watchdog, and `handleUpdate` refuses updates in the
+            // meantime rather than letting Telegraf take the lazy path.
+            for (let attempt = 1; attempt <= IDENTITY_STARTUP_ATTEMPTS; attempt += 1) {
+                try {
+                    const me = await ensureBotIdentity();
+                    runtimeLogger.info(`[Webhook] bot identity established: @${me.username}`);
+                    break;
+                } catch (error) {
+                    lastRuntimeError = error.message;
+                    runtimeLogger.error(
+                        `[Webhook] bot identity attempt ${attempt}/${IDENTITY_STARTUP_ATTEMPTS}`
+                        + ` failed: ${error.message}`
+                    );
+                    if (attempt < IDENTITY_STARTUP_ATTEMPTS) {
+                        await new Promise((resolve) => setTimeout(resolve, IDENTITY_RETRY_DELAY_MS * attempt));
+                    }
+                }
+            }
+            if (!identityEstablished()) {
+                runtimeLogger.error(
+                    '[Webhook] bot identity unproven; updates are refused until the watchdog recovers it'
+                );
+            }
             await ensureWebhook('startup');
             if (!watchdog) {
                 watchdog = setInterval(checkAndRepair, checkIntervalMs);
@@ -246,14 +345,18 @@ function createBotRuntime(options = {}) {
     return {
         attach,
         checkAndRepair,
+        ensureBotIdentity,
         ensureWebhook,
         getStatus,
         handleUpdate,
+        identityEstablished,
         matchesToken,
         start,
         stop,
         validateWebhookSecret,
-        get mode() { return mode; }
+        get mode() { return mode; },
+        get inFlightUpdateCount() { return inFlightUpdates.size; },
+        get completedUpdateCount() { return completedUpdateIds.size; }
     };
 }
 

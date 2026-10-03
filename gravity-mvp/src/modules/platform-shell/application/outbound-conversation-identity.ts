@@ -110,10 +110,18 @@ export async function prepareOutboundConversationV1(
     }
 
     const metadata = record(chat.metadata)
+    // MAX keeps both sources unchanged. For Telegram, Chat.chatType is the single
+    // canonical private/group source: `metadata.chatKind` is carried by no
+    // production Telegram row, and the conversation adapter never writes metadata
+    // onto an existing row, so demanding it refused every Telegram send forever
+    // instead of ever self-healing.
     if (
-        (channel === 'max' || channel === 'telegram')
+        channel === 'max'
         && (chat.chatType !== 'private' || metadata.chatKind !== 'private')
     ) {
+        throw new Error('CONTACT_CONVERSATION_NOT_PRIVATE')
+    }
+    if (channel === 'telegram' && chat.chatType !== 'private') {
         throw new Error('CONTACT_CONVERSATION_NOT_PRIVATE')
     }
     const declaredProviderAccountId = exactNonEmptyString(metadata.providerAccountId)
