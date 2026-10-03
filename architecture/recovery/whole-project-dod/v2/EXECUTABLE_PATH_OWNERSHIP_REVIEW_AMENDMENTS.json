@@ -535,6 +535,42 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "messaging-s1-shared-retry-safety-10318827-20261003",
+      "reviewed_at": "2026-10-03T00:00:00Z",
+      "reviewed_by": "MESSAGING_S1_SHARED_RETRY_SAFETY_IMPLEMENTER_20261003",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_S1_LIGHTWEIGHT_GOVERNANCE_RESOLUTION_20261003",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Records the S1 shared retry-safety candidate on the production Gravity baseline 10318827. The effective lineage it extends is the immutable 2026-08-13 review, amendments 1-5, current-review epoch 1 (2,511 -> 2,519) and amendment 6, messaging-max-inbound-reliability-final-335cdae7-20261001 (2,519 -> 2,520), which is the tail of this tree. The production successor 04053538 appends a sibling after that same tail, telegram-driver-linking-person-confirmation-ux-10318827-20261002: a rebind-only amendment of two routes S1 does not touch, adding no surface and leaving the current-review epochs byte-identical, so its current triple is this amendment's predecessor triple too. This development evidence is baseline-local: it does not restate, absorb or reorder that sibling, and it is not landing evidence; on the landing lineage this amendment is appended after the sibling, with predecessor and current re-derived there. No current-review epoch is needed, because every surface added here is context-owned and an epoch exists only to admit new exact-inventory assignments. It adds eight tracked executable surfaces, all selected by the messaging context manifest and therefore context-owned, with no explicit ownership assignment: the operator retry capability gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.ts, its server action gravity-mvp/src/app/messages/message-retry-actions.ts, the composer send-state helper gravity-mvp/src/app/messages/hooks/outbound-send-state.ts, and five tests (operator-delivery-retry.test.ts, delivery-recovery-operations.postgres.test.ts, shared-retry-safety.test.ts, shared-retry-safety.postgres.test.ts under modules/messaging/public/v1, and app/messages/components/MobileTextReply.test.tsx). They move the tracked executable denominator from 2,520 to 2,528, measured with the repository's own tracked-surface inventory. No assignment, exact-inventory transition, lifecycle, functional owner, governed exclusion or reviewed rationale is created or altered, the governed exclusion count stays 1,213, and this amendment carries no rebind: no reviewed exact-inventory surface changes bytes. Nothing is copied from main's mobile-text-reply amendment; the triple is this repository's own derivation over this tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2520,
+        "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab",
+        "coverage_sha256": "5b796ddbc65dc69e91e4fc31c60c7c1e5400ec0c738faf6a9a81c24f5784fd77"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2528,
+        "tracked_inventory_sha256": "2f866c21ca4ed1fc1e063684bbfb5fa2b25c4b7bced638a26536de7abe1c3b84",
+        "coverage_sha256": "c8d7b69b5f5366ee90c79fce4b3a234fc5bd9ae2381862b5d2be432a0670c8cb"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
