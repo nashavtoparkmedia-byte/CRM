@@ -164,6 +164,7 @@ import {
     checkTelegramReachability,
     importTelegramHistory,
     initTelegramListeners,
+    pauseTelegramConnection,
     resumeTelegramConnection,
     sendTelegramMedia,
     sendTelegramMessage,
@@ -861,71 +862,87 @@ describe('GramJS private conversation identity admission', () => {
     // A valid provider message is stored before any Contact or Driver work, and
     // no enrichment outcome, duplicate, race, restart or catch-up failure can
     // make it disappear or store it twice.
-    describe('TG-1 persist-first MTProto ingress', () => {
-        const RUNTIME_SLOT = Symbol.for('yoko.telegram.mtproto-runtime.v1')
+    const RUNTIME_SLOT = Symbol.for('yoko.telegram.mtproto-runtime.v1')
 
-        type StoredRow = { id: string, chatId: string, externalId: string, direction: string, content: string }
+    type StoredRow = {
+        id: string
+        chatId: string
+        externalId: string
+        direction: string
+        content: string
+        sentAt: Date
+    }
 
-        // An in-memory Message table with the real unique key on externalId.
-        function useMessageStore() {
-            const rows = new Map<string, StoredRow>()
-            mocks.createMessage.mockImplementation(async (command: StoredRow) => {
-                if (rows.has(command.externalId)) {
-                    throw Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
-                }
-                const row = {
-                    id: `stored-${rows.size + 1}`,
-                    chatId: command.chatId,
-                    externalId: command.externalId,
-                    direction: command.direction,
-                    content: command.content,
-                }
-                rows.set(command.externalId, row)
-                return { message: row }
-            })
-            mocks.messageFindFirst.mockImplementation(async ({ where }: { where: Record<string, any> }) => {
-                const keys = where.externalId
-                    ? [where.externalId]
-                    : (where.OR ?? []).map((arm: Record<string, unknown>) => arm.externalId).filter(Boolean)
-                for (const key of keys) {
-                    const row = rows.get(key)
-                    if (row) return row
-                }
-                return null
-            })
-            return rows
-        }
-
-        function enrichmentBlockedLogs() {
-            return mocks.opsLog.mock.calls.filter(call => call[1] === 'telegram_mtproto_enrichment_blocked')
-        }
-
-        function catchUpSummaries(connectionId: string) {
-            return mocks.opsLog.mock.calls
-                .filter(call => call[1] === 'telegram_mtproto_catchup_summary' && call[2]?.connectionId === connectionId)
-                .map(call => call[2])
-        }
-
-        async function waitForCatchUp(connectionId: string, count = 1) {
-            await vi.waitFor(() => expect(catchUpSummaries(connectionId).length).toBeGreaterThanOrEqual(count))
-            return catchUpSummaries(connectionId)[count - 1]
-        }
-
-        function listenerErrors() {
-            return (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls
-                .filter(call => String(call[0]).startsWith('[TG-LISTENER] Error'))
-        }
-
-        function catchUpMessage(peerId: string, id: number, out = false) {
-            return {
-                out,
-                id,
-                peerId: { userId: BigInt(peerId) },
-                message: `catch-up ${peerId}/${id}`,
-                date: Math.floor(Date.now() / 1000) - 600 + id,
+    // Does one Prisma where-arm match a stored row? Equality per field, plus the
+    // gte/lte range a content window uses, so any dedupe arm is evaluated as
+    // the database would evaluate it.
+    function storedArmMatches(row: StoredRow, arm: Record<string, any>): boolean {
+        return Object.entries(arm).every(([field, expected]) => {
+            if (field === 'sentAt') {
+                const at = row.sentAt.getTime()
+                return (expected.gte === undefined || at >= expected.gte.getTime())
+                    && (expected.lte === undefined || at <= expected.lte.getTime())
             }
-        }
+            return (row as Record<string, unknown>)[field] === expected
+        })
+    }
 
+    // An in-memory Message table with the real unique key on externalId.
+    function useMessageStore() {
+        const rows = new Map<string, StoredRow>()
+        mocks.createMessage.mockImplementation(async (command: StoredRow) => {
+            if (rows.has(command.externalId)) {
+                throw Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
+            }
+            const row = {
+                id: `stored-${rows.size + 1}`,
+                chatId: command.chatId,
+                externalId: command.externalId,
+                direction: command.direction,
+                content: command.content,
+                sentAt: command.sentAt,
+            }
+            rows.set(command.externalId, row)
+            return { message: row }
+        })
+        mocks.messageFindFirst.mockImplementation(async ({ where }: { where: Record<string, any> }) => {
+            const arms: Array<Record<string, any>> = where.OR ?? [where]
+            return [...rows.values()].find(row => arms.some(arm => storedArmMatches(row, arm))) ?? null
+        })
+        return rows
+    }
+
+    function enrichmentBlockedLogs() {
+        return mocks.opsLog.mock.calls.filter(call => call[1] === 'telegram_mtproto_enrichment_blocked')
+    }
+
+    function catchUpSummaries(connectionId: string) {
+        return mocks.opsLog.mock.calls
+            .filter(call => call[1] === 'telegram_mtproto_catchup_summary' && call[2]?.connectionId === connectionId)
+            .map(call => call[2])
+    }
+
+    async function waitForCatchUp(connectionId: string, count = 1) {
+        await vi.waitFor(() => expect(catchUpSummaries(connectionId).length).toBeGreaterThanOrEqual(count))
+        return catchUpSummaries(connectionId)[count - 1]
+    }
+
+    function listenerErrors() {
+        return (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls
+            .filter(call => String(call[0]).startsWith('[TG-LISTENER] Error'))
+    }
+
+    function catchUpMessage(peerId: string, id: number, out = false) {
+        return {
+            out,
+            id,
+            peerId: { userId: BigInt(peerId) },
+            message: `catch-up ${peerId}/${id}`,
+            date: Math.floor(Date.now() / 1000) - 600 + id,
+        }
+    }
+
+    describe('TG-1 persist-first MTProto ingress', () => {
         describe('enrichment failure after the provider event', () => {
             test('inbound persists when the link throws DRIVER_MISMATCH; no person write, side effects still run', async () => {
                 const connectionId = `tg1-driver-mismatch-${connectionSequence}`
@@ -1104,6 +1121,7 @@ describe('GramJS private conversation identity admission', () => {
                     externalId: 'telegram:7111:42:1001',
                     direction: 'inbound',
                     content: 'inbound exact identity',
+                    sentAt: new Date(),
                 })
                 mocks.messageFindFirst.mockResolvedValueOnce(null)
 
@@ -1453,6 +1471,7 @@ describe('GramJS private conversation identity admission', () => {
 
             test('a quote in the exact current form for this live account and peer is sent as a reply', async () => {
                 const { connectionId, chat } = replySetup()
+                mocks.getMessages.mockResolvedValue([{ id: 5021, date: 1_700_000_000 }])
 
                 await expect(sendTelegramMessage(PEER, 'answer', connectionId, {
                     chatId: chat.id,
@@ -1466,7 +1485,6 @@ describe('GramJS private conversation identity admission', () => {
             })
 
             test.each([
-                ['a legacy bare id', '5021'],
                 ['another account', `telegram:9999:${PEER}:5021`],
                 ['another peer', `telegram:${ACCOUNT}:42:5021`],
                 ['a Bot-lane event key', `telegram:${ACCOUNT}:${PEER}:update%3A77`],
@@ -1483,6 +1501,365 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.sendMessage).not.toHaveBeenCalled()
                 expect(mocks.getEntity).not.toHaveBeenCalled()
             })
+        })
+    })
+    // ── TG-2: MTProto reliability completion ─────────────────────────────
+    // F4 key-only inbound dedupe, F5 peer resolution with one sweep, F6 the
+    // channel's own quote parser with a live addressability proof.
+    describe('TG-2 MTProto reliability completion', () => {
+        // The published S1 adapter outcome token (MessageService, S1 contract).
+        const S1_OUTCOME_CODE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(SEND_OUTCOME_UNKNOWN|NOT_DISPATCHED|REFUSED)\b/g
+        const s1Outcomes = (error: unknown) => [...String((error as Error)?.message ?? error).matchAll(S1_OUTCOME_CODE)].map(match => match[1])
+
+        async function rejection(promise: Promise<unknown>): Promise<Error> {
+            try {
+                await promise
+            } catch (error) {
+                return error as Error
+            }
+            throw new Error('expected a rejection')
+        }
+
+        function sweepCalls() {
+            return mocks.getDialogs.mock.calls.filter(call => (call[0] as { limit?: number })?.limit === 200)
+        }
+
+        function sendSetup(peerId: string, providerAccountId = '7200') {
+            const connectionId = `tg2-send-${peerId}-${connectionSequence}`
+            const chat = {
+                ...exactChat({
+                    externalChatId: `telegram:${peerId}`,
+                    metadata: { chatKind: 'private', peerId, providerAccountId, connectionId },
+                }),
+                id: `chat-tg2-${peerId}`,
+                contactId: `contact-tg2-${peerId}`,
+                contactIdentityId: `identity-tg2-${peerId}`,
+            }
+            mocks.providerAccountId = providerAccountId
+            mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+            mocks.chatFindUnique.mockResolvedValue(chat)
+            mocks.prepareOutbound.mockResolvedValue({
+                chatId: chat.id,
+                channel: 'telegram',
+                providerAccountId,
+                connectionId,
+                identityTarget: peerId,
+                target: peerId,
+            })
+            return { connectionId, chat }
+        }
+
+        describe('F4 key-only inbound dedupe', () => {
+            test('two identical texts with distinct provider ids within seconds are two rows', async () => {
+                const rows = useMessageStore()
+                const handler = await initializeListener(`tg2-repeat-${connectionSequence}`, '7201')
+                const first = { ...inboundMessage('42'), id: 3001, message: 'да' }
+                const second = { ...first, id: 3002, date: first.date + 1 }
+
+                await handler({ message: first })
+                await handler({ message: second })
+
+                expect([...rows.keys()]).toEqual(['telegram:7201:42:3001', 'telegram:7201:42:3002'])
+            })
+
+            test('the same word twice within 5 s, then 1..6, arrives as 8 rows in order (catch-up replay)', async () => {
+                const rows = useMessageStore()
+                const connectionId = `tg2-burst-${connectionSequence}`
+                mocks.providerAccountId = '7202'
+                mocks.telegramConnectionFindMany.mockResolvedValue([connection(connectionId)])
+                const base = Math.floor(Date.now() / 1000) - 120
+                const sent = ['ок', 'ок', '1', '2', '3', '4', '5', '6'].map((text, index) => ({
+                    out: false,
+                    id: 4001 + index,
+                    peerId: { userId: 77n },
+                    message: text,
+                    date: base + (index < 2 ? 0 : index),
+                }))
+                mocks.getDialogs.mockResolvedValue([{ isUser: true, entity: { id: 77n }, unreadCount: 8 }])
+                mocks.getMessages.mockResolvedValue([...sent].reverse())
+
+                await initTelegramListeners()
+                await waitForCatchUp(connectionId)
+
+                expect([...rows.values()].map(row => row.content)).toEqual(['ок', 'ок', '1', '2', '3', '4', '5', '6'])
+                expect(rows.size).toBe(8)
+            })
+
+            test('a replayed event is matched exactly to its legacy bare row in the same chat, and only there', async () => {
+                const rows = useMessageStore()
+                const handler = await initializeListener(`tg2-legacy-${connectionSequence}`, '7203')
+                const stamp = new Date()
+                rows.set('5501', { id: 'legacy-in-42', chatId: 'chat:telegram:42', externalId: '5501', direction: 'inbound', content: 'старый текст', sentAt: stamp })
+                rows.set('5502', { id: 'legacy-in-99', chatId: 'chat:telegram:99', externalId: '5502', direction: 'inbound', content: 'другой чат', sentAt: stamp })
+
+                await handler({ message: { ...inboundMessage('42'), id: 5501, message: 'старый текст' } })
+                await handler({ message: { ...inboundMessage('42'), id: 5502, message: 'другой чат' } })
+
+                expect(rows.has('telegram:7203:42:5501')).toBe(false)
+                expect(rows.has('telegram:7203:42:5502')).toBe(true)
+                expect(rows.size).toBe(3)
+            })
+
+            test('a reworded event with an already stored provider id stays one row', async () => {
+                const rows = useMessageStore()
+                const handler = await initializeListener(`tg2-reworded-${connectionSequence}`, '7204')
+
+                await handler({ message: { ...inboundMessage('42'), id: 6001, message: 'исходный' } })
+                await handler({ message: { ...inboundMessage('42'), id: 6001, message: 'отредактированный', date: Math.floor(Date.now() / 1000) + 30 } })
+
+                expect(rows.size).toBe(1)
+                expect(mocks.createMessage).toHaveBeenCalledOnce()
+            })
+
+            test('history import stores identical inbound texts by key and matches legacy bare rows exactly', async () => {
+                const rows = useMessageStore()
+                const connectionId = `tg2-import-${connectionSequence}`
+                const providerAccountId = '7205'
+                mocks.providerAccountId = providerAccountId
+                mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+                const date = Math.floor(Date.now() / 1000) - 60
+                rows.set('7001', { id: 'legacy-7001', chatId: 'chat:telegram:128', externalId: '7001', direction: 'inbound', content: 'привет', sentAt: new Date(date * 1000) })
+                mocks.getDialogs
+                    .mockResolvedValueOnce([])
+                    .mockResolvedValueOnce([{ isUser: true, entity: { id: 128n, firstName: 'Peer' } }])
+                mocks.getMessages.mockResolvedValue([
+                    { out: false, id: 7003, message: 'да', date: date + 2 },
+                    { out: false, id: 7002, message: 'да', date: date + 1 },
+                    { out: false, id: 7001, message: 'привет', date },
+                ])
+
+                await importTelegramHistory('job-tg2-keys', 'available_history', undefined, connectionId)
+
+                expect([...rows.keys()].sort()).toEqual(['7001', `telegram:${providerAccountId}:128:7002`, `telegram:${providerAccountId}:128:7003`])
+                expect(mocks.patchImportJob).toHaveBeenLastCalledWith(expect.objectContaining({
+                    patch: expect.objectContaining({
+                        detailsJson: expect.objectContaining({ newMessages: 2, failedMessages: 0 }),
+                    }),
+                }))
+            })
+        })
+
+        describe('F5 peer resolution', () => {
+            test('a peer missing from the entity cache resolves after one sweep and is sent once', async () => {
+                const peerId = '880001'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity
+                    .mockRejectedValueOnce(new Error(`Could not find the input entity for {"userId":"${peerId}"}`))
+                    .mockImplementation(async target => ({ id: target }))
+
+                await expect(sendTelegramMessage(peerId, 'после рестарта', connectionId, { chatId: chat.id }))
+                    .resolves.toMatchObject({ success: true, externalId: `telegram:7200:${peerId}:9001` })
+
+                expect(sweepCalls()).toHaveLength(1)
+                expect(mocks.getEntity).toHaveBeenCalledTimes(2)
+                expect(mocks.sendMessage).toHaveBeenCalledOnce()
+                expect(mocks.opsLog).toHaveBeenCalledWith('info', 'telegram_mtproto_peer_sweep', expect.objectContaining({
+                    connectionId,
+                    ok: true,
+                }))
+            })
+
+            test('a peer still unresolved after a sweep that answered is refused, terminal, never sent', async () => {
+                const peerId = '880002'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+
+                const error = await rejection(sendTelegramMessage(peerId, 'бот-чат', connectionId, { chatId: chat.id }))
+
+                expect(error.message).toContain('TELEGRAM_PEER_UNRESOLVED')
+                expect(s1Outcomes(error)).toEqual(['REFUSED'])
+                expect(error.message.length).toBeLessThanOrEqual(120)
+                expect(sweepCalls()).toHaveLength(1)
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+                expect(mocks.recordReachability).not.toHaveBeenCalled()
+            })
+
+            test('a sweep that does not answer leaves the send safe to redeliver and unsent', async () => {
+                const peerId = '880003'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+                mocks.getDialogs.mockImplementation(async (input: { limit?: number }) => {
+                    if (input?.limit === 200) throw new Error('FLOOD_WAIT_30')
+                    return []
+                })
+
+                const error = await rejection(sendTelegramMessage(peerId, 'текст', connectionId, { chatId: chat.id }))
+
+                expect(error.message).toContain('TELEGRAM_PEER_UNRESOLVED')
+                expect(s1Outcomes(error)).toEqual(['NOT_DISPATCHED'])
+                expect(error.message.length).toBeLessThanOrEqual(120)
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+                expect(mocks.opsLog).toHaveBeenCalledWith('warn', 'telegram_mtproto_peer_sweep', expect.objectContaining({ ok: false, error: 'FLOOD_WAIT_30' }))
+            })
+
+            test('concurrent misses share one sweep, and a second sweep waits 10 minutes', async () => {
+                vi.useFakeTimers({ toFake: ['Date'] })
+                try {
+                    const peerId = '880004'
+                    const { connectionId, chat } = sendSetup(peerId)
+                    mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+
+                    const [first, second] = await Promise.all([
+                        rejection(sendTelegramMessage(peerId, 'один', connectionId, { chatId: chat.id })),
+                        rejection(sendTelegramMessage(peerId, 'два', connectionId, { chatId: chat.id })),
+                    ])
+                    expect(s1Outcomes(first)).toEqual(['REFUSED'])
+                    expect(s1Outcomes(second)).toEqual(['REFUSED'])
+                    expect(sweepCalls()).toHaveLength(1)
+
+                    vi.setSystemTime(Date.now() + 9 * 60_000)
+                    await rejection(sendTelegramMessage(peerId, 'три', connectionId, { chatId: chat.id }))
+                    expect(sweepCalls()).toHaveLength(1)
+
+                    vi.setSystemTime(Date.now() + 2 * 60_000)
+                    await rejection(sendTelegramMessage(peerId, 'четыре', connectionId, { chatId: chat.id }))
+                    expect(sweepCalls()).toHaveLength(2)
+                    expect(mocks.sendMessage).not.toHaveBeenCalled()
+                } finally {
+                    vi.useRealTimers()
+                }
+            })
+
+            test('a replaced client never inherits the previous client\'s sweep window', async () => {
+                const peerId = '880007'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+
+                await rejection(sendTelegramMessage(peerId, 'до замены', connectionId, { chatId: chat.id }))
+                expect(sweepCalls()).toHaveLength(1)
+
+                // Pause and resume replace the GramJS client; its entity cache is cold.
+                await pauseTelegramConnection(connectionId)
+                await resumeTelegramConnection(connectionId)
+                const clientsBefore = mocks.clients.length
+                mocks.getEntity
+                    .mockRejectedValueOnce(new Error('Could not find the input entity'))
+                    .mockImplementation(async target => ({ id: target }))
+
+                await expect(sendTelegramMessage(peerId, 'после замены', connectionId, { chatId: chat.id }))
+                    .resolves.toMatchObject({ success: true })
+                expect(mocks.clients.length).toBe(clientsBefore)
+                expect(sweepCalls()).toHaveLength(2)
+                expect(mocks.sendMessage).toHaveBeenCalledOnce()
+            })
+
+            test('media and reaction resolve through the same sweep and refuse the same way', async () => {
+                const peerId = '880005'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+                const proof = { chatId: chat.id, providerAccountId: '7200', identityTarget: peerId }
+
+                const media = await rejection(sendTelegramMedia(peerId, 'ZmFrZQ==', 'a.bin', 'application/octet-stream', undefined, connectionId, proof))
+                const reaction = await rejection(sendTelegramReaction({
+                    target: peerId,
+                    messageId: `telegram:7200:${peerId}:301`,
+                    emoji: '👍',
+                    remove: false,
+                    connectionId,
+                    proof,
+                }))
+
+                expect(s1Outcomes(media)).toEqual(['REFUSED'])
+                expect(s1Outcomes(reaction)).toEqual(['REFUSED'])
+                expect(sweepCalls()).toHaveLength(1)
+                expect(mocks.sendFile).not.toHaveBeenCalled()
+                expect(mocks.invoke).not.toHaveBeenCalled()
+            })
+
+            test('an entity that resolves to another peer is a binding mismatch and never triggers a sweep', async () => {
+                const peerId = '880006'
+                const { connectionId, chat } = sendSetup(peerId)
+                mocks.getEntity.mockResolvedValue({ id: 123n })
+
+                await expect(sendTelegramMessage(peerId, 'текст', connectionId, { chatId: chat.id }))
+                    .rejects.toThrow('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+                expect(sweepCalls()).toHaveLength(0)
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('F6 reply parsed by the channel and proven before dispatch', () => {
+            const PEER = '12345678901'
+            const ACCOUNT = '7210'
+            const PROVIDER_DATE = 1_700_000_000
+
+            function replySend(quotedMsgId: string) {
+                const { connectionId, chat } = sendSetup(PEER, ACCOUNT)
+                return () => sendTelegramMessage(PEER, 'ответ', connectionId, { chatId: chat.id, quotedMsgId })
+            }
+
+            test('a current-form quote of a live message in this dialog is sent as a reply', async () => {
+                const send = replySend(`telegram:${ACCOUNT}:${PEER}:5021`)
+                mocks.getMessages.mockResolvedValue([{ id: 5021, date: PROVIDER_DATE }])
+
+                await expect(send()).resolves.toMatchObject({ success: true })
+
+                expect(mocks.getMessages).toHaveBeenCalledWith(expect.objectContaining({ id: BigInt(PEER) }), { ids: [5021] })
+                expect(mocks.sendMessage).toHaveBeenCalledWith(expect.anything(), { message: 'ответ', replyTo: 5021 })
+            })
+
+            test('a legacy bare quote stored in this chat at the provider timestamp is sent as a reply', async () => {
+                const rows = useMessageStore()
+                const send = replySend('5021')
+                rows.set('5021', { id: 'legacy', chatId: `chat-tg2-${PEER}`, externalId: '5021', direction: 'inbound', content: 'старое', sentAt: new Date(PROVIDER_DATE * 1000) })
+                mocks.getMessages.mockResolvedValue([{ id: 5021, date: PROVIDER_DATE }])
+
+                await expect(send()).resolves.toMatchObject({ success: true })
+
+                expect(mocks.sendMessage).toHaveBeenCalledWith(expect.anything(), { message: 'ответ', replyTo: 5021 })
+            })
+
+            test.each([
+                ['a deleted or foreign-dialog current id (GramJS answers nothing)', `telegram:${ACCOUNT}:${PEER}:5021`, [undefined], null],
+                ['a legacy bare id this chat never stored', '5021', [{ id: 5021, date: PROVIDER_DATE }], null],
+                ['a legacy bare id stored in another chat', '5021', [{ id: 5021, date: PROVIDER_DATE }], 'chat-other'],
+                ['a legacy bare id numbered by another account (timestamp differs)', '5021', [{ id: 5021, date: PROVIDER_DATE + 3600 }], 'same-chat'],
+            ])('%s is refused, terminal, never sent', async (_label, quotedMsgId, providerAnswer, storedIn) => {
+                const rows = useMessageStore()
+                const send = replySend(quotedMsgId)
+                if (storedIn) {
+                    rows.set('5021', {
+                        id: 'legacy',
+                        chatId: storedIn === 'same-chat' ? `chat-tg2-${PEER}` : storedIn,
+                        externalId: '5021',
+                        direction: 'inbound',
+                        content: 'старое',
+                        sentAt: new Date(PROVIDER_DATE * 1000),
+                    })
+                }
+                mocks.getMessages.mockResolvedValue(providerAnswer)
+
+                const error = await rejection(send())
+
+                expect(error.message).toContain('REPLY_TARGET_NOT_ADDRESSABLE')
+                expect(s1Outcomes(error)).toEqual(['REFUSED'])
+                expect(error.message.length).toBeLessThanOrEqual(120)
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+            })
+
+            test('a quote the provider cannot be asked about leaves the send unsent and safe to redeliver', async () => {
+                const send = replySend(`telegram:${ACCOUNT}:${PEER}:5021`)
+                mocks.getMessages.mockRejectedValue(new Error('Request was unsuccessful 3 time(s)'))
+
+                const error = await rejection(send())
+
+                expect(error.message).toContain('REPLY_TARGET_UNVERIFIED')
+                expect(s1Outcomes(error)).toEqual(['NOT_DISPATCHED'])
+                expect(error.message.length).toBeLessThanOrEqual(120)
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+            })
+
+            test('a malformed quote is refused before any provider call', async () => {
+                const send = replySend('telegram:other:shape')
+
+                const error = await rejection(send())
+
+                expect(s1Outcomes(error)).toEqual(['REFUSED'])
+                expect(mocks.getEntity).not.toHaveBeenCalled()
+                expect(mocks.getMessages).not.toHaveBeenCalled()
+                expect(mocks.sendMessage).not.toHaveBeenCalled()
+            })
+
         })
     })
 })
