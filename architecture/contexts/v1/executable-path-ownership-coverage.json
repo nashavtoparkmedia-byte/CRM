@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2520,
-    "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab"
+    "tracked_executable_surfaces": 2528,
+    "tracked_inventory_sha256": "2f866c21ca4ed1fc1e063684bbfb5fa2b25c4b7bced638a26536de7abe1c3b84"
   },
   "governed_exclusions": [
     {
@@ -281,10 +281,10 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "5b796ddbc65dc69e91e4fc31c60c7c1e5400ec0c738faf6a9a81c24f5784fd77",
+  "coverage_sha256": "c8d7b69b5f5366ee90c79fce4b3a234fc5bd9ae2381862b5d2be432a0670c8cb",
   "summary": {
-    "tracked_executable_surfaces": 2520,
-    "context_owned_paths": 1307,
+    "tracked_executable_surfaces": 2528,
+    "context_owned_paths": 1315,
     "governed_exclusion_paths": 1213
   },
   "reviewed_exact_inventory_materialization": {
@@ -292,12 +292,12 @@
     "decision_registry_sha256": "5c826321943cdbdd43dfa73d9cd68ad351b5197c89b3c469f77f7d0f8f1ada5e",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
-    "tracked_inventory_sha256": "d2625e8998c924cfff777e9026b8781e299f9d908ba7c54d8d6549bee62701ab",
+    "tracked_inventory_sha256": "2f866c21ca4ed1fc1e063684bbfb5fa2b25c4b7bced638a26536de7abe1c3b84",
     "exact_inventory_change_count": 4,
     "reviewed_assignment_count": 294,
     "amendments_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
-    "amendments_sha256": "9996be07df40c55be824ecdeb6a43d97a201577e20b49b11e710edb39cb95fbd",
-    "amendment_count": 6,
+    "amendments_sha256": "463475486293f62db29aa0be07fea85eccdd9cebd624ec0ec08b92bc077f503f",
+    "amendment_count": 7,
     "current_reviews_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_CURRENT_REVIEWS.json",
     "current_reviews_sha256": "a43650ec92ad3db60061a947aeaeec7aa614e5eb448e7be32aebb5cd8024349d",
     "current_review_epoch_count": 1,
