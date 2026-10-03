@@ -415,6 +415,10 @@ type TelegramMtprotoRuntime = {
     hardRestartLastAt: Map<string, number>
     catchUps: Map<string, Promise<TelegramCatchUpSummary>>
     lastCatchUpAt: Map<string, number>
+    // The entity cache a sweep warms belongs to one GramJS client, so sweep
+    // state is only ever reused for the very client that produced it.
+    peerSweeps: Map<string, { client: TelegramClient, sweep: Promise<boolean> }>
+    lastPeerSweep: Map<string, { client: TelegramClient, at: number, ok: boolean }>
     initPromise: Promise<void> | null
     healthInterval: ReturnType<typeof setInterval> | null
 }
@@ -443,11 +447,18 @@ function telegramMtprotoRuntime(): TelegramMtprotoRuntime {
             hardRestartLastAt: new Map(),
             catchUps: new Map(),
             lastCatchUpAt: new Map(),
+            peerSweeps: new Map(),
+            lastPeerSweep: new Map(),
             initPromise: null,
             healthInterval: null,
         }
     }
-    return host[TELEGRAM_MTPROTO_RUNTIME_SLOT]
+    const runtime = host[TELEGRAM_MTPROTO_RUNTIME_SLOT]
+    // A slot created by an older copy of this module (development reload) gains
+    // the state it did not have instead of failing on it.
+    runtime.peerSweeps ??= new Map()
+    runtime.lastPeerSweep ??= new Map()
+    return runtime
 }
 
 const tgRuntime = telegramMtprotoRuntime()
@@ -596,25 +607,69 @@ function exactTelegramProviderMessageId(
     return /^\d+$/.test(raw) && raw !== '0' ? raw : null
 }
 
+type TelegramReplyTarget = {
+    messageId: number
+    // A bare id from the pre-namespace lane carries no account or peer.
+    legacy: boolean
+}
+
 /**
- * The provider message id a reply addresses. Only the channel's own exact form
- * for this live account and peer qualifies; anything else (a legacy bare id, a
- * Bot-lane key, another account's or peer's id, or garbage) is not addressable,
- * and the send is refused rather than silently sent without the quote.
+ * Parses a requested quote with this channel's own id forms: the current
+ * `telegram:<account>:<peer>:<id>` for the live account and this peer, or a
+ * legacy bare MTProto id. Anything else (a Bot-lane key, another account's or
+ * peer's id, zero, an unsafe integer, garbage) is not addressable, and the send
+ * is refused rather than silently sent without the quote.
  */
-function telegramReplyTargetMessageId(
+function telegramReplyTarget(
     quotedMsgId: string,
     providerAccountId: string | null,
     peerId: string | null,
-): number {
-    const raw = providerAccountId && peerId
+): TelegramReplyTarget {
+    const current = providerAccountId && peerId
         ? exactTelegramProviderMessageId(quotedMsgId, providerAccountId, peerId)
         : null
+    const raw = current ?? (/^\d+$/.test(quotedMsgId) ? quotedMsgId : null)
     const messageId = raw ? Number.parseInt(raw, 10) : Number.NaN
     if (!Number.isSafeInteger(messageId) || messageId <= 0 || String(messageId) !== raw) {
-        throw new Error('REPLY_TARGET_NOT_ADDRESSABLE')
+        throw telegramSendError('REPLY_TARGET_NOT_ADDRESSABLE', TELEGRAM_MTPROTO_REFUSED, 'цитату нельзя адресовать в Telegram')
     }
-    return messageId
+    return { messageId, legacy: current === null }
+}
+
+/**
+ * Proves, on the live client and before dispatch, that the quoted message is a
+ * live message of this very dialog: GramJS answers nothing for a deleted id or
+ * an id of another peer. A legacy bare id must also be the same message the
+ * conversation stored under it (same provider timestamp), because the bare
+ * form cannot show which account numbered it.
+ */
+async function proveTelegramReplyTarget(
+    client: TelegramClient,
+    entity: any,
+    target: TelegramReplyTarget,
+    chatId: string,
+    quotedMsgId: string,
+): Promise<number> {
+    let providerMessage: any
+    try {
+        [providerMessage] = await client.getMessages(entity, { ids: [target.messageId] })
+    } catch (error: unknown) {
+        console.warn(`[TG-SEND] reply target lookup failed msgId=${target.messageId}: ${error instanceof Error ? error.message : String(error)}`)
+        throw telegramSendError('REPLY_TARGET_UNVERIFIED', TELEGRAM_MTPROTO_NOT_DISPATCHED, 'цитата не проверена')
+    }
+    const refused = () => telegramSendError('REPLY_TARGET_NOT_ADDRESSABLE', TELEGRAM_MTPROTO_REFUSED, 'цитату нельзя адресовать в Telegram')
+    if (!providerMessage || providerMessage.id !== target.messageId) throw refused()
+    if (target.legacy) {
+        const stored = await (prisma.message as any).findFirst({
+            where: { chatId, externalId: quotedMsgId },
+            select: { sentAt: true },
+        })
+        const providerDate = validateTgDate(providerMessage.date)
+        if (!stored || !providerDate || !(stored.sentAt instanceof Date) || stored.sentAt.getTime() !== providerDate.getTime()) {
+            throw refused()
+        }
+    }
+    return target.messageId
 }
 
 async function rejectTelegramConversationCollision(
@@ -816,6 +871,25 @@ function telegramNonPersonPeerReason(
     if (peerId === TELEGRAM_SERVICE_NOTIFICATIONS_PEER_ID) return 'service'
     if (entity && typeof entity === 'object' && (entity as { bot?: unknown }).bot === true) return 'bot'
     return null
+}
+
+/**
+ * Inbound dedupe is by provider key only: the exact current id, or the exact
+ * legacy bare id (the raw MTProto id the pre-namespace lane stored) in this
+ * same conversation. Message ids in one account's private dialog are unique
+ * across both directions, so the legacy arm cannot match another message. A
+ * content/time window is never a key: it dropped genuine repeats (the same
+ * word twice, two uncaptioned photos) and missed reworded duplicates.
+ */
+function telegramInboundKeyArms(
+    conversationId: string,
+    storedExternalId: string,
+    rawProviderMessageId: string | undefined,
+): Array<Record<string, string>> {
+    return [
+        { externalId: storedExternalId },
+        ...(rawProviderMessageId ? [{ chatId: conversationId, externalId: rawProviderMessageId }] : []),
+    ]
 }
 
 function isUniqueConstraintViolation(error: unknown): boolean {
@@ -1032,23 +1106,11 @@ async function processInboundTelegramMessage(
             lastMessageAt: now,
         })
         receipt.chatId = conversation.id
+        const storedExternalId = externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`
 
-        // 3. DE-DUPLICATION: by externalId or content+time
+        // 3. DE-DUPLICATION: by the exact provider key only
         const existing = await (prisma.message as any).findFirst({
-            where: {
-                OR: [
-                    ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                    {
-                        chatId: conversation.id,
-                        content: text,
-                        direction: 'inbound',
-                        sentAt: {
-                            gte: new Date(now.getTime() - 5000),
-                            lte: new Date(now.getTime() + 5000)
-                        }
-                    }
-                ]
-            }
+            where: { OR: telegramInboundKeyArms(conversation.id, storedExternalId, rawExternalMsgId) },
         })
 
         if (existing) {
@@ -1084,7 +1146,7 @@ async function processInboundTelegramMessage(
         }
 
         const msgType = mediaInfo?.type || 'text'
-        const savedMsg = await createTelegramProviderMessage({ chatId: conversation.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
+        const savedMsg = await createTelegramProviderMessage({ chatId: conversation.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: storedExternalId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
         if (!savedMsg) {
             console.log(`[${loggerPrefix}] DB-DEDUP: insert race on msgId=${externalMsgId}`)
             receipt.outcome = 'duplicate'
@@ -1769,6 +1831,101 @@ async function createTelegramClient(connection: any): Promise<TelegramClient> {
     return client
 }
 
+// Adapter outcome codes from the Messaging send contract (S1): a refused send
+// is terminal, a send that never left is safe to redeliver. An untyped error
+// would be treated as an unknown outcome. Each code is followed by a short
+// operator-facing reason; the failed row shows the first 120 characters.
+const TELEGRAM_MTPROTO_REFUSED = 'TELEGRAM_MTPROTO_REFUSED'
+const TELEGRAM_MTPROTO_NOT_DISPATCHED = 'TELEGRAM_MTPROTO_NOT_DISPATCHED'
+
+function telegramSendError(reason: string, outcome: string, operatorText: string): Error {
+    return new Error(`${reason} (${outcome}): ${operatorText}`)
+}
+
+const TG_PEER_SWEEP_DIALOG_LIMIT = 200
+const TG_PEER_SWEEP_INTERVAL_MS = 10 * 60 * 1000
+
+/**
+ * One dialog sweep per client. Loading the account's dialogs puts their peers
+ * into this client's in-memory entity cache, which is all an exact numeric
+ * peer can be resolved from after a restart (StringSession persists none).
+ * Single-flight, and at most one per 10 minutes: inside that window the last
+ * result is reused. A replaced client starts with a cold cache, so it never
+ * inherits a sweep it did not run. Resolves true when the account answered.
+ */
+function sweepTelegramPeers(client: TelegramClient, connectionId: string): Promise<boolean> {
+    const inFlight = tgRuntime.peerSweeps.get(connectionId)
+    if (inFlight?.client === client) return inFlight.sweep
+    const last = tgRuntime.lastPeerSweep.get(connectionId)
+    if (last?.client === client && Date.now() - last.at < TG_PEER_SWEEP_INTERVAL_MS) return Promise.resolve(last.ok)
+    const startedAt = Date.now()
+    const sweep: Promise<boolean> = Promise.resolve()
+        .then(() => client.getDialogs({ limit: TG_PEER_SWEEP_DIALOG_LIMIT }))
+        .then(
+            (dialogs) => ({ ok: true, dialogs: dialogs.length, error: undefined as string | undefined }),
+            (error: unknown) => ({ ok: false, dialogs: 0, error: error instanceof Error ? error.message : String(error) }),
+        )
+        .then(async (result) => {
+            tgRuntime.lastPeerSweep.set(connectionId, { client, at: startedAt, ok: result.ok })
+            console[result.ok ? 'log' : 'warn'](`[TG-PEER] sweep conn=${connectionId} ok=${result.ok} dialogs=${result.dialogs}${result.error ? ` error=${result.error}` : ''}`)
+            const opsLog = await loadTelegramOpsLog()
+            opsLog(result.ok ? 'info' : 'warn', 'telegram_mtproto_peer_sweep', {
+                channel: 'telegram',
+                connectionId,
+                ok: result.ok,
+                dialogs: result.dialogs,
+                durationMs: Date.now() - startedAt,
+                error: result.error,
+            })
+            return result.ok
+        })
+        .finally(() => {
+            if (tgRuntime.peerSweeps.get(connectionId)?.sweep === sweep) tgRuntime.peerSweeps.delete(connectionId)
+        })
+    tgRuntime.peerSweeps.set(connectionId, { client, sweep })
+    return sweep
+}
+
+/**
+ * Resolves the exact numeric peer of an identity-preflighted conversation on
+ * the live client. A cache miss gets one dialog sweep and one retry. Still
+ * unresolved after a sweep that answered, the peer is not addressable from
+ * this account (for example a Bot-only peer): the send is refused before
+ * anything is dispatched. If the sweep itself did not answer, nothing was
+ * dispatched either and the send may be delivered again later.
+ */
+async function resolveExactTelegramPeerEntity(
+    client: TelegramClient,
+    connectionId: string,
+    peerId: string,
+): Promise<any> {
+    const lookup = async () => {
+        const entity = await client.getEntity(BigInt(peerId) as any)
+        if (entity?.id?.toString() !== peerId) {
+            throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+        }
+        return entity
+    }
+    const bindingMismatch = (error: unknown) => error instanceof Error
+        && error.message === 'CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH'
+    try {
+        return await lookup()
+    } catch (firstError: unknown) {
+        if (bindingMismatch(firstError)) throw firstError
+        console.warn(`[TG-PEER] cache miss conn=${connectionId} peer=${peerId}: ${firstError instanceof Error ? firstError.message : String(firstError)}`)
+    }
+    const swept = await sweepTelegramPeers(client, connectionId)
+    try {
+        return await lookup()
+    } catch (retryError: unknown) {
+        if (bindingMismatch(retryError)) throw retryError
+        console.warn(`[TG-PEER] unresolved conn=${connectionId} peer=${peerId} swept=${swept}: ${retryError instanceof Error ? retryError.message : String(retryError)}`)
+        throw swept
+            ? telegramSendError('TELEGRAM_PEER_UNRESOLVED', TELEGRAM_MTPROTO_REFUSED, 'собеседник недоступен в личном Telegram')
+            : telegramSendError('TELEGRAM_PEER_UNRESOLVED', TELEGRAM_MTPROTO_NOT_DISPATCHED, 'поиск диалогов не удался')
+    }
+}
+
 type ExactTelegramOutboundProof = {
     chatId: string
     providerAccountId?: string
@@ -1850,10 +2007,7 @@ async function resolveExactTelegramOutboundPeer(
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
 
-    const entity = await client.getEntity(BigInt(target) as any)
-    if (entity?.id?.toString() !== target) {
-        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
-    }
+    const entity = await resolveExactTelegramPeerEntity(client, connection.id, target)
     return { client, connection, entity, providerAccountId: liveProviderAccountId }
 }
 
@@ -1941,8 +2095,8 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         // A requested reply is a provider semantic, never a hint. It is resolved
         // before anything leaves, and a quote this exact live account and peer
         // cannot address refuses the send instead of delivering it unquoted.
-        const replyToMessageId = metadata?.quotedMsgId
-            ? telegramReplyTargetMessageId(metadata.quotedMsgId, exactProviderAccountId, exactPreparedTarget)
+        const replyTarget = metadata?.quotedMsgId
+            ? telegramReplyTarget(metadata.quotedMsgId, exactProviderAccountId, exactPreparedTarget)
             : null
 
         // Normalize target: if it's a mobile number, ensure it has '+'
@@ -1960,7 +2114,7 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
             console.log(`[TG-SEND] Resolving entity for ${target}...`)
             // If it's a numeric ID (no plus, just digits), try resolving as number
             if (exactPreparedTarget) {
-                entity = await client.getEntity(BigInt(exactPreparedTarget) as any)
+                entity = await resolveExactTelegramPeerEntity(client, connection.id, exactPreparedTarget)
             } else if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
                 try {
                     entity = await client.getEntity(BigInt(target) as any)
@@ -1971,15 +2125,10 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
                 entity = await client.getEntity(target)
             }
             console.log(`[TG-SEND] Entity resolved: ${entity.id.toString()}`)
-            if (exactPreparedTarget && entity?.id?.toString() !== exactPreparedTarget) {
-                throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
-            }
         } catch (entityErr: any) {
+            // The exact resolver has already swept and classified its answer.
+            if (exactPreparedTarget) throw entityErr
             console.warn(`[TG-SEND] getEntity FAILED for ${target}: ${entityErr.message}. Attempting import...`)
-
-            if (exactPreparedTarget) {
-                throw new Error(`Cannot resolve exact Telegram peer ${exactPreparedTarget}`)
-            }
             
             try {
                 // Try importing contact if it's a phone number
@@ -2013,6 +2162,10 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
 
         console.log(`[TG-SEND] Sending message to entity...`)
         
+        const replyToMessageId = replyTarget && metadata?.chatId && metadata.quotedMsgId
+            ? await proveTelegramReplyTarget(client, entity, replyTarget, metadata.chatId, metadata.quotedMsgId)
+            : null
+
         // Add a safety timeout for the actual sending
         const sendOpts: any = { message }
         if (replyToMessageId !== null) sendOpts.replyTo = replyToMessageId
@@ -2274,23 +2427,28 @@ export async function importTelegramHistory(
                     // One message that cannot be stored is counted and the rest of
                     // the dialog is still imported.
                     try {
-                        // Dedup
+                        // Dedup. Inbound by the exact provider key only; outbound
+                        // echo matching of CRM-sent rows stays as it is until the
+                        // Messaging evidence command owns it.
+                        const storedExternalId = externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`
                         const existing = await (prisma.message as any).findFirst({
                             where: {
-                                OR: [
-                                    ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                                    {
-                                        chatId: conversation.id,
-                                        content: msgText,
-                                        direction: isOutbound ? 'outbound' : 'inbound',
-                                        sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
-                                    }
-                                ]
+                                OR: isOutbound
+                                    ? [
+                                        ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
+                                        {
+                                            chatId: conversation.id,
+                                            content: msgText,
+                                            direction: 'outbound',
+                                            sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
+                                        }
+                                    ]
+                                    : telegramInboundKeyArms(conversation.id, storedExternalId, rawExternalMsgId),
                             }
                         })
                         if (existing) continue
 
-                        const savedHistMsg = await createTelegramProviderMessage({ chatId: conversation.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
+                        const savedHistMsg = await createTelegramProviderMessage({ chatId: conversation.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: storedExternalId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
                         if (!savedHistMsg) continue
 
                         // Download media for history import
