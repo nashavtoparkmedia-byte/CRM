@@ -16,6 +16,7 @@
       "operations": [
         "validate",
         "generate_contexts",
+        "preview_reviewed_current_denominator",
         "materialize_reviewed_current_denominator"
       ],
       "authority_sources": [

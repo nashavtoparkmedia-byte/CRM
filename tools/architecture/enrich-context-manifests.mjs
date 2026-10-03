@@ -276,6 +276,7 @@ const moduleTests = {
   identity_access: [
     command('check-identity-boundary.mjs'),
     command('check-identity-user-directory-boundary.mjs'),
+    command('check-mobile-delivery-provider-boundary.mjs'),
   ],
   max_channel: [
     command('check-driver-max-messaging-boundary.mjs'),

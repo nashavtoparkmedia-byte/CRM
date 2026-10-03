@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { CashOrderBudgetV1, CASH_ORDER_INGESTION_TIMING_V1 as T } from './cash-order-ingestion-budget'
 import {
+    isRetiredCashOrderIngestionModeV1,
     parseCashOrderIngestionConfigV1,
     parseCashOrderIngestionModeV1,
 } from './cash-order-ingestion-config'
@@ -248,8 +249,26 @@ describe('ingestion mode and enabled parks', () => {
         for (const value of [undefined, '', '  ', 'WRITE', 'on', 'dry-run', 'true']) {
             expect(parseCashOrderIngestionModeV1(value)).toBe('off')
         }
-        expect(parseCashOrderIngestionModeV1(' dry_run ')).toBe('dry_run')
         expect(parseCashOrderIngestionModeV1('write')).toBe('write')
+    })
+
+    // Retired 2026-09-25: dry_run was never read-only, so it is no longer a
+    // scheduled mode. It must fail closed to off, never to write, and say why.
+    it('fails a retired dry_run configuration closed, with a diagnostic', () => {
+        for (const value of ['dry_run', ' dry_run ']) {
+            expect(parseCashOrderIngestionModeV1(value)).toBe('off')
+            expect(isRetiredCashOrderIngestionModeV1(value)).toBe(true)
+            expect(parseCashOrderIngestionConfigV1({ mode: value, parks: 'p1' })).toEqual({
+                mode: 'off',
+                enabledParks: ['p1'],
+                configError: 'scheduled_dry_run_retired',
+            })
+        }
+    })
+
+    it('keeps the park limit failure ahead of the retired-mode diagnostic', () => {
+        expect(parseCashOrderIngestionConfigV1({ mode: 'dry_run', parks: 'a,b,c,d' }).configError)
+            .toBe('enabled_park_limit_exceeded')
     })
 
     it('reads a comma-separated park list without duplicates', () => {

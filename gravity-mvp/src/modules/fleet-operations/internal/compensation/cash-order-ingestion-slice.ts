@@ -19,6 +19,7 @@ import {
 import type { BookingWindowV1 } from './cash-order-ingestion-windows'
 import { classifyCashOrderPageV1, type CashOrderRemovalReasonV1 } from './cash-order-page-classifier'
 import { cashOrderRowIdV1 } from './compensation-cash-order-ingestion'
+import type { CashOrderRejectionV1 } from './compensation-cash-order-projection'
 import {
     requestCashOrderPageV1,
     type CashOrderPageFetcherV1,
@@ -49,6 +50,12 @@ export interface CashOrderSliceCountersV1 {
     endedAtChanged: number
     removed: Record<CashOrderRemovalReasonV1, number>
     ignored: number
+    /**
+     * The same ignored orders, split by the projection's own rejection code.
+     * The total alone cannot tell an operator whether the provider shape is
+     * what we expect, which is the whole question a read-only preflight asks.
+     */
+    ignoredByReason: Partial<Record<CashOrderRejectionV1, number>>
     collapsedDuplicates: number
 }
 
@@ -64,6 +71,7 @@ export function emptyCashOrderSliceCountersV1(): CashOrderSliceCountersV1 {
         endedAtChanged: 0,
         removed: { not_completed: 0, not_cash: 0, not_payable: 0 },
         ignored: 0,
+        ignoredByReason: {},
         collapsedDuplicates: 0,
     }
 }
@@ -81,6 +89,10 @@ export function addCashOrderSliceCountersV1(total: CashOrderSliceCountersV1, par
     total.removed.not_cash += part.removed.not_cash
     total.removed.not_payable += part.removed.not_payable
     total.ignored += part.ignored
+    for (const [reason, count] of Object.entries(part.ignoredByReason)) {
+        const key = reason as CashOrderRejectionV1
+        total.ignoredByReason[key] = (total.ignoredByReason[key] ?? 0) + (count ?? 0)
+    }
     total.collapsedDuplicates += part.collapsedDuplicates
 }
 
@@ -207,6 +219,10 @@ export async function runCashOrderSliceV1(input: CashOrderSliceInputV1): Promise
 
         counters.accepted += decisions.accepted.length
         counters.ignored += Object.values(decisions.ignoredByReason).reduce((sum, count) => sum + (count ?? 0), 0)
+        for (const [reason, count] of Object.entries(decisions.ignoredByReason)) {
+            const key = reason as CashOrderRejectionV1
+            counters.ignoredByReason[key] = (counters.ignoredByReason[key] ?? 0) + (count ?? 0)
+        }
         counters.collapsedDuplicates += decisions.collapsedDuplicates
         for (const order of decisions.accepted) {
             acceptedOrderIds.add(order.externalOrderId)

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Acceptance-only manifest.
+
+    Both receivers below exist only in this variant. They were never in the
+    release artifact and the workflow asserts, on the built APK, that neither
+    the classes nor their actions are present in it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Acceptance aid: the action button on the ongoing diagnostics
+             notification. Not exported — only this app can trigger it, so no
+             other app can make the shell post a notification or choose its
+             target. -->
+        <receiver
+            android:name=".TestNotificationSeed$SeedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Deterministic push acceptance. Exported because the process-dead
+             scenario broadcasts to it from adb after the system has killed the
+             app, which is precisely the case an in-process call cannot reach.
+             The exposure is bounded by the build: this variant is a separate
+             application id that is never released, and the release artifact is
+             asserted to carry neither this class nor these actions. -->
+        <receiver
+            android:name=".push.AcceptancePushInjection"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.INJECT_PUSH" />
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.SEED_PUSH_TOKEN" />
+                <action android:name="ru.yokoone.crm.shell.acceptance.action.REPORT_PUSH_STATE" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

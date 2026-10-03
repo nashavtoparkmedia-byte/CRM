@@ -11,8 +11,10 @@
  * Tool surface (MVP):
  *   - save_lead_data        — store partial qualification answers
  *   - end_call              — wrap up: produce final summary + qualification
- *   - transfer_to_manager   — escalate (live transfer not wired in Day 1; we
- *                             just record the intent and let CRM act on it)
+ *   - transfer_to_manager   — record that the lead asked for a manager and end
+ *                             the conversation. There is no live transfer: the
+ *                             name is kept for contract stability, CRM stores
+ *                             the intent and acts on it out of band.
  *
  * Without OPENAI_API_KEY the module is disabled — see `enabled` getter.
  * Bridge logs `[llm] DISABLED` once on boot and routes around it.
@@ -119,14 +121,18 @@ const TOOLS = [
         function: {
             name: 'transfer_to_manager',
             description:
-                'Перевести разговор на живого менеджера. Используй, когда лид настойчиво ' +
-                'просит человека, или вопрос лида выходит за рамки сценария.',
+                'Зафиксировать запрос лида на менеджера и завершить этот разговор. ' +
+                'Используй, когда лид настойчиво просит человека, или вопрос лида ' +
+                'выходит за рамки сценария. Соединения с менеджером во время этого ' +
+                'звонка не происходит: не говори, что соединяешь, переводишь или что ' +
+                'менеджер перезвонит — только что запрос зафиксирован и звонок ' +
+                'завершается.',
             parameters: {
                 type: 'object',
                 properties: {
                     reason: {
                         type: 'string',
-                        description: 'Зачем переводим (для лога менеджера).',
+                        description: 'Зачем нужен менеджер (для лога менеджера).',
                     },
                 },
                 required: ['reason'],

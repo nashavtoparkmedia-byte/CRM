@@ -1,7 +1,9 @@
 /**
  * Types for the AI-call bridge — manager-initiated outbound calls where
  * ChatGPT-driven voice agent talks to a lead, asks ~5 scenario questions,
- * handles objections, and transfers to a human via SIP REFER when stuck.
+ * handles objections, and records a request for a human when stuck. There is no
+ * SIP REFER and no live transfer: `transfer_to_manager` ends the conversation and
+ * leaves the intent on the call record.
  *
  * Audio flow:
  *   FreeSWITCH (mod_audio_fork) ⇄ WebSocket ⇄ AudioBridge (this app)
@@ -18,7 +20,7 @@ export type AiCallSessionStatus =
     | 'starting'      // FreeSWITCH originating the call, AI not yet engaged
     | 'greeting'      // AI playing the opening line
     | 'active'        // dialog in progress
-    | 'transferring'  // SIP REFER in flight — connecting to manager
+    | 'transferring'  // terminal: the lead asked for a manager, call ended
     | 'ended'         // hangup, normal completion
     | 'failed'        // technical failure (STT/LLM/TTS error or bridge dropped)
 

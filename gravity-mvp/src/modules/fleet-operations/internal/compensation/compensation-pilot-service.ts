@@ -45,6 +45,11 @@ import {
     type PilotDriverStatusV1,
     type PilotSubmissionRefusalV1,
 } from './compensation-pilot-flow'
+import {
+    admitPilotContactLineageV1,
+    type PilotContactLineageReadV1,
+    type PilotLineageAdmissionRefusalV1,
+} from './compensation-pilot-lineage'
 
 /**
  * What the Telegram webhook proved before it called the pilot.
@@ -68,11 +73,8 @@ export interface PilotTelegramPersonProofV1 {
 
 export type PilotMainDriverConfirmationV1 = 'confirmed' | 'not_confirmed' | 'busy'
 
-export type PilotContactLineageReadV1 =
-    | { status: 'resolved'; canonicalContactId: string; contactIds: readonly string[] }
-    | { status: 'missing' }
-    /** Contacts could not walk the merge redirects to one canonical contact. */
-    | { status: 'unresolvable' }
+/** Re-exported so every port implementor keeps one shape for the lineage read. */
+export type { PilotContactLineageReadV1 }
 
 export interface PilotDriverFactsV1 {
     externalParkId: string | null
@@ -209,6 +211,22 @@ function exactText(value: unknown): value is string {
 }
 
 /**
+ * How the shared lineage admission maps onto this surface's refusals. It is a
+ * translation only: an unknown lineage and one joined to other contacts are
+ * both reviewable, while a missing or non-canonical contact is simply unproven.
+ * These are the exact refusals this path returned before the rule was shared.
+ */
+const PILOT_IDENTITY_LINEAGE_REFUSALS_V1: Record<
+    PilotLineageAdmissionRefusalV1,
+    'identity_not_proven' | 'identity_needs_review'
+> = {
+    lineage_missing: 'identity_not_proven',
+    lineage_unresolvable: 'identity_needs_review',
+    lineage_not_canonical: 'identity_not_proven',
+    lineage_not_singleton: 'identity_needs_review',
+}
+
+/**
  * Turns the webhook's proof into the canonical person C1 will bind.
  *
  * Fails closed at every step. A lineage of more than one contact is refused
@@ -228,13 +246,12 @@ export async function resolvePilotIdentityV1(
     if (confirmation === 'busy') return { proven: false, refusal: 'identity_busy' }
     if (confirmation !== 'confirmed') return { proven: false, refusal: 'identity_not_proven' }
 
-    const lineage = await port.resolveContactLineage(proof.contactId)
-    if (lineage.status === 'unresolvable') return { proven: false, refusal: 'identity_needs_review' }
-    if (lineage.status !== 'resolved' || lineage.canonicalContactId !== proof.contactId) {
-        return { proven: false, refusal: 'identity_not_proven' }
-    }
-    if (lineage.contactIds.length !== 1 || lineage.contactIds[0] !== proof.contactId) {
-        return { proven: false, refusal: 'identity_needs_review' }
+    const admission = admitPilotContactLineageV1(
+        proof.contactId,
+        await port.resolveContactLineage(proof.contactId),
+    )
+    if (!admission.admitted) {
+        return { proven: false, refusal: PILOT_IDENTITY_LINEAGE_REFUSALS_V1[admission.refusal] }
     }
 
     const driver = await port.findDriverFacts(proof.driverId)
@@ -244,8 +261,8 @@ export async function resolvePilotIdentityV1(
         proven: true,
         identity: {
             telegramUserId: proof.telegramUserId,
-            canonicalContactId: proof.contactId,
-            lineage: [proof.contactId],
+            canonicalContactId: admission.canonicalContactId,
+            lineage: admission.lineage,
             externalParkId: driver.externalParkId,
             externalDriverProfileId: driver.externalDriverProfileId,
             facts: driver.facts,

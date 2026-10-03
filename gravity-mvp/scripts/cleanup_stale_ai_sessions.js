@@ -22,9 +22,10 @@
 // Scope decisions baked in
 // ────────────────────────
 //   • Only `starting`, `greeting`, `active` are eligible. `transferring`
-//     is intentionally excluded — SIP REFER + human pickup can take
-//     several minutes in legitimate flows, false-positives there are
-//     more painful than the residual stale-state risk.
+//     is intentionally excluded because it is not a live state at all:
+//     there is no SIP REFER in this product, so `transferring` is the
+//     terminal label for "the lead asked for a manager" and finalization
+//     has already written status/endedAt on that row. Nothing to reap.
 //   • Default TTL is 30 minutes — well above the realistic upper bound
 //     for a live AI-conversation (~3× p99 of normal duration) while
 //     still small enough to bound UI staleness.

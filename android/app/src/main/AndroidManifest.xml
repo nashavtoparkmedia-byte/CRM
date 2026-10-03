@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Android 13+ requires a runtime grant before any notification is shown.
-         Stage 1 uses this only for the local test notification used to prove
-         deep-link navigation; no remote push is registered or received yet. -->
+         The shell asks once; without it nothing this app posts reaches the
+         screen, and the push path reports that truthfully rather than
+         pretending a notification was displayed. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -34,17 +36,35 @@
             </intent-filter>
         </activity>
 
-        <!-- Stage-1 acceptance aid: the action button on the ongoing
-             diagnostics notification. Not exported — only this app can
-             trigger it, so no other app can make the shell post a
-             notification or choose its target. -->
-        <receiver
-            android:name=".TestNotificationSeed$SeedReceiver"
+        <!-- WorkManager initializes on demand rather than through androidx
+             startup. Every process this app starts - including the ones the
+             system creates only to hand it a push - would otherwise open
+             WorkManager's database and start its threads before knowing
+             whether anything needs scheduling. ShellApplication supplies the
+             configuration, so the first enqueue initializes it and a process
+             that never enqueues never pays for it. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- Firebase only dispatches to this when a default FirebaseApp exists,
+             which requires an external google-services.json that this
+             repository deliberately does not carry. Not exported: only the
+             messaging library may start it. -->
+        <service
+            android:name=".push.PushMessagingService"
             android:exported="false">
             <intent-filter>
-                <action android:name="ru.yokoone.crm.shell.action.SEED_TEST_NOTIFICATION" />
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
-        </receiver>
+        </service>
 
     </application>
 </manifest>

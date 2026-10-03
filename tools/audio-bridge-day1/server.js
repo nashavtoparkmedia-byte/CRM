@@ -48,12 +48,12 @@ const crm = require('./crm-client')
 const runtime = require('./runtime-config')
 const { opsLog } = require('./opsLog')
 const { CallSession } = require('./call-session')
-const { createChannelLifecycle, createSessionResolver, parseEslEventHeaders } = require('./channel-lifecycle')
-// Set by shutdown() before it stops the live sessions. C1a deliberately leaves
-// the shutdown policy exactly as it was: a restart finalizes each session as
-// `closed` and leaves its channel up. Whether redeploying the bridge should drop
-// calls in progress is a separate, Owner-visible decision, and a hangup issued
-// from the shutdown path would in any case race the process exit below.
+const { createChannelLifecycle, createShutdownSequence, createSessionResolver, parseEslEventHeaders } = require('./channel-lifecycle')
+// C2. An intentional shutdown no longer leaves product calls up: a bridge that is
+// going away takes no AI runtime with it, so the lead would hold a live silent
+// channel until C1b's native cutoff. The channel lifecycle owns the shutdown
+// phases (mark, terminate known, sweep for unseen, bounded acknowledgement); this
+// flag is only what the request paths here read to stop starting new work.
 let shuttingDown = false
 
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
@@ -217,6 +217,14 @@ const wss = new WebSocketServer({ server: httpServer, path: '/audio' })
 
 wss.on('connection', (ws, req) => {
     const remote = `${req.socket.remoteAddress}:${req.socket.remotePort}`
+    if (shuttingDown) {
+        // A fork connecting while the bridge is going away would attach STT to a
+        // channel that is already being ended. Refuse it outright; existing sockets
+        // are closed later, after the termination phases had their chance.
+        console.log(`[ws] refused from ${remote}: bridge is shutting down`)
+        try { ws.terminate() } catch {}
+        return
+    }
     // mod_audio_fork passes our "fork_meta" tag in the URL query — we encode
     // the FreeSWITCH call UUID there at auto-fork time so we can route the
     // WS stream back to the right CallSession.
@@ -395,6 +403,13 @@ function eslApi(command, timeoutMs = 5000) {
  */
 async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
     if (sessions.has(callUuid)) return { classification: 'product', session: sessions.get(callUuid) }
+    // Shutdown binds nothing new: no CRM round trip, no greeting, no STT/LLM/TTS.
+    // The lifecycle does not call this during shutdown either — this is the second
+    // line of defence for any other caller.
+    if (shuttingDown) {
+        console.log(`[session] bind refused for ${callUuid}: bridge is shutting down`)
+        return { classification: 'unknown', session: null }
+    }
 
     // Refresh provider keys from CRM (DB-backed). The fetch is cached
     // 60 s in crm-client, so back-to-back calls share one DB hit. The
@@ -492,9 +507,11 @@ async function ensureSessionForCall(callUuid, isChannelDead = () => false) {
         // session. Until this existed, a call the bot itself ended stayed parked
         // until the lead hung up — and the session was already out of the map,
         // so nothing owned that channel any more.
-        requestTermination: ({ reason, graceMs }) => (shuttingDown
-            ? 'skipped_shutdown'
-            : lifecycle.terminate(callUuid, { reason, graceMs })),
+        // One primitive decides, always. During shutdown this request arrives after
+        // the channel was already asked to end, and the lifecycle's own at-most-once
+        // guard answers `duplicate` — which is why there is no shutdown special case
+        // here any more.
+        requestTermination: ({ reason, graceMs }) => lifecycle.terminate(callUuid, { reason, graceMs }),
     })
     sessions.set(callUuid, session)
     if (isChannelDead()) {
@@ -625,12 +642,30 @@ async function broadcastWav(callUuid, wavBuffer) {
 // channel-lifecycle.js; answer-gated playback (issue #23) in broadcastWav().
 // Connection reconnects with exponential backoff on disconnect.
 
+// The live event socket and its pending reconnect, so shutdown can stop the
+// listener instead of letting it reconnect into a process that is exiting.
+let eslEventSocket = null
+let eslReconnectTimer = null
+
+function stopEslEventListener() {
+    if (eslReconnectTimer !== null) {
+        clearTimeout(eslReconnectTimer)
+        eslReconnectTimer = null
+    }
+    const sock = eslEventSocket
+    eslEventSocket = null
+    if (sock === null) return
+    try { sock.destroy() } catch {}
+}
+
 function startEslEventListener() {
+    if (shuttingDown) return
     let reconnectDelay = 2000
     let buf = ''
     let stage = 'connecting'
 
     const sock = net.connect(ESL_PORT, ESL_HOST)
+    eslEventSocket = sock
     sock.setEncoding('utf8')
 
     // Every event is parsed and handed to the channel lifecycle, which filters
@@ -711,10 +746,15 @@ function startEslEventListener() {
     })
 
     sock.on('close', () => {
+        if (eslEventSocket === sock) eslEventSocket = null
+        if (shuttingDown) {
+            console.log('[esl-events] disconnected during shutdown — not reconnecting')
+            return
+        }
         console.log(`[esl-events] disconnected, reconnect in ${reconnectDelay}ms`)
         stage = 'connecting'
         buf = ''
-        setTimeout(startEslEventListener, reconnectDelay)
+        eslReconnectTimer = setTimeout(startEslEventListener, reconnectDelay)
         reconnectDelay = Math.min(reconnectDelay * 2, 30000)
     })
 
@@ -727,22 +767,43 @@ function startEslEventListener() {
 startEslEventListener()
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
+//
+// The sequence and its bounds live in channel-lifecycle.js, which owns the
+// channels and the one physical termination primitive. What belongs to the process
+// is injected below: stopping sessions, closing the sockets, and exiting.
+//
+// HTTP closes last on purpose — it is what serves TTS playback to FreeSWITCH, so
+// closing it before the termination phases would cut audio for channels that are
+// still up.
+
+const shutdownSequence = createShutdownSequence({
+    lifecycle,
+    stopSessions: () => {
+        // Best effort, never awaited: CallSession.stop() finalizes as `closed` and
+        // the CRM POST carries its own bounded retry (~17 s worst case), which must
+        // never sit in front of a hangup.
+        console.log(`[main] finalizing ${sessions.size} active session(s) (best effort, not awaited)`)
+        for (const session of sessions.values()) {
+            try { session.stop() } catch {}
+        }
+        sessions.clear()
+    },
+    closeWebSockets: () => {
+        for (const client of wss.clients) {
+            try { client.terminate() } catch {}
+        }
+        wss.close(() => {})
+    },
+    closeEslListener: stopEslEventListener,
+    closeHttpServer: () => { httpServer.close(() => {}) },
+    exit: () => process.exit(0),
+})
 
 function shutdown(signal) {
-    // Before any session is stopped: their terminal transitions must not turn a
-    // redeploy into a wave of hangups (see `shuttingDown` above).
+    // Read by the request paths above (no new bind, no new WS work) and set before
+    // any phase runs. The lifecycle keeps its own copy for the event path.
     shuttingDown = true
-    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size}); live channels are left up`)
-    for (const session of sessions.values()) {
-        try { session.stop() } catch {}
-    }
-    sessions.clear()
-    for (const client of wss.clients) {
-        try { client.terminate() } catch {}
-    }
-    wss.close(() => {})
-    httpServer.close(() => process.exit(0))
-    setTimeout(() => process.exit(1), 3000).unref()
+    void shutdownSequence.shutdown(signal)
 }
 process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))

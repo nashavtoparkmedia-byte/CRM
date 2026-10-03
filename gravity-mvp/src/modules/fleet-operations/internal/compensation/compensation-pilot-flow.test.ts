@@ -4,11 +4,15 @@ import type { StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 import {
     decidePilotSubmissionV1,
     pilotDriverStatusV1,
+    pilotOrderClaimableWithinBudgetV1,
+    pilotPayableKopecksV1,
     remainingBudgetKopecksV1,
     PILOT_MAX_CLAIMED_RUBLES,
+    PILOT_MIN_CLAIMED_RUBLES,
     type PilotSubmissionContextV1,
     type PilotSubmissionRequestV1,
 } from './compensation-pilot-flow'
+import { KOPECKS_PER_RUBLE, MAX_COMPENSATION_KOPECKS } from './compensation-money'
 
 const ORDER: StoredCashOrderV1 = {
     id: 'row-1',
@@ -126,5 +130,68 @@ describe('remaining budget', () => {
     it('never reports a negative remainder', () => {
         expect(remainingBudgetKopecksV1({ limitKopecks: 10_000, reservedKopecks: 9_000, settledKopecks: 5_000 }))
             .toBe(0)
+    })
+})
+
+describe('the payable amount, extracted', () => {
+    /**
+     * The submission gate and readiness must never disagree about what a claim
+     * costs, so both now read one function. This asserts the function is exactly
+     * the expression the gate used before it was extracted, across the whole
+     * valid claim range and either side of both caps.
+     */
+    it('equals the lower of the claim, the order and the pilot cap', () => {
+        const amounts = [1, 99, 100, 33_500, 99_999, 100_000, 250_000]
+        const claims = [PILOT_MIN_CLAIMED_RUBLES, 2, 300, 999, PILOT_MAX_CLAIMED_RUBLES, 1_500]
+        for (const amountKopecks of amounts) {
+            for (const claimedRubles of claims) {
+                expect(pilotPayableKopecksV1(claimedRubles, { amountKopecks })).toBe(Math.min(
+                    claimedRubles * KOPECKS_PER_RUBLE,
+                    amountKopecks,
+                    MAX_COMPENSATION_KOPECKS,
+                ))
+            }
+        }
+    })
+
+    it('still drives the submission gate: the refusal follows the payable amount', () => {
+        for (const claimedRubles of [PILOT_MIN_CLAIMED_RUBLES, 300, PILOT_MAX_CLAIMED_RUBLES]) {
+            const payable = pilotPayableKopecksV1(claimedRubles, ORDER)
+            expect(decidePilotSubmissionV1(request({ claimedRubles }), context({ remainingBudgetKopecks: payable })))
+                .toMatchObject({ accepted: true })
+            expect(decidePilotSubmissionV1(request({ claimedRubles }), context({ remainingBudgetKopecks: payable - 1 })))
+                .toEqual({ accepted: false, refusal: 'budget_exhausted' })
+        }
+    })
+})
+
+describe('order claimability, as readiness asks it', () => {
+    it('asks only whether the cheapest valid claim fits', () => {
+        const order = { amountKopecks: 50_000 }
+        const cheapest = pilotPayableKopecksV1(PILOT_MIN_CLAIMED_RUBLES, order)
+        expect(cheapest).toBe(KOPECKS_PER_RUBLE)
+        expect(pilotOrderClaimableWithinBudgetV1(order, cheapest)).toBe(true)
+        expect(pilotOrderClaimableWithinBudgetV1(order, cheapest - 1)).toBe(false)
+    })
+
+    it('is bounded by the order when the order is worth less than one ruble', () => {
+        expect(pilotOrderClaimableWithinBudgetV1({ amountKopecks: 40 }, 40)).toBe(true)
+        expect(pilotOrderClaimableWithinBudgetV1({ amountKopecks: 40 }, 39)).toBe(false)
+    })
+
+    it('agrees with the submission gate: claimable exactly when some claim is accepted', () => {
+        for (const amountKopecks of [40, 100, 33_500, 250_000]) {
+            for (const remainingBudgetKopecks of [0, 39, 40, 99, 100, 33_500, 100_000]) {
+                const order = { ...ORDER, amountKopecks }
+                const claimable = pilotOrderClaimableWithinBudgetV1(order, remainingBudgetKopecks)
+                const someClaimAccepted = [PILOT_MIN_CLAIMED_RUBLES, 2, 300, PILOT_MAX_CLAIMED_RUBLES].some(
+                    (claimedRubles) => decidePilotSubmissionV1(
+                        request({ claimedRubles }),
+                        context({ catalogue: [order], remainingBudgetKopecks }),
+                    ).accepted,
+                )
+                expect(claimable).toBe(someClaimAccepted)
+            }
+        }
     })
 })

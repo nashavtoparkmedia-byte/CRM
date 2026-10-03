@@ -20,7 +20,8 @@ import {
     subscribeCallAlertAudioStatus,
     type CallAlertAudioStatus,
 } from '@/modules/calling/public/v1/call-alert-audio'
-import { OutboundCallingClientProvider } from '@/infrastructure/ui/calling-client-capability'
+import { OutboundCallingClientProvider, type OutboundCallingMode } from '@/infrastructure/ui/calling-client-capability'
+import { isRenderedInMobileShellV1 } from './client-ui/mobile-shell-client'
 
 // Codecs we keep in outbound SDP offers.
 // Megafon SBC silently drops INVITEs whose first audio codec is opus (or anything
@@ -122,6 +123,10 @@ export interface ActiveCallInfo {
 
 interface SipApi {
     status: SipStatus
+    // How outbound calling is presented, derived here and handed to Calling's
+    // own button and to the neutral capability alike, so both twins read one
+    // decision rather than two detectors.
+    outboundMode: OutboundCallingMode
     extension: string | null
     incomingCall: IncomingCallInfo | null
     incomingAlert: IncomingCallAlertInfo | null
@@ -983,9 +988,21 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         setActiveCall(prev => (prev ? { ...prev, fsUuid } : prev))
     }
 
+    // Presentation only, and deliberately after mount: the server has no
+    // User-Agent while producing this markup, so deciding during render would
+    // hydrate one tree on the server and another on the client. Starting at
+    // 'softphone' and correcting once is what keeps the first paint honest.
+    //
+    // This is the only place the shell is detected. Nothing outside Calling
+    // learns how the mode was decided - consumers receive the mode itself.
+    const [outboundMode, setOutboundMode] = useState<OutboundCallingMode>('softphone')
+    useEffect(() => {
+        if (isRenderedInMobileShellV1()) setOutboundMode('system_dialer')
+    }, [])
+
     return (
-        <SipContext.Provider value={{ status, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, reconnect, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
-            <OutboundCallingClientProvider value={{ status, hasActiveCall: !!activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
+        <SipContext.Provider value={{ status, outboundMode, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, reconnect, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
+            <OutboundCallingClientProvider value={{ status, outboundMode, hasActiveCall: !!activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
                 {children}
             </OutboundCallingClientProvider>
         </SipContext.Provider>

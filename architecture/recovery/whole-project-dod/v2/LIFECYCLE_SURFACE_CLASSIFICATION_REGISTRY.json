@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 721,
-    "test": 38,
+    "total_entries": 727,
+    "test": 39,
     "dead_historical": 92,
-    "migration_only": 84,
-    "active_operational": 502,
+    "migration_only": 85,
+    "active_operational": 506,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -45,7 +45,7 @@
       "disposition": "TEST_SUPPORT",
       "production_capability": "NONE",
       "functional_owner": "platform_engineering",
-      "source_sha256": "bdff8bc2a1ed568db69a99cf215c88d78ebc5a87df89705f6836f01b115d3d7d",
+      "source_sha256": "d082975f55a7c312d113a2211562eb64774288c3078557d8693549ea00be7756",
       "rationale": "Android shell end-to-end acceptance harness. Test-support infrastructure: it exists only to prove the shell on a real Android system and has no production path. Every service it touches is created and destroyed inside the job - a disposable PostgreSQL from the workflow's own services block on 127.0.0.1:55432, the committed migrations applied to it together with the governed predecessor archive (architecture/migrations/v1/archive/pre-outbox, copied into the runner's checkout only, in the name order production-migration-authority.json fixes), synthetic conversations seeded from android/tools/acceptance-seed.sql, and a loopback MAX transport stand-in, android/tools/acceptance-max-transport.mjs, on 127.0.0.1:3905; both files are classified TEST/TEST_SUPPORT in this same registry. The two credential accesses the analyzer reports as ambiguous are exactly those two steps, flagged sql_not_statically_available because the statements live in a file and inside Prisma rather than inline; both target that disposable database only and are reviewed as DISPOSABLE_ACCEPTANCE_DATABASE_SETUP in credential-unknown-access-resolution.json. The CRM runs under env -i with an allowlist of exactly PATH, HOME, NODE_ENV, DATABASE_URL, MAX_SCRAPER_URL, MOBILE_ACCESS_USER and MOBILE_ACCESS_PASS, so no provider, bot, telephony, TURN or production credential exists in the process. MAX_SCRAPER_URL is an address, not a credential: it names the loopback stand-in, which accepts only the one synthetic send and answers it with a confirmed delivery proof, so the MAX path reaches nothing beyond the runner and every other outbound transport is inert by construction. The literal values it carries - the acceptance database user and password, the mobile access passphrase, and the signing keystore password - are test-only constants for services that exist for the length of one job; none is a repository secret and none authenticates to anything outside the runner. APK signing uses a keystore generated per run by keytool and discarded with the runner, so no real signing key is present. It declares contents: read, touches no production host, registry or deployment path, and is not part of the authoritative control catalogue. source_sha256 pins this classification to the exact reviewed workflow bytes. Lifecycle classification grants no database, credential, provider or deployment authority.",
       "classification_artifact": "docs/mobile/ANDROID_ACCEPTANCE_E2E.md"
     },
@@ -3081,6 +3081,24 @@
       "functional_owner": "gravity_application_operations"
     },
     {
+      "path": "gravity-mvp/scripts/compensation-cash-order-preflight.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator command that runs the read-only cash-order authorization preflight. An operator runs it deliberately against a deployed environment, so its production reachability is confirmed and manual, but it is read-only by construction: it writes no SQL, holds no credentials of its own, and calls the fleet_operations public owner operation, which is composed with a persistence capability that refuses every mutating method. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/scripts/compensation-pilot-readiness.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator command that proves the two pilot readiness gates, PILOT CANDIDATE READY and PILOT INPUT READY, against real data. An operator runs it deliberately against a deployed environment, so its production reachability is confirmed and manual, but it is read-only by construction: it performs no write, no provider request and no Telegram API request, writes no SQL of its own, holds no credentials, and calls the fleet_operations public readiness owner operation after binding telegram_channel's own bounded public driver-link read into the seam Fleet declares for it. Exit 0 requires the requested gate to be proven, so a population-truncated scan that found nothing is a non-success rather than a negative. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "gravity_application_operations"
+    },
+    {
       "path": "gravity-mvp/scripts/count-db.ts",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -5002,6 +5020,15 @@
       "functional_owner": "architecture_recovery"
     },
     {
+      "path": "tools/architecture/check-compensation-edge-perimeter-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It reads the edge_delivery nginx template and asserts the cash-compensation perimeter invariant; it writes nothing and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
       "path": "tools/architecture/check-configuration-operational-health-boundary.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -5539,6 +5566,15 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active operational surface classified in exact-set batch; functional owner architecture_recovery; approved path: bounded analyzer/enforcement capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-mobile-delivery-provider-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It reads the identity_access mobile-delivery boundary sources, the context manifests and the contract registry, and asserts that the FCM provider adapter, its configuration and its credential environment names stay inside that boundary while every other context reaches mobile notification delivery only through the public capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
       "functional_owner": "architecture_recovery"
     },
     {

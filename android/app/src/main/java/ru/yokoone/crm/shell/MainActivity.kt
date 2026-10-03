@@ -33,6 +33,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
+import ru.yokoone.crm.shell.push.PushRegistration
 
 /**
  * The whole shell.
@@ -81,7 +82,7 @@ class MainActivity : AppCompatActivity() {
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) TestNotificationSeed.ensureDiagnosticsNotification(this) }
+    ) { granted -> if (granted) ShellTestHooks.onNotificationsReady(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,6 +110,23 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
 
         val fromNotification = consumeDeepLinkUrl(intent)
+        // Name which of the three starts this was. A push that arrives after
+        // the system has taken the process is the one case where the target can
+        // go missing and the screen still looks plausible - the chat list shows
+        // the same message as a preview - so the start has to say for itself
+        // whether it carried a target. safeUrl keeps the identifier out.
+        ShellDiagnostics.write(
+            "YOKO_NET fail push-open cold act=${shortName(intent?.action)}" +
+                // The flags say whose Intent this is. A launcher tap carries
+                // NEW_TASK|RESET_TASK_IF_NEEDED (0x10200000); the notification's
+                // carries NEW_TASK|CLEAR_TASK or NEW_TASK|CLEAR_TOP. That is the
+                // difference between an Intent that was never ours and one that
+                // was ours and arrived stripped.
+                " flags=0x${Integer.toHexString(intent?.flags ?: 0)}" +
+                " keys=${intent?.extras?.keySet()?.joinToString(",") { shortName(it) } ?: "none"}" +
+                " tgt=${ShellDiagnostics.safeUrl(fromNotification)}" +
+                " restored=${savedInstanceState != null}",
+        )
         when {
             // A notification tap always wins over restored state: the operator
             // asked for a specific conversation.
@@ -131,13 +149,51 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val target = consumeDeepLinkUrl(intent) ?: return
+        val target = consumeDeepLinkUrl(intent)
+        ShellDiagnostics.write(
+            "YOKO_NET fail push-open new act=${shortName(intent.action)}" +
+                " keys=${intent.extras?.keySet()?.joinToString(",") { shortName(it) } ?: "none"}" +
+                " tgt=${ShellDiagnostics.safeUrl(target)}",
+        )
+        if (target == null) return
         load(target)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         webView.saveState(outState)
+    }
+
+    /**
+     * A third opportunity, for the case neither of the other two covers: the
+     * app returning to the foreground on a session established while it was
+     * away. Costs one cookie read; PushRegistration ignores it unless the
+     * observation is actually a transition.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) observeSession(webView.url)
+    }
+
+    /**
+     * Hand the shell's view of the session to the registration state machine.
+     *
+     * It reads whether a session cookie exists for the pinned origin and
+     * whether the page is the login screen. It does not read the cookie value
+     * and stores nothing about it.
+     */
+    private fun observeSession(url: String?) {
+        val started = PushRegistration.onPageSettled(
+            this,
+            url,
+            CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN),
+        )
+        if (started) {
+            // Persist the jar now: the registration attempt may run in a
+            // process started after this one is gone, and a cookie that was
+            // never flushed is a cookie that worker cannot see.
+            CookieManager.getInstance().flush()
+        }
     }
 
     override fun onPause() {
@@ -228,7 +284,27 @@ class MainActivity : AppCompatActivity() {
                 currentTargetUrl = url ?: currentTargetUrl
                 rememberLastVisitedUrl()
                 ShellDiagnostics.write("nav done  ${ShellDiagnostics.safeUrl(url)}")
+
+                observeSession(url)
             }
+        }
+
+        /**
+         * The signal a document load does NOT give us.
+         *
+         * The CRM is a Next.js App Router application: signing in posts a
+         * Server Action, the server answers 303, and the router then moves to
+         * the messenger client-side, inside the same document. No second page
+         * load happens, so onPageFinished fires once - for the login screen -
+         * and never again. The first hosted run proved it: the device held a
+         * token, observed no authenticated session, and therefore never
+         * registered. doUpdateVisitedHistory is the hook Chromium calls for
+         * those history changes, so it is the one that sees a sign-in.
+         */
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            super.doUpdateVisitedHistory(view, url, isReload)
+            if (currentLoadFailed) return
+            observeSession(url)
         }
 
         override fun onReceivedError(
@@ -371,18 +447,18 @@ class MainActivity : AppCompatActivity() {
     //
     // There is none, deliberately.
     //
-    // Stage 1 needs no native operation from the page. Session expiry is
+    // The page needs no native operation from the shell. Session expiry is
     // handled by the CRM redirecting to the mobile login, a notification target
     // is consumed natively from the Intent, and every other decision is the
     // CRM's. Injecting an object into the page to carry messages nothing sends
     // would be attack surface bought for nothing.
     //
-    // When push lands it will need exactly one operation, to hand the FCM
-    // registration token to the page so it can be bound to the session that
-    // owns the device. That will use WebViewCompat.addWebMessageListener with
-    // an allowed-origin rule of BuildConfig.CRM_ORIGIN — never
-    // addJavascriptInterface, which injects into every frame regardless of
-    // origin and cannot be restricted.
+    // Push registration does not change this. An earlier version of this
+    // comment said the FCM token would be handed to the page over a
+    // WebMessageListener; it is not, and no bridge was ever added. The device
+    // registers natively against the CRM's own endpoint, carrying the session
+    // cookie the WebView already holds, so the token, the device identity and
+    // the session value never cross into page script in either direction.
 
     // ── Navigation and state ─────────────────────────────────────────────
 
@@ -420,6 +496,16 @@ class MainActivity : AppCompatActivity() {
      * back to whichever conversation they last tapped, losing wherever they had
      * navigated since. A notification opens a conversation once.
      */
+    /**
+     * Last dot-segment of a fully qualified constant name.
+     *
+     * The start lines have to survive a 200-character annotation and a
+     * 400-character assertion message, and the difference that matters is VIEW
+     * against MAIN, not the package they live in.
+     */
+    private fun shortName(value: String?): String =
+        value?.substringAfterLast('.') ?: "null"
+
     private fun consumeDeepLinkUrl(intent: Intent?): String? {
         val chatId = intent?.getStringExtra(ChatNotifications.EXTRA_CHAT_ID) ?: return null
         val url = CrmOrigin.buildOpenChatUrl(
@@ -492,17 +578,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Local test notifications (stage 1 only) ──────────────────────────
+    // ── Notification permission ──────────────────────────────────────────
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            TestNotificationSeed.ensureDiagnosticsNotification(this)
+            ShellTestHooks.onNotificationsReady(this)
             return
         }
         val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
         if (granted) {
-            TestNotificationSeed.ensureDiagnosticsNotification(this)
+            ShellTestHooks.onNotificationsReady(this)
         } else {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }

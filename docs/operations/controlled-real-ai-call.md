@@ -66,6 +66,31 @@ AudioBridge `/health` response to be exactly `ok`. Production Compose publishes
 the bridge only on host loopback (`127.0.0.1:3030`) so host-network FreeSWITCH
 can reach `ws://127.0.0.1:3030/audio` without exposing the bridge publicly.
 
+## Scenario wording precondition
+
+`transfer_to_manager` connects nobody and guarantees no manager callback: it
+records that the lead asked for a manager and ends the call. Every lead-facing
+phrase in the source says exactly that, and the follow-up task is still created
+only for a driver recipient.
+
+The words the model actually follows come from the persisted
+`AiCallScenario.systemPrompt` row, not from the repository, so a scenario created
+before that change still instructs the model to promise a live handoff. Before a
+controlled real call, read the reviewed scenario's prompt and confirm it promises
+no connection, no holding the line, and no callback. A row whose prompt still
+hashes to the superseded default carries the old promise verbatim:
+
+```
+sha256 664016f425bed58cd5cfb983576f7106f3fb7bd5b5b7474355e663548ec8deaa
+2055 characters
+```
+
+Aligning such a row is a production data change, not a migration, and needs its
+own owner authorization. Guard it by that digest so an operator-authored prompt is
+never overwritten, or have the owner edit the prompt in
+`/settings/integrations/ai-call-scenarios`. This source change performs no data
+mutation.
+
 ## Readiness and controlled request
 
 First call `GET /api/ai-calls/start` with the control-token header. The response is secret-free and

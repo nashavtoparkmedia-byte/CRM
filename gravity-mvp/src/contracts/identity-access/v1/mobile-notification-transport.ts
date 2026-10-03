@@ -1,8 +1,9 @@
 /**
- * Mobile Push v1 — provider-neutral transport port.
+ * Mobile Delivery v1 — provider-neutral transport port.
  *
- * Dispatch depends only on this. The FCM HTTP v1 adapter implements it, so no
- * provider type, SDK or runtime API reaches the delivery rules.
+ * Every caller depends only on this. The FCM HTTP v1 adapter inside
+ * mobile_delivery implements it, so no provider type, SDK, runtime API or
+ * credential value reaches a consuming context's delivery rules.
  */
 
 export type MobilePushSendOutcomeV1 =

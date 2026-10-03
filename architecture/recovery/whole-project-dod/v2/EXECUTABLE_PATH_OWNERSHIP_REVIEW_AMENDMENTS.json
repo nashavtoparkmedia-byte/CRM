@@ -131,7 +131,7 @@
               "retired": 1
             }
           },
-          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository\u2019s own tracked-surface inventory over that commit\u2019s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is seventy-two additions and no retirements, contributed by the accepted main integrations this branch has taken: forty-one through PR #88 MAX production parity, sixteen through PR #91 migration authority owner context and PR #92 compensation monetary core, thirteen through PR #87 Android shell session and deeplink, and two through PR #95 AI Calls pre-release production parity. Relative to the accepted upstream main current state the net one hundred and thirty-eight is one hundred and thirty-nine additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. Both directions reconcile to the same merged denominator of 2501, and each of the three surface sets was produced by running the repository’s own tracked-surface inventory over that commit’s tree rather than being inferred from the published artifacts. This reviewer reviewed neither accepted set surface by surface and does not claim to have done so."
         },
         "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
@@ -786,7 +786,7 @@
           "path": "gravity-mvp/src/app/messages/message-retry-actions.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface, the Messaging server action behind \u00ab\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c\u00bb on a persisted failed message, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "A new tracked executable surface, the Messaging server action behind «Повторить» on a persisted failed message, under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
           "path": "gravity-mvp/src/modules/messaging/public/v1/operator-delivery-retry.test.ts",
@@ -1254,6 +1254,451 @@
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
           "review_rationale": "A new tracked executable surface, Mobile Push v1 server code, under a path the messaging bounded context owns (gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "compensation-edge-perimeter-boundary-main-42aad7cf-20260925",
+      "reviewed_at": "2026-09-25T00:00:00Z",
+      "reviewed_by": "COMPENSATION_EDGE_PERIMETER_RECONCILIATION_EXECUTOR_REVIEW_20260925",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_NGINX_SECURITY_BOUNDARY_MAIN_RECONCILIATION_20260925",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 42aad7cf, whose tail is mobile-push-v1-p1-main-baf2ecaa-20260924, and reviews only the one surface the cash-compensation edge perimeter adds. It supersedes an earlier review of the same surface anchored on main a8ac491f (compensation-edge-perimeter-boundary-main-a8ac491f-20260924), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the surface is reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the single tracked executable surface the cash-compensation edge perimeter adds on top of main 42aad7cf, tools/architecture/check-compensation-edge-perimeter-boundary.mjs: 2,624 + 1 = 2,625 surfaces, context-owned unchanged at 1,395 and governed exclusions 1,229 -> 1,230. It is a boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix with no exact inventory, so it receives no explicit exact-inventory assignment and no exact-inventory transition moves; the repository's own derivation over this tree reports no exact-inventory drift against the published coverage. It carries a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / POSSIBLE, functional owner architecture_recovery), matching every other boundary control, which is why this amendment's tracked inventory digest also carries that registered classification. The nginx template the control asserts over is not a tracked executable surface, so it moves no denominator of its own, and the host-managed credential file is ignored by Git and never tracked. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this reconciled tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2624,
+        "tracked_inventory_sha256": "94b830f1f75c362a449de56c25c156f7ef8d128fe95a7016cddaca912cac1989",
+        "coverage_sha256": "23e1fd7483ab1136beefce324bbb5914b565dc62d59c53433544b308c9f0e7e7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "b154e113b4316d5a38166996391dca0dde59149fa50e0a0e931dded6af7e75e3",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "tools/architecture/check-compensation-edge-perimeter-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It reads the edge_delivery nginx template and asserts an invariant; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-order-readonly-preflight-main-6209eeb9-20260928",
+      "reviewed_at": "2026-09-28T00:00:00Z",
+      "reviewed_by": "CASH_ORDER_READONLY_PREFLIGHT_RECONCILIATION_EXECUTOR_REVIEW_20260928",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_AUTHORIZED_CASH_ORDER_READONLY_PREFLIGHT_MAIN_RECONCILIATION_20260928",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 6209eeb9, whose tail is compensation-edge-perimeter-boundary-main-42aad7cf-20260925, and reviews only the six surfaces the read-only cash-order preflight adds. It supersedes the earlier review of the same six surfaces anchored on main baf2ecaa (cash-order-readonly-preflight-main-baf2ecaa-20260925), which is deliberately not carried forward: that anchor's denominator of 2,592 no longer exists on main, so the surfaces are reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the six tracked executable surfaces the read-only cash-order preflight adds on top of main 6209eeb9: 2,625 + 6 = 2,631 surfaces, context-owned 1,395 -> 1,399 and governed exclusions 1,230 -> 1,232. Four live under gravity-mvp/src/modules/fleet-operations, which the fleet_operations context manifest owns by prefix: the one-shot preflight itself, the read-only store that is the whole persistence capability it holds, and two Vitest suites, one of them PostgreSQL-backed. The remaining two are the operator command and its argument test under gravity-mvp/scripts, which the gravity_scripts exclusion covers by prefix with no exact inventory. The command receives a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / CONFIRMED_MANUAL_OPERATOR, functional owner gravity_application_operations) because an operator runs it deliberately against a deployed environment; that classification grants no write authority, and the probe holds none. The repository's own derivation over this tree reports no exact-inventory drift, so no path needs an explicit exact-inventory assignment and no source fingerprint rebind is required. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale belonging to any other track is changed: the ownership state landed by Calling, Android, Mobile Push and the compensation edge perimeter is preserved exactly as published.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2625,
+        "tracked_inventory_sha256": "b154e113b4316d5a38166996391dca0dde59149fa50e0a0e931dded6af7e75e3",
+        "coverage_sha256": "8adec9573d80f28f803a5150eae095573bd08f98a2789434e5ccb86e0073e6bf"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "4737f280c5fbbea610fdeda0bb8addf1ec287a9b7023775c622c1b6c16788140",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-preflight.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one-shot read-only authorization probe, under a path the fleet_operations context owns by prefix, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. It is composed with a persistence capability one read method wide and never passes through the generic operational job wrapper."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/read-only-cash-order-ingestion-store.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The whole persistence capability the probe holds: one real read method, and every mutating method of the ingestion store shape refused before a transaction. Context-owned by prefix under fleet_operations, so it needs no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-order-ingestion-preflight.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Vitest suite for the probe's decisions and refusals, beside the module it covers, context-owned by prefix under fleet_operations. It drives in-process fakes only, opens no database connection and holds no credential."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-cash-order-preflight.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "PostgreSQL-backed proof that a probe run leaves persistent state untouched, beside the module it covers, context-owned by prefix under fleet_operations. It runs only against a disposable database behind an explicit environment flag and never against production."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-cash-order-preflight.ts",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The operator command, under gravity-mvp/scripts which the gravity_scripts exclusion covers by prefix with no exact inventory, so it takes no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It writes no SQL and holds no credential; it calls the public owner operation."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-cash-order-preflight.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Argument-parsing test for the operator command, under the same gravity_scripts prefix exclusion with no exact inventory. It asserts that the command accepts a bounded park subset and no operator-supplied window, and it reaches nothing outside the process."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "mobile-push-p2-native-final-main-8824ece3-20260928",
+      "reviewed_at": "2026-09-28T00:00:00Z",
+      "reviewed_by": "MOBILE_PUSH_V1_P2_RECONCILIATION_EXECUTOR_REVIEW_20260928",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_MOBILE_PUSH_V1_P2_FINAL_RECONCILIATION_20260928",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 8824ece3, whose tail is cash-order-readonly-preflight-main-6209eeb9-20260928. It supersedes the earlier P2 amendment anchored on main 6209eeb9 (mobile-push-p2-native-final-main-6209eeb9-20260927), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the same transition is recorded again against the published chain rather than replayed."
+      },
+      "reason": "Records the tracked executable inventory transition the Mobile Push v1 P2 reconciliation makes on top of main 8824ece3: 4737f280 -> 63cfa7bc with the denominator unchanged at 2,631 surfaces and the coverage digest unchanged at 54aff6e4. P2 adds no tracked executable surface at all. Its product is Android source and resources -- Kotlin, AndroidManifest and values XML -- and none of .kt, .xml or .kts is a tracked executable extension, so the twenty-seven Kotlin and two XML paths this reconciliation adds or retires are invisible to the inventory's path set; no file mode changes, and the context-owned and governed-exclusion path counts are untouched. The single input that moves is the reviewed lifecycle classification of .github/workflows/android-acceptance-e2e.yml, whose source_sha256 pin is rebound from bdff8bc2 to d082975f because P2 edits that workflow. registered_source_sha256 is an inventory identity input, which is why the inventory digest moves while every other field of the triple stands still. The two reviewed credential dispositions bound to those same workflow bytes are rebound in credential-unknown-access-resolution.json in the same movement, and the fresh credential verification passes over the combined tree with 0 new ambiguous and 0 new public risk. No ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no reviewed assignment's source fingerprint moves, so this amendment carries no rebind and records no unassigned surface. The current triple is the repository's own derivation over this exact tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "4737f280c5fbbea610fdeda0bb8addf1ec287a9b7023775c622c1b6c16788140",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "63cfa7bcf1885d86040933eb1133dd7e460acca72c33cc5f4c8e092ab1c642bb",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "compensation-pilot-readiness-main-55c52135-20260929",
+      "reviewed_at": "2026-09-29T00:00:00Z",
+      "reviewed_by": "COMPENSATION_PILOT_READINESS_RECONCILIATION_EXECUTOR_REVIEW_20260929",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_PILOT_READINESS_MAIN_RECONCILIATION_20260929",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 55c52135, whose tail is mobile-push-p2-native-final-main-8824ece3-20260928, and reviews only the thirteen surfaces the read-only pilot readiness proof adds. It supersedes the earlier review of the same thirteen surfaces anchored on main 8824ece3 (compensation-pilot-readiness-main-8824ece3-20260928), which is deliberately not carried forward: that anchor's predecessor inventory digest 4737f280 no longer describes main, because Mobile Push v1 P2 rebound the android acceptance workflow's registered source hash and moved the tracked inventory digest to 63cfa7bc without changing the surface count. The surfaces are therefore reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the thirteen tracked executable surfaces the read-only two-gate pilot readiness proof adds on top of main 55c52135: 2,631 + 13 = 2,644 surfaces, context-owned 1,399 -> 1,410 and governed exclusions 1,232 -> 1,234. Eleven live under gravity-mvp/src and are context-owned by prefix: four under telegram_channel, which publishes the smallest read that answers which park a driver's bot link is on, and seven under fleet_operations, which holds the pure two-gate decision, the composition seam, the population read, the registration seam for the Telegram link and three Vitest suites, one of them PostgreSQL-backed. The remaining two are the operator command and its test under gravity-mvp/scripts, which the gravity_scripts exclusion covers by prefix with no exact inventory. The command receives a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / CONFIRMED_MANUAL_OPERATOR, functional owner gravity_application_operations) because an operator runs it deliberately against a deployed environment; that classification grants no write authority, and the proof holds none: it performs no write, no provider request and no Telegram API request. Every value in this record was derived by the repository's own tooling over this combined tree, not carried from the frozen candidate: the predecessor triple is the published P2 tail, and the current inventory digest 2d0b20b8 differs from the frozen candidate's 2be9ccfc precisely because it now includes P2's registry rebind. The derivation reports no exact-inventory drift, so no path needs an explicit exact-inventory assignment and no source fingerprint rebind is required. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale belonging to any other track is changed: the ownership state landed by Calling, Android, Mobile Push, the compensation edge perimeter and the read-only cash-order preflight is preserved exactly as published.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2631,
+        "tracked_inventory_sha256": "63cfa7bcf1885d86040933eb1133dd7e460acca72c33cc5f4c8e092ab1c642bb",
+        "coverage_sha256": "54aff6e4f45fcb5a7410ba71f539b4b3a3430da9915b812504fa6072f72cca9d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2644,
+        "tracked_inventory_sha256": "2d0b20b86d4507d07a14641130e0e091d7caf71bc8c48a4201c6d37be9317798",
+        "coverage_sha256": "5cedfb8db60fa368c5517569ff57f10e2e6639fadfe5d88bc629ad85edd6867f"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/telegram-channel/v1/driver-telegram-park-link-queries.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The versioned query and result contract for the one read Telegram channel publishes about a driver bot link, under gravity-mvp/src/contracts/telegram-channel which the telegram_channel context owns by prefix. It names two output fields and caps the request at 500 driver ids, so an unbounded enumeration of the link table is not expressible; it holds no Prisma, framework or credential reference."
+        },
+        {
+          "path": "gravity-mvp/src/modules/telegram-channel/public/v1/driver-telegram-park-link-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The owner-side handler for that read: it parses the versioned query and projects each row to driverId and activeParkId only, so a port returning a wider row cannot widen the contract. Context-owned by prefix under telegram_channel, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/telegram-channel/public/v1/driver-telegram-park-link-handler.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Vitest suite for the published read, beside the module it covers. It asserts the projection against a port that deliberately offers the Telegram id, username, submitted phone and bot state, and that the bound and the envelope version are enforced. Context-owned by prefix under telegram_channel, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/telegram-channel/public/v1/driver-telegram-park-link.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "PostgreSQL-backed proof that the adapter selects only the two published columns rather than projecting after a wider read, and that the read mutates nothing. It runs only against a disposable database behind an explicit environment flag and never against production. Context-owned by prefix under telegram_channel, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-readiness.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure two-gate readiness decision: PILOT CANDIDATE READY and PILOT INPUT READY, as bounded reason codes over facts other authorities own. Contact lineage admission is delegated to the one shared rule the live monetary path also uses, and eligibility, catalogue membership, catalogue status, freshness and claimability to the functions the live pilot already uses. It decides nothing monetary itself. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-readiness-service.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The readiness composition seam: it narrows the population by Driver facts before asking any other owner about anyone, applies the two gates, and reports per-gate proof completeness so a bounded population read cannot present an unknown as a proven negative. Every port method it names is a read; it holds no write capability and reaches no provider. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-compensation-pilot-readiness-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The population read, one query over one table selecting seven columns: the identifiers readiness correlates on and the three facts the Yandex fleet sync writes. No name, phone, licence or unrelated Driver field is selected, and an empty pilot scope reads nothing. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/compensation-pilot-telegram-link-reader.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The registration seam Fleet declares so the bot link park can be supplied without a fleet_operations to telegram_channel import, which the acyclic manifest dependency graph forbids. Registration is idempotent for one function, a competing composition fails closed, and there is no raw fallback. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-readiness.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Vitest suite for the readiness acceptance matrix: every fact of both gates failing on its own, the submission freshness boundary between 45 and 60 minutes, and a table that drives one lineage read through both the readiness gate and the live monetary identity path to prove they never disagree on admission. It drives pure functions only and opens no database connection. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-readiness-service.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Vitest suite for the readiness composition, driven through fakes whose every mutating method throws, so a change that starts writing or submitting fails this suite rather than production. It also pins the bounded population and Telegram batching semantics. It reaches nothing outside the process. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-pilot-readiness.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "PostgreSQL-backed proof of the correlation and immutability claims: that an order from another park or another driver profile is never counted, that a real C1 claim excludes its order, and that the whole content of every table readiness can see is unchanged before and after. It runs only against a disposable database behind an explicit environment flag and never against production. Context-owned by prefix under fleet_operations, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-pilot-readiness.ts",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The operator command, under gravity-mvp/scripts which the gravity_scripts exclusion covers by prefix with no exact inventory, so it takes no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It writes no SQL and holds no credential: it binds the published Telegram read into the seam Fleet declares and calls one public owner operation."
+        },
+        {
+          "path": "gravity-mvp/scripts/compensation-pilot-readiness.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Tests for the operator command argument parsing, its exit-code decision and its output redaction: the sanitized projection is fed a report carrying a name, phone, licence, Telegram id, username, raw external order id and credential-shaped values, and none of them may reach stdout. Under the same gravity_scripts prefix exclusion with no exact inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "call-alerts-v1-foundation-main-f9f4d75a-20260930",
+      "reviewed_at": "2026-09-30T00:00:00Z",
+      "reviewed_by": "CALL_ALERTS_V1_FOUNDATION_RECONCILIATION_EXECUTOR_REVIEW_20260930",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_CALL_ALERTS_V1_FOUNDATION_MAIN_INTEGRATION_20260930",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f9f4d75a, whose tail is compensation-pilot-readiness-main-55c52135-20260929. It supersedes the earlier foundation amendment anchored on main 6209eeb9 (call-alerts-v1-mobile-delivery-foundation-main-6209eeb9-20260928), which is deliberately not carried forward: that anchor's denominator no longer exists on main, so the same surfaces are reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the tracked executable surfaces the Call Alerts v1 backend foundation adds on top of main f9f4d75a: 2,644 + 19 = 2,663 surfaces, context-owned 1,410 -> 1,428 and governed exclusions 1,234 -> 1,235. Twenty-three paths become tracked and four retire. Twenty-two of the new paths are owned by a context manifest -- Calling's alert contracts, transition, dispatch, outbox adapter, runtime, application operations, mobile-shell client and the outbound-calling-mode proof of Calling's call button, fleet_operations' proof of its twin DriverCallButton beside it, and identity_access's mobile-delivery boundary, its public capability and the relocated provider transport contract -- so the coverage derivation gives each of them a context owner and none of them reaches a governed exclusion or an exact inventory. The twenty-third, tools/architecture/check-mobile-delivery-provider-boundary.mjs, is a boundary control under the architecture_controls governed exclusion, which covers tools/architecture by prefix with no exact inventory; it carries a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / POSSIBLE, functional owner architecture_recovery) matching every other boundary control, which is why this amendment's tracked inventory digest also carries that registered classification. Four of the new paths are relocations of surfaces that were tracked under the messaging context at the predecessor denominator: the FCM transport, its test, the delivery configuration and the provider-neutral transport contract now live inside identity_access's mobile-delivery boundary and in the identity-access contracts, and their four former messaging paths retire in the same movement, so that pair is denominator-neutral. The coverage digest moves because the record set gains nineteen paths net, eighteen context-owned and one governed exclusion. One reviewed exact-inventory assignment rewrites its bytes in the same movement: the shared outbound-calling capability seam gains the semantic outboundMode field, so this amendment carries exactly one source-fingerprint rebind, and the repository's own derivation over this tree reports all four exact-inventory transitions exactly as the historical review recorded them. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2644,
+        "tracked_inventory_sha256": "2d0b20b86d4507d07a14641130e0e091d7caf71bc8c48a4201c6d37be9317798",
+        "coverage_sha256": "5cedfb8db60fa368c5517569ff57f10e2e6639fadfe5d88bc629ad85edd6867f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2663,
+        "tracked_inventory_sha256": "c483caa51e2e7c5335549f010fda4cbd7decc7c35dcfd9b09b67e1956e546314",
+        "coverage_sha256": "62aeeeafc1126b95b810c5cf1e50ff0e6c6f0bac34608da244f26c0129b355c7"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/infrastructure/ui/calling-client-capability.tsx",
+          "previous_source_sha256": "a6d98724fcad0474b6f024242d744a1bcc8117de70fda6c2762ce86fa35c9823",
+          "current_source_sha256": "b50aa96fb0ad5d0cf5624d9ae011620b98d9940eff0d5ffde9d52f1a76a96b08",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The shared outbound-calling capability seam gains the semantic OutboundCallingMode type and the outboundMode field, so a consumer outside Calling learns how outbound calling is presented on this client without learning the platform, the User-Agent or how the mode was decided. The file still declares only a React context, its provider and its hook; it imports no module, reads no Prisma client, performs no fetch and exposes no call control. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime functional owner, gravity_runtime_remainder exclusion, exact_runtime_inventory membership and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-delivery-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-events.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/call-alert-requested-event.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/identity-access/v1/mobile-notification-transport.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-ports.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/call-alert-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-dispatch.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-dispatch.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-transition.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/call-alerts/call-alert-transition.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/mobile-shell-client.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/mobile-shell-client.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/outbound-calling-mode.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/client-ui/DriverCallButton.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the fleet_operations context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-delivery-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/fcm-http-v1-transport.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.test.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/fcm-http-v1-transport.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/fcm-http-v1-transport.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/mobile-delivery-config.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME. This path is a relocation: the same surface was tracked at gravity-mvp/src/modules/messaging/internal/mobile-push/mobile-push-config.ts under the messaging context at the predecessor denominator, and that path retires in the same movement, so the pair is denominator-neutral."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-delivery/mobile-delivery-transport-capability.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-delivery/index.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-delivery/mobile-delivery-public-surface.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "tools/architecture/check-mobile-delivery-provider-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the FCM provider adapter, its configuration and its credential environment names stay inside identity_access's mobile-delivery boundary; it writes nothing."
         }
       ],
       "invariants": {

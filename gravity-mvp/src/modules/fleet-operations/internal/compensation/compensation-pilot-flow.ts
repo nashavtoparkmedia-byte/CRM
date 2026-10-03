@@ -22,6 +22,42 @@ import type { StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 /** The pilot asks for whole rubles and will not take more than this. */
 export const PILOT_MAX_CLAIMED_RUBLES = MAX_COMPENSATION_KOPECKS / KOPECKS_PER_RUBLE
 
+/** The smallest claim the pilot accepts, and so the cheapest one a budget must cover. */
+export const PILOT_MIN_CLAIMED_RUBLES = 1
+
+/**
+ * What C1 would actually reserve for a claim against an order.
+ *
+ * The payable amount is the lower of the claim, the order and the pilot cap, so
+ * that is what the budget must be able to cover. Checking the claim alone would
+ * refuse a claim the park could actually afford.
+ */
+export function pilotPayableKopecksV1(
+    claimedRubles: number,
+    order: { amountKopecks: number },
+): number {
+    return Math.min(
+        claimedRubles * KOPECKS_PER_RUBLE,
+        order.amountKopecks,
+        MAX_COMPENSATION_KOPECKS,
+    )
+}
+
+/**
+ * Whether *some* valid claim against this order could pass the budget rule.
+ *
+ * The cheapest valid claim is the minimum one, so if that does not fit, no
+ * larger claim can either. Readiness asks exactly this question, and asks it
+ * through the same function the submission gate uses, so the two can never
+ * disagree about what the budget affords.
+ */
+export function pilotOrderClaimableWithinBudgetV1(
+    order: { amountKopecks: number },
+    remainingBudgetKopecks: number,
+): boolean {
+    return pilotPayableKopecksV1(PILOT_MIN_CLAIMED_RUBLES, order) <= remainingBudgetKopecks
+}
+
 export const PILOT_SUBMISSION_REFUSALS_V1 = [
     'support_not_confirmed',
     'attachment_missing',
@@ -80,7 +116,7 @@ export function decidePilotSubmissionV1(
     if (!attachmentFileId) return refuse('attachment_missing')
 
     if (!Number.isInteger(request.claimedRubles)) return refuse('claim_not_whole_rubles')
-    if (request.claimedRubles < 1) return refuse('claim_below_minimum')
+    if (request.claimedRubles < PILOT_MIN_CLAIMED_RUBLES) return refuse('claim_below_minimum')
     if (request.claimedRubles > PILOT_MAX_CLAIMED_RUBLES) return refuse('claim_above_pilot_cap')
 
     const order = context.catalogue.find((candidate) => candidate.externalOrderId === request.externalOrderId)
@@ -90,14 +126,7 @@ export function decidePilotSubmissionV1(
         return refuse('order_already_claimed')
     }
 
-    // The payable amount is the lower of the claim and the order, so that is
-    // what the budget must be able to cover. Checking the claim alone would
-    // refuse a claim the park could actually afford.
-    const payableKopecks = Math.min(
-        request.claimedRubles * KOPECKS_PER_RUBLE,
-        order.amountKopecks,
-        MAX_COMPENSATION_KOPECKS,
-    )
+    const payableKopecks = pilotPayableKopecksV1(request.claimedRubles, order)
     if (payableKopecks > context.remainingBudgetKopecks) return refuse('budget_exhausted')
 
     return {

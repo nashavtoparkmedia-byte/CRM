@@ -59,7 +59,7 @@ function order(id: string, bookedAt: Date, overrides: Record<string, unknown> = 
     }
 }
 
-function runtimeFor(mode: 'dry_run' | 'write', fetchPage: CashOrderIngestionPortsV1['fetchPage']) {
+function runtimeFor(mode: 'write', fetchPage: CashOrderIngestionPortsV1['fetchPage']) {
     const store: CashOrderIngestionStoreV1 = {
         ...legacyPrismaCashOrderIngestionStoreV1,
         readAuthoritySnapshot: async () => ({
@@ -140,16 +140,14 @@ proof('cash-order ingestion runtime on real PostgreSQL', () => {
         expect(row.lastReconciliationCompletedAt!.getTime()).toBeGreaterThanOrEqual(row.reconciliationPassStartedAt!.getTime())
     })
 
-    it('writes no order and no freshness in dry_run, only its own progress', async () => {
-        const source = fleet([order('hot', new Date(Date.now() - HOUR))])
-        const result = await runtimeFor('dry_run', source.fetchPage).runTick()
-        expect(result.errors).toEqual([])
-        expect(source.requests.length).toBeGreaterThan(1)
-        expect(await stored('hot')).toBeNull()
-        const row = await checkpoint()
-        expect(row).toMatchObject({ lastRunMode: 'dry_run', lastHotSuccessAt: null, reconciliationCursorBookedAt: null, lastReconciliationCompletedAt: null })
-        expect(row.lastRunSummary?.dryRun).toMatchObject({ passStartedAt: expect.any(String) })
-    })
+    // Retired 2026-09-25. Its title stated the retired contract exactly —
+    // "writes no order and no freshness in dry_run, only its own progress" —
+    // and it asserted lastRunMode, lastHotSuccessAt and lastRunSummary.dryRun,
+    // i.e. that a dry run did persist. The scheduled mode is gone and the
+    // read-only probe that replaced it is proven against real PostgreSQL in
+    // compensation-cash-order-preflight.postgres.test.ts, which asserts that
+    // no checkpoint row, lease, progress, run status, deferral or cron-health
+    // row appears or changes.
 
     it('confirms one order with a narrow query and removes it once the provider disqualifies it', async () => {
         const bookedAt = new Date(Date.now() - 2 * HOUR)

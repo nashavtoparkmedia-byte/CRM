@@ -16,6 +16,12 @@
     "environment_names": [
       "ADMIN_PASS",
       "ADMIN_USER",
+      "MOBILE_PUSH_ENABLED",
+      "MOBILE_PUSH_FCM_ALLOW_LOOPBACK_OVERRIDE",
+      "MOBILE_PUSH_FCM_CLIENT_EMAIL",
+      "MOBILE_PUSH_FCM_ENDPOINT_OVERRIDE",
+      "MOBILE_PUSH_FCM_PRIVATE_KEY",
+      "MOBILE_PUSH_FCM_PROJECT_ID",
       "NODE_ENV"
     ],
     "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
@@ -31,17 +37,17 @@
   "forbidden_dependencies": [
     "credentialValuesInContracts",
     "directForeignPrismaWrites",
+    "foreign_provider_credentials",
     "message_transport",
     "providerImplementationImportsOutsideOwningContext",
-    "provider_credentials",
     "unversionedCrossContextPayloads"
   ],
   "foreign_write_migration_plans": [],
   "internal_surface": [
-    "gravity-mvp/src/lib/users",
+    "gravity-mvp/src/app/api/mobile",
     "gravity-mvp/src/app/login",
     "gravity-mvp/src/app/users",
-    "gravity-mvp/src/app/api/mobile"
+    "gravity-mvp/src/lib/users"
   ],
   "owned_data": [
     {
@@ -65,15 +71,24 @@
     "context": "identity_access"
   },
   "protected": true,
-  "provider_relationships": [],
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "identity_access"
+      ],
+      "name": "fcm_http_v1",
+      "role": "outbound mobile push transport owned by the mobile-delivery internal boundary"
+    }
+  ],
   "public_surface": [
     "CrmUserQuery.v1",
     "CurrentUserQuery.v1",
     "IntegrationAdminAuthorization.v1",
     "ListUserIdentitiesQuery.v1",
+    "MobileNotificationDelivery.v1",
     "UserIdentity.v1"
   ],
-  "responsibility": "CRM operator identity, authentication state and authorization-facing user lookup.",
+  "responsibility": "CRM operator identity, authentication state, authorization-facing user lookup, and addressing authenticated mobile devices for provider notification delivery.",
   "schema": "yoko.crm.module-manifest.v1",
   "technical_modules": [
     "users"
@@ -113,7 +128,8 @@
     ],
     "module_tests": [
       "node tools/architecture/check-identity-boundary.mjs",
-      "node tools/architecture/check-identity-user-directory-boundary.mjs"
+      "node tools/architecture/check-identity-user-directory-boundary.mjs",
+      "node tools/architecture/check-mobile-delivery-provider-boundary.mjs"
     ]
   },
   "version": 1

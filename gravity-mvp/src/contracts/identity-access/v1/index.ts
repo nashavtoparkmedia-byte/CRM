@@ -56,3 +56,9 @@ export type {
     MobilePushTargetSkipReasonV1,
     RegisterMobilePushDeviceBodyV1,
 } from './mobile-push-registration'
+export type {
+    MobilePushMessageV1,
+    MobilePushSendOutcomeV1,
+    MobilePushTransportProblemV1,
+    MobilePushTransportV1,
+} from './mobile-notification-transport'
