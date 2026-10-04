@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   sendBotMessage: vi.fn(),
   changeDriverLimit: vi.fn(),
   authorizeDriverTelegram: vi.fn(),
+  canonicalBotConnection: vi.fn(),
   opsLog: vi.fn(),
   recordReachability: vi.fn(),
 }))
@@ -76,9 +77,16 @@ vi.mock('@/modules/contacts/public/v2', () => ({
   resolveContactV2: mocks.promoteDisplayName,
 }))
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
-  prepareManualDriverTelegramLinkAuthorityV1: mocks.authorizeDriverTelegram,
+  prepareDriverTelegramConversationAuthorityV1: mocks.authorizeDriverTelegram,
+  canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
   recordBotUserProfileV1: mocks.recordProfile,
 }))
+
+const BOT_CONNECTION = 'driver-bot-primary'
+/** The live Driver Bot API account id, as the bot process reports it. */
+const BOT_ACCOUNT = '8447212640'
+/** The single production MTProto personal-account transport. */
+const MTPROTO_CONNECTION = '1982527911'
 vi.mock('@/infrastructure/operations/operational-log', () => ({
   operationalLogV1: mocks.opsLog,
 }))
@@ -99,8 +107,10 @@ function request(overrides: Record<string, unknown> = {}, signature = 'test-bot-
     },
     body: JSON.stringify({
       telegramId: '42',
-      providerAccountId: 'telegram-bot-b',
-      connectionId: 'telegram-connection-b',
+      // Production shape: the live Bot API account id is numeric, and the
+      // transport the bot reports is the canonical configured one.
+      providerAccountId: BOT_ACCOUNT,
+      connectionId: BOT_CONNECTION,
       providerEventId: 'update:1001',
       providerUpdateId: '1001',
       providerMessageId: '2001',
@@ -165,11 +175,15 @@ describe('Telegram webhook account and transport admission', () => {
     mocks.ensureContactLink.mockResolvedValue({ linked: true })
     mocks.recordReachability.mockResolvedValue({ outcome: 'updated', status: 'confirmed' })
     mocks.sendBotMessage.mockResolvedValue({ success: true, messageId: 'bot-message-1' })
+    // Person/conversation proof: it names no transport.
     mocks.authorizeDriverTelegram.mockResolvedValue({
       chatId: 'chat-1',
-      providerAccountId: 'telegram-bot-b',
-      connectionId: 'telegram-connection-b',
+      contactId: 'contact-1',
+      contactIdentityId: 'identity-1',
+      driverId: 'driver-1',
+      target: '42',
     })
+    mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
   })
 
   afterAll(() => {
@@ -177,52 +191,48 @@ describe('Telegram webhook account and transport admission', () => {
     else process.env.BOT_CRM_SECRET = originalSecret
   })
 
-  test('persists the exact incoming provider account and transport on a new private Chat', async () => {
-    const created = chat({
-      chatKind: 'private',
-      providerAccountId: 'telegram-bot-b',
-      connectionId: 'telegram-connection-b',
-    })
+  test('creates a new private Chat with transport-neutral metadata', async () => {
+    const created = chat({})
     mocks.upsertConversation.mockResolvedValue({ conversation: created })
     mocks.patchConversation.mockResolvedValue({ conversation: created })
 
     const response = await POST(request())
 
     expect(response.status).toBe(200)
+    // A Chat is the shared peer identity. Bot transport provenance must not be
+    // persisted at conversation level, or a Bot-first row would collide with the
+    // MTProto ingress on the very same peer. chatType carries private/group.
     expect(mocks.upsertConversation).toHaveBeenCalledWith({
       contract: 'messaging.UpsertChannelConversationCommand.v1',
       externalChatId: 'telegram:42',
       channel: 'telegram',
       name: '@driver42',
       chatType: 'private',
-      metadata: {
-        chatKind: 'private',
-        providerAccountId: 'telegram-bot-b',
-        connectionId: 'telegram-connection-b',
-      },
+      metadata: {},
     })
     expect(mocks.resolveContact).toHaveBeenCalledWith(
       'telegram',
       '42',
       null,
       '@driver42',
-      { chatKind: 'private', providerAccountId: 'telegram-bot-b' },
+      { chatKind: 'private', providerAccountId: BOT_ACCOUNT },
     )
     expect(mocks.ensureContactLink).toHaveBeenCalledOnce()
     expect(mocks.recordReachability).toHaveBeenCalledWith({
       identityId: 'identity-1',
       contactId: 'contact-1',
       channel: 'telegram',
-      providerAccountId: 'telegram-bot-b',
+      providerAccountId: BOT_ACCOUNT,
       providerTargetId: '42',
       status: 'confirmed',
     })
     expect(mocks.botMessageCreate).toHaveBeenCalledOnce()
+    // Exact transport provenance stays on the event, which is where it belongs.
     expect(mocks.createMessage).toHaveBeenCalledWith(expect.objectContaining({
-      externalId: 'telegram:telegram-bot-b:42:update%3A1001',
+      externalId: `telegram:${BOT_ACCOUNT}:42:update%3A1001`,
       metadata: expect.objectContaining({
-        providerAccountId: 'telegram-bot-b',
-        connectionId: 'telegram-connection-b',
+        providerAccountId: BOT_ACCOUNT,
+        connectionId: BOT_CONNECTION,
         providerPeerId: '42',
         providerEventId: 'update:1001',
         providerUpdateId: '1001',
@@ -233,43 +243,84 @@ describe('Telegram webhook account and transport admission', () => {
     expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
   })
 
+  // A Chat is the shared peer/conversation identity, never exclusive transport
+  // ownership, so a stored connection naming the other Telegram transport is not
+  // a contradiction. This is the MTProto-first ordering of the mixed-transport
+  // proof: existing MTProto Chat -> Bot ingress -> accepted, one Chat, no
+  // durable conflict.
   test.each([
-    ['another transport connection', {
+    ['the MTProto personal-account transport', {
       chatKind: 'private',
-      providerAccountId: 'telegram-bot-b',
-      connectionId: 'telegram-connection-a',
-    }, 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION', 'transport_connection_mismatch'],
-  ])('rejects an existing private Chat with %s before downstream mutation', async (
-    _label,
-    metadata,
-    expectedError,
-    reason,
-  ) => {
-    const existing = chat(metadata)
+      providerAccountId: MTPROTO_CONNECTION,
+      connectionId: MTPROTO_CONNECTION,
+    }],
+    ['a stored connection only', { connectionId: MTPROTO_CONNECTION }],
+    ['no transport provenance at all', {}],
+  ])('admits an existing private Chat carrying %s', async (_label, metadata) => {
+    const existing = chat(metadata, {
+      contactId: 'contact-a',
+      contactIdentityId: 'identity-a',
+    })
     mocks.upsertConversation.mockResolvedValue({ conversation: existing })
+    mocks.patchConversation.mockResolvedValue({ conversation: existing })
 
     const response = await POST(request())
 
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({ error: expectedError })
-    expect(mocks.appendCollision).toHaveBeenCalledWith({
-      chatId: 'chat-1',
-      evidence: expect.objectContaining({
-        channel: 'telegram',
-        reason,
-        incomingProviderAccountId: 'telegram-bot-b',
-        incomingConnectionId: 'telegram-connection-b',
-        externalChatId: 'telegram:42',
-      }),
-    })
-    expectNoPersonOrMessageMutation()
+    expect(response.status).toBe(200)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expect(mocks.createMessage).toHaveBeenCalledOnce()
   })
 
-  test('records durable Chat evidence for a real cross-transport claim on a linked identity', async () => {
-    const existing = chat({
-      chatKind: 'private',
-      connectionId: 'telegram-connection-a',
-    }, {
+  // Bot-first ordering of the mixed-transport proof: a new peer first seen through
+  // Bot API must create a Chat that the MTProto ingress can later admit. The
+  // GramJS side of this ordering is proven by
+  // tg-actions.identity.test.ts > 'admits a legacy private Chat carrying no
+  // transport or peer provenance', which accepts exactly the row created here.
+  test('a Bot-first new Chat carries no key that could collide with MTProto', async () => {
+    const created = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: created })
+    mocks.patchConversation.mockResolvedValue({ conversation: created })
+
+    await POST(request())
+
+    const [[create]] = mocks.upsertConversation.mock.calls
+    expect(create.metadata).not.toHaveProperty('connectionId')
+    expect(create.metadata).not.toHaveProperty('providerAccountId')
+    expect(create.metadata).not.toHaveProperty('chatKind')
+    expect(create.chatType).toBe('private')
+  })
+
+  test('a second Bot event on that Bot-first Chat is admitted unchanged', async () => {
+    const created = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: created })
+    mocks.patchConversation.mockResolvedValue({ conversation: created })
+
+    const first = await POST(request())
+    const second = await POST(request({ providerUpdateId: '1002', providerEventId: 'update:1002' }))
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('never rewrites the stored transport of an admitted shared Chat', async () => {
+    const existing = chat({ connectionId: MTPROTO_CONNECTION })
+    mocks.upsertConversation.mockResolvedValue({ conversation: existing })
+    mocks.patchConversation.mockResolvedValue({ conversation: existing })
+
+    await POST(request())
+
+    const [[patch]] = mocks.patchConversation.mock.calls
+    expect(patch.patch).not.toHaveProperty('metadata')
+  })
+
+  test('records durable Chat evidence for a real collision on a linked identity', async () => {
+    // The transport arm is gone, but a genuine contradiction — a private event
+    // racing a concrete group Chat — still produces durable evidence.
+    const existing = chat({ chatKind: 'group' }, {
+      chatType: 'group',
       contactId: 'contact-a',
       contactIdentityId: 'identity-a',
     })
@@ -284,11 +335,11 @@ describe('Telegram webhook account and transport admission', () => {
       contactId: 'contact-a',
       identityId: 'identity-a',
       channel: 'telegram',
-      reason: 'transport_connection_mismatch',
+      reason: 'chat_kind_mismatch',
       evidenceRoot: expect.stringContaining('channel-collision:telegram:telegram:42:'),
       details: expect.objectContaining({
-        incomingConnectionId: 'telegram-connection-b',
-        existingConnectionId: 'telegram-connection-a',
+        incomingChatKind: 'private',
+        existingChatKind: 'group',
       }),
     })
     expectNoPersonOrMessageMutation()
@@ -369,7 +420,7 @@ describe('Telegram webhook account and transport admission', () => {
     expect(mocks.messageFindFirst).toHaveBeenCalledWith({
       where: {
         chatId: 'chat-1',
-        externalId: 'telegram:telegram-bot-b:42:update%3A1001',
+        externalId: `telegram:${BOT_ACCOUNT}:42:update%3A1001`,
       },
       select: { id: true },
     })
@@ -409,41 +460,156 @@ describe('Telegram webhook account and transport admission', () => {
     expect(mocks.messageFindFirst).toHaveBeenCalledWith({
       where: {
         chatId: 'chat-1',
-        externalId: 'telegram:telegram-bot-b:-10042:update%3A1001',
+        externalId: `telegram:${BOT_ACCOUNT}:-10042:update%3A1001`,
       },
       select: { id: true },
     })
     expect(mocks.createMessage).toHaveBeenCalledWith(expect.objectContaining({
-      externalId: 'telegram:telegram-bot-b:-10042:update%3A1001',
+      externalId: `telegram:${BOT_ACCOUNT}:-10042:update%3A1001`,
       metadata: expect.objectContaining({
-        providerAccountId: 'telegram-bot-b',
+        providerAccountId: BOT_ACCOUNT,
         providerPeerId: '-10042',
         providerEventId: 'update:1001',
       }),
+    }))
+    // The group Chat keeps only its descriptive title/kind — no transport keys.
+    expect(mocks.upsertConversation).toHaveBeenCalledWith(expect.objectContaining({
+      chatType: 'group',
+      metadata: { chatTitle: 'Dispatch', chatType: 'supergroup' },
     }))
     expect(mocks.groupInboundWorkflow).toHaveBeenCalledOnce()
     expect(mocks.resolveContact).not.toHaveBeenCalled()
     expect(mocks.botMessageCreate).not.toHaveBeenCalled()
   })
 
-  test('does not continue when exact Contact linkage rejects the admitted Chat', async () => {
-    const admitted = chat({
-      chatKind: 'private',
-      providerAccountId: 'telegram-bot-b',
-      connectionId: 'telegram-connection-b',
+  // ── register_bot_user ────────────────────────────────────────────────
+  // The clean bot posts registration to this route with the shared signature.
+  // Registration records BotUser profile evidence only; it must not depend on
+  // shared Chat transport ownership.
+
+  function registrationRequest(payload: Record<string, unknown>, signature = 'test-bot-secret') {
+    return new NextRequest('https://crm.example/api/webhook/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-bot-signature': signature },
+      body: JSON.stringify({ action: 'register_bot_user', payload }),
     })
+  }
+
+  test('accepts a signed register_bot_user and records profile evidence only', async () => {
+    mocks.driverFindFirst.mockResolvedValue(null)
+
+    const response = await POST(registrationRequest({
+      telegramId: '42',
+      username: 'driver42',
+      firstName: 'Driver',
+      lastName: 'Forty Two',
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      linked: false,
+      status: 'PENDING_MANAGER_LINK',
+    })
+    expect(mocks.recordProfile).toHaveBeenCalledOnce()
+    // No conversation admission, no transport ownership, no message.
+    expect(mocks.upsertConversation).not.toHaveBeenCalled()
+    expect(mocks.createMessage).not.toHaveBeenCalled()
+  })
+
+  test('rejects register_bot_user with a wrong signature', async () => {
+    const response = await POST(registrationRequest({ telegramId: '42' }, 'wrong-secret'))
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
+    expect(mocks.recordProfile).not.toHaveBeenCalled()
+  })
+
+  // ── persist-before-enrichment ────────────────────────────────────────
+  // An authenticated, de-duplicated provider event is durable once admitted.
+  // Identity enrichment runs afterwards and is non-fatal: a contradictory
+  // Contact, ContactIdentity or Driver must never make a delivered message
+  // disappear, and must never ask the bot to resend an accepted event.
+
+  // `vi.clearAllMocks()` clears calls but keeps implementations, so every case
+  // here breaks enrichment for exactly one call and leaks nothing forward.
+  test.each([
+    ['Contact linkage', () => mocks.ensureContactLink.mockRejectedValueOnce(
+      new Error('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH'))],
+    ['Contact resolution', () => mocks.isResolvedContact.mockReturnValueOnce(false)],
+    ['reachability', () => mocks.recordReachability.mockRejectedValueOnce(
+      new Error('CONTACT_REACHABILITY_BLOCKED'))],
+    ['Driver linking', () => mocks.linkDriver.mockRejectedValueOnce(
+      new Error('DRIVER_LINK_CONTRADICTION'))],
+    ['BotUser profile', () => mocks.recordProfile.mockRejectedValueOnce(
+      new Error('BOT_USER_PROFILE_BLOCKED'))],
+  ])('keeps the Message when %s contradicts, and does not ask for a resend', async (
+    _label,
+    breakEnrichment,
+  ) => {
+    const admitted = chat({})
     mocks.upsertConversation.mockResolvedValue({ conversation: admitted })
     mocks.patchConversation.mockResolvedValue({ conversation: admitted })
-    mocks.ensureContactLink.mockRejectedValue(new Error('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH'))
+    breakEnrichment()
 
     const response = await POST(request())
 
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({ error: 'TELEGRAM_CONTACT_BINDING_BLOCKED' })
-    expect(mocks.recordProfile).not.toHaveBeenCalled()
-    expect(mocks.botMessageCreate).not.toHaveBeenCalled()
-    expect(mocks.createMessage).not.toHaveBeenCalled()
-    expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+    // Transport processing succeeded: the event was accepted and persisted.
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      processed: 'message_persisted',
+      enrichment: 'blocked',
+    })
+    expect(mocks.createMessage).toHaveBeenCalledOnce()
+    expect(mocks.botMessageCreate).toHaveBeenCalledOnce()
+    expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+  })
+
+  test('persists the Message before any person enrichment runs', async () => {
+    const admitted = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: admitted })
+    mocks.patchConversation.mockResolvedValue({ conversation: admitted })
+
+    await POST(request())
+
+    expect(mocks.createMessage.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.resolveContact.mock.invocationCallOrder[0])
+    expect(mocks.inboundWorkflow.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.resolveContact.mock.invocationCallOrder[0])
+  })
+
+  test('a blocked event does not poison the next independent event', async () => {
+    const admitted = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: admitted })
+    mocks.patchConversation.mockResolvedValue({ conversation: admitted })
+    mocks.ensureContactLink.mockRejectedValueOnce(new Error('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH'))
+
+    const eventA = await POST(request())
+    const eventB = await POST(request({
+      providerUpdateId: '1002',
+      providerEventId: 'update:1002',
+    }))
+
+    expect(eventA.status).toBe(200)
+    await expect(eventA.json()).resolves.toMatchObject({ enrichment: 'blocked' })
+    expect(eventB.status).toBe(200)
+    const bodyB = await eventB.json()
+    expect(bodyB.enrichment).toBeUndefined()
+    expect(mocks.createMessage).toHaveBeenCalledTimes(2)
+  })
+
+  test('a persistence failure is still a transport failure', async () => {
+    const admitted = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: admitted })
+    mocks.patchConversation.mockResolvedValue({ conversation: admitted })
+    mocks.createMessage.mockRejectedValue(new Error('DB_DOWN'))
+
+    const response = await POST(request())
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toEqual({ error: 'TELEGRAM_INGRESS_PERSISTENCE_FAILED' })
+    expect(mocks.resolveContact).not.toHaveBeenCalled()
   })
 
   test('does not confirm reachability for an outgoing bot echo', async () => {
@@ -626,7 +792,6 @@ describe('Telegram webhook account and transport admission', () => {
     ['a different conversation key', { chatKind: 'private' }, { externalChatId: 'telegram:999' }],
     ['a different channel', { chatKind: 'private' }, { channel: 'whatsapp' }],
     ['a concrete group chatType', { chatKind: 'private' }, { chatType: 'group' }],
-    ['a conversation bound to another transport', { chatKind: 'private', connectionId: 'telegram-connection-a' }, {}],
   ])('still rejects %s before any person or message mutation', async (_label, metadata, overrides) => {
     mocks.upsertConversation.mockResolvedValue({ conversation: chat(metadata, overrides) })
 

@@ -69,7 +69,7 @@ function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.e
             const text = typeof req.body?.text === 'string' ? req.body.text : '';
             if (!requestedPeer) throw new Error('TELEGRAM_OUTBOUND_PEER_INVALID');
             if (!text) throw new Error('TELEGRAM_MESSAGE_INVALID');
-            if (!requestedAccount) throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN');
+            // The transport binding stays mandatory and canonical.
             if (!requestedConnection || !liveConnection) {
                 throw new Error('TELEGRAM_BOT_CONNECTION_UNPROVEN');
             }
@@ -78,12 +78,24 @@ function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.e
             }
             const inlineKeyboard = sanitizeInlineKeyboard(req.body?.inlineKeyboard);
 
-            // This live call is the provider-account attestation. It must be
-            // immediately before sendMessage and may not be replaced by env.
-            const liveBot = await bot.telegram.getMe();
-            const liveAccount = concreteId(liveBot?.id);
+            // The provider account comes from the readiness-proven Bot identity:
+            // botRuntime.ensureBotIdentity() assigns a validated live getMe result
+            // to Telegraf's botInfo before any update or delivery is accepted. It
+            // is never taken from configuration, and it is deliberately NOT
+            // re-fetched per delivery — a lazy getMe here made every outbound send
+            // depend on a fresh api.telegram.org round trip over an egress that
+            // intermittently resets. A bot's own account id cannot change without
+            // a new token, which restarts the process and re-proves identity.
+            const liveAccount = concreteId(bot.botInfo?.id);
             if (!liveAccount) throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN');
-            if (requestedAccount !== liveAccount) {
+            // providerAccountId is OPTIONAL in the request. No production Telegram
+            // conversation carries a provider-account stamp (measured: 0 of 219),
+            // so `outbound.providerAccountId` is always null and Gravity omits the
+            // field; demanding it rejected every CRM delivery with
+            // TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN while proving nothing. When a
+            // caller DOES pin an account we still hold it to the proven identity,
+            // which is the same asymmetry Gravity's own echo check already uses.
+            if (requestedAccount && requestedAccount !== liveAccount) {
                 throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_MISMATCH');
             }
 
