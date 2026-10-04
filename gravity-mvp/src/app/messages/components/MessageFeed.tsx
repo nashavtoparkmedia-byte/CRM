@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
-import { canRetryOutbound, hasUnknownDeliveryOutcome } from "../hooks/outbound-send-state"
+import { canRetryOutbound, hasUnknownDeliveryOutcome, outboundDeliveryState } from "../hooks/outbound-send-state"
+import { deliveryStateLabelV1 } from "@/modules/messaging/public/v1/delivery-state-policy"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, Clock, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
 import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/modules/calling/public/v1/call-status-policy"
@@ -505,6 +506,9 @@ export default function MessageFeed({
 
         const { message: msg, position, showAvatar, showName, showTail, spacingTop, statusPlacement } = item
         const isOutbound = msg.direction === 'outbound'
+        // Ticks show only what the evidence proves: a send without provider
+        // proof is still pending, never ✓ and never ✓✓.
+        const deliveryState = outboundDeliveryState(msg)
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         const isSearchMatch = activeSearchMessageId === msg.id
 
@@ -837,7 +841,7 @@ export default function MessageFeed({
                                         <div
                                             className="group/fail relative"
                                             role="img"
-                                            aria-label={hasUnknownDeliveryOutcome(msg) ? 'Статус доставки неизвестен' : 'Не отправлено'}
+                                            aria-label={deliveryStateLabelV1(deliveryState ?? 'failed_not_safe_to_retry')}
                                         >
                                             <AlertCircle size={14} strokeWidth={2.5} className="text-red-500" />
                                             {msg.metadata?.error && (
@@ -863,22 +867,22 @@ export default function MessageFeed({
                                             <span className="text-[10px] text-red-500 font-medium leading-none">Статус неизвестен</span>
                                         )}
                                     </div>
-                                ) : msg.status === 'sending' ? (
-                                    <span role="img" aria-label="Отправляется" className="flex items-center translate-y-[1px]">
+                                ) : msg.status === 'sending' || deliveryState === 'send_requested' ? (
+                                    <span role="img" aria-label={msg.status === 'sending' ? 'Отправляется' : deliveryStateLabelV1('send_requested')} className="flex items-center translate-y-[1px]">
                                         <Clock size={12} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white/60' : 'text-[#8ECB8E]/70'} />
                                     </span>
                                 ) : (
                                     <div
                                         role="img"
-                                        aria-label={msg.status === 'read' ? 'Прочитано' : msg.status === 'delivered' ? 'Доставлено' : 'Отправлено'}
+                                        aria-label={deliveryStateLabelV1(deliveryState ?? 'provider_accepted')}
                                         className="flex items-baseline scale-x-[0.9] -space-x-[11px] translate-y-[2px]"
                                     >
-                                        {msg.status === 'read' ? (
+                                        {deliveryState === 'read' ? (
                                             <>
                                                 <Check size={16} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white' : 'text-[#48A5E3]'} />
                                                 <Check size={16} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white' : 'text-[#48A5E3]'} />
                                             </>
-                                        ) : msg.status === 'delivered' ? (
+                                        ) : deliveryState === 'delivered' ? (
                                             <>
                                                 <Check size={16} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white/60' : 'text-[#8ECB8E]'} />
                                                 <Check size={16} strokeWidth={2.5} className={statusPlacement === 'overlay' && msg.type !== 'text' ? 'text-white/60' : 'text-[#8ECB8E]'} />

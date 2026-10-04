@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { prepareMessagesForUI, UIItem } from "../utils/message-utils"
 import { patchConversation } from "./useConversations"
+import type { DeliveryStateV1 } from "@/modules/messaging/public/v1/delivery-state-policy"
 import {
     applySendAnswer,
     applySendFailure,
@@ -43,6 +44,8 @@ export interface Message {
     clientMessageId?: string
     metadata?: Record<string, any>
     attachments?: MessageAttachment[]
+    /** The server's delivery state from this device's own send answer; a canonical row re-derives it. */
+    deliveryState?: DeliveryStateV1
 }
 
 const messageCache = new Map<string, Message[]>()
@@ -136,6 +139,7 @@ export type RetryPersistedDelivery = (messageId: string) => Promise<{
         retryable: boolean
         deliveryOutcome: string | null
         errorSchemaVersion: number | null
+        deliveryState?: string | null
     } | null
 }>
 
@@ -462,6 +466,7 @@ export function useMessages(
                     retryable: result.message.retryable,
                     deliveryOutcome: result.message.deliveryOutcome,
                     errorSchemaVersion: result.message.errorSchemaVersion,
+                    deliveryState: result.message.deliveryState,
                 })
                 : { ...previous, metadata: { ...previous.metadata, error: result.error || previous.metadata?.error } }))
         } catch (err) {

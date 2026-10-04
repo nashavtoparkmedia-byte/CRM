@@ -34,6 +34,8 @@ import { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 import { legacyPrismaExternalConversationPortV1 } from '../public/v1/legacy-prisma-external-conversation-adapter'
 import { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from '../public/v1/channel-message-handler'
 import { legacyPrismaChannelMessagePortV1 } from '../public/v1/legacy-prisma-channel-message-adapter'
+import { createApplyMessageDeliveryEvidenceHandlerV1 } from '../public/v1/message-delivery-evidence-handler'
+import { legacyPrismaMessageDeliveryEvidencePortV1 } from '../public/v1/legacy-prisma-message-delivery-evidence-adapter'
 import { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from '../public/v1/channel-conversation-handler'
 import { legacyPrismaChannelConversationPortV1 } from '../public/v1/legacy-prisma-channel-conversation-adapter'
 import { createDeleteRetainedMessagesHandlerV1, createPurgeMessageRetryMetadataHandlerV1 } from '../public/v1/message-retention-handler'
@@ -84,6 +86,7 @@ const patchExternalConversation = createPatchExternalConversationHandlerV1(legac
 const createExternalConversation = createCreateExternalConversationHandlerV1(legacyPrismaExternalConversationPortV1)
 const createChannelMessage = createCreateChannelMessageHandlerV1(legacyPrismaChannelMessagePortV1)
 const patchMessageDelivery = createPatchMessageDeliveryHandlerV1(legacyPrismaChannelMessagePortV1)
+const applyMessageDeliveryEvidence = createApplyMessageDeliveryEvidenceHandlerV1(legacyPrismaMessageDeliveryEvidencePortV1)
 const upsertChannelConversation = createUpsertChannelConversationHandlerV1(legacyPrismaChannelConversationPortV1)
 const patchChannelConversation = createPatchChannelConversationHandlerV1(legacyPrismaChannelConversationPortV1)
 const deleteRetainedMessages = createDeleteRetainedMessagesHandlerV1(legacyPrismaMessageRetentionPortV1)
@@ -133,6 +136,7 @@ export const patchExternalConversationV1 = (...args: Parameters<typeof patchExte
 export const createExternalConversationV1 = (...args: Parameters<typeof createExternalConversation>) => createExternalConversation(...args)
 export const createChannelMessageV1 = (...args: Parameters<typeof createChannelMessage>) => createChannelMessage(...args)
 export const patchMessageDeliveryV1 = (...args: Parameters<typeof patchMessageDelivery>) => patchMessageDelivery(...args)
+export const applyMessageDeliveryEvidenceV1 = (...args: Parameters<typeof applyMessageDeliveryEvidence>) => applyMessageDeliveryEvidence(...args)
 export const upsertChannelConversationV1 = (...args: Parameters<typeof upsertChannelConversation>) => upsertChannelConversation(...args)
 export const patchChannelConversationV1 = (...args: Parameters<typeof patchChannelConversation>) => patchChannelConversation(...args)
 export const deleteRetainedMessagesV1 = (...args: Parameters<typeof deleteRetainedMessages>) => deleteRetainedMessages(...args)
