@@ -63,7 +63,11 @@ const staticButtons = [
     '🚖 Текущий заказ',
     '💳 Только безнал',
     '💵 Включить наличку',
-    '💰 Компенсация наличных'
+    // Only while released. A hidden entry must not interrupt: this list is
+    // checked before Stage and resets whatever scene is open, so a stale
+    // keyboard press would otherwise throw a driver out of an unrelated
+    // survey, car or order flow before anything refused it.
+    ...startHandler.compensationEntryButtons()
 ];
 
 bot.use(async (ctx, next) => {

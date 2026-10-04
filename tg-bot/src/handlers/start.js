@@ -7,6 +7,22 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { ensureBotMappingV1 } = require('../public-bot-maintenance');
 
+/**
+ * The one spelling of the compensation entry label, and the one place that
+ * decides whether it exists at all.
+ *
+ * Three places must agree: the main keyboard here, the menu action here, and the
+ * interruption middleware in bot.js. They all read this, so the entry cannot be
+ * half-released - visible but unreachable, or hidden but still able to interrupt
+ * an unrelated flow.
+ */
+const COMPENSATION_ENTRY_LABEL = '💰 Компенсация наличных';
+
+/** The label as a keyboard/interruption entry, or nothing while unreleased. */
+function compensationEntryButtons() {
+    return config.compensationEntryEnabled ? [COMPENSATION_ENTRY_LABEL] : [];
+}
+
 function crmParkRequest(action, payload) {
     return new Promise((resolve) => {
         const base = (() => {
@@ -101,7 +117,7 @@ async function getMainMenu(ctx) {
         ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
         ['🚗 Подключиться', surveyButtons[0]],
         ['💬 Чат водителей', '🛠 Поддержка'],
-        ['💰 Компенсация наличных'],
+        ...(config.compensationEntryEnabled ? [[COMPENSATION_ENTRY_LABEL]] : []),
         ['© Yoko Park · Бот для водителей'],
     ];
 
@@ -230,7 +246,14 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
         case '© Yoko Park · Бот для водителей':
             return await showMainMenu(ctx);
 
-        case '💰 Компенсация наличных':
+        case COMPENSATION_ENTRY_LABEL:
+            // A reply keyboard lives in Telegram, not here, so a driver can still
+            // press a button from a keyboard sent before the entry was hidden -
+            // and anyone can type the label by hand. Refuse locally: no scene, no
+            // CRM call, one bounded sentence.
+            if (!config.compensationEntryEnabled) {
+                return await ctx.reply('Раздел «Компенсация наличных» пока недоступен.');
+            }
             if (ctx.scene) return await ctx.scene.enter('compensation');
             return await ctx.reply('Компенсация временно недоступна.');
 
@@ -417,6 +440,8 @@ async function handleMessage(ctx, surveyHandler, adminHandler) {
 }
 
 module.exports = {
+    COMPENSATION_ENTRY_LABEL,
+    compensationEntryButtons,
     showMainMenu,
     handleStart,
     handleMenuAction,

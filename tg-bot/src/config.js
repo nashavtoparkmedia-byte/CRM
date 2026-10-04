@@ -16,6 +16,17 @@ const config = {
     // variable are unaffected.
     databasePath: process.env.BOT_SQLITE_PATH || './database.sqlite',
     
+    // Release visibility for the Telegram cash-compensation entry. Exactly the
+    // string "true" releases it; absent, empty, "false", a mistyped value or any
+    // other value keeps it hidden, so a deploy that forgets the variable fails
+    // closed rather than exposing the pilot.
+    //
+    // This answers one question only: is the entry released? It never decides
+    // whether a driver may compensate - eligibility, park authority, catalogue
+    // state, budget and order freshness all stay with the CRM, which refuses
+    // independently. The flag can therefore only ever hide, never grant.
+    compensationEntryEnabled: process.env.BOT_COMPENSATION_ENTRY_ENABLED === 'true',
+
     // Bot settings
     botName: 'SurveyBot',
     
