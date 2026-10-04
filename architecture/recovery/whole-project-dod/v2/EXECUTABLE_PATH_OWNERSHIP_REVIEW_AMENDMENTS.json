@@ -1711,6 +1711,55 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-s1-shared-retry-safety-main-c0d69f06-20261004",
+      "reviewed_at": "2026-10-04T00:00:00Z",
+      "reviewed_by": "MESSAGING_S1_SHARED_RETRY_SAFETY_MAIN_LANDING_EXECUTOR_REVIEW_20261004",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_S1_MAIN_LANDING_RECONCILE_20261004",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at c0d69f06, whose tail is call-alerts-v1-foundation-main-f9f4d75a-20260930."
+      },
+      "reason": "Records the tracked executable surfaces the S1 shared retry-safety landing adds on top of main c0d69f06: 2,663 + 2 = 2,665 surfaces, context-owned 1,428 -> 1,430 and governed exclusions 1,235 unchanged. The two new paths are the S1 tests gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.test.ts and shared-retry-safety.postgres.test.ts, owned by the messaging context through its manifest owned_paths, so the coverage derivation gives each a context owner and neither reaches a governed exclusion or an exact inventory. The other two S1 landing paths, MessageService.ts and operator-delivery-retry.test.ts, change bytes only; both are context-owned and in no reviewed exact inventory, so this amendment carries no source-fingerprint rebind, and the derivation reports no rebind required and no exact-inventory path without a reviewed assignment. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The frozen S1 development candidate e54cbc3e on the production baseline 10318827 carried its own baseline-local amendment on a different chain; it is not carried here. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2663,
+        "tracked_inventory_sha256": "c483caa51e2e7c5335549f010fda4cbd7decc7c35dcfd9b09b67e1956e546314",
+        "coverage_sha256": "62aeeeafc1126b95b810c5cf1e50ff0e6c6f0bac34608da244f26c0129b355c7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2665,
+        "tracked_inventory_sha256": "876bd77b10714f97b3706d5598cf7b06e0cee6284ba477d19aac0aa2309f43b2",
+        "coverage_sha256": "6b26de9638031de7c478c3c45d953177047cd8c38ceee364f76cba87fbb1f3de"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the messaging context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST. It runs only against a disposable database named by an explicit environment variable and is skipped otherwise."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the messaging context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
