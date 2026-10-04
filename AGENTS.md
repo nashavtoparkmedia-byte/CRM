@@ -129,3 +129,43 @@ interaction, or a real business decision.
 
 These sources are accepted architecture machinery. Reference them; do not
 duplicate, casually regenerate, or rewrite their evidence chains.
+
+## Engineering map
+
+Before substantial feature, domain, schema, integration, runtime, or
+cross-domain work, read `docs/CRM_ENGINEERING_MAP.md` (the CRM engineering
+map), starting with its `AI ENGINEERING ENTRYPOINT`. Use it to identify:
+
+- the owning domain;
+- the existing capability, if one already covers the need;
+- the public extension point;
+- data ownership;
+- important invariants;
+- legacy/compatibility surfaces, which are not a base for new functionality;
+- the relevant verification.
+
+The current repository is authoritative. The map is navigation and synthesized
+engineering knowledge; it does not replace or override this file, the
+manifests, registries, policies, checks, or the code. If the map contradicts
+repository evidence, stop and report `STOP / SYSTEM MAP DRIFT` with the
+discrepancy. Do not silently follow stale documentation, and do not silently
+invent another architecture.
+
+`NEW PRODUCT SECTION != NEW DOMAIN`. `NEW SCREEN != NEW DOMAIN`.
+`NEW WORKFLOW != NEW DOMAIN`. Reuse or extend the existing owning domain when
+the evidence supports it; a new domain still requires the new-domain checklist.
+
+### Map maintenance
+
+At completion of substantial work, report exactly one of:
+
+- `CRM_ENGINEERING_MAP IMPACT = NONE`
+- `CRM_ENGINEERING_MAP IMPACT = UPDATE REQUIRED`, with the affected sections
+  and the reason.
+
+`UPDATE REQUIRED` applies when the change materially alters domain ownership, a
+public contract, data ownership, an important invariant, a critical flow, an
+extension point, runtime topology, verification routing, or a legacy/current
+classification. Ordinary implementation details, UI text, local refactors, and
+changes that do not affect system navigation or architecture do not require a
+map update.
