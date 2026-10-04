@@ -571,6 +571,42 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "messaging-s2-delivery-evidence-contract-e54cbc3e-20261004",
+      "reviewed_at": "2026-10-04T00:00:00Z",
+      "reviewed_by": "MESSAGING_S2_DELIVERY_EVIDENCE_CONTRACT_IMPLEMENTER_20261004",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_S2_AUTONOMOUS_DEVELOPMENT_START_20261004",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Records the S2 delivery evidence contract candidate, built on the frozen S1 candidate e54cbc3e. The effective lineage it extends is the immutable 2026-08-13 review, amendments 1-5, current-review epoch 1 (2,511 -> 2,519), amendment 6, messaging-max-inbound-reliability-final-335cdae7-20261001 (2,519 -> 2,520), and amendment 7, messaging-s1-shared-retry-safety-10318827-20261003 (2,520 -> 2,528), which is the tail of this tree. This development evidence is baseline-local: it does not restate, absorb or reorder any sibling on another lineage, and it is not landing evidence; on a landing lineage this amendment is appended after that lineage's tail, with predecessor and current re-derived there. No current-review epoch is needed, because every surface added here is context-owned and an epoch exists only to admit new exact-inventory assignments. It adds eight tracked executable surfaces, all selected by the messaging context manifest and therefore context-owned, with no explicit ownership assignment: the pure delivery-state policy gravity-mvp/src/modules/messaging/public/v1/delivery-state-policy.ts, the neutral evidence command handler message-delivery-evidence-handler.ts and its Prisma port legacy-prisma-message-delivery-evidence-adapter.ts under the same directory, and five tests (delivery-state-policy.test.ts, message-delivery-evidence-handler.test.ts, delivery-evidence-contract.test.ts and delivery-evidence-contract.postgres.test.ts under modules/messaging/public/v1, and app/messages/hooks/outbound-send-state.test.ts). They move the tracked executable denominator from 2,528 to 2,536, measured with the repository's own tracked-surface inventory. No assignment, exact-inventory transition, lifecycle, functional owner, governed exclusion or reviewed rationale is created or altered, the governed exclusion count stays 1,213, and this amendment carries no rebind: no reviewed exact-inventory surface changes bytes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2528,
+        "tracked_inventory_sha256": "2f866c21ca4ed1fc1e063684bbfb5fa2b25c4b7bced638a26536de7abe1c3b84",
+        "coverage_sha256": "c8d7b69b5f5366ee90c79fce4b3a234fc5bd9ae2381862b5d2be432a0670c8cb"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2536,
+        "tracked_inventory_sha256": "bc6ee03107ebc5db961880421243fcf7af2c247d6d27e1af1eec8f8aa7556098",
+        "coverage_sha256": "a66e53095d5954756227d95d80b6fce790cdcc4c4379b0c555b39f7f4a96b346"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
