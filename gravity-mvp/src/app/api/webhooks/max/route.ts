@@ -19,9 +19,9 @@ import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } fr
 import { selectUniqueExactMaxSenderCandidate } from '@/modules/max-channel/internal/max-contact-ingress-policy'
 import { isAuthorizedMaxScraperWebhookV1 } from '@/modules/max-channel/internal/scraper-webhook-auth'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V2, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1, type ChannelMessageTypeV1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { appendConversationIdentityCollisionV1, createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { appendConversationIdentityCollisionV1, applyMessageDeliveryEvidenceV1, createChannelMessageV1, createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
@@ -136,6 +136,9 @@ type MaxWebhookBody = {
   replyToExternalId?: string | number | null
   chatKind?: 'private' | 'group' | 'unknown' | null
   domRoute?: unknown
+  event?: string | null
+  readerId?: string | number | null
+  mark?: number | null
 }
 
 function normalizeMaxChatId(chatId: unknown): string {
@@ -204,7 +207,85 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 const MAX_DOM_FALLBACK_EXTERNAL_ID = /^max-dom-(\d{1,20})-([0-9a-f]{16})$/
 // Every synthetic id the scraper can mint. A provider-backed source that presented one
 // of these would be claiming provider evidence it does not have, so it is refused.
-const MAX_DOM_PLACEHOLDER_EXTERNAL_ID = /^(?:max-dom-|max-recovered-)/
+const MAX_DOM_PLACEHOLDER_EXTERNAL_ID = /^(?:max-dom-|max-recovered-|max-mirror-)/
+
+// A MAX provider message id as the scraper canonicalizes it: 'd3' and the 16 hex digits of
+// the 64-bit id, which is (MAX server ms << 16) | a 16-bit suffix.
+const MAX_PROVIDER_MESSAGE_ID = /^d3[0-9a-f]{16}$/i
+
+/** MAX's own time for a provider message id, in ms; null for anything else. */
+function maxProviderMessageTimeMs(externalId: string | null | undefined): number | null {
+  if (!externalId || !MAX_PROVIDER_MESSAGE_ID.test(externalId)) return null
+  const id = BigInt.asIntN(64, BigInt(`0x${externalId.slice(2)}`))
+  return id > 0n ? Number(id >> 16n) : null
+}
+
+function comparableMaxText(value: string | null | undefined): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+// D-04: a DOM-recovered copy of a text is written when the scraper recovers it, so its
+// sentAt lies at most a little before MAX's own time for the message (clock skew) and up
+// to the recovery delay after it.
+const MAX_DOM_TEXT_UPGRADE_BEFORE_MS = 60_000
+const MAX_DOM_TEXT_UPGRADE_AFTER_MS = 10 * 60_000
+// Outbound rows one read mark is checked against, newest first.
+const MAX_READ_MARK_BATCH = 50
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002')
+}
+
+/**
+ * A peer's read mark, forwarded by the scraper from an op:130 push or a chat snapshot. MAX
+ * Web shows a message read by a participant when the message's time is at or before that
+ * participant's mark (isReadBy: time <= mark), so each of our messages in the conversation
+ * whose MAX time is at or before the mark gets a read receipt. The MAX time is read from the
+ * provider id itself, so no CRM clock enters the comparison. Messaging's evidence command
+ * applies it, and only when stronger than what the row already proves: a repeated or older
+ * mark changes nothing.
+ */
+async function applyMaxPeerReadMark(body: MaxWebhookBody, providerAccountId: string) {
+  const mark = typeof body.mark === 'number' && Number.isFinite(body.mark) && body.mark > 0 ? body.mark : null
+  const readerId = body.readerId != null ? String(body.readerId) : ''
+  if (!body.chatId || !mark || !readerId) {
+    return NextResponse.json({ error: 'MAX_READ_MARK_INVALID' }, { status: 400 })
+  }
+  if (readerId === providerAccountId) return NextResponse.json({ ok: true, skipped: 'own_read_mark', applied: 0 })
+  const chat = await prisma.chat.findUnique({ where: { externalChatId: normalizeMaxChatId(body.chatId) } })
+  if (!chat || chat.channel !== 'max') return NextResponse.json({ ok: true, skipped: 'unknown_conversation', applied: 0 })
+  const chatAccount = concreteProviderAccountId(chat.metadata)
+  if (chatAccount && chatAccount !== providerAccountId) {
+    return NextResponse.json({ ok: true, skipped: 'provider_account_mismatch', applied: 0 })
+  }
+  const rows = await prisma.message.findMany({
+    where: {
+      chatId: chat.id,
+      channel: 'max',
+      direction: 'outbound',
+      status: { in: ['sent', 'delivered'] },
+      externalId: { startsWith: 'd3' },
+    },
+    select: { id: true, externalId: true },
+    orderBy: { sentAt: 'desc' },
+    take: MAX_READ_MARK_BATCH,
+  })
+  let applied = 0
+  for (const row of rows) {
+    const providerTime = maxProviderMessageTimeMs(row.externalId)
+    if (providerTime === null || providerTime > mark || !row.externalId) continue
+    const result = await applyMessageDeliveryEvidenceV1({
+      contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+      chatId: chat.id,
+      channel: 'max',
+      providerMessageId: row.externalId,
+      evidence: 'read_receipt',
+    })
+    if (result.outcome === 'applied') applied += 1
+  }
+  maxRuntimeTrace('webhook.read_mark', { chatId: String(body.chatId), chatInternalId: chat.id, mark, applied, source: body.source ?? null })
+  return NextResponse.json({ ok: true, applied })
+}
 const MAX_DOM_ROUTE_ID = /^\d{1,20}$/
 // Bounded page for the competing-conversation scan; a full page fails closed.
 const MAX_DOM_FALLBACK_CLAIMANT_LIMIT = 25
@@ -385,6 +466,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' }, { status: 400 })
     }
 
+    if (body.event === 'read_mark') return applyMaxPeerReadMark(body, maxProviderAccountId)
+
     if (!chatId) {
       maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'missing_chat_id' })
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
@@ -435,10 +518,7 @@ export async function POST(request: Request) {
     const externalIdString = externalId ? String(externalId) : null
     const replyToExternalIdString = replyToExternalId ? String(replyToExternalId) : null
     const isTextProviderEvent = isTextType && usableAttachments.length === 0
-    const isPlaceholderTextId = !!externalIdString && (
-      externalIdString.startsWith('max-dom-') ||
-      externalIdString.startsWith('max-recovered-')
-    )
+    const isPlaceholderTextId = !!externalIdString && MAX_DOM_PLACEHOLDER_EXTERNAL_ID.test(externalIdString)
     const isHistoryReplay = source === 'history' || source === 'catchup'
     const allowLiveDomTextRecovery = Boolean(
       isTextProviderEvent &&
@@ -456,6 +536,14 @@ export async function POST(request: Request) {
         skipped: 'text_without_provider_identity',
         externalId: externalIdString,
       })
+    }
+
+    // A message of our own account is recorded only with MAX's id for it (the provider
+    // writer below). The page draws an outgoing message before MAX accepts it, so a copy
+    // without that id - a DOM mirror, a minted id - proves nothing about delivery.
+    if (!deleted && isOutgoing && !(externalIdString && MAX_PROVIDER_MESSAGE_ID.test(externalIdString))) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalIdString, chatId: String(chatId), reason: 'outgoing_without_provider_id' })
+      return NextResponse.json({ ok: true, skipped: 'outgoing_without_provider_id', externalId: externalIdString })
     }
 
     const rawExternalChatId = String(rawChatId || chatId)
@@ -950,8 +1038,50 @@ export async function POST(request: Request) {
         })).message as Message
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
       }
-    } else if (msgType === 'text' && externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
-      console.log(`[MAX Webhook] skipped text DOM externalId upgrade for ${externalIdString}`)
+    } else if (
+      msgType === 'text' &&
+      !isOutgoing &&
+      externalIdString &&
+      MAX_PROVIDER_MESSAGE_ID.test(externalIdString) &&
+      !(await prisma.message.findUnique({ where: { externalId: externalIdString }, select: { id: true } }))
+    ) {
+      // D-04: the provider event for a text the scraper already stored from the page,
+      // under a synthetic id, takes that row over instead of adding a second copy. Bounded
+      // to this conversation, inbound text, the same text, and the recovery window around
+      // MAX's own time for the message; the oldest such copy is the one taken, one copy
+      // per provider message, so every provider message still ends up as exactly one row.
+      const providerTime = maxProviderMessageTimeMs(externalIdString) ?? sentAt.getTime()
+      const domCopies = await prisma.message.findMany({
+        where: {
+          chatId: chat.id,
+          channel: 'max',
+          direction: 'inbound',
+          type: 'text',
+          externalId: { startsWith: 'max-dom-' },
+          sentAt: {
+            gte: new Date(providerTime - MAX_DOM_TEXT_UPGRADE_BEFORE_MS),
+            lte: new Date(providerTime + MAX_DOM_TEXT_UPGRADE_AFTER_MS),
+          },
+        },
+        orderBy: { sentAt: 'asc' },
+        take: 25,
+      })
+      const domCopy = domCopies.find(candidate => comparableMaxText(candidate.content) === comparableMaxText(content))
+      if (domCopy) {
+        // The row is provider-backed from here: it keeps nothing that said it came from the page.
+        const { source: _domSource, ...domMetadata } = metadataRecord(domCopy.metadata)
+        message = (await replaceExternalMessageV1({
+          contract: REPLACE_EXTERNAL_MESSAGE_COMMAND_V1,
+          messageId: domCopy.id,
+          externalId: externalIdString,
+          type: msgType,
+          content,
+          sentAt,
+          metadata: { ...domMetadata, senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], upgradedFromExternalId: domCopy.externalId, ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+        })).message as Message
+        console.log(`[MAX Webhook] upgraded DOM text externalId ${domCopy.externalId} → ${externalIdString}`)
+        opsLog('info', 'max_dom_text_upgraded', { channel: 'max', chatId: chat.id, externalChatId, fromExternalId: domCopy.externalId, externalId: externalIdString })
+      }
     }
 
     const isDomFallbackMedia =
@@ -1006,6 +1136,63 @@ export async function POST(request: Request) {
           deduped: true,
         })
       }
+    }
+
+    // Our own account's message with MAX's id: pushed from another session of the account,
+    // or read back by the catch-up. Messaging's evidence command settles the CRM send it
+    // belongs to (by that id, else the oldest unsettled CRM send of the same text); a
+    // message the CRM never sent is recorded as `sent` carrying that same provider
+    // evidence. MAX reports no device receipt, so nothing here is ever `delivered`; a
+    // peer read mark makes it `read` later.
+    if (!message && isOutgoing && externalIdString && MAX_PROVIDER_MESSAGE_ID.test(externalIdString)) {
+      const providerEvidence = {
+        contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+        chatId: chat.id,
+        channel: 'max' as const,
+        providerMessageId: externalIdString,
+        evidence: isHistoryReplay ? 'history_readback' as const : 'provider_echo' as const,
+        ...(msgType === 'text' ? { content } : {}),
+        providerSentAt: sentAt,
+      }
+      let settled = await applyMessageDeliveryEvidenceV1(providerEvidence)
+      if (settled.outcome === 'no_match') {
+        try {
+          await createChannelMessageV1({
+            contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+            chatId: chat.id,
+            direction: 'outbound',
+            type: msgType as ChannelMessageTypeV1,
+            content,
+            channel: 'max',
+            externalId: externalIdString,
+            sentAt,
+            metadata: { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+          })
+        } catch (error) {
+          // Another delivery of the same event stored it first; the evidence below finds it.
+          if (!isUniqueConstraintViolation(error)) throw error
+        }
+        settled = await applyMessageDeliveryEvidenceV1(providerEvidence)
+      }
+      if (settled.outcome === 'refused' && settled.reason === 'provider_id_collision') {
+        const owner = await prisma.message.findUnique({ where: { externalId: externalIdString } })
+        const owningChat = owner ? await prisma.chat.findUnique({ where: { id: owner.chatId } }) : null
+        if (owningChat && owningChat.id !== chat.id) {
+          const collision = await rejectExistingChatCollision(owningChat, {
+            requireExactExternalChatId: true,
+            expectedChatId: chat.id,
+          })
+          if (collision) return collision
+        }
+        return NextResponse.json({ error: 'MAX_MESSAGE_IDENTITY_COLLISION' }, { status: 409 })
+      }
+      if (!settled.messageId) {
+        // Contention or an unreadable answer: nothing is claimed, the scraper retries.
+        return NextResponse.json({ error: 'MAX_PROVIDER_EVIDENCE_NOT_APPLIED', reason: settled.reason }, { status: 503 })
+      }
+      message = await prisma.message.findUnique({ where: { id: settled.messageId } })
+      if (!message) return NextResponse.json({ error: 'MAX_PROVIDER_EVIDENCE_NOT_APPLIED' }, { status: 503 })
+      maxRuntimeTrace('webhook.own_message_evidence', { providerMessageId: externalIdString, chatInternalId: chat.id, messageId: message.id, outcome: settled.outcome, matchedBy: settled.matchedBy })
     }
 
     // Create Message (skip if already seen)

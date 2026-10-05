@@ -18,11 +18,14 @@ const {
   selectPendingLiveDomCandidates,
   evaluatePhoneResolutionUiSend,
   isUiTextSubmitObserved,
+  canonicalMaxMessageIdHex,
+  maxRealIdAsPlainNumber,
+  maxRealIdFromProtocolId,
   runSingleMaxTextSend,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
-const { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry } = require('./sync/MessageSync')
+const { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry, recoveryStatePath } = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
@@ -45,6 +48,8 @@ const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
 const BIDIRECTIONAL_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.bidirectional_history_recovery_v1')
+// On the volume (D-09): every recreate used to start without it.
+const LAST_ACTIVITY_PATH   = recoveryStatePath('last_activity.json')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -155,6 +160,33 @@ function maxDeliveryLog(event) {
 
 function isRealMaxMessageId(id) {
   return /^d301/i.test(String(id || ''))
+}
+
+// Ids in a request the scraper builds are the ids the page itself would send
+// (see maxRealIdFromProtocolId): a chat by its real id, a message by its
+// 64-bit id, both as BigInt - which the frame encoder writes as MAX's id ext.
+function maxChatIdForRequest(protocolChatId) {
+  const real = maxRealIdFromProtocolId(protocolChatId)
+  if (real === null || real === 0n) throw Object.assign(new Error(`not a MAX chat id: ${protocolChatId}`), { dispatched: false, reason: 'invalid_chat_id' })
+  return real
+}
+
+function maxMessageIdForRequest(messageId) {
+  const hex = canonicalMaxMessageIdHex(typeof messageId === 'object' ? messageId : String(messageId || ''))
+  const id = hex ? maxRealIdFromProtocolId({ __maxId: true, hex }) : null
+  if (id === null) throw Object.assign(new Error(`not a MAX message id: ${messageId}`), { dispatched: false, reason: 'invalid_message_id' })
+  return id
+}
+
+function maxMessageIdFromResponse(response) {
+  return canonicalMaxMessageIdHex(response?.message?.id) || null
+}
+
+// A media id MAX handed out (videoId, fileId) goes back the way the page sends
+// it back: as the plain number its codec decoded it to.
+function plainMaxIdForRequest(value) {
+  if (typeof value === 'string' && /^(?:d3|cf)[0-9a-f]{16}$/i.test(value)) return maxRealIdAsPlainNumber({ __maxId: true, hex: value })
+  return maxRealIdAsPlainNumber(value) ?? value
 }
 
 function stableTextCid(seed) {
@@ -471,115 +503,6 @@ function extractReactionCountersFromMap(messagesReactions) {
   return countersByMessage
 }
 
-function hexFromMaxReactionBlob(value) {
-  if (value == null) return ''
-  const raw = String(value)
-  if (/^[0-9a-f]+$/i.test(raw) && raw.length % 2 === 0) return raw.toLowerCase()
-  return Buffer.from(raw, 'utf8').toString('hex').toLowerCase()
-}
-
-function maxMessageSuffix(messageId) {
-  const hex = String(messageId || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
-  if (hex.length < 12) return ''
-  return hex.slice(-12)
-}
-
-function compactReactionSnapshotMatches(messagesReactions, messageId) {
-  if (!messagesReactions || !messageId) return false
-  const suffix = maxMessageSuffix(messageId)
-  if (!suffix) return false
-  const countersMarker = Buffer.from('counters').toString('hex')
-  for (const value of Object.values(messagesReactions)) {
-    if (typeof value !== 'string') continue
-    const hex = hexFromMaxReactionBlob(value)
-    if (hex.includes(countersMarker) && hex.includes(suffix)) return true
-  }
-  return false
-}
-
-function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remove = false, timeoutMs = 15_000 } = {}) {
-  if (!transport?._rawHandlers || !messageId) return Promise.resolve(null)
-  const expectedMessageId = String(messageId)
-  const expectedChatId = chatId != null ? String(chatId) : null
-  const expectedEmoji = emoji ? normalizeReactionEmoji(emoji) : ''
-
-  return new Promise(resolve => {
-    let done = false
-    const cleanup = () => {
-      const index = transport._rawHandlers.indexOf(handler)
-      if (index >= 0) transport._rawHandlers.splice(index, 1)
-    }
-    const finish = confirmation => {
-      if (done) return
-      done = true
-      clearTimeout(timer)
-      cleanup()
-      resolve(confirmation)
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    const matches = externalMsgId => String(externalMsgId || '') === expectedMessageId
-
-    const handler = data => {
-      try {
-        if (![135, 155, 180].includes(data?.opcode)) return
-        const payload = data.payload || {}
-
-        if (data.opcode === 180 && payload.messagesReactions) {
-          const byMessage = extractReactionCountersFromMap(payload.messagesReactions)
-          if (byMessage.has(expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180',
-              counters: byMessage.get(expectedMessageId),
-            })
-            return
-          }
-          if (compactReactionSnapshotMatches(payload.messagesReactions, expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180_compact',
-              counters: expectedEmoji ? [{ reaction: expectedEmoji, count: remove ? 0 : 1 }] : undefined,
-            })
-            return
-          }
-        }
-
-        if (data.opcode === 155 && matches(payload.messageId || payload.id)) {
-          const counters = normalizeReactionCounters(payload.reactionInfo || payload)
-          if (counters.length > 0 || remove) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op155',
-              counters,
-            })
-            return
-          }
-        }
-
-        if (data.opcode === 135 && payload.chat) {
-          const chatMatches = !expectedChatId || !payload.chat.id || String(payload.chat.id) === expectedChatId
-          if (chatMatches && matches(payload.chat.lastReactedMessageId)) {
-            const reaction = normalizeReactionEmoji(payload.chat.lastReaction || expectedEmoji)
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op135',
-              reaction,
-              counters: reaction ? [{ reaction, count: remove ? 0 : 1 }] : undefined,
-            })
-          }
-        }
-      } catch (e) {
-        console.warn(`[sendReaction] confirmation parse failed: ${e.message}`)
-      }
-    }
-    transport._rawHandlers.push(handler)
-  })
-}
-
 function normalizeReactionCounters(source) {
   const raw = Array.isArray(source?.counters)
     ? source.counters
@@ -837,6 +760,10 @@ async function forwardToWebhook(payload) {
     chatKind: deriveMaxChatKind(...providerChatModels),
   }
   trackImportedMessage(normalizedPayload.chatId, normalizedPayload.timestamp)
+  return postToCrmWebhook(normalizedPayload)
+}
+
+function postToCrmWebhook(normalizedPayload) {
   const url  = new URL(CRM_WEBHOOK_URL)
   const body = JSON.stringify(normalizedPayload)
   const mod  = url.protocol === 'https:' ? https : http
@@ -1149,13 +1076,67 @@ async function forwardIncomingMessage(msg, mediaPipeline, messageSync, transport
   // Сохраняем timestamp последней активности для catch-up при рестарте
   try {
     fs.writeFileSync(
-      path.join(__dirname, 'last_activity.json'),
+      LAST_ACTIVITY_PATH,
       JSON.stringify({ ts: Date.now() })
     )
   } catch {}
 
   // Запоминаем chatId для catch-up при рестарте
   rememberKnownChatId(payload.chatId)
+}
+
+// ─── Peer read marks → CRM ───────────────────────────────────────────────────
+// A peer's read mark (see TransportInterceptor._notePeerReadMark) goes to the
+// same webhook as an event of its own; the CRM turns it into a read receipt
+// for each of our messages at or before the mark. One mark per chat and reader
+// waits at a time: a newer mark replaces an older one still queued.
+const pendingReadMarks = new Map()
+let readMarkFlushTimer = null
+let readMarkFlushing = false
+
+function queueReadMarkForCrm(event) {
+  if (!event?.chatId || !event?.readerId || !Number.isFinite(event?.mark)) return
+  const key = `${event.chatId}:${event.readerId}`
+  const queued = pendingReadMarks.get(key)
+  if (queued && queued.mark >= event.mark) return
+  pendingReadMarks.set(key, event)
+  if (!readMarkFlushTimer && !readMarkFlushing) readMarkFlushTimer = setTimeout(flushReadMarksToCrm, 500)
+}
+
+async function forwardReadMarkToWebhook(event) {
+  const providerAccountId = liveAuthenticatedMaxProviderAccountId()
+  if (!providerAccountId) throw new Error('MAX_PROVIDER_ACCOUNT_UNPROVEN')
+  return postToCrmWebhook({
+    event: 'read_mark',
+    accountId: providerAccountId,
+    chatId: normalizeMaxChatId(event.chatId),
+    rawChatId: String(event.chatId),
+    readerId: String(event.readerId),
+    mark: event.mark,
+    source: event.source || null,
+  })
+}
+
+async function flushReadMarksToCrm() {
+  readMarkFlushTimer = null
+  readMarkFlushing = true
+  try {
+    while (pendingReadMarks.size) {
+      const [key, event] = pendingReadMarks.entries().next().value
+      pendingReadMarks.delete(key)
+      const result = await forwardWithBoundedRetry(forwardReadMarkToWebhook, event)
+      const applied = result?.json && typeof result.json === 'object' ? result.json.applied : null
+      if (result.status >= 200 && result.status < 300) {
+        console.log(`[readMark] → CRM chatId=${event.chatId} reader=${event.readerId} mark=${event.mark} source=${event.source} applied=${applied ?? 'n/a'}`)
+      } else {
+        console.warn(`[readMark] CRM did not take chatId=${event.chatId} mark=${event.mark}: ${result.error?.message || result.status}`)
+        transport?.forgetPeerReadMark?.(event.chatId, event.readerId, event.mark)
+      }
+    }
+  } finally {
+    readMarkFlushing = false
+    if (pendingReadMarks.size && !readMarkFlushTimer) readMarkFlushTimer = setTimeout(flushReadMarksToCrm, 500)
+  }
 }
 
 // ─── Отправка текста ─────────────────────────────────────────────────────────
@@ -1177,12 +1158,33 @@ async function forwardIncomingMessage(msg, mediaPipeline, messageSync, transport
  * dispatched. A CRM-supplied route that disagrees with the attested one is
  * refused rather than trusted.
  */
+// MAX Web's route for a chat is /<the chat's real id> (its _buildUrl). The
+// static overrides above are exactly that projection of four protocol ids,
+// written down before the id encoding was understood (see
+// maxRealIdFromProtocolId). Any other chat is sent to on its canonical route,
+// and only after MAX has accepted the page's own subscribe or history request
+// for that chat on that route (prepareTextSendSurface).
+function canonicalWebRouteForChat(protocolChatId) {
+  const real = maxRealIdFromProtocolId(protocolChatId)
+  return real === null || real === 0n ? null : real.toString()
+}
+
 function resolveAttestedTextSendRoute(chatId, uiChatId) {
-  const attested = UI_CHAT_ID_OVERRIDES[String(chatId ?? '')]
+  const protocolChatId = String(chatId ?? '')
+  const attested = UI_CHAT_ID_OVERRIDES[protocolChatId]
   const requested = String(uiChatId ?? '').trim()
-  if (!attested) return { route: null, reason: 'route_unresolved' }
-  if (requested && requested !== String(attested)) return { route: null, reason: 'route_conflict' }
-  return { route: { uiRouteId: String(attested), source: 'static_override' } }
+  if (attested) {
+    if (requested && requested !== String(attested)) return { route: null, reason: 'route_conflict' }
+    return { route: { uiRouteId: String(attested), source: 'static_override' } }
+  }
+  const canonical = canonicalWebRouteForChat(protocolChatId)
+  if (!canonical) return { route: null, reason: 'route_unresolved' }
+  if (requested && requested !== canonical) {
+    // A stored uiChatId (a legacy phone-era id) is a hint older code kept; it
+    // never replaces the route MAX Web itself uses.
+    console.warn(`[sendText] stored uiChatId ignored for chatId=${protocolChatId}: canonical route ${canonical}`)
+  }
+  return { route: { uiRouteId: canonical, source: 'canonical_real_id', requiresAttestation: true } }
 }
 
 function isPageOnWebRoute(uiRouteId) {
@@ -1207,16 +1209,41 @@ async function waitForDomRecoveryToFinish(timeoutMs = 15_000) {
  * it is not already open - every navigation reloads the page and its socket),
  * and an authenticated socket that has stayed up.
  */
-async function prepareTextSendSurface(uiRouteId, protocolChatId, { needsComposeRoute }) {
+async function openTextSendRoute(uiRouteId, protocolChatId) {
+  if (transport) transport._activeUiChatId = String(protocolChatId)
+  console.log(`[sendText] opening https://web.max.ru/${uiRouteId}`)
+  await page.goto(`https://web.max.ru/${uiRouteId}`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+  return isPageOnWebRoute(uiRouteId)
+}
+
+async function prepareTextSendSurface(route, protocolChatId, { needsComposeRoute }) {
+  const uiRouteId = route.uiRouteId
   if (!page || !isReady) return { ready: false, reason: 'page_not_ready' }
   if (!(await waitForDomRecoveryToFinish())) return { ready: false, reason: 'dom_recovery_busy' }
+  let openedAt = 0
   if (needsComposeRoute && !isPageOnWebRoute(uiRouteId)) {
-    if (transport) transport._activeUiChatId = String(protocolChatId)
-    console.log(`[sendText] opening https://web.max.ru/${uiRouteId}`)
-    await page.goto(`https://web.max.ru/${uiRouteId}`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
-    if (!isPageOnWebRoute(uiRouteId)) return { ready: false, reason: 'route_not_open' }
+    openedAt = Date.now()
+    if (!(await openTextSendRoute(uiRouteId, protocolChatId))) return { ready: false, reason: 'route_not_open' }
   }
-  return transport.waitForSendReadySocket({ stableMs: 1200, timeoutMs: 20_000 })
+  let socket = await transport.waitForSendReadySocket({ stableMs: 1200, timeoutMs: 20_000 })
+  if (!socket.ready || !needsComposeRoute || !route.requiresAttestation) return socket
+
+  // Nothing is typed into a route MAX has not accepted as this chat.
+  let attestation = await transport.waitForRouteAttestation(protocolChatId, { sinceMs: openedAt, timeoutMs: 4_000 })
+  if (!attestation && !openedAt) {
+    // Already on the route, but no answer recorded for it: open it again so the
+    // page asks MAX once more.
+    openedAt = Date.now()
+    if (!(await openTextSendRoute(uiRouteId, protocolChatId))) return { ready: false, reason: 'route_not_open' }
+    socket = await transport.waitForSendReadySocket({ stableMs: 1200, timeoutMs: 20_000 })
+    if (!socket.ready) return socket
+    attestation = await transport.waitForRouteAttestation(protocolChatId, { sinceMs: openedAt, timeoutMs: 4_000 })
+  }
+  if (!attestation) return { ready: false, reason: 'route_unattested' }
+  if (!attestation.accepted) {
+    return { ready: false, reason: `route_refused:${attestation.error}`, refusedCode: 'MAX_ROUTE_UNRESOLVED' }
+  }
+  return socket
 }
 
 async function findComposeInput() {
@@ -1354,7 +1381,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
       transport,
       chatId: protocolChatId,
       text,
-      ensureReady: () => prepareTextSendSurface(route.uiRouteId, protocolChatId, { needsComposeRoute: !replyProviderId }),
+      ensureReady: () => prepareTextSendSurface(route, protocolChatId, { needsComposeRoute: !replyProviderId }),
       performAction: replyProviderId
         ? () => submitReplyThroughPage(protocolChatId, text, replyProviderId, cid, route.uiRouteId)
         : () => submitTextThroughCompose(route.uiRouteId, text),
@@ -2985,17 +3012,6 @@ function stableDomCandidateMessageId(chatId, text, attachments = [], candidate =
   return stableDomMediaMessageId(chatId, `${text || ''}:pos=${x}:${y}`, attachments)
 }
 
-function stableDomMirrorMessageId(chatId, text, attachments = [], candidate = {}) {
-  const day = Math.floor(Date.now() / 86_400_000)
-  const minute = Number.isFinite(candidate.displayMinute) ? candidate.displayMinute : candidate.displayTime || 'unknown'
-  const attachmentSignature = attachments
-    .map(att => `${att.type || ''}:${att.name || ''}:${att.size || ''}`)
-    .join('|')
-  const signature = `${chatId}:${day}:${minute}:${comparableDomText(text)}:${attachmentSignature}`
-  const hash = crypto.createHash('sha1').update(signature).digest('hex').slice(0, 16)
-  return `max-mirror-${chatId}-${hash}`
-}
-
 async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual', options = {}) {
   if (!latest?.text && !latest?.attachments?.length) return { skipped: 'no_content' }
   if (latest.text && !latest.attachments?.length && isDomNoiseText(latest.text)) return { skipped: 'noise_text', text: latest.text }
@@ -3006,17 +3022,18 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   if (isOutgoingCandidate && !options.includeOutgoing) {
     return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW }
   }
-  if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
-    return { skipped: 'crm_outbound_already_recorded', text: latest.text }
+  // The page draws an outgoing message before MAX has accepted it, so a DOM
+  // copy of one proves nothing about the provider and carries no provider id.
+  // Messages of our own account reach the CRM only with MAX's id: pushed from
+  // another session, or read back by the catch-up.
+  if (isOutgoingCandidate) {
+    return { skipped: 'outgoing_without_provider_id', text: latest.text }
   }
-  if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
-    return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
-  }
-  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+  const pendingProviderId = reason === 'empty_op71_after_op128' && latest.text && !latest.attachments?.length
     ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
     : null
   let resolvedProviderId = pendingProviderId
-  const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+  const replyParts = reason === 'empty_op71_after_op128' && latest.text && !latest.attachments?.length
     ? domReplyQuoteParts(latest.text)
     : null
   const replyBridge = new MaxWebReplyBridge(page)
@@ -3097,9 +3114,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const text = attachments.length > 0 ? cleanDomMediaCaption(latest.text, attachments) : latest.text
   if (!text && !attachments.length) return { skipped: 'no_download_source', rawAttachments: latest.attachments?.length || 0 }
 
-  const externalId = isOutgoingCandidate
-    ? stableDomMirrorMessageId(chatId, text, attachments, latest)
-    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
+  const externalId = resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest)
   // Committed only once the CRM has accepted it, below. Marking it here made a refused
   // message permanently unretryable and, for a provider-backed candidate, left the
   // pending head both unconfirmed and already-seen - a per-chat inbound deadlock.
@@ -3129,8 +3144,8 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     timestamp: latest._providerTimestamp || options.timestamp || Date.now(),
     messageType,
     attachments,
-    isOutgoing: isOutgoingCandidate,
-    source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    isOutgoing: false,
+    source: resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback',
     domRoute,
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
@@ -3148,7 +3163,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     // head to the next candidate.
     return { skipped: 'pending_provider_not_accepted', providerBackedRetry: true, externalId, text, webhook: result }
   }
-  if (!isOutgoingCandidate && reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
+  if (reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
     rememberDomRecoveredText(chatId, text)
   }
   if (result.status >= 200 && result.status < 300 && result.skipped) {
@@ -3382,30 +3397,17 @@ let _dialogBusy      = false  // защита от параллельных вы
 async function syncContacts(timeoutMs = 8000) {
   if (!transport || !isReady) return false
 
-  const fresh = await new Promise((resolve) => {
-    let done = false
-    const timer = setTimeout(() => {
-      const idx = transport._rawHandlers.indexOf(handler)
-      if (idx > -1) transport._rawHandlers.splice(idx, 1)
-      done = true; resolve(false)
-    }, timeoutMs)
-
-    function handler(data) {
-      if (data.opcode === 32 && data.payload?.contacts) {
-        clearTimeout(timer)
-        const idx = transport._rawHandlers.indexOf(handler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-        contactStore.ingest(data.payload)
-        if (!done) { done = true; resolve(true) }
-      }
-    }
-    transport._rawHandlers.push(handler)
-
-    // Try to trigger a contacts refresh by sending opcode 32 as a request
-    // MAX server should respond with cmd:1 payload.contacts OR push a fresh opcode 32
-    transport.sendFrame(32, {}, { waitResponse: false })
-      .catch(e => console.warn('[syncContacts] sendFrame(32) failed:', e.message))
-  })
+  // The answer to the scraper's own request comes back to this call only.
+  const fresh = await transport.requestBinary(OP.CONTACTS, {}, { timeoutMs, purpose: 'contacts_sync' })
+    .then(payload => {
+      if (!payload?.contacts) return false
+      contactStore.ingest(payload)
+      return true
+    })
+    .catch(e => {
+      console.warn('[syncContacts] op:32 failed:', e.message)
+      return false
+    })
 
   if (fresh) {
     _lastContactSync = Date.now()
@@ -3425,36 +3427,18 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
   if (existing) return existing
 
   if (!transport || !isReady) return null
-  const userIdNum = Number(senderId)
-  if (isNaN(userIdNum)) return null
-
-  return new Promise((resolve) => {
-    let done = false
-    const timer = setTimeout(() => { done = true; resolve(null) }, timeoutMs)
-
-    function handler(data) {
-      if (data.opcode === 32 && data.payload?.contacts) {
-        const found = (data.payload.contacts || []).find(c => String(c.id) === String(senderId))
-        if (found) {
-          clearTimeout(timer)
-          const idx = transport._rawHandlers.indexOf(handler)
-          if (idx > -1) transport._rawHandlers.splice(idx, 1)
-          contactStore.ingest(data.payload)
-          if (!done) { done = true; resolve(found.phone ? String(found.phone) : null) }
-        }
-      }
-    }
-    transport._rawHandlers.push(handler)
-
-    transport.sendFrame(OP.CONTACTS, { contactIds: [userIdNum] }, { waitResponse: false })
-      .catch(e => {
-        clearTimeout(timer)
-        const idx = transport._rawHandlers.indexOf(handler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-        if (!done) { done = true; resolve(null) }
-        console.warn('[getContactPhone] op:32 failed:', e.message)
-      })
-  })
+  const contactId = maxRealIdFromProtocolId(senderId)
+  if (contactId === null) return null
+  try {
+    const payload = await transport.requestBinary(OP.CONTACTS, { contactIds: [contactId] }, { timeoutMs, purpose: 'contact_lookup' })
+    const found = (payload?.contacts || []).find(c => maxRealIdFromProtocolId(c?.id) === contactId)
+    if (!found) return null
+    contactStore.ingest(payload)
+    return found.phone ? String(found.phone) : null
+  } catch (e) {
+    console.warn('[getContactPhone] op:32 failed:', e.message)
+    return null
+  }
 }
 
 // ─── "Найти по номеру" dialog ─────────────────────────────────────────────────
@@ -4756,7 +4740,7 @@ async function resolvePhoneLive(digits, messageToSend = null) {
  * Returns the upload response JSON: {photos: {"<photoId>": {token: "..."}}}
  */
 async function uploadImageToMax(transport, fileBuffer, filename, mimeType) {
-  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_IMAGE_URL, { count: 1 }, { waitResponse: true })
+  const uploadResp = await transport.requestBinary(OP.GET_UPLOAD_IMAGE_URL, { count: 1 }, { purpose: 'media_upload_url' })
   if (!uploadResp?.url) throw new Error('Не получен URL для загрузки изображения')
   const uploadName = safeUploadFilename(filename, 'image.jpg')
 
@@ -4848,7 +4832,7 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
     uploadResponse: { hasPhotoToken: Boolean(photoToken), keys: Object.keys(uploadData || {}) },
   })
 
-  const cid = -Date.now()
+  const cid = BigInt(Date.now())
   maxDeliveryLog({
     operation: 'send',
     status: 'send_requested',
@@ -4856,12 +4840,12 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-    chatId,
+  const resp = await transport.requestBinary(OP.SEND_MESSAGE, {
+    chatId: maxChatIdForRequest(chatId),
     message: { cid, text: caption || '', attaches: [{ _type: 'PHOTO', photoToken }] },
     notify: true,
-  }, { waitResponse: true })
-  const maxMessageId = resp?.message?.id ? String(resp.message.id) : null
+  }, { timeoutMs: 15_000, purpose: 'media_send' })
+  const maxMessageId = maxMessageIdFromResponse(resp)
   maxDeliveryLog({
     operation: 'echo',
     status: isRealMaxMessageId(maxMessageId) ? 'max_echo_received' : 'send_requested',
@@ -4889,14 +4873,16 @@ async function sendMessageWithRetry(transport, chatId, messagePayload, maxRetrie
       await new Promise(r => setTimeout(r, initialDelay))
     }
     try {
-      const cid = -Date.now()
-      const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-        chatId,
+      const cid = BigInt(Date.now())
+      const resp = await transport.requestBinary(OP.SEND_MESSAGE, {
+        chatId: maxChatIdForRequest(chatId),
         message: { ...messagePayload, cid },
         notify: true,
-      }, { waitResponse: true })
-      return resp?.message?.id ? String(resp.message.id) : null
+      }, { timeoutMs: 15_000, purpose: 'media_send' })
+      return maxMessageIdFromResponse(resp)
     } catch (e) {
+      // Only MAX's own "not ready yet" refusal is retried: the message was
+      // refused, so nothing was sent. A timeout is never retried here.
       if (e.maxError === 'attachment.not.ready' && attempt < maxRetries) {
         console.log(`[sendMsgRetry] attachment.not.ready — will retry`)
         continue
@@ -4918,7 +4904,7 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_VIDEO_URL, { count: 1 }, { waitResponse: true })
+  const urlResp = await transport.requestBinary(OP.GET_UPLOAD_VIDEO_URL, { count: 1 }, { purpose: 'media_upload_url' })
   const info = urlResp?.info?.[0]
   if (!info?.url || info?.videoId == null) {
     throw new Error(`Не получен URL для загрузки видео. Ответ: ${JSON.stringify(urlResp)}`)
@@ -4944,7 +4930,7 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
 
   const maxMessageId = await sendMessageWithRetry(transport, chatId, {
     text:    caption || '',
-    attaches: [{ _type: 'VIDEO', videoId: info.videoId, token: info.token || undefined, duration: null }],
+    attaches: [{ _type: 'VIDEO', videoId: plainMaxIdForRequest(info.videoId), token: info.token || undefined, duration: null }],
   })
   maxDeliveryLog({
     operation: 'echo',
@@ -4970,7 +4956,7 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_FILE_URL, { count: 1 }, { waitResponse: true })
+  const urlResp = await transport.requestBinary(OP.GET_UPLOAD_FILE_URL, { count: 1 }, { purpose: 'media_upload_url' })
   const info = urlResp?.info?.[0]
   if (!info?.url || info?.fileId == null) {
     throw new Error(`Не получен URL для загрузки файла. Ответ: ${JSON.stringify(urlResp)}`)
@@ -4996,7 +4982,7 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 
   const maxMessageId = await sendMessageWithRetry(transport, chatId, {
     text:    caption || '',
-    attaches: [{ _type: 'FILE', fileId: info.fileId, name: filename, size: fileBuffer.length }],
+    attaches: [{ _type: 'FILE', fileId: plainMaxIdForRequest(info.fileId), name: filename, size: fileBuffer.length }],
   })
   maxDeliveryLog({
     operation: 'echo',
@@ -5012,195 +4998,44 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 
 // ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
 
-async function sendReaction(transport, chatId, messageId, emoji) {
-  const reactionId = reactionIdByEmoji.get(String(emoji)) || emoji
-  try {
-    const confirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      emoji,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, reactionId, false, true)
-    console.log(`[sendReaction] binary sent chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId}`)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-    })
-    const confirmation = await confirmationPromise
-    if (confirmation?.reactionConfirmed) {
-      console.log(`[sendReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: confirmation.source,
-        counters: confirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-    }
-    console.warn(`[sendReaction] unsigned binary not confirmed, trying signed message id chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-    const signedConfirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      emoji,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, reactionId, false, false)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-      source: 'binary_frame_signed',
-    })
-    const signedConfirmation = await signedConfirmationPromise
-    if (signedConfirmation?.reactionConfirmed) {
-      console.log(`[sendReaction] confirmed via ${signedConfirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)} signed=true`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: signedConfirmation.source,
-        counters: signedConfirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: signedConfirmation.source, counters: signedConfirmation.counters }
-    }
-    const noConfirmation = new Error('Binary reaction frame was not confirmed by MAX')
-    noConfirmation.noConfirmation = true
-    throw noConfirmation
-  } catch (binaryErr) {
-    console.warn(`[sendReaction] ${binaryErr.noConfirmation ? 'binary not confirmed' : 'binary failed'}, trying JSON fallback: ${binaryErr.message}`)
+// The page's own requests (bundle): op:178 {chatId, postId, messageId,
+// reaction:{reactionType:'EMOJI', id}} and op:179 {chatId, postId, messageId}.
+// MAX's response to that request - matched by seq, never a later push - is the
+// proof the reaction was applied; its reactionInfo is the message's new state.
+async function sendReactionRequest(transport, opcode, chatId, messageId, reaction) {
+  const request = {
+    chatId: maxChatIdForRequest(chatId),
+    messageId: maxMessageIdForRequest(messageId),
+    ...(reaction ? { reaction } : {}),
   }
-  const basePayload = {
-    chatId,
-    messageId: String(messageId),
-    reaction: { reactionType: 'EMOJI', id: reactionId },
-  }
-  const payloads = [basePayload, { ...basePayload, postId: null }]
-  let lastErr = null
-  let resp = null
-  for (const payload of payloads) {
-    try {
-      const confirmationPromise = waitForReactionConfirmation(transport, {
-        chatId,
-        messageId,
-        emoji,
-        timeoutMs: 15_000,
-      })
-      resp = await transport.sendFrame(OP.SEND_REACTION, payload, { waitResponse: true, timeoutMs: 15_000 })
-      const confirmation = await confirmationPromise
-      if (confirmation?.reactionConfirmed) {
-        console.log(`[sendReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-        maxDeliveryLog({
-          operation: 'reaction',
-          status: 'max_echo_received',
-          conversationId: String(chatId),
-          protocolChatId: String(chatId),
-          maxMessageId: String(messageId),
-          externalId: String(messageId),
-          source: confirmation.source,
-          counters: confirmation.counters,
-        })
-        return { frameSent: true, reactionConfirmed: true, responseReceived: Boolean(resp), deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-      }
-      break
-    } catch (e) {
-      lastErr = e
-      console.warn(`[sendReaction] variant failed chatId=${chatId} msgId=${String(messageId).slice(0, 16)}: ${e.message}`)
-    }
-  }
-  if (!resp && lastErr) throw lastErr
-  console.log(`[sendReaction] frame response chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId} resp=${JSON.stringify(resp).slice(0, 160)}`)
+  const response = await transport.requestBinary(opcode, request, { timeoutMs: 15_000, purpose: opcode === OP.SEND_REACTION ? 'reaction' : 'reaction_remove' })
   maxDeliveryLog({
     operation: 'reaction',
-    status: 'send_requested',
+    status: 'max_echo_received',
     conversationId: String(chatId),
     protocolChatId: String(chatId),
     maxMessageId: String(messageId),
     externalId: String(messageId),
+    source: `op${opcode}_response`,
   })
-  return { frameSent: true, reactionConfirmed: false, responseReceived: Boolean(resp), deliveryStatus: 'send_requested', source: 'json_response' }
+  return {
+    frameSent: true,
+    reactionConfirmed: true,
+    deliveryStatus: 'delivered',
+    source: `op${opcode}_response`,
+    counters: response?.reactionInfo ?? null,
+  }
+}
+
+async function sendReaction(transport, chatId, messageId, emoji) {
+  const reactionId = reactionIdByEmoji.get(String(emoji)) || emoji
+  console.log(`[sendReaction] chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId}`)
+  return sendReactionRequest(transport, OP.SEND_REACTION, chatId, messageId, { reactionType: 'EMOJI', id: reactionId })
 }
 
 async function removeReaction(transport, chatId, messageId) {
-  try {
-    const confirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      remove: true,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, null, true, true)
-    console.log(`[removeReaction] binary sent chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-    })
-    const confirmation = await confirmationPromise
-    if (confirmation?.reactionConfirmed) {
-      console.log(`[removeReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: confirmation.source,
-        counters: confirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-    }
-    const noConfirmation = new Error('Binary remove-reaction frame was not confirmed by MAX')
-    noConfirmation.noConfirmation = true
-    throw noConfirmation
-  } catch (binaryErr) {
-    console.warn(`[removeReaction] ${binaryErr.noConfirmation ? 'binary not confirmed' : 'binary failed'}, trying JSON fallback: ${binaryErr.message}`)
-  }
-  const basePayload = {
-    chatId,
-    messageId: String(messageId),
-  }
-  const payloads = [basePayload, { ...basePayload, postId: null }]
-  let lastErr = null
-  let resp = null
-  for (const payload of payloads) {
-    try {
-      resp = await transport.sendFrame(OP.REMOVE_REACTION, payload, { waitResponse: true, timeoutMs: 15_000 })
-      break
-    } catch (e) {
-      lastErr = e
-      console.warn(`[removeReaction] variant failed chatId=${chatId} msgId=${String(messageId).slice(0, 16)}: ${e.message}`)
-    }
-  }
-  if (!resp && lastErr) throw lastErr
-  console.log(`[removeReaction] frame response chatId=${chatId} msgId=${String(messageId).slice(0, 16)} resp=${JSON.stringify(resp).slice(0, 160)}`)
-  maxDeliveryLog({
-    operation: 'reaction',
-    status: 'send_requested',
-    conversationId: String(chatId),
-    protocolChatId: String(chatId),
-    maxMessageId: String(messageId),
-    externalId: String(messageId),
-  })
-  return { frameSent: true, reactionConfirmed: false, responseReceived: Boolean(resp), deliveryStatus: 'send_requested', source: 'json_response' }
+  console.log(`[removeReaction] chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
+  return sendReactionRequest(transport, OP.REMOVE_REACTION, chatId, messageId, null)
 }
 
 // ─── Резолв видео/файла: opcode 83 / 88 ──────────────────────────────────────
@@ -5258,11 +5093,17 @@ async function resolveAttachmentUrl(transport, att, chatId, messageId) {
   }
   if ((type === 'file' || type === 'document' || type === 'audio' || type === 'voice') && (att.fileId || att.token)) {
     opcode = OP.RESOLVE_FILE
-    payload = { fileId: att.fileId || att.token, ...(att.token ? { token: att.token } : {}), chatId, messageId: String(messageId) }
+    // The page's own op:88 request: {fileId, chatId, messageId, itemType}.
+    payload = {
+      fileId: att.fileId ? plainMaxIdForRequest(att.fileId) : att.token,
+      chatId: maxChatIdForRequest(chatId),
+      messageId: maxMessageIdForRequest(messageId),
+      itemType: 'REGULAR',
+    }
   } else {
     return null
   }
-  const resp = await transport.sendFrame(opcode, payload, { waitResponse: true })
+  const resp = await transport.requestBinary(opcode, payload, { purpose: 'resolve_file' })
   console.log(`[ResolveAttachment] opcode=${opcode} payload=${JSON.stringify(redactForStructuredLog(payload))} response=${JSON.stringify(redactForStructuredLog(resp)).slice(0, 800)}`)
   return findFirstUrl(resp)
 }
@@ -5679,6 +5520,24 @@ async function init() {
     inboundLedger.noteBrowserAck(chatId, messageId)
   })
 
+  // D-11: MAX ended the session (a definitive op:19 refusal, a logout). The
+  // account is unproven from here, so every send answers 503 unproven, and the
+  // session controller's next check finds the page logged out and waits for QR.
+  transport.onSessionLoss(loss => {
+    isReady = false
+    session.isLoggedIn = false
+    transport.clearRouteAttestations()
+    maxDeliveryLog({ operation: 'session', status: 'failed', reason: loss.reason })
+  })
+
+  // Catch-up runs only while the page is free: never during a send or a DOM recovery.
+  transport.configureCatchUp({ isBusy: () => uiSendInProgress || domFallbackRunning || isSending })
+
+  // A peer's read mark is a read receipt for our messages at or before it.
+  transport.onReadMark(event => {
+    queueReadMarkForCrm(event)
+  })
+
   // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс (фоллбэк)
   // Опкод 135 (сервер push) надёжнее, но на случай если он не пришёл — перехватываем
   // исходящий WS фрейм. Пропускаем наши собственные фреймы (seq >= 500).
@@ -5766,7 +5625,10 @@ async function init() {
       }
 
       if (!SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED) {
-        console.log('[App] WS reconnected, userId:', userId, '— catch-up disabled (it injects op:49 frames that close the socket)')
+        // The page's own chat snapshots after the login note any gap; the
+        // binary catch-up fills it (TransportInterceptor.runCatchUp).
+        console.log('[App] WS reconnected, userId:', userId, '— binary catch-up for open gaps:', Object.keys(transport.gapFloors()).length)
+        transport.scheduleCatchUp(4_000, 'reconnect')
         return
       }
       console.log('[App] WS reconnected, userId:', userId, '— catch-up...')
@@ -5778,6 +5640,9 @@ async function init() {
 
     console.log('[App] WS auth OK, userId:', userId)
     markReady(`ws-auth:${userId}`)
+    // Gaps left by the last process (on the volume) are filled once the page's
+    // startup snapshots have arrived.
+    transport.scheduleCatchUp(6_000, 'startup')
     if (_wsReadyAt === 0) { _wsReadyAt = Date.now(); loadPhoneChatIdCache() }
     session.isLoggedIn = true  // сразу, до sync — чтобы _waitForQrLogin вышел немедленно
 
@@ -5806,7 +5671,7 @@ async function init() {
     // Записываем время ПОСЛЕ catch-up — следующий рестарт будет подтягивать с этого момента
     try {
       fs.writeFileSync(
-        path.join(__dirname, 'last_activity.json'),
+        LAST_ACTIVITY_PATH,
         JSON.stringify({ ts: Date.now() })
       )
     } catch {}
@@ -6242,19 +6107,28 @@ app.post('/delete-message', async (req, res) => {
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   try {
-    // Opcode 66 = DELETE_MESSAGE. Confirmed from web.max.ru bundle:
-    // yield*r(66,{...revertId(chatId), messageIds:[id,...], forMe:!forAll})
-    // forMe:false = delete for everyone, forMe:true = delete only for sender
-    const result = await transport.sendFrame(OP.DELETE_MESSAGE, {
-      chatId:     Number(chatId),
-      messageIds: [String(messageId)],
+    // Opcode 66 = DELETE_MESSAGE, the page's own request (bundle):
+    // yield*r(66,{chatId:e.id,postId,messageIds:i,forMe:!n}) - forMe:false is
+    // delete for everyone. MAX answers with the ids it removed and any it could not.
+    const providerMessageId = maxMessageIdForRequest(messageId)
+    const result = await transport.requestBinary(OP.DELETE_MESSAGE, {
+      chatId:     maxChatIdForRequest(chatId),
+      messageIds: [providerMessageId],
       forMe:      false,
-    }, { waitResponse: true })
-    console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`, JSON.stringify(result).slice(0, 100))
+    }, { timeoutMs: 15_000, purpose: 'delete' })
+    const failed = Array.isArray(result?.failedMessageIds)
+      && result.failedMessageIds.some(id => canonicalMaxMessageIdHex(id) === canonicalMaxMessageIdHex(String(messageId)))
+    if (failed) {
+      console.warn(`[delete-message] MAX could not delete chatId=${chatId} msgId=${messageId}`)
+      return res.status(422).json({ error: 'MAX_DELETE_REFUSED: MAX could not delete the message', code: 'MAX_DELETE_REFUSED' })
+    }
+    console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`)
     res.json({ success: true, providerAccountId })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
-    res.status(500).json({ error: e.message })
+    if (e.dispatched === false) return res.status(503).json({ error: `MAX_DELETE_NOT_DISPATCHED: ${e.reason || e.message}`, code: 'MAX_DELETE_NOT_DISPATCHED' })
+    if (e.refused) return res.status(422).json({ error: `MAX_DELETE_REFUSED: ${e.maxError}`, code: 'MAX_DELETE_REFUSED' })
+    res.status(502).json({ error: `MAX_DELETE_OUTCOME_UNKNOWN: ${e.reason || e.message}`, code: 'MAX_DELETE_OUTCOME_UNKNOWN' })
   }
 })
 
@@ -6394,7 +6268,13 @@ app.get('/contacts', (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: sendQueue.length })
+  const sessionLoss = transport?.sessionLoss?.() || null
+  res.json({
+    status: sessionLoss ? 'session_lost' : (isReady ? 'ready' : 'initializing'),
+    isReady,
+    queueLength: sendQueue.length,
+    ...(sessionLoss ? { sessionLoss } : {}),
+  })
 })
 
 app.get('/status', (req, res) => {
@@ -6410,6 +6290,10 @@ app.get('/status', (req, res) => {
       wsConnected:   !!transport?._wsConnected,
       authenticated: !!transport?.isAuthenticated?.(),
       myUserId:      transport?._myUserId || null,
+      sessionLoss:   transport?.sessionLoss?.() || null,
+      wire:          transport?.wireInterventionState?.() || null,
+      openGaps:      transport ? Object.keys(transport.gapFloors()).length : 0,
+      catchUp:       transport?._catchUp ? { running: transport._catchUp.running, lastRunAt: transport._catchUp.lastRunAt || null, lastResult: transport._catchUp.lastResult } : null,
     },
   })
 })
@@ -6522,7 +6406,7 @@ app.post('/import-history', async (req, res) => {
     const sinceTs = Date.now() - daysBack * 24 * 60 * 60 * 1000
     try {
       fs.writeFileSync(
-        path.join(__dirname, 'last_activity.json'),
+        LAST_ACTIVITY_PATH,
         JSON.stringify({ ts: sinceTs })
       )
     } catch {}
@@ -6531,7 +6415,7 @@ app.post('/import-history', async (req, res) => {
     sync.clear()
   } else if (mode === 'available_history') {
     // Сбрасываем last_activity чтобы захватить максимально доступную историю
-    try { fs.unlinkSync(path.join(__dirname, 'last_activity.json')) } catch {}
+    try { fs.unlinkSync(LAST_ACTIVITY_PATH) } catch {}
     InitialHistorySync.resetDoneFlag()
     sync.clear()  // сбрасываем dedup чтобы не пропустить сообщения при реимпорте
   } else if (mode === 'from_connection_time') {

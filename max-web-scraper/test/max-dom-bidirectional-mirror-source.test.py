@@ -30,12 +30,18 @@ def test_automatic_recovery_reads_only_fresh_dom_messages():
     assert 'preSkipped.dom_stale_event_filtered' in INDEX
 
 
-def test_outgoing_max_web_messages_are_mirrored_without_crm_echo_duplicates():
-    assert 'function stableDomMirrorMessageId(' in INDEX
-    assert 'return `max-mirror-${chatId}-${hash}`' in INDEX
-    assert "source: isOutgoingCandidate ? 'max_web_mirror'" in INDEX
-    assert 'isOutgoing: isOutgoingCandidate' in INDEX
-    assert "skipped: 'crm_outbound_already_recorded'" in INDEX
+def test_outgoing_dom_messages_are_never_forwarded_without_a_provider_id():
+    # M2: the page draws an outgoing message before MAX accepts it, so a DOM copy
+    # is not provider evidence; the old synthetic max-mirror-* rows were stored as
+    # delivered. Own messages reach the CRM only with MAX's id (another session's
+    # push, or the catch-up read-back).
+    candidate = INDEX[INDEX.index('async function forwardDomCandidate('):INDEX.index('const pendingProviderId = reason')]
+    assert "if (isOutgoingCandidate) {" in candidate
+    assert "return { skipped: 'outgoing_without_provider_id', text: latest.text }" in candidate
+    assert 'function stableDomMirrorMessageId(' not in INDEX
+    assert 'max-mirror-' not in INDEX
+    assert "'max_web_mirror'" not in INDEX
+    assert 'isOutgoing: false,' in INDEX[INDEX.index('async function forwardDomCandidate('):]
     assert 'rememberCrmOutboundText(message, digits, uiChatId, phone)' in INDEX
 
 

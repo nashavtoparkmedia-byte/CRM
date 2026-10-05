@@ -7,11 +7,19 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/modules/max-channel/application/messaging-transport', () => ({
     sendMaxTransportTextV1: mocks.sendMaxTransportTextV1,
+    readMaxTextSendFailureV1: () => null,
+    maxTextSendFailureMessageV1: () => null,
 }))
 
-vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
-    registerMaxChannelDeliveryV1: mocks.registerMaxChannelDeliveryV1,
-}))
+vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async () => {
+    const actual = await vi.importActual<typeof import('../src/modules/messaging/public/v1/channel-delivery-runtime')>(
+        '../src/modules/messaging/public/v1/channel-delivery-runtime',
+    )
+    return {
+        channelDeliveryErrorV1: actual.channelDeliveryErrorV1,
+        registerMaxChannelDeliveryV1: mocks.registerMaxChannelDeliveryV1,
+    }
+})
 
 vi.mock('@/modules/max-channel/public/v1/reaction-delivery', () => ({
     sendMaxReactionDeliveryV1: vi.fn(),
@@ -68,7 +76,25 @@ describe('MAX-owned text delivery validation', () => {
         })
     }
 
-    it('accepts a confirmed real provider message id', async () => {
+    it('accepts a real provider message id MAX answered for this send as provider_ack', async () => {
+        await expect(validate({
+            success: true,
+            externalId: providerId,
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+            proofKind: 'provider_ack',
+            deliveryProof: { kind: 'provider_ack', providerMessageId: providerId, requestSeq: 22 },
+            providerAccountId,
+        }, 'cmid-provider')).resolves.toEqual({
+            outcome: 'delivered',
+            externalId: providerId,
+            resolvedChatId: null,
+            evidence: 'provider_ack',
+            providerMessageId: providerId,
+        })
+    })
+
+    it('keeps an id without a correlated proof a client action: the old answers took it from any frame', async () => {
         await expect(validate({
             success: true,
             externalId: providerId,
@@ -76,9 +102,11 @@ describe('MAX-owned text delivery validation', () => {
             deliveryStatus: 'delivered',
             providerAccountId,
         }, 'cmid-provider')).resolves.toEqual({
-            outcome: 'delivered',
-            externalId: providerId,
+            outcome: 'pending',
+            externalId: null,
             resolvedChatId: null,
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 
@@ -101,6 +129,8 @@ describe('MAX-owned text delivery validation', () => {
             outcome: 'pending',
             externalId: null,
             resolvedChatId: null,
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 
@@ -109,6 +139,8 @@ describe('MAX-owned text delivery validation', () => {
             outcome: 'pending',
             externalId: null,
             resolvedChatId: null,
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 
@@ -169,6 +201,8 @@ describe('MAX phone-first UI send contract', () => {
             outcome: 'pending',
             externalId: null,
             resolvedChatId: '902100000001',
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 
@@ -187,6 +221,8 @@ describe('MAX phone-first UI send contract', () => {
             outcome: 'pending',
             externalId: null,
             resolvedChatId: '902100000001',
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 
@@ -205,6 +241,8 @@ describe('MAX phone-first UI send contract', () => {
             outcome: 'pending',
             externalId: null,
             resolvedChatId: null,
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 

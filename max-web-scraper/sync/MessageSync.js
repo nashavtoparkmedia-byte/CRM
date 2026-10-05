@@ -3,10 +3,31 @@
 const fs   = require('fs')
 const path = require('path')
 
-const { OP }           = require('../transport/TransportInterceptor')
+const { OP, maxRealIdFromProtocolId } = require('../transport/TransportInterceptor')
 const { MessageParser } = require('../parser/MessageParser')
 
-const DEDUP_PATH         = path.join(__dirname, '..', 'last_seen_dedupe.json')
+/**
+ * Where a piece of the scraper's recovery state lives: the user_data volume,
+ * the only directory a container recreate keeps (D-09). A copy left at the old
+ * place, inside the container layer, is moved there the first time.
+ */
+function recoveryStatePath(fileName, { rootDir = path.join(__dirname, '..') } = {}) {
+  const volumePath = path.join(rootDir, 'user_data', fileName)
+  const legacyPath = path.join(rootDir, fileName)
+  try {
+    if (!fs.existsSync(volumePath) && fs.existsSync(legacyPath)) {
+      fs.mkdirSync(path.dirname(volumePath), { recursive: true })
+      fs.copyFileSync(legacyPath, volumePath)
+      fs.unlinkSync(legacyPath)
+      console.log(`[Sync] moved recovery state ${fileName} onto the user_data volume`)
+    }
+  } catch (error) {
+    console.warn(`[Sync] could not move recovery state ${fileName}: ${error.message}`)
+  }
+  return volumePath
+}
+
+const DEDUP_PATH         = recoveryStatePath('last_seen_dedupe.json')
 const DEDUP_TTL_MS       = 5 * 60 * 1000   // 5 минут
 const MAX_DEDUP_ENTRIES  = 5000
 
@@ -113,7 +134,7 @@ class MessageSync {
       const result = await transport.sendFrame(
         OP.GET_HISTORY,
         {
-          chatId,
+          chatId:      maxRealIdFromProtocolId(chatId),
           from:        Date.now(),
           forward:     0,
           backward:    50,
@@ -161,6 +182,7 @@ class MessageSync {
 
   _save() {
     try {
+      fs.mkdirSync(path.dirname(DEDUP_PATH), { recursive: true })
       fs.writeFileSync(DEDUP_PATH, JSON.stringify(Object.fromEntries(this.seen)))
     } catch (e) {
       console.error('[Sync] Ошибка сохранения dedup cache:', e.message)
@@ -318,4 +340,4 @@ async function forwardWithBoundedRetry(forward, payload, {
   return { ...last, attempts: delaysMs.length + 1 }
 }
 
-module.exports = { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry }
+module.exports = { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry, recoveryStatePath }

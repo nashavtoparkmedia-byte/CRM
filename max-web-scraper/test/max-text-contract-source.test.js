@@ -97,7 +97,10 @@ test('MAX outbound text delivery consumes only MAX-owned validated semantic outc
   assert.match(deliveryRuntime, /outcome: 'delivered' \| 'pending'/)
   assert.match(maxCapability, /function validateMaxTextDeliveryResultV1/)
   assert.match(maxCapability, /hasExplicitFailure \|\| hasExplicitError/)
-  assert.match(maxCapability, /outcome: validatedProviderProof \? 'delivered' : 'pending'/)
+  // S2 typed evidence: provider_ack only for an id MAX answered for this very send.
+  assert.match(maxCapability, /proofKind === 'provider_ack' \|\| proofKind === 'provider_store_readback'/)
+  assert.match(maxCapability, /outcome: correlatedProviderProof \? 'delivered' : 'pending'/)
+  assert.match(maxCapability, /evidence: correlatedProviderProof \? 'provider_ack' : 'client_action'/)
   assert.doesNotMatch(maxCapability, /ui_send_action/)
   assert.match(messageService, /const maxDeliveryConfirmed = maxRes\.outcome === 'delivered'/)
   assert.match(messageService, /const maxDeliveryConfirmed = retryMaxRes\.outcome === 'delivered'/)
@@ -334,7 +337,7 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
   assertBefore(
     scraper,
     "return { skipped: 'dom_reply_quote_text', text: latest.text }",
-    'const externalId = isOutgoingCandidate',
+    'const externalId = resolvedProviderId || stableDomCandidateMessageId(',
     'DOM quote-composed reply bubbles must be filtered before assigning max-dom ids',
   )
 })
@@ -488,13 +491,19 @@ test('M1 socket: frames are read with the MAX Web layout in both directions', ()
   assert.doesNotMatch(transport, /maxMsgpackDecodeAll\(buf\.slice\(12\)\)/)
 })
 
-test('M1 outbound: only an attested route is used and the send is gated on an authenticated socket', () => {
+test('M1/M2 outbound: a static route as attested, any other chat only on its canonical route once MAX accepts it, on an authenticated socket', () => {
   const scraper = read('max-web-scraper/index.js')
   const route = scraper.slice(scraper.indexOf('function resolveAttestedTextSendRoute('), scraper.indexOf('function isPageOnWebRoute('))
-  assert.match(route, /const attested = UI_CHAT_ID_OVERRIDES\[String\(chatId \?\? ''\)\]/)
-  assert.match(route, /if \(!attested\) return \{ route: null, reason: 'route_unresolved' \}/)
+  assert.match(route, /const attested = UI_CHAT_ID_OVERRIDES\[protocolChatId\]/)
   assert.match(route, /if \(requested && requested !== String\(attested\)\) return \{ route: null, reason: 'route_conflict' \}/)
-  const surface = scraper.slice(scraper.indexOf('async function prepareTextSendSurface('), scraper.indexOf('async function findComposeInput('))
+  assert.match(route, /const canonical = canonicalWebRouteForChat\(protocolChatId\)/)
+  assert.match(route, /if \(!canonical\) return \{ route: null, reason: 'route_unresolved' \}/)
+  assert.match(route, /source: 'canonical_real_id', requiresAttestation: true/)
+  const surface = scraper.slice(scraper.indexOf('async function openTextSendRoute('), scraper.indexOf('async function findComposeInput('))
   assert.match(surface, /if \(needsComposeRoute && !isPageOnWebRoute\(uiRouteId\)\) \{/)
-  assert.match(surface, /return transport\.waitForSendReadySocket\(\{ stableMs: 1200, timeoutMs: 20_000 \}\)/)
+  assert.match(surface, /transport\.waitForSendReadySocket\(\{ stableMs: 1200, timeoutMs: 20_000 \}\)/)
+  // Nothing is typed into a canonical route before MAX answered the page opening it.
+  assert.match(surface, /await transport\.waitForRouteAttestation\(protocolChatId, \{ sinceMs: openedAt, timeoutMs: 4_000 \}\)/)
+  assert.match(surface, /if \(!attestation\) return \{ ready: false, reason: 'route_unattested' \}/)
+  assert.match(surface, /refusedCode: 'MAX_ROUTE_UNRESOLVED'/)
 })
