@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "0ce3da1f9c07be64c21da141fadd5d5868afd5f0836dce27c289256554b47ebd"
+      "sha256": "a9d8cbcaa78584d08d02111bd56972f122cd82512f5a4956eb539ca7f4f2fc52"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "908cb2dfc423cabb0b81b6e7f1e4f535f179c733e02247552b176901b9ffd6e0"
+      "sha256": "2aafe2ca7847baebfffdae3e0790dcbd45d4375408b5e4ba1a4bdd86f4d20d22"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
