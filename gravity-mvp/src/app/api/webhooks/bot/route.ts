@@ -3,11 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import {
+    canonicalTelegramBotConnectionIdV1,
     patchDriverTelegramLinkV1,
-    prepareManualDriverTelegramLinkAuthorityV1,
+    prepareDriverTelegramConversationAuthorityV1,
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
-    type PreparedManualDriverTelegramLinkAuthorityV1,
+    type PreparedDriverTelegramConversationAuthorityV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
@@ -81,13 +82,13 @@ export async function POST(request: Request) {
 
 /**
  * The one implementation of current Telegram Driver authority for bot actions.
- * Returns the prepared proof, or null when the exact chat, transport binding or
- * confirmed Driver person cannot be proven right now.
+ * Returns the person proof, or null when the Bot runtime transport, the exact
+ * private chat or the confirmed Driver person cannot be proven right now.
  */
 async function resolveCurrentBotDriverAuthority(
     payload: unknown,
     input: { driverId: string; telegramId: bigint },
-): Promise<PreparedManualDriverTelegramLinkAuthorityV1 | null> {
+): Promise<PreparedDriverTelegramConversationAuthorityV1 | null> {
     const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {}
@@ -97,17 +98,32 @@ async function resolveCurrentBotDriverAuthority(
     const connectionId = typeof record.connectionId === 'string'
         ? record.connectionId.trim()
         : ''
-    if (!providerAccountId || !connectionId) return null
+    // Bot RUNTIME authority, proven independently of the person. The request is
+    // already authenticated by BOT_CRM_SECRET above. providerAccountId is live
+    // provenance reported by the bot process: it is required to be concrete so a
+    // caller cannot omit it, but it is never treated as account authority, and it
+    // is never compared against stored Chat or identity metadata.
+    // See docs/design/provider-account-identity-v1.md.
+    if (!providerAccountId || !/^\d+$/.test(providerAccountId) || !connectionId) return null
     try {
-        const authority = await prepareManualDriverTelegramLinkAuthorityV1(input)
+        // The claimed transport is proven against the Telegram-owned
+        // configuration, never against Chat.metadata.connectionId: a Chat is the
+        // shared peer identity and its stored connection may legitimately name
+        // the MTProto personal-account transport.
+        if (connectionId !== canonicalTelegramBotConnectionIdV1()) {
+            throw new Error('TELEGRAM_BOT_CONNECTION_MISMATCH')
+        }
+        // Independent PERSON/CONVERSATION proof: exact private Chat for this
+        // peer, exact Contact, active conflict-free ContactIdentity, and a
+        // confirmed main Driver. It names no transport.
+        const person = await prepareDriverTelegramConversationAuthorityV1(input)
         if (
-            authority.target !== input.telegramId.toString()
-            || authority.providerAccountId !== providerAccountId
-            || authority.connectionId !== connectionId
+            person.target !== input.telegramId.toString()
+            || person.driverId !== input.driverId
         ) {
             throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
         }
-        return authority
+        return person
     } catch (error: unknown) {
         console.warn(
             '[driver-bot] Current Telegram Driver authority rejected:',

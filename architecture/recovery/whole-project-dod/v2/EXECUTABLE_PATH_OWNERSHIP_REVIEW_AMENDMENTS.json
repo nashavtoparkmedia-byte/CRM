@@ -1787,6 +1787,101 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "tg-bot-t1-telegram-authority-runtime-contract-main-9b0d125b-20261005",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "reviewed_by": "TG_BOT_T1_TELEGRAM_AUTHORITY_RUNTIME_RECONCILIATION_EXECUTOR_REVIEW_20261005",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TG_BOT_T1_CURRENT_MAIN_DRIFT_REVIEW_ON_MAIN_9B0D125B_20261005",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 9b0d125b, whose tail is tg-bot-compensation-entry-gate-main-7dfa2539-20261004. Nothing is carried from the production incident lineage, and nothing baseline-bound is carried from the earlier T1 candidates 809fc2f0 and 962c9af6 either: their amendments were bound to earlier chain tails, so the same surfaces are derived again against the chain main publishes now."
+      },
+      "reason": "Records the tracked executable surfaces and source fingerprints the Telegram production authority and runtime contract (T1: units A1-A4) moves on top of main 9b0d125b: 2,664 + 6 = 2,670 surfaces, context-owned 1,429 -> 1,435 and governed exclusions unchanged at 1,235. Six paths become tracked and none retires; all six sit under paths the telegram_channel context owns through its manifest, so none reaches a governed exclusion or an exact inventory and none receives an explicit ownership assignment. Three reviewed exact-inventory assignments move their bytes and are rebound as chained rebinds from the exact fingerprints main's chain last approved: the Telegram inbound webhook and the explicit Bot send action from the composition amendment, and the driver-bot webhook from the selected-park amendment. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes. The reviewed delta is the one first derived on main 04839381 and again on 7dfa2539; the compensation entry-gate amendment has since added one test surface and moved the chain to 2,664, so the predecessor and the resulting triple differ here while the six surfaces and three rebinds are the same. The triple is this repository's own derivation over this tree (preview on the clean product commit 1df2c7a0).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2664,
+        "tracked_inventory_sha256": "4b4e351442a0687a67482dcdf241593a734d7d0d6bab9cf8229bffa29b16933a",
+        "coverage_sha256": "d8646259179746c4264c5b6c58f55bb47de5ffe0b58d9234171f95e51e67dde2"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2670,
+        "tracked_inventory_sha256": "a1a9202c76f0221a015844fa6218248518644931ebef20c3f36de798044e3dd7",
+        "coverage_sha256": "8ae77a559ec4e4b79cc82c5087d8d57083d9abb5feb92280203a2f1cd40c5708"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "previous_source_sha256": "f0f710ae7bb89031180dd700d9bc40e81745a527b58fd667033517e6070eda41",
+          "current_source_sha256": "b0f69ce069fd76a05bd4696c942ee276a94bedf23ce7c8a080e91bffd8e79ef2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The Telegram inbound webhook keeps every reviewed ownership field. Its bytes become the production bytes: a private event is persisted before any person enrichment and answers a persisted result when enrichment is blocked, the current Driver authority is the transport-free person proof, and the Bot transport is proven against Telegram-owned configuration instead of stored Chat metadata. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "ddb84ae53511736adaae1a0f5395f9d13caadefe93338667bb92929cb9882db0",
+          "current_source_sha256": "e978303126841674d078c35b5c28488ed4c914efe49c07aa39ec18196406b1c5",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook keeps its single current-authority implementation and every compensation action reads the same proof as before. Only that resolver's body moves: it requires a concrete provider account, proves the Bot transport against Telegram-owned configuration and proves the person through the transport-free conversation authority bound to the manager link's Driver, instead of comparing transport fields stored on the Chat. It adds no model access and no write. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "9b8174b6dad9a8fde1289c7f85ffb8c5ac757a41ca616e1c98a8601e69498a4a",
+          "current_source_sha256": "3420851428ea5e7c04112dc74c18f10f2ef0b2f1d3f6e5e76d9bc44f456b80d6",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The explicit Bot send action keeps every reviewed ownership field. It now takes the Bot transport from Telegram-owned configuration and requests no provider account, instead of forwarding the connection and provider account a shared Chat happens to carry; the mandatory connection and message-id echo proofs are unchanged. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/telegram-channel/public/v1/bot-transport-config.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/src/modules/telegram-channel, a path the telegram_channel bounded context owns in architecture/contexts/v1/manifests/telegram_channel.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/telegram-channel/public/v1/bot-transport-config.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Telegram-owned source of the canonical Driver Bot transport id, under gravity-mvp/src/modules/telegram-channel which the telegram_channel context owns by prefix. It reads one configuration name, reads no database and fails closed when unconfigured. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/security/botRuntimeUpdateLifecycle.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under tg-bot/src, a path the telegram_channel bounded context owns in architecture/contexts/v1/manifests/telegram_channel.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/security/crmForwardOutcome.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under tg-bot/src, a path the telegram_channel bounded context owns in architecture/contexts/v1/manifests/telegram_channel.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/security/driverOrderDiagnostics.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under tg-bot/src, a path the telegram_channel bounded context owns in architecture/contexts/v1/manifests/telegram_channel.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tg-bot/src/utils/driverOrderDiagnostics.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The manager-facing diagnostics helper for driver order failures, under tg-bot/src which the telegram_channel context owns by prefix. It holds no Telegraf, Prisma or credential reference. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
