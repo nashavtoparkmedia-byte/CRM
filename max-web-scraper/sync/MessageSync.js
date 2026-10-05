@@ -175,4 +175,147 @@ class MessageSync {
   }
 }
 
-module.exports = { MessageSync }
+// ─── Inbound delivery ledger ───────────────────────────────────────────────
+// Per provider message id: what MAX delivered to the page versus what the CRM
+// has stored. It answers the question the live socket path and DOM recovery
+// used to settle with time windows - "is this message persisted?":
+//
+// - forwards for one chat run one at a time in arrival order (`enqueue`), so
+//   the CRM stores a burst in the order the page received it;
+// - an id is in flight from `beginForward` until the CRM answers, and a second
+//   delivery of it meanwhile is not forwarded twice;
+// - only a 2xx from the CRM settles it (`markPersisted`); a failure releases
+//   it, so a later delivery or the recovery path can forward it again;
+// - the page acknowledges every push it receives (op:128 cmd 1). An
+//   acknowledged id that is still unsettled `graceMs` later goes to
+//   `onUnpersisted` - the recovery trigger - instead of being forgotten.
+class InboundDeliveryLedger {
+  constructor({
+    graceMs = 4000,
+    retentionMs = 30 * 60 * 1000,
+    onUnpersisted = null,
+    setTimer = setTimeout,
+    clearTimer = clearTimeout,
+    now = () => Date.now(),
+  } = {}) {
+    this._graceMs = graceMs
+    this._retentionMs = retentionMs
+    this._onUnpersisted = onUnpersisted
+    this._setTimer = setTimer
+    this._clearTimer = clearTimer
+    this._now = now
+    this._persisted = new Map() // id -> { chatId, at, outcome }
+    this._inFlight = new Map()  // id -> startedAt
+    this._acked = new Map()     // id -> { chatId, at, timer }
+    this._chains = new Map()    // chat key -> tail promise
+  }
+
+  enqueue(chatKey, task) {
+    const key = String(chatKey ?? '')
+    const previous = this._chains.get(key) || Promise.resolve()
+    const result = previous.then(() => task())
+    const tail = result.catch(() => {})
+    this._chains.set(key, tail)
+    tail.then(() => {
+      if (this._chains.get(key) === tail) this._chains.delete(key)
+    })
+    return result
+  }
+
+  isPersisted(id) {
+    this._prune()
+    return id != null && this._persisted.has(String(id))
+  }
+
+  isInFlight(id) {
+    return id != null && this._inFlight.has(String(id))
+  }
+
+  /** False when this id is already settled or being forwarded right now. */
+  beginForward(id) {
+    if (id == null || id === '') return true
+    const key = String(id)
+    if (this.isPersisted(key) || this._inFlight.has(key)) return false
+    this._inFlight.set(key, this._now())
+    return true
+  }
+
+  markPersisted(id, chatId = null, outcome = 'stored') {
+    if (id == null || id === '') return
+    const key = String(id)
+    this._inFlight.delete(key)
+    this._persisted.set(key, { chatId: chatId == null ? null : String(chatId), at: this._now(), outcome })
+    const acked = this._acked.get(key)
+    if (acked?.timer) this._clearTimer(acked.timer)
+    this._acked.delete(key)
+  }
+
+  releaseForward(id) {
+    if (id == null || id === '') return
+    this._inFlight.delete(String(id))
+  }
+
+  noteBrowserAck(chatId, id) {
+    if (id == null || id === '') return
+    const key = String(id)
+    if (this.isPersisted(key) || this._acked.has(key)) return
+    const entry = { chatId: chatId == null ? null : String(chatId), at: this._now(), timer: null }
+    entry.timer = this._setTimer(() => this._checkAcknowledged(key), this._graceMs)
+    this._acked.set(key, entry)
+  }
+
+  _checkAcknowledged(key) {
+    const entry = this._acked.get(key)
+    if (!entry) return
+    if (this._persisted.has(key)) {
+      this._acked.delete(key)
+      return
+    }
+    if (this._inFlight.has(key)) {
+      // Still being forwarded: decide on what the CRM answers, not on a clock.
+      entry.timer = this._setTimer(() => this._checkAcknowledged(key), this._graceMs)
+      return
+    }
+    this._acked.delete(key)
+    if (typeof this._onUnpersisted === 'function') {
+      try {
+        this._onUnpersisted({ chatId: entry.chatId, messageId: key, ackedAt: entry.at })
+      } catch {}
+    }
+  }
+
+  _prune() {
+    const cutoff = this._now() - this._retentionMs
+    for (const [key, value] of this._persisted) {
+      if (value.at < cutoff) this._persisted.delete(key)
+    }
+  }
+}
+
+/**
+ * Forwards one inbound payload to the CRM, retrying a bounded number of times
+ * on a network error or a 5xx/429. The CRM stores MAX messages with an atomic
+ * upsert by provider id, so a retry cannot duplicate. A 4xx is a decision and
+ * is returned as is.
+ */
+async function forwardWithBoundedRetry(forward, payload, {
+  delaysMs = [500, 1500, 4000],
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+} = {}) {
+  let last = null
+  for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
+    try {
+      last = await forward(payload)
+      const status = Number(last?.status) || 0
+      if ((status >= 200 && status < 300) || (status >= 400 && status < 500 && status !== 429)) {
+        return { ...last, attempts: attempt + 1 }
+      }
+    } catch (error) {
+      last = { status: 0, error }
+    }
+    if (attempt < delaysMs.length) await sleep(delaysMs[attempt])
+  }
+  return { ...last, attempts: delaysMs.length + 1 }
+}
+
+module.exports = { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry }

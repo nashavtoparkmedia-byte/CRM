@@ -348,6 +348,173 @@ function findMsgpackIdFieldValue(buf, fieldName) {
   return findMsgpackFieldValue(buf, fieldName)
 }
 
+// ─── MAX binary frame codec ──────────────────────────────────────────────────
+// Taken from the MAX Web client the page itself runs (web.max.ru bundle
+// _app/immutable/chunks/CGK0xiLg.js, read 2026-10-02: frame decoder `$ne`,
+// encoder `ere`, LZ4 block decoder `Gne`), and confirmed against all 3,644
+// outgoing frame headers in the preserved production log of 2026-10-02:
+//
+//   byte  0     protocol version, 10
+//   byte  1     cmd: 0 request or server push, 1 response, 2 request re-sent
+//               after login, 3 error
+//   bytes 2-3   seq, int16 big-endian, per socket
+//   bytes 4-5   opcode, int16 big-endian (272 and 302 exist)
+//   byte  6     compression: 0 = plain msgpack; n > 0 = one LZ4 block whose
+//               decoded size is at most length * n
+//   bytes 7-9   payload length, uint24 big-endian
+//   bytes 10..  payload: exactly one msgpack value
+//
+// The reader this replaces took byte 6 for cmd and bytes 7-8 for seq, and
+// decoded msgpack from byte 9 without decompressing. A frame whose LZ4 block
+// held a back-reference therefore decoded to garbage: long inbound text full
+// of U+FFFD, op:19 without its profile, and op:128 pushes reduced to a stray
+// id that was then dropped as unsafe_pending_id - the lost burst message.
+const MAX_FRAME_HEADER_BYTES = 10
+const MAX_FRAME_PROTOCOL_VERSION = 10
+const LZ4_MIN_MATCH = 4
+const LZ4_LAST_LITERALS = 5
+
+function lz4CorruptBlock(offset) {
+  return new Error(`lz4: corrupt block at offset ${offset}`)
+}
+
+// A faithful port of the page's own LZ4 block decoder (`Gne`), bounds checks
+// included, so the scraper accepts exactly the blocks MAX Web accepts.
+function lz4BlockDecompress(input, maxOutputLength) {
+  const src = input instanceof Uint8Array ? input : Uint8Array.from(input || [])
+  const capacity = Math.max(0, Math.floor(Number(maxOutputLength) || 0))
+  const out = new Uint8Array(capacity)
+  const srcLength = src.length
+  let ip = 0
+  let op = 0
+  while (ip < srcLength) {
+    const token = src[ip++]
+    let literalLength = token >>> 4
+    if (literalLength === 15) {
+      let extra
+      do {
+        if (ip >= srcLength) throw lz4CorruptBlock(ip)
+        extra = src[ip++]
+        literalLength += extra
+      } while (extra === 255)
+    }
+    if (ip + literalLength > srcLength || op + literalLength > capacity) throw lz4CorruptBlock(ip)
+    if (ip + literalLength === srcLength) {
+      out.set(src.subarray(ip, ip + literalLength), op)
+      op += literalLength
+      break
+    }
+    if (ip + literalLength + 2 + 1 + LZ4_LAST_LITERALS > srcLength) throw lz4CorruptBlock(ip)
+    out.set(src.subarray(ip, ip + literalLength), op)
+    ip += literalLength
+    op += literalLength
+    if (ip + 2 > srcLength) throw lz4CorruptBlock(ip)
+    const offset = src[ip++] | (src[ip++] << 8)
+    if (offset === 0 || offset > op) throw lz4CorruptBlock(ip)
+    let matchLength = (token & 15) + LZ4_MIN_MATCH
+    if ((token & 15) === 15) {
+      let extra
+      do {
+        if (ip >= srcLength) throw lz4CorruptBlock(ip)
+        extra = src[ip++]
+        matchLength += extra
+      } while (extra === 255)
+    }
+    if (op + matchLength > capacity) throw lz4CorruptBlock(ip)
+    const matchStart = op - offset
+    if (offset >= matchLength) {
+      out.set(out.subarray(matchStart, matchStart + matchLength), op)
+      op += matchLength
+    } else {
+      const end = op + matchLength
+      let from = matchStart
+      while (op < end) out[op++] = out[from++]
+    }
+  }
+  return out.subarray(0, op)
+}
+
+/**
+ * Decodes one MAX Web socket frame. A frame that cannot be decoded exactly is
+ * reported as such and never guessed at: a partial decode is how a stray value
+ * used to pass for a message id.
+ */
+function decodeMaxBinaryFrame(input) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input || [])
+  if (buf.length < MAX_FRAME_HEADER_BYTES) return { ok: false, reason: 'short_frame', byteLength: buf.length }
+  const header = {
+    version: buf[0],
+    cmd: buf[1],
+    seq: buf.readInt16BE(2),
+    opcode: buf.readInt16BE(4),
+    compression: buf[6],
+    length: (buf[7] << 16) | (buf[8] << 8) | buf[9],
+  }
+  if (header.version !== MAX_FRAME_PROTOCOL_VERSION) return { ok: false, reason: 'unknown_version', ...header }
+  if (header.length === 0) return { ok: true, ...header, payload: undefined }
+  if (buf.length < MAX_FRAME_HEADER_BYTES + header.length) return { ok: false, reason: 'truncated_payload', ...header }
+  let body = buf.subarray(MAX_FRAME_HEADER_BYTES, MAX_FRAME_HEADER_BYTES + header.length)
+  if (header.compression > 0) {
+    try {
+      body = Buffer.from(lz4BlockDecompress(body, header.length * header.compression))
+    } catch (error) {
+      return { ok: false, reason: 'lz4_corrupt', error: error.message, ...header }
+    }
+  }
+  let values
+  try {
+    values = maxMsgpackDecodeAll(body)
+  } catch (error) {
+    return { ok: false, reason: 'msgpack_error', error: error.message, ...header }
+  }
+  if (!values.length) return { ok: false, reason: 'msgpack_empty', ...header }
+  return { ok: true, ...header, payload: values[0], trailingValues: values.length - 1 }
+}
+
+// MAX ids travel as msgpack ext type 1 wrapping an int64 (0xd3) or, when the
+// page re-encodes a positive BigInt, a uint64 (0xcf). The scraper's canonical
+// message id is 'd3' + the 16 hex digits of the 64-bit value either way.
+function canonicalMaxMessageIdHex(value) {
+  if (value == null) return null
+  let digits = null
+  if (typeof value === 'object' && typeof value.hex === 'string') {
+    digits = value.hex.toLowerCase()
+  } else if (typeof value === 'string') {
+    digits = value.trim().toLowerCase()
+  } else {
+    return null
+  }
+  if (/^(?:d3|cf)[0-9a-f]{16}$/.test(digits)) return `d3${digits.slice(2)}`
+  return null
+}
+
+function maxIdValueToBigInt(value) {
+  try {
+    if (typeof value === 'bigint') return value
+    if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value)
+    if (typeof value === 'string' && /^-?\d{1,20}$/.test(value.trim())) return BigInt(value.trim())
+    if (value && typeof value === 'object' && typeof value.hex === 'string') {
+      const hex = value.hex.toLowerCase()
+      if (/^d3[0-9a-f]{16}$/.test(hex)) return BigInt.asIntN(64, BigInt(`0x${hex.slice(2)}`))
+      if (/^cf[0-9a-f]{16}$/.test(hex)) return BigInt(`0x${hex.slice(2)}`)
+    }
+  } catch {}
+  return null
+}
+
+function maxChatIdString(value) {
+  const numeric = maxIdValueToBigInt(value)
+  return numeric === null ? null : numeric.toString()
+}
+
+// A provider timestamp (ms) carried as an ext int64, or null.
+function maxExtTimestampMs(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const numeric = maxIdValueToBigInt(value)
+  if (numeric === null || numeric <= 0n || numeric > BigInt(Number.MAX_SAFE_INTEGER)) return null
+  return Number(numeric)
+}
+
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
 // и добавляет window.__maxWsSend(rawString) для отправки фреймов из Node.js
@@ -499,6 +666,253 @@ function evaluatePhoneResolutionUiSend({
   }
 }
 
+// ─── One text send: correlation and outcome ─────────────────────────────────
+// MAX pushes no op:128 echo to the session that sent a message (none of the
+// seven CRM sends of 2026-10-02 19:25-19:32 got one). Its answer to a send is
+// the op:64 RESPONSE (cmd 1) carrying the seq of the page's own op:64 request,
+// and that request is visible here as an outgoing frame. So a send is proven
+// only by:
+//   request:  an outgoing op:64 (cmd 0, or 2 when re-sent after login) whose
+//             chatId and text are this send's;
+//   response: an incoming op:64 cmd 1 with that request's seq, the same chat,
+//             the same text and - when both carry one - the same cid.
+// No other frame can supply the id. A reactions snapshot, a chat update or a
+// page reload replay is exactly how "7" was given the id of "6".
+
+function normalizeSentMaxText(value) {
+  return String(value ?? '')
+    .replace(/ /g, ' ')
+    .replace(/\r\n/g, '\n')
+    .trim()
+}
+
+class MaxTextSendObservation {
+  constructor({ chatId, text, now = () => Date.now() } = {}) {
+    this.chatId = maxChatIdString(chatId) ?? String(chatId ?? '')
+    this.text = normalizeSentMaxText(text)
+    this.request = null
+    this.extraRequests = []
+    this.response = null
+    this.rejection = null
+    this.conflictingResponse = null
+    this.ignoredResponses = 0
+    this.closed = false
+    this._now = now
+    this._waiters = new Set()
+  }
+
+  _targets(payload) {
+    return maxChatIdString(payload?.chatId) === this.chatId
+      && normalizeSentMaxText(payload?.message?.text) === this.text
+  }
+
+  _requestSeqs() {
+    return [this.request, ...this.extraRequests].filter(Boolean).map(entry => entry.seq)
+  }
+
+  onOutgoingFrame(frame) {
+    if (this.closed || frame?.opcode !== OP.SEND_MESSAGE || ![0, 2].includes(frame.cmd)) return
+    if (!this._targets(frame.payload)) return
+    const entry = {
+      seq: frame.seq,
+      cmd: frame.cmd,
+      cid: maxChatIdString(frame.payload?.message?.cid),
+      socket: frame.socket ?? null,
+      at: this._now(),
+    }
+    if (!this.request) {
+      this.request = entry
+    } else if (entry.seq !== this.request.seq || entry.socket !== this.request.socket) {
+      // The page itself sent this text again. Never a second action of ours,
+      // but it is recorded, because it is a second copy on the wire.
+      this.extraRequests.push(entry)
+    }
+    this._notify()
+  }
+
+  onIncomingFrame(frame) {
+    if (this.closed || frame?.opcode !== OP.SEND_MESSAGE || !this.request) return
+    if (!this._requestSeqs().includes(frame.seq)) return
+    if (frame.cmd === 3) {
+      if (!this.response && !this.rejection) {
+        this.rejection = {
+          seq: frame.seq,
+          error: typeof frame.payload?.error === 'string' ? frame.payload.error : null,
+          at: this._now(),
+        }
+      }
+      this._notify()
+      return
+    }
+    if (frame.cmd !== 1) return
+    const payload = frame.payload || {}
+    const message = payload.message || {}
+    const providerMessageId = canonicalMaxMessageIdHex(message.id)
+    const requestCid = this.request.cid
+    const responseCid = maxChatIdString(message.cid)
+    const sameChat = maxChatIdString(payload.chatId ?? message.chatId) === this.chatId
+    const sameText = message.text == null || normalizeSentMaxText(message.text) === this.text
+    const sameCid = !requestCid || !responseCid || requestCid === responseCid
+    if (!providerMessageId || !/^d301/.test(providerMessageId) || !sameChat || !sameText || !sameCid) {
+      this.ignoredResponses += 1
+      return
+    }
+    if (!this.response) {
+      this.response = { seq: frame.seq, providerMessageId, at: this._now() }
+    } else if (this.response.providerMessageId !== providerMessageId) {
+      this.conflictingResponse = { seq: frame.seq, providerMessageId, at: this._now() }
+    }
+    this._notify()
+  }
+
+  _notify() {
+    for (const waiter of [...this._waiters]) waiter()
+  }
+
+  _waitFor(predicate, timeoutMs) {
+    if (predicate()) return Promise.resolve(true)
+    return new Promise(resolve => {
+      let timer = null
+      const waiter = () => {
+        if (!predicate()) return
+        clearTimeout(timer)
+        this._waiters.delete(waiter)
+        resolve(true)
+      }
+      timer = setTimeout(() => {
+        this._waiters.delete(waiter)
+        resolve(predicate())
+      }, Math.max(0, timeoutMs))
+      this._waiters.add(waiter)
+    })
+  }
+
+  waitForRequest(timeoutMs) {
+    return this._waitFor(() => Boolean(this.request), timeoutMs)
+  }
+
+  waitForAnswer(timeoutMs) {
+    return this._waitFor(() => Boolean(this.response || this.rejection), timeoutMs)
+  }
+
+  close() {
+    this.closed = true
+    this._notify()
+  }
+
+  snapshot() {
+    return {
+      request: this.request,
+      extraRequests: this.extraRequests.slice(),
+      response: this.response,
+      rejection: this.rejection,
+      conflictingResponse: this.conflictingResponse,
+      ignoredResponses: this.ignoredResponses,
+    }
+  }
+}
+
+/**
+ * The outcome of ONE send call, from what the call did and what the wire
+ * showed. Outcomes:
+ *   accepted        a correlated provider id: MAX has this message
+ *   requested       the page put this send on the wire; MAX's answer was not
+ *                   seen. Reported without an id, never as delivered
+ *   rejected        MAX answered the request with an error
+ *   not_dispatched  nothing reached the wire and nothing can: safe to send again
+ *   unknown         an action was taken and nothing proves either way; the
+ *                   caller must never send this text again on its own
+ */
+function decideMaxTextSendOutcome({ action = {}, evidence = {} } = {}) {
+  const requestSeq = evidence.request?.seq ?? null
+  const wire = {
+    requestSeq,
+    extraRequestFrames: Array.isArray(evidence.extraRequests) ? evidence.extraRequests.length : 0,
+  }
+  if (evidence.response?.providerMessageId) {
+    const storeId = action.storeConfirmedId || null
+    if (evidence.conflictingResponse || (storeId && storeId !== evidence.response.providerMessageId)) {
+      return { outcome: 'unknown', reason: 'provider_id_conflict', ...wire }
+    }
+    return {
+      outcome: 'accepted',
+      providerMessageId: evidence.response.providerMessageId,
+      proofKind: 'provider_ack',
+      ...wire,
+    }
+  }
+  if (evidence.rejection) {
+    return { outcome: 'rejected', reason: evidence.rejection.error || 'provider_error', ...wire }
+  }
+  if (action.storeConfirmedId && /^d301[0-9a-f]{14}$/.test(action.storeConfirmedId)) {
+    // A reply read back from the page's provider store: a NEW server-assigned
+    // id on an outgoing message carrying exactly this text and reply link.
+    return {
+      outcome: 'accepted',
+      providerMessageId: action.storeConfirmedId,
+      proofKind: 'provider_store_readback',
+      ...wire,
+    }
+  }
+  if (evidence.request) {
+    return { outcome: 'requested', proofKind: 'client_frame', ...wire }
+  }
+  if (!action.performed) {
+    return { outcome: 'not_dispatched', reason: action.notDispatchedReason || 'no_action_taken', ...wire }
+  }
+  if (action.kind === 'compose' && action.composeRetainedText === true) {
+    // The compose box still holds the exact text, so the page never took the
+    // submit and has nothing queued.
+    return { outcome: 'not_dispatched', reason: 'compose_not_submitted', ...wire }
+  }
+  return { outcome: 'unknown', reason: action.unknownReason || 'submitted_without_send_frame', ...wire }
+}
+
+/**
+ * Runs exactly one physical send action and returns its decided outcome. There
+ * is no fallback and no retry inside a call: once `performAction` has run, the
+ * only answers are the ones the wire supports.
+ */
+async function runSingleMaxTextSend({
+  transport,
+  chatId,
+  text,
+  ensureReady,
+  performAction,
+  requestTimeoutMs = 4000,
+  answerTimeoutMs = 10_000,
+} = {}) {
+  const readiness = await ensureReady()
+  if (!readiness?.ready) {
+    return decideMaxTextSendOutcome({
+      action: { performed: false, notDispatchedReason: readiness?.reason || 'transport_not_ready' },
+    })
+  }
+  const observation = transport.beginTextSendObservation({ chatId, text })
+  let action
+  try {
+    action = await performAction()
+  } catch (error) {
+    action = { performed: true, unknownReason: `action_failed:${String(error?.message || error).slice(0, 120)}` }
+  }
+  try {
+    if (action?.performed) {
+      const requestSeen = await observation.waitForRequest(requestTimeoutMs)
+      if (requestSeen) {
+        await observation.waitForAnswer(answerTimeoutMs)
+      } else if (typeof action.inspectWithoutRequest === 'function') {
+        // Only now, after the wire stayed silent, is the page's own state read.
+        try {
+          Object.assign(action, await action.inspectWithoutRequest())
+        } catch {}
+      }
+    }
+    return decideMaxTextSendOutcome({ action: action || {}, evidence: observation.snapshot() })
+  } finally {
+    transport.endTextSendObservation(observation)
+  }
+}
+
 class TransportInterceptor {
   constructor() {
     this._messageHandlers      = []
@@ -529,6 +943,8 @@ class TransportInterceptor {
     this._pendingOp71ChatIds   = []
     this._pendingLooseMedia    = []
     this._activeUiChatId       = null
+    this._sendObservations     = new Set() // MaxTextSendObservation per in-flight send call
+    this._browserAckHandlers   = []        // page acknowledged a push: {chatId, messageId}
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
@@ -586,7 +1002,7 @@ class TransportInterceptor {
     // duplicate processing — both failed for api.oneme.ru/websocket anyway.
 
     // Перехватываем ВСЕ исходящие WS-фреймы для диагностики + реакции
-    this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
+    this._cdpClient.on('Network.webSocketFrameSent', ({ requestId, response }) => {
       if (!response.payloadData) return
       try {
         const data = JSON.parse(response.payloadData)
@@ -614,43 +1030,11 @@ class TransportInterceptor {
               this._op71Prefix = [buf[9], buf[10], buf[11]]
               console.log(`[op71prefix] captured: ${this._op71Prefix.map(b => b.toString(16).padStart(2,'0')).join(' ')} fseq:${fseq}`)
             }
-            // op:128 cmd:1 (browser mark-as-received) contains chatId in payload.
-            // MAX doesn't send op:130 unless the user has the chat open, so this
-            // outgoing frame is the only reliable source of chatId after op:128 empty notification.
-            if (opcode === 0x80 && cmd === 0x01 && buf.length > 12) {
-              try {
-                // Payload starts after 9-byte header + 3-byte prefix = byte 12
-                const decoded = maxMsgpackDecodeAll(buf.slice(12))
-                const rawChatId = decoded?.chatId ?? decoded?.[0]?.chatId
-                if (rawChatId != null && rawChatId !== 0) {
-                  // Browser encodes chatId as lower 32 bits only. Resolve full chatId
-                  // via _recentActiveChatIds (populated from op:48 with full chatIds),
-                  // then fall back to _lastMsgRawHex keys (populated from persistent storage).
-                  const shortId = Number(rawChatId) >>> 0
-                  let chatIdStr = String(rawChatId)
-                  for (const [cid] of this._recentActiveChatIds) {
-                    if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
-                  }
-                  if (chatIdStr === String(rawChatId)) {
-                    // Not found in _recentActiveChatIds — try _lastMsgRawHex (persisted IDs)
-                    for (const cid of this._lastMsgRawHex.keys()) {
-                      if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
-                    }
-                  }
-                  console.log(`[op128mark] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
-                  this._rememberRecentOp128Chat(chatIdStr)
-                  // If one or more bare op:128 notifications arrived before the
-                  // browser mark frame exposed chatId, move all queued provider ids
-                  // into the chat-specific pending queue in original order.
-                  const registrations = this._registerPreChatPendingForChat(chatIdStr)
-                  if (registrations.length > 0) {
-                    console.log(`[op128mark] registered ${registrations.length} pending live msg(s) for chatId:${chatIdStr} ids:${registrations.map(r => r.pendingHex.slice(0,16)).join(',')}`)
-                  }
-                  console.log(`[op128mark] active op71 disabled; guarded DOM recovery will handle gaps for chatId:${chatIdStr}`)
-                }
-              } catch (e) {
-                console.warn('[op128mark→op71] decode error:', e.message)
-              }
+            const outgoing = decodeMaxBinaryFrame(buf)
+            if (outgoing.ok) {
+              this._handleOutgoingFrame({ ...outgoing, socket: requestId ?? null })
+            } else {
+              console.warn(`[WS→MAX BIN] undecodable outgoing frame reason:${outgoing.reason} op:${outgoing.opcode ?? 'n/a'} seq:${outgoing.seq ?? 'n/a'}`)
             }
             // A live video notification may not expose its d301 message id in
             // op:128/op:180. MAX Web immediately follows it with a binary
@@ -671,7 +1055,8 @@ class TransportInterceptor {
             }
             const maxHex  = opcode === 71 ? buf.length : 20
             const hex     = [...buf.slice(0, maxHex)].map(b => b.toString(16).padStart(2,'0')).join(' ')
-            console.log('[WS→MAX BIN] op:', opcode, 'cmd:', cmd, 'len:', buf.length, 'hex:', hex)
+            console.log('[WS→MAX BIN] op:', outgoing.opcode ?? opcode, 'cmd:', outgoing.cmd ?? 'n/a', 'seq:', outgoing.seq ?? 'n/a',
+              'compression:', outgoing.compression ?? 'n/a', 'len:', buf.length, 'hex:', hex)
           } else if (buf.length > 0) {
             const hex = [...buf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
             console.log('[WS→MAX BIN?] len:', buf.length, 'hex:', hex)
@@ -724,6 +1109,52 @@ class TransportInterceptor {
     console.log('[Transport] CDP активен')
   }
 
+  // ─── Исходящие фреймы страницы (декодированные) ─────────────────────────
+
+  _handleOutgoingFrame(frame) {
+    for (const observation of this._sendObservations) {
+      try { observation.onOutgoingFrame(frame) } catch {}
+    }
+    // The page acknowledges every op:128 push it received with
+    // {chatId, messageId} (cmd 1, the push's own seq). That acknowledgement is
+    // the page's record that a message EXISTS, independent of whether the
+    // scraper managed to decode or persist the push itself.
+    if (frame.opcode === OP.INCOMING_MSG && frame.cmd === 1) {
+      const rawChatId = frame.payload?.chatId
+      const messageId = canonicalMaxMessageIdHex(frame.payload?.messageId)
+      const chatIdStr = this._resolveBrowserAckChatId(rawChatId)
+      if (!chatIdStr) return
+      console.log(`[op128ack] page acknowledged chatId:${chatIdStr} msgId:${messageId || 'n/a'}`)
+      this._rememberRecentOp128Chat(chatIdStr)
+      const registrations = this._registerPreChatPendingForChat(chatIdStr)
+      if (registrations.length > 0) {
+        console.log(`[op128ack] registered ${registrations.length} pending live msg(s) for chatId:${chatIdStr} ids:${registrations.map(r => r.pendingHex.slice(0,16)).join(',')}`)
+      }
+      if (messageId && /^d301/.test(messageId)) {
+        for (const handler of this._browserAckHandlers) {
+          try { handler({ chatId: chatIdStr, rawChatId: maxChatIdString(rawChatId), messageId }) } catch {}
+        }
+      }
+    }
+  }
+
+  // The page acknowledges a push with the chat id as it holds it, which can be
+  // the 32-bit web route rather than the 64-bit provider chat id.
+  _resolveBrowserAckChatId(rawChatId) {
+    const raw = maxChatIdString(rawChatId)
+    if (!raw || raw === '0') return null
+    const known = [...this._recentActiveChatIds.keys(), ...this._lastMsgRawHex.keys()]
+    if (known.includes(raw)) return raw
+    let shortId
+    try { shortId = BigInt.asUintN(32, BigInt(raw)) } catch { return raw }
+    for (const candidate of known) {
+      try {
+        if (BigInt.asUintN(32, BigInt(candidate)) === shortId) return candidate
+      } catch {}
+    }
+    return raw
+  }
+
   // ─── Обработка входящих WS фреймов ──────────────────────────────────────
 
   _handleFrame(raw) {
@@ -766,6 +1197,33 @@ class TransportInterceptor {
       && (value.sender != null || value.id != null)
   }
 
+  // A chat-list page or a history load carries messages that are not new. One
+  // is new for this process only if it is newer than the newest message
+  // confirmed for its chat; a chat seen for the first time is only anchored.
+  // Read whole, these frames would otherwise replay every conversation's last
+  // message into the CRM.
+  _emitIfNewerThanAnchor(chatId, message, source) {
+    const chatIdStr = String(chatId || '')
+    const msgHex = message?.id?.__maxId ? canonicalMaxMessageIdHex(message.id) : null
+    if (!chatIdStr || !isUsableMaxMessageHex(msgHex)) return { emitted: false, reason: 'no_provider_id' }
+    const anchorHex = this._lastMsgRawHex.get(chatIdStr)
+    if (!isUsableMaxMessageHex(anchorHex)) {
+      this._rememberConfirmedMessageAnchor(chatIdStr, msgHex, { markSeen: true })
+      this._persistLastMsgRawHex()
+      return { emitted: false, reason: 'anchor_seeded' }
+    }
+    if (compareMaxIdHex(msgHex, anchorHex) <= 0) return { emitted: false, reason: 'not_newer' }
+    this._rememberConfirmedMessageAnchor(chatIdStr, msgHex, { markSeen: true })
+    this._persistLastMsgRawHex()
+    const pseudo = { chatId: chatIdStr, message }
+    this._consumeLooseMediaForMessage(pseudo)
+    const msg = this._normalizeMaxMsg(pseudo)
+    if (!msg || (!msg.text && !msg.attachments?.length)) return { emitted: false, reason: 'no_content' }
+    console.log(`[Transport] ${source} message newer than anchor chat:${chatIdStr} id:${msgHex.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
+    this._emit(msg)
+    return { emitted: true, reason: 'newer_than_anchor' }
+  }
+
   _extractMessagesDeep(value, out = [], seen = new Set(), depth = 0) {
     if (value == null || depth > 10) return out
     if (this._isMessageLike(value)) {
@@ -787,7 +1245,9 @@ class TransportInterceptor {
         }
       }
       for (const [key, item] of Object.entries(value)) {
-        if (key === '__complexEntries') continue
+        // A linked (forwarded or replied-to) message is content of its parent,
+        // never a message of this chat.
+        if (key === '__complexEntries' || key === 'link') continue
         this._extractMessagesDeep(item, out, seen, depth + 1)
       }
     }
@@ -969,15 +1429,24 @@ class TransportInterceptor {
     // op:19 = MAX подтвердил auth на этом WS. После него MAX обрабатывает sends (op:64).
     // Проверяем независимо от cmd (MAX слает cmd:0, cmd:2, cmd:3 в разных сценариях).
     if (data.opcode === OP.AUTH) {
-      const id = data.payload?.profile?.contact?.id
+      // Now that op:19 decodes whole, every login carries the profile; its id is
+      // normalized so an ext-encoded value can never become "[object Object]".
+      const id = maxChatIdString(data.payload?.profile?.contact?.id)
       console.log(`[Auth] Opcode 19: cmd=${data.cmd}, has_profile=${!!data.payload?.profile}, userId=${id || 'none'}`)
-      // Всегда помечаем WS как готовый после op:19 (auth confirmed, MAX примет op:64).
-      this._wsConnected = true
-      this._fireWsReady()
-      if (id) {
-        this._myUserId = String(id)
-        console.log('[Transport] My userId:', this._myUserId)
-        for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
+      if (data.cmd === 3) {
+        // MAX refused the login on this socket (login.token, login.blocked, ...).
+        // Nothing sent on it would be accepted, so it is not a send-ready socket.
+        console.warn(`[Auth] Opcode 19 refused: ${data.payload?.error || 'unknown error'}`)
+        this._wsConnected = false
+      } else {
+        // op:19 answered: MAX accepts op:64 on this socket from here on.
+        this._wsConnected = true
+        this._fireWsReady()
+        if (id) {
+          this._myUserId = String(id)
+          console.log('[Transport] My userId:', this._myUserId)
+          for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
+        }
       }
     }
 
@@ -1066,24 +1535,17 @@ class TransportInterceptor {
             candidates.push(m)
           }
           addCandidate(lastMsg)
-          for (const m of this._extractMessagesDeep(chat)) addCandidate(m)
           if (!candidates.length) continue
 
-          // _lastMsgRawHex is intentionally NOT updated from op:53 to avoid a race condition:
-          // op:53 fires after a new message arrives (updating to the new msg's ID), but op:130
-          // fires shortly after and needs the PREVIOUS ID to request messages newer than it.
-          // _lastMsgRawHex is only updated from op:48 (startup) and op:71 responses (confirmed fetch).
+          // op:53 answers the page's own chat-list request: each chat with its
+          // lastMessage, not a stream of new messages. Only a lastMessage newer
+          // than the newest message this process confirmed for the chat is
+          // emitted (a message missed while the socket was down); an unseen chat
+          // is only anchored. Nested link messages are never this chat's own.
           for (const candidate of candidates) {
             const msgId = candidate.id.__maxId ? candidate.id.hex : String(candidate.id)
             if (this._lastSeenMsgId.get(chatId) === msgId) continue
-            this._lastSeenMsgId.set(chatId, msgId)
-            const pseudo = { chatId, message: candidate }
-            this._consumeLooseMediaForMessage(pseudo)
-            const msg = this._normalizeMaxMsg(pseudo)
-            if (msg && (msg.text || msg.attachments?.length > 0)) {
-              console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
-              this._emit(msg)
-            }
+            this._emitIfNewerThanAnchor(chatId, candidate, 'op:53')
           }
         }
       }
@@ -1124,11 +1586,12 @@ class TransportInterceptor {
             }
           }
           if (lastMsg?.id?.__maxId) {
-            const newHex   = lastMsg.id.hex
-            // Store the REAL lastMessage ID as anchor. Op:71 returns messages with ID >= anchor
-            // (inclusive). The dedup in op:71 response skips the anchor itself via _lastSeenMsgId.
-            if (this._rememberConfirmedMessageAnchor(chatId, newHex, { markSeen: true })) {
-              console.log(`[op48] chatId:${chatId} anchor ${newHex.slice(0,16)} (lastMsg)`)
+            // A chat's lastMessage newer than its anchor arrived while this
+            // process was not receiving pushes (a socket gap, a restart): it is
+            // emitted, never silently confirmed. An unseen chat is anchored.
+            const anchorResult = this._emitIfNewerThanAnchor(chatId, lastMsg, 'op:48')
+            if (anchorResult.reason === 'anchor_seeded') {
+              console.log(`[op48] chatId:${chatId} anchor ${String(lastMsg.id.hex).slice(0,16)} (lastMsg)`)
             }
           }
           // Also scan __complexEntries: MAX stores message IDs as MAP KEYs → {__maxId, hex} after decodeExt fix
@@ -1254,6 +1717,20 @@ class TransportInterceptor {
       if (chatIdRaw != null && messages.length > 0) {
         const chatIdStr = String(chatIdRaw)
         console.log(`[op49] active history chatId:${chatIdStr} msgs:${messages.length}`)
+        if (!isUsableMaxMessageHex(this._lastMsgRawHex.get(chatIdStr))) {
+          // History of a chat with no confirmed anchor is old history: anchor at
+          // its newest message and emit nothing, instead of replaying it all.
+          const newest = messages
+            .map(m => canonicalMaxMessageIdHex(m?.id))
+            .filter(isUsableMaxMessageHex)
+            .sort(compareMaxIdHex)
+            .pop()
+          if (newest && this._rememberConfirmedMessageAnchor(chatIdStr, newest, { markSeen: true })) {
+            this._persistLastMsgRawHex()
+            console.log(`[op49] chatId:${chatIdStr} anchor ${newest.slice(0,16)} (history of an unanchored chat; nothing emitted)`)
+          }
+          messages = []
+        }
         for (const m of messages) {
           if (!m || typeof m !== 'object') continue
           const pseudo = { chatId: chatIdStr, message: m }
@@ -1341,84 +1818,30 @@ class TransportInterceptor {
     }
   }
 
-  // ─── Декодирование бинарных WS фреймов (новый api.oneme.ru протокол) ────
+  // ─── Декодирование бинарных WS фреймов (api.oneme.ru) ───────────────────
   //
-  // Frame layout (observed via hex dump, 9-byte fixed header):
-  //   Byte 0:    0x0a = protocol magic (10)
-  //   Byte 1:    0x01 = version
-  //   Byte 2:    0x00 = flags
-  //   Bytes 3-4: uint16 BE = frame sequence number
-  //   Byte 5:    opcode (same numbers as JSON protocol)
-  //   Byte 6:    cmd (meaning differs from JSON: 1=push, 4=success, etc.)
-  //   Bytes 7-8: uint16 BE = request seq (for matching responses)
-  //   Bytes 9+:  MessagePack-encoded payload object
-  //
+  // Layout and compression: see decodeMaxBinaryFrame. The cmd values are the
+  // protocol's own (0 push, 1 response, 3 error) - the same meaning the JSON
+  // protocol handling below was written for - so nothing is remapped.
   _handleBinaryFrame(buf) {
-    if (buf.length < 9) return
-
-    if (buf[0] !== 0x0a) {
-      console.log('[BIN] Unknown magic byte:', buf[0].toString(16))
+    const frame = decodeMaxBinaryFrame(buf)
+    if (!frame.ok) {
+      // Never guess at a partial decode. The page still acknowledges a push it
+      // received (op:128 cmd 1), and that acknowledgement is what recovers it.
+      console.warn(`[BIN] undecodable frame reason:${frame.reason} op:${frame.opcode ?? 'n/a'} cmd:${frame.cmd ?? 'n/a'} seq:${frame.seq ?? 'n/a'} compression:${frame.compression ?? 'n/a'}${frame.error ? ` error:${frame.error}` : ''}`)
       return
     }
 
-    const opcode   = buf[5]
-    const cmd      = buf[6]
-    const reqSeq   = (buf[7] << 8) | buf[8]
-    const frameSeq = (buf[3] << 8) | buf[4]
+    const payload = frame.payload === undefined ? {} : frame.payload
+    const data = { opcode: frame.opcode, cmd: frame.cmd, seq: frame.seq, payload, _compression: frame.compression }
 
-    let payload = {}
-    if (buf.length > 9) {
-      const payloadBuf = buf.slice(9)
-      try {
-        // Payload is a sequence of msgpack values: preamble fixints first, then the actual
-        // payload object/array last. Always take the LAST value; fall back to last object.
-        const values = maxMsgpackDecodeAll(payloadBuf)
-        if (values.length > 0) {
-          const last = values[values.length - 1]
-          if (last !== null && last !== undefined && typeof last === 'object') {
-            payload = last
-          } else {
-            // Last is a primitive — walk backwards for last non-null object
-            for (let i = values.length - 2; i >= 0; i--) {
-              if (values[i] !== null && typeof values[i] === 'object') {
-                payload = values[i]
-                break
-              }
-            }
-          }
-        }
-      } catch (e) {
-        const hex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
-        console.log('[BIN] decode fail op:', opcode, 'hex:', hex, 'err:', e.message.slice(0, 80))
-        // Retry with increasing byte offsets to handle new preamble formats (e.g. 0xdd prefix)
-        let recovered = false
-        for (let skip = 1; skip <= 5; skip++) {
-          try {
-            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip))
-            if (!alt.length) continue
-            const last = alt[alt.length - 1]
-            if (last !== null && last !== undefined && typeof last === 'object' && !Array.isArray(last)) {
-              payload = last
-              console.log(`[BIN] op:${opcode} recovered with skip=${skip}`)
-              recovered = true
-              break
-            }
-          } catch {}
-        }
-        if (!recovered) return
-      }
+    if (frame.opcode !== OP.PRESENCE) {
+      console.log('[BIN] op:', frame.opcode, 'cmd:', frame.cmd, 'seq:', frame.seq, 'compression:', frame.compression,
+        JSON.stringify(payload).slice(0, 200))
     }
 
-    // Map binary frame to the same JSON-protocol data shape that _handleFrame uses
-    // In binary protocol: cmd=1 means "server push" (no reqSeq), cmd=4 means "success response"
-    // We normalise to old protocol: cmd=1 for success, cmd=0 for push
-    const mappedCmd = (cmd === 4) ? 1 : (cmd === 1 ? 0 : cmd)
-
-    const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
-
-    if (opcode !== OP.PRESENCE) {
-      console.log('[BIN] op:', opcode, 'cmd:', cmd, '→', mappedCmd, 'seq:', reqSeq,
-        JSON.stringify(payload).slice(0, 200))
+    for (const observation of this._sendObservations) {
+      try { observation.onIncomingFrame(data) } catch {}
     }
 
     // Feed into the common handler (reuse all existing opcode processing)
@@ -1461,15 +1884,21 @@ class TransportInterceptor {
       direction === 'OUT' || direction === 'OUTGOING'
     )
 
+    // Ids and times are ext-encoded 64-bit values on the wire; read whole,
+    // they must keep the forms the rest of the scraper and the CRM already use
+    // (d3… message ids, ms times). A chat or sender id that arrives ext-encoded
+    // becomes its decimal string; a plain number is left as it always was.
+    const extOrValue = value => (value && typeof value === 'object') ? maxChatIdString(value) : value
+    const sender = String(extOrValue(m.sender) || '')
     return {
-      id:                m.id?.__maxId ? m.id.hex : (m.id || null),
-      chatId:            payload.chatId || null,
-      from:              String(m.sender || ''),
+      id:                m.id?.__maxId ? (canonicalMaxMessageIdHex(m.id) || m.id.hex) : (m.id || null),
+      chatId:            extOrValue(payload.chatId) || null,
+      from:              sender,
       text,
-      timestamp:         m.time  || Date.now(),
+      timestamp:         maxExtTimestampMs(m.time) || Date.now(),
       type:              hasAttaches ? this._detectMaxType(attaches) : 'text',
       attachments:       this._extractMaxAttachmentsV2(attaches),
-      isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : protocolOutgoing,
+      isOutgoing:        this._myUserId ? sender === this._myUserId : protocolOutgoing,
       replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
       forwardedFromId:   (m.link?.type === 'FORWARD' && m.link.message?.sender) ? String(m.link.message.sender) : null,
       status:            m.status || null,
@@ -2250,6 +2679,48 @@ class TransportInterceptor {
     return !!this._myUserId
   }
 
+  /**
+   * Waits until the page has an authenticated socket that has stayed up for
+   * `stableMs`, with the provider account proven and the page's own socket
+   * OPEN. A send may only start after this answers ready: text typed into a
+   * page without one (the second "6" of 2026-10-02 19:25:58) cleared the
+   * compose box and never reached the wire.
+   */
+  async waitForSendReadySocket({ stableMs = 1200, timeoutMs = 20_000, pollMs = 250 } = {}) {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      const stable = await this.waitForStableWs(stableMs, Math.max(0, deadline - Date.now()))
+      if (!stable) break
+      if (!this.isAuthenticated()) return { ready: false, reason: 'provider_account_unproven' }
+      let pageSocketOpen = true
+      if (this._page) {
+        pageSocketOpen = await this._page.evaluate(() => Boolean(window.__maxWs && window.__maxWs.readyState === 1))
+          .catch(() => false)
+      }
+      if (pageSocketOpen && this._wsConnected) return { ready: true }
+      await new Promise(resolve => setTimeout(resolve, pollMs))
+    }
+    return { ready: false, reason: 'socket_not_authenticated' }
+  }
+
+  /** Starts correlating the page's op:64 traffic for one send call. */
+  beginTextSendObservation({ chatId, text } = {}) {
+    const observation = new MaxTextSendObservation({ chatId, text })
+    this._sendObservations.add(observation)
+    return observation
+  }
+
+  endTextSendObservation(observation) {
+    if (!observation) return
+    observation.close()
+    this._sendObservations.delete(observation)
+  }
+
+  /** The page acknowledged a received push: `{ chatId, rawChatId, messageId }`. */
+  onBrowserMessageAck(handler) {
+    this._browserAckHandlers.push(handler)
+  }
+
   onMessage(handler) {
     this._messageHandlers.push(handler)
   }
@@ -2366,7 +2837,15 @@ class TransportInterceptor {
 module.exports = {
   TransportInterceptor,
   OP,
+  MaxTextSendObservation,
+  canonicalMaxMessageIdHex,
+  decideMaxTextSendOutcome,
+  decodeMaxBinaryFrame,
   evaluatePhoneResolutionUiSend,
   isUiTextSubmitObserved,
+  lz4BlockDecompress,
+  maxChatIdString,
+  maxMsgpackDecodeAll,
+  runSingleMaxTextSend,
   selectPendingLiveDomCandidates,
 }

@@ -6,9 +6,15 @@ const mocks = vi.hoisted(() => ({
     sendTextTransport: vi.fn(),
 }))
 
-vi.mock('@/modules/max-channel/application/messaging-transport', () => ({
-    sendMaxTransportTextV1: mocks.sendTextTransport,
-}))
+vi.mock('@/modules/max-channel/application/messaging-transport', async () => {
+    const actual = await vi.importActual<typeof import('@/modules/max-channel/application/messaging-transport')>(
+        '@/modules/max-channel/application/messaging-transport',
+    )
+    return {
+        maxTextSendFailureMessageV1: actual.maxTextSendFailureMessageV1,
+        sendMaxTransportTextV1: mocks.sendTextTransport,
+    }
+})
 vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
     registerMaxChannelDeliveryV1: mocks.register,
 }))
@@ -131,6 +137,91 @@ describe('MAX provider account to transport binding', () => {
                 isPersonal: true,
             },
         })).rejects.toThrow('MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH')
+    })
+
+    test('a UI action without a correlated provider id is never delivered', async () => {
+        // The compose box clearing was recorded as delivered for a message that
+        // never left the page (2026-10-02 19:25:58). Such an answer stays pending.
+        const capability = registeredCapability()
+        mocks.sendTextTransport.mockResolvedValue({
+            success: true,
+            externalId: null,
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+            providerAccountId: 'live-account-a',
+            deliveryProof: { kind: 'ui_send_action', clientMessageId: 'client-1', actionConfirmed: true },
+        })
+
+        await expect(capability.sendText({
+            target: '902454841098',
+            content: 'hello',
+            options: {
+                providerAccountId: 'live-account-a',
+                connectionId: 'max_scraper',
+                isPersonal: true,
+                clientMessageId: 'client-1',
+            },
+        })).resolves.toEqual({ outcome: 'pending', externalId: null, resolvedChatId: null })
+    })
+
+    test('a request seen on the wire without MAX\'s answer stays pending with no id', async () => {
+        const capability = registeredCapability()
+        mocks.sendTextTransport.mockResolvedValue({
+            success: true,
+            externalId: null,
+            deliveryConfirmed: false,
+            deliveryStatus: 'send_requested',
+            proofKind: 'client_frame',
+            code: 'MAX_SEND_UNCONFIRMED',
+            providerAccountId: 'live-account-a',
+        })
+
+        await expect(capability.sendText({
+            target: '902454841098',
+            content: 'hello',
+            options: { providerAccountId: 'live-account-a', connectionId: 'max_scraper', isPersonal: true },
+        })).resolves.toEqual({ outcome: 'pending', externalId: null, resolvedChatId: null })
+    })
+
+    test.each([
+        ['a synthetic DOM-recovery id', { quotedMsgId: 'max-dom-902454841098-0123456789abcdef', quotedText: '3' }],
+        ['a quoted row with no provider id', { quotedText: 'Добрый день', quotedSentAt: '2026-10-02T19:25:24.000Z', quotedDirection: 'inbound' }],
+        ['a quoted row with no provider id and no text', { quotedSentAt: '2026-10-02T19:25:24.000Z' }],
+    ])('refuses a reply to %s before anything is dispatched', async (_label, quote) => {
+        const capability = registeredCapability()
+
+        await expect(capability.sendText({
+            target: '902454841098',
+            content: 'ответ',
+            options: { providerAccountId: 'live-account-a', connectionId: 'max_scraper', isPersonal: true, ...quote },
+        })).rejects.toThrow(/^MAX_REPLY_TARGET_NOT_ADDRESSABLE: .*\(MAX_SEND_REFUSED\)$/)
+        expect(mocks.sendTextTransport).not.toHaveBeenCalled()
+    })
+
+    test('a reply to a real provider id goes out as a reply', async () => {
+        const capability = registeredCapability()
+        mocks.sendTextTransport.mockResolvedValue({
+            success: true,
+            externalId: 'd301a0fe1478805e09',
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+            providerAccountId: 'live-account-a',
+        })
+
+        await expect(capability.sendText({
+            target: '902454841098',
+            content: 'ответ',
+            options: {
+                providerAccountId: 'live-account-a',
+                connectionId: 'max_scraper',
+                isPersonal: true,
+                quotedMsgId: 'd301a0fe1417a12c06',
+                quotedText: '3',
+                quotedSentAt: '2026-10-02T19:25:24.000Z',
+                quotedDirection: 'inbound',
+            },
+        })).resolves.toMatchObject({ outcome: 'delivered', externalId: 'd301a0fe1478805e09' })
+        expect(mocks.sendTextTransport).toHaveBeenCalledWith(expect.objectContaining({ quotedMsgId: 'd301a0fe1417a12c06' }))
     })
 
     test('sends media with the exact account and verifies the scraper echo', async () => {

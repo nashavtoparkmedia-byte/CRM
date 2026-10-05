@@ -82,7 +82,10 @@ describe('MAX-owned text delivery validation', () => {
         })
     })
 
-    it('accepts send-specific UI confirmation without a provider id', async () => {
+    it('keeps a send-specific UI action without a provider id pending, never delivered', async () => {
+        // The compose box clearing is not proof that anything left the page: on
+        // 2026-10-02 a message typed while the socket was down was recorded
+        // delivered and never sent.
         await expect(validate({
             success: true,
             externalId: null,
@@ -95,7 +98,7 @@ describe('MAX-owned text delivery validation', () => {
                 actionConfirmed: true,
             },
         })).resolves.toEqual({
-            outcome: 'delivered',
+            outcome: 'pending',
             externalId: null,
             resolvedChatId: null,
         })
@@ -120,16 +123,11 @@ describe('MAX-owned text delivery validation', () => {
 })
 
 /**
- * The phone-first zero-state send. The scraper resolves a phone by typing into
- * the MAX compose box, confirming the exact text left it, and binding the new
- * conversation from a send-bound signal when one appears. These are the literal
- * responses that `/send-message` branch emits, captured by executing it.
- *
- * Before the fix it neither echoed the live account nor carried a proof, so this
- * boundary threw MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH and MessageService stored a
- * message the contact had received as failed. Echoing the account alone would
- * still leave it pending: stored as 'sent' without a provider id, which recovery
- * marks failed and retryable after five minutes, and the retry job re-sends.
+ * The responses of the retired phone-first zero-state send. The scraper no
+ * longer types into a phone lookup (a phone target is refused as
+ * MAX_ROUTE_UNRESOLVED before anything is typed), but this boundary must still
+ * treat such answers safely: without the live-account echo they fail closed,
+ * and a UI action proof is never delivered - only a correlated provider id is.
  */
 describe('MAX phone-first UI send contract', () => {
     beforeEach(() => {
@@ -174,7 +172,7 @@ describe('MAX phone-first UI send contract', () => {
         })
     })
 
-    it('accepts the proven response as delivered and keeps the bound conversation', async () => {
+    it('keeps a UI action proof pending and keeps the bound conversation', async () => {
         await expect(validate({
             success: true,
             chatId: '902100000001',
@@ -186,13 +184,13 @@ describe('MAX phone-first UI send contract', () => {
             source: 'ui_resolve_send',
             deliveryProof: { kind: 'ui_send_action', clientMessageId: 'msg_phone_first', actionConfirmed: true },
         }, 'msg_phone_first')).resolves.toEqual({
-            outcome: 'delivered',
+            outcome: 'pending',
             externalId: null,
             resolvedChatId: '902100000001',
         })
     })
 
-    it('accepts a proven send with no bound conversation as delivered without inventing a binding', async () => {
+    it('keeps a UI action proof with no bound conversation pending without inventing a binding', async () => {
         await expect(validate({
             success: true,
             chatId: null,
@@ -204,7 +202,7 @@ describe('MAX phone-first UI send contract', () => {
             source: 'ui_resolve_send_unconfirmed',
             deliveryProof: { kind: 'ui_send_action', clientMessageId: 'msg_phone_first', actionConfirmed: true },
         }, 'msg_phone_first')).resolves.toEqual({
-            outcome: 'delivered',
+            outcome: 'pending',
             externalId: null,
             resolvedChatId: null,
         })
