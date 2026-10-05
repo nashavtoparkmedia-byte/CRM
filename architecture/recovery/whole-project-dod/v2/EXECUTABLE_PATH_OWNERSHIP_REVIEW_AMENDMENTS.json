@@ -739,6 +739,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 5
       }
+    },
+    {
+      "amendment_id": "contact-identity-m3a2-contact-card-shell-rcq1-20261005",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A2_CANDIDATE_OWNERSHIP_REVIEW_20261005",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "ORCHESTRATOR_APPROVED_M3A2_CONTACT_CARD_SHELL_RCQ1_COMPOSITION",
+      "reason": "M3A2 adds exactly nine tracked executable surfaces and moves no existing surface between owners. Five are messaging-owned and placed by existing messaging owned paths: the forward-ported RCQ1 contract gravity-mvp/src/contracts/messaging/v1/resolve-conversation-contact-query.ts, its handler, its legacy Prisma adapter and its contract tests under gravity-mvp/src/modules/messaging/public/v1, and the host mount proof MessagesShell.contact-card.test.tsx under gravity-mvp/src/app/messages. Four are platform_shell-owned under gravity-mvp/src/infrastructure/ui/contact-card, the Contact Card shell ContactCardShell.tsx, its server composition contact-card-actions.ts and their two proofs: the platform_shell manifest names exactly that directory in its maintained internal_surface and the context-manifest generator derives it into owned_paths, the same mechanism that owns the contacts lookup route, so the two runtime files never enter the gravity_runtime_remainder exact inventory, which stays at its reviewed 247 paths, and no other infrastructure path changes owner. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed. Existing surfaces changed bytes without changing ownership and with no reviewed source-hash binding: the messaging-owned MessagesShell.tsx gains the opt-in card branch, the messaging-owned messaging-operations.ts, public v1 index and contracts v1 index gain the RCQ1 wiring and exports, and the boundary control tools/architecture/check-contact-card-core-boundary.mjs keeps its ACTIVE OPERATIONAL_SCRIPT classification under architecture_controls. The reviewed inventory fingerprint moves only because nine paths joined the inventory, and the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2575,
+        "tracked_inventory_sha256": "abe8784aeac38d13568bb9825dff77dade6aca2f32f85a46e0a3d42be7223079",
+        "coverage_sha256": "38a59ea478574dbc93236a008d3768506a28dd321cb186bd3845e71cc8a4616b"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2584,
+        "tracked_inventory_sha256": "0cd4938de7edafba27ecbbffd22cbbe51cafb8aa51b919a9ae5ada1e19fffafd",
+        "coverage_sha256": "09c0a6dea29f627b19c7d23a863098c8327754d46d261f054437966a369071fa"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 9
+      }
     }
   ]
 }

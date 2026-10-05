@@ -108,13 +108,15 @@
   "internal_surface": [
     "gravity-mvp/src/components",
     "gravity-mvp/src/app/layout.tsx",
-    "gravity-mvp/src/instrumentation.ts"
+    "gravity-mvp/src/instrumentation.ts",
+    "gravity-mvp/src/infrastructure/ui/contact-card"
   ],
   "owned_data": [],
   "owned_paths": [
     "android",
     "gravity-mvp/src/app/layout.tsx",
     "gravity-mvp/src/components",
+    "gravity-mvp/src/infrastructure/ui/contact-card",
     "gravity-mvp/src/instrumentation.ts",
     "gravity-mvp/src/modules/platform-shell"
   ],

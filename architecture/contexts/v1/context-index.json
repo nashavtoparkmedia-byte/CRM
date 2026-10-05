@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "44f6b369fb1fe8e8493dc1e025e7bf5d9960aebc44671a2dfc430dcac400fb8d"
+      "sha256": "40f411e96cdaca5d9229b6e6436dd97fffa0a853d5e51fa7705d137a1a0d03f0"
     },
     {
       "context": "operations_observability",
@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
+      "sha256": "ddfca241ee254315a057c59258a8332baa8919ca6bfeb2bfe7b42fe8135e0d0e"
     },
     {
       "context": "telegram_channel",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "2f4f829fbb0094441dbc64eed4d6d27eacd6aab63fdaffe996ece3ae00fd1738"
+      "sha256": "b4aa896ac33f00d989e01e4054ad034f26f02b7fa1d19454628fc263e391dd89"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "1c67f1007d83b2ef84c2e630a21a89b276a7f1f744443e62e220216b3a2c0f70"
+      "sha256": "7ab226db17a8b9fc60c8ef02e34dff7ea40a1ec59dadbb2e4830a3a7e8e5f9e0"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "e14d560837676d90fdba85cb67fa0ac4982fb7b9a02f8786f1a370e22f0bebcc"
+      "sha256": "018b96149ede9e97c290960e2737bed14456d7089e8c9693699312529cbbc979"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "9f84de2abcab6717ae1e0bf9e39af528b6912fa8507e5d9c4c6e53400dfe6c09"
+      "sha256": "e6d8b78aa55a744ecfc4d259577ee588d374615feacf6ef394610254eea83a43"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
