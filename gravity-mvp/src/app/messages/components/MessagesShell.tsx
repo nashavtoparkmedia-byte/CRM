@@ -20,6 +20,8 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import ChatList from "./ChatList"
 import ChatWorkspace from "./ChatWorkspace"
 import ContactProfileDrawer from "./ContactProfileDrawer"
+import { useChatNavigation } from "../hooks/useChatNavigation"
+import ContactCardShell from "@/infrastructure/ui/contact-card/ContactCardShell"
 
 export default function MessagesShell({
     initialChatId,
@@ -42,6 +44,11 @@ export default function MessagesShell({
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [, startTransition] = useTransition()
+    const { toggleProfileDrawer } = useChatNavigation()
+
+    // Opt-in Contact Card (M3A2): only the exact `card=1` beside `profile=1`
+    // replaces the legacy drawer. Any other value keeps the drawer, the default.
+    const isContactCardMode = searchParams.get('card') === '1'
 
     // Sync channelTab with URL param (ChatChannelTabs updates URL directly)
     const urlChannel = searchParams.get('channel') || 'all'
@@ -101,7 +108,9 @@ export default function MessagesShell({
             />
 
             {isProfileOpen && chatId && (
-                <ContactProfileDrawer chatId={chatId} />
+                isContactCardMode
+                    ? <ContactCardShell chatId={chatId} onClose={() => toggleProfileDrawer(false)} />
+                    : <ContactProfileDrawer chatId={chatId} />
             )}
         </>
     )
