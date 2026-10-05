@@ -225,7 +225,8 @@
     "ChannelConversationWorkflow.v1",
     "CompletedCallTimelineProjector.v1",
     "DeliveryRecoveryOperations.v1",
-    "DraftImprovement.v1"
+    "DraftImprovement.v1",
+    "ResolveConversationContactQuery.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers, history import state, and inbound AI reply/draft orchestration.",
   "schema": "yoko.crm.module-manifest.v1",
