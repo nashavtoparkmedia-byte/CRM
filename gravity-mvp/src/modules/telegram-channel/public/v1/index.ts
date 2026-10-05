@@ -16,8 +16,9 @@ export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-deliv
 export { sendExactTelegramBotMessageV1, readTelegramBotFileV1, TELEGRAM_BOT_FILE_CONTENT_TYPES_V1, TELEGRAM_BOT_FILE_MAX_BYTES_V1 } from './bot-message-delivery'
 export type { TelegramBotFileReadV1 } from './bot-message-delivery'
 export type { TelegramBotInlineButtonV1, TelegramBotInlineKeyboardV1 } from './bot-message-delivery'
-export { prepareManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
-export type { PreparedManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
+export { canonicalTelegramBotConnectionIdV1, TELEGRAM_BOT_CONNECTION_ENV_NAME } from './bot-transport-config'
+export { prepareDriverTelegramConversationAuthorityV1, prepareManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
+export type { PreparedDriverTelegramConversationAuthorityV1, PreparedManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
 export {
     deleteDriverTelegramLinkV1,
     dismissBotLinkRequestV1,
