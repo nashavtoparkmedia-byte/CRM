@@ -91,6 +91,9 @@ describe('manual Telegram link multi-park wiring', () => {
         // written onto a Driver that already exists and already carries this
         // exact Yandex profile, and the route creates no Driver to make the
         // link possible.
+        // The revalidated profile must already resolve to this exact CRM Driver;
+        // a profile with no Driver, or with another one, is refused before any proof.
+        expect(route).toContain('!profile.driverId || profile.driverId !== driverId')
         // The Driver proves the exact profile either by its legacy raw provider id
         // or by the park-qualified external pair the Fleet reconciler writes.
         expect(route).toContain('driver.yandexDriverId === profile.id')
