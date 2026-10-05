@@ -1745,6 +1745,48 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "tg-bot-compensation-entry-gate-main-7dfa2539-20261004",
+      "reviewed_at": "2026-10-04T00:00:00Z",
+      "reviewed_by": "TG_BOT_COMPENSATION_ENTRY_GATE_RECONCILIATION_EXECUTOR_REVIEW_20261004",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TG_BOT_COMPENSATION_ENTRY_GATE_MAIN_INTEGRATION_20261004",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 7dfa2539, whose tail is call-alerts-android-notification-ux-main-04839381-20261003, and reviews only the one surface the Telegram compensation entry gate adds. It supersedes three earlier records for the same surface that never landed and are deliberately not carried forward: the gate amendment anchored on main 57f07078 (tg-bot-compensation-entry-gate-main-57f07078-20260927), whose anchor denominator no longer exists on main, and the reconciliation amendments anchored on main 04839381 (tg-bot-compensation-entry-gate-main-04839381-20261003) and on main c0d69f06 (tg-bot-compensation-entry-gate-main-c0d69f06-20261004), whose predecessor is no longer the published tail. The same surface is reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the single tracked executable surface the Telegram compensation entry release gate adds on top of main 7dfa2539, tg-bot/src/security/compensationEntryGate.test.js: 2,663 + 1 = 2,664 surfaces, context-owned 1,428 -> 1,429 and governed exclusions unchanged at 1,235. The published tail is the Android call-alert UX amendment, which moved only the tracked inventory digest and no surface count, so this record's predecessor is that tail's current triple and its current triple differs from the predecessor by exactly this one surface. The new surface is a node:test contract test under tg-bot/src, which the telegram_channel context owns by prefix, so it is context-owned rather than a governed exclusion and receives no explicit exact-inventory assignment. It is placed under src/security because that is the directory the authoritative tg-bot-security control runs, so the gate it pins is enforced rather than merely covered. The three runtime files the gate touches, tg-bot/src/config.js, tg-bot/src/bot.js and tg-bot/src/handlers/start.js, carry no reviewed exact-inventory assignment, so no source fingerprint rebind is required and none is claimed; the repository's own derivation over this tree requires no source hash rebind and reports the four exact-inventory transitions exactly as the historical review recorded them. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2663,
+        "tracked_inventory_sha256": "5c47e8bc99d9407644806b696fdc1ef2488077ad431cf079d2bb31f4750f98db",
+        "coverage_sha256": "62aeeeafc1126b95b810c5cf1e50ff0e6c6f0bac34608da244f26c0129b355c7"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2664,
+        "tracked_inventory_sha256": "4b4e351442a0687a67482dcdf241593a734d7d0d6bab9cf8229bffa29b16933a",
+        "coverage_sha256": "d8646259179746c4264c5b6c58f55bb47de5ffe0b58d9234171f95e51e67dde2"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "tg-bot/src/security/compensationEntryGate.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A node:test contract test for the Telegram compensation entry release gate, under a tg-bot/src path the telegram_channel context owns by prefix, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. It loads the bot's own configuration and start handler with in-process fakes, replaces http and https so no outbound request can leave the process, opens no database connection and holds no credential."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
