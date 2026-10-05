@@ -1588,7 +1588,7 @@ test('M2 catch-up: a snapshot past the anchor opens a gap; the page\'s own histo
   assert.equal(request.opcode, 49)
   assert.equal(maxRealIdFromProtocolId(request.payload.chatId), BigInt(REAL_CHAT))
   assert.deepEqual([request.payload.from, request.payload.forward, request.payload.backward, request.payload.getMessages],
-    [maxTimeOfId(GAP_ANCHOR.id), 40, 0, true])
+    [maxTimeOfId(GAP_ANCHOR.id) - 1, 40, 0, true])
   assert.deepEqual(emitted.map(m => m.text), ['4', '2', '3', 'ответ с телефона'], 'the missed messages, in order, and "4" only once')
   const own = emitted.find(m => m.id === GAP_OWN.id)
   assert.deepEqual([own.isOutgoing, own.source], [true, 'catchup'], 'a missed message of our own is a history read-back')

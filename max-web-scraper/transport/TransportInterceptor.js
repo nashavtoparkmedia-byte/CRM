@@ -2924,7 +2924,10 @@ class TransportInterceptor {
     }
     let floor = startFloor
     for (let page = 0; page < maxPagesPerChat; page++) {
-      const fromMs = maxMessageIdTimeMs(floor)
+      // One ms before the floor's own time, so the floor message is in the
+      // answer whether MAX reads `from` inclusively or not: the answer must
+      // show it started no later than the floor.
+      const fromMs = maxMessageIdTimeMs(floor) - 1
       let answer
       try {
         answer = await this.requestBinary(OP.GET_HISTORY, {
