@@ -1942,6 +1942,54 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-s1-shared-retry-safety-main-eb52b92c-20261005",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "reviewed_by": "MESSAGING_S1_SHARED_RETRY_SAFETY_T1_LANDED_MAIN_RECONCILE_EXECUTOR_REVIEW_20261005",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_S1_RECONCILE_ONTO_EB52B92C_20261005",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at eb52b92c, whose tail is tg-bot-t1-telegram-authority-runtime-contract-main-06b4fd36-20261005, and reviews only the two surfaces the S1 shared retry-safety landing adds. It supersedes three earlier S1 landing records that never landed and are deliberately not carried forward: the records anchored on main c0d69f06 (messaging-s1-shared-retry-safety-main-c0d69f06-20261004), on main 77fbd894 (messaging-s1-shared-retry-safety-main-77fbd894-20261005) and on main 06b4fd36 (messaging-s1-shared-retry-safety-main-06b4fd36-20261005), whose predecessor is no longer the published tail since the T1 record landed after it. The same surfaces are reviewed again against the published chain rather than replayed, and the RCQ1 and T1 records are not changed."
+      },
+      "reason": "Records the tracked executable surfaces the S1 shared retry-safety landing adds on top of main eb52b92c: 2,674 + 2 = 2,676 surfaces, context-owned 1,439 -> 1,441 and governed exclusions 1,235 unchanged. The two new paths are the S1 tests gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.test.ts and shared-retry-safety.postgres.test.ts, owned by the messaging context through its manifest owned_paths, so the coverage derivation gives each a context owner and neither reaches a governed exclusion or an exact inventory. The other two S1 landing paths, gravity-mvp/src/lib/MessageService.ts and operator-delivery-retry.test.ts, change bytes only; both are context-owned and in no reviewed exact inventory, so this amendment carries no source-fingerprint rebind. The published tail is the T1 Telegram authority and runtime contract amendment that landed with main eb52b92c, so this record's predecessor is that tail's current triple and its current triple differs from the predecessor by exactly these two surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The frozen S1 development candidate e54cbc3e on the production baseline 10318827 carried its own baseline-local amendment on a different chain; it is not carried here. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2674,
+        "tracked_inventory_sha256": "5ca46b2cd7d5f4b180fe8280cb4d2742ffee1d791ef5a39018e8a020e5afd723",
+        "coverage_sha256": "84b9449efa7591616926c242f77b007741582c08268ac335b559add399b2bf2a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2676,
+        "tracked_inventory_sha256": "27019a9f4b3c64bd55b73053c18f8dfc3eb08692a8b8ff770dfc080b26b7a144",
+        "coverage_sha256": "6422dafb4595be72223ea3fcec10b72076d12f141e1549a41b182497e3cebf4d"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the messaging context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST. It runs only against a disposable database named by an explicit environment variable and is skipped otherwise."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/shared-retry-safety.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the messaging context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
