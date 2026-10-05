@@ -50,6 +50,7 @@ android {
         // it hands the target to this path and the CRM decides where to go.
         buildConfigField("String", "OPEN_CHAT_PATH", "\"/messages/open\"")
         buildConfigField("String", "MESSENGER_PATH", "\"/messages\"")
+        buildConfigField("String", "CALLS_PATH", "\"/calls\"")
         // The one endpoint the shell itself calls. Compile-time, like the
         // origin it is appended to: there is no setting, no intent extra and no
         // payload field that can point the registrar anywhere else.

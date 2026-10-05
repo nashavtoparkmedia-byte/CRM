@@ -128,4 +128,44 @@ class CrmOriginTest {
         assertNull(CrmOrigin.sanitizeRestoredUrl("javascript:alert(1)"))
         assertNull(CrmOrigin.sanitizeRestoredUrl(null))
     }
+
+    // ------------------------------------------------------------------
+    // Call alert routing. The destination is fixed in this app; a payload
+    // carries an identifier and a kind and can never name a route.
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a call alert tap lands on the calls screen of the pinned origin`() {
+        assertEquals(CrmOrigin.ORIGIN + "/calls", CrmOrigin.callsUrl())
+        assertTrue(CrmOrigin.isInAppUrl(CrmOrigin.callsUrl()))
+    }
+
+    @Test
+    fun `a call alert wins over anything else on the intent and never reads a route`() {
+        // Even handed a conversation and a hostile-looking route, the call
+        // branch resolves to this app's own /calls.
+        assertEquals(
+            CrmOrigin.callsUrl(),
+            CrmOrigin.deepLinkTarget(
+                callAlertKind = "call_incoming",
+                chatId = "chat_abc123",
+                channelTab = "https://evil.example/pwn",
+                messageId = "../../etc/passwd",
+            ),
+        )
+        assertEquals(
+            CrmOrigin.callsUrl(),
+            CrmOrigin.deepLinkTarget("call_missed", chatId = null, channelTab = null, messageId = null),
+        )
+    }
+
+    @Test
+    fun `without a call alert the conversation routing is exactly what it was`() {
+        assertEquals(
+            CrmOrigin.buildOpenChatUrl("chat_abc123", "tg", "msg_abc123"),
+            CrmOrigin.deepLinkTarget(null, "chat_abc123", "tg", "msg_abc123"),
+        )
+        assertNull(CrmOrigin.deepLinkTarget(null, chatId = null, channelTab = null, messageId = null))
+        assertNull(CrmOrigin.deepLinkTarget(null, chatId = "../../etc/passwd", channelTab = null, messageId = null))
+    }
 }

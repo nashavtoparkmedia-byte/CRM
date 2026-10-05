@@ -89,7 +89,13 @@ class AcceptancePushInjection : BroadcastReceiver() {
         const val SEED_PREFIX = "SEEDED_PUSH_TOKEN="
         const val STATE_PREFIX = "PUSH_STATE"
 
-        /** Exactly the five keys P1 sends; nothing else is read from the intent. */
-        val PAYLOAD_KEYS = listOf("v", "kind", "chatId", "messageId", "channel")
+        /**
+         * Exactly the keys the CRM sends; nothing else is read from the intent.
+         *
+         * The five message keys P1 sends, plus the call identifier a call alert
+         * carries. The handler still validates every one of them: widening this
+         * list only decides what may be forwarded, never what is accepted.
+         */
+        val PAYLOAD_KEYS = listOf("v", "kind", "chatId", "messageId", "channel", "callId")
     }
 }

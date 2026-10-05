@@ -65,25 +65,53 @@ object RemotePushHandler {
 
         synchronized(LOCK) {
             PushDedupStore.prune(context, now)
-            if (PushDedupStore.hasSeen(context, payload.messageId)) return Outcome.Duplicate
+            // One store, one key space. A chat message dedupes on its own id and
+            // a call alert on (kind, callId); the payload decides which, so a
+            // second store for call alerts would only be a second thing to get
+            // wrong about process death.
+            if (PushDedupStore.hasSeen(context, payload.dedupKey)) return Outcome.Duplicate
 
-            val posted = ChatNotifications.postChatNotification(
-                context = context,
-                notificationId = ChatNotifications.notificationIdFor(payload.chatId),
-                chatId = payload.chatId,
-                // Null on purpose. The payload's channel is the provider the
-                // message arrived on, not a messenger tab, and the CRM's
-                // /messages/open gate derives the tab from the conversation
-                // itself. Mapping it here would create a second authority that
-                // could disagree with the server.
-                channelTab = null,
-                messageId = payload.messageId,
-                title = context.getString(R.string.push_notification_title),
-                body = context.getString(R.string.push_notification_body),
-            )
+            val posted = when (payload) {
+                is PushPayload.ChatMessage -> postChatMessage(context, payload)
+                is PushPayload.CallAlert -> postCallAlert(context, payload)
+            }
 
-            if (posted) PushDedupStore.record(context, payload.messageId, now)
+            if (posted) PushDedupStore.record(context, payload.dedupKey, now)
             return Outcome.Accepted(posted)
         }
     }
+
+    private fun postChatMessage(context: Context, payload: PushPayload.ChatMessage): Boolean =
+        ChatNotifications.postChatNotification(
+            context = context,
+            notificationId = ChatNotifications.notificationIdFor(payload.chatId),
+            chatId = payload.chatId,
+            // Null on purpose. The payload's channel is the provider the
+            // message arrived on, not a messenger tab, and the CRM's
+            // /messages/open gate derives the tab from the conversation
+            // itself. Mapping it here would create a second authority that
+            // could disagree with the server.
+            channelTab = null,
+            messageId = payload.messageId,
+            title = context.getString(R.string.push_notification_title),
+            body = context.getString(R.string.push_notification_body),
+        )
+
+    /**
+     * The notification id is derived from the deduplication key, not the call
+     * id, so an incoming alert and a later missed alert for the same call are
+     * two notifications and neither replaces the other.
+     */
+    private fun postCallAlert(context: Context, payload: PushPayload.CallAlert): Boolean =
+        ChatNotifications.postCallAlertNotification(
+            context = context,
+            notificationId = ChatNotifications.notificationIdFor(payload.dedupKey),
+            callAlertKind = payload.kind.wire,
+            title = context.getString(
+                when (payload.kind) {
+                    CallAlertKind.INCOMING -> R.string.call_alert_incoming_title
+                    CallAlertKind.MISSED -> R.string.call_alert_missed_title
+                },
+            ),
+        )
 }

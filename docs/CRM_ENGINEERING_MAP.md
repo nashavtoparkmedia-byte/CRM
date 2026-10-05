@@ -242,8 +242,9 @@ Each entry lists what the code actually does.
   - `G/app/tg-actions.ts` — the whole MTProto/GramJS runtime (login, client cache,
     listeners, catch-up, send, media, history import, reachability).
   - `G/modules/telegram-channel/public/v1/` — `runtime-operations.ts`,
-    `messaging-delivery-capability.ts`, `bot-message-delivery.ts`, driver-link and
-    bot-user-profile handlers/adapters.
+    `messaging-delivery-capability.ts`, `bot-message-delivery.ts`,
+    `bot-transport-config.ts` (the canonical Driver Bot transport id), driver-link
+    and bot-user-profile handlers/adapters.
   - `G/infrastructure/telegram/operational-capabilities.ts`.
   - Bot-side in CRM: `G/app/api/webhook/telegram/route.ts` (bot messages in),
     `G/app/api/webhooks/bot/route.ts` (bot action RPC), `G/app/tg-bot-actions.ts`,
@@ -255,7 +256,11 @@ Each entry lists what the code actually does.
   `answers`, `analytics_events`, `broadcasts`, `broadcast_stats`), tg-bot SQLite.
 - **Runtime**: MTProto session in `TelegramConnection.sessionString`; clients and
   listeners are module-level Maps in the Gravity process. `tg-bot` shares the CRM
-  Postgres (`DATABASE_URL`) and also keeps a local SQLite file.
+  Postgres (`DATABASE_URL`) and also keeps a local SQLite file. The Driver Bot
+  transport id comes only from configuration: `CRM_TELEGRAM_CONNECTION_ID`, read
+  by `canonicalTelegramBotConnectionIdV1()`. It is never taken from a stored
+  `Chat` or `TelegramConnection` row, and a missing, untrimmed or placeholder
+  value fails closed (`TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN`).
 - **Extension points**: `TelegramChannelDeliveryV1` in
   `channel-delivery-runtime.ts`; a new bot action = a `case` in
   `G/app/api/webhooks/bot/route.ts` + a tg-bot handler.
@@ -632,19 +637,33 @@ Fleet sync: reconciler adapter → `runDriverClusterContactOwnershipV1`.
 `publishPersistedMessageV1`.
 
 **F-05 Telegram bot inbound**
-`tg-bot/src/services/crmIntegration.js` (header `x-bot-signature`) →
+`tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
+before any handler runs) → `tg-bot/src/services/crmIntegration.js` (header
+`x-bot-signature`; bounded retry on 5xx and transport errors, 4xx is terminal) →
 `POST G/app/api/webhook/telegram/route.ts` → auth → exact provider-event check →
-conversation admission → dedupe on `(chatId, externalId)` → F-01 →
-`recordBotUserProfileV1` → `prisma.botChatMessage.create` →
-`createChannelMessageV1`. The same route also runs the driver limit-change state
-machine. This route does **not** call `publishPersistedMessageV1` (R-06).
+conversation admission → dedupe on `(chatId, externalId)` → **persist**:
+`prisma.botChatMessage.create` → `createChannelMessageV1` → conversation
+workflow → **enrich** (bounded, non-fatal): F-01 → `recordBotUserProfileV1`.
+A blocked enrichment is answered `processed: 'message_persisted'`,
+`enrichment: 'blocked'`, never as a retryable error; only a failed persist
+answers 500. The same route also runs the driver limit-change state machine.
+This route does **not** call `publishPersistedMessageV1` (R-06).
 
 **F-06 Telegram driver linking**
 tg-bot `handlers/start.js` → action `sync_user` →
 `G/app/api/webhooks/bot/route.ts` → `recordBotUserProfileV1` + pending link
 request → manager confirms via `POST G/app/api/bot-link/route.ts` →
-`saveManualDriverTelegramLinkV1` → transactional `DriverTelegram` write.
-Alternative entry: `G/app/api/platform/drivers/[id]/telegram-link/route.ts`.
+`saveManualDriverTelegramLinkV1` → authority → transactional `DriverTelegram`
+write. Alternative entry: `G/app/api/platform/drivers/[id]/telegram-link/route.ts`.
+The authority (`manual-driver-telegram-link-authority.ts`) is two separate
+proofs: a transport-free person proof,
+`prepareDriverTelegramConversationAuthorityV1` (exact private `Chat` by
+`chatType`, active confirmed conflict-free `ContactIdentity`, confirmed main
+Driver), and the configured Bot transport
+(`canonicalTelegramBotConnectionIdV1()`). It is re-read inside the write
+transaction under the Contacts ownership lock. Driver actions arriving through
+`G/app/api/webhooks/bot/route.ts` use the same person proof and prove the
+calling Bot transport against configuration, not against `Chat` metadata.
 
 **F-07 MAX inbound**
 `max-web-scraper/transport/TransportInterceptor.js` (WS frame) → `handleIncoming`
@@ -1084,6 +1103,29 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   — `G/app/tg-actions.identity.test.ts`.
 - **I-17 One driver per Telegram id and vice versa.** — `DriverTelegram` unique
   columns + in-transaction authority re-read — manual-link adapter tests.
+- **I-41 For Telegram, `Chat.chatType` is the single private/group source.**
+  `metadata.chatKind` is not consulted for Telegram (MAX still requires both). —
+  `manual-driver-telegram-link-authority.ts`,
+  `G/modules/platform-shell/application/outbound-conversation-identity.ts` —
+  authority tests, `check-telegram-driver-link-boundary.mjs`.
+- **I-42 The Driver ↔ Telegram person proof carries no transport; the Driver Bot
+  transport is configuration.** A `Chat`-stored connection or provider account is
+  never authority, and an unconfigured transport fails closed. —
+  `prepareDriverTelegramConversationAuthorityV1`,
+  `canonicalTelegramBotConnectionIdV1` —
+  `manual-driver-telegram-link-authority.test.ts`, `bot-transport-config.test.ts`,
+  `G/app/api/webhooks/bot/route.test.ts`.
+- **I-43 Telegram bot inbound is persist-first.** An authenticated, de-duplicated
+  event of an admitted conversation is written before person enrichment; a
+  blocked enrichment is reported, never answered as retryable. —
+  `G/app/api/webhook/telegram/route.ts` — its route test,
+  `check-messaging-conversation-contact-link-boundary.mjs` (placement pin).
+- **I-44 tg-bot awaits the CRM forward; a failed update stays retryable and a
+  completed one is not re-executed.** An `update_id` is recorded only after its
+  handler chain succeeds. — `tg-bot/src/bot.js`,
+  `tg-bot/src/services/crmIntegration.js`, `tg-bot/src/services/botRuntime.js` —
+  `tg-bot/src/security/crmForwardOutcome.test.js`,
+  `tg-bot/src/security/botRuntimeUpdateLifecycle.test.js`.
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.

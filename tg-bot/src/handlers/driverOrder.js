@@ -26,6 +26,7 @@ const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
 const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
+const { notifyManagerAboutFailure } = require('../utils/driverOrderDiagnostics');
 
 // Same env resolution as carManagement.js — action calls must go to
 // /api/webhooks/bot, NOT /api/webhook/telegram. CRM_WEBHOOK_URL is reserved
@@ -191,6 +192,15 @@ async function reportFailure(ctx, state) {
     if (state.error === 'NOT_LINKED') {
         await ctx.reply('⚠️ Профиль не привязан. Нажмите «🚘 Мой автомобиль» и поделитесь номером.');
         return;
+    }
+    // Every remaining shape is an order-system incident, so page the configured
+    // managers before answering the driver. NOT_LINKED has already returned, so
+    // the suppression rule holds by construction. Never fatal to the driver's
+    // own reply: a diagnostic that cannot be delivered must not swallow it.
+    try {
+        await notifyManagerAboutFailure(ctx, state);
+    } catch (diagnosticError) {
+        logger.warn(`[DriverOrder] manager diagnostic failed: ${diagnosticError?.message || diagnosticError}`);
     }
     if (state.error === 'NO_YANDEX_ID' || state.status === 'ESCALATED_TO_MANAGER') {
         await ctx.reply('✉️ Передал менеджеру — он свяжется с тобой.');

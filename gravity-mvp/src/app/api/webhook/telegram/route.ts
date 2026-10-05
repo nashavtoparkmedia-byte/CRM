@@ -21,7 +21,8 @@ import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COM
 import { appendConversationIdentityCollisionV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import {
-    prepareManualDriverTelegramLinkAuthorityV1,
+    canonicalTelegramBotConnectionIdV1,
+    prepareDriverTelegramConversationAuthorityV1,
     recordBotUserProfileV1,
 } from '@/modules/telegram-channel/public/v1'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
@@ -138,14 +139,25 @@ async function requireCurrentDriverTelegramAuthority(input: {
     connectionId: string
 }): Promise<NextResponse | null> {
     try {
-        const authority = await prepareManualDriverTelegramLinkAuthorityV1({
+        // Bot RUNTIME authority. This ingress is already authenticated by
+        // BOT_CRM_SECRET, and the transport it reports is proven against the
+        // Telegram-owned configuration, never against the shared Chat.
+        if (input.connectionId !== canonicalTelegramBotConnectionIdV1()) {
+            throw new Error('TELEGRAM_BOT_CONNECTION_MISMATCH')
+        }
+        // Live runtime provenance must be concrete, but it is never treated as
+        // account authority. See docs/design/provider-account-identity-v1.md.
+        if (!/^\d+$/.test(input.providerAccountId)) {
+            throw new Error('TELEGRAM_BOT_PROVIDER_ACCOUNT_UNPROVEN')
+        }
+        // Independent PERSON/CONVERSATION proof; it names no transport.
+        const person = await prepareDriverTelegramConversationAuthorityV1({
             driverId: input.driverId,
             telegramId: input.telegramId,
         })
         if (
-            authority.chatId !== input.chatId
-            || authority.providerAccountId !== input.providerAccountId
-            || authority.connectionId !== input.connectionId
+            person.chatId !== input.chatId
+            || person.target !== input.telegramId.toString()
         ) {
             throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
         }
@@ -178,36 +190,41 @@ async function admitTelegramConversation(input: {
         channel: 'telegram',
         name: input.name,
         chatType: input.chatKind,
+        // Transport-neutral CREATE. A Chat is the peer/conversation identity shared
+        // by both Telegram transports, never exclusive transport ownership, so Bot
+        // provenance must not be persisted at conversation level: a Bot-first row
+        // stamped with the Bot transport would make the GramJS ladder's own
+        // transport arm fire on that very peer. chatKind is not written either,
+        // because Chat.chatType is the single canonical private/group source. Exact
+        // Bot provenance stays on the event/message.
+        // See docs/design/provider-account-identity-v1.md.
         metadata: {
             ...(input.extraMetadata || {}),
-            chatKind: input.chatKind,
-            providerAccountId: input.providerAccountId,
-            connectionId: input.connectionId,
         },
     })
     const chat = result.conversation as TelegramIngressChat
     const existingMetadata = metadataRecord(chat.metadata)
     const existingProviderAccountId = concreteOpaqueId(existingMetadata.providerAccountId)
     const existingConnectionId = concreteOpaqueId(existingMetadata.connectionId)
+    // Chat.chatType is the single canonical private/group source for Telegram.
     const existingChatKind = chat.chatType === 'private' || chat.chatType === 'group'
         ? chat.chatType
-        : existingMetadata.chatKind === 'private' || existingMetadata.chatKind === 'group'
-            ? existingMetadata.chatKind
-            : null
-    // Same rule as the GramJS ladder in tg-actions: reject a CONTRADICTION, never
-    // the mere absence of provenance a legacy row could not have recorded and
-    // can never gain. Provider-account comparison is removed outright, because
-    // no production conversation carries that stamp and the value names a
-    // mutable transport slot. See docs/design/provider-account-identity-v1.md.
+        : null
+    // Reject a CONTRADICTION, never the mere absence of provenance a legacy row
+    // could not have recorded and can never gain. Provider-account comparison was
+    // already removed. The transport-connection arm is removed as well: a stored
+    // connection naming the other Telegram transport is not a contradiction on a
+    // shared conversation, and rejecting it locked the Bot out of every peer the
+    // personal account had ever observed. Transport provenance is carried by the
+    // event/message instead, never by Chat ownership.
+    // See docs/design/provider-account-identity-v1.md.
     const collisionReason = chat.channel !== 'telegram'
         ? 'channel_mismatch'
         : chat.externalChatId !== input.externalChatId
             ? 'conversation_key_mismatch'
-            : existingConnectionId !== null && existingConnectionId !== input.connectionId
-                ? 'transport_connection_mismatch'
-                : existingChatKind !== input.chatKind
-                    ? 'chat_kind_mismatch'
-                    : null
+            : existingChatKind !== input.chatKind
+                ? 'chat_kind_mismatch'
+                : null
 
     if (collisionReason) {
         const evidence = {
@@ -243,11 +260,9 @@ async function admitTelegramConversation(input: {
                 },
             })
         }
-        const error = collisionReason === 'transport_connection_mismatch'
-            ? 'TELEGRAM_TRANSPORT_CONNECTION_COLLISION'
-            : collisionReason === 'chat_kind_mismatch'
-                ? 'TELEGRAM_CHAT_KIND_COLLISION'
-                : 'TELEGRAM_CONVERSATION_COLLISION'
+        const error = collisionReason === 'chat_kind_mismatch'
+            ? 'TELEGRAM_CHAT_KIND_COLLISION'
+            : 'TELEGRAM_CONVERSATION_COLLISION'
         return { response: NextResponse.json({ error }, { status: 409 }) }
     }
 
@@ -456,12 +471,75 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, processed: 'duplicate_provider_event' })
         }
         let message: { id: string }
+        const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
 
-        // Also save to the unified Messenger chat/message tables
-        // so inbound TG messages appear in the CRM Messenger UI
+        // ── PHASE 1 — PERSIST ─────────────────────────────────────────
+        // The provider event is authenticated, well formed, de-duplicated and
+        // belongs to an admitted conversation, so it is durable from here on. It
+        // is written with its exact event-level transport provenance BEFORE any
+        // person enrichment: a contradictory Contact, ContactIdentity or Driver
+        // must never make a delivered message disappear.
+        try {
+            message = await prisma.botChatMessage.create({
+                data: {
+                    telegramId: tgIdBigInt,
+                    text,
+                    direction: direction || 'INCOMING'
+                }
+            })
+
+            // PR-Ц: определяем тип сообщения по первому attachment.
+            // text → текст без медиа; image/video/voice/audio/document/sticker → media-сообщение.
+            const firstAtt = Array.isArray(attachments) && attachments.length > 0 ? attachments[0] : null
+            const firstAttachmentType = firstAtt && typeof firstAtt === 'object'
+                ? (firstAtt as Record<string, unknown>).type
+                : null
+            const supportedMessageTypes = new Set<ChannelMessageTypeV1>([
+                'text', 'image', 'audio', 'video', 'sticker', 'voice', 'document',
+            ])
+            const msgType: ChannelMessageTypeV1 = typeof firstAttachmentType === 'string'
+                && supportedMessageTypes.has(firstAttachmentType as ChannelMessageTypeV1)
+                ? firstAttachmentType as ChannelMessageTypeV1
+                : 'text'
+            const msgMetadata: Record<string, unknown> = {
+                providerAccountId: telegramProviderAccountId,
+                connectionId: telegramConnectionId,
+                providerPeerId: telegramIdString,
+                providerEventId: telegramProviderEvent.eventId,
+                providerUpdateId: telegramProviderEvent.updateId,
+                providerMessageId: telegramProviderEvent.messageId,
+                callbackQueryId: telegramProviderEvent.callbackQueryId,
+            }
+            if (Array.isArray(attachments) && attachments.length > 0) {
+                msgMetadata.attachments = attachments
+            }
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: msgDirection, content: text, channel: 'telegram', type: msgType, sentAt, status: 'delivered', externalId: messageExternalId, metadata: msgMetadata })
+
+            // Workflow: update status/unread/requiresResponse. This is the part of
+            // the inbound lane that makes the persisted Message visible and
+            // consistent, so it belongs to the persistence phase.
+            if (msgDirection === 'inbound') {
+                await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
+            } else {
+                await ConversationWorkflowService.onOutboundMessage(unifiedChat.id, sentAt)
+            }
+
+            console.log(`[WEBHOOK-TG] SAVED channel=telegram chatId=${unifiedChat.id} driverId=${unifiedChat.driverId || 'none'} dir=${direction} text="${text.substring(0, 30)}"`)
+        } catch (unifiedErr: unknown) {
+            const unifiedErrorMessage = unifiedErr instanceof Error ? unifiedErr.message : String(unifiedErr)
+            opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: unifiedErrorMessage })
+            return NextResponse.json({ error: 'TELEGRAM_INGRESS_PERSISTENCE_FAILED' }, { status: 500 })
+        }
+
+        // ── PHASE 2 — ENRICH ──────────────────────────────────────────
+        // Bounded and non-fatal. The provider event is already durable, so a
+        // contradictory person is reported as an enrichment outcome, never as a
+        // delivery failure: answering with a retryable error would tell the bot to
+        // resend an event the CRM has already accepted.
+        let enrichmentBlocked: string | null = null
         try {
             // ── Contact Model dual write ──────────────────────────────
-            try {
+            {
                 // PR-А: Contact.displayName тоже приоритет — real name > @username
                 const contactResult = await resolveChannelContactOperationV1(
                     'telegram',
@@ -528,15 +606,6 @@ export async function POST(req: NextRequest) {
                         familyName: lastName || null,
                     },
                 })
-            } catch (contactErr: unknown) {
-                const contactErrorMessage = contactErr instanceof Error ? contactErr.message : String(contactErr)
-                opsLog('warn', 'webhook_telegram_contact_binding_blocked', {
-                    channel: 'telegram',
-                    chatId: unifiedChat.id,
-                    providerAccountId: telegramProviderAccountId,
-                    error: contactErrorMessage,
-                })
-                return NextResponse.json({ error: 'TELEGRAM_CONTACT_BINDING_BLOCKED' }, { status: 409 })
             }
             // ──────────────────────────────────────────────────────────
 
@@ -550,57 +619,14 @@ export async function POST(req: NextRequest) {
                 phoneVerified: false,
                 observedAt: sentAt,
             })
-
-            // Add the message to the legacy Telegram history only after the
-            // exact Chat/Contact ownership admission has succeeded.
-            message = await prisma.botChatMessage.create({
-                data: {
-                    telegramId: tgIdBigInt,
-                    text,
-                    direction: direction || 'INCOMING'
-                }
-            })
-
-            const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
-            // PR-Ц: определяем тип сообщения по первому attachment.
-            // text → текст без медиа; image/video/voice/audio/document/sticker → media-сообщение.
-            const firstAtt = Array.isArray(attachments) && attachments.length > 0 ? attachments[0] : null
-            const firstAttachmentType = firstAtt && typeof firstAtt === 'object'
-                ? (firstAtt as Record<string, unknown>).type
-                : null
-            const supportedMessageTypes = new Set<ChannelMessageTypeV1>([
-                'text', 'image', 'audio', 'video', 'sticker', 'voice', 'document',
-            ])
-            const msgType: ChannelMessageTypeV1 = typeof firstAttachmentType === 'string'
-                && supportedMessageTypes.has(firstAttachmentType as ChannelMessageTypeV1)
-                ? firstAttachmentType as ChannelMessageTypeV1
-                : 'text'
-            const msgMetadata: Record<string, unknown> = {
+        } catch (enrichErr: unknown) {
+            enrichmentBlocked = enrichErr instanceof Error ? enrichErr.message : String(enrichErr)
+            opsLog('warn', 'webhook_telegram_enrichment_blocked', {
+                channel: 'telegram',
+                chatId: unifiedChat.id,
                 providerAccountId: telegramProviderAccountId,
-                connectionId: telegramConnectionId,
-                providerPeerId: telegramIdString,
-                providerEventId: telegramProviderEvent.eventId,
-                providerUpdateId: telegramProviderEvent.updateId,
-                providerMessageId: telegramProviderEvent.messageId,
-                callbackQueryId: telegramProviderEvent.callbackQueryId,
-            }
-            if (Array.isArray(attachments) && attachments.length > 0) {
-                msgMetadata.attachments = attachments
-            }
-            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: msgDirection, content: text, channel: 'telegram', type: msgType, sentAt, status: 'delivered', externalId: messageExternalId, metadata: msgMetadata })
-
-            // Workflow: update status/unread/requiresResponse
-            if (msgDirection === 'inbound') {
-                await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
-            } else {
-                await ConversationWorkflowService.onOutboundMessage(unifiedChat.id, sentAt)
-            }
-
-            console.log(`[WEBHOOK-TG] SAVED channel=telegram chatId=${unifiedChat.id} driverId=${unifiedChat.driverId || 'none'} dir=${direction} text="${text.substring(0, 30)}"`)
-        } catch (unifiedErr: unknown) {
-            const unifiedErrorMessage = unifiedErr instanceof Error ? unifiedErr.message : String(unifiedErr)
-            opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: unifiedErrorMessage })
-            return NextResponse.json({ error: 'TELEGRAM_INGRESS_PERSISTENCE_FAILED' }, { status: 500 })
+                error: enrichmentBlocked,
+            })
         }
 
         // Try to find if user is a linked driver
@@ -786,6 +812,18 @@ export async function POST(req: NextRequest) {
         const responseData = {
             id: message.id,
             telegramId: telegramId // Use the original string/number from the request
+        }
+
+        // Transport-level acknowledgement. The provider event was accepted and
+        // persisted, so transport processing succeeded; a blocked identity is
+        // reported alongside it and never as a reason to resend.
+        if (enrichmentBlocked) {
+            return NextResponse.json({
+                success: true,
+                processed: 'message_persisted',
+                enrichment: 'blocked',
+                message: responseData,
+            })
         }
 
         return NextResponse.json({ success: true, message: responseData })

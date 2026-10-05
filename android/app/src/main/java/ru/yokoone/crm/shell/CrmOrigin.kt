@@ -64,6 +64,15 @@ object CrmOrigin {
     fun startUrl(): String = ORIGIN + BuildConfig.MESSENGER_PATH
 
     /**
+     * Where a call alert tap lands.
+     *
+     * Built here from the pinned origin and a compile-time path, never from a
+     * payload. A call alert carries an identifier and a kind and no route, so
+     * there is nothing to validate and nothing a push could redirect.
+     */
+    fun callsUrl(): String = ORIGIN + BuildConfig.CALLS_PATH
+
+    /**
      * Scheme of the pinned origin.
      *
      * Release pins an https origin, and `release_origin_is_https` asserts it.
@@ -128,6 +137,27 @@ object CrmOrigin {
         }
 
         return builder.build().toString()
+    }
+
+    /**
+     * Where a notification tap should land, or null if it names nothing this
+     * shell will act on.
+     *
+     * The whole routing decision, in one pure function, so it can be asserted
+     * without starting an Activity. A call alert wins and resolves to the fixed
+     * [callsUrl]; otherwise the conversation identifier is validated and rebuilt
+     * by [buildOpenChatUrl]. Neither branch reads a URL from anywhere but this
+     * file's own compile-time constants.
+     */
+    fun deepLinkTarget(
+        callAlertKind: String?,
+        chatId: String?,
+        channelTab: String?,
+        messageId: String?,
+    ): String? {
+        if (callAlertKind != null) return callsUrl()
+        if (chatId == null) return null
+        return buildOpenChatUrl(chatId = chatId, channelTab = channelTab, messageId = messageId)
     }
 
     /**

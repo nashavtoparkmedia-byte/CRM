@@ -16,4 +16,17 @@
          screen discloses only that something arrived. -->
     <string name="push_notification_title">Новое сообщение</string>
     <string name="push_notification_body">Нажмите, чтобы открыть диалог</string>
+
+    <!-- Call alerts get their own channel so an operator can silence chat
+         notifications without silencing calls, and the other way round. Both
+         call kinds share the one channel: Android channel settings are what the
+         operator actually sees, and a per-kind split would offer a choice
+         nobody asked for. -->
+    <string name="call_alert_channel_name">Звонки</string>
+    <string name="call_alert_channel_description">Уведомления о входящих и пропущенных звонках</string>
+
+    <!-- Same privacy rule as the message copy: the payload carries no number and
+         no name, so a lock screen discloses only that a call happened. -->
+    <string name="call_alert_incoming_title">Входящий звонок</string>
+    <string name="call_alert_missed_title">Пропущенный звонок</string>
 </resources>

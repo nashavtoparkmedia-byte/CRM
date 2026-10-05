@@ -4,7 +4,10 @@ import { prisma } from '@/lib/prisma'
 import { SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
-import { saveManualDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import {
+    canonicalTelegramBotConnectionIdV1,
+    saveManualDriverTelegramLinkV1,
+} from '@/modules/telegram-channel/public/v1'
 import {
     sendExactTelegramBotMessageV1,
     type TelegramBotInlineKeyboardV1,
@@ -63,11 +66,21 @@ export async function sendTelegramBotMessage(
             throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
         }
 
+        // This is the explicit Bot transport entry point: the caller chose Bot by
+        // calling it, so the transport comes from Telegram-owned configuration.
+        // `outbound.connectionId` is NOT used — a shared Chat may carry the
+        // MTProto personal-account connection, or none at all. No provider
+        // account is requested either: `Chat.metadata.providerAccountId` is
+        // descriptive legacy telemetry and may belong to MTProto, so constraining
+        // the live bot by it would fail a delivery that is in fact correct. The
+        // bot still returns its live provider account as runtime provenance, and
+        // the mandatory connection and message-id echo proofs are unchanged.
+        // See docs/design/provider-account-identity-v1.md.
         await sendExactTelegramBotMessageV1({
             peerId: outbound.target,
             text,
-            providerAccountId: outbound.providerAccountId,
-            connectionId: outbound.connectionId ?? undefined,
+            providerAccountId: null,
+            connectionId: canonicalTelegramBotConnectionIdV1(),
             ...(inlineKeyboard ? { inlineKeyboard } : {}),
         })
 

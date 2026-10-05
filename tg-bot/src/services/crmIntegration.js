@@ -44,6 +44,35 @@ function extractTelegramProviderEvidence(ctx) {
 }
 
 /**
+ * Terminal outcomes of one forward attempt chain. The caller awaits these so a
+ * forward is never left in flight after the update that produced it.
+ */
+const CRM_FORWARD_OUTCOME = {
+    /** CRM accepted the provider event (2xx). */
+    SUCCESS: 'success',
+    /** Nothing forwardable in this update; no request was made. */
+    SKIPPED: 'skipped',
+    /** Local binding incomplete, so the request was refused before sending. */
+    UNBOUND: 'unbound',
+    /** CRM refused this exact event (4xx). Resending cannot change the answer. */
+    TERMINAL_4XX: 'terminal_4xx',
+    /** Transport stayed unavailable for the whole bounded retry budget. */
+    RETRY_EXHAUSTED_TRANSIENT: 'retry_exhausted_transient',
+};
+
+/**
+ * Only transport faults and server-side faults may be retried.
+ *
+ * Every 4xx is the CRM refusing this exact event on its own terms — a bad
+ * signature, an unbound payload, a rejected identity. The same bytes produce the
+ * same answer, so retrying a 4xx only delays the report and, in the 401 case the
+ * incident was made of, turns one refusal into four identical ones.
+ */
+function isRetryableStatus(statusCode) {
+    return typeof statusCode === 'number' && statusCode >= 500;
+}
+
+/**
  * Service to forward incoming Telegram events to the CRM system's Webhook.
  */
 class CrmIntegrationService {
@@ -53,11 +82,26 @@ class CrmIntegrationService {
     }
 
     forwardMessageToCrm(ctx, direction = 'INCOMING', retryCount = 0) {
-        return new Promise((resolve, reject) => {
-            if (!this.isEnabled || !this.crmWebhookUrl) return resolve();
+        return new Promise((resolve) => {
+            if (!this.isEnabled || !this.crmWebhookUrl) {
+                return resolve({ outcome: CRM_FORWARD_OUTCOME.SKIPPED, reason: 'disabled' });
+            }
 
             const MAX_RETRIES = 3;
-            const TIMEOUT_MS = 15000;
+            // Operational knob with a safe default. It exists so the timeout arm
+            // is reachable in a bounded test; production leaves it unset.
+            const configuredTimeout = Number.parseInt(process.env.BOT_CRM_FORWARD_TIMEOUT_MS || '', 10);
+            const TIMEOUT_MS = Number.isInteger(configuredTimeout) && configuredTimeout > 0
+                ? configuredTimeout
+                : 15000;
+            // `destroy()` on timeout also emits 'error', so without this a single
+            // timeout would start two independent retry chains.
+            let terminated = false;
+            const terminate = (handler) => {
+                if (terminated) return;
+                terminated = true;
+                handler();
+            };
 
             try {
                 const telegramId = ctx.from?.id;
@@ -152,14 +196,22 @@ class CrmIntegrationService {
                     }
                 }
 
-                if (!telegramId || !text) return resolve();
+                if (!telegramId || !text) {
+                    return resolve({
+                        outcome: CRM_FORWARD_OUTCOME.SKIPPED,
+                        reason: 'no_forwardable_content',
+                    });
+                }
 
                 const providerEvidence = extractTelegramProviderEvidence(ctx);
                 const connectionId = String(process.env.CRM_TELEGRAM_CONNECTION_ID || process.env.TELEGRAM_CONNECTION_ID || '').trim();
                 const signature = String(process.env.BOT_CRM_SECRET || '').trim();
                 if (!providerEvidence || !connectionId || !signature) {
                     logger.error('[CRM IN] Refusing unbound webhook: live bot/update evidence, CRM Telegram connection, and BOT_CRM_SECRET are required');
-                    return resolve();
+                    return resolve({
+                        outcome: CRM_FORWARD_OUTCOME.UNBOUND,
+                        reason: 'binding_incomplete',
+                    });
                 }
 
                 const payload = {
@@ -200,52 +252,70 @@ class CrmIntegrationService {
                 const req = lib.request(options, (res) => {
                     let body = '';
                     res.on('data', chunk => body += chunk);
-                    res.on('end', () => {
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
+                    res.on('end', () => terminate(() => {
+                        const status = res.statusCode;
+                        if (status >= 200 && status < 300) {
                             logger.info(`[CRM IN] Forwarded message to CRM from ${telegramId}`);
-                            resolve();
-                        } else {
-                            logger.error(`[CRM IN] Failed to forward to CRM. Status: ${res.statusCode}`);
-                            this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve);
+                            return resolve({
+                                outcome: CRM_FORWARD_OUTCOME.SUCCESS,
+                                status,
+                                attempts: retryCount + 1,
+                            });
                         }
-                    });
+                        if (!isRetryableStatus(status)) {
+                            logger.error(`[CRM IN] CRM refused the event. Status: ${status}. Not retrying.`);
+                            return resolve({
+                                outcome: CRM_FORWARD_OUTCOME.TERMINAL_4XX,
+                                status,
+                                attempts: retryCount + 1,
+                            });
+                        }
+                        logger.error(`[CRM IN] Failed to forward to CRM. Status: ${status}`);
+                        this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { status });
+                    }));
                 });
 
-                req.setTimeout(TIMEOUT_MS, () => {
+                req.setTimeout(TIMEOUT_MS, () => terminate(() => {
                     req.destroy();
                     logger.error(`[CRM IN] Timeout forwarding to CRM for ${telegramId} (Attempt ${retryCount + 1})`);
-                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve);
-                });
+                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'timeout' });
+                }));
 
-                req.on('error', (error) => {
+                req.on('error', (error) => terminate(() => {
                     logger.error(`[CRM IN] Error forwarding to CRM: ${error.message}`);
-                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve);
-                });
+                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'transport_error' });
+                }));
 
                 req.write(data);
                 req.end();
             } catch (error) {
                 logger.error(`[CRM IN] Error: ${error.message}`);
-                resolve();
+                resolve({ outcome: CRM_FORWARD_OUTCOME.SKIPPED, reason: 'local_exception' });
             }
         });
     }
 
-    handleRetry(ctx, direction, retryCount, maxRetries, resolve) {
+    handleRetry(ctx, direction, retryCount, maxRetries, resolve, detail = {}) {
         if (retryCount < maxRetries) {
             const delay = 1000 * (retryCount + 1);
             logger.info(`[CRM IN] Retrying in ${delay}ms... (Attempt ${retryCount + 2}/${maxRetries + 1})`);
             setTimeout(() => {
                 this.forwardMessageToCrm(ctx, direction, retryCount + 1).then(resolve);
             }, delay);
-        } else {
-            logger.error(`[CRM IN] Max retries reached. Message dropped.`);
-            resolve();
+            return;
         }
+        logger.error(`[CRM IN] Max retries reached. Message dropped.`);
+        resolve({
+            outcome: CRM_FORWARD_OUTCOME.RETRY_EXHAUSTED_TRANSIENT,
+            attempts: retryCount + 1,
+            ...detail,
+        });
     }
 }
 
 module.exports = new CrmIntegrationService();
+module.exports.CRM_FORWARD_OUTCOME = CRM_FORWARD_OUTCOME;
+module.exports.isRetryableStatus = isRetryableStatus;
 module.exports.CrmIntegrationService = CrmIntegrationService;
 module.exports.extractTelegramProviderEvidence = extractTelegramProviderEvidence;
 // The Telegram webhook origin normalisation now lives in its own unit-tested

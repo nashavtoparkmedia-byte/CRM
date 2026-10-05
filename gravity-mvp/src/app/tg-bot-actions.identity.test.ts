@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     sendBot: vi.fn(),
     requireAdmin: vi.fn(),
     saveManualLink: vi.fn(),
+    canonicalBotConnection: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -36,7 +37,12 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
 }))
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
     saveManualDriverTelegramLinkV1: mocks.saveManualLink,
+    canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
 }))
+
+const BOT_CONNECTION = 'driver-bot-primary'
+/** The single production MTProto personal-account transport. */
+const MTPROTO_CONNECTION = '1982527911'
 
 import { linkTelegramUserToDriver, sendTelegramBotMessage } from './tg-bot-actions'
 
@@ -48,9 +54,11 @@ const exactChat = {
     channel: 'telegram',
     externalChatId: 'telegram:42',
     chatType: 'private',
+    // Exact production shape: the shared Chat carries the MTProto personal-account
+    // transport, which explicit Bot delivery must ignore entirely.
     metadata: {
-        providerAccountId: 'telegram-account-exact',
-        connectionId: 'telegram-connection-exact',
+        providerAccountId: MTPROTO_CONNECTION,
+        connectionId: MTPROTO_CONNECTION,
         peerId: '42',
     },
 }
@@ -60,8 +68,8 @@ const exactBinding = {
     channel: 'telegram',
     contactId: 'contact-exact',
     contactIdentityId: 'identity-exact',
-    providerAccountId: 'telegram-account-exact',
-    connectionId: 'telegram-connection-exact',
+    providerAccountId: MTPROTO_CONNECTION,
+    connectionId: MTPROTO_CONNECTION,
     identityTarget: '42',
     target: '42',
     isMaxPersonal: false,
@@ -72,9 +80,12 @@ describe('sendTelegramBotMessage exact outbound identity boundary', () => {
         vi.clearAllMocks()
         mocks.chatFindUnique.mockResolvedValue(exactChat)
         mocks.prepareOutbound.mockResolvedValue(exactBinding)
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.sendBot.mockResolvedValue({
-            providerAccountId: 'telegram-account-exact',
-            connectionId: 'telegram-connection-exact',
+            // The live bot reports its own account as runtime provenance; the
+            // caller never requested one.
+            providerAccountId: 'telegram-bot-live-account',
+            connectionId: BOT_CONNECTION,
             messageId: '1001',
         })
         mocks.botMessageCreate.mockResolvedValue({ id: 'legacy-message-1' })
@@ -84,7 +95,7 @@ describe('sendTelegramBotMessage exact outbound identity boundary', () => {
         vi.spyOn(console, 'error').mockImplementation(() => {})
     })
 
-    test('preflights the persisted Chat and sends only the prepared peer and connection', async () => {
+    test('preflights the persisted Chat and sends the prepared peer on the configured Bot transport', async () => {
         const result = await sendTelegramBotMessage('42', 'hello', 'caller-driver')
 
         expect(result).toEqual({ success: true, messageId: 'legacy-message-1' })
@@ -102,11 +113,13 @@ describe('sendTelegramBotMessage exact outbound identity boundary', () => {
             },
         })
         expect(mocks.prepareOutbound).toHaveBeenCalledWith(exactChat)
+        // The legacy MTProto account and connection on the shared Chat are ignored:
+        // no provider account is requested, and the transport comes from config.
         expect(mocks.sendBot).toHaveBeenCalledWith({
             peerId: '42',
             text: 'hello',
-            providerAccountId: 'telegram-account-exact',
-            connectionId: 'telegram-connection-exact',
+            providerAccountId: null,
+            connectionId: BOT_CONNECTION,
         })
         expect(mocks.botMessageCreate).toHaveBeenCalledWith({
             data: {
@@ -169,10 +182,43 @@ describe('sendTelegramBotMessage exact outbound identity boundary', () => {
         expect(mocks.sendBot).toHaveBeenCalledWith({
             peerId: '42',
             text: 'hello',
-            providerAccountId: 'telegram-account-exact',
-            connectionId: 'telegram-connection-exact',
+            providerAccountId: null,
+            connectionId: BOT_CONNECTION,
             inlineKeyboard,
         })
+    })
+
+    test('never requests a provider account derived from the shared Chat', async () => {
+        await sendTelegramBotMessage('42', 'hello')
+
+        const [[delivery]] = mocks.sendBot.mock.calls
+        expect(delivery.providerAccountId).toBeNull()
+        expect(delivery.connectionId).toBe(BOT_CONNECTION)
+        expect(delivery.connectionId).not.toBe(MTPROTO_CONNECTION)
+    })
+
+    test('fails closed when the canonical Bot transport is unconfigured', async () => {
+        mocks.canonicalBotConnection.mockImplementation(() => {
+            throw new Error('TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN')
+        })
+
+        await expect(sendTelegramBotMessage('42', 'hello')).resolves.toEqual({
+            success: false,
+            error: 'TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN',
+        })
+        expect(mocks.sendBot).not.toHaveBeenCalled()
+        expect(mocks.botMessageCreate).not.toHaveBeenCalled()
+    })
+
+    test('does not fall back to MTProto when Bot delivery fails', async () => {
+        mocks.sendBot.mockRejectedValue(new Error('TELEGRAM_BOT_DELIVERY_FAILED:503'))
+
+        await expect(sendTelegramBotMessage('42', 'hello')).resolves.toEqual({
+            success: false,
+            error: 'TELEGRAM_BOT_DELIVERY_FAILED:503',
+        })
+        const source = readFileSync(`${process.cwd()}/src/app/tg-bot-actions.ts`, 'utf8')
+        expect(source).not.toMatch(/sendTelegramMessage|tg-actions/)
     })
 
     test('does not record success when the exact delivery capability rejects', async () => {
