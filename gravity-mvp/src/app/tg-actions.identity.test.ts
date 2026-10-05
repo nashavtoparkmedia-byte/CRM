@@ -2045,6 +2045,8 @@ describe('GramJS private conversation identity admission', () => {
                 ['FLOOD_WAIT (420) answered to the call', 'flood', ['NOT_DISPATCHED']],
                 ['a 400 refusal answered to the call', 'blocked', ['REFUSED']],
                 ['a 403 refusal answered to the call', 'forbidden', ['REFUSED']],
+                ['a 401 refusal answered to the call', 'unauthorized', ['REFUSED']],
+                ['a 406 refusal answered to the call', 'unacceptable', ['REFUSED']],
                 ['a 500 answered to the call', 'server', []],
                 ['a dropped socket during the call', 'socket', []],
                 ['an unusable id after the call succeeded', 'bad-id', []],
@@ -2057,6 +2059,8 @@ describe('GramJS private conversation identity admission', () => {
                 if (scenario === 'flood') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('420: FLOOD_WAIT_30'), { code: 420, errorMessage: 'FLOOD_WAIT' }))
                 if (scenario === 'blocked') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('400: USER_IS_BLOCKED'), { code: 400, errorMessage: 'USER_IS_BLOCKED' }))
                 if (scenario === 'forbidden') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('403: CHAT_WRITE_FORBIDDEN'), { code: 403, errorMessage: 'CHAT_WRITE_FORBIDDEN' }))
+                if (scenario === 'unauthorized') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('401: AUTH_KEY_UNREGISTERED'), { code: 401, errorMessage: 'AUTH_KEY_UNREGISTERED' }))
+                if (scenario === 'unacceptable') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('406: USER_RESTRICTED'), { code: 406, errorMessage: 'USER_RESTRICTED' }))
                 if (scenario === 'server') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('500: INTERNAL'), { code: 500, errorMessage: 'INTERNAL' }))
                 if (scenario === 'socket') mocks.sendMessage.mockRejectedValue(new Error('Not connected'))
                 if (scenario === 'bad-id') mocks.sendMessage.mockResolvedValue({ id: 'x' })
