@@ -14,6 +14,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -759,30 +760,10 @@ class PushAcceptanceTest {
      * being clickable rather than by text order, and the submit button is
      * matched on exact text because the CRM chrome carries its own "Войти…".
      */
+    /** Same DOM-driven sign-in as LoginAcceptanceTest; see [SignInForm] for why. */
     private fun signIn() {
-        device.wait(Until.hasObject(By.textContains("Сотрудник")), ACTION_TIMEOUT)
-        val candidates = (
-            device.findObjects(By.textContains("Выберите")) +
-                device.findObjects(By.textContains("Сотрудник"))
-            ).distinct()
-        val picker = candidates.firstOrNull { it.isClickable }
-            ?: candidates.firstOrNull { it.className != "android.widget.TextView" }
-        assertNotNull("no clickable operator select; tree: ${treeShape(300)}", picker)
-        picker!!.click()
-
-        val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
-        assertNotNull("the operator list did not open; tree: ${treeShape(460)}", option)
-        option!!.click()
-
-        val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
-        assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
-        assertTrue("expected a login and a password field, found ${fields.size}", fields.size >= 2)
-        fields[0].text = user
-        fields[1].text = password
-
-        val submit = device.wait(Until.findObject(By.text("Войти")), ACTION_TIMEOUT)
-        assertNotNull("submit button not found; on screen: ${visibleText()}", submit)
-        submit.click()
+        val outcome = SignInForm.submit(SignInForm.OPERATOR, user, password, ACTION_TIMEOUT)
+        assertEquals("the sign-in form was not submitted; on screen: ${visibleText()}", "submitted", outcome)
     }
 
     private fun evidenceDir(): File? {

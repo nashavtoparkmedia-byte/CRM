@@ -384,81 +384,18 @@ class LoginAcceptanceTest {
     }
 
     /**
-     * Fill and submit the sign-in form.
+     * Fill and submit the sign-in form through the page's own DOM.
      *
-     * The operator picker is a native `<select>`, which Chromium surfaces as a
-     * dialog rather than an inline list, so it is opened and chosen explicitly
-     * instead of being typed into.
+     * Input goes through [SignInForm], not the accessibility tree: on a physical
+     * Samsung with a third-party autofill service the first focused field let
+     * that service's overlay take the active window, and the operator select
+     * vanished from what UI Automator could see. What the click reached is still
+     * established the same way as before, by the assertions the scenarios make
+     * about the screen that follows: the rejection message, or the messenger.
      */
     private fun signIn(password: String) {
-        // The operator select is `required`, so the browser refuses to submit
-        // without it and shows its own "Please select an item in the list."
-        // — which is exactly what the failure screens carried once the submit
-        // button was being clicked correctly.
-        //
-        // This used to be `if (picker != null) { ... }`: when the select was not
-        // found, the whole step was skipped in silence and the run failed much
-        // later for an unrelated-looking reason. Not finding it is now a
-        // failure that says so, in the same class of mistake as a tool that
-        // exits 0 when it did nothing.
-        // Run #23 printed the tree with classes and settled what this element
-        // is. Inside a WebView the select is not a Spinner — it is a plain
-        // `android.view.View`, and it sits immediately after a TextView that
-        // carries the same word:
-        //
-        //   TextView='Сотрудник' | View='Сотрудн…'
-        //
-        // Matching on text alone therefore finds the LABEL first, because it
-        // comes first in tree order, and clicking a label opens nothing. So
-        // pick among the candidates by what a control actually is: clickable,
-        // and not a TextView.
-        device.wait(Until.hasObject(By.textContains("Сотрудник")), ACTION_TIMEOUT)
-        val candidates = (
-            device.findObjects(By.textContains("Выберите")) +
-                device.findObjects(By.textContains("Сотрудник"))
-            ).distinct()
-        val picker = candidates.firstOrNull { it.isClickable }
-            ?: candidates.firstOrNull { it.className != "android.widget.TextView" }
-        assertNotNull(
-            "no clickable operator select among ${candidates.size} candidates " +
-                "(${candidates.joinToString { "${it.className?.substringAfterLast('.')}:clickable=${it.isClickable}" }}); " +
-                "tree: ${treeShape(300)}",
-            picker,
-        )
-        picker!!.click()
-        val option = device.wait(Until.findObject(By.textContains("Мария")), ACTION_TIMEOUT)
-        assertNotNull(
-            "the operator list did not open after clicking the select; tree: ${treeShape(460)}",
-            option,
-        )
-        option!!.click()
-
-        val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
-        assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
-        assertTrue("expected a login and a password field, found ${fields.size}", fields.size >= 2)
-
-        fields[0].text = user
-        fields[1].text = password
-
-        // EXACT text, not textContains. The sign-in page renders inside the CRM
-        // chrome, and that chrome carries its own "Войти..." item — visible in
-        // every failure dump, listed before the form's button. textContains
-        // matches both, findObject returns whichever comes first, and clicking
-        // the chrome item leaves the form filled, unsubmitted and errorless,
-        // which is exactly what every failing assertion has been reporting.
-        val submit = device.wait(Until.findObject(By.text("Войти")), ACTION_TIMEOUT)
-        assertNotNull(
-            "submit button not found by exact text; on screen: ${visibleText()}",
-            submit,
-        )
-        submit.click()
-
-        // No pending-state probe here. The one that used to live at this point
-        // waited for By.textStartsWith("Вход"), which the page's own heading
-        // "Вход в мобильное приложение" satisfies and has satisfied since
-        // before the click — so it reported true whatever happened and proved
-        // nothing. What the click reached is established by the assertions the
-        // scenarios make about the screen that follows it.
+        val outcome = SignInForm.submit(SignInForm.OPERATOR, user, password, ACTION_TIMEOUT)
+        assertEquals("the sign-in form was not submitted; on screen: ${visibleText()}", "submitted", outcome)
     }
 
     /**
