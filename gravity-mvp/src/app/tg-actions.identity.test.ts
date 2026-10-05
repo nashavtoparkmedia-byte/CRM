@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-    clients: [] as Array<{ handlers: Array<(event: unknown) => Promise<void>> }>,
+    clients: [] as Array<{ handlers: Array<(event: unknown) => Promise<void>>, builders: unknown[] }>,
     telegramConnectionFindMany: vi.fn(),
     telegramConnectionFindUnique: vi.fn(),
     chatFindUnique: vi.fn(),
@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => ({
     emitMessage: vi.fn(),
     recordReachability: vi.fn(),
     opsLog: vi.fn(),
+    applyEvidence: vi.fn(),
+    messageFindMany: vi.fn(),
+    connect: vi.fn(),
     telegramConnectionUpdate: vi.fn(),
     admittedChat: null as null | Record<string, unknown>,
     providerAccountId: '7000',
@@ -39,13 +42,14 @@ vi.mock('telegram', () => ({
     TelegramClient: class MockTelegramClient {
         connected = true
         handlers: Array<(event: unknown) => Promise<void>> = []
+        builders: unknown[] = []
         session = { save: () => 'session' }
 
         constructor() {
             mocks.clients.push(this)
         }
 
-        async connect() {}
+        async connect() { return mocks.connect() }
         async disconnect() {}
         async isUserAuthorized() { return true }
         async getMe() { return { id: BigInt(mocks.providerAccountId) } }
@@ -55,10 +59,14 @@ vi.mock('telegram', () => ({
         async sendMessage(target: unknown, input: unknown) { return mocks.sendMessage(target, input) }
         async sendFile(target: unknown, input: unknown) { return mocks.sendFile(target, input) }
         async invoke(input: unknown) { return mocks.invoke(input) }
-        addEventHandler(handler: (event: unknown) => Promise<void>) { this.handlers.push(handler) }
+        addEventHandler(handler: (event: unknown) => Promise<void>, builder?: unknown) {
+            this.handlers.push(handler)
+            this.builders.push(builder)
+        }
     },
     Api: {
         UpdateMessageReactions: class {},
+        UpdateReadHistoryOutbox: class {},
         ReactionEmoji: class { constructor(public input: unknown) {} },
         messages: { SendReaction: class { constructor(public input: unknown) {} } },
         contacts: { ImportContacts: class {} },
@@ -75,7 +83,7 @@ vi.mock('telegram/sessions', () => ({
 vi.mock('telegram/client/uploads', () => ({ CustomFile: class {} }))
 vi.mock('telegram/events', () => ({
     NewMessage: class {},
-    Raw: class {},
+    Raw: class { constructor(public input: unknown) {} },
 }))
 vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn() } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -90,6 +98,7 @@ vi.mock('@/lib/prisma', () => ({
         message: {
             findFirst: mocks.messageFindFirst,
             findUnique: mocks.messageFindUnique,
+            findMany: mocks.messageFindMany,
         },
         messageAttachment: {
             count: vi.fn(),
@@ -125,7 +134,7 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     ensureConversationContactLinkV1: mocks.ensureContactLink,
     patchChannelConversationV1: mocks.patchConversation,
     patchHistoryImportJobV1: mocks.patchImportJob,
-    patchMessageDeliveryV1: vi.fn(),
+    applyMessageDeliveryEvidenceV1: mocks.applyEvidence,
     patchMessageMetadataV1: mocks.patchMessageMetadata,
     prepareOutboundConversationV1: mocks.prepareOutbound,
     upsertChannelConversationV1: mocks.upsertConversation,
@@ -160,6 +169,7 @@ vi.mock('@/infrastructure/operations/operational-log', () => ({
     operationalLogV1: mocks.opsLog,
 }))
 
+import { Api } from 'telegram'
 import {
     checkTelegramReachability,
     importTelegramHistory,
@@ -171,6 +181,8 @@ import {
     sendTelegramReaction,
     stopTelegramHealthCheck,
 } from './tg-actions'
+import { createApplyMessageDeliveryEvidenceHandlerV1 } from '@/modules/messaging/public/v1/message-delivery-evidence-handler'
+import { deriveDeliveryStateV1, readDeliveryEvidenceV1, readTextDeliveryResultV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 
 let connectionSequence = 0
 
@@ -283,6 +295,9 @@ describe('GramJS private conversation identity admission', () => {
         mocks.getDialogs.mockResolvedValue([])
         mocks.getMessages.mockResolvedValue([])
         mocks.telegramConnectionUpdate.mockResolvedValue({})
+        mocks.applyEvidence.mockResolvedValue({ outcome: 'no_match', messageId: null, matchedBy: null, reason: null })
+        mocks.messageFindMany.mockResolvedValue([])
+        mocks.connect.mockResolvedValue(undefined)
         vi.spyOn(console, 'log').mockImplementation(() => {})
         vi.spyOn(console, 'warn').mockImplementation(() => {})
         vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -544,7 +559,7 @@ describe('GramJS private conversation identity admission', () => {
         mocks.admittedChat = chat
 
         await expect(sendTelegramMessage(peerId, 'exact peer', connectionId, { chatId: chat.id }))
-            .resolves.toMatchObject({ success: true, externalId: `telegram:${providerAccountId}:${peerId}:9001` })
+            .resolves.toMatchObject({ evidence: 'provider_ack', providerMessageId: `telegram:${providerAccountId}:${peerId}:9001` })
 
         expect(mocks.prepareOutbound).toHaveBeenCalledWith(chat, connectionId)
         expect(mocks.getEntity).toHaveBeenCalledWith(BigInt(peerId))
@@ -867,47 +882,70 @@ describe('GramJS private conversation identity admission', () => {
     type StoredRow = {
         id: string
         chatId: string
-        externalId: string
+        externalId: string | null
         direction: string
         content: string
         sentAt: Date
+        channel?: string | null
+        type?: string
+        status?: string
+        metadata?: unknown
+        updatedAt?: Date
     }
 
-    // Does one Prisma where-arm match a stored row? Equality per field, plus the
-    // gte/lte range a content window uses, so any dedupe arm is evaluated as
-    // the database would evaluate it.
+    // Does one Prisma where-arm match a stored row? Equality per field, the
+    // gte/lte range a content window uses, and the not / startsWith operators,
+    // so any query is evaluated as the database would evaluate it.
     function storedArmMatches(row: StoredRow, arm: Record<string, any>): boolean {
         return Object.entries(arm).every(([field, expected]) => {
+            const actual = (row as Record<string, unknown>)[field]
             if (field === 'sentAt') {
                 const at = row.sentAt.getTime()
                 return (expected.gte === undefined || at >= expected.gte.getTime())
                     && (expected.lte === undefined || at <= expected.lte.getTime())
             }
-            return (row as Record<string, unknown>)[field] === expected
+            if (expected && typeof expected === 'object' && !(expected instanceof Date)) {
+                if ('not' in expected) return actual !== expected.not
+                if ('startsWith' in expected) return typeof actual === 'string' && actual.startsWith(expected.startsWith)
+            }
+            return actual === expected
         })
     }
 
-    // An in-memory Message table with the real unique key on externalId.
+    // An in-memory Message table with the real unique key on externalId. Rows
+    // without a provider id (CRM sends still in flight) are kept under `crm:<id>`.
     function useMessageStore() {
         const rows = new Map<string, StoredRow>()
+        let sequence = 0
         mocks.createMessage.mockImplementation(async (command: StoredRow) => {
-            if (rows.has(command.externalId)) {
+            if (command.externalId && rows.has(command.externalId)) {
                 throw Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
             }
-            const row = {
-                id: `stored-${rows.size + 1}`,
+            const row: StoredRow = {
+                id: `stored-${++sequence}`,
                 chatId: command.chatId,
                 externalId: command.externalId,
                 direction: command.direction,
                 content: command.content,
                 sentAt: command.sentAt,
+                channel: command.channel ?? 'telegram',
+                type: command.type ?? 'text',
+                // Prisma's column default when a create names no status.
+                status: command.status ?? 'sent',
+                metadata: command.metadata ?? {},
+                updatedAt: new Date(),
             }
-            rows.set(command.externalId, row)
+            rows.set(command.externalId ?? `crm:${row.id}`, row)
             return { message: row }
         })
         mocks.messageFindFirst.mockImplementation(async ({ where }: { where: Record<string, any> }) => {
             const arms: Array<Record<string, any>> = where.OR ?? [where]
             return [...rows.values()].find(row => arms.some(arm => storedArmMatches(row, arm))) ?? null
+        })
+        mocks.messageFindMany.mockImplementation(async ({ where, orderBy, take }: { where: Record<string, any>, orderBy?: { sentAt?: 'asc' | 'desc' }, take?: number }) => {
+            const found = [...rows.values()].filter(row => storedArmMatches(row, where))
+            if (orderBy?.sentAt) found.sort((a, b) => (a.sentAt.getTime() - b.sentAt.getTime()) * (orderBy.sentAt === 'desc' ? -1 : 1))
+            return take === undefined ? found : found.slice(0, take)
         })
         return rows
     }
@@ -1394,7 +1432,7 @@ describe('GramJS private conversation identity admission', () => {
             await waitForCatchUp(connectionId)
 
             expect(mocks.clients).toHaveLength(1)
-            expect(mocks.clients[0].handlers).toHaveLength(2)
+            expect(mocks.clients[0].handlers).toHaveLength(3)
             expect(mocks.getDialogs).toHaveBeenCalledOnce()
         })
 
@@ -1476,7 +1514,7 @@ describe('GramJS private conversation identity admission', () => {
                 await expect(sendTelegramMessage(PEER, 'answer', connectionId, {
                     chatId: chat.id,
                     quotedMsgId: `telegram:${ACCOUNT}:${PEER}:5021`,
-                })).resolves.toMatchObject({ success: true })
+                })).resolves.toMatchObject({ evidence: 'provider_ack' })
 
                 expect(mocks.sendMessage).toHaveBeenCalledWith(
                     expect.objectContaining({ id: BigInt(PEER) }),
@@ -1648,7 +1686,7 @@ describe('GramJS private conversation identity admission', () => {
                     .mockImplementation(async target => ({ id: target }))
 
                 await expect(sendTelegramMessage(peerId, 'после рестарта', connectionId, { chatId: chat.id }))
-                    .resolves.toMatchObject({ success: true, externalId: `telegram:7200:${peerId}:9001` })
+                    .resolves.toMatchObject({ evidence: 'provider_ack', providerMessageId: `telegram:7200:${peerId}:9001` })
 
                 expect(sweepCalls()).toHaveLength(1)
                 expect(mocks.getEntity).toHaveBeenCalledTimes(2)
@@ -1737,7 +1775,7 @@ describe('GramJS private conversation identity admission', () => {
                     .mockImplementation(async target => ({ id: target }))
 
                 await expect(sendTelegramMessage(peerId, 'после замены', connectionId, { chatId: chat.id }))
-                    .resolves.toMatchObject({ success: true })
+                    .resolves.toMatchObject({ evidence: 'provider_ack' })
                 expect(mocks.clients.length).toBe(clientsBefore)
                 expect(sweepCalls()).toHaveLength(2)
                 expect(mocks.sendMessage).toHaveBeenCalledOnce()
@@ -1792,7 +1830,7 @@ describe('GramJS private conversation identity admission', () => {
                 const send = replySend(`telegram:${ACCOUNT}:${PEER}:5021`)
                 mocks.getMessages.mockResolvedValue([{ id: 5021, date: PROVIDER_DATE }])
 
-                await expect(send()).resolves.toMatchObject({ success: true })
+                await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
 
                 expect(mocks.getMessages).toHaveBeenCalledWith(expect.objectContaining({ id: BigInt(PEER) }), { ids: [5021] })
                 expect(mocks.sendMessage).toHaveBeenCalledWith(expect.anything(), { message: 'ответ', replyTo: 5021 })
@@ -1804,7 +1842,7 @@ describe('GramJS private conversation identity admission', () => {
                 rows.set('5021', { id: 'legacy', chatId: `chat-tg2-${PEER}`, externalId: '5021', direction: 'inbound', content: 'старое', sentAt: new Date(PROVIDER_DATE * 1000) })
                 mocks.getMessages.mockResolvedValue([{ id: 5021, date: PROVIDER_DATE }])
 
-                await expect(send()).resolves.toMatchObject({ success: true })
+                await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
 
                 expect(mocks.sendMessage).toHaveBeenCalledWith(expect.anything(), { message: 'ответ', replyTo: 5021 })
             })
@@ -1860,6 +1898,475 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.sendMessage).not.toHaveBeenCalled()
             })
 
+        })
+    })
+    // ── TG-3: Telegram delivery evidence (consumer of the frozen S2 contract) ──
+    // C1 typed send result, C2 outcome tokens, C4 late evidence for echoes,
+    // read-backs and read markers. The evidence command here is S2's real
+    // handler over the in-memory table, so matching order, monotonicity and
+    // collision refusal are S2's own.
+    describe('TG-3 Telegram delivery evidence', () => {
+        const ACCOUNT = '7300'
+        const PEER = '4300'
+        const CHAT = `chat:telegram:${PEER}`
+        const S1_OUTCOME_CODE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(SEND_OUTCOME_UNKNOWN|NOT_DISPATCHED|REFUSED)\b/g
+        const s1Outcomes = (error: unknown) => [...String((error as Error)?.message ?? error).matchAll(S1_OUTCOME_CODE)].map(match => match[1])
+        const pid = (id: number, peer = PEER, account = ACCOUNT) => `telegram:${account}:${peer}:${id}`
+
+        async function failure(promise: Promise<unknown>): Promise<Error> {
+            try {
+                await promise
+            } catch (error) {
+                return error as Error
+            }
+            throw new Error('expected a rejection')
+        }
+
+        // S2's evidence command over the in-memory Message table.
+        function useEvidenceStore() {
+            const rows = useMessageStore()
+            const rowById = (id: string) => [...rows.values()].find(row => row.id === id)
+            const keyOf = (row: StoredRow) => [...rows.entries()].find(([, value]) => value === row)?.[0]
+            const handler = createApplyMessageDeliveryEvidenceHandlerV1({
+                async findByProviderId(providerMessageId) {
+                    return ([...rows.values()].find(row => row.externalId === providerMessageId) ?? null) as any
+                },
+                async findUnsettledByContent(input) {
+                    return [...rows.values()]
+                        .filter(row => row.chatId === input.chatId && row.channel === input.channel && row.direction === 'outbound'
+                            && row.type === 'text' && row.content === input.content && !row.externalId
+                            && row.sentAt >= input.sentFrom && row.sentAt <= input.sentTo)
+                        .sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime()) as any
+                },
+                async apply(row, write) {
+                    const current = rowById(row.id)
+                    if (!current || current.updatedAt!.getTime() !== row.updatedAt.getTime()) return 'stale'
+                    if (write.externalId && [...rows.values()].some(other => other.externalId === write.externalId && other.id !== row.id)) {
+                        return 'provider_id_taken'
+                    }
+                    const key = keyOf(current)!
+                    current.status = write.status
+                    current.metadata = write.metadata
+                    current.updatedAt = new Date(current.updatedAt!.getTime() + 1)
+                    if (write.externalId) {
+                        current.externalId = write.externalId
+                        rows.delete(key)
+                        rows.set(write.externalId, current)
+                    }
+                    return 'applied'
+                },
+                async afterApplied() {},
+                now: () => new Date(),
+            })
+            mocks.applyEvidence.mockImplementation(handler)
+            // A CRM send recorded by Messaging before its answer: no provider id yet.
+            const crmSend = (content: string, sentAt: Date, extra: Partial<StoredRow> = {}) => {
+                const row: StoredRow = {
+                    id: `crm-${rows.size + 1}`,
+                    chatId: CHAT,
+                    externalId: null,
+                    direction: 'outbound',
+                    content,
+                    sentAt,
+                    channel: 'telegram',
+                    type: 'text',
+                    status: 'sent',
+                    metadata: {},
+                    updatedAt: new Date(),
+                    ...extra,
+                }
+                rows.set(row.externalId ?? `crm:${row.id}`, row)
+                return row
+            }
+            return { rows, crmSend }
+        }
+
+        function evidenceCalls() {
+            return mocks.applyEvidence.mock.calls.map(call => call[0] as Record<string, unknown>)
+        }
+
+        function echo(id: number, text: string, date = Math.floor(Date.now() / 1000), peer = PEER) {
+            return { out: true, id, peerId: { userId: BigInt(peer) }, message: text, date, chat: { firstName: 'Peer' } }
+        }
+
+        function sendSetup(peerId = PEER) {
+            const connectionId = `tg3-send-${connectionSequence}`
+            const chat = {
+                ...exactChat({
+                    externalChatId: `telegram:${peerId}`,
+                    metadata: { chatKind: 'private', peerId, providerAccountId: ACCOUNT, connectionId },
+                }),
+                id: `chat-tg3-${peerId}`,
+                contactId: 'contact-tg3',
+                contactIdentityId: 'identity-tg3',
+            }
+            mocks.providerAccountId = ACCOUNT
+            mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+            mocks.chatFindUnique.mockResolvedValue(chat)
+            mocks.prepareOutbound.mockResolvedValue({
+                chatId: chat.id,
+                channel: 'telegram',
+                providerAccountId: ACCOUNT,
+                connectionId,
+                identityTarget: peerId,
+                target: peerId,
+            })
+            return () => sendTelegramMessage(peerId, 'текст', connectionId, { chatId: chat.id })
+        }
+
+        describe('C1 typed send result', () => {
+            test('a send Telegram answered with a message id is provider_ack for that id, never delivered', async () => {
+                const send = sendSetup()
+                mocks.sendMessage.mockResolvedValue({ id: 9301 })
+
+                const result = await send()
+
+                expect(result).toEqual({ evidence: 'provider_ack', providerMessageId: pid(9301) })
+                expect(readTextDeliveryResultV1(result)).toEqual({ evidence: 'provider_ack', providerMessageId: pid(9301) })
+                expect(JSON.stringify(result)).not.toContain('delivered')
+            })
+
+            test('a send whose RPC answer carries no message id is only a client action', async () => {
+                const send = sendSetup()
+                mocks.sendMessage.mockResolvedValue({})
+
+                const result = await send()
+
+                expect(result).toEqual({ evidence: 'client_action', providerMessageId: null })
+                expect(readTextDeliveryResultV1(result)).toEqual({ evidence: 'client_action', providerMessageId: null })
+            })
+        })
+
+        describe('C2 failure outcomes', () => {
+            test.each([
+                ['a gate refusal before the call', 'gate', ['REFUSED']],
+                ['an inactive connection', 'inactive', ['NOT_DISPATCHED']],
+                ['a client that cannot connect', 'connect', ['NOT_DISPATCHED']],
+                ['FLOOD_WAIT (420) answered to the call', 'flood', ['NOT_DISPATCHED']],
+                ['a 400 refusal answered to the call', 'blocked', ['REFUSED']],
+                ['a 403 refusal answered to the call', 'forbidden', ['REFUSED']],
+                ['a 500 answered to the call', 'server', []],
+                ['a dropped socket during the call', 'socket', []],
+                ['an unusable id after the call succeeded', 'bad-id', []],
+                ['an unresolved peer after a sweep', 'peer', ['REFUSED']],
+            ])('%s carries exactly the outcome it proves', async (_label, scenario, expected) => {
+                const send = sendSetup()
+                if (scenario === 'gate') mocks.prepareOutbound.mockRejectedValue(new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH'))
+                if (scenario === 'inactive') mocks.telegramConnectionFindUnique.mockResolvedValue(null)
+                if (scenario === 'connect') mocks.connect.mockRejectedValue(new Error('Connection to Telegram failed'))
+                if (scenario === 'flood') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('420: FLOOD_WAIT_30'), { code: 420, errorMessage: 'FLOOD_WAIT' }))
+                if (scenario === 'blocked') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('400: USER_IS_BLOCKED'), { code: 400, errorMessage: 'USER_IS_BLOCKED' }))
+                if (scenario === 'forbidden') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('403: CHAT_WRITE_FORBIDDEN'), { code: 403, errorMessage: 'CHAT_WRITE_FORBIDDEN' }))
+                if (scenario === 'server') mocks.sendMessage.mockRejectedValue(Object.assign(new Error('500: INTERNAL'), { code: 500, errorMessage: 'INTERNAL' }))
+                if (scenario === 'socket') mocks.sendMessage.mockRejectedValue(new Error('Not connected'))
+                if (scenario === 'bad-id') mocks.sendMessage.mockResolvedValue({ id: 'x' })
+                if (scenario === 'peer') mocks.getEntity.mockRejectedValue(new Error('Could not find the input entity'))
+
+                const error = await failure(send())
+
+                expect(error.message).toMatch(/^Telegram delivery failed: /)
+                expect(s1Outcomes(error)).toEqual(expected)
+                expect(error.message.length).toBeLessThanOrEqual(160)
+            })
+
+            test('a send that never resolved within 25 s is an unknown outcome', async () => {
+                vi.useFakeTimers({ toFake: ['setTimeout'] })
+                try {
+                    const send = sendSetup()
+                    mocks.sendMessage.mockReturnValue(new Promise(() => {}))
+                    const pending = failure(send())
+                    await vi.advanceTimersByTimeAsync(25_000)
+                    const error = await pending
+
+                    expect(error.message).toContain('timeout')
+                    expect(s1Outcomes(error)).toEqual([])
+                } finally {
+                    vi.useRealTimers()
+                }
+            })
+        })
+
+        describe('C4 own-message echoes and read-backs', () => {
+            test('the echo of a CRM send still in flight settles that row as provider_echo, no second row', async () => {
+                const { rows, crmSend } = useEvidenceStore()
+                const sentAt = new Date(Date.now() - 2_000)
+                const crm = crmSend('из CRM', sentAt)
+                const handler = await initializeListener(`tg3-echo-crm-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9401, 'из CRM') })
+
+                expect(rows.size).toBe(1)
+                expect(crm.externalId).toBe(pid(9401))
+                expect(crm.status).toBe('sent')
+                expect(readDeliveryEvidenceV1(crm.metadata)).toMatchObject({ evidence: 'provider_echo', source: 'echo' })
+                expect(deriveDeliveryStateV1(crm)).toBe('provider_accepted')
+                expect(evidenceCalls()[0]).toMatchObject({ chatId: CHAT, channel: 'telegram', providerMessageId: pid(9401), evidence: 'provider_echo', content: 'из CRM' })
+                expect(evidenceCalls()[0].providerSentAt).toBeInstanceOf(Date)
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+            })
+
+            test('the echo of an acked or a pre-S2 delivered CRM row changes nothing', async () => {
+                const { rows, crmSend } = useEvidenceStore()
+                const acked = crmSend('уже подтверждено', new Date(), {
+                    externalId: pid(9402),
+                    metadata: { delivery: { v: 1, evidence: 'provider_ack', evidenceAt: new Date().toISOString(), source: 'ack' } },
+                })
+                const legacyDelivered = crmSend('старый статус', new Date(), { externalId: pid(9403), status: 'delivered' })
+                const handler = await initializeListener(`tg3-echo-acked-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9402, 'уже подтверждено') })
+                await handler({ message: echo(9403, 'старый статус') })
+
+                expect(rows.size).toBe(2)
+                expect(readDeliveryEvidenceV1(acked.metadata)?.evidence).toBe('provider_ack')
+                expect(legacyDelivered.status).toBe('delivered')
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+            })
+
+            test('a message sent from the phone is written once, as sent with provider_echo, never as delivered', async () => {
+                const { rows } = useEvidenceStore()
+                const handler = await initializeListener(`tg3-echo-phone-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9404, 'с телефона') })
+
+                const row = rows.get(pid(9404))!
+                expect(rows.size).toBe(1)
+                expect(mocks.createMessage).toHaveBeenCalledWith(expect.not.objectContaining({ status: expect.anything() }))
+                expect(row.status).toBe('sent')
+                expect(readDeliveryEvidenceV1(row.metadata)).toMatchObject({ evidence: 'provider_echo', source: 'echo' })
+                expect(deriveDeliveryStateV1(row)).toBe('provider_accepted')
+                expect(mocks.emitMessage).toHaveBeenCalledOnce()
+            })
+
+            test('the same text sent twice from the phone is two rows; a mirrored row is never a content match', async () => {
+                const { rows } = useEvidenceStore()
+                const handler = await initializeListener(`tg3-echo-twice-${connectionSequence}`, ACCOUNT)
+                const at = Math.floor(Date.now() / 1000)
+
+                await handler({ message: echo(9405, 'ок', at) })
+                await handler({ message: echo(9406, 'ок', at + 1) })
+
+                expect([...rows.keys()].sort()).toEqual([pid(9405), pid(9406)])
+            })
+
+            test('an echo whose provider id another message holds is refused and writes nothing', async () => {
+                const { rows } = useEvidenceStore()
+                rows.set(pid(9407), {
+                    id: 'inbound-holder', chatId: CHAT, externalId: pid(9407), direction: 'inbound', content: 'чужое',
+                    sentAt: new Date(), channel: 'telegram', type: 'text', status: 'delivered', metadata: {}, updatedAt: new Date(),
+                })
+                const handler = await initializeListener(`tg3-echo-collision-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9407, 'исходящее') })
+
+                expect(rows.size).toBe(1)
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+                expect(mocks.opsLog).toHaveBeenCalledWith('warn', 'telegram_mtproto_echo_refused', expect.objectContaining({ reason: 'provider_id_collision' }))
+            })
+
+            test('a legacy row stored under the bare id is the same message and is never written again', async () => {
+                const { rows } = useEvidenceStore()
+                rows.set('9408', {
+                    id: 'legacy-out', chatId: CHAT, externalId: '9408', direction: 'outbound', content: 'июльское',
+                    sentAt: new Date(), channel: 'telegram', type: 'text', status: 'delivered', metadata: {}, updatedAt: new Date(),
+                })
+                const handler = await initializeListener(`tg3-echo-legacy-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9408, 'июльское') })
+
+                expect(rows.size).toBe(1)
+                expect(mocks.applyEvidence).not.toHaveBeenCalled()
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+            })
+
+            test('a media echo is matched by its exact id only, never by content', async () => {
+                const { rows, crmSend } = useEvidenceStore()
+                crmSend('[Фото]', new Date())
+                const handler = await initializeListener(`tg3-echo-media-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: { ...echo(9409, ''), media: { className: 'MessageMediaPhoto' } } })
+
+                expect(evidenceCalls()[0]).not.toHaveProperty('content')
+                expect(rows.has(pid(9409))).toBe(true)
+                expect(rows.size).toBe(2)
+            })
+
+            test('catch-up records its own read-back as history_readback', async () => {
+                const { rows } = useEvidenceStore()
+                const connectionId = `tg3-readback-${connectionSequence}`
+                mocks.providerAccountId = ACCOUNT
+                mocks.telegramConnectionFindMany.mockResolvedValue([connection(connectionId)])
+                mocks.getDialogs.mockResolvedValue([{ isUser: true, entity: { id: BigInt(PEER) }, unreadCount: 0 }])
+                mocks.getMessages.mockResolvedValue([echo(9410, 'прочитано из истории')])
+
+                await initTelegramListeners()
+                await waitForCatchUp(connectionId)
+
+                expect(readDeliveryEvidenceV1(rows.get(pid(9410))!.metadata)).toMatchObject({ evidence: 'history_readback', source: 'sync' })
+            })
+
+            test('history import matches an unsettled CRM send and writes an external send as sent + history_readback', async () => {
+                const { rows, crmSend } = useEvidenceStore()
+                const connectionId = `tg3-import-${connectionSequence}`
+                const date = Math.floor(Date.now() / 1000) - 30
+                const crm = crmSend('из CRM при импорте', new Date(date * 1000 - 1_000))
+                mocks.providerAccountId = ACCOUNT
+                mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+                mocks.getDialogs
+                    .mockResolvedValueOnce([])
+                    .mockResolvedValueOnce([{ isUser: true, entity: { id: BigInt(PEER), firstName: 'Peer' } }])
+                mocks.getMessages.mockResolvedValue([
+                    { out: true, id: 9412, message: 'внешнее', date },
+                    { out: true, id: 9411, message: 'из CRM при импорте', date },
+                ])
+
+                await importTelegramHistory('job-tg3', 'available_history', undefined, connectionId)
+
+                expect(crm.externalId).toBe(pid(9411))
+                expect(readDeliveryEvidenceV1(crm.metadata)?.evidence).toBe('history_readback')
+                const external = rows.get(pid(9412))!
+                expect(external.status).toBe('sent')
+                expect(readDeliveryEvidenceV1(external.metadata)?.evidence).toBe('history_readback')
+                expect(rows.size).toBe(2)
+            })
+
+            test('a row whose evidence could not be recorded yet gets it on the next observation', async () => {
+                const { rows } = useEvidenceStore()
+                const real = mocks.applyEvidence.getMockImplementation()!
+                let calls = 0
+                mocks.applyEvidence.mockImplementation(async (command: unknown) => {
+                    calls++
+                    if (calls === 2) return { outcome: 'refused', messageId: null, matchedBy: null, reason: 'contention' }
+                    return real(command)
+                })
+                const handler = await initializeListener(`tg3-heal-${connectionSequence}`, ACCOUNT)
+
+                await handler({ message: echo(9413, 'позже') })
+                const row = rows.get(pid(9413))!
+                expect(row.status).toBe('sent')
+                expect(readDeliveryEvidenceV1(row.metadata)).toBeNull()
+
+                await handler({ message: echo(9413, 'позже') })
+                expect(readDeliveryEvidenceV1(row.metadata)?.evidence).toBe('provider_echo')
+                expect(rows.size).toBe(1)
+            })
+        })
+
+        describe('C4 read markers', () => {
+            function seedOutbound(rows: Map<string, StoredRow>, ids: number[], peer = PEER) {
+                for (const id of ids) {
+                    rows.set(pid(id, peer), {
+                        id: `out-${peer}-${id}`, chatId: `chat:telegram:${peer}`, externalId: pid(id, peer), direction: 'outbound',
+                        content: `#${id}`, sentAt: new Date(Date.now() - 10_000 + id), channel: 'telegram', type: 'text', status: 'sent',
+                        metadata: { delivery: { v: 1, evidence: 'provider_ack', evidenceAt: new Date().toISOString(), source: 'ack' } },
+                        updatedAt: new Date(),
+                    })
+                }
+            }
+
+            function chatsByKey() {
+                mocks.chatFindUnique.mockImplementation(async ({ where }: { where: { externalChatId?: string } }) => (
+                    where.externalChatId ? { id: `chat:${where.externalChatId}`, channel: 'telegram' } : null
+                ))
+            }
+
+            test('UpdateReadHistoryOutbox marks this account\'s rows up to max_id as read, and only those', async () => {
+                const { rows } = useEvidenceStore()
+                chatsByKey()
+                seedOutbound(rows, [9501, 9502, 9503])
+                seedOutbound(rows, [9501], '4399')
+                rows.set('9500', {
+                    id: 'legacy-bare', chatId: CHAT, externalId: '9500', direction: 'outbound', content: 'legacy',
+                    sentAt: new Date(), channel: 'telegram', type: 'text', status: 'delivered', metadata: {}, updatedAt: new Date(),
+                })
+                await initializeListener(`tg3-read-${connectionSequence}`, ACCOUNT)
+                const readHandler = mocks.clients.at(-1)!.handlers[2]
+
+                await readHandler({ peer: { userId: BigInt(PEER) }, maxId: 9502 })
+
+                expect(rows.get(pid(9501))!.status).toBe('read')
+                expect(rows.get(pid(9502))!.status).toBe('read')
+                expect(rows.get(pid(9503))!.status).toBe('sent')
+                expect(rows.get(pid(9501, '4399'))!.status).toBe('sent')
+                expect(rows.get('9500')!.status).toBe('delivered')
+                expect(deriveDeliveryStateV1(rows.get(pid(9502))!)).toBe('read')
+                expect(evidenceCalls().every(call => call.evidence === 'read_receipt')).toBe(true)
+
+                const before = mocks.applyEvidence.mock.calls.length
+                await readHandler({ peer: { userId: BigInt(PEER) }, maxId: 9502 })
+                expect(mocks.applyEvidence.mock.calls.length).toBe(before)
+            })
+
+            test.each([
+                ['the account itself', { peer: { userId: BigInt(ACCOUNT) }, maxId: 9502 }],
+                ['Telegram service notifications', { peer: { userId: 777000n }, maxId: 9502 }],
+                ['a group peer', { peer: { chatId: 55n }, maxId: 9502 }],
+                ['a malformed max_id', { peer: { userId: BigInt(PEER) }, maxId: 'x' }],
+                ['a zero max_id', { peer: { userId: BigInt(PEER) }, maxId: 0 }],
+            ])('a read marker for %s changes nothing', async (_label, update) => {
+                const { rows } = useEvidenceStore()
+                chatsByKey()
+                seedOutbound(rows, [9501])
+                // The account's own chat and the service chat exist in production.
+                seedOutbound(rows, [9501], ACCOUNT)
+                seedOutbound(rows, [9501], '777000')
+                await initializeListener(`tg3-read-skip-${connectionSequence}`, ACCOUNT)
+
+                await mocks.clients.at(-1)!.handlers[2](update)
+
+                expect(rows.get(pid(9501))!.status).toBe('sent')
+                expect(rows.get(pid(9501, ACCOUNT))!.status).toBe('sent')
+                expect(rows.get(pid(9501, '777000'))!.status).toBe('sent')
+                expect(mocks.applyEvidence).not.toHaveBeenCalled()
+            })
+
+            test('the read-marker handler listens to UpdateReadHistoryOutbox', async () => {
+                await initializeListener(`tg3-read-wiring-${connectionSequence}`, ACCOUNT)
+                const builder = mocks.clients.at(-1)!.builders[2] as { input?: { types?: unknown[] } }
+
+                expect(builder?.input?.types).toEqual([Api.UpdateReadHistoryOutbox])
+            })
+
+            test('newer legacy rows never crowd an addressable row out of the read scan', async () => {
+                const { rows } = useEvidenceStore()
+                chatsByKey()
+                seedOutbound(rows, [9701])
+                for (let index = 0; index < 205; index++) {
+                    rows.set(`${8000 + index}`, {
+                        id: `legacy-${index}`, chatId: CHAT, externalId: `${8000 + index}`, direction: 'outbound', content: 'old',
+                        sentAt: new Date(Date.now() + index), channel: 'telegram', type: 'text', status: 'delivered', metadata: {}, updatedAt: new Date(),
+                    })
+                }
+                await initializeListener(`tg3-read-budget-${connectionSequence}`, ACCOUNT)
+
+                await mocks.clients.at(-1)!.handlers[2]({ peer: { userId: BigInt(PEER) }, maxId: 9701 })
+
+                expect(rows.get(pid(9701))!.status).toBe('read')
+            })
+
+            test('catch-up recovers a read marker missed while disconnected from the dialog', async () => {
+                const { rows } = useEvidenceStore()
+                chatsByKey()
+                seedOutbound(rows, [9601, 9602])
+                const connectionId = `tg3-read-catchup-${connectionSequence}`
+                mocks.providerAccountId = ACCOUNT
+                mocks.telegramConnectionFindMany.mockResolvedValue([connection(connectionId)])
+                mocks.getDialogs.mockResolvedValue([{ isUser: true, entity: { id: BigInt(PEER) }, unreadCount: 0, dialog: { readOutboxMaxId: 9601 } }])
+
+                await initTelegramListeners()
+                const summary = await waitForCatchUp(connectionId)
+
+                expect(summary).toMatchObject({ readReceipts: 1, failed: 0 })
+                expect(rows.get(pid(9601))!.status).toBe('read')
+                expect(rows.get(pid(9602))!.status).toBe('sent')
+            })
+        })
+
+        test('the adapter never claims device delivery', () => {
+            const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
+            expect(source).not.toContain('device_receipt')
+            expect(source).not.toMatch(/status:\s*'delivered'[^\n]*direction:\s*'outbound'/)
         })
     })
 })
