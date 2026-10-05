@@ -607,6 +607,50 @@
         "rationale_changes": 0,
         "primary_surface_reviews_performed": 0
       }
+    },
+    {
+      "amendment_id": "max-reliability-m2-coverage-recovery-20261005",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "reviewed_by": "MAX_RELIABILITY_M2_COVERAGE_RECOVERY_IMPLEMENTER_20261005",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_MAX_RELIABILITY_M2_AUTONOMOUS_DEVELOPMENT_START_20261005",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "Records the MAX RELIABILITY M2 coverage-and-recovery candidate, developed on an isolated composite of the frozen S2 candidate 8a1d13c3 and the frozen M1 candidate 6386e7c7, both on the production Gravity baseline 10318827. The effective lineage it extends is the immutable 2026-08-13 review, amendments 1-5, current-review epoch 1 (2,511 -> 2,519), amendment 6, messaging-max-inbound-reliability-final-335cdae7-20261001 (2,519 -> 2,520), amendment 7, messaging-s1-shared-retry-safety-10318827-20261003 (2,520 -> 2,528), and amendment 8, messaging-s2-delivery-evidence-contract-e54cbc3e-20261004 (2,528 -> 2,536), which is the tail of this tree; M1 adds no tracked surface and no amendment. This development evidence is baseline-local and is not landing evidence: on a landing lineage this amendment is appended after that lineage's tail, with its triple and the rebind's previous fingerprint re-derived there. It is a rebind-only amendment: it adds and removes no tracked executable surface, so the denominator stays 2,536 and the triple is unchanged, measured with the repository's own tracked-surface inventory. One reviewed exact-inventory assignment moves its bytes and is rebound as a CHAINED rebind, gravity-mvp/src/app/api/webhooks/max/route.ts, from the exact fingerprint amendment 6 approved (317946a4), which amendments 7 and 8 left untouched, to the bytes now on disk. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no epoch is added or altered.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2536,
+        "tracked_inventory_sha256": "bc6ee03107ebc5db961880421243fcf7af2c247d6d27e1af1eec8f8aa7556098",
+        "coverage_sha256": "a66e53095d5954756227d95d80b6fce790cdcc4c4379b0c555b39f7f4a96b346"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2536,
+        "tracked_inventory_sha256": "bc6ee03107ebc5db961880421243fcf7af2c247d6d27e1af1eec8f8aa7556098",
+        "coverage_sha256": "a66e53095d5954756227d95d80b6fce790cdcc4c4379b0c555b39f7f4a96b346"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "317946a4ff2ccfe7ab0f4ac56c7fe0d7f0b2810ec1417f6d0e199e39a4e567be",
+          "current_source_sha256": "1ad5c2b0741e916e6590a7d78fa1f3ee4e5a435a9df2b3a7875464d1b4d0ac8e",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The MAX webhook route keeps every reviewed ownership field. Only its bytes move: a peer read mark event is applied as read receipts through Messaging's public delivery-evidence command; a message of our own account with MAX's id is settled or recorded through Messaging's public evidence and channel-message commands as sent with provider evidence instead of the external-message upsert, and one without MAX's id is not recorded; a DOM-recovered text copy is taken over by the provider event of the same text within a bounded window. Every existing provider-account, collision, claimant, peer and DOM-route guard is unchanged, and the route still writes only through Messaging's public v1 surface. This rebind continues from exactly the fingerprint amendment 6 approved, so the chain stays unbroken. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and inventory kind exact_runtime_inventory are unchanged."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "primary_surface_reviews_performed": 0
+      }
     }
   ]
 }
