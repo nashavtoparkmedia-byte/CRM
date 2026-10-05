@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "44f6b369fb1fe8e8493dc1e025e7bf5d9960aebc44671a2dfc430dcac400fb8d"
+      "sha256": "40f411e96cdaca5d9229b6e6436dd97fffa0a853d5e51fa7705d137a1a0d03f0"
     },
     {
       "context": "operations_observability",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "c69380f5af933d07ac21288fdf28bca0b8e47feea649079a09f80428a2d15cd6"
+      "sha256": "48e3a9d41776c8765a66a9658d25b6b6ff2ae2af09b16a344d68d8469ea313f4"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "12bc00546487d2190a62c3f3850ede89cadb6be5fa1ffc5d5ed3045faf1d6860"
+      "sha256": "a0482b25ff25e89bfea180cfa820de07f54c592f0e37be95ad9f317c6cd4136c"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "610f11735351d1c9a5e7a4de077719d1881b9eda1c9828e09e914fe3b4c87ee0"
+      "sha256": "0ce3da1f9c07be64c21da141fadd5d5868afd5f0836dce27c289256554b47ebd"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "327575272f204c825bb07e64d2be63bdb877844a5b9fbaa0ac5ba8b6bd4b27fd"
+      "sha256": "908cb2dfc423cabb0b81b6e7f1e4f535f179c733e02247552b176901b9ffd6e0"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

@@ -1787,6 +1787,66 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-rcq1-resolve-conversation-contact-main-9b0d125b-20261005",
+      "reviewed_at": "2026-10-05T00:00:00Z",
+      "reviewed_by": "MESSAGING_RCQ1_RESOLVE_CONVERSATION_CONTACT_QUERY_EXECUTOR_REVIEW_20261005",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_RCQ1_RESOLVE_CONVERSATION_CONTACT_QUERY_CROSS_PRODUCT_DEPENDENCY_20261005",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 9b0d125b, whose tail is tg-bot-compensation-entry-gate-main-7dfa2539-20261004, and reviews only the four surfaces the Messaging ResolveConversationContactQuery.v1 capability adds."
+      },
+      "reason": "Records the four tracked executable surfaces that messaging.ResolveConversationContactQuery.v1 adds on top of main 9b0d125b: the provider-neutral contract gravity-mvp/src/contracts/messaging/v1/resolve-conversation-contact-query.ts, its neutral read-only handler and its legacy Prisma adapter under gravity-mvp/src/modules/messaging/public/v1, and their contract test. 2,664 + 4 = 2,668 surfaces, context-owned 1,429 -> 1,433 and governed exclusions unchanged at 1,235. The published tail is the Telegram compensation entry gate amendment, so this record's predecessor is that tail's current triple, and its current triple differs from it by exactly these four messaging-owned surfaces, derived with the repository's own tracked-surface inventory over this tree. Every surface sits under a path the messaging context owns (gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging in architecture/contexts/v1/manifests/messaging.json owned_paths), so context ownership comes from the manifest and no explicit exact-inventory assignment applies. The edited composition and barrel files carry no reviewed exact-inventory assignment, so no source fingerprint rebind is required and none is claimed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2664,
+        "tracked_inventory_sha256": "4b4e351442a0687a67482dcdf241593a734d7d0d6bab9cf8229bffa29b16933a",
+        "coverage_sha256": "d8646259179746c4264c5b6c58f55bb47de5ffe0b58d9234171f95e51e67dde2"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2668,
+        "tracked_inventory_sha256": "b9e5f562784b2486e836be2dbef82d969014a1d40d572a8a843c44f9434b74e1",
+        "coverage_sha256": "935d5f8d39a9e0d3b984ffd4f5030b5406834b000dd768e5fa3206eabbe5504b"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/resolve-conversation-contact-query.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral messaging.ResolveConversationContactQuery.v1 contract (query, result union, parser), under gravity-mvp/src/contracts/messaging, a path the messaging context owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. It imports nothing and carries no provider, account, transport or routing field."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-resolve-conversation-contact-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The read-only Prisma port of the query: one literal-select read of the exact Chat row (contactId and metadata only) and the canonical Contact from the Contacts public resolveContactLineageV1. It writes nothing, under a path the messaging context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/resolve-conversation-contact-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The neutral handler of the query, which decides not_found, ambiguous, unresolved or resolved over its port and imports only the messaging contract, under a path the messaging context owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/resolve-conversation-contact.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The vitest contract test of the query with in-memory fakes and a mocked Prisma whose every write throws; it opens no database connection and holds no credential, under a path the messaging context owns, so context ownership comes from the manifest."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

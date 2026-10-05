@@ -377,6 +377,7 @@
         "MessageStream.v1",
         "MessageView.v1",
         "PersistedMessageIngress.v1",
+        "ResolveConversationContactQuery.v1",
         "TransportRegistryHealth.v1",
         "TransportRegistryLifecycle.v1"
       ],
