@@ -192,6 +192,16 @@ Each entry lists what the code actually does.
 - **Upstream**: contacts, identity_access, work_management, ai_knowledge, calling,
   fleet_operations. **Downstream**: the three channel contexts, platform_shell,
   avito, analytics.
+- **Public read — Contact → conversations**: `ContactConversationsQuery.v1` →
+  `ContactConversationsResult.v1` (`contactConversationsV1` from
+  `G/modules/messaging/public/v1`; browser transport
+  `G/app/messages/contact-conversations-actions.ts`, no `app/api` route). 1..25
+  Contact ids; per id `not_found`, or `found` with `canonicalContactId`, an
+  ordered array of channel contexts (`primaryConversationId` + conversations),
+  `latestConversationId` (null when none) and `truncated` (more than 50 exist:
+  partial, never proof of absence — `contactChannelConversationsV1` answers
+  `unknown`). Replaces the legacy `/api/contacts/search` `hasChat` signal for
+  NewChatPopover / ChatList (M3A6D); see I-45.
 - **Extension points**: delivery port interfaces in `channel-delivery-runtime.ts`;
   new persisted command = contract + handler + adapter + wiring in
   `messaging-operations.ts`; new outbox event = contract +
@@ -480,6 +490,14 @@ Duplicated sources of truth: `Chat.channel` vs `Message.channel`; three parallel
 person links on Chat (`driverId`, `contactId`, `contactIdentityId`); delivery
 state split between `Message.status` and `Message.metadata.*`; `Message.aiStatus`
 vs `MessageEventLog.status`.
+
+`Chat` public read path, Contact → conversations: `contactConversationsV1`
+(`ContactConversationsQuery.v1`) via
+`legacy-prisma-contact-conversations-query-adapter.ts` — one read of
+`Chat.{id, channel, lastMessageAt, createdAt}` where `contactId` is the requested
+id or its canonical survivor (Contacts `resolveContactLineageV1`) and
+`chatType = 'private'`, ordered `lastMessageAt DESC NULLS LAST, createdAt DESC,
+id ASC`, `take 51`. No `ContactPhone`, `ContactIdentity`, `Driver` or provider read.
 
 ### 3.2 Contacts
 
@@ -1128,6 +1146,19 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `internal/mobile-push/mobile-push.postgres.test.ts`.
 - **I-15 Outbox claim is compare-and-set; bounded attempts; stale-claim
   recovery; dead letter.** — `prisma-outbox-store.ts` — `prisma-outbox-store.test.ts`.
+- **I-45 Contact → conversation read is exact-link, provider-neutral,
+  private-only, read-only and deterministic.** A conversation is a Contact's only
+  when `Chat.contactId` is the requested id or its canonical survivor — never by
+  phone, ChannelIdentity, provider identity or heuristic; group chats never count;
+  workflow status never hides one; one total order (`lastActivityAt` DESC nulls
+  last, `createdAt` DESC, `conversationId` ASC) picks every primary and latest
+  conversation; nothing is written, created or sent; an unknown stored channel or a
+  broken merge lineage fails the query; a `truncated` answer never proves absence.
+  — `contact-conversations-query-handler.ts`, the legacy Prisma adapter —
+  `contact-conversations-query.test.ts`. Known limit (v1): conversations still
+  linked to other merged-away aliases of the person (not the requested id) are not
+  looked for; merges move conversations to the survivor, so this matters only
+  after a failed merge.
 
 ### Channels
 
