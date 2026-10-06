@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "40f411e96cdaca5d9229b6e6436dd97fffa0a853d5e51fa7705d137a1a0d03f0"
+      "sha256": "8361748984fd7b1bd26bdd7277ce49ce32ebcf909c71d753de9e3331d4792bef"
     },
     {
       "context": "operations_observability",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "48e3a9d41776c8765a66a9658d25b6b6ff2ae2af09b16a344d68d8469ea313f4"
+      "sha256": "48e32f3553d9a0682d7207ec51f82d4aa657469729cceb36f8ccde7111cb86f3"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
