@@ -21,6 +21,47 @@ type DriverSearchRow = {
   workStatus: string | null
   currentStatus: string | null
   source: 'crm' | 'yandex'
+  // Already computed by the Fleet owner; the operator UI needs them to offer the
+  // Contacts-owned person confirmation. They carry no authority of their own.
+  profileClusterKey: string | null
+  personContactId: string | null
+  personReviewRequired: boolean
+}
+
+// Owner refusals from the Telegram link authority, mapped to operator-facing
+// codes. The authority itself is unchanged; only its presentation is.
+const LINK_REFUSALS: Record<string, { code: string; error: string }> = {
+  DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED: {
+    code: 'PERSON_CONFIRMATION_REQUIRED',
+    error: 'Сначала подтвердите, что этот профиль водителя относится к этому человеку.',
+  },
+  DRIVER_TELEGRAM_EXACT_PRIVATE_CHAT_REQUIRED: {
+    code: 'TELEGRAM_CHAT_REQUIRED',
+    error: 'Нет личного чата с этим пользователем. Попросите водителя написать боту.',
+  },
+  DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH: {
+    code: 'TELEGRAM_IDENTITY_UNVERIFIED',
+    error: 'Telegram-профиль пользователя не подтверждён в CRM. Нужна сверка контакта.',
+  },
+  DRIVER_TELEGRAM_LINK_CONTRADICTION: {
+    code: 'TELEGRAM_LINK_CONFLICT',
+    error: 'Этот Telegram или водитель уже привязаны к другой записи.',
+  },
+}
+const LINK_REJECTED = {
+  code: 'TELEGRAM_LINK_REJECTED',
+  error: 'Не удалось привязать Telegram: проверка не пройдена.',
+}
+const DRIVER_PROFILE_UNVERIFIED = {
+  code: 'DRIVER_PROFILE_UNVERIFIED',
+  error: 'Профиль Яндекса не совпадает с водителем в CRM. Повторите поиск.',
+}
+
+function linkRefusal(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined
+  if (typeof code === 'string' && Object.hasOwn(LINK_REFUSALS, code)) return LINK_REFUSALS[code]
+  const message = error instanceof Error ? error.message : ''
+  return Object.hasOwn(LINK_REFUSALS, message) ? LINK_REFUSALS[message] : LINK_REJECTED
 }
 
 const DRIVER_ID_MAX_LENGTH = 200
@@ -70,10 +111,8 @@ async function saveConfirmedTelegramLink(driverId: string, telegramId: string) {
       telegramId: BigInt(telegramId),
     })
     return null
-  } catch {
-    return NextResponse.json({
-      error: 'An admitted private Telegram chat and confirmed main driver are required',
-    }, { status: 409 })
+  } catch (error) {
+    return NextResponse.json(linkRefusal(error), { status: 409 })
   }
 }
 
@@ -170,6 +209,10 @@ export async function POST(req: NextRequest) {
           workStatus: profile.workStatus,
           currentStatus: profile.currentStatus,
           source: 'yandex' as const,
+          profileClusterKey: profile.profileClusterKey ?? null,
+          personContactId: profile.contactId ?? null,
+          personReviewRequired: (profile.clusterWarnings?.length ?? 0) > 0
+            || (profile.contactMergeCandidateIds?.length ?? 0) > 0,
         })
       }
     }
@@ -190,6 +233,9 @@ export async function POST(req: NextRequest) {
         workStatus: null,
         currentStatus: null,
         source: 'crm' as const,
+        profileClusterKey: null,
+        personContactId: null,
+        personReviewRequired: false,
       })
     }
 
@@ -232,17 +278,24 @@ export async function POST(req: NextRequest) {
       // create a Driver merely to make a manual Telegram link possible.
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
-        select: { id: true, fullName: true, yandexDriverId: true },
+        select: {
+          id: true,
+          fullName: true,
+          yandexDriverId: true,
+          externalDriverProfileId: true,
+          externalParkId: true,
+        },
       })
-      if (
-        !profile.driverId
-        || profile.driverId !== driverId
-        || !driver
-        || driver.yandexDriverId !== profile.id
-      ) {
-        return NextResponse.json({
-          error: 'Confirm the driver person on an existing CRM Driver before linking Telegram',
-        }, { status: 409 })
+      // The Driver must carry this exact provider profile. Legacy rows keep the
+      // raw provider id in yandexDriverId; Fleet-created rows use a park-qualified
+      // yandexDriverId and keep the raw id with its park in the external pair,
+      // because a provider profile id is unique only within its park.
+      const carriesExactProfile = driver !== null && (
+        driver.yandexDriverId === profile.id
+        || (driver.externalDriverProfileId === profile.id && driver.externalParkId === parkId)
+      )
+      if (!profile.driverId || profile.driverId !== driverId || !driver || !carriesExactProfile) {
+        return NextResponse.json(DRIVER_PROFILE_UNVERIFIED, { status: 409 })
       }
       const rejected = await saveConfirmedTelegramLink(driver.id, telegramId)
       if (rejected) return rejected

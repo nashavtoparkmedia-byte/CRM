@@ -80,7 +80,7 @@ export async function GET() {
     allTelegramIds.length
       ? prisma.chat.findMany({
           where: { channel: 'telegram', externalChatId: { in: allTelegramIds } },
-          select: { id: true, externalChatId: true },
+          select: { id: true, externalChatId: true, contactId: true },
         })
       : [],
   ])
@@ -113,8 +113,16 @@ export async function GET() {
     }
   })
 
+  // The Chat's Contact is the person a driver confirmation must be recorded on
+  // before the Telegram link authority admits the link. It is exposed for the
+  // operator flow only; the link authority re-reads it under its own lock.
+  const chatContactMap = Object.fromEntries(
+    chats.map(c => [c.externalChatId.replace('telegram:', ''), c.contactId ?? null])
+  )
+
   const linkedTelegramIds = new Set(dtRows.map(row => row.telegramId.toString()))
   const requests = buildPendingBotLinkRequests({ registryRows, legacyRequests, linkedTelegramIds, chatMap })
+    .map(request => ({ ...request, chatContactId: chatContactMap[request.telegramId] ?? null }))
 
   return NextResponse.json({ linked, requests })
 }

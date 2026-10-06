@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { prisma } from '@/lib/prisma'
 import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { PendingBotLinkRequestNotFoundError, deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
+import { PendingBotLinkRequestNotFoundError, buildPendingBotLinkRequests, deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
 
 import { DELETE, GET } from './route'
 
@@ -43,6 +44,37 @@ describe('Telegram bot user administration authorization', () => {
     const response = await GET()
 
     expect(response.status).toBe(403)
+  })
+
+  it('exposes the Chat Contact of each pending request for the person confirmation', async () => {
+    hasAdminAccess.mockResolvedValue(true)
+    const chatFindMany = vi.fn().mockResolvedValue([
+      { id: 'chat-42', externalChatId: 'telegram:42', contactId: 'contact-t' },
+      { id: 'chat-44', externalChatId: 'telegram:44', contactId: null },
+    ])
+    Object.assign(prisma as unknown as Record<string, unknown>, {
+      driverTelegram: { findMany: vi.fn().mockResolvedValue([]) },
+      botChatMessage: { findMany: vi.fn().mockResolvedValue([]) },
+      botUserRegistry: { findMany: vi.fn().mockResolvedValue([{ telegramId: 42n }, { telegramId: 43n }, { telegramId: 44n }]) },
+      chat: { findMany: chatFindMany },
+    })
+    vi.mocked(buildPendingBotLinkRequests).mockReturnValue([
+      { id: 'r42', telegramId: '42', chatId: 'chat-42' },
+      { id: 'r43', telegramId: '43', chatId: null },
+      { id: 'r44', telegramId: '44', chatId: 'chat-44' },
+    ] as never)
+
+    const response = await GET()
+    const { requests } = await response.json()
+
+    expect(chatFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: { id: true, externalChatId: true, contactId: true },
+    }))
+    expect(requests).toEqual([
+      expect.objectContaining({ id: 'r42', chatContactId: 'contact-t' }),
+      expect.objectContaining({ id: 'r43', chatContactId: null }),
+      expect.objectContaining({ id: 'r44', chatContactId: null }),
+    ])
   })
 
   it.each([

@@ -664,6 +664,15 @@ Driver), and the configured Bot transport
 transaction under the Contacts ownership lock. Driver actions arriving through
 `G/app/api/webhooks/bot/route.ts` use the same person proof and prove the
 calling Bot transport against configuration, not against `Chat` metadata.
+On the bot page (`G/app/settings/integrations/bot/BotPageClient.tsx`) a person
+the authority does not yet accept is confirmed through F-03, not in this flow:
+`G/app/api/bot-users/route.ts` exposes the pending chat's Contact
+(`chatContactId`), the page calls `POST /api/contacts/[id]/driver-person` on it,
+waits for the refreshed search, then links. `bot-link` accepts a Driver for the
+selected Yandex profile by its legacy raw profile id or by the park-qualified
+pair (`externalDriverProfileId` + `externalParkId`); anything else is
+`DRIVER_PROFILE_UNVERIFIED`. Authority refusals reach the operator as fixed
+codes (`PERSON_CONFIRMATION_REQUIRED` and the `TELEGRAM_*` family).
 
 **F-07 MAX inbound**
 `max-web-scraper/transport/TransportInterceptor.js` (WS frame) → `handleIncoming`

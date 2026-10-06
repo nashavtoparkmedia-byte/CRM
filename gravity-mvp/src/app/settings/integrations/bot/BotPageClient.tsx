@@ -25,6 +25,9 @@ interface PendingRequest {
     firstName: string | null
     lastName: string | null
     chatId: string | null
+    // The Contact that owns the Telegram Chat: the person a driver confirmation
+    // must be recorded on before the link authority admits the link.
+    chatContactId: string | null
     createdAt: string
 }
 
@@ -38,6 +41,31 @@ interface DriverSearchResult {
     workStatus: string | null
     currentStatus: string | null
     source: 'crm' | 'yandex'
+    profileClusterKey: string | null
+    personContactId: string | null
+    personReviewRequired: boolean
+}
+
+// Whether this screen may offer a link for the selected Driver. It only decides
+// what to show; the Telegram link authority and the Contacts confirmation both
+// re-prove everything server-side.
+type LinkAvailability = 'ready' | 'chat_required' | 'person_review_required'
+
+function linkAvailability(row: PendingRequest, driver: DriverSearchResult): LinkAvailability {
+    if (!row.chatId || !row.chatContactId) return 'chat_required'
+    if (driver.personReviewRequired) return 'person_review_required'
+    if (driver.personContactId && driver.personContactId !== row.chatContactId) return 'person_review_required'
+    return 'ready'
+}
+
+function confirmationError(status: number, data: Record<string, unknown>): string {
+    if (status === 401 || status === 403) return 'Нет прав для подтверждения водителя.'
+    if (status === 503) return 'Парки Яндекса сейчас не отвечают. Повторите подтверждение позже.'
+    if (status === 409 && (data.status === 'contradiction' || data.confirmation || data.automaticMerge)) {
+        return 'Этот профиль водителя уже подтверждён для другого контакта. Нужна сверка контактов в CRM.'
+    }
+    if (status === 409) return 'Данные водителя устарели. Повторите поиск.'
+    return 'Не удалось подтвердить водителя.'
 }
 
 function formatDate(iso: string) {
@@ -118,9 +146,17 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
     const [dismissing, setDismissing] = useState(false)
     const [checkedParks, setCheckedParks] = useState(0)
     const [error, setError] = useState<string | null>(null)
+    // Explicit, visible person confirmation: never a side effect of linking.
+    const [confirmFor, setConfirmFor] = useState<DriverSearchResult | null>(null)
+    const [confirming, setConfirming] = useState(false)
+    const [confirmedDriverId, setConfirmedDriverId] = useState<string | null>(null)
+    const [refreshNonce, setRefreshNonce] = useState(0)
+    // The refresh a confirmation requests must finish before linking is offered:
+    // the link then runs against the refreshed authoritative state.
+    const [settledNonce, setSettledNonce] = useState(0)
 
     useEffect(() => {
-        if (query.length < 3) { setResults([]); return }
+        if (query.length < 3) { setResults([]); setSettledNonce(settled => Math.max(settled, refreshNonce)); return }
         setSearching(true)
         setError(null)
         const timer = setTimeout(async () => {
@@ -140,10 +176,10 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
             } catch (searchError) {
                 setResults([])
                 setError(searchError instanceof Error ? searchError.message : 'Ошибка поиска водителя')
-            } finally { setSearching(false) }
+            } finally { setSearching(false); setSettledNonce(settled => Math.max(settled, refreshNonce)) }
         }, 300)
         return () => { clearTimeout(timer); setSearching(false) }
-    }, [query])
+    }, [query, refreshNonce])
 
     const handleLink = async (driver: DriverSearchResult) => {
         setSaving(true)
@@ -163,7 +199,16 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                 }),
             })
             const data = await response.json()
-            if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось привязать водителя')
+            if (!response.ok || !data.success) {
+                if (data.code === 'PERSON_CONFIRMATION_REQUIRED') {
+                    if (driver.profileClusterKey && row.chatContactId) {
+                        setConfirmFor(driver)
+                        return
+                    }
+                    throw new Error('Подтвердить водителя здесь нельзя: профиль не найден в парках Яндекса. Найдите водителя по телефону или ВУ.')
+                }
+                throw new Error(data.error || 'Не удалось привязать водителя')
+            }
 
             try {
                 await deleteBotUserMutation({ action: 'dismiss', requestId: row.id })
@@ -175,6 +220,49 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
             setError(linkError instanceof Error ? linkError.message : 'Не удалось привязать водителя')
         } finally {
             setSaving(false)
+        }
+    }
+
+    // Contacts owns the person decision: its public route re-runs the Fleet search,
+    // requires a fresh exact cluster and records the confirmation. Telegram code
+    // writes nothing here.
+    const handleConfirm = async (driver: DriverSearchResult) => {
+        if (!row.chatContactId || !driver.profileClusterKey) return
+        setConfirming(true)
+        setError(null)
+        try {
+            const response = await fetch(`/api/contacts/${encodeURIComponent(row.chatContactId)}/driver-person`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    profileClusterKey: driver.profileClusterKey,
+                    representativeDriverId: driver.id,
+                    searchInput: query.trim(),
+                }),
+            })
+            const data = await response.json().catch(() => ({})) as Record<string, unknown>
+            // 502 means the confirmation was persisted and only the Fleet follow-up failed.
+            const confirmation = data.confirmation as { contactId?: string } | undefined
+            if (response.ok || (response.status === 502 && confirmation)) {
+                setConfirmedDriverId(driver.id)
+                if (confirmation?.contactId && confirmation.contactId !== row.chatContactId) {
+                    // Contacts reconciled the person onto another Contact: reload the
+                    // requests so the link uses the authoritative Chat Contact.
+                    onLinked()
+                    return
+                }
+                setRefreshNonce(n => n + 1)
+                return
+            }
+            setError(confirmationError(response.status, data))
+            if (response.status === 409 && !data.confirmation && !data.automaticMerge && data.status !== 'contradiction') {
+                setConfirmFor(null)
+                setRefreshNonce(n => n + 1)
+            }
+        } catch {
+            setError('Не удалось подтвердить водителя.')
+        } finally {
+            setConfirming(false)
         }
     }
 
@@ -232,7 +320,7 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                         </>
                     )}
                     {showSearch && (
-                        <button onClick={() => { setShowSearch(false); setQuery(''); setResults([]) }} className="text-[#64748B] hover:text-[#0F172A]">
+                        <button onClick={() => { setShowSearch(false); setQuery(''); setResults([]); setConfirmFor(null); setConfirmedDriverId(null) }} className="text-[#64748B] hover:text-[#0F172A]">
                             <X size={14} />
                         </button>
                     )}
@@ -254,6 +342,61 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                         />
                     </div>
                     {error && !searching && <div className="text-[11px] text-red-600 mb-1">{error}</div>}
+                    {(!row.chatId || !row.chatContactId) && (
+                        <div className="text-[11px] text-[#64748B] mb-1">
+                            Пользователь ещё не писал боту. Привязка станет доступна после его первого сообщения.
+                        </div>
+                    )}
+                    {confirmFor && (() => {
+                        const current = results.find(r => r.id === confirmFor.id) ?? confirmFor
+                        const confirmed = confirmedDriverId === confirmFor.id
+                        const blocked = linkAvailability(row, current) !== 'ready'
+                        return (
+                            <div className="mb-1.5 rounded border border-[#E4ECFC] bg-white px-2 py-1.5">
+                                <div className="text-[12px] font-medium text-[#0F172A]">
+                                    {current.fullName}{current.parkName ? ` · ${current.parkName}` : ''}
+                                </div>
+                                {blocked ? (
+                                    <div className="text-[11px] text-red-600 mt-0.5">
+                                        Профиль водителя относится к другому контакту в CRM. Нужна сверка контактов.
+                                    </div>
+                                ) : confirmed ? (
+                                    <>
+                                        <div className="text-[11px] text-[#059669] mt-0.5">Водитель подтверждён.</div>
+                                        <button
+                                            disabled={saving || searching || settledNonce !== refreshNonce}
+                                            onClick={() => handleLink(current)}
+                                            className="mt-1 text-[11px] font-semibold text-white bg-[#2AABEE] px-2 py-0.5 rounded hover:bg-[#1E96D4] disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {saving ? <Loader2 size={9} className="animate-spin" /> : 'Привязать Telegram'}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="text-[11px] text-[#64748B] mt-0.5">
+                                            Перед привязкой Telegram необходимо подтвердить, что этот профиль водителя относится к этому человеку.
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <button
+                                                disabled={confirming}
+                                                onClick={() => handleConfirm(current)}
+                                                className="text-[11px] font-semibold text-white bg-[#2AABEE] px-2 py-0.5 rounded hover:bg-[#1E96D4] disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                                {confirming ? <Loader2 size={9} className="animate-spin" /> : 'Подтвердить водителя'}
+                                            </button>
+                                            <button
+                                                disabled={confirming}
+                                                onClick={() => setConfirmFor(null)}
+                                                className="text-[11px] text-[#64748B] hover:text-[#0F172A] px-1.5 py-0.5 rounded hover:bg-gray-100"
+                                            >
+                                                Отмена
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )
+                    })()}
                     {searching ? (
                         <div className="text-[11px] text-[#64748B] flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Ищу...</div>
                     ) : results.length > 0 ? (
@@ -269,13 +412,22 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                                             {d.workStatus === 'fired' && <span className="text-red-600"> · уволен</span>}
                                         </div>
                                     </div>
-                                    <button
-                                        disabled={saving}
-                                        onClick={() => handleLink(d)}
-                                        className="text-[11px] font-semibold text-white bg-[#2AABEE] px-2 py-0.5 rounded hover:bg-[#1E96D4] disabled:opacity-50 flex items-center gap-1"
-                                    >
-                                        {saving ? <Loader2 size={9} className="animate-spin" /> : 'Привязать'}
-                                    </button>
+                                    {linkAvailability(row, d) === 'person_review_required' ? (
+                                        <span
+                                            title="Профиль водителя относится к другому контакту в CRM. Сначала выполните сверку контактов."
+                                            className="text-[10px] text-red-600 shrink-0 ml-2"
+                                        >
+                                            Нужна сверка контакта
+                                        </span>
+                                    ) : linkAvailability(row, d) === 'ready' ? (
+                                        <button
+                                            disabled={saving || confirming}
+                                            onClick={() => handleLink(d)}
+                                            className="text-[11px] font-semibold text-white bg-[#2AABEE] px-2 py-0.5 rounded hover:bg-[#1E96D4] disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {saving ? <Loader2 size={9} className="animate-spin" /> : 'Привязать'}
+                                        </button>
+                                    ) : null}
                                 </div>
                             ))}
                         </div>
