@@ -316,15 +316,21 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
             expect(results.filter(result => (result as Row).duplicate === true)).toHaveLength(1)
         })
 
-        it('a unique violation that is not this intent is not mistaken for a duplicate', async () => {
-            // msg_${Date.now()} collides with an unrelated row's primary key.
+        it('a row created in the same millisecond is never mistaken for this intent, nor collides with it', async () => {
+            // The row id is unique per send, so another intent's row from the
+            // same millisecond neither blocks this send nor answers for it.
             const now = vi.spyOn(Date, 'now').mockReturnValue(0)
             mocks.store.set('msg_0', { id: 'msg_0', clientMessageId: 'cmid-unrelated', chatId: CHAT.id, status: 'delivered' })
+            mocks.maxSendText.mockResolvedValue(DELIVERED)
 
-            await expect(MessageService.send(CHAT.id, 'Collision', 'max', undefined, 'cmid-collision'))
-                .rejects.toThrow('Unique constraint failed')
+            const result = await MessageService.send(CHAT.id, 'Collision', 'max', undefined, 'cmid-collision')
             now.mockRestore()
-            expect(mocks.maxSendText).not.toHaveBeenCalled()
+
+            expect(result).toMatchObject({ success: true, clientMessageId: 'cmid-collision' })
+            expect(result).not.toHaveProperty('duplicate')
+            expect(result.id).toMatch(/^msg_0_/)
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+            expect(persisted('msg_0')).toMatchObject({ clientMessageId: 'cmid-unrelated', status: 'delivered' })
         })
     })
 
@@ -338,7 +344,9 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
             ['MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH', 'unknown', false, 'UNKNOWN'],
             ['Контакт не найден в MAX. Дождитесь первого входящего сообщения', 'terminal', false, 'RECIPIENT_NOT_FOUND'],
             ['Invalid target', 'terminal', false, 'VALIDATION_ERROR'],
-            ['MAX delivery failed', 'terminal', false, 'UNKNOWN'],
+            // An untyped failure after the provider call proves neither a
+            // refusal nor that nothing was dispatched (S1).
+            ['MAX delivery failed', 'unknown', false, 'UNKNOWN'],
         ])('%s → %s', async (error, deliveryOutcome, retryable, errorCode) => {
             mocks.maxSendText.mockRejectedValue(new Error(error))
 
