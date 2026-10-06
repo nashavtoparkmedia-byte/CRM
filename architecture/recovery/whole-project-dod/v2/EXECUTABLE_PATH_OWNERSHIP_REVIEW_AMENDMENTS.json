@@ -1942,6 +1942,57 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "tg-bot-41-driver-person-confirmation-main-af132bf7-20261006",
+      "reviewed_at": "2026-10-06T00:00:00Z",
+      "reviewed_by": "TG_BOT_41_DRIVER_PERSON_CONFIRMATION_RECONCILIATION_EXECUTOR_REVIEW_20261006",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TG_BOT_41_RECONCILE_ONTO_MAIN_AF132BF7_20261006",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at af132bf7, whose tail is tg-bot-t1-telegram-authority-runtime-contract-main-06b4fd36-20261005. It is the first rebind-only amendment on main: the reviewed triple does not move, so it is admitted by the rebind-only resolver semantics main received through governance/ownership-rebind-only-amendment-onto-eb52b92c-20261005 (#157). Nothing is carried from the production incident lineage; the same two surfaces are derived again against the chain main publishes now."
+      },
+      "reason": "Records the two source fingerprints the driver person confirmation flow (#41) moves on top of main af132bf7 without moving the reviewed denominator: 2,674 tracked executable surfaces, context-owned 1,439 and governed exclusions 1,235 are unchanged, no path becomes tracked and none retires. Two reviewed exact-inventory assignments move their bytes and are rebound from the exact fingerprints the 2026-08-13 review approved, which main's chain never rebound before: the bot-link route confirms the driver person on an existing CRM Driver through the Fleet-computed profile predicate and maps the Telegram link authority's refusals to operator-facing codes, and the bot-users route exposes the chat's Contact id and the Fleet-computed person fields the operator flow needs. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes. The triple is this repository's own derivation over this tree (preview on the clean product commit c40bc0b7).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2674,
+        "tracked_inventory_sha256": "5ca46b2cd7d5f4b180fe8280cb4d2742ffee1d791ef5a39018e8a020e5afd723",
+        "coverage_sha256": "84b9449efa7591616926c242f77b007741582c08268ac335b559add399b2bf2a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2674,
+        "tracked_inventory_sha256": "5ca46b2cd7d5f4b180fe8280cb4d2742ffee1d791ef5a39018e8a020e5afd723",
+        "coverage_sha256": "84b9449efa7591616926c242f77b007741582c08268ac335b559add399b2bf2a"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "previous_source_sha256": "9ebd71b247c6fc323b362bfa662096949d2b00146fb0e657dfd0680eb4977c62",
+          "current_source_sha256": "a495ab236e266ca26a72d69d0fccd4c3640a40ed2882d6738d5b9ecf7bc91bc2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The bot-link route keeps every reviewed ownership field. Before it links Telegram it requires the Fleet-computed profile to name this exact CRM Driver and the Driver to carry this exact provider profile (raw provider id, or the park-qualified external pair), refusing with DRIVER_PROFILE_UNVERIFIED otherwise, and it maps the unchanged Telegram link authority's refusals to operator-facing codes instead of one generic message. It adds no model access and no write outside the owners it already called. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/bot-users/route.ts",
+          "previous_source_sha256": "6bdfcbd6bee170c00c9e206eb1718a21c303e3c2728e7697c2f4bbd221dce69b",
+          "current_source_sha256": "033822e46e87060ef3d85bc77e28f3b89e1f079e028c39c196787cc8dda49ad7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The bot-users route keeps every reviewed ownership field. It additionally reads the Chat's Contact id and passes through the Fleet-computed profile cluster key, person Contact id and review-required flag so the operator page can offer the Contacts-owned person confirmation; these fields carry no authority of their own and the link authority re-reads the Contact under its own lock. It adds no write. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
