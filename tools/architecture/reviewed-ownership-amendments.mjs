@@ -98,6 +98,30 @@ function assertAmendmentIdentity(amendment, id, historicalReviewer, historicalRe
   assert(typeof amendment.reason === 'string' && amendment.reason.length >= 48, `reviewed executable ownership amendment lacks an explicit reason: ${id}`)
 }
 
+// An amendment normally records a movement of the reviewed denominator. A change that
+// only moves the BYTES of an already reviewed exact surface moves no field of the triple:
+// the inventory digest covers surface identity, and a coverage record carries path,
+// context, exclusion and lifecycle but no content hash. Requiring a movement would make
+// such a change impossible to record at all, which is why the only lawful shape for it is
+// this one. It is admitted only when it carries nothing besides the rebind, so an
+// unchanged triple can never smuggle an ownership change past the denominator rule.
+//
+// This relaxes the DENOMINATOR rule and no fingerprint rule. Every rebind still has to
+// name an already reviewed assignment, start from exactly the fingerprint that assignment
+// carries, and end at the bytes on disk - all of which the consuming validator binds.
+function assertRebindOnlyAmendment(amendment, id) {
+  const rebinds = amendment.source_hash_rebinds ?? []
+  // Keep the original message: an amendment that moves nothing and rebinds nothing is
+  // exactly the case the denominator rule has always rejected.
+  assert(rebinds.length > 0, `reviewed executable ownership amendment does not move the reviewed denominator: ${id}`)
+  assert(amendment.amendment_kind === undefined, `a rebind-only reviewed executable ownership amendment may not compose authorities: ${id}`)
+  assert((amendment.unassigned_tracked_surfaces ?? []).length === 0, `a rebind-only reviewed executable ownership amendment may not change the tracked surface set: ${id}`)
+  const invariants = amendment.invariants
+  assert(invariants !== null && typeof invariants === 'object' && !Array.isArray(invariants), `a rebind-only reviewed executable ownership amendment must declare its invariants: ${id}`)
+  const declared = Object.entries(invariants)
+  assert(declared.length > 0 && declared.every(([, value]) => value === 0), `a rebind-only reviewed executable ownership amendment must declare every other delta zero: ${id}`)
+}
+
 function collectAmendmentDecisions(amendment, id, rebinds, unassigned) {
   const ownRebinds = new Set()
   for (const rebind of amendment.source_hash_rebinds ?? []) {
@@ -272,7 +296,7 @@ export function resolveReviewedOwnershipExtension(decisions, amendments, context
 
     assert(sameTriple(amendment.predecessor, previous), `reviewed executable ownership amendment does not extend its exact predecessor: ${id}`)
     assert(isExactTriple(amendment.current), `reviewed executable ownership amendment current denominator invalid: ${id}`)
-    assert(!sameTriple(amendment.current, amendment.predecessor), `reviewed executable ownership amendment does not move the reviewed denominator: ${id}`)
+    if (sameTriple(amendment.current, amendment.predecessor)) assertRebindOnlyAmendment(amendment, id)
 
     const isComposition = amendment.amendment_kind === AMENDMENT_MERGE_COMPOSITION_KIND
     // Declaring a composition may never be optional. When the chain anchor is
