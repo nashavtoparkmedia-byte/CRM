@@ -48,6 +48,8 @@ import { createEnsureConversationContactLinkHandlerV1 } from '../public/v1/conve
 import { legacyPrismaConversationContactLinkPortV1 } from '../public/v1/legacy-prisma-conversation-contact-link-adapter'
 import { createResolveConversationContactHandlerV1 } from '../public/v1/resolve-conversation-contact-handler'
 import { legacyPrismaResolveConversationContactPortV1 } from '../public/v1/legacy-prisma-resolve-conversation-contact-adapter'
+import { createContactConversationsQueryHandlerV1 } from '../public/v1/contact-conversations-query-handler'
+import { legacyPrismaContactConversationsQueryPortV1 } from '../public/v1/legacy-prisma-contact-conversations-query-adapter'
 import { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from '../public/v1/contact-conversation-handler'
 import { legacyPrismaContactConversationPortV1 } from '../public/v1/legacy-prisma-contact-conversation-adapter'
 import { createPatchMessageMetadataHandlerV1 } from '../public/v1/patch-message-metadata-handler'
@@ -98,6 +100,7 @@ const deleteConversationsById = createDeleteConversationsByIdHandlerV1(legacyPri
 const detachContactConversations = createDetachContactConversationsHandlerV1(legacyPrismaContactConversationRetentionPortV1)
 const ensureConversationContactLink = createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)
 const resolveConversationContact = createResolveConversationContactHandlerV1(legacyPrismaResolveConversationContactPortV1)
+const contactConversations = createContactConversationsQueryHandlerV1(legacyPrismaContactConversationsQueryPortV1)
 const findAndBackfillContactConversation = createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const openFallbackContactConversation = createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const patchMessageMetadata = createPatchMessageMetadataHandlerV1(legacyPrismaPatchMessageMetadataPortV1)
@@ -148,6 +151,7 @@ export const deleteConversationsByIdV1 = (...args: Parameters<typeof deleteConve
 export const detachContactConversationsV1 = (...args: Parameters<typeof detachContactConversations>) => detachContactConversations(...args)
 export const ensureConversationContactLinkV1 = (...args: Parameters<typeof ensureConversationContactLink>) => ensureConversationContactLink(...args)
 export const resolveConversationContactV1 = (...args: Parameters<typeof resolveConversationContact>) => resolveConversationContact(...args)
+export const contactConversationsV1 = (...args: Parameters<typeof contactConversations>) => contactConversations(...args)
 export const findAndBackfillContactConversationV1 = (...args: Parameters<typeof findAndBackfillContactConversation>) => findAndBackfillContactConversation(...args)
 export const openFallbackContactConversationV1 = (...args: Parameters<typeof openFallbackContactConversation>) => openFallbackContactConversation(...args)
 export const patchMessageMetadataV1 = (...args: Parameters<typeof patchMessageMetadata>) => patchMessageMetadata(...args)
