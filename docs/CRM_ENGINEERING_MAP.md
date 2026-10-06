@@ -195,7 +195,12 @@ Each entry lists what the code actually does.
 - **Extension points**: delivery port interfaces in `channel-delivery-runtime.ts`;
   new persisted command = contract + handler + adapter + wiring in
   `messaging-operations.ts`; new outbox event = contract +
-  `messagingOutboxPublishersV1` + outbox manifest.
+  `messagingOutboxPublishersV1` + outbox manifest. Which Contact a conversation
+  belongs to: `ResolveConversationContactQuery.v1` (`resolveConversationContactV1`
+  from `G/modules/messaging/public/v1`) — read-only, by exact `Chat.id`, answers
+  `resolved` (the canonical Contact after Contacts' merge lineage), `unresolved`,
+  `ambiguous` (the recorded `metadata.contactResolution.status`, whatever link the
+  Chat carries) or `not_found`; no provider, account or transport detail crosses it.
 - **Tests**: colocated vitest under `G/modules/messaging/**`,
   `G/lib/MessageService.provider-account.test.ts`,
   `G/app/api/messages/*/route.test.ts`; `tools/architecture/check-messaging-*-boundary.mjs`.
@@ -463,7 +468,7 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 
 | Model | Main writers | Main readers | Public contract | Cross-domain access observed |
 |---|---|---|---|---|
-| `Chat` | `G/modules/messaging/public/v1/legacy-prisma-*-adapter` (conversation family), `G/lib/ConversationWorkflowService.ts` (raw SQL), `G/lib/MessageService.ts` | `MessageService.listConversations`, routes, channel code | `upsertChannelConversationV1`, `createExternalConversationV1`, `ensureConversationContactLinkV1`, `channelConversationWorkflowV1` | Direct writes in `G/app/api/messages/send-media/route.ts`, `send-image/route.ts`, `G/app/messages/open/route.ts`. Direct reads from `G/app/tg-actions.ts`, `G/lib/whatsapp/WhatsAppService.ts`, `G/app/api/webhooks/*` |
+| `Chat` | `G/modules/messaging/public/v1/legacy-prisma-*-adapter` (conversation family), `G/lib/ConversationWorkflowService.ts` (raw SQL), `G/lib/MessageService.ts` | `MessageService.listConversations`, routes, channel code | `upsertChannelConversationV1`, `createExternalConversationV1`, `ensureConversationContactLinkV1`, `channelConversationWorkflowV1`; read: `resolveConversationContactV1` (`ResolveConversationContactQuery.v1`) | Direct writes in `G/app/api/messages/send-media/route.ts`, `send-image/route.ts`, `G/app/messages/open/route.ts`. Direct reads from `G/app/tg-actions.ts`, `G/lib/whatsapp/WhatsAppService.ts`, `G/app/api/webhooks/*` |
 | `Message` | `MessageService.send/retrySend/recoverStuckMessages`, messaging adapters, `G/lib/messageEvents.ts` (aiStatus) | `MessageService.listMessages`, AI pipeline, channel dedupe lookups | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1`, `patchMessageDeliveryV1` | Direct writes in `G/app/api/messages/{send-media,send-image,delete}/route.ts` |
 | `MessageAttachment` | attach-media adapters (v1, v2) | `G/app/api/attachments/[id]/route.ts` | `attachMessageMediaV1` / `V2` | Direct write in `send-media/route.ts` |
 | `MessageEventLog` | `G/lib/messageEvents.ts` (insert), event-log adapter (claim/complete/fail) | the claim only | `claimMessageEventV1` | — |
@@ -723,8 +728,11 @@ capability first and persist afterwards, with direct Prisma writes.
 - every 5 min + at boot: `recoverStuckMessagingDeliveriesV1` →
   `MessageService.recoverStuckMessages(5)` — outbound rows still `sent` with no
   `externalId` after 5 min become `failed`, outcome `unknown`.
-- every 2 min: `retryEligibleMessagingDeliveriesV1` → `MessageService.retrySend`
-  for rows marked `safe_to_redeliver`.
+- every 2 min: `retryEligibleMessagingDeliveriesV1` → `MessageService.retrySend`.
+  The selector admits only `failed` outbound rows recorded `safe_to_redeliver`
+  with `errorSchemaVersion` ≥ 2 (I-10); `retrySend` re-checks that gate, leases the
+  row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
+  lease holder may finalise it (I-11).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
 
 **F-13 Realtime**
@@ -1088,10 +1096,26 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 - **I-09 Inbound dedupe on `Message.externalId` (unique).** — receive and
   external-message adapters. Exception: `createChannelMessageV1` leaves dedupe to
   the caller; Telegram and WhatsApp add a same-content time-window dedupe.
-- **I-10 Redelivery only when the failure is classified `safe_to_redeliver`.** —
-  `classifyDeliveryOutcome`, `retrySend`, the retry SQL selector —
-  `delivery-recovery-operations.test.ts`. Classification is substring matching on
-  provider error text.
+- **I-10 Redelivery only when the failure is classified `safe_to_redeliver`
+  under taxonomy v2.** — `classifyDeliveryOutcome`, `isSafeToRedeliver`
+  (`retrySend`), the retry SQL selector — `delivery-recovery-operations.test.ts`,
+  `shared-retry-safety.test.ts`. An adapter code token in the error decides
+  first: `<PREFIX>_NOT_DISPATCHED` → `safe_to_redeliver`, `<PREFIX>_REFUSED` →
+  `terminal`, `<PREFIX>_SEND_OUTCOME_UNKNOWN` → `unknown` (with several codes the
+  least permissive wins). Provider-text patterns apply only without a code, and an
+  unclassified error is `unknown`. Only rows with `errorSchemaVersion` ≥ 2 can be
+  redelivered; a v1 `retryable` row fails closed.
+- **I-10a An `unknown` outcome is never resent** — not by the retry job, not by an
+  operator retry. `retrySend` also refuses a row that carries provider evidence
+  (`externalId`, MAX `deliveryConfirmed`), and stuck `sent` rows become `unknown`
+  on every channel (F-12). — `MessageService.retrySend`, `recoverStuckMessages` —
+  `shared-retry-safety.test.ts`, `shared-retry-safety.postgres.test.ts`.
+- **I-10b A provider id owned by another row is never reassigned.** A finalize
+  that hits the unique `Message.externalId` leaves the id with its owner. A mirror
+  of this send (same chat, outbound, same text, no `clientMessageId`) lets the
+  send stand; any other owner makes this row `failed` with `PROVIDER_ID_CONFLICT`
+  and outcome `unknown`. — `providerIdOwnership` in `G/lib/MessageService.ts` —
+  `shared-retry-safety.test.ts`, `shared-retry-safety.postgres.test.ts`.
 - **I-11 A retry is admitted once** (compare-and-set on `status='failed'` +
   `updatedAt`; finalisation fenced by lease id) —
   `G/lib/MessageService.provider-account.test.ts`.
@@ -1276,7 +1300,6 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-10 | Fleet-check quota comparison uses fields the scraper `/admin/stats` does not return | `G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` L71; `/admin/stats` in `yandex-fleet-scraper/src/api.ts` returns queue counts only | HIGH |
 | R-11 | tg-bot falls back to secret `'secret'` when `BOT_CRM_SECRET` is unset | `tg-bot/src/services/crmAction.js` L29 | HIGH |
 | R-12 | `getTelegramClient` triggers `catchUpMissedMessages` on every cached-client fetch | `G/app/tg-actions.ts` L1316, L1323 | HIGH |
-| R-13 | Message id is `msg_${Date.now()}` — same-millisecond collision possible | `G/lib/MessageService.ts` | MEDIUM |
 | R-14 | `/api/ai-calls/dev-simulate` is enabled unless an env flag is exactly `'false'` | `G/app/api/ai-calls/dev-simulate/route.ts` L41 | HIGH |
 | R-15 | Retention has only a 24 h interval with no startup run; a process restarted more often than daily never runs it | `G/instrumentation.ts` | MEDIUM |
 | R-16 | Operational log tables grow without cleanup (`cron_health_log` gets a row per watchdog tick) | `G/lib/cron-health.ts`; no cleanup caller | MEDIUM |
