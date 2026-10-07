@@ -9,7 +9,7 @@
  * driven unchanged.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import type { ContactLookupItemV1, ContactLookupResultV1 } from '@/modules/contacts/public/v1/contact-lookup'
 import {
@@ -82,13 +82,13 @@ function answerConversations(...entries: ContactConversationsEntryV1[]) {
     mocks.conversations.mockResolvedValue({ ok: true, result: { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: entries } })
 }
 
-let onSelectChat: ReturnType<typeof vi.fn>
-let onClose: ReturnType<typeof vi.fn>
+let onSelectChat: Mock<(chatId: string) => void>
+let onClose: Mock<() => void>
 
 beforeEach(() => {
     vi.clearAllMocks()
-    onSelectChat = vi.fn()
-    onClose = vi.fn()
+    onSelectChat = vi.fn<(chatId: string) => void>()
+    onClose = vi.fn<() => void>()
     mocks.lookup.mockResolvedValue(lookupAnswer([]))
     mocks.conversations.mockResolvedValue({ ok: true, result: { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } })
     mocks.startByContact.mockResolvedValue({ chatId: 'chat-created', channel: 'telegram', isNew: true })
