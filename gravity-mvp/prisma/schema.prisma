@@ -1684,6 +1684,8 @@ model Contact {
   mergesAsSurvivor  ContactMerge[]    @relation("MergeSurvivor")
   phones            ContactPhone[]
   tasks             Task[]
+  communicationPolicy       ContactCommunicationPolicy?
+  communicationPolicyEvents ContactCommunicationPolicyEvent[]
 
   @@index([displayName])
   @@index([isArchived])
@@ -1760,6 +1762,46 @@ model ContactMerge {
   @@index([mergedId])
 }
 
+
+/// Contacts-owned standing communication restriction of one canonical Contact.
+/// Absence of a row means allowed; the three flags are the whole V1 policy.
+model ContactCommunicationPolicy {
+  contactId   String   @id
+  denyAll     Boolean  @default(false)
+  denyMessage Boolean  @default(false)
+  denyVoice   Boolean  @default(false)
+  version     Int
+  updatedBy   String   @db.VarChar(128)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @db.Timestamptz(3)
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+}
+
+/// Append-only evidence of every ContactCommunicationPolicy write (mutation, merge, merge_recovery).
+model ContactCommunicationPolicyEvent {
+  eventId           String   @id @db.VarChar(64)
+  contactId         String
+  cause             String   @db.VarChar(32)
+  version           Int
+  previousVersion   Int?
+  beforeDenyAll     Boolean?
+  beforeDenyMessage Boolean?
+  beforeDenyVoice   Boolean?
+  afterDenyAll      Boolean
+  afterDenyMessage  Boolean
+  afterDenyVoice    Boolean
+  actor             String   @db.VarChar(128)
+  reason            String   @db.VarChar(512)
+  mutationRequestId String?  @unique @db.VarChar(128)
+  requestDigest     String?  @db.VarChar(64)
+  mergeId           String?  @db.VarChar(64)
+  sourceContactId   String?
+  recordedAt        DateTime @default(now()) @db.Timestamptz(3)
+  contact           Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, version])
+  @@index([contactId, recordedAt])
+}
 
 model ContactDriverProfileAudit {
   id                   String   @id @default(cuid())
