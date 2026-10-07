@@ -2113,6 +2113,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-one-order-per-day-slot-key-main-8e639943-20261007",
+      "reviewed_at": "2026-10-07T00:00:00Z",
+      "reviewed_by": "CASH_ONE_ORDER_PER_DAY_SLOT_KEY_EXECUTOR_REVIEW_20261007",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "CURATOR_ACCEPTED_CASH_ONE_ORDER_PER_DAY_ORDER_DAY_SLOT_KEY_IMPLEMENT_AUTHORIZED_20261007",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 8e639943, whose tail is messaging-contact-conversations-query-main-cfa7468e-20261006. It is a rebind-only amendment: the reviewed triple does not move, so it is admitted by the rebind-only resolver semantics main carries since #157, exactly as the tg-bot #41 amendment before it. One surface is derived again against the chain main publishes now."
+      },
+      "reason": "Records the one source fingerprint the Cash 1 ORDER/DAY order-day slot key moves on top of main 8e639943 without moving the reviewed denominator: 2,682 tracked executable surfaces, context-owned 1,447 and governed exclusions 1,235 are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from the exact fingerprint the 2026-08-13 review approved, which main's chain never rebound before: the compensation application detail screen now labels the authorization's stored day as the order day the compensation slot holds, labels the settlement's day as the day the money was paid, and states the daily-limit refusal as one compensation per order day. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes. The triple is this repository's own derivation over this tree (preview on the clean product commit deafb3bb).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2682,
+        "tracked_inventory_sha256": "7a31701f9f8176ec6fa4b8d60a78a60b70e2e4213ddb459e6ae183211d6c978b",
+        "coverage_sha256": "067eb6a3f5af353fb4f5977361939d96ab8365b4ff610004aeab135ac7d433fd"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2682,
+        "tracked_inventory_sha256": "7a31701f9f8176ec6fa4b8d60a78a60b70e2e4213ddb459e6ae183211d6c978b",
+        "coverage_sha256": "067eb6a3f5af353fb4f5977361939d96ab8365b4ff610004aeab135ac7d433fd"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/[applicationId]/CompensationApplicationDetail.tsx",
+          "previous_source_sha256": "c5200c7aa552dd44355959e7f08d77c0a6b93d8bb68e0669f3940c5b2a5c8966",
+          "current_source_sha256": "a1f1d891a0d01d086eecd987e1be46ca755ab0badb7724b1e2e5dd0559e2f32d",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation application detail screen keeps every reviewed ownership field. It changes three operator-facing strings only: the authorization line now reads the stored day as the order day the compensation slot holds, the settlement line names its day as the day the money was paid, and the daily-limit refusal says the driver already has a compensation for that order's day. It still renders the actions the server said are open and reports the result code the server returned, never a state of its own; it adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
