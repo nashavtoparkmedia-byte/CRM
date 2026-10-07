@@ -235,57 +235,6 @@ const MAX_READ_MARK_BATCH = 50
 function isUniqueConstraintViolation(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002')
 }
-
-/**
- * A peer's read mark, forwarded by the scraper from an op:130 push or a chat snapshot. MAX
- * Web shows a message read by a participant when the message's time is at or before that
- * participant's mark (isReadBy: time <= mark), so each of our messages in the conversation
- * whose MAX time is at or before the mark gets a read receipt. The MAX time is read from the
- * provider id itself, so no CRM clock enters the comparison. Messaging's evidence command
- * applies it, and only when stronger than what the row already proves: a repeated or older
- * mark changes nothing.
- */
-async function applyMaxPeerReadMark(body: MaxWebhookBody, providerAccountId: string) {
-  const mark = typeof body.mark === 'number' && Number.isFinite(body.mark) && body.mark > 0 ? body.mark : null
-  const readerId = body.readerId != null ? String(body.readerId) : ''
-  if (!body.chatId || !mark || !readerId) {
-    return NextResponse.json({ error: 'MAX_READ_MARK_INVALID' }, { status: 400 })
-  }
-  if (readerId === providerAccountId) return NextResponse.json({ ok: true, skipped: 'own_read_mark', applied: 0 })
-  const chat = await prisma.chat.findUnique({ where: { externalChatId: normalizeMaxChatId(body.chatId) } })
-  if (!chat || chat.channel !== 'max') return NextResponse.json({ ok: true, skipped: 'unknown_conversation', applied: 0 })
-  const chatAccount = concreteProviderAccountId(chat.metadata)
-  if (chatAccount && chatAccount !== providerAccountId) {
-    return NextResponse.json({ ok: true, skipped: 'provider_account_mismatch', applied: 0 })
-  }
-  const rows = await prisma.message.findMany({
-    where: {
-      chatId: chat.id,
-      channel: 'max',
-      direction: 'outbound',
-      status: { in: ['sent', 'delivered'] },
-      externalId: { startsWith: 'd3' },
-    },
-    select: { id: true, externalId: true },
-    orderBy: { sentAt: 'desc' },
-    take: MAX_READ_MARK_BATCH,
-  })
-  let applied = 0
-  for (const row of rows) {
-    const providerTime = maxProviderMessageTimeMs(row.externalId)
-    if (providerTime === null || providerTime > mark || !row.externalId) continue
-    const result = await applyMessageDeliveryEvidenceV1({
-      contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
-      chatId: chat.id,
-      channel: 'max',
-      providerMessageId: row.externalId,
-      evidence: 'read_receipt',
-    })
-    if (result.outcome === 'applied') applied += 1
-  }
-  maxRuntimeTrace('webhook.read_mark', { chatId: String(body.chatId), chatInternalId: chat.id, mark, applied, source: body.source ?? null })
-  return NextResponse.json({ ok: true, applied })
-}
 const MAX_DOM_ROUTE_ID = /^\d{1,20}$/
 // Bounded page for the competing-conversation scan; a full page fails closed.
 const MAX_DOM_FALLBACK_CLAIMANT_LIMIT = 25
@@ -1418,4 +1367,55 @@ export async function POST(request: Request) {
     opsLog('error', 'webhook_max_error', { channel: 'max', error: message })
     return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 })
   }
+}
+
+/**
+ * A peer's read mark, forwarded by the scraper from an op:130 push or a chat snapshot. MAX
+ * Web shows a message read by a participant when the message's time is at or before that
+ * participant's mark (isReadBy: time <= mark), so each of our messages in the conversation
+ * whose MAX time is at or before the mark gets a read receipt. The MAX time is read from the
+ * provider id itself, so no CRM clock enters the comparison. Messaging's evidence command
+ * applies it, and only when stronger than what the row already proves: a repeated or older
+ * mark changes nothing.
+ */
+async function applyMaxPeerReadMark(body: MaxWebhookBody, providerAccountId: string) {
+  const mark = typeof body.mark === 'number' && Number.isFinite(body.mark) && body.mark > 0 ? body.mark : null
+  const readerId = body.readerId != null ? String(body.readerId) : ''
+  if (!body.chatId || !mark || !readerId) {
+    return NextResponse.json({ error: 'MAX_READ_MARK_INVALID' }, { status: 400 })
+  }
+  if (readerId === providerAccountId) return NextResponse.json({ ok: true, skipped: 'own_read_mark', applied: 0 })
+  const chat = await prisma.chat.findUnique({ where: { externalChatId: normalizeMaxChatId(body.chatId) } })
+  if (!chat || chat.channel !== 'max') return NextResponse.json({ ok: true, skipped: 'unknown_conversation', applied: 0 })
+  const chatAccount = concreteProviderAccountId(chat.metadata)
+  if (chatAccount && chatAccount !== providerAccountId) {
+    return NextResponse.json({ ok: true, skipped: 'provider_account_mismatch', applied: 0 })
+  }
+  const rows = await prisma.message.findMany({
+    where: {
+      chatId: chat.id,
+      channel: 'max',
+      direction: 'outbound',
+      status: { in: ['sent', 'delivered'] },
+      externalId: { startsWith: 'd3' },
+    },
+    select: { id: true, externalId: true },
+    orderBy: { sentAt: 'desc' },
+    take: MAX_READ_MARK_BATCH,
+  })
+  let applied = 0
+  for (const row of rows) {
+    const providerTime = maxProviderMessageTimeMs(row.externalId)
+    if (providerTime === null || providerTime > mark || !row.externalId) continue
+    const result = await applyMessageDeliveryEvidenceV1({
+      contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+      chatId: chat.id,
+      channel: 'max',
+      providerMessageId: row.externalId,
+      evidence: 'read_receipt',
+    })
+    if (result.outcome === 'applied') applied += 1
+  }
+  maxRuntimeTrace('webhook.read_mark', { chatId: String(body.chatId), chatInternalId: chat.id, mark, applied, source: body.source ?? null })
+  return NextResponse.json({ ok: true, applied })
 }
