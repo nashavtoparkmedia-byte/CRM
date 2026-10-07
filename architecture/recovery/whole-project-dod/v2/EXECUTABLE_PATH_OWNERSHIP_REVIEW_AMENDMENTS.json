@@ -769,6 +769,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 9
       }
+    },
+    {
+      "amendment_id": "contact-identity-m3a6d-contact-conversations-20261007",
+      "reviewed_at": "2026-10-07T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_M3A6D_CANDIDATE_OWNERSHIP_REVIEW_20261007",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "ORCHESTRATOR_APPROVED_M3A6D_BINDING_IMPLEMENT_AFTER_PR160",
+      "reason": "M3A6D adds exactly twelve tracked executable surfaces and moves no existing surface between owners. Ten are messaging-owned and placed by existing messaging owned paths: the forward-ported ContactConversationsQuery.v1 contract under gravity-mvp/src/contracts/messaging/v1, its query handler, legacy Prisma adapter and contract tests under gravity-mvp/src/modules/messaging/public/v1, the landed browser transport contact-conversations-actions.ts and its proof, the client hook useContactConversations and its proof, and the NewChatPopover and ChatList consumer proofs, all under gravity-mvp/src/app/messages. Two are contacts-owned and placed by the existing contacts owned path gravity-mvp/src/modules/contacts: the shared client lookup state machine client-ui/use-contact-lookup.ts and its proof. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, no manifest owned path changes, and the gravity_runtime_remainder inventory stays at its reviewed 247 paths. Existing surfaces changed bytes without changing ownership and with no reviewed source-hash binding: the contacts-owned ContactSelector.tsx now consumes the shared lookup hook with its public API unchanged; the messaging-owned NewChatPopover.tsx and ChatList.tsx move off the legacy contact search; the messaging-owned contracts v1 index, public v1 index and messaging-operations.ts gain the forward-ported exports and wiring; and the boundary control tools/architecture/check-contact-lookup-boundary.mjs keeps its ACTIVE OPERATIONAL_SCRIPT classification under architecture_controls. The legacy useContactSearch hook and /api/contacts/search route are byte-identical. The reviewed inventory fingerprint moves only because twelve paths joined the inventory, and the coverage assignments and every semantic ownership field are otherwise unchanged.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2584,
+        "tracked_inventory_sha256": "0cd4938de7edafba27ecbbffd22cbbe51cafb8aa51b919a9ae5ada1e19fffafd",
+        "coverage_sha256": "09c0a6dea29f627b19c7d23a863098c8327754d46d261f054437966a369071fa"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2596,
+        "tracked_inventory_sha256": "283e585bf550e0bf1bee55a91493725bc9336d9d52cf4ad718a59bf5d8c8372b",
+        "coverage_sha256": "bed3076e96100d27abd90e2ac20b7b26ea1cda3f136bdd98d3f48fd75364b3b6"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 12
+      }
     }
   ]
 }
