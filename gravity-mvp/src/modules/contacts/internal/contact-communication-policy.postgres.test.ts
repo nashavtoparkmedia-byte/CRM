@@ -30,6 +30,10 @@ import {
 
 const proof = process.env.YOKO_CONTACT_COMMUNICATION_POLICY_POSTGRES_PROOF === '1' ? describe : describe.skip
 const db = new PrismaClient()
+// mutationRequestId is globally unique by design, so a request id consumed by an
+// earlier run of this proof against the same database must conflict. Every
+// request id below is therefore namespaced per run.
+const RUN = randomUUID().slice(0, 8)
 
 const ALL = { denyAll: true, denyMessage: false, denyVoice: false }
 const MESSAGE = { denyAll: false, denyMessage: true, denyVoice: false }
@@ -58,7 +62,7 @@ async function eventRows(contactId: string) {
 function set(contactId: string, requestId: string, expectedVersion: number, restriction: typeof ALL, actor = 'proof-operator') {
   return setContactCommunicationPolicyV1({
     contract: SET_CONTACT_COMMUNICATION_POLICY_COMMAND_V1,
-    requestId, contactId, expectedVersion, restriction, actor, reason: 'isolated postgres proof',
+    requestId: `${RUN}:${requestId}`, contactId, expectedVersion, restriction, actor, reason: 'isolated postgres proof',
   })
 }
 
@@ -119,7 +123,7 @@ proof('contact communication policy foundation on real PostgreSQL', () => {
     expect(await policyRow(contactId)).toMatchObject({ ...VOICE, version: 2, updatedBy: 'proof-operator' })
     const events = await eventRows(contactId)
     expect(events.map(event => [event.cause, event.version, event.previousVersion, event.mutationRequestId])).toEqual([
-      ['mutation', 1, null, 'req-apply'], ['mutation', 2, 1, 'req-next'],
+      ['mutation', 1, null, `${RUN}:req-apply`], ['mutation', 2, 1, `${RUN}:req-next`],
     ])
     await expect(permission(contactId, 'voice')).resolves.toMatchObject({ decision: 'deny', reason: 'restricted_voice', policyVersion: 2 })
     await expect(permission(contactId, 'message')).resolves.toMatchObject({ decision: 'allow', policyVersion: 2 })
