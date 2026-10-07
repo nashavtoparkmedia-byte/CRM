@@ -31,6 +31,17 @@
 // through that client and no longer through the legacy search hook; its merge
 // direction, confirmation, command and refresh are proven by its focused test,
 // which this control runs.
+//
+// M3A6D moves the client request lifecycle (debounce, sequencing, stale answers)
+// out of ContactSelector into one shared Contacts state machine,
+// useContactLookupV1, which now carries the criteria gate and every transport,
+// policy and vocabulary ban the selector carried; the selector keeps its public
+// API and no timer or sequence of its own. NewChatPopover and ChatList are the
+// only other adopters of that hook. Neither keeps the legacy search hook, the
+// legacy route or `hasChat`, neither sorts what the lookup returned, and neither
+// reads Messaging's conversation answer except through Messaging's own
+// useContactConversations helpers, which fail closed: only a proven absence
+// starts a conversation, and only a complete answer proves a Contact extra.
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -67,6 +78,30 @@ const DRAWER = 'gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
 const DRAWER_PROOF = 'gravity-mvp/src/app/messages/components/ContactProfileDrawer.merge-picker.test.tsx'
 // The only authorized adopters of the selector: the merge picker and its proof.
 const AUTHORIZED_SELECTOR_CONSUMERS = [DRAWER_PROOF, DRAWER].sort()
+// M3A6D: the one client lookup state machine and its authorized adopters.
+const LOOKUP_HOOK = `${CLIENT_UI_DIR}/use-contact-lookup.ts`
+const LOOKUP_HOOK_PROOF = `${CLIENT_UI_DIR}/use-contact-lookup.test.ts`
+const NEW_CHAT = 'gravity-mvp/src/app/messages/components/NewChatPopover.tsx'
+const NEW_CHAT_PROOF = 'gravity-mvp/src/app/messages/components/NewChatPopover.contact-lookup.test.tsx'
+const CHAT_LIST = 'gravity-mvp/src/app/messages/components/ChatList.tsx'
+const CHAT_LIST_PROOF = 'gravity-mvp/src/app/messages/components/ChatList.contact-lookup.test.tsx'
+const CONVERSATIONS_HOOK = 'gravity-mvp/src/app/messages/hooks/useContactConversations.ts'
+const CONVERSATIONS_HOOK_PROOF = 'gravity-mvp/src/app/messages/hooks/useContactConversations.test.ts'
+// Every tracked file under gravity-mvp/src, outside Contacts client-ui, that names the shared hook.
+const LOOKUP_HOOK_CONSUMERS = '<git-grep:useContactLookupV1 outside contacts client-ui>'
+const AUTHORIZED_LOOKUP_HOOK_CONSUMERS = [CHAT_LIST, NEW_CHAT].sort()
+// Transport, server and foreign state no Contacts client lookup surface may own.
+const CLIENT_SURFACE_FORBIDDEN = [
+  'fetch(', '/api/', 'axios', 'XMLHttpRequest', 'useContactSearch', '@/lib/prisma', 'prisma.', 'server-only',
+  '@/modules/', '@/infrastructure', 'app/messages', 'platform-shell',
+]
+// ContactLookup.v1 policy no client surface may reimplement.
+const CLIENT_POLICY_FORBIDDEN = [
+  'stripToDigits', 'formatContactPhone', 'isTechnicalProviderName', 'buildProviderNeutralContactDisplayV1',
+  'buildCanonicalContactSummary', 'contactLookupSortKeyV1', 'localeCompare', "normalize('NFKC')", '.sort(',
+  'phone_exact', 'phone_substring', 'name_prefix', 'name_substring', 'CONTACT_LOOKUP_MAX_LIMIT_V1',
+  'replace(/\\D', 'canonicalPinnedAt', 'displayNameSource',
+]
 
 // The exact public contract. Anything else is a boundary change.
 const ITEM_FIELDS = ['contactId', 'displayName', 'displayTitle', 'primaryPhone', 'channels']
@@ -287,16 +322,16 @@ function assertSelectorClientSurface(sources) {
   const selector = sources[SELECTOR]
   assert(selector.startsWith('"use client"'), 'ContactSelector is not a client component')
   const specifiers = [...new Set([...selector.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
-  assert.deepEqual(specifiers, ['../contact-lookup', 'react'],
-    `ContactSelector imports something other than React and ContactLookup.v1: ${specifiers.join(', ')}`)
+  assert.deepEqual(specifiers, ['../contact-lookup', './use-contact-lookup', 'react'],
+    `ContactSelector imports something other than React, ContactLookup.v1 and the shared lookup hook: ${specifiers.join(', ')}`)
   const code = withoutComments(selector)
-  assert(code.includes('contactLookupCriteriaV1('), 'ContactSelector does not gate queries with contactLookupCriteriaV1')
-  assert(code.includes('ContactLookupItemV1') && code.includes('ContactLookupResultV1'),
-    'ContactSelector does not consume the ContactLookup.v1 types')
-  for (const forbidden of [
-    'fetch(', '/api/', 'axios', 'XMLHttpRequest', 'useContactSearch', '@/lib/prisma', 'prisma.', 'server-only',
-    '@/modules/', '@/infrastructure', 'app/messages', 'platform-shell',
-  ]) {
+  // The criteria gate and the request lifecycle live in the one shared state machine.
+  assert(code.includes('useContactLookupV1(lookup'), 'ContactSelector does not use the shared lookup state machine')
+  for (const owned of ['setTimeout', 'clearTimeout', 'timerRef', 'sequenceRef', 'mountedRef']) {
+    assert(!code.includes(owned), `ContactSelector keeps a second lookup state machine: ${owned}`)
+  }
+  assert(code.includes('ContactLookupItemV1'), 'ContactSelector does not consume the ContactLookup.v1 item type')
+  for (const forbidden of CLIENT_SURFACE_FORBIDDEN) {
     assert(!code.includes(forbidden), `ContactSelector owns transport, server or foreign state: ${forbidden}`)
   }
   assert(!sources[PUBLIC_INDEX].includes('ContactSelector'),
@@ -309,12 +344,7 @@ function assertSelectorClientSurface(sources) {
 /** 12. The selector reimplements no lookup, ranking, ordering, phone or display policy. */
 function assertSelectorNoPolicy(sources) {
   const code = withoutComments(sources[SELECTOR])
-  for (const forbidden of [
-    'stripToDigits', 'formatContactPhone', 'isTechnicalProviderName', 'buildProviderNeutralContactDisplayV1',
-    'buildCanonicalContactSummary', 'contactLookupSortKeyV1', 'localeCompare', "normalize('NFKC')", '.sort(',
-    'phone_exact', 'phone_substring', 'name_prefix', 'name_substring', 'CONTACT_LOOKUP_MAX_LIMIT_V1',
-    'replace(/\\D', 'canonicalPinnedAt', 'displayNameSource',
-  ]) {
+  for (const forbidden of CLIENT_POLICY_FORBIDDEN) {
     assert(!code.includes(forbidden), `ContactSelector reimplements a ContactLookup.v1 policy: ${forbidden}`)
   }
   // The lookup owns the title; the selector renders it and never composes one.
@@ -390,6 +420,85 @@ function assertMergePickerAdoption(sources) {
   assert(sources[DRAWER_PROOF].includes('ContactSelector'), 'the merge picker proof is missing')
 }
 
+/** 17. One Contacts client lookup state machine: the criteria gate, the stale guard, no transport, no policy. */
+function assertSharedLookupHook(sources) {
+  const hook = sources[LOOKUP_HOOK]
+  const specifiers = [...new Set([...hook.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
+  assert.deepEqual(specifiers, ['../contact-lookup', 'react'],
+    `the shared lookup hook imports something other than React and ContactLookup.v1: ${specifiers.join(', ')}`)
+  const code = withoutComments(hook)
+  assert(code.includes('export function useContactLookupV1('), 'the shared lookup hook is not declared')
+  assert(code.includes('if (contactLookupCriteriaV1(query) === null) return false'),
+    'the shared lookup hook does not gate queries with contactLookupCriteriaV1')
+  assert(code.includes('ContactLookupResultV1'), 'the shared lookup hook does not consume the ContactLookup.v1 result type')
+  assert(code.includes('sequence !== sequenceRef.current') && code.includes('!mountedRef.current'),
+    'the shared lookup hook can apply a stale or unmounted answer')
+  assert.equal(code.match(/setTimeout\(/gu)?.length, 1, 'the shared lookup hook keeps more than one timer')
+  for (const forbidden of CLIENT_SURFACE_FORBIDDEN) {
+    assert(!code.includes(forbidden), `the shared lookup hook owns transport, server or foreign state: ${forbidden}`)
+  }
+  for (const forbidden of CLIENT_POLICY_FORBIDDEN) {
+    assert(!code.includes(forbidden), `the shared lookup hook reimplements a ContactLookup.v1 policy: ${forbidden}`)
+  }
+  for (const forbidden of FORBIDDEN_VOCABULARY) {
+    assert(!code.includes(forbidden), `the shared lookup hook carries ${forbidden}`)
+  }
+  assert(!/use-contact-lookup|useContactLookupV1/u.test(sources[PUBLIC_INDEX]),
+    'the client lookup hook is re-exported through the server-oriented Contacts barrel')
+  // The selector's public debounce stays one value, owned by the shared machine.
+  assert(withoutComments(sources[SELECTOR]).includes('export const CONTACT_SELECTOR_DEBOUNCE_MS = CONTACT_LOOKUP_DEBOUNCE_MS'),
+    'ContactSelector keeps a second debounce value')
+  const consumers = sources[LOOKUP_HOOK_CONSUMERS].split('\n').map((line) => line.trim()).filter(Boolean).sort()
+  assert.deepEqual(consumers, AUTHORIZED_LOOKUP_HOOK_CONSUMERS,
+    `the shared lookup hook is adopted outside NewChatPopover and ChatList: ${consumers.join(', ')}`)
+}
+
+/** 18. NewChatPopover and ChatList: ContactLookup.v1 for people, Messaging's fail-closed context for conversations. */
+function assertConversationConsumers(sources) {
+  for (const relative of [NEW_CHAT, CHAT_LIST]) {
+    const code = withoutComments(sources[relative])
+    assert(code.includes("from '@/modules/contacts/public/v1/client-ui/use-contact-lookup'") || code.includes('from "@/modules/contacts/public/v1/client-ui/use-contact-lookup"'),
+      `${relative} does not use the shared Contacts lookup hook`)
+    assert(code.includes('client-ui/http-contact-lookup-client'), `${relative} does not reach the lookup through the Contacts client`)
+    assert(code.includes('from "../hooks/useContactConversations"'), `${relative} does not take conversation context from Messaging`)
+    for (const forbidden of ['useContactSearch', '/api/contacts/search', 'hasChat', '@/lib/prisma', 'prisma.',
+      'readContactConversationsAction', '.entries.get(', '.entries.values(', 'ContactSearchResult']) {
+      assert(!code.includes(forbidden), `${relative} bypasses the lookup or the conversation context: ${forbidden}`)
+    }
+    // What the lookup returned is used in the order received.
+    assert(/contactLookup\.status === 'success' \? contactLookup\.result\?\.items \?\? \[\] : \[\]/u.test(code),
+      `${relative} does not take its Contacts from the settled lookup answer`)
+    assert(!/\b(?:results|contactResults|extraContacts)\b[^\n;]*\.sort\(/u.test(code), `${relative} re-orders the lookup answer`)
+  }
+  const newChat = withoutComments(sources[NEW_CHAT])
+  assert(newChat.includes('contactChannelDecisionV1(conversations, contact.contactId, dbChannel)'),
+    'NewChatPopover does not decide open/start through the Messaging decision')
+  assert(newChat.includes(".kind === 'start'"), 'NewChatPopover shows «новый чат» on something other than a proven absence')
+  assert(newChat.includes('new Set<string>(focusedContact?.channels || [])'),
+    'NewChatPopover channel identity marks no longer come from ContactLookup alone')
+  const chatList = withoutComments(sources[CHAT_LIST])
+  for (const helper of ['isExtraContactV1(', 'foundContactConversationsV1(', 'hasProvenNoConversationV1(']) {
+    assert(chatList.includes(helper), `ChatList does not use the fail-closed Messaging helper ${helper}`)
+  }
+  // The Messaging helpers themselves fail closed.
+  const conversations = withoutComments(sources[CONVERSATIONS_HOOK])
+  const specifiers = [...new Set([...conversations.matchAll(/\bfrom\s+'([^']+)'/gu)].map((match) => match[1]))].sort()
+  assert.deepEqual(specifiers, ['../contact-conversations-actions', '@/contracts/messaging/v1/contact-conversations-query', 'react'],
+    `the conversation hook reaches something other than the landed Messaging transport: ${specifiers.join(', ')}`)
+  for (const forbidden of ['prisma', 'fetch(', '/api/', 'startByContact', 'create']) {
+    assert(!conversations.includes(forbidden), `the conversation hook reads or writes outside its transport: ${forbidden}`)
+  }
+  assert(conversations.includes('contactChannelConversationsV1(entry, channel)'),
+    'the conversation decision does not use the contract helper')
+  assert.equal(conversations.match(/return \{ kind: 'start'/gu)?.length, 1, 'more than one path starts a conversation')
+  assert(conversations.includes("if (lookup.kind === 'absent') return { kind: 'start'"),
+    'a conversation may start on something other than a proven absence')
+  assert(conversations.includes('return entry.truncated === false\n}'), 'an extra Contact may be shown on a truncated answer')
+  assert(conversations.includes("if (state.status !== 'ready') return false"), 'an extra Contact may be shown without an answer')
+  assert(conversations.includes('entry.truncated === false && entry.latestConversationId === null'),
+    '«новый чат» may be shown on an incomplete answer')
+}
+
 const CHECKS = [
   ['contract_shape', assertContractShape],
   ['no_foreign_vocabulary', assertNoForeignVocabulary],
@@ -407,6 +516,8 @@ const CHECKS = [
   ['selector_accessibility', assertSelectorAccessibility],
   ['lookup_transport', assertLookupTransport],
   ['merge_picker_adoption', assertMergePickerAdoption],
+  ['shared_lookup_hook', assertSharedLookupHook],
+  ['conversation_consumers', assertConversationConsumers],
 ]
 
 const PROBES = [
@@ -443,11 +554,35 @@ const PROBES = [
   ['legacy_hook_touched', 'legacy_unchanged', (s) => ({ ...s, [LEGACY_HOOK]: `${s[LEGACY_HOOK]}\n// touched\n` })],
   ['adapter_runs_raw_sql', 'no_schema_surface', (s) => ({ ...s, [ADAPTER]: s[ADAPTER].replace('    if (contactIds.length === 0) return []', '    if (contactIds.length === 0) return []\n    await prisma.$queryRaw`select 1`') })],
   ['selector_server_component', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('"use client"\n', '') })],
-  ['selector_fetches_legacy_route', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const runLookup = useCallback(', "  const legacy = (q: string) => fetch('/api/contacts/search?q=' + q)\n  const runLookup = useCallback(") })],
+  ['selector_fetches_legacy_route', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const { status, result, request, reset } = useContactLookupV1(', "  const legacy = (q: string) => fetch('/api/contacts/search?q=' + q)\n  const { status, result, request, reset } = useContactLookupV1(") })],
+  ['selector_bypasses_shared_hook', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('useContactLookupV1(lookup, { onSettled })', "({ status: 'idle' as const, result: null, request: (q: string) => q.length > 1, reset: () => {} })") })],
+  ['selector_owns_second_timer', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('  const items = result?.items ?? []', '  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)\n  const items = result?.items ?? []') })],
   ['selector_uses_legacy_hook', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { useContactSearch } from '../../../../../app/messages/hooks/useContactSearch'") })],
   ['selector_imports_prisma', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { prisma } from '@/lib/prisma'") })],
   ['selector_imports_messaging', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace("} from '../contact-lookup'", "} from '../contact-lookup'\nimport { searchConversations } from '@/modules/messaging/public/v1'") })],
-  ['selector_skips_criteria', 'selector_client_surface', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('if (contactLookupCriteriaV1(text) === null) return', 'if (text.trim().length < 2) return') })],
+  ['lookup_hook_skips_criteria', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replace('if (contactLookupCriteriaV1(query) === null) return false', 'if (query.trim().length < 2) return false') })],
+  ['lookup_hook_fetches_legacy_route', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replace('  const runLookup = useCallback(', "  const legacy = (q: string) => fetch('/api/contacts/search?q=' + q)\n  const runLookup = useCallback(") })],
+  ['lookup_hook_applies_stale_answer', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replaceAll('if (!mountedRef.current || sequence !== sequenceRef.current) return', 'if (!mountedRef.current) return') })],
+  ['lookup_hook_sorts_results', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replace('const receivedItems = Array.isArray(received?.items) ? received.items : []', 'const receivedItems = Array.isArray(received?.items) ? [...received.items].sort() : []') })],
+  ['lookup_hook_normalizes_phone', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replace('  const request = useCallback((query: string) => {', "  const digitsOnly = (q: string) => q.replace(/\\D/g, '')\n  const request = useCallback((query: string) => {") })],
+  ['lookup_hook_imports_messaging', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK]: s[LOOKUP_HOOK].replace("import { contactLookupCriteriaV1, type ContactLookupResultV1 } from '../contact-lookup'", "import { contactLookupCriteriaV1, type ContactLookupResultV1 } from '../contact-lookup'\nimport { contactConversationsV1 } from '@/modules/messaging/public/v1'") })],
+  ['lookup_hook_reexported_from_barrel', 'shared_lookup_hook', (s) => ({ ...s, [PUBLIC_INDEX]: `${s[PUBLIC_INDEX]}\nexport { useContactLookupV1 } from './client-ui/use-contact-lookup'\n` })],
+  ['lookup_hook_second_debounce', 'shared_lookup_hook', (s) => ({ ...s, [SELECTOR]: s[SELECTOR].replace('export const CONTACT_SELECTOR_DEBOUNCE_MS = CONTACT_LOOKUP_DEBOUNCE_MS', 'export const CONTACT_SELECTOR_DEBOUNCE_MS = 250') })],
+  ['lookup_hook_adopted_elsewhere', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK_CONSUMERS]: `${s[LOOKUP_HOOK_CONSUMERS]}gravity-mvp/src/app/tasks/components/TaskContactSearch.tsx\n` })],
+  ['lookup_hook_adopter_dropped', 'shared_lookup_hook', (s) => ({ ...s, [LOOKUP_HOOK_CONSUMERS]: `${CHAT_LIST}\n` })],
+  ['consumer_keeps_legacy_hook', 'conversation_consumers', (s) => ({ ...s, [NEW_CHAT]: s[NEW_CHAT].replace('import { useStartConversation } from "../hooks/useStartConversation"', 'import { useStartConversation } from "../hooks/useStartConversation"\nimport { useContactSearch } from "../hooks/useContactSearch"') })],
+  ['consumer_fetches_legacy_route', 'conversation_consumers', (s) => ({ ...s, [CHAT_LIST]: s[CHAT_LIST].replace('const CONTACT_LOOKUP_LIMIT = 8', "const CONTACT_LOOKUP_LIMIT = 8\nconst legacy = (q: string) => fetch('/api/contacts/search?q=' + q)") })],
+  ['consumer_restores_has_chat', 'conversation_consumers', (s) => ({ ...s, [CHAT_LIST]: s[CHAT_LIST].replace('const entry = foundContactConversationsV1(contactConversations, contact.contactId)', 'const entry = foundContactConversationsV1(contactConversations, contact.contactId)\n        const hasChat = entry?.channels.length') })],
+  ['consumer_sorts_lookup_answer', 'conversation_consumers', (s) => ({ ...s, [NEW_CHAT]: s[NEW_CHAT].replace('                        {results.map(contact => {', '                        {[...results].sort((a, b) => a.displayName.localeCompare(b.displayName)).map(contact => {') })],
+  ['consumer_reads_conversation_entries', 'conversation_consumers', (s) => ({ ...s, [NEW_CHAT]: s[NEW_CHAT].replace('const knownChannels = new Set<string>(focusedContact?.channels || [])', "const knownChannels = new Set<string>(focusedContact?.channels || [])\n                if (conversations.status === 'ready') for (const entry of conversations.entries.values()) void entry") })],
+  ['consumer_calls_transport_directly', 'conversation_consumers', (s) => ({ ...s, [CHAT_LIST]: s[CHAT_LIST].replace('const CONTACT_LOOKUP_LIMIT = 8', "const CONTACT_LOOKUP_LIMIT = 8\nimport { readContactConversationsAction } from '../contact-conversations-actions'") })],
+  ['consumer_hint_on_unknown', 'conversation_consumers', (s) => ({ ...s, [NEW_CHAT]: s[NEW_CHAT].replace("contactChannelDecisionV1(conversations, contact.contactId, dbChannel).kind === 'start'", "contactChannelDecisionV1(conversations, contact.contactId, dbChannel).kind !== 'open'") })],
+  ['consumer_extra_without_messaging', 'conversation_consumers', (s) => ({ ...s, [CHAT_LIST]: s[CHAT_LIST].replace('return contactResults.filter(contact => isExtraContactV1(contactConversations, contact.contactId, visibleChatIds))', 'return contactResults') })],
+  ['conversations_unknown_starts', 'conversation_consumers', (s) => ({ ...s, [CONVERSATIONS_HOOK]: s[CONVERSATIONS_HOOK].replace("    return { kind: lookup.kind }", "    if (lookup.kind === 'unknown') return { kind: 'start', canonicalContactId: contactId }\n    return { kind: lookup.kind }") })],
+  ['conversations_extra_on_truncated', 'conversation_consumers', (s) => ({ ...s, [CONVERSATIONS_HOOK]: s[CONVERSATIONS_HOOK].replace('    return entry.truncated === false\n}', '    return true\n}') })],
+  ['conversations_extra_without_answer', 'conversation_consumers', (s) => ({ ...s, [CONVERSATIONS_HOOK]: s[CONVERSATIONS_HOOK].replace("    if (state.status !== 'ready') return false\n    const entry = state.entries.get(contactId)\n    if (!entry || entry.status !== 'found') return false\n    if (knownConversationIdsV1", "    if (state.status !== 'ready') return true\n    const entry = state.entries.get(contactId)\n    if (!entry || entry.status !== 'found') return false\n    if (knownConversationIdsV1") })],
+  ['conversations_hint_on_truncated', 'conversation_consumers', (s) => ({ ...s, [CONVERSATIONS_HOOK]: s[CONVERSATIONS_HOOK].replace('entry.truncated === false && entry.latestConversationId === null', 'entry.latestConversationId === null') })],
+  ['conversations_hook_reads_chat', 'conversation_consumers', (s) => ({ ...s, [CONVERSATIONS_HOOK]: s[CONVERSATIONS_HOOK].replace("import { readContactConversationsAction } from '../contact-conversations-actions'", "import { readContactConversationsAction } from '../contact-conversations-actions'\nimport { prisma } from '@/lib/prisma'") })],
   ['selector_reexported_from_barrel', 'selector_client_surface', (s) => ({ ...s, [PUBLIC_INDEX]: `${s[PUBLIC_INDEX]}\nexport { default as ContactSelector } from './client-ui/ContactSelector'\n` })],
   ['selector_adopted_by_consumer', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: `${s[SELECTOR_CONSUMERS]}gravity-mvp/src/app/messages/components/NewChatPopover.tsx\n` })],
   ['selector_adopter_dropped', 'selector_client_surface', (s) => ({ ...s, [SELECTOR_CONSUMERS]: `${DRAWER_PROOF}\n` })],
@@ -479,13 +614,18 @@ const PROBES = [
 function main() {
   const relatives = [LOOKUP, ADAPTER, PROOF, POLICY, POLICY_PROOF, OPERATIONS, PUBLIC_INDEX, MANIFEST,
     LEGACY_ROUTE, LEGACY_HOOK, SELECTOR, SELECTOR_PROOF, LOOKUP_ROUTE, LOOKUP_ROUTE_PROOF, HTTP_CLIENT,
-    HTTP_CLIENT_PROOF, DRAWER, DRAWER_PROOF]
+    HTTP_CLIENT_PROOF, DRAWER, DRAWER_PROOF, LOOKUP_HOOK, LOOKUP_HOOK_PROOF, NEW_CHAT, NEW_CHAT_PROOF,
+    CHAT_LIST, CHAT_LIST_PROOF, CONVERSATIONS_HOOK, CONVERSATIONS_HOOK_PROOF]
   const sources = Object.fromEntries(relatives.map((relative) => [relative, read(relative)]))
   // git grep exits 1 when nothing matches; only a status above 1 is a failure.
   const consumers = spawnSync('git', ['-c', 'safe.directory=*', 'grep', '-l', 'ContactSelector', '--',
     'gravity-mvp/src', `:(exclude)${CLIENT_UI_DIR}`], { cwd: root, encoding: 'utf8' })
   assert(consumers.status === 0 || consumers.status === 1, `the selector consumer scan failed: ${consumers.stderr}`)
   sources[SELECTOR_CONSUMERS] = consumers.stdout
+  const hookConsumers = spawnSync('git', ['-c', 'safe.directory=*', 'grep', '-l', 'useContactLookupV1', '--',
+    'gravity-mvp/src', `:(exclude)${CLIENT_UI_DIR}`], { cwd: root, encoding: 'utf8' })
+  assert(hookConsumers.status === 0 || hookConsumers.status === 1, `the lookup hook consumer scan failed: ${hookConsumers.stderr}`)
+  sources[LOOKUP_HOOK_CONSUMERS] = hookConsumers.stdout
   const checks = new Map(CHECKS)
   for (const [, check] of CHECKS) check(sources)
 
@@ -516,6 +656,10 @@ function main() {
     'src/modules/contacts/public/v1/client-ui/http-contact-lookup-client.test.ts',
     'src/app/api/contacts/lookup/route.test.ts',
     'src/app/messages/components/ContactProfileDrawer.merge-picker.test.tsx',
+    'src/modules/contacts/public/v1/client-ui/use-contact-lookup.test.ts',
+    'src/app/messages/hooks/useContactConversations.test.ts',
+    'src/app/messages/components/NewChatPopover.contact-lookup.test.tsx',
+    'src/app/messages/components/ChatList.contact-lookup.test.tsx',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
   assert.equal(vitest.status, 0, `the contact lookup proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
   const passed = passingProofCount(vitest.stdout)
@@ -538,6 +682,9 @@ function main() {
     selector_consumers: AUTHORIZED_SELECTOR_CONSUMERS.length - 1,
     lookup_transport_pass_through: true,
     merge_picker_on_lookup: true,
+    shared_lookup_state_machines: 1,
+    lookup_hook_consumers: AUTHORIZED_LOOKUP_HOOK_CONSUMERS.length,
+    conversation_context_fail_closed: true,
   }, null, 2)}\n`)
 }
 

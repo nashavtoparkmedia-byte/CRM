@@ -2,10 +2,21 @@
 
 import { useState, useRef, useEffect } from "react"
 import { X, Search, Send, Loader2, AlertTriangle, Phone } from "lucide-react"
-import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
+import { contactChannelDecisionV1, useContactConversations } from "../hooks/useContactConversations"
 import { useSip } from '@/modules/calling/public/v1/sip-client-context'
+import { useContactLookupV1 } from '@/modules/contacts/public/v1/client-ui/use-contact-lookup'
+import { createHttpContactLookupClientV1 } from '@/modules/contacts/public/v1/client-ui/http-contact-lookup-client'
+import type { ContactLookupItemV1 } from '@/modules/contacts/public/v1/contact-lookup'
+import type { ContactConversationsChannelV1 } from '@/contracts/messaging/v1/contact-conversations-query'
 import { toast } from "sonner"
+
+// Contacts are found through ContactLookup.v1 (Contacts owns matching, order and
+// display); whether a conversation already exists comes only from Messaging's
+// ContactConversationsQuery.v1. A module-level client keeps the lookup's request
+// sequencing stable across renders.
+const contactLookupClient = createHttpContactLookupClientV1()
+const CONTACT_LOOKUP_LIMIT = 8
 
 const CHANNELS = [
     { id: 'wa',    label: 'WA',  dbChannel: 'whatsapp', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
@@ -45,7 +56,17 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const inputRef = useRef<HTMLInputElement>(null)
     const popoverRef = useRef<HTMLDivElement>(null)
 
-    const { results, loading } = useContactSearch(query)
+    const contactLookup = useContactLookupV1(contactLookupClient, { limit: CONTACT_LOOKUP_LIMIT })
+    const requestContactLookup = contactLookup.request
+    // Whether ContactLookup.v1 accepted the newest query: an idle lookup is a
+    // refused query only when it was never sent.
+    const lookupRequestRef = useRef<{ query: string; accepted: boolean } | null>(null)
+    useEffect(() => {
+        lookupRequestRef.current = { query, accepted: requestContactLookup(query) }
+    }, [query, requestContactLookup])
+    const results: ContactLookupItemV1[] = contactLookup.status === 'success' ? contactLookup.result?.items ?? [] : []
+    const conversations = useContactConversations(results.map(contact => contact.contactId))
+    const loading = contactLookup.status === 'loading' || conversations.status === 'loading'
     const { loading: starting, error: startError, startByContact, startByPhone, clearError } = useStartConversation()
     const { startPlaceholderOutbound, setActiveCallFsUuid, status: sipStatus } = useSip()
 
@@ -125,28 +146,40 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
         setTimeout(() => inputRef.current?.focus(), 50)
     }, [])
 
-    // Auto-start chat when opened from tasks with a phone number
+    // Auto-start chat when opened from tasks with a phone number. It acts only on
+    // a settled lookup of that exact query: one Contact → its conversation
+    // decision; no Contact → the new-number flow, and only for a phone input;
+    // several Contacts → nothing is guessed, the operator picks one.
     useEffect(() => {
-        if (initialQuery && !autoStarted && !starting) {
+        if (!initialQuery || autoStarted || starting) return
+        if (query !== initialQuery) return
+        if (contactLookup.status === 'loading') return
+        if (contactLookup.status === 'idle' && lookupRequestRef.current?.query === query && lookupRequestRef.current.accepted) return
+        if (contactLookup.status !== 'success') {
             setAutoStarted(true)
-            // Small delay to let contact search finish first
-            const timer = setTimeout(async () => {
-                if (results.length > 0) {
-                    // Contact found — open existing or create chat
-                    await handleSelectContact(results[0])
-                } else {
-                    // No contact — create new chat by phone
-                    const result = await startByPhone(initialQuery, selectedChannel)
-                    if (result) {
-                        onSelectChat(result.chatId)
-                        onClose()
-                        setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
-                    }
-                }
-            }, 800)
-            return () => clearTimeout(timer)
+            return
         }
-    }, [initialQuery, autoStarted, results, starting])
+        if (results.length === 1) {
+            if (conversations.status === 'idle' || conversations.status === 'loading') return
+            setAutoStarted(true)
+            void handleSelectContact(results[0])
+            return
+        }
+        setAutoStarted(true)
+        if (results.length > 1) {
+            setShowSuggestions(true)
+            return
+        }
+        if (!isPhone) return
+        void (async () => {
+            const result = await startByPhone(initialQuery, selectedChannel)
+            if (result) {
+                onSelectChat(result.chatId)
+                onClose()
+                setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+            }
+        })()
+    }, [initialQuery, autoStarted, starting, query, contactLookup.status, results, conversations.status])
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -197,10 +230,10 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
         setShowSuggestions(true)
     }
 
-    const handleSelectContact = async (contact: ContactSearchResult) => {
-        // Phone channel — call the contact's primary phone (or any phone).
+    const handleSelectContact = async (contact: ContactLookupItemV1) => {
+        // Phone channel — call the contact's primary phone.
         if (selectedChannel === 'phone') {
-            const phone = primaryPhone(contact)
+            const phone = contact.primaryPhone
             if (!phone) {
                 toast.error('У контакта нет номера телефона')
                 return
@@ -210,22 +243,39 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
         }
 
         const channelDef = CHANNELS.find(c => c.id === selectedChannel)
-        const dbChannel = channelDef?.dbChannel || 'telegram'
+        const dbChannel = (channelDef?.dbChannel || 'telegram') as ContactConversationsChannelV1
 
-        const existingChatId = contact.hasChat[dbChannel]
-
-        if (existingChatId) {
-            onSelectChat(existingChatId)
-            onClose()
-            setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
-        } else {
-            // Contact exists but no chat in this channel — create it directly
-            const result = await startByContact(contact.id, selectedChannel)
-            if (result) {
-                onSelectChat(result.chatId)
+        // Only Messaging's answer decides: an existing conversation is opened, a
+        // proven absence may start one, and anything less creates nothing.
+        const decision = contactChannelDecisionV1(conversations, contact.contactId, dbChannel)
+        switch (decision.kind) {
+            case 'open':
+                onSelectChat(decision.conversationId)
                 onClose()
                 setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+                return
+            case 'start': {
+                // Contact exists but no chat in this channel — create it directly
+                const result = await startByContact(decision.canonicalContactId, selectedChannel)
+                if (result) {
+                    onSelectChat(result.chatId)
+                    onClose()
+                    setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+                }
+                return
             }
+            case 'loading':
+                toast('Проверяем диалоги контакта — попробуйте через секунду')
+                return
+            case 'not_found':
+                toast.error('Контакт не найден')
+                return
+            case 'unknown':
+                toast.error('Не удалось точно определить диалоги контакта — новый чат не создан')
+                return
+            case 'unavailable':
+                toast.error('Не удалось проверить диалоги контакта — новый чат не создан')
+                return
         }
     }
 
@@ -276,20 +326,32 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const handleStartChat = async () => {
         if (!query.trim() || starting) return
 
-        // Phone channel — initiate a call instead of opening a chat.
+        // Phone channel — initiate a call instead of opening a chat. Only a single
+        // match stands in for the typed number; with several, the typed number is
+        // dialled as entered and no Contact is guessed.
         if (selectedChannel === 'phone') {
-            const contact = results[0]
-            const target = contact ? (primaryPhone(contact) || query.trim()) : query.trim()
+            const contact = results.length === 1 ? results[0] : null
+            const target = contact ? (contact.primaryPhone || query.trim()) : query.trim()
             await placeCall(target, contact?.displayName)
             return
         }
 
-        if (results.length > 0) {
+        if (results.length === 1) {
             await handleSelectContact(results[0])
             return
         }
+        if (results.length > 1) {
+            setShowSuggestions(true)
+            toast('Выберите контакт из списка')
+            return
+        }
 
-        // No contact found — new phone number flow
+        // No contact found — new phone number flow, only once the lookup has
+        // proved that no Contact matches.
+        if (contactLookup.status !== 'success') {
+            if (contactLookup.status === 'loading') toast('Идёт поиск контакта — попробуйте через секунду')
+            return
+        }
         if (isPhone) {
             const result = await startByPhone(query.trim(), selectedChannel)
             if (result) {
@@ -299,9 +361,6 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
             }
         }
     }
-
-    const primaryPhone = (c: ContactSearchResult) =>
-        c.phones.find(p => p.isPrimary)?.phone || c.phones[0]?.phone || null
 
     const isPhoneChannelOuter = selectedChannel === 'phone'
     return (
@@ -354,17 +413,20 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 {showSuggestions && results.length > 0 && (
                     <div className="mt-1.5 bg-white border border-[#E8E8E8] rounded-lg shadow-sm max-h-[220px] overflow-y-auto">
                         {results.map(contact => {
-                            const phone = primaryPhone(contact)
+                            const phone = contact.primaryPhone
                             const channelDef = CHANNELS.find(c => c.id === selectedChannel)
-                            const dbChannel = channelDef?.dbChannel || 'telegram'
-                            const hasChatInChannel = !!contact.hasChat[dbChannel]
+                            const dbChannel = (channelDef?.dbChannel || 'telegram') as ContactConversationsChannelV1
+                            // «новый чат» states a proven absence of a conversation on the
+                            // selected chat channel, nothing about the Contact's identities.
+                            const provenNoChatInChannel = selectedChannel !== 'phone'
+                                && contactChannelDecisionV1(conversations, contact.contactId, dbChannel).kind === 'start'
 
                             return (
                                 <button
-                                    key={contact.id}
+                                    key={contact.contactId}
                                     onClick={() => handleSelectContact(contact)}
-                                    onMouseEnter={() => setHoveredContactId(contact.id)}
-                                    onMouseLeave={() => setHoveredContactId(prev => prev === contact.id ? null : prev)}
+                                    onMouseEnter={() => setHoveredContactId(contact.contactId)}
+                                    onMouseLeave={() => setHoveredContactId(prev => prev === contact.contactId ? null : prev)}
                                     className="w-full px-3 py-[2px] flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left group"
                                 >
                                     <div className="w-[32px] h-[32px] rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
@@ -372,12 +434,12 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="text-[13px] font-medium text-[#111] truncate">
-                                            {contact.displayName || "Без имени"}
+                                            {contact.displayName}
                                         </div>
                                         <div className="text-[11px] text-gray-400 truncate flex items-center gap-1">
                                             {phone && <span className="font-mono">{phone}</span>}
-                                            {!hasChatInChannel && (
-                                                <span className="text-[9px] text-orange-500 font-medium">новый</span>
+                                            {provenNoChatInChannel && (
+                                                <span data-testid="new-chat-hint" className="text-[9px] text-orange-500 font-medium">новый чат</span>
                                             )}
                                         </div>
                                     </div>
@@ -403,7 +465,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )}
 
                 {/* No results hints */}
-                {showSuggestions && query.trim().length >= 2 && !loading && results.length === 0 && (
+                {showSuggestions && query.trim().length >= 2 && contactLookup.status === 'success' && results.length === 0 && (
                     <div className="mt-1.5 px-1 text-[11px] text-gray-400">
                         {isPhone
                             ? <span>Новый номер: <span className="font-mono text-[#111]">{query.trim()}</span></span>
@@ -411,12 +473,17 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                         }
                     </div>
                 )}
+                {showSuggestions && contactLookup.status === 'error' && (
+                    <div role="alert" className="mt-1.5 px-1 text-[11px] text-red-500">
+                        Не удалось выполнить поиск контактов
+                    </div>
+                )}
             </div>
 
             {/* Channel selection shows CRM channel presence only, not provider account reachability. */}
             {(() => {
                 const focusedContact =
-                    results.find(c => c.id === hoveredContactId) ||
+                    results.find(c => c.contactId === hoveredContactId) ||
                     (results.length === 1 ? results[0] : null)
                 const knownChannels = new Set<string>(focusedContact?.channels || [])
                 return (

@@ -12,8 +12,9 @@
 // It owns no transport. The caller injects `lookup`, so the selector is testable
 // without a network and a future integration slice can supply any thin transport
 // without changing selection semantics. Query validity, ranking, ordering and the
-// limit all belong to ContactLookup.v1: the selector asks contactLookupCriteriaV1
-// whether a query may be sent and renders results in exactly the order received.
+// limit all belong to ContactLookup.v1, and the request lifecycle (debounce,
+// sequencing, stale answers) belongs to the shared useContactLookupV1 state
+// machine: the selector renders results in exactly the order received.
 //
 // Only a concrete ContactLookupItemV1 can become the selection. Typed text never
 // does, Enter on no highlighted option selects nothing, and Blur or Tab never
@@ -23,14 +24,16 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 
+import type { ContactLookupItemV1 } from '../contact-lookup'
 import {
-  contactLookupCriteriaV1,
-  type ContactLookupItemV1,
-  type ContactLookupResultV1,
-} from '../contact-lookup'
+  CONTACT_LOOKUP_DEBOUNCE_MS,
+  useContactLookupV1,
+  type ContactLookupClientV1,
+  type ContactLookupSettledV1,
+} from './use-contact-lookup'
 
 /** The injected transport for ContactLookup.v1. */
-export type ContactLookupClientV1 = (input: { query: string; limit?: number }) => Promise<ContactLookupResultV1>
+export type { ContactLookupClientV1 }
 
 export type ContactSelectorPropsV1 = {
   /** The accessible name of the picker, e.g. "Контакт для объединения". */
@@ -44,7 +47,7 @@ export type ContactSelectorPropsV1 = {
 }
 
 /** A fixed operator-picker debounce, matching the existing contact search hook. */
-export const CONTACT_SELECTOR_DEBOUNCE_MS = 300
+export const CONTACT_SELECTOR_DEBOUNCE_MS = CONTACT_LOOKUP_DEBOUNCE_MS
 
 // Presentation only: a translation of the channel enum, never a capability claim.
 const CHANNEL_LABELS: Record<string, string> = {
@@ -58,8 +61,6 @@ const CHANNEL_LABELS: Record<string, string> = {
 function channelLabel(channel: string): string {
   return CHANNEL_LABELS[channel] ?? channel
 }
-
-type LookupStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export default function ContactSelector({
   label,
@@ -77,35 +78,29 @@ export default function ContactSelector({
 
   const [inputText, setInputText] = useState(value?.displayTitle ?? '')
   const [open, setOpen] = useState(false)
-  const [status, setStatus] = useState<LookupStatus>('idle')
-  const [result, setResult] = useState<ContactLookupResultV1 | null>(null)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [announcement, setAnnouncement] = useState('')
 
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Every query, selection and clear takes a new number; a completion is applied
-  // only if its number is still the latest. Transport cancellation is not relied
-  // upon, because an injected lookup need not support it.
-  const sequenceRef = useRef(0)
-  const mountedRef = useRef(true)
   const committedTitleRef = useRef<string | null>(value?.displayTitle ?? null)
 
-  const items = result?.items ?? []
-
-  const cancelPending = useCallback(() => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current)
-    timerRef.current = null
-    sequenceRef.current += 1
-  }, [])
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      cancelPending()
+  // Every query, selection and clear supersedes the request in flight; the shared
+  // state machine applies an answer only while it is still the newest one.
+  const onSettled = (settled: ContactLookupSettledV1) => {
+    setActiveIndex(-1)
+    if (settled.status === 'error') {
+      // The cause is deliberately not rendered: a server message is not
+      // operator text, and the committed selection is left untouched.
+      setAnnouncement('')
+      return
     }
-  }, [cancelPending])
+    setAnnouncement(settled.result.items.length === 0
+      ? 'Контакты не найдены'
+      : `Найдено контактов: ${settled.result.items.length}`)
+  }
+  const { status, result, request, reset } = useContactLookupV1(lookup, { onSettled })
+
+  const items = result?.items ?? []
 
   // Follow a controlled value. A newly committed item shows its title; a value
   // cleared from outside clears the text only if the operator had not already
@@ -121,42 +116,10 @@ export default function ContactSelector({
   }, [value])
 
   const resetLookup = useCallback(() => {
-    cancelPending()
-    setStatus('idle')
-    setResult(null)
+    reset()
     setActiveIndex(-1)
     setOpen(false)
-  }, [cancelPending])
-
-  const runLookup = useCallback((query: string, sequence: number) => {
-    let pending: Promise<ContactLookupResultV1>
-    try {
-      pending = Promise.resolve(lookup({ query }))
-    } catch {
-      pending = Promise.reject(new Error('lookup failed'))
-    }
-    pending.then(
-      (received) => {
-        if (!mountedRef.current || sequence !== sequenceRef.current) return
-        const receivedItems = Array.isArray(received?.items) ? received.items : []
-        setResult({ items: receivedItems, total: receivedItems.length, truncated: received?.truncated === true })
-        setStatus('success')
-        setActiveIndex(-1)
-        setAnnouncement(receivedItems.length === 0
-          ? 'Контакты не найдены'
-          : `Найдено контактов: ${receivedItems.length}`)
-      },
-      () => {
-        if (!mountedRef.current || sequence !== sequenceRef.current) return
-        // The cause is deliberately not rendered: a server message is not
-        // operator text, and the committed selection is left untouched.
-        setResult(null)
-        setStatus('error')
-        setActiveIndex(-1)
-        setAnnouncement('')
-      },
-    )
-  }, [lookup])
+  }, [reset])
 
   const handleTextChange = (text: string) => {
     if (disabled) return
@@ -168,14 +131,8 @@ export default function ContactSelector({
     }
     setInputText(text)
     resetLookup()
-    if (contactLookupCriteriaV1(text) === null) return
-    const sequence = sequenceRef.current
-    setStatus('loading')
+    if (!request(text)) return
     setOpen(true)
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null
-      runLookup(text, sequence)
-    }, CONTACT_SELECTOR_DEBOUNCE_MS)
   }
 
   const select = (item: ContactLookupItemV1) => {
