@@ -4,7 +4,8 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
-import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1, type TextDeliveryResultV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 function serialize(obj: any): any {
@@ -639,6 +640,11 @@ export class MessageService {
         let errorMessage: string | null = null
         let deliveryExternalId: string | null = null
         let maxDeliveryMetadata: any = null
+        // S2: what a typed adapter proved about this send, and the outcome a
+        // typed failure states. Both stay null for a legacy adapter, which keeps
+        // its legacy behaviour.
+        let typedResult: TextDeliveryResultV1 | null = null
+        let typedFailure: ReturnType<typeof readChannelDeliveryErrorV1> = null
 
         try {
             switch (channel) {
@@ -650,9 +656,11 @@ export class MessageService {
                         content,
                         quotedMessageId: quotedMsgId,
                     })
+                    typedResult = readTextDeliveryResultV1(waRes)
+                    if (typedResult) break
                     // The provider id the adapter returned is stored like every
                     // other channel's; an empty one stores nothing.
-                    deliveryExternalId = nonEmptyString(waRes?.externalId)
+                    deliveryExternalId = nonEmptyString((waRes as { externalId?: unknown } | null | undefined)?.externalId)
                     deliveryStatus = 'delivered'
                     break
                 
@@ -691,6 +699,10 @@ export class MessageService {
                         protocolChatId: rawExternalChatId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
                     }
+                    // A typed MAX result alone decides (S2): its evidence, never
+                    // the legacy outcome, and never 'delivered' at send.
+                    typedResult = readTextDeliveryResultV1(maxRes)
+                    if (typedResult) Object.assign(maxDeliveryMetadata, typedMaxDeliveryMetadata(typedResult))
                     console.log('[MAX_DELIVERY]', JSON.stringify({
                         operation: 'send',
                         status: maxDeliveryMetadata.status,
@@ -749,18 +761,38 @@ export class MessageService {
                             connectionId: routedConnectionId,
                             metadata: { messageId, chatId: targetChat.id, quotedMsgId },
                         })
+                        typedResult = readTextDeliveryResultV1(res)
+                        if (typedResult) break
                         if (res.externalId) deliveryExternalId = String(res.externalId)
                         deliveryStatus = 'delivered'
                     } catch (tgErr: any) {
                         deliveryStatus = 'failed'
                         errorMessage = tgErr.message
+                        typedFailure = readChannelDeliveryErrorV1(tgErr)
                         console.error(`[MessageService] TG Delivery FAILED: ${errorMessage}`);
                     }
                     break
             }
         } catch (provErr: any) {
-            deliveryStatus = 'failed'
-            errorMessage = provErr.message
+            if (typedResult) {
+                // The adapter already answered with typed evidence; an error in
+                // this send's own bookkeeping says nothing about the provider.
+                opsLog('warn', 'message_send_post_result_error', { messageId, chatId: currentChatId, channel, error: provErr?.message })
+            } else {
+                deliveryStatus = 'failed'
+                errorMessage = provErr.message
+                typedFailure = readChannelDeliveryErrorV1(provErr)
+            }
+        }
+
+        // S2 evidence → status: a typed send is never 'delivered' at send time.
+        // Provider acceptance and a client action both leave the row 'sent'; the
+        // recorded evidence tells them apart.
+        let sendEvidence: DeliveryEvidenceRecordV1 | null = null
+        if (typedResult) {
+            deliveryStatus = 'sent'
+            deliveryExternalId = typedResult.providerMessageId
+            sendEvidence = newDeliveryEvidenceRecordV1(typedResult.evidence, 'send', new Date())
         }
 
         // Guarantee metadata.error is always set for failed messages
@@ -768,7 +800,10 @@ export class MessageService {
             errorMessage = 'Ошибка доставки'
         }
 
-        let deliveryOutcome = errorMessage ? classifyDeliveryOutcome(errorMessage) : null
+        // A typed failure states its own outcome; the text taxonomy reads any other error.
+        let deliveryOutcome: DeliveryOutcomeV1 | null = errorMessage ? (typedFailure?.outcome ?? classifyDeliveryOutcome(errorMessage)) : null
+        // What the send answer derives its delivery state from.
+        let settledMetadata: unknown = null
 
         // 3. Update status + retry classification
         try {
@@ -777,11 +812,12 @@ export class MessageService {
             if (maxDeliveryMetadata) {
                 metadata.maxDelivery = maxDeliveryMetadata
             }
+            if (sendEvidence) metadata.delivery = sendEvidence
             if (errorMessage) {
                 metadata.error = errorMessage
-                metadata.errorCode = getErrorCode(errorMessage)
+                metadata.errorCode = typedFailure?.code ?? getErrorCode(errorMessage)
                 metadata.errorSchemaVersion = ERROR_SCHEMA_VERSION
-                const retryable = classifyError(errorMessage)
+                const retryable = deliveryOutcome === 'safe_to_redeliver'
                 metadata.retryable = retryable
                 metadata.deliveryOutcome = deliveryOutcome
                 metadata.retryAttempt = 0
@@ -794,43 +830,58 @@ export class MessageService {
                 }
             }
 
+            settledMetadata = metadata
             let finalRow: any
-            try {
-                finalRow = await (prisma.message as any).update({
-                    where: { id: messageId },
-                    data: {
-                        status: deliveryStatus,
-                        externalId: deliveryExternalId || undefined,
-                        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+            const proven = await settleUnlessProven(messageId, created?.updatedAt, async (where) => {
+                try {
+                    finalRow = await (prisma.message as any).update({
+                        where,
+                        data: {
+                            status: deliveryStatus,
+                            externalId: deliveryExternalId || undefined,
+                            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+                        }
+                    })
+                } catch (finalizeErr: unknown) {
+                    // The provider-id write rule: an id another row owns is never
+                    // reassigned, and only a mirror of this very send leaves it standing.
+                    if (!deliveryExternalId || !isProviderIdUniqueViolation(finalizeErr)) throw finalizeErr
+                    const ownership = await providerIdOwnership(deliveryExternalId, { id: messageId, chatId: currentChatId, content })
+                    if (ownership.disposition === 'conflict') {
+                        deliveryStatus = 'failed'
+                        errorMessage = PROVIDER_ID_CONFLICT_ERROR
+                        deliveryOutcome = 'unknown'
+                        Object.assign(metadata, providerIdConflictMetadata(metadata, deliveryExternalId, ownership.ownerMessageId))
+                        // The typed evidence named the other row's message, so it proves nothing here.
+                        delete metadata.delivery
                     }
-                })
-            } catch (finalizeErr: unknown) {
-                // The provider-id write rule: an id another row owns is never
-                // reassigned, and only a mirror of this very send leaves it standing.
-                if (!deliveryExternalId || !isProviderIdUniqueViolation(finalizeErr)) throw finalizeErr
-                const ownership = await providerIdOwnership(deliveryExternalId, { id: messageId, chatId: currentChatId, content })
-                if (ownership.disposition === 'conflict') {
-                    deliveryStatus = 'failed'
-                    errorMessage = PROVIDER_ID_CONFLICT_ERROR
-                    deliveryOutcome = 'unknown'
-                    Object.assign(metadata, providerIdConflictMetadata(metadata, deliveryExternalId, ownership.ownerMessageId))
+                    opsLog(ownership.disposition === 'conflict' ? 'warn' : 'info', ownership.disposition === 'conflict' ? 'message_provider_id_conflict' : 'message_provider_id_mirror', {
+                        operation: 'send',
+                        messageId,
+                        chatId: currentChatId,
+                        channel,
+                        externalId: deliveryExternalId,
+                        ownerMessageId: ownership.ownerMessageId,
+                    })
+                    deliveryExternalId = null
+                    finalRow = await (prisma.message as any).update({
+                        where,
+                        data: {
+                            status: deliveryStatus,
+                            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+                        }
+                    })
                 }
-                opsLog(ownership.disposition === 'conflict' ? 'warn' : 'info', ownership.disposition === 'conflict' ? 'message_provider_id_conflict' : 'message_provider_id_mirror', {
-                    operation: 'send',
-                    messageId,
-                    chatId: currentChatId,
-                    channel,
-                    externalId: deliveryExternalId,
-                    ownerMessageId: ownership.ownerMessageId,
-                })
-                deliveryExternalId = null
-                finalRow = await (prisma.message as any).update({
-                    where: { id: messageId },
-                    data: {
-                        status: deliveryStatus,
-                        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-                    }
-                })
+            })
+            if (proven) {
+                // Evidence settled this row while the call was in flight; it stands.
+                opsLog('info', 'message_settled_by_evidence', { operation: 'send', messageId, chatId: currentChatId, channel, attemptStatus: deliveryStatus, attemptExternalId: deliveryExternalId, status: proven.status, externalId: proven.externalId })
+                finalRow = proven
+                deliveryStatus = proven.status as MessageStatus
+                deliveryExternalId = proven.externalId ?? null
+                errorMessage = null
+                deliveryOutcome = null
+                settledMetadata = proven.metadata
             }
             // The row broadcast at creation still reads 'sent'. Pushing the settled
             // row lets every open view of this conversation reach the final state
@@ -881,6 +932,12 @@ export class MessageService {
                 console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
             }
         }
+        // S2: for a typed send, provider acceptance or stronger is the
+        // reachability evidence; a client action, an unknown outcome and a
+        // failure are not. A legacy adapter's 'delivered' is the block above.
+        if (deliveryStatus !== 'delivered' && deliveryStatus !== 'failed' && isProviderAcceptedEvidenceV1(readDeliveryEvidenceV1(settledMetadata)?.evidence)) {
+            await recordAcceptedProviderReachability(outboundBinding, { operation: 'send', messageId, chatId: currentChatId, channel })
+        }
 
         return {
             success: deliveryStatus !== 'failed',
@@ -892,6 +949,7 @@ export class MessageService {
             deliveryConfirmed: maxDeliveryMetadata?.deliveryConfirmed,
             error: errorMessage,
             ...(deliveryOutcome ? { retryable: deliveryOutcome === 'safe_to_redeliver', deliveryOutcome, errorSchemaVersion: ERROR_SCHEMA_VERSION } : {}),
+            deliveryState: deriveDeliveryStateV1({ direction: 'outbound', status: deliveryStatus, metadata: settledMetadata }),
         }
     }
 
@@ -927,6 +985,8 @@ export class MessageService {
         if (nonEmptyString(message.externalId) || meta.maxDelivery?.deliveryConfirmed === true) {
             return { success: false, error: 'Not retryable' }
         }
+        // So does any recorded delivery evidence (S2), whatever its strength.
+        if (readDeliveryEvidenceV1(meta)) return { success: false, error: 'Not retryable' }
 
         const attempt = (meta.retryAttempt || 0) + 1
         if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
@@ -1002,6 +1062,9 @@ export class MessageService {
         let errorMessage: string | null = null
         let deliveryExternalId: string | null = null
         let retryMaxDeliveryMetadata: any = null
+        // S2, as on a first send: typed evidence or a typed failure, when the adapter gives one.
+        let retryTypedResult: TextDeliveryResultV1 | null = null
+        let retryTypedFailure: ReturnType<typeof readChannelDeliveryErrorV1> = null
 
         try {
             const chat = message.chat
@@ -1017,7 +1080,9 @@ export class MessageService {
                         chatId: rawExternalId,
                         content: message.content,
                     })
-                    deliveryExternalId = nonEmptyString(waRes?.externalId)
+                    retryTypedResult = readTextDeliveryResultV1(waRes)
+                    if (retryTypedResult) break
+                    deliveryExternalId = nonEmptyString((waRes as { externalId?: unknown } | null | undefined)?.externalId)
                     deliveryStatus = 'delivered'
                     break
                 }
@@ -1083,6 +1148,8 @@ export class MessageService {
                         protocolChatId: rawExternalId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
                     }
+                    retryTypedResult = readTextDeliveryResultV1(retryMaxRes)
+                    if (retryTypedResult) Object.assign(retryMaxDeliveryMetadata, typedMaxDeliveryMetadata(retryTypedResult))
                     console.log('[MAX_DELIVERY]', JSON.stringify({
                         operation: 'send',
                         status: retryMaxDeliveryMetadata.status,
@@ -1102,13 +1169,27 @@ export class MessageService {
                         connectionId: connId,
                         metadata: { messageId, chatId: message.chatId },
                     })
+                    retryTypedResult = readTextDeliveryResultV1(res)
+                    if (retryTypedResult) break
                     if (res.externalId) deliveryExternalId = res.externalId
                     deliveryStatus = 'delivered'
                     break
                 }
             }
         } catch (err: any) {
-            errorMessage = err.message || 'Retry delivery failed'
+            if (retryTypedResult) {
+                opsLog('warn', 'message_send_post_result_error', { messageId, chatId: message.chatId, channel: message.channel, error: err?.message })
+            } else {
+                errorMessage = err.message || 'Retry delivery failed'
+                retryTypedFailure = readChannelDeliveryErrorV1(err)
+            }
+        }
+        // A typed retry is never 'delivered' at send time either.
+        let retryEvidence: DeliveryEvidenceRecordV1 | null = null
+        if (retryTypedResult) {
+            deliveryStatus = 'sent'
+            deliveryExternalId = retryTypedResult.providerMessageId
+            retryEvidence = newDeliveryEvidenceRecordV1(retryTypedResult.evidence, 'send', new Date())
         }
 
         // Update final status
@@ -1116,10 +1197,12 @@ export class MessageService {
         if (retryMaxDeliveryMetadata) {
             retryMeta.maxDelivery = retryMaxDeliveryMetadata
         }
+        if (retryEvidence) retryMeta.delivery = retryEvidence
         if (deliveryStatus === 'failed') {
             retryMeta.error = errorMessage
-            retryMeta.retryable = classifyError(errorMessage || '')
-            retryMeta.deliveryOutcome = classifyDeliveryOutcome(errorMessage || '')
+            retryMeta.deliveryOutcome = retryTypedFailure?.outcome ?? classifyDeliveryOutcome(errorMessage || '')
+            retryMeta.retryable = retryMeta.deliveryOutcome === 'safe_to_redeliver'
+            if (retryTypedFailure?.code) retryMeta.errorCode = retryTypedFailure.code
             retryMeta.errorSchemaVersion = ERROR_SCHEMA_VERSION
             opsLog('warn', 'message_retry_failed', { messageId, channel: message.channel, retryAttempt: attempt, error: errorMessage || undefined })
         } else {
@@ -1169,6 +1252,14 @@ export class MessageService {
             })
         })
         if (retryFinalization.count !== 1) {
+            // S2 (I5): evidence that settles a row in flight revokes the retry
+            // lease on it. The proven row stands and this attempt's answer is dropped.
+            const proven = await MessageService.readSendState(messageId)
+            if (proven && provenDeliveryRankV1(proven) >= 1) {
+                opsLog('info', 'message_settled_by_evidence', { operation: 'retry', messageId, chatId: message.chatId, channel: message.channel, attemptStatus: deliveryStatus, attemptExternalId: deliveryExternalId, status: proven.status, externalId: proven.externalId })
+                await ConversationWorkflowService.onOutboundMessage(message.chatId, new Date())
+                return { success: true }
+            }
             opsLog('warn', 'message_retry_lease_lost', {
                 messageId,
                 chatId: message.chatId,
@@ -1206,6 +1297,9 @@ export class MessageService {
                 console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
             }
         }
+        if (deliveryStatus === 'sent' && isProviderAcceptedEvidenceV1(retryEvidence?.evidence)) {
+            await recordAcceptedProviderReachability(outboundBinding, { operation: 'retry', messageId, chatId: message.chatId, channel: message.channel })
+        }
 
         return { success: deliveryStatus !== 'failed', error: errorMessage || undefined }
     }
@@ -1233,6 +1327,7 @@ const SEND_STATE_SELECT = {
     externalId: true,
     sentAt: true,
     metadata: true,
+    updatedAt: true,
 } as const
 
 export type SendStateRow = {
@@ -1247,6 +1342,7 @@ export type SendStateRow = {
     externalId: string | null
     sentAt: Date
     metadata: unknown
+    updatedAt: Date
 }
 
 function sendStateMetadata(row: SendStateRow): Record<string, unknown> {
@@ -1266,6 +1362,7 @@ function canonicalSendState(row: SendStateRow) {
         retryable: failed && isSafeToRedeliver(metadata),
         deliveryOutcome: failed ? (nonEmptyString(metadata.deliveryOutcome) ?? null) : null,
         errorSchemaVersion: failed && typeof metadata.errorSchemaVersion === 'number' ? metadata.errorSchemaVersion : null,
+        deliveryState: deriveDeliveryStateV1(row),
     }
 }
 
@@ -1306,6 +1403,85 @@ function assertSameSendIntent(existing: SendStateRow, intent: SendIntentV1, clie
 
 function isUniqueConstraintViolation(error: unknown): boolean {
     return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2002')
+}
+
+// ── Settling an attempt in flight (S2, I5) ───────────────────────────────
+//
+// A provider call can take seconds, and evidence for the very row it is
+// sending can arrive meanwhile through the evidence command: an echo or an ack
+// racing its own send. A send's settled write is therefore a compare-and-set
+// on the row version the send last saw (a retry's is its lease, which the
+// evidence command revokes). When the version moved, a row that now proves
+// provider acceptance or more stands as it is: it is never demoted, and a
+// failure is never written over provider evidence. Any other change — the row
+// moved conversation, recovery marked it stale — is written over with the
+// attempt's answer on the new version.
+
+const IN_FLIGHT_SETTLE_ATTEMPTS = 3
+
+function isRecordToUpdateMissing(error: unknown): boolean {
+    return Boolean(error && typeof error === 'object' && (error as { code?: unknown }).code === 'P2025')
+}
+
+/** Runs the attempt's settled write, or returns the row when evidence already settled it. */
+async function settleUnlessProven(
+    messageId: string,
+    version: unknown,
+    write: (where: { id: string; updatedAt?: Date }) => Promise<void>,
+): Promise<SendStateRow | null> {
+    let current = version instanceof Date ? version : undefined
+    for (let attempt = 1; ; attempt++) {
+        try {
+            await write(current ? { id: messageId, updatedAt: current } : { id: messageId })
+            return null
+        } catch (error: unknown) {
+            if (!current || !isRecordToUpdateMissing(error) || attempt >= IN_FLIGHT_SETTLE_ATTEMPTS) throw error
+            const row = await (prisma.message as any).findUnique({
+                where: { id: messageId },
+                select: SEND_STATE_SELECT,
+            })
+            if (!row) throw error
+            if (provenDeliveryRankV1(row) >= 1) return row
+            current = row.updatedAt instanceof Date ? row.updatedAt : undefined
+        }
+    }
+}
+
+/** The MAX delivery record of a typed MAX result: never confirmed at send, whatever the legacy outcome said. */
+function typedMaxDeliveryMetadata(result: TextDeliveryResultV1) {
+    return {
+        status: isProviderAcceptedEvidenceV1(result.evidence) ? 'provider_accepted' : 'send_requested',
+        deliveryConfirmed: false,
+        maxMessageId: result.providerMessageId,
+        externalId: result.providerMessageId,
+    }
+}
+
+/**
+ * Reachability `confirmed` from a typed send's provider acceptance or stronger
+ * (S2). A client action, an unknown outcome and a failure never write it.
+ */
+async function recordAcceptedProviderReachability(
+    outboundBinding: Awaited<ReturnType<typeof prepareOutboundConversationV1>>,
+    context: { operation: 'send' | 'retry'; messageId: string; chatId: string; channel?: string },
+): Promise<void> {
+    try {
+        const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
+        const reachabilityResult = await contactReachabilityV1.recordExactProviderReachability({
+            identityId: outboundBinding.contactIdentityId,
+            contactId: outboundBinding.contactId,
+            channel: outboundBinding.channel,
+            providerAccountId: outboundBinding.providerAccountId,
+            providerTargetId: outboundBinding.identityTarget,
+            status: 'confirmed',
+        })
+        if (reachabilityResult.outcome === 'rejected') {
+            opsLog('warn', 'message_reachability_rejected', { ...context, reason: reachabilityResult.reason })
+        }
+    } catch (reachErr: any) {
+        // Non-critical — the provider already accepted the message.
+        console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
+    }
 }
 
 // ── Provider-id write rule ───────────────────────────────────────────────
@@ -1364,6 +1540,8 @@ function providerIdConflictMetadata(metadata: Record<string, any>, externalId: s
         lastFailedAt: new Date().toISOString(),
         providerIdConflict: { externalId, ownerMessageId },
     }
+    // Typed evidence named the other row's message too, so it proves nothing here.
+    delete settled.delivery
     // The MAX proof named the other row's message, so it confirms nothing here.
     if (metadata.maxDelivery && typeof metadata.maxDelivery === 'object') {
         settled.maxDelivery = {
@@ -1524,11 +1702,6 @@ function classifyDeliveryOutcome(error: string): DeliveryOutcomeV1 {
     // Neither proof that nothing was dispatched nor a refusal: the provider may
     // have the message. Unknown is never redelivered and never called final.
     return 'unknown'
-}
-
-/** Retryable means safe to redeliver, not merely transient. */
-function classifyError(error: string): boolean {
-    return classifyDeliveryOutcome(error) === 'safe_to_redeliver'
 }
 
 function getErrorCode(error: string): ErrorCode {

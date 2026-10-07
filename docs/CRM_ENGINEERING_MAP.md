@@ -211,6 +211,15 @@ Each entry lists what the code actually does.
   `resolved` (the canonical Contact after Contacts' merge lineage), `unresolved`,
   `ambiguous` (the recorded `metadata.contactResolution.status`, whatever link the
   Chat carries) or `not_found`; no provider, account or transport detail crosses it.
+- **Delivery-truth extension points (S2)**: a channel adapter answers a text send
+  with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
+  `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
+  'safe_to_redeliver' | 'terminal')` where that is known; any other error is
+  `unknown`. Later provider evidence enters through `applyMessageDeliveryEvidenceV1`
+  (`messaging.PatchMessageDeliveryCommand.v2`), and `deriveDeliveryStateV1`
+  (`delivery-state-policy.ts`) is the only delivery-state derivation (seven states:
+  `send_requested`, `provider_accepted`, `delivered`, `read`,
+  `failed_safe_to_retry`, `failed_not_safe_to_retry`, `indeterminate`).
 - **Tests**: colocated vitest under `G/modules/messaging/**`,
   `G/lib/MessageService.provider-account.test.ts`,
   `G/app/api/messages/*/route.test.ts`; `tools/architecture/check-messaging-*-boundary.mjs`.
@@ -479,7 +488,7 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | Model | Main writers | Main readers | Public contract | Cross-domain access observed |
 |---|---|---|---|---|
 | `Chat` | `G/modules/messaging/public/v1/legacy-prisma-*-adapter` (conversation family), `G/lib/ConversationWorkflowService.ts` (raw SQL), `G/lib/MessageService.ts` | `MessageService.listConversations`, routes, channel code | `upsertChannelConversationV1`, `createExternalConversationV1`, `ensureConversationContactLinkV1`, `channelConversationWorkflowV1`; read: `resolveConversationContactV1` (`ResolveConversationContactQuery.v1`) | Direct writes in `G/app/api/messages/send-media/route.ts`, `send-image/route.ts`, `G/app/messages/open/route.ts`. Direct reads from `G/app/tg-actions.ts`, `G/lib/whatsapp/WhatsAppService.ts`, `G/app/api/webhooks/*` |
-| `Message` | `MessageService.send/retrySend/recoverStuckMessages`, messaging adapters, `G/lib/messageEvents.ts` (aiStatus) | `MessageService.listMessages`, AI pipeline, channel dedupe lookups | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1`, `patchMessageDeliveryV1` | Direct writes in `G/app/api/messages/{send-media,send-image,delete}/route.ts` |
+| `Message` | `MessageService.send/retrySend/recoverStuckMessages`, messaging adapters, `G/lib/messageEvents.ts` (aiStatus) | `MessageService.listMessages`, AI pipeline, channel dedupe lookups | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1`, `patchMessageDeliveryV1`; late evidence: `applyMessageDeliveryEvidenceV1` (`PatchMessageDeliveryCommand.v2`) | Direct writes in `G/app/api/messages/{send-media,send-image,delete}/route.ts` |
 | `MessageAttachment` | attach-media adapters (v1, v2) | `G/app/api/attachments/[id]/route.ts` | `attachMessageMediaV1` / `V2` | Direct write in `send-media/route.ts` |
 | `MessageEventLog` | `G/lib/messageEvents.ts` (insert), event-log adapter (claim/complete/fail) | the claim only | `claimMessageEventV1` | — |
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
@@ -726,7 +735,9 @@ checks → `assertPrivateWhatsAppConversationConnectionV1` →
 `prisma.message.create` (status `sent`) → SSE → `switch(channel)` →
 `get{WhatsApp,Telegram,Max}ChannelDeliveryV1().sendText` → `message.update`
 (status, `externalId`, metadata) → SSE → `ConversationWorkflowService.onOutboundMessage`
-→ reachability record.
+→ reachability record. A typed result (S2) leaves the row `sent` with its evidence in
+`metadata.delivery`; reachability is recorded for it only on `provider_ack` /
+`provider_echo` (a legacy adapter's `delivered` records it as before).
 MAX leg: `sendMaxTransportTextV1`
 (`G/modules/max-channel/application/messaging-transport.ts`) → scraper
 `POST /send-message` → result validated by `validateMaxTextDeliveryResultV1`.
@@ -752,6 +763,11 @@ capability first and persist afterwards, with direct Prisma writes.
   row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
   lease holder may finalise it (I-11).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
+- late evidence: `applyMessageDeliveryEvidenceV1` matches the exact provider id
+  (another chat's, direction's or channel's row holding it is refused), else the
+  oldest unsettled same-text send in the chat from 10 min before `providerSentAt`
+  (+60 s tolerance); it only strengthens a row, settles it by compare-and-set, and
+  revokes an in-flight `retryLeaseId` so that attempt's answer never overwrites it.
 
 **F-13 Realtime**
 `G/lib/messageStreamBus.ts` (in-process map) →
@@ -1134,6 +1150,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   send stand; any other owner makes this row `failed` with `PROVIDER_ID_CONFLICT`
   and outcome `unknown`. — `providerIdOwnership` in `G/lib/MessageService.ts` —
   `shared-retry-safety.test.ts`, `shared-retry-safety.postgres.test.ts`.
+- **I-10c Delivery evidence only strengthens.** Repeated, out-of-order or weaker
+  evidence is `unchanged`; Telegram `device_receipt` is refused. —
+  `message-delivery-evidence-handler.ts`, `provenDeliveryRankV1` —
+  `message-delivery-evidence-handler.test.ts`, `delivery-evidence-contract.test.ts`,
+  `delivery-evidence-contract.postgres.test.ts`.
+- **I-10d A typed send is never `delivered` at send time.** Acceptance and a client
+  action both leave the row `sent`; only the recorded evidence tells them apart. —
+  `MessageService.send`, `deriveDeliveryStateV1` — `delivery-state-policy.test.ts`,
+  `delivery-evidence-contract.test.ts`.
 - **I-11 A retry is admitted once** (compare-and-set on `status='failed'` +
   `updatedAt`; finalisation fenced by lease id) —
   `G/lib/MessageService.provider-account.test.ts`.
