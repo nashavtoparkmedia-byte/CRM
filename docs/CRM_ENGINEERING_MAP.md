@@ -1239,7 +1239,7 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   application/authorization/claim — CHECKs and (partial) unique indexes in
   `20260910220000_add_compensation_monetary_core/migration.sql`;
   `compensationPayoutSlotDayV1` / `compensationSettlementBusinessDayV1` in
-  `COMP/compensation-policy.ts` — `COMP/*.postgres.test.ts`.
+  `COMP/compensation-policy.ts` — `COMP/*.postgres.test.ts`, `COMP/compensation-policy.test.ts`.
 - **I-29 Fixed lock order; Contact tables are never locked by compensation.** —
   `COMPENSATION_LOCK_ORDER_V1`, `COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1` in
   `COMP/compensation-policy.ts`.

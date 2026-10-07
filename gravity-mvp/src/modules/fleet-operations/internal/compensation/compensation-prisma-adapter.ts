@@ -663,9 +663,10 @@ export async function startCompensationPayoutV1(
 
         // The slot this preparation would hold is the ORDER's business day,
         // read from the claim's immutable `orderEndedAt`. A plain read, on
-        // purpose: the claim is row-locked only by finalize, where it ranks
-        // after the payout authorization, and a non-locking SELECT of an
-        // immutable column neither takes nor needs a place in the frozen order.
+        // purpose: the claim is row-locked by submit and by finalize, each at
+        // the claim's own rank below the payout authorization, and a
+        // non-locking SELECT of an immutable column neither takes nor needs a
+        // place in the frozen order.
         const claimDays = await tx.$queryRawUnsafe<Array<{ orderEndedAt: Date }>>(
             `SELECT "orderEndedAt" FROM "CompensationOrderClaim" WHERE "id" = $1`,
             application.orderClaimId,

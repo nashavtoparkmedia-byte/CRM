@@ -199,10 +199,13 @@ function insertFinalizedSlotRow(
 /** PostgreSQL reports a unique violation by its key columns; Prisma relays that detail. */
 const PERSON_DAY_KEY_VIOLATION = /23505[\s\S]*\("compensationPersonId", "intendedBusinessDay"\)/
 
-// Two orders on one Yekaterinburg day (10 Sep 15:00 and 17:00) and one on the day before.
+// Two orders on one Yekaterinburg day (10 Sep 14:00 and 15:00, both before the
+// default 16:00 submission) and one on the day before.
 const ORDER_DAY_A = { endedAt: new Date('2026-09-10T10:00:00.000Z'), verifiedAt: new Date('2026-09-10T10:05:00.000Z') }
-const ORDER_DAY_B = { endedAt: new Date('2026-09-10T12:00:00.000Z'), verifiedAt: new Date('2026-09-10T12:05:00.000Z') }
+const ORDER_DAY_B = { endedAt: new Date('2026-09-10T09:00:00.000Z'), verifiedAt: new Date('2026-09-10T09:05:00.000Z') }
 const PREVIOUS_ORDER_DAY = { endedAt: new Date('2026-09-09T10:00:00.000Z'), verifiedAt: new Date('2026-09-09T10:05:00.000Z') }
+/** A second park: the person limit is shared across every profile and park. */
+const OTHER_PARK = '45e30e9d6b824c608e5d28719cb19a6e'
 
 async function openPeriod(month: { year: number; month: number }, limitKopecks = 500_000): Promise<void> {
     const key = `${month.year}-${String(month.month).padStart(2, '0')}`
@@ -390,6 +393,10 @@ proof('compensation monetary core on real PostgreSQL', () => {
         const submitted = await submitCompensationApplicationV1(submitCommand())
         const started = await startPayout(submitted.applicationId)
         expect(started.intendedBusinessDay).toBe('2026-09-10')
+        // The instant that names the settlement day is verified against the
+        // database clock before anything is written.
+        await expectCode(finalizePayout(started, new Date(Date.now() + 26 * 60 * 60 * 1000)), 'payout_clock_skew')
+        expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationSettlement"`)).toBe(0)
         const window = [await databaseDayKey()]
         const finalizedAt = at(1)
         const settled = await finalizePayout(started, finalizedAt)
@@ -771,16 +778,18 @@ proof('compensation monetary core on real PostgreSQL', () => {
     })
 
     describe('one compensated cash order per person per ORDER business day', () => {
-        it('refuses a second order of the same order day once the first is paid, whatever day the manager pays on', async () => {
+        it('refuses a second order of the same order day once the first is paid, whatever day or park the manager pays from', async () => {
             const person = evidence()
             const first = await submitCompensationApplicationV1(submitCommand({ person, order: order(ORDER_DAY_A) }))
             const started = await startPayout(first.applicationId)
             expect(started.intendedBusinessDay).toBe('2026-09-10')
             expect((await finalizePayout(started)).status).toBe('settled')
 
-            // Submission never consumes the slot: the second claim is accepted
-            // and reserved, and only the payout start is refused.
-            const second = await submitCompensationApplicationV1(submitCommand({ person, order: order(ORDER_DAY_B) }))
+            // Submission never consumes the slot: the second claim, from another
+            // park, is accepted and reserved, and only the payout start is refused.
+            const second = await submitCompensationApplicationV1(submitCommand({
+                person, order: order({ ...ORDER_DAY_B, externalParkId: OTHER_PARK }),
+            }))
             expect(second.status).toBe('created')
             await expectCode(startPayout(second.applicationId, at(2)), 'daily_limit_reached')
             await expectSlotRows([{ intendedBusinessDay: '2026-09-10', state: 'finalized' }])
@@ -936,6 +945,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             const beforeMidnight = await submitCompensationApplicationV1(submitCommand({
                 person,
                 order: order({ endedAt: new Date('2026-09-10T18:59:00.000Z'), verifiedAt: new Date('2026-09-10T18:59:30.000Z') }),
+                submittedAt: new Date('2026-09-11T06:00:00.000Z'),
             }))
             const first = await startPayout(beforeMidnight.applicationId)
             expect(first.intendedBusinessDay).toBe('2026-09-10')
@@ -943,6 +953,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             const afterMidnight = await submitCompensationApplicationV1(submitCommand({
                 person,
                 order: order({ endedAt: new Date('2026-09-10T19:00:00.000Z'), verifiedAt: new Date('2026-09-10T19:00:30.000Z') }),
+                submittedAt: new Date('2026-09-11T06:00:00.000Z'),
             }))
             const second = await startPayout(afterMidnight.applicationId, at(2))
             expect(second.intendedBusinessDay).toBe('2026-09-11')

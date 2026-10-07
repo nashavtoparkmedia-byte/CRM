@@ -152,11 +152,18 @@ describe('one compensated cash order per person per order day', () => {
         expect(adapter).toContain('const intendedBusinessDay = compensationPayoutSlotDayV1(claimDays[0].orderEndedAt)')
         expect(adapter).not.toContain('compensationPayoutSlotDayV1(serverNow)')
         expect(adapter).not.toContain('compensationPayoutSlotDayV1(command.startedAt)')
-        // The settlement day: the database instant the finalize transaction verified.
-        expect(adapter).toContain('const serverNow = await assertAgreesWithDatabaseClock(tx, command.finalizedAt)')
-        expect(adapter).toContain('const settlementBusinessDay = compensationSettlementBusinessDayV1(serverNow)')
-        expect(adapter).toContain('amountKopecks, settlementBusinessDay,')
-        expect(adapter).toContain('businessDay: settlementBusinessDay,')
+        // The settlement day: the database instant the finalize transaction
+        // verified, pinned inside finalizeInTransaction itself.
+        const finalizeStart = adapter.indexOf('async function finalizeInTransaction(')
+        const finalizeEnd = adapter.indexOf('export async function releaseCompensationPayoutV1(')
+        expect(finalizeStart).toBeGreaterThan(0)
+        expect(finalizeEnd).toBeGreaterThan(finalizeStart)
+        const finalize = adapter.slice(finalizeStart, finalizeEnd)
+        expect(finalize).toContain('const serverNow = await assertAgreesWithDatabaseClock(tx, command.finalizedAt)')
+        expect(finalize).toContain('const settlementBusinessDay = compensationSettlementBusinessDayV1(serverNow)')
+        expect(finalize).toContain('amountKopecks, settlementBusinessDay,')
+        expect(finalize).toContain('businessDay: settlementBusinessDay,')
+        expect(finalize).not.toContain('compensationSettlementBusinessDayV1(command.finalizedAt)')
         expect(adapter).not.toContain('compensationSettlementBusinessDayV1(command.finalizedAt)')
         expect(adapter).not.toContain('authorization.intendedBusinessDay,')
         expect(adapter).not.toContain('businessDay: authorization.intendedBusinessDay')
