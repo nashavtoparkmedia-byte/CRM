@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
     COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1,
@@ -14,6 +16,8 @@ import {
     compensationFinalizeDecisionV1,
     compensationPayoutConsumesDaySlotV1,
     compensationPayoutHoldsLocksV1,
+    compensationPayoutSlotDayV1,
+    compensationSettlementBusinessDayV1,
     isCompensationPayoutAuthorizationStaleV1,
     type CompensationPayoutAuthorizationSnapshotV1,
 } from './compensation-policy'
@@ -115,11 +119,49 @@ describe('payout authorization states', () => {
         expect(compensationPayoutHoldsLocksV1('cancelled')).toBe(false)
     })
 
-    it('keeps the daily slot claimed once a payout has been finalized', () => {
+    it('keeps the order-day slot claimed once a payout has been finalized', () => {
         expect(compensationPayoutConsumesDaySlotV1('active')).toBe(true)
         expect(compensationPayoutConsumesDaySlotV1('unknown_outcome')).toBe(true)
         expect(compensationPayoutConsumesDaySlotV1('finalized')).toBe(true)
         expect(compensationPayoutConsumesDaySlotV1('cancelled')).toBe(false)
+    })
+})
+
+describe('one compensated cash order per person per order day', () => {
+    it('keys the slot by the Asia/Yekaterinburg business day the ORDER ended on', () => {
+        // 10 Sep 23:59 and 11 Sep 00:00 Yekaterinburg (UTC+5).
+        expect(compensationPayoutSlotDayV1(new Date('2026-09-10T18:59:00.000Z'))).toBe('2026-09-10')
+        expect(compensationPayoutSlotDayV1(new Date('2026-09-10T19:00:00.000Z'))).toBe('2026-09-11')
+        // A last-day order keeps its own day, however late it is submitted.
+        expect(compensationPayoutSlotDayV1(new Date('2026-08-31T13:00:00.000Z'))).toBe('2026-08-31')
+    })
+
+    it('names the settlement day from the database instant, not from the caller instant', () => {
+        // The caller runs 31 s ahead of the database, well inside the 5-minute
+        // skew the adapter tolerates, and is already on the next local day.
+        const serverNow = new Date('2026-09-10T18:59:59.000Z')
+        const callerFinalizedAt = new Date('2026-09-10T19:00:30.000Z')
+        expect(compensationSettlementBusinessDayV1(serverNow)).toBe('2026-09-10')
+        expect(compensationSettlementBusinessDayV1(callerFinalizedAt)).toBe('2026-09-11')
+    })
+
+    it('wires the adapter to the order day for the slot and to the database clock for the settlement day', () => {
+        const adapter = readFileSync(resolve(__dirname, 'compensation-prisma-adapter.ts'), 'utf8')
+        // The slot: the claim's immutable orderEndedAt, read without a row lock.
+        expect(adapter).toContain('`SELECT "orderEndedAt" FROM "CompensationOrderClaim" WHERE "id" = $1`')
+        expect(adapter).toContain('const intendedBusinessDay = compensationPayoutSlotDayV1(claimDays[0].orderEndedAt)')
+        expect(adapter).not.toContain('compensationPayoutSlotDayV1(serverNow)')
+        expect(adapter).not.toContain('compensationPayoutSlotDayV1(command.startedAt)')
+        // The settlement day: the database instant the finalize transaction verified.
+        expect(adapter).toContain('const serverNow = await assertAgreesWithDatabaseClock(tx, command.finalizedAt)')
+        expect(adapter).toContain('const settlementBusinessDay = compensationSettlementBusinessDayV1(serverNow)')
+        expect(adapter).toContain('amountKopecks, settlementBusinessDay,')
+        expect(adapter).toContain('businessDay: settlementBusinessDay,')
+        expect(adapter).not.toContain('compensationSettlementBusinessDayV1(command.finalizedAt)')
+        expect(adapter).not.toContain('authorization.intendedBusinessDay,')
+        expect(adapter).not.toContain('businessDay: authorization.intendedBusinessDay')
+        // The adapter never derives a business day by itself.
+        expect(adapter).not.toContain('compensationBusinessDayKeyV1')
     })
 })
 

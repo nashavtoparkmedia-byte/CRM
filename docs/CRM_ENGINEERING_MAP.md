@@ -1228,10 +1228,18 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 - **I-28 Monetary constraints are in the database**: budget
   `reserved + settled <= limit`; application amount bounds; attempt number 1..2;
   `PAID` ⇔ `paidAt`; one claim per `(provider, externalParkId, externalOrderId)`;
-  one pending application per person; one payout per person per business day; one
-  settlement per application/authorization/claim — CHECKs and (partial) unique
-  indexes in `20260910220000_add_compensation_monetary_core/migration.sql` —
-  `COMP/*.postgres.test.ts`.
+  one pending application per person; one compensated cash order per person per
+  ORDER business day (`Asia/Yekaterinburg` day of `CompensationOrderClaim.orderEndedAt`,
+  held as `CompensationPayoutAuthorization.intendedBusinessDay` by the partial unique
+  index `CompensationPayoutAuthorization_person_day_key` over `active / unknown_outcome /
+  finalized`; `cancelled` and reconciliation `not_paid` release it; submission, rejection,
+  idempotent replay and a failed transaction consume nothing; one person shares the limit
+  across every profile and park; `CompensationSettlement.businessDay` is the settlement
+  day from the database clock, not the slot); one settlement per
+  application/authorization/claim — CHECKs and (partial) unique indexes in
+  `20260910220000_add_compensation_monetary_core/migration.sql`;
+  `compensationPayoutSlotDayV1` / `compensationSettlementBusinessDayV1` in
+  `COMP/compensation-policy.ts` — `COMP/*.postgres.test.ts`.
 - **I-29 Fixed lock order; Contact tables are never locked by compensation.** —
   `COMPENSATION_LOCK_ORDER_V1`, `COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1` in
   `COMP/compensation-policy.ts`.
