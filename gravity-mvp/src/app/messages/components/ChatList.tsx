@@ -9,14 +9,24 @@ import { Virtuoso } from "react-virtuoso"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, Conversation, markChatRead, releaseStickyUnread } from "../hooks/useConversations"
 import { prefetchMessages } from "../hooks/useMessages"
-import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
+import { foundContactConversationsV1, hasProvenNoConversationV1, isExtraContactV1, useContactConversations } from "../hooks/useContactConversations"
+import { useContactLookupV1 } from "@/modules/contacts/public/v1/client-ui/use-contact-lookup"
+import { createHttpContactLookupClientV1 } from "@/modules/contacts/public/v1/client-ui/http-contact-lookup-client"
+import type { ContactLookupItemV1 } from "@/modules/contacts/public/v1/contact-lookup"
 import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
 import AiInternToggle from "./AiInternToggle"
 import CallToolbar from "@/modules/calling/public/v1/client-ui/CallToolbar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/infrastructure/ui/tooltip"
+
+// Extra Contacts are found through ContactLookup.v1; whether one is already
+// represented by a visible conversation comes only from Messaging's
+// ContactConversationsQuery.v1. A module-level client keeps the lookup's request
+// sequencing stable across renders.
+const contactLookupClient = createHttpContactLookupClientV1()
+const CONTACT_LOOKUP_LIMIT = 8
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
     const { conversations, setConversations, isLoading } = useConversations()
@@ -109,8 +119,14 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         }).catch(() => {})
     }
 
-    // FC-10: Contact Search API for broader results
-    const { results: contactResults, loading: contactSearchLoading } = useContactSearch(searchQuery)
+    // FC-10: Contact search for broader results — the same operator query, sent to
+    // ContactLookup.v1; the conversation context of what it finds comes from Messaging.
+    const contactLookup = useContactLookupV1(contactLookupClient, { limit: CONTACT_LOOKUP_LIMIT })
+    const requestContactLookup = contactLookup.request
+    useEffect(() => { requestContactLookup(searchQuery) }, [searchQuery, requestContactLookup])
+    const contactResults: ContactLookupItemV1[] = contactLookup.status === 'success' ? contactLookup.result?.items ?? [] : []
+    const contactConversations = useContactConversations(contactResults.map(contact => contact.contactId))
+    const contactSearchLoading = contactLookup.status === 'loading' || contactConversations.status === 'loading'
 
     // Filter Logic
     const filteredConversations = useMemo(() => {
@@ -253,13 +269,10 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             c.allChatIds?.forEach(id => visibleChatIds.add(id))
         }
 
-        // Filter out contacts whose chats are already visible
-        return contactResults.filter(contact => {
-            const chatIds = Object.values(contact.hasChat)
-            if (chatIds.length === 0) return true // no chat at all — show
-            return !chatIds.some(id => visibleChatIds.has(id))
-        })
-    }, [debouncedSearch, contactResults, filteredConversations])
+        // Only a Contact proven not to be represented by a visible conversation is
+        // offered: a truncated, missing or failed answer proves nothing.
+        return contactResults.filter(contact => isExtraContactV1(contactConversations, contact.contactId, visibleChatIds))
+    }, [debouncedSearch, contactResults, filteredConversations, contactConversations])
 
     // Keyboard Navigation
     useEffect(() => {
@@ -333,18 +346,20 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     }, [selectedChatId])
 
     // FC-10: Navigate to a contact from API search results
-    const handleContactSelect = (contact: ContactSearchResult) => {
+    const handleContactSelect = (contact: ContactLookupItemV1) => {
+        const entry = foundContactConversationsV1(contactConversations, contact.contactId)
+        if (!entry) return
         // If contact has any chat, navigate to the most recent one
-        const chatEntries = Object.entries(contact.hasChat)
-        if (chatEntries.length > 0) {
-            const chatId = chatEntries[0][1] // first chat id
-            handleChatSelect(chatId)
+        if (entry.latestConversationId !== null) {
+            handleChatSelect(entry.latestConversationId)
             return
         }
+        // Only a complete answer proves there is no chat to open.
+        if (entry.truncated) return
         // No chat exists — open NewChatPopover pre-filled would be complex,
         // so trigger start-conversation directly via API
         const channel = selectedChannels.size === 1 ? Array.from(selectedChannels)[0] : 'tg'
-        startContactConversation(contact.id, channel)
+        startContactConversation(entry.canonicalContactId, channel)
     }
 
     // Start conversation for contact without existing chat
@@ -1053,10 +1068,11 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                     )}
                                 </div>
                                 {extraContacts.map(contact => {
-                                    const phone = contact.phones.find(p => p.isPrimary)?.phone || contact.phones[0]?.phone
-                                    const chatCount = Object.keys(contact.hasChat).length
+                                    const phone = contact.primaryPhone
+                                    // «новый чат» states a proven absence of any conversation, not a channel identity.
+                                    const provenNoChat = hasProvenNoConversationV1(contactConversations, contact.contactId)
                                     return (
-                                        <div key={contact.id} className="px-[2px] py-0.5">
+                                        <div key={contact.contactId} className="px-[2px] py-0.5">
                                             <button
                                                 onClick={() => handleContactSelect(contact)}
                                                 className="w-full text-left flex items-center gap-3 px-3 h-[64px] rounded-xl hover:bg-[#F0F2F5] transition-all"
@@ -1067,10 +1083,10 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="font-semibold text-[13px] text-[#111] truncate">
-                                                            {contact.displayName || "Без имени"}
+                                                            {contact.displayName}
                                                         </span>
-                                                        {chatCount === 0 && (
-                                                            <span className="text-[9px] font-semibold text-orange-500 bg-orange-50 px-1 py-px rounded">новый</span>
+                                                        {provenNoChat && (
+                                                            <span data-testid="new-chat-hint" className="text-[9px] font-semibold text-orange-500 bg-orange-50 px-1 py-px rounded">новый чат</span>
                                                         )}
                                                     </div>
                                                     <div className="flex items-center gap-1.5 mt-0.5">
