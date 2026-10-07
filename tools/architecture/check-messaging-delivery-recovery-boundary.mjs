@@ -33,7 +33,7 @@ const exactConsumerImports = [
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
 const executableDigests = {
     recoverStuckMessages: '46ef9e2894fcec22222bde690bda0e420b25ca4dc4fee7bbf85b45da254fadb0',
-    retrySend: '17b6454a2482e2c6ca102b3f0f37361f456a6d1727cb7092dce2a4ff07e066e1',
+    retrySend: 'b5984ec86ccaf1512c5910f98054509cf02deb75d10d966cd95e970c5deb422d',
     sendReachabilityBlock: 'cee5e85ebaf2c10f76453683d850e645755d9664489d4acbcb1af3b9ba99be76',
 }
 
