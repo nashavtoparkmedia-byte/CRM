@@ -681,6 +681,52 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
     })
 
+    it('serves a last-day order through its 72 h grace after the month ended, charging the first month', async () => {
+        await seedPerson()
+        // The person was hired in September; the real-time fixture month is
+        // irrelevant here, so the hire is pinned and September is opened.
+        await database.$executeRawUnsafe(
+            `UPDATE "Driver" SET "yandexHireDate" = $2 WHERE "id" = $1`,
+            DRIVER_ID, new Date('2026-09-05T06:00:00.000Z'),
+        )
+        await openPeriod({ year: 2026, month: 9 })
+        const lastDayOrderId = 'e'.repeat(32)
+        const ordinaryOrderId = 'g'.repeat(32)
+        await ingestCashOrderPageV1([
+            // 30 September 23:30 Yekaterinburg: the last calendar day of the hire month.
+            fleetOrder({ id: lastDayOrderId, short_id: 3982095, ended_at: '2026-09-30T18:30:00.000Z' }),
+            fleetOrder({ id: ordinaryOrderId, short_id: 3982096, ended_at: '2026-09-12T10:00:00.000Z' }),
+        ], CONTEXT, ingestionPort())
+
+        // 2 October: the month is over; the last-day order is inside its grace.
+        const graceNow = new Date('2026-10-02T12:00:00.000Z')
+        const section = await compensationSectionViewV1(PROOF, port, ingestion, graceNow)
+        expect(section).toMatchObject({ available: true, firstMonthKey: '2026-09', remainingBudgetKopecks: 500_000 })
+        if (!section.available) return
+        expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId])
+
+        const created = await submitPilotApplicationV1(submitInput(randomUUID(), lastDayOrderId), port, ingestion, graceNow)
+        expect(created).toMatchObject({ submitted: true, amountKopecks: 30_000, status: 'created' })
+        const claims = await database.$queryRawUnsafe<Array<{ submissionDeadline: Date; deadlineBasis: string; budgetPeriodKey: string }>>(
+            `SELECT "submissionDeadline","deadlineBasis","budgetPeriodKey" FROM "CompensationOrderClaim"`)
+        expect(claims).toHaveLength(1)
+        expect(claims[0]).toMatchObject({ deadlineBasis: 'last_day_grace', budgetPeriodKey: '2026-09' })
+        expect(new Date(claims[0].submissionDeadline).getTime()).toBe(new Date('2026-10-03T18:30:00.000Z').getTime())
+        expect(Number((await periodRow('2026-09')).reservedKopecks)).toBe(30_000)
+
+        // The ordinary September order closed with the month: it is not listed,
+        // so the submit refuses it before anything reaches C1.
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), ordinaryOrderId), port, ingestion, graceNow))
+            .toEqual({ submitted: false, refusal: 'order_not_in_catalogue' })
+
+        // At the deadline the month is over in every sense the product has,
+        // and the driver still sees what they submitted.
+        const atDeadline = await compensationSectionViewV1(PROOF, port, ingestion, new Date('2026-10-03T18:30:00.000Z'))
+        expect(atDeadline).toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        expect(atDeadline.applications).toHaveLength(1)
+        expect(await count('CompensationApplication')).toBe(1)
+    })
+
     it('answers a second claim while one is pending with the monetary-core refusal, writing nothing', async () => {
         await seedPerson()
         await ingestCashOrderPageV1([fleetOrder({ id: 'c'.repeat(32), short_id: 3982092 })], CONTEXT, ingestionPort())

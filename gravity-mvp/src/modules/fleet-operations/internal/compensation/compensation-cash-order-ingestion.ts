@@ -14,8 +14,6 @@
 
 import {
     compensationCalendarMonthV1,
-    compensationMonthEndInstantV1,
-    compensationMonthStartInstantV1,
     compensationPeriodKeyV1,
 } from './compensation-calendar'
 import {
@@ -25,7 +23,8 @@ import {
     type VerifiedCashOrderProjectionV1,
 } from './compensation-cash-order-projection'
 import { compensationDerivedIdV1 } from './compensation-identity'
-import { compensationPilotEligibilityV1, type CompensationEligibilityFactsV1 } from './compensation-eligibility'
+import { compensationPilotFirstMonthV1, type CompensationEligibilityFactsV1 } from './compensation-eligibility'
+import { compensationSubmissionDeadlineV1, isSubmissionWindowOpenV1 } from './compensation-submission-window'
 
 /**
  * Stable row identity. Derived from the provider triple only, so the same trip
@@ -92,36 +91,61 @@ export type CashOrderCatalogueV1<T extends StoredCashOrderV1 = StoredCashOrderV1
     }
 
 /**
+ * Whether one order can still be submitted at `now`, by the monetary core's
+ * own rule: until the end of the order's business month, or for 72 hours from
+ * completion when the order completed on that month's last calendar day. This
+ * is the same deadline C1 stores on the claim and refuses against, read here
+ * so the list never offers what the submit would refuse.
+ */
+export function cashOrderSubmissionOpenV1(order: { endedAt: Date }, now: Date): boolean {
+    return isSubmissionWindowOpenV1(now, compensationSubmissionDeadlineV1(order.endedAt))
+}
+
+/**
  * The orders a driver may claim against right now.
  *
- * Eligibility is evaluated first and the catalogue is empty unless it passes,
- * so an ineligible driver is never shown a list they cannot act on. Orders are
- * then confined to the driver's first calendar month in the park, measured on
- * the same Yekaterinburg calendar the budget period uses, so the two can never
- * disagree about which month an order belongs to.
+ * The facts gate is evaluated first and the catalogue is empty unless it
+ * passes, so an ineligible driver is never shown a list they cannot act on.
+ * Orders are then confined to the driver's first calendar month in the park,
+ * measured on the same Yekaterinburg calendar the budget period uses, so the
+ * two can never disagree about which month an order belongs to, and each is
+ * kept only while its own submission window is open.
+ *
+ * Inside the first month that last test changes nothing: every first-month
+ * order's deadline is the month's end or later. Once the month has ended it is
+ * what keeps a last-day order claimable through its 72-hour grace, and nothing
+ * else: an ordinary order of the month closed with the month, and the month
+ * itself is reported as over once no order is left in its grace. The driver's
+ * window is never widened; the order's earned window is simply not thrown away
+ * at the calendar rollover.
  */
 export function cashOrderCatalogueV1<T extends StoredCashOrderV1>(
     facts: CompensationEligibilityFactsV1,
     storedOrders: readonly T[],
     now: Date,
 ): CashOrderCatalogueV1<T> {
-    const eligibility = compensationPilotEligibilityV1(facts, now)
-    if (!eligibility.eligible) {
-        return { eligible: false, reason: eligibility.reason, orders: [] }
-    }
+    const first = compensationPilotFirstMonthV1(facts)
+    if (!first.ok) return { eligible: false, reason: first.reason, orders: [] }
 
-    const monthStart = compensationMonthStartInstantV1(eligibility.firstMonth).getTime()
-    const monthEnd = compensationMonthEndInstantV1(eligibility.firstMonth).getTime()
+    const monthStart = first.windowStartsAt.getTime()
+    const monthEnd = first.windowEndsAt.getTime()
+    if (now.getTime() < monthStart) {
+        return { eligible: false, reason: 'outside_first_calendar_month', orders: [] }
+    }
 
     const orders = storedOrders
         .filter((order) => {
             const ended = order.endedAt.getTime()
-            return ended >= monthStart && ended < monthEnd
+            return ended >= monthStart && ended < monthEnd && cashOrderSubmissionOpenV1(order, now)
         })
         .slice()
         .sort((left, right) => right.endedAt.getTime() - left.endedAt.getTime())
 
-    return { eligible: true, firstMonthKey: eligibility.firstMonthKey, orders }
+    if (now.getTime() >= monthEnd && orders.length === 0) {
+        return { eligible: false, reason: 'outside_first_calendar_month', orders: [] }
+    }
+
+    return { eligible: true, firstMonthKey: first.firstMonthKey, orders }
 }
 
 /** The budget period an order belongs to: its own month, not the submission month. */
