@@ -456,6 +456,7 @@ describe('Mobile Text Reply v1 — owner-side send and retry semantics', () => {
                     retryable: false,
                     deliveryOutcome: null,
                     errorSchemaVersion: null,
+                    deliveryState: 'delivered',
                 },
             })
             expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
