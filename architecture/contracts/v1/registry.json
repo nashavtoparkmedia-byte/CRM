@@ -179,6 +179,7 @@
     {
       "capabilities": [
         "ContactCardSummary.v1",
+        "ContactCommunicationPermissionQuery.v1",
         "ContactDisplayPolicy.v1",
         "ContactIdentityConflictView.v1",
         "ContactIdentityMaintenance.v1",

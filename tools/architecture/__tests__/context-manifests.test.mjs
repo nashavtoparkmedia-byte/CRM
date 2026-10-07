@@ -36,7 +36,7 @@ test('bounded contexts cover modules, owned data, dependencies and foreign write
     technicalModules: 27,
     ownedPaths: 95,
   });
-  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 17, verifiedEntrypoints: 54, verifiedManifests: 16, verifiedOutputs: 4 });
+  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 17, verifiedEntrypoints: 55, verifiedManifests: 16, verifiedOutputs: 4 });
 });
 
 test('duplicate technical-module assignment fails closed', () => {
