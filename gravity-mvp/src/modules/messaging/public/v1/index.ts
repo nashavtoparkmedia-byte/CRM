@@ -46,6 +46,8 @@ export { createEnsureConversationContactLinkHandlerV1 } from './conversation-con
 export type { ConversationContactLinkPersistencePortV1 } from './conversation-contact-link-handler'
 export { createResolveConversationContactHandlerV1 } from './resolve-conversation-contact-handler'
 export type { ConversationContactRecordV1, ResolveConversationContactPortV1 } from './resolve-conversation-contact-handler'
+export { createContactConversationsQueryHandlerV1 } from './contact-conversations-query-handler'
+export type { ContactConversationRowV1, ContactConversationsPortV1 } from './contact-conversations-query-handler'
 export { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from './contact-conversation-handler'
 export type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
 export { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-handler'
@@ -116,6 +118,7 @@ export {
     receiveMessageV1,
     replaceExternalMessageV1,
     resolveConversationContactV1,
+    contactConversationsV1,
     resolveConversationV1,
     sendMessageV1,
     syncCallTimelineV1,
