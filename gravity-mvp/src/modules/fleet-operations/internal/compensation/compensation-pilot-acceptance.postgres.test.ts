@@ -705,6 +705,29 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         if (!section.available) return
         expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId])
 
+        // A stale last-day claim asks ingestion for a confirmation that carries
+        // the order's own completion instant, at the last moment of its window.
+        const lastMoment = new Date('2026-10-03T18:29:59.999Z')
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationCashOrder" SET "observedAt" = $1 WHERE "externalOrderId" = $2`,
+            new Date((await databaseNow()).getTime() - 3_600_001), lastDayOrderId,
+        )
+        const staleIngestion = pilotIngestion()
+        expect(await checkPilotOrderV1({ ...PROOF, externalOrderId: lastDayOrderId, scopeKey: SCOPE_KEY, retry: false }, port, staleIngestion, lastMoment))
+            .toMatchObject({ state: 'checking' })
+        expect(staleIngestion.requestOrderConfirmation).toHaveBeenCalledWith({
+            externalParkId: PARK,
+            dayKey: '2026-09-30',
+            externalOrderId: lastDayOrderId,
+            providerBookedAt: null,
+            endedAt: new Date('2026-09-30T18:30:00.000Z'),
+        })
+        // Yandex confirms it again (as the scheduled check would): fresh for the submit below.
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationCashOrder" SET "observedAt" = $1 WHERE "externalOrderId" = $2`,
+            CONTEXT.observedAt, lastDayOrderId,
+        )
+
         const created = await submitPilotApplicationV1(submitInput(randomUUID(), lastDayOrderId), port, ingestion, graceNow)
         expect(created).toMatchObject({ submitted: true, amountKopecks: 30_000, status: 'created' })
         const claims = await database.$queryRawUnsafe<Array<{ submissionDeadline: Date; deadlineBasis: string; budgetPeriodKey: string }>>(

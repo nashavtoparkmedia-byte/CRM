@@ -399,6 +399,7 @@ describe('checking the order a driver chose', () => {
             dayKey: '2026-09-12',
             externalOrderId: ORDER.externalOrderId,
             providerBookedAt: ORDER.providerBookedAt,
+            endedAt: ORDER.endedAt,
         })
     })
 
@@ -620,15 +621,46 @@ describe('a last-day order after the first month has ended', () => {
     })
 
     it('is claimable until the deadline and refused at it and after it', async () => {
-        const p = port({ findCashOrders: vi.fn(async () => [ORDER, LAST_DAY_ORDER]) })
-        const lastMoment = await compensationSectionViewV1(PROOF, p, ingestion(), new Date(GRACE_DEADLINE.getTime() - 1))
+        // Stale, so that the only thing stopping a confirmation request at the
+        // deadline is the closed window, never an already-fresh observation.
+        const staleLastDay: PilotCatalogueOrderV1 = { ...LAST_DAY_ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }
+        const p = port({ findCashOrders: vi.fn(async () => [ORDER, staleLastDay]) })
+        const i = ingestion()
+        const lastMoment = await compensationSectionViewV1(PROOF, p, i, new Date(GRACE_DEADLINE.getTime() - 1))
         expect(lastMoment.available).toBe(true)
         for (const now of [GRACE_DEADLINE, new Date(GRACE_DEADLINE.getTime() + 1)]) {
-            expect(await compensationSectionViewV1(PROOF, p, ingestion(), now))
+            expect(await compensationSectionViewV1(PROOF, p, i, now))
                 .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
-            expect(await submitPilotApplicationV1(SUBMIT_LAST_DAY, p, ingestion(), now))
+            expect(await submitPilotApplicationV1(SUBMIT_LAST_DAY, p, i, now))
                 .toEqual({ submitted: false, refusal: 'outside_first_calendar_month' })
         }
+        expect(p.submitApplication).not.toHaveBeenCalled()
+        // No provider confirmation is ever asked for a claim whose window has closed.
+        expect(i.requestOrderConfirmation).not.toHaveBeenCalled()
+    })
+
+    it('asks for a stale last-day claim to be confirmed at the last moment, carrying the order\'s own completion instant', async () => {
+        const stale: PilotCatalogueOrderV1 = { ...LAST_DAY_ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }
+        const p = port({ findCashOrders: vi.fn(async () => [stale]) })
+        const i = ingestion()
+        expect(await submitPilotApplicationV1(SUBMIT_LAST_DAY, p, i, new Date(GRACE_DEADLINE.getTime() - 1)))
+            .toEqual({ submitted: false, refusal: 'order_confirmation_pending' })
+        expect(i.requestOrderConfirmation).toHaveBeenCalledWith({
+            externalParkId: PARK,
+            dayKey: '2026-09-30',
+            externalOrderId: LAST_DAY_ORDER.externalOrderId,
+            providerBookedAt: LAST_DAY_ORDER.providerBookedAt,
+            endedAt: LAST_DAY_ORDER.endedAt,
+        })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('treats a window that closed between the listing and the request as a failed check, never as a claim', async () => {
+        const stale: PilotCatalogueOrderV1 = { ...LAST_DAY_ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }
+        const p = port({ findCashOrders: vi.fn(async () => [stale]) })
+        const i = ingestion({ requestOrderConfirmation: vi.fn(async () => ({ status: 'not_scheduled' as const, reason: 'order_window_closed' })) })
+        expect(await submitPilotApplicationV1(SUBMIT_LAST_DAY, p, i, new Date(GRACE_DEADLINE.getTime() - 1)))
+            .toEqual({ submitted: false, refusal: 'order_check_failed' })
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 

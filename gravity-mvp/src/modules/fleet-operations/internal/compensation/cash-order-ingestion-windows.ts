@@ -251,7 +251,13 @@ export function targetedDayWindowV1(dayKey: string, dbNow: Date): BookingWindowV
     return to > from ? { from: at(from), to: at(to) } : null
 }
 
-/** Whether a day confirmation lies inside the reconciled claim horizon. */
+/**
+ * Whether a day confirmation lies inside the reconciled claim horizon. This is
+ * the generic, day-level reach of background reconciliation. A confirmation
+ * requested on behalf of a specific claim is additionally admitted by that
+ * order's own submission window (compensation-submission-window), decided in
+ * the ingestion runtime; this function never widens for it.
+ */
 export function targetedDayWithinHorizonV1(dayKey: string, dbNow: Date): boolean {
     return businessDayStartV1(dayKey).getTime() - W.BOOKING_MARGIN_MS >= reconciliationFloorV1(dbNow).getTime()
 }
