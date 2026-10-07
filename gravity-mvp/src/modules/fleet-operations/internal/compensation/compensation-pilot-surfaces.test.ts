@@ -46,9 +46,15 @@ describe('the telegram scene is reachable and registered', () => {
 
     it('interrupts any active scene or connection mode, so the entry works from every state', () => {
         // Without this, an abandoned compensation step or the connection flow
-        // swallows the tap before the main-menu fallback ever sees it.
+        // swallows the tap before the main-menu fallback ever sees it. The
+        // label reaches this pre-Stage list only through the release gate
+        // helper, never as a literal: a hidden entry must not interrupt an
+        // unrelated flow either, so the gated spread is the shape pinned here.
         const staticButtons = BOT.slice(BOT.indexOf('const staticButtons = ['), BOT.indexOf('];', BOT.indexOf('const staticButtons = [')))
-        expect(staticButtons).toContain("'💰 Компенсация наличных'")
+        expect(staticButtons).toContain('...startHandler.compensationEntryButtons()')
+        expect(staticButtons).not.toContain("'💰 Компенсация наличных'")
+        expect(MENU).toContain("const COMPENSATION_ENTRY_LABEL = '💰 Компенсация наличных'")
+        expect(MENU).toContain('config.compensationEntryEnabled ? [COMPENSATION_ENTRY_LABEL] : []')
     })
 
     it('is registered on the bot stage', () => {
