@@ -56,6 +56,14 @@ import { createContactReachabilityEvidenceViewHandlerV1 } from '../public/v1/con
 import { legacyPrismaContactReachabilityEvidenceViewPortV1 } from '../public/v1/legacy-prisma-contact-reachability-evidence-view-adapter'
 import { createSearchContactsHandlerV1 } from '../public/v1/contact-lookup'
 import { legacyPrismaContactLookupPortV1 } from '../public/v1/legacy-prisma-contact-lookup-adapter'
+import {
+    createContactCommunicationPermissionQueryHandlerV1,
+    createSetContactCommunicationPolicyHandlerV1,
+} from '../public/v1/contact-communication-policy'
+import {
+    legacyPrismaContactCommunicationPolicyMutationPortV1,
+    legacyPrismaContactCommunicationPolicyReadPortV1,
+} from '../internal/legacy-prisma-contact-communication-policy-adapter'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -74,6 +82,8 @@ const getContactCardSummary = createContactCardSummaryHandlerV1(legacyPrismaCont
 const getContactIdentityConflictView = createContactIdentityConflictViewHandlerV1(legacyPrismaContactIdentityConflictViewPortV1)
 const getContactReachabilityEvidenceView = createContactReachabilityEvidenceViewHandlerV1(legacyPrismaContactReachabilityEvidenceViewPortV1)
 const searchContacts = createSearchContactsHandlerV1(legacyPrismaContactLookupPortV1)
+const getContactCommunicationPermission = createContactCommunicationPermissionQueryHandlerV1(legacyPrismaContactCommunicationPolicyReadPortV1)
+const setContactCommunicationPolicy = createSetContactCommunicationPolicyHandlerV1(legacyPrismaContactCommunicationPolicyMutationPortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
 export const attachContactIdentityV1 = (...args: Parameters<typeof attachContactIdentity>) => attachContactIdentity(...args)
@@ -114,3 +124,5 @@ export const getContactCardSummaryV1 = (...args: Parameters<typeof getContactCar
 export const getContactIdentityConflictViewV1 = (...args: Parameters<typeof getContactIdentityConflictView>) => getContactIdentityConflictView(...args)
 export const getContactReachabilityEvidenceViewV1 = (...args: Parameters<typeof getContactReachabilityEvidenceView>) => getContactReachabilityEvidenceView(...args)
 export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => searchContacts(...args)
+export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
+export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)

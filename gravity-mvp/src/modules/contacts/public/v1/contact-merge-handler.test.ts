@@ -255,6 +255,10 @@ function makeHarness(options: HarnessOptions = {}) {
       async composeContactState(sourceContactId, targetContactId, identityRemaps) {
         await stage('contacts.composeContactState', sourceContactId, targetContactId, identityRemaps)
       },
+      async composeCommunicationPolicy(sourceContactId, targetContactId, input) {
+        await stage('contacts.composeCommunicationPolicy', sourceContactId, targetContactId, input)
+        return { sourceBefore: null, survivorBefore: null, composed: null }
+      },
       async recordMerge(input) {
         await stage('contacts.recordMerge', input)
         return input.id
@@ -863,6 +867,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'contacts.movePhonesToContact',
       'contacts.reconcilePrimaryPhonesAfterMove',
       'contacts.composeContactState',
+      'contacts.composeCommunicationPolicy',
       'messaging.moveChatsToDriverContact',
       'messaging.attachUnlinkedContactChatsToDriver',
       'work.moveTasksToContact',
@@ -940,6 +945,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'contacts.movePhonesToContact',
       'contacts.reconcilePrimaryPhonesAfterMove',
       'contacts.composeContactState',
+      'contacts.composeCommunicationPolicy',
       'fleet.findDriverIdByYandexDriverId',
       'messaging.moveChatsToDriverContact',
       'work.moveTasksToContact',
@@ -950,7 +956,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'contacts.setMergedRedirect',
       'contacts.verifyOwnershipPostconditions',
     ])
-    expect(harness.committed[10].args).toEqual([
+    expect(harness.committed[11].args).toEqual([
       'source-contact',
       'target-contact',
       'target-driver-db-id',
@@ -1464,6 +1470,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'contacts.movePhonesToContact',
     'contacts.reconcilePrimaryPhonesAfterMove',
     'contacts.composeContactState',
+    'contacts.composeCommunicationPolicy',
     'messaging.moveChatsToDriverContact',
     'messaging.attachUnlinkedContactChatsToDriver',
     'work.moveTasksToContact',
@@ -1484,6 +1491,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'contacts.movePhonesToContact',
     'contacts.reconcilePrimaryPhonesAfterMove',
     'contacts.composeContactState',
+    'contacts.composeCommunicationPolicy',
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToDriverContact',
     'work.moveTasksToContact',
@@ -1504,6 +1512,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'contacts.movePhonesToContact',
     'contacts.reconcilePrimaryPhonesAfterMove',
     'contacts.composeContactState',
+    'contacts.composeCommunicationPolicy',
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToContact',
     'work.moveTasksToContact',

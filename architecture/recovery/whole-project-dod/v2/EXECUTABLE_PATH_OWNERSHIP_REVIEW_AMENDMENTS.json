@@ -799,6 +799,36 @@
         "rationale_changes": 0,
         "new_tracked_surfaces_placed_by_existing_rules": 12
       }
+    },
+    {
+      "amendment_id": "contact-identity-contact-communication-restrictions-foundation-20261008",
+      "reviewed_at": "2026-10-08T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_COMMUNICATION_RESTRICTIONS_CANDIDATE_OWNERSHIP_REVIEW_20261008",
+      "role": "CANDIDATE_EXECUTOR_DENOMINATOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_CONTACT_COMMUNICATION_RESTRICTIONS_FOUNDATION_IMPLEMENT",
+      "reason": "The contact communication restrictions foundation, reconciled onto the epic after M3A6D landed, adds exactly ten tracked executable surfaces and moves no existing surface between owners. Eight sit under the contacts owned paths: the contract module gravity-mvp/src/contracts/contacts/v1/contact-communication-policy-contracts.ts with its proof; the domain gravity-mvp/src/modules/contacts/public/v1/contact-communication-policy.ts with its proof; and under gravity-mvp/src/modules/contacts/internal the Prisma store and ports legacy-prisma-contact-communication-policy-adapter.ts with its proof, the transaction-bound lineage port prisma-contact-lineage-port.ts and the isolated-PostgreSQL proof contact-communication-policy.postgres.test.ts. One is the boundary control tools/architecture/check-contact-communication-policy-boundary.mjs, placed by the established architecture-tooling cohort precedent. One is the expand-only source migration gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql, placed by the established migration cohort precedent. Every new surface is placed by an existing rule: no assignment, lifecycle, functional owner, governed exclusion or exact inventory transition is created, altered or removed, and no exact inventory drifted. Existing surfaces changed bytes without changing ownership and with no reviewed source-hash binding: the contacts-owned merge handler, merge adapter, recovery adapter, operations composition, public barrel and contracts index gain the policy wiring, and their proofs follow.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2596,
+        "tracked_inventory_sha256": "283e585bf550e0bf1bee55a91493725bc9336d9d52cf4ad718a59bf5d8c8372b",
+        "coverage_sha256": "bed3076e96100d27abd90e2ac20b7b26ea1cda3f136bdd98d3f48fd75364b3b6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2606,
+        "tracked_inventory_sha256": "fd34af48bded50f6e8c49db2ee9e49eb0c1280b8f5a02199c5d8c16ecce52fe6",
+        "coverage_sha256": "8bb6c8a23965ffa0c65becc71f3bf34865c34f76892e5f39e2aaad3eb1ef6548"
+      },
+      "source_hash_rebinds": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0,
+        "new_tracked_surfaces_placed_by_existing_rules": 10
+      }
     }
   ]
 }

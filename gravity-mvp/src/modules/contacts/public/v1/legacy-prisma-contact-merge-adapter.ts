@@ -18,6 +18,11 @@ import {
   phoneEvidenceState,
 } from './contact-evidence-state'
 import { composeContactCustomFieldsV1 } from '../../internal/contact-merge-state-composer'
+import {
+  composeContactCommunicationPolicyV1,
+  restrictionStateOfV1,
+} from './contact-communication-policy'
+import { makePrismaContactCommunicationPolicyStoreV1 } from '../../internal/legacy-prisma-contact-communication-policy-adapter'
 
 const contactMergeInclude = {
   phones: true,
@@ -563,6 +568,38 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
         })
       },
 
+      async composeCommunicationPolicy(sourceContactId, targetContactId, input) {
+        const store = makePrismaContactCommunicationPolicyStoreV1(transaction)
+        const sourceBefore = await store.readPolicy(sourceContactId)
+        const survivorBefore = await store.readPolicy(targetContactId)
+        const composedState = composeContactCommunicationPolicyV1(sourceBefore, survivorBefore)
+        if (composedState === null) return { sourceBefore: null, survivorBefore: null, composed: null }
+        const expectedVersion = survivorBefore?.version ?? 0
+        const version = expectedVersion + 1
+        await store.writePolicy({
+          contactId: targetContactId,
+          expectedVersion,
+          version,
+          restriction: composedState,
+          actor: input.actor,
+        })
+        await store.appendEvent({
+          contactId: targetContactId,
+          cause: 'merge',
+          version,
+          previousVersion: survivorBefore?.version ?? null,
+          before: survivorBefore === null ? null : restrictionStateOfV1(survivorBefore),
+          after: composedState,
+          actor: input.actor,
+          reason: `contact_merge:${input.mergeId}`,
+          mutationRequestId: null,
+          requestDigest: null,
+          mergeId: input.mergeId,
+          sourceContactId,
+        })
+        return { sourceBefore, survivorBefore, composed: { ...composedState, version } }
+      },
+
       async recordMerge(input) {
         const recoveryState = input.automated ? 'recoverable' : 'clear'
         const snapshotBefore = {
@@ -572,6 +609,7 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
             evidenceRoots: input.evidenceRoots,
             survivorEvaluation: input.survivorEvaluation,
             recoveryState,
+            communicationPolicy: input.communicationPolicy,
           },
         } as unknown as Prisma.InputJsonValue
         const mergeResult = await transaction.contactMerge.create({

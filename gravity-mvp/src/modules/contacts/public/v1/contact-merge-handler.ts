@@ -14,6 +14,11 @@ import {
   createRecoverAutomatedContactMergeHandlerV1,
   type AutomatedMergeRecoveryUnitOfWorkV1,
 } from './automated-contact-merge-recovery'
+import {
+  CONTACT_COMMUNICATION_MERGE_ACTOR_FALLBACK_V1,
+  contactCommunicationPolicyActorV1,
+  type ContactMergeCommunicationPolicyEvidenceV1,
+} from './contact-communication-policy'
 
 export type ContactMergeErrorCodeV1 =
   | 'CONTACT_NOT_FOUND'
@@ -183,6 +188,19 @@ export interface ContactMergeContactsRepositoryV1
     targetContactId: string,
     identityRemaps: ReadonlyArray<MergeIdentityRemapV1>,
   ): Promise<void>
+  /**
+   * Composes the survivor's standing communication restriction as the OR of
+   * both sides (deny wins), writes it at the survivor's next policy version
+   * with a `merge` event naming this merge record, and returns the evidence the
+   * merge record stores so automated recovery can prove what it did. A merge of
+   * two Contacts without a policy writes nothing and returns null evidence. The
+   * merged-away Contact's own policy row is never touched.
+   */
+  composeCommunicationPolicy(
+    sourceContactId: string,
+    targetContactId: string,
+    input: { mergeId: string; actor: string },
+  ): Promise<ContactMergeCommunicationPolicyEvidenceV1>
   recordMerge(input: {
     id: string
     survivorId: string
@@ -194,6 +212,7 @@ export interface ContactMergeContactsRepositoryV1
     survivorEvaluation: unknown
     automated: boolean
     evidenceRoots: string[]
+    communicationPolicy: ContactMergeCommunicationPolicyEvidenceV1
   }): Promise<string>
   archiveContact(contactId: string): Promise<void>
   setMergedRedirect(contactId: string, survivorId: string): Promise<void>
@@ -571,15 +590,22 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
           })
         }
         const snapshot = makeSnapshot(loser, winner)
+        // The merge record id is fixed before the owned state moves so the
+        // policy merge event can name the record it belongs to.
+        const plannedMergeRecordId = generateMergeRecordId()
         const identityRemaps = await moveOwnedState(repositories, loser, winner)
         await contacts.composeContactState(loser.id, winner.id, identityRemaps)
+        const communicationPolicy = await contacts.composeCommunicationPolicy(loser.id, winner.id, {
+          mergeId: plannedMergeRecordId,
+          actor: contactCommunicationPolicyActorV1(parsed.mergedBy, CONTACT_COMMUNICATION_MERGE_ACTOR_FALLBACK_V1),
+        })
         await messaging.moveChatsToDriverContact(loser.id, winner.id, driver.id)
         await messaging.attachUnlinkedContactChatsToDriver(winner.id, driver.id)
         await work.moveTasksToContact(loser.id, winner.id)
         await calling.moveCallsToContact(loser.id, winner.id)
         await fleet.moveDriverProfilesToContact(loser.id, winner.id)
         const mergeRecordId = await contacts.recordMerge({
-          id: generateMergeRecordId(),
+          id: plannedMergeRecordId,
           survivorId: winner.id,
           mergedId: loser.id,
           mergedBy: parsed.mergedBy,
@@ -589,6 +615,7 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
           survivorEvaluation: evaluation,
           automated: false,
           evidenceRoots: [],
+          communicationPolicy,
         })
         await contacts.archiveContact(loser.id)
         await contacts.setMergedRedirect(loser.id, winner.id)
@@ -726,8 +753,15 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
       const winner = evaluation.survivorId === source.id ? source : target
       const loser = evaluation.mergedId === source.id ? source : target
       const snapshot = makeSnapshot(loser, winner)
+      // The merge record id is fixed before the owned state moves so the
+      // policy merge event can name the record it belongs to.
+      const plannedMergeRecordId = generateMergeRecordId()
       const identityRemaps = await moveOwnedState(repositories, loser, winner)
       await contacts.composeContactState(loser.id, winner.id, identityRemaps)
+      const communicationPolicy = await contacts.composeCommunicationPolicy(loser.id, winner.id, {
+        mergeId: plannedMergeRecordId,
+        actor: contactCommunicationPolicyActorV1(parsed.mergedBy, CONTACT_COMMUNICATION_MERGE_ACTOR_FALLBACK_V1),
+      })
       const composedYandexDriverId = winner.yandexDriverId ?? loser.yandexDriverId
       const targetDriverId = composedYandexDriverId
         ? await fleet.findDriverIdByYandexDriverId(composedYandexDriverId)
@@ -741,7 +775,7 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
       await calling.moveCallsToContact(loser.id, winner.id)
       await fleet.moveDriverProfilesToContact(loser.id, winner.id)
       const mergeRecordId = await contacts.recordMerge({
-        id: generateMergeRecordId(),
+        id: plannedMergeRecordId,
         survivorId: winner.id,
         mergedId: loser.id,
         mergedBy: parsed.mergedBy,
@@ -751,6 +785,7 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
         survivorEvaluation: evaluation,
         automated: Boolean(parsed.automation),
         evidenceRoots: automationEvidenceRoots,
+        communicationPolicy,
       })
       await contacts.archiveContact(loser.id)
       await contacts.setMergedRedirect(loser.id, winner.id)

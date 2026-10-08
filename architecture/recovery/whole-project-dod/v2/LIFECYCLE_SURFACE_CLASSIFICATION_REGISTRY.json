@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 723,
+    "total_entries": 725,
     "test": 35,
     "dead_historical": 92,
-    "migration_only": 84,
-    "active_operational": 507,
+    "migration_only": 85,
+    "active_operational": 508,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6636,6 +6636,25 @@
       "rationale": "Active architecture control-plane surface for the M3A6A reusable Contacts lookup; approved path is a bounded read-only boundary control that pins the exact ContactLookupItemV1 and ContactLookupResultV1 field sets, the absence of any unbounded count, the absence of provider external id, provider account and target ids, transport, connection, session, conversation route, chat, message, reachability, conflict and raw metadata vocabulary from both the contract and its adapter, the reuse of the canonical Contacts display policy, confirmed-person accessor, phone evidence and phone normalization rather than a second implementation of any of them, the existence of the provider-neutral display projection inside ContactDisplayPolicy together with the absence of the provider-external-id fallback from its cascade and the unchanged legacy fallback of the canonical summary, the single shared name-precedence helper and its two generic-fallback consumers, the declared rank-class precedence with collection bounded at limit plus one so a lower class cannot hide a higher one before truncation, the locale-independent NFKC sort key, the single Contacts-owned database reader and the three models it may touch, the absence of any write, raw SQL, schema reference or provider probe, the absence of any Messaging or foreign-domain import, the materialization of the already-declared ContactLookup.v1 capability with no duplicate ContactSelector.v1 concept, the wiring of the capability to its Contacts adapter, and the byte-identical legacy contact-search route and hook including their operator-only external-id search. It also executes the lookup and display-policy proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-communication-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the Contact Identity contact communication restrictions foundation; approved path is a bounded read-only boundary control that pins the exact fail-closed ContactCommunicationPermissionQuery.v1 and SetContactCommunicationPolicyCommand.v1 shapes and the message/voice class list, the absence of provider, channel, transport, conversation, reachability and customFields vocabulary from the contracts, the domain and the adapter, the reuse of the existing Contact lineage handler bound to the transaction client rather than a second redirect walk, the replay-first mutation decision order with its sha256 request digest and compare-and-set version advance, the Contacts ownership transaction and row lock around every mutation, the single Contacts store that persists the two policy models on an attributed receiver with no upsert and no delete, the absence of the mutation path from the Contacts public surface and from every file outside Contacts, the deny-wins merge composition in both full-merge paths with the merge record evidence, the event-chain recovery rule that reverses a composition only at a new version and routes anything newer into manual reconciliation, the migration's version-chain, append-only and cascade-only guards with no TRUNCATE guard and no data statement, and the declaration of the capability, the owned infrastructure state and the pending source migration. It also executes the contract, domain, adapter, merge and recovery proofs and, only where an isolated database is provided, the PostgreSQL proof. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Contacts-owned communication policy foundation schema (two new tables with their constraints, guard functions and row triggers) inside one explicit transaction through controlled migration tooling; the only existing object it names is Contact(id) as the referenced side of two cascading foreign keys, it changes no existing row, carries no data statement and no backfill so every existing Contact stays as permitted as today; it stores no credential, provider identifier, transport, conversation or channel identity; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "contacts",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e"
     }
   ]
 }

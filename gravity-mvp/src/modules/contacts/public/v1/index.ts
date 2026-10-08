@@ -77,7 +77,26 @@ export {
     resolveContactV1,
     searchContactsV1,
     setContactDisplayNameV1,
+    getContactCommunicationPermissionV1,
 } from '../../application/contact-operations'
+// ContactCommunicationPermissionQuery.v1 is the only communication-policy
+// surface other contexts may reach. The mutation (setContactCommunicationPolicyV1,
+// its handler factory and its ports) is deliberately NOT exported here: it is a
+// Contacts-owned operation that stays inside the context until an adopter is
+// explicitly admitted, so no business module can broaden a standing restriction.
+export {
+    CONTACT_COMMUNICATION_NO_RESTRICTION_V1,
+    composeContactCommunicationPolicyV1,
+    createContactCommunicationPermissionQueryHandlerV1,
+    evaluateContactCommunicationRestrictionV1,
+    restrictionStateOfV1,
+    sameRestrictionStateV1,
+} from './contact-communication-policy'
+export type {
+    ContactCommunicationPermissionStateV1,
+    ContactCommunicationPolicySnapshotV1,
+    ContactCommunicationRestrictionVerdictV1,
+} from './contact-communication-policy'
 export {
     linkContactToBestDriverV1,
     startMaxContactResolutionShadowV1,

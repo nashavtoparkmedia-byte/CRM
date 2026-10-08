@@ -431,6 +431,31 @@
         "dbbbad3faafcd8e2fb1528c69660278dde30eae9ee467f361b7c710287851045",
         "defa7fbcda8343efac57bb61463ea2e947fbf6bd84f006a482e57a78767120db"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Contacts-owned communication policy foundation schema (two new tables with their constraints, guard functions and row triggers) inside one explicit transaction through controlled migration tooling; the only existing object it names is Contact(id) as the referenced side of two cascading foreign keys, it changes no existing row and carries no data statement or backfill; it stores no credential, provider identifier, transport, conversation or channel identity; this review grants no application-runtime or production-application authority. All sixteen sites are exact DDL statements on the two foundation tables, their guard functions and triggers; there is no TRUNCATE guard and therefore no parsed-target phantom site.",
+      "expected_site_signatures": [
+        "00126f0ab9cd2078fd82a80108cea4c241d04a5fefa9503fac8ccc365e49b05c",
+        "0820844fe625b2f0983f916c6d2320019bfdae051299aa9de12616758037abe9",
+        "10a741903df4b8d7a1c8f016862631805887627706ba16b6b3cb7278cdbf8239",
+        "15b68e4dd720211288ee0d4959432f07500c8c43a4f16b48d338c3a89b5856a7",
+        "35b023208ad534223b1c4b06eff76ea91577da39ec713c612910c538dbf427cc",
+        "52f34468b089a68aab3bde2ed3f12b4c936a3ab8099aa85f433848cfd712e498",
+        "6625137cd8a5a73f01706642fc936eca81d700877132ed94192ee5a4d9609eab",
+        "6ceef214aadcba2e0b165fb767083010e30f7d55fbadce72f548d7fe42586aa0",
+        "81e6bc82f293069fba4d2572a21de81faaa3114bb5fe17841de4c302a0d7fa61",
+        "86f86145fd04b7ffc46d2bf240dd71d3eb3107c20895e0f9ffcba9ab85f398ee",
+        "9988d5b0590e1817f515469b0fe3fe8b8bcfcb3a1d917b96eb42960b28e08721",
+        "a50ddb4f754f6ab20902cb885bd1c065c4d0f4d03ff711f912389cfbb98ec080",
+        "b534e66418ece738d1550ef260ee75b39457b249d0128972c9a7452b6f3dd1df",
+        "cdc7e7a04e041477e9019375885600279501264e371360ad4b1876fce95d31dd",
+        "da98c526c21824419c96784caaeb8e6d0fe38a7416c03d3a32081f397d072fd5",
+        "ffbed1964eb1ea1007d782e2a53edc7244be8a029caea66262898c9799c00918"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -4529,6 +4554,294 @@
         }
       ],
       "review_rationale": "Expand-only statement of the MAX provider account foundation migration: TRUNCATE on ON. It creates or constrains only MAX Channel-owned foundation objects, touches no existing table and no historical MAX table, and stores no credential."
+    },
+    {
+      "site_signature": "00126f0ab9cd2078fd82a80108cea4c241d04a5fefa9503fac8ccc365e49b05c",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 92,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicy",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicy. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "0820844fe625b2f0983f916c6d2320019bfdae051299aa9de12616758037abe9",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 193,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "contact_communication_policy_event_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_FUNCTION on contact_communication_policy_event_guard. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "10a741903df4b8d7a1c8f016862631805887627706ba16b6b3cb7278cdbf8239",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 213,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "ContactCommunicationPolicyEvent_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_TRIGGER on ContactCommunicationPolicyEvent_guard. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "15b68e4dd720211288ee0d4959432f07500c8c43a4f16b48d338c3a89b5856a7",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 115,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "35b023208ad534223b1c4b06eff76ea91577da39ec713c612910c538dbf427cc",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 154,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "contact_communication_policy_guard",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_FUNCTION on contact_communication_policy_guard. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "52f34468b089a68aab3bde2ed3f12b4c936a3ab8099aa85f433848cfd712e498",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 66,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "6625137cd8a5a73f01706642fc936eca81d700877132ed94192ee5a4d9609eab",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 99,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "6ceef214aadcba2e0b165fb767083010e30f7d55fbadce72f548d7fe42586aa0",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 63,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicy",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicy. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "81e6bc82f293069fba4d2572a21de81faaa3114bb5fe17841de4c302a0d7fa61",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 16,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicy",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_TABLE on ContactCommunicationPolicy. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "86f86145fd04b7ffc46d2bf240dd71d3eb3107c20895e0f9ffcba9ab85f398ee",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 60,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_INDEX on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "9988d5b0590e1817f515469b0fe3fe8b8bcfcb3a1d917b96eb42960b28e08721",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 189,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "ContactCommunicationPolicy_guard",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_TRIGGER on ContactCommunicationPolicy_guard. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "a50ddb4f754f6ab20902cb885bd1c065c4d0f4d03ff711f912389cfbb98ec080",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 129,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "b534e66418ece738d1550ef260ee75b39457b249d0128972c9a7452b6f3dd1df",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 57,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_INDEX on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "cdc7e7a04e041477e9019375885600279501264e371360ad4b1876fce95d31dd",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 121,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: ALTER_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "da98c526c21824419c96784caaeb8e6d0fe38a7416c03d3a32081f397d072fd5",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 30,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_TABLE on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "ffbed1964eb1ea1007d782e2a53edc7244be8a029caea66262898c9799c00918",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "line": 54,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "contacts",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "ContactCommunicationPolicyEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_INDEX on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
     }
   ]
 }
