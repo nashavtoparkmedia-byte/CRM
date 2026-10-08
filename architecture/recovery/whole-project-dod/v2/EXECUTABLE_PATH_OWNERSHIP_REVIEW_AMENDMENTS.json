@@ -2197,6 +2197,87 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-m1m2-combined-unit-main-5d7cd23f-20261008",
+      "reviewed_at": "2026-10-08T00:00:00Z",
+      "reviewed_by": "MAX_M1_M2_COMBINED_UNIT_EXECUTOR_REVIEW_20261008",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_RELEASED_MAX_M1_M2_FINAL_CURRENT_MAIN_RECONCILE_CONTACTS_ACCEPTED_20261008",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 5d7cd23f, whose tail is messaging-s2-delivery-evidence-contract-main-8e639943-20261007, and reviews only the six surfaces and the one source fingerprint the combined MAX M1+M2 unit with its Contacts peer-identity capability adds on that tail. The production-lineage ownership records of the corrected M2 authority ef5aba5c are not carried; everything here is derived again against the chain main publishes now."
+      },
+      "reason": "Records the combined MAX M1+M2 landing unit on top of main 5d7cd23f. Six tracked executable surfaces are added: three contacts-owned (the provider-neutral contacts.ResolveInboundConversationPeerIdentityQuery.v1 contract and its test under gravity-mvp/src/contracts/contacts/v1, and its read-only handler under gravity-mvp/src/modules/contacts/public/v1) and three max_channel-owned (the scraper's DOM-recovery route attestation max-web-scraper/lib/DomRouteAttestation.js and two scraper tests). 2,690 + 6 = 2,696 surfaces, context-owned 1,455 -> 1,461 and governed exclusions unchanged at 1,235. One reviewed exact-inventory assignment moves its bytes: the MAX scraper webhook route, rebound from the fingerprint the 2026-08-13 review approved, which main's chain never rebound before. The current triple is this repository's own derivation over this tree (preview on the clean commit d8a21af8, which reported exactly this one required rebind and no exact-inventory path without a reviewed assignment). Every new surface sits under a path its context owns (gravity-mvp/src/contracts/contacts and gravity-mvp/src/modules/contacts in the contacts manifest, max-web-scraper in the max_channel manifest), so context ownership comes from the manifests and no explicit exact-inventory assignment applies. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2690,
+        "tracked_inventory_sha256": "9e44e52d8c6ebac5718e8075262991da95f7b2cd1c8f83304341130f69919048",
+        "coverage_sha256": "b9b46bad4e7e0f9f30b2f8e6f1637686efd33da3e4ed1ac7de65361beb5c8cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "previous_source_sha256": "67fe16a55a8b9e37cb4cc20493e4a2b84738f45659a33a839e8d0cae17f5fd81",
+          "current_source_sha256": "eab2576acd1c798200af00789364c165c4ecec12369102af3064843a9d6a6275",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The MAX scraper webhook keeps every reviewed ownership field. Its bytes become the corrected M2 product bytes (ef5aba5c): a DOM-fallback inbound is bound to its conversation only after Contacts' public ResolveInboundConversationPeerIdentityQuery.v1 proves the peer, a stored DOM-fallback replay dedupes before the collision guard, op:130 peer read marks are applied through the hoisted applyMaxPeerReadMark placed after the POST handler, and MAX ids are compared in the real-id space. It reads Contacts state only through the Contacts public barrel and adds no direct Contacts write. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder and inventory kind exact_runtime_inventory are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/inbound-conversation-peer-identity-query.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The contract test of contacts.ResolveInboundConversationPeerIdentityQuery.v1 (envelope, exact fields, version and identifier validation); it opens no database connection and holds no credential, under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/inbound-conversation-peer-identity-query.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral contacts.ResolveInboundConversationPeerIdentityQuery.v1 contract: an inbound peer's exact provider identifier within one Contact and its linked conversation identity, answered ready / contact_not_found / peer_identity_not_found / peer_identity_conflicted / linked_identity_not_found. It never authorizes a send. Under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/inbound-conversation-peer-identity-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The read-only handler of the inbound peer-identity query over the existing Contacts conversation persistence port; it consults no reachability and writes nothing, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "max-web-scraper/lib/DomRouteAttestation.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The MAX scraper's proof that DOM-recovered text was read from the conversation it is forwarded for: the shared page must have shown exactly that route before, during and after the one read, with no navigation, UI send or phone lookup in between; anything else is verified false and the CRM refuses to bind the text to a person. It is scraper runtime under max-web-scraper, a path the max_channel context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "max-web-scraper/test/max-dom-route-attestation.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The node:test suite of the scraper's DOM-recovery route attestation; it uses only Node built-ins and the module under test, opens no network or database connection and holds no credential, under max-web-scraper, a path the max_channel context owns."
+        },
+        {
+          "path": "max-web-scraper/test/max-inbound-pending-provider-queue-source.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A node:test source-contract test of the scraper's inbound pending-provider queue; it reads the scraper source text only, opens no network or database connection and holds no credential, under max-web-scraper, a path the max_channel context owns."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
