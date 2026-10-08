@@ -143,9 +143,19 @@ describe('MessageService MAX outbound delivery', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         identityFixtures.clear()
-        mocks.prepareIdentity.mockImplementation(async ({ identityId }: { identityId: string }) => (
-            identityFixtures.get(identityId) ?? { status: 'identity_not_found' }
-        ))
+        // The Contacts command carries two exact, mutually exclusive selector axes: the
+        // identity's row id, or the exact provider id it carries. MAX addresses its peer by
+        // provider id, because a conversation's linked identity is legitimately not the peer.
+        mocks.prepareIdentity.mockImplementation(async (
+            { identityId, identityExternalId }: { identityId: string | null; identityExternalId?: string | null },
+        ) => {
+            if (identityExternalId) {
+                return [...identityFixtures.values()].find(
+                    fixture => fixture.identity?.externalId === identityExternalId,
+                ) ?? { status: 'identity_not_found' }
+            }
+            return identityFixtures.get(identityId ?? '') ?? { status: 'identity_not_found' }
+        })
         mocks.messageFindUnique.mockResolvedValue(null)
         mocks.messageFindMany.mockResolvedValue([])
         mocks.messageFindFirst.mockResolvedValue(null)

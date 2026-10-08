@@ -4,6 +4,7 @@ const WEBHOOK_SECRET = 'test-max-scraper-webhook-secret'
 
 const mocks = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
+  messageFindMany: vi.fn(),
   chatFindUnique: vi.fn(),
   chatFindMany: vi.fn(),
   patchConversation: vi.fn(),
@@ -12,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   createConversation: vi.fn(),
   upsertMessage: vi.fn(),
   replaceMessage: vi.fn(),
+  applyEvidence: vi.fn(),
+  createChannelMessage: vi.fn(),
   deleteMessage: vi.fn(),
   deleteMessageMedia: vi.fn(),
   ensureContactLink: vi.fn(),
@@ -19,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   shadowStart: vi.fn(),
   shadowComplete: vi.fn(),
   resolveContact: vi.fn(),
+  prepareIdentity: vi.fn(),
+  resolvePeerIdentity: vi.fn(),
   isResolvedContact: vi.fn(),
   recordReachability: vi.fn(),
   selectSenderCandidate: vi.fn(),
@@ -34,7 +39,7 @@ vi.mock('@/lib/prisma', () => ({
     message: {
       findUnique: mocks.messageFindUnique,
       findFirst: vi.fn(),
-      findMany: vi.fn(),
+      findMany: mocks.messageFindMany,
     },
     chat: {
       findUnique: mocks.chatFindUnique,
@@ -61,6 +66,8 @@ vi.mock('@/modules/contacts/public/v1', () => ({
   markChannelIdentityConflictV1: mocks.markIdentityConflict,
   isResolvedChannelContactResultV1: mocks.isResolvedContact,
   resolveChannelContactOperationV1: mocks.resolveContact,
+  prepareContactConversationIdentityV1: mocks.prepareIdentity,
+  resolveInboundConversationPeerIdentityV1: mocks.resolvePeerIdentity,
 }))
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
   contactReachabilityV1: {
@@ -75,6 +82,8 @@ vi.mock('@/infrastructure/operations/operational-log', () => ({
 }))
 vi.mock('@/modules/messaging/public/v1', () => ({
   appendConversationIdentityCollisionV1: mocks.appendCollision,
+  applyMessageDeliveryEvidenceV1: mocks.applyEvidence,
+  createChannelMessageV1: mocks.createChannelMessage,
   createExternalConversationV1: mocks.createConversation,
   deleteMessageMediaV1: mocks.deleteMessageMedia,
   deleteMessageV1: mocks.deleteMessage,
@@ -149,11 +158,38 @@ function expectCollisionEvidence(reason: string) {
   })
 }
 
+// A MAX provider message id, 'd3' + 16 hex: (MAX ms << 16) | suffix.
+const PROVIDER_ID = 'd301a0fe1478805e09'
+const providerIdAt = (ms: number, suffix = 1) => `d3${((BigInt(ms) << 16n) | BigInt(suffix)).toString(16).padStart(16, '0')}`
+
+function evidenceResult(outcome: string, messageId: string | null = null, extra: Record<string, unknown> = {}) {
+  return {
+    contract: 'messaging.PatchMessageDeliveryResult.v2',
+    outcome,
+    messageId,
+    matchedBy: messageId ? 'provider_id' : null,
+    reason: null,
+    ...extra,
+  }
+}
+
+// Messaging finds no CRM send for the own message; it is created, and the
+// evidence then lands on the created row.
+function ownMessageCreatedAs(messageId: string, chatId = 'chat-1') {
+  mocks.applyEvidence
+    .mockResolvedValueOnce(evidenceResult('no_match'))
+    .mockResolvedValueOnce(evidenceResult('applied', messageId))
+  mocks.createChannelMessage.mockResolvedValue({ message: { id: messageId, chatId } })
+  mocks.messageFindUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
+    where.id === messageId ? { id: messageId, chatId, direction: 'outbound', status: 'sent' } : null)
+}
+
 describe('MAX webhook provider-account admission', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     vi.stubEnv('MAX_SCRAPER_WEBHOOK_SECRET', WEBHOOK_SECRET)
     mocks.messageFindUnique.mockResolvedValue(null)
+    mocks.messageFindMany.mockResolvedValue([])
     mocks.shadowStart.mockResolvedValue({
       session: { complete: mocks.shadowComplete },
     })
@@ -562,7 +598,7 @@ describe('MAX webhook provider-account admission', () => {
     expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
   })
 
-  test('rejects an upsert race that resolves the global message id to another Chat', async () => {
+  test('rejects an own-message race that resolves the provider id to another Chat', async () => {
     const admittedChat = existingChat({
       senderId: 'peer-sender',
       chatKind: 'private',
@@ -583,11 +619,14 @@ describe('MAX webhook provider-account admission', () => {
       .mockResolvedValueOnce(admittedChat)
       .mockResolvedValueOnce(owningChat)
     mocks.patchConversation.mockResolvedValue({ conversation: admittedChat })
-    mocks.upsertMessage.mockResolvedValue({
-      message: { id: 'message-account-a', chatId: owningChat.id },
-    })
+    mocks.applyEvidence.mockResolvedValue(evidenceResult('refused', null, { reason: 'provider_id_collision' }))
+    // Not stored when the duplicate check runs; stored by another delivery before the evidence.
+    mocks.messageFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'message-account-a', chatId: owningChat.id })
 
     const response = await POST(request({
+      externalId: PROVIDER_ID,
       isOutgoing: true,
       senderId: 'account-user',
       senderName: 'CRM Operator',
@@ -603,6 +642,8 @@ describe('MAX webhook provider-account admission', () => {
         existingProviderAccountId: 'max-account-a',
       }),
     }))
+    expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
     expect(mocks.outboundWorkflow).not.toHaveBeenCalled()
   })
 
@@ -640,6 +681,80 @@ describe('MAX webhook provider-account admission', () => {
     })
     expect(mocks.ensureContactLink.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.recordReachability.mock.invocationCallOrder[0])
+  })
+
+  // --- cold cache on the PROVIDER-framed path ------------------------------------------
+  // The scraper derives chatKind from an in-memory cache that is empty after every container
+  // start, including the restart activation performs. The DOM path is protected from writing
+  // cache-derived values by `!domFallbackPeer`; the provider-framed path is not. So a cold
+  // `unknown` used to overwrite a stored `private` that had been proven from a DIALOG model,
+  // which then failed the next DOM inbound at `stored_chat_kind` and every outbound with
+  // CONTACT_CONVERSATION_NOT_PRIVATE.
+  function acceptedProviderInbound(storedMetadata: Record<string, unknown>) {
+    const chat = existingChat({
+      senderId: 'max-sender-42',
+      providerAccountId: 'max-account-b',
+      connectionId: 'max_scraper',
+      ...storedMetadata,
+    })
+    mocks.chatFindUnique.mockResolvedValue(chat)
+    mocks.chatFindMany.mockResolvedValue([])
+    mocks.patchConversation.mockResolvedValue({ conversation: chat })
+    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-in-1', chatId: chat.id } })
+    mocks.resolveContact.mockResolvedValue({
+      status: 'identity_reused',
+      isNew: false,
+      contact: { id: 'contact-b' },
+      identity: { id: 'identity-b' },
+    })
+    mocks.isResolvedContact.mockReturnValue(true)
+    return chat
+  }
+  const patchedChatKind = () => mocks.patchConversation.mock.calls
+    .find(([argument]) => argument?.patch?.metadata)?.[0].patch.metadata.chatKind
+
+  test.each([
+    ['private', 'private'],
+    // A stored group conversation is reachable here: with an incoming `unknown` the collision
+    // guard finds no concrete mismatch and no group authority breach, so it reaches this write.
+    ['group', 'group'],
+  ])('a cold-cache provider event does not downgrade a stored %s chat kind', async (stored, expected) => {
+    acceptedProviderInbound({ chatKind: stored })
+
+    const response = await POST(request({ chatKind: 'unknown' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe(expected)
+  })
+
+  test('a cold-cache provider event still records unknown when no concrete kind is stored', async () => {
+    acceptedProviderInbound({ chatKind: undefined })
+
+    const response = await POST(request({ chatKind: 'unknown' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe('unknown')
+  })
+
+  test('a concrete incoming private chat kind is still written unchanged', async () => {
+    acceptedProviderInbound({ chatKind: 'private' })
+
+    const response = await POST(request({ chatKind: 'private' }))
+
+    expect(response.status).toBe(200)
+    expect(patchedChatKind()).toBe('private')
+  })
+
+  test('an explicit incoming group against a stored private conversation is still refused', async () => {
+    // The concrete-mismatch branch of the collision guard answers this before any write, which
+    // is why preserving a concrete stored kind widens no accepted chat kind.
+    acceptedProviderInbound({ chatKind: 'private' })
+
+    const response = await POST(request({ chatKind: 'group' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expect(mocks.patchConversation).not.toHaveBeenCalled()
   })
 
   test('does not confirm reachability for history even after exact private linkage', async () => {
@@ -724,9 +839,10 @@ describe('MAX webhook provider-account admission', () => {
     })
     mocks.chatFindUnique.mockResolvedValue(chat)
     mocks.patchConversation.mockResolvedValue({ conversation: chat })
-    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-out-1', chatId: 'chat-1' } })
+    ownMessageCreatedAs('message-out-1')
 
     const response = await POST(request({
+      externalId: PROVIDER_ID,
       isOutgoing: true,
       senderId: 'account-user',
       senderName: 'CRM Operator',
@@ -770,9 +886,10 @@ describe('MAX webhook provider-account admission', () => {
     mocks.chatFindUnique.mockResolvedValue(null)
     mocks.createConversation.mockResolvedValue({ conversation: created })
     mocks.patchConversation.mockResolvedValue({ conversation: created })
-    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-out-2', chatId: 'chat-1' } })
+    ownMessageCreatedAs('message-out-2')
 
     const response = await POST(request({
+      externalId: PROVIDER_ID,
       isOutgoing: true,
       senderId: 'account-user',
       senderName: 'CRM Operator',
@@ -796,5 +913,978 @@ describe('MAX webhook provider-account admission', () => {
     expect(mocks.resolveContact).not.toHaveBeenCalled()
     expect(mocks.ensureContactLink).not.toHaveBeenCalled()
     expect(mocks.recordReachability).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DOM-fallback inbound (production failure 2026-09-22 11:44:50Z).
+//
+// The provider push lost its message object, so the scraper recovered the text from
+// the page and forwarded it without a provider senderId. Such an event may inherit the
+// peer of the exact, already proven private conversation it names — only when the
+// scraper attests it read that conversation's page and every independent MAX invariant
+// names that same peer. The chat id and route below are C4's, from MAX_CHAT_ID_ALIASES.
+// ---------------------------------------------------------------------------
+const DOM_ACCOUNT = '902100000248'
+const DOM_CHAT = '902454841098'
+const DOM_ROUTE = '511708938'
+const DOM_PEER = '902200000154'
+// Production topology: one Contact holds three active MAX identities - a phone-shaped one,
+// one whose externalId is the conversation key (which the Chat is linked to), and the peer
+// who actually speaks. fb9fb30d assumed the linked identity was the peer and fail-closed.
+const DOM_PHONE_IDENTITY = 'identity-phone'
+const DOM_CHATKEY_IDENTITY = 'identity-chatkey'
+const DOM_PEER_IDENTITY = 'identity-peer'
+const DOM_EXTERNAL_ID = `max-dom-${DOM_CHAT}-7ef524501d31775e`
+
+function attestedRoute(overrides: Record<string, unknown> = {}) {
+  return { uiRouteId: DOM_ROUTE, source: 'static_override', extraction: 'message_element', verified: true, ...overrides }
+}
+
+function domRequest(overrides: Record<string, unknown> = {}, omit: string[] = []) {
+  const body: Record<string, unknown> = {
+    accountId: DOM_ACCOUNT,
+    externalId: DOM_EXTERNAL_ID,
+    chatId: DOM_CHAT,
+    rawChatId: DOM_CHAT,
+    text: 'A2-0922-K7Q3',
+    timestamp: Date.now() - 1_000,
+    messageType: 'text',
+    attachments: [],
+    isOutgoing: false,
+    source: 'dom_fallback',
+    chatKind: 'private',
+    domRoute: attestedRoute(),
+    ...overrides,
+  }
+  for (const key of omit) delete body[key]
+  return new Request('https://crm.example/api/webhooks/max', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Max-Scraper-Webhook-Secret': WEBHOOK_SECRET },
+    body: JSON.stringify(body),
+  })
+}
+
+function provenPrivateChat(overrides: Record<string, unknown> = {}, metadata: Record<string, unknown> = {}) {
+  return {
+    id: 'chat-c4',
+    channel: 'max',
+    externalChatId: DOM_CHAT,
+    chatType: 'private',
+    name: 'User A',
+    contactId: 'contact-c4',
+    contactIdentityId: DOM_CHATKEY_IDENTITY,
+    driverId: null,
+    metadata: {
+      senderId: DOM_PEER,
+      chatKind: 'private',
+      providerAccountId: DOM_ACCOUNT,
+      connectionId: 'max_scraper',
+      rawExternalChatId: DOM_CHAT,
+      contactResolution: { status: 'identity_reused', candidateCount: 1, automaticLinkPerformed: true },
+      ...metadata,
+    },
+    ...overrides,
+  }
+}
+
+function readyPeerIdentity(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'ready',
+    contact: { id: 'contact-c4', displayName: 'User A' },
+    peerIdentity: {
+      kind: 'inbound_peer_identity',
+      id: DOM_PEER_IDENTITY,
+      channel: 'max',
+      externalId: DOM_PEER,
+      providerAccountId: null,
+      ...overrides,
+    },
+  }
+}
+
+describe('MAX webhook DOM-fallback peer binding', () => {
+  let chat: ReturnType<typeof provenPrivateChat>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('MAX_SCRAPER_WEBHOOK_SECRET', WEBHOOK_SECRET)
+    chat = provenPrivateChat()
+    mocks.messageFindUnique.mockResolvedValue(null)
+    mocks.messageFindMany.mockResolvedValue([])
+    mocks.shadowStart.mockResolvedValue({ session: { complete: mocks.shadowComplete } })
+    mocks.shadowComplete.mockResolvedValue(undefined)
+    mocks.emitMessage.mockResolvedValue(undefined)
+    mocks.appendCollision.mockResolvedValue(undefined)
+    mocks.markIdentityConflict.mockResolvedValue(undefined)
+    mocks.chatFindUnique.mockImplementation(async () => chat)
+    mocks.chatFindMany.mockImplementation(async () => [chat])
+    mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity())
+    mocks.selectSenderCandidate.mockReturnValue({ status: 'none', candidateCount: 0 })
+    mocks.patchConversation.mockImplementation(async () => ({ conversation: chat }))
+    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-dom-1', chatId: 'chat-c4' } })
+    mocks.resolveContact.mockResolvedValue({
+      status: 'identity_reused',
+      isNew: false,
+      contact: { id: 'contact-c4' },
+      identity: { id: 'identity-c4' },
+    })
+    mocks.isResolvedContact.mockReturnValue(true)
+    mocks.recordReachability.mockResolvedValue({ outcome: 'updated', identityId: 'identity-c4', status: 'confirmed' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function expectNoDomMessage() {
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.replaceMessage).not.toHaveBeenCalled()
+    expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+    expect(mocks.emitMessage).not.toHaveBeenCalled()
+    expect(mocks.recordReachability).not.toHaveBeenCalled()
+  }
+
+  async function expectUnproven(response: Response) {
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_UNPROVEN' })
+    expect(mocks.appendCollision).toHaveBeenCalledOnce()
+    expect(mocks.appendCollision.mock.calls[0][0].evidence).toMatchObject({
+      reason: 'sender_identity_unproven',
+      incomingSenderId: null,
+    })
+    expectNoDomMessage()
+  }
+
+  async function expectBound(response: Response) {
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true, chatInternalId: 'chat-c4', messageId: 'message-dom-1' })
+    expect(mocks.upsertMessage).toHaveBeenCalledOnce()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  }
+
+  test('accepts the exact production DOM-fallback event once on the proven private conversation', async () => {
+    await expectBound(await POST(domRequest()))
+
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith({
+      contract: 'contacts.ResolveInboundConversationPeerIdentityQuery.v1',
+      contactId: 'contact-c4',
+      channel: 'max',
+      // the peer is resolved by its own external id, NOT by the conversation's linked identity
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    })
+    // unfiltered by provider account, so an unstamped legacy claimant cannot hide
+    expect(mocks.chatFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        channel: 'max',
+        metadata: { path: ['senderId'], equals: DOM_PEER },
+      },
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-c4',
+      direction: 'inbound',
+      externalId: DOM_EXTERNAL_ID,
+      content: 'A2-0922-K7Q3',
+      metadata: expect.objectContaining({
+        senderId: DOM_PEER,
+        senderIdProof: 'bound_private_conversation',
+        source: 'dom_fallback',
+        maxChatId: DOM_CHAT,
+      }),
+    }))
+    // The conversation already names its person: no new resolution, link or reachability.
+    expect(mocks.resolveContact).not.toHaveBeenCalled()
+    expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+    expect(mocks.recordReachability).not.toHaveBeenCalled()
+    expect(mocks.selectSenderCandidate).not.toHaveBeenCalled()
+    // The Chat patch keeps only activity; payload phone/name never reach it.
+    expect(mocks.patchConversation.mock.calls[0][0].patch).not.toHaveProperty('metadata')
+    expect(mocks.patchConversation.mock.calls[0][0].patch).not.toHaveProperty('name')
+    expect(mocks.patchConversation).toHaveBeenLastCalledWith(expect.objectContaining({
+      patch: { metadata: expect.objectContaining({ contactResolution: { status: 'bound_conversation_reused', candidateCount: 1, automaticLinkPerformed: false } }) },
+    }))
+    expect(mocks.shadowComplete).toHaveBeenCalledWith({ status: 'contact_reused', contactId: 'contact-c4', source: 'identity' })
+    expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+  })
+
+  test('ignores payload phone and name on an accepted DOM-fallback event', async () => {
+    chat = provenPrivateChat({ name: 'MAX:902200000154' })
+    await expectBound(await POST(domRequest({ phone: '+79990000000', senderPhone: '+79990000000', senderName: 'Cached Name' })))
+    expect(mocks.patchConversation.mock.calls[0][0].patch).toEqual({ lastMessageAt: expect.any(Date) })
+  })
+
+  test('replays the same DOM-fallback event as a duplicate of the stored message', async () => {
+    mocks.messageFindUnique.mockResolvedValue({ id: 'message-dom-1', chatId: 'chat-c4', externalId: DOM_EXTERNAL_ID, chat })
+
+    const response = await POST(domRequest())
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true, chatInternalId: 'chat-c4', messageId: 'message-dom-1', deduped: true })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('binds a protocol-route DOM read only to the same canonical chat id', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { rawExternalChatId: '902400000777' })
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectBound(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: '902400000777', source: 'protocol_chat_id' }) })))
+  })
+
+  test('binds a participant-route DOM read only when the route is the proven peer', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { rawExternalChatId: '902400000777' })
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectBound(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: DOM_PEER, source: 'dialog_participant' }) })))
+  })
+
+  test('ignores a group conversation that happens to store the same sender', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-group', externalChatId: '902400000555' }, { chatKind: 'group' })])
+    await expectBound(await POST(domRequest()))
+  })
+
+  test.each([
+    ['no attestation', { domRoute: undefined }],
+    ['attestation not verified', { domRoute: attestedRoute({ verified: false }) }],
+    ['verified is a string', { domRoute: attestedRoute({ verified: 'true' }) }],
+    ['heuristic text row', { domRoute: attestedRoute({ extraction: 'generic_text_rows' }) }],
+    ['unknown route source', { domRoute: attestedRoute({ source: 'guessed' }) }],
+    ['static route that Gravity does not map to this chat', { domRoute: attestedRoute({ uiRouteId: '201482140' }) }],
+    ['static route with a prototype key', { domRoute: attestedRoute({ uiRouteId: 'constructor' }) }],
+    ['non-numeric route', { domRoute: attestedRoute({ uiRouteId: '51170893x' }) }],
+    ['protocol route of another chat', { domRoute: attestedRoute({ uiRouteId: '902400000777', source: 'protocol_chat_id' }) }],
+    ['participant route that is not the proven peer', { domRoute: attestedRoute({ uiRouteId: '902200000999', source: 'dialog_participant' }) }],
+    ['attestation is an array', { domRoute: [attestedRoute()] }],
+    ['attestation is a string', { domRoute: 'verified' }],
+    ['attestation is null', { domRoute: null }],
+  ])('rejects without a verified page binding: %s', async (_label, event) => {
+    await expectUnproven(await POST(domRequest(event)))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+  })
+
+  test('keeps rejecting a DOM-fallback event when the provider account is absent from the payload', async () => {
+    const response = await POST(domRequest({}, ['accountId']))
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('keeps rejecting a DOM-fallback event on a Chat whose provider account was never proven', async () => {
+    chat = provenPrivateChat({}, { providerAccountId: undefined })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects a DOM-fallback event carried by another provider account', async () => {
+    const response = await POST(domRequest({ accountId: '902100000999' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects when the Contact identity carries a different concrete provider account', async () => {
+    mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity({ providerAccountId: '902100000999' }))
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('rejects a DOM-fallback event that claims a group conversation', async () => {
+    const response = await POST(domRequest({ chatKind: 'group' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expectNoDomMessage()
+  })
+
+  // The INCOMING kind may legitimately be absent - the scraper's cache is transient, see the
+  // cold-cache block below. The DURABLE stored proof may not be, with or without it.
+  test.each([
+    ['stored kind missing', {}, { chatKind: undefined }, {}, []],
+    ['stored kind missing and the incoming kind is unknown too', { chatKind: 'unknown' }, { chatKind: undefined }, {}, []],
+    ['stored kind missing and the incoming kind is absent too', {}, { chatKind: undefined }, {}, ['chatKind']],
+    ['stored kind group on a person-owned Chat', { chatKind: 'group' }, { chatKind: 'group' }, {}, []],
+    ['stored kind group while the incoming kind is unknown', { chatKind: 'unknown' }, { chatKind: 'group' }, {}, []],
+    ['Chat column is not private', {}, {}, { chatType: 'group' }, []],
+    ['Chat column is not private while the incoming kind is unknown', { chatKind: 'unknown' }, {}, { chatType: 'group' }, []],
+  ])('rejects without proof when %s', async (_label, event, storedMetadata, chatColumns, omit) => {
+    chat = provenPrivateChat(chatColumns, storedMetadata)
+    const response = await POST(domRequest(event, omit as string[]))
+    expect(response.status).toBe(409)
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).toHaveBeenCalled()
+  })
+
+  // --- cold cache -------------------------------------------------------------------------
+  // The scraper derives the outgoing chatKind from an in-memory chatCache filled only by
+  // op48/op53 frames, which starts EMPTY on every container start - including the restart that
+  // activating a release performs. On 2026-09-26 production refused a real inbound here with
+  // `unknown` on a conversation whose stored state already proved it private, and the peer
+  // resolution never ran. Durable stored proof plus a valid attested route may stand in for the
+  // missing transient signal, and for nothing else.
+  test.each([
+    ['the scraper reports an unknown chat kind', { chatKind: 'unknown' }, []],
+    ['the scraper omits the chat kind entirely', {}, ['chatKind']],
+  ])('binds a cold-cache DOM-fallback event when %s', async (_label, event, omit) => {
+    await expectBound(await POST(domRequest(event, omit as string[])))
+
+    // the repair's own resolution must actually RUN, not merely "not 409"
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-c4',
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' }),
+    }))
+    // A cold cache must never overwrite the stored kind it just failed to report. The
+    // contact-resolution patch legitimately spreads the existing metadata forward, so the
+    // invariant is not "chatKind is absent" but "chatKind is still the stored private".
+    for (const call of mocks.patchConversation.mock.calls) {
+      const patched = call[0].patch?.metadata
+      if (patched && 'chatKind' in patched) expect(patched.chatKind).toBe('private')
+    }
+  })
+
+  test('a cold cache never widens group acceptance', async () => {
+    const response = await POST(domRequest({ chatKind: 'group' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_CHAT_KIND_COLLISION' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('a cold-cache event still needs its exact attested route', async () => {
+    const response = await POST(domRequest({ chatKind: 'unknown', domRoute: attestedRoute({ verified: false }) }))
+
+    expect(response.status).toBe(409)
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('resolves the production topology under a cold cache', async () => {
+    // the shape that failed production: the Chat links the chat-key identity, the peer is a
+    // sibling identity of the same Contact, and the scraper reported no chat kind at all.
+    expect(chat.contactIdentityId).toBe(DOM_CHATKEY_IDENTITY)
+    expect(chat.contactIdentityId).not.toBe(DOM_PEER_IDENTITY)
+    expect(chat.metadata.senderId).toBe(DOM_PEER)
+
+    await expectBound(await POST(domRequest({ chatKind: 'unknown' })))
+
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+  })
+
+  test('replays a cold-cache event exactly once and does not re-prove it', async () => {
+    await expectBound(await POST(domRequest({ chatKind: 'unknown' })))
+    mocks.resolvePeerIdentity.mockClear()
+    mocks.upsertMessage.mockClear()
+    mocks.messageFindUnique.mockResolvedValue({ id: 'message-dom-1', chatId: 'chat-c4', externalId: DOM_EXTERNAL_ID, chat })
+
+    const replay = await POST(domRequest({ chatKind: 'unknown' }))
+
+    expect(replay.status).toBe(200)
+    await expect(replay.json()).resolves.toMatchObject({ deduped: true, messageId: 'message-dom-1' })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('rejects an unstamped legacy chat that claims the same peer', async () => {
+    // the claimant scan is unfiltered by provider account precisely so this chat is visible
+    const unstamped = provenPrivateChat({ id: 'chat-legacy', externalChatId: '902400000888' }, { providerAccountId: undefined })
+    mocks.chatFindMany.mockImplementation(async () => [chat, unstamped])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('rejects a competing private chat on a different provider account', async () => {
+    const foreign = provenPrivateChat({ id: 'chat-foreign', externalChatId: '902400000999' }, { providerAccountId: '902100000777' })
+    mocks.chatFindMany.mockImplementation(async () => [chat, foreign])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('fails closed when the claimant scan comes back truncated', async () => {
+    // a full page means "exactly one private claimant" would describe an arbitrary slice
+    const page = Array.from({ length: 25 }, (_, index) => provenPrivateChat(
+      { id: `chat-group-${index}`, externalChatId: `9024000${String(index).padStart(5, '0')}` },
+      { chatKind: 'group' },
+    ))
+    mocks.chatFindMany.mockImplementation(async () => [chat, ...page].slice(0, 25))
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('rejects when a second private Chat on the same account claims the same peer', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-other', externalChatId: '902400000777' })])
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('accepts the exact production topology: chat linked to the chat-key identity, peer in a sibling identity', async () => {
+    // Contact holds three active MAX identities: phone, chat-key (which the Chat links to)
+    // and the peer. This is the shape that made fb9fb30d fail production with identity_peer.
+    expect(chat.contactIdentityId).toBe(DOM_CHATKEY_IDENTITY)
+    expect(chat.contactIdentityId).not.toBe(DOM_PEER_IDENTITY)
+    expect(chat.metadata.senderId).toBe(DOM_PEER)
+    mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity())
+
+    const response = await POST(domRequest())
+
+    expect(response.status).toBe(200)
+    // resolved by the peer's own external id, with the linked chat-key identity passed through
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-c4',
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+    // exactly one Message, on the existing Chat, carrying the proven peer
+    expect(mocks.upsertMessage).toHaveBeenCalledOnce()
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-c4',
+      metadata: expect.objectContaining({ senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' }),
+    }))
+    // no identity created, no Chat rebinding, no conflict, no collision audit
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expect(mocks.createConversation).not.toHaveBeenCalled()
+    for (const call of mocks.patchConversation.mock.calls) {
+      expect(call[0]).not.toHaveProperty('contactId')
+      expect(call[0]).not.toHaveProperty('contactIdentityId')
+    }
+  })
+
+  test('replays the production-topology event exactly once', async () => {
+    mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity())
+    const first = await POST(domRequest())
+    expect(first.status).toBe(200)
+
+    // the stored message now exists and carries the proven peer
+    mocks.messageFindUnique.mockResolvedValue({
+      id: 'message-dom-1',
+      chatId: 'chat-c4',
+      direction: 'inbound',
+      metadata: { senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' },
+      chat,
+    })
+    mocks.upsertMessage.mockClear()
+    mocks.appendCollision.mockClear()
+    mocks.markIdentityConflict.mockClear()
+
+    const replay = await POST(domRequest())
+
+    expect(replay.status).toBe(200)
+    await expect(replay.json()).resolves.toMatchObject({ deduped: true, messageId: 'message-dom-1' })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('a replay whose peer can no longer be proven still dedupes without writing a conflict', async () => {
+    // the exact regression the hoisted duplicate branch exists for: Contacts state moved
+    // after the message was stored, so the proof now fails - the replay must still dedupe.
+    mocks.messageFindUnique.mockResolvedValue({
+      id: 'message-dom-1',
+      chatId: 'chat-c4',
+      direction: 'inbound',
+      metadata: { senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' },
+      chat,
+    })
+    mocks.resolvePeerIdentity.mockResolvedValue({ status: 'peer_identity_conflicted' })
+
+    const replay = await POST(domRequest())
+
+    expect(replay.status).toBe(200)
+    await expect(replay.json()).resolves.toMatchObject({ deduped: true })
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    // The proof is SKIPPED on a replay, not merely tolerated when it fails. Dedupe alone
+    // cannot prove that: the duplicate branch answers 200 either way, so without this the
+    // stored-message guard could be dropped and every replay would silently re-prove.
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+  })
+
+  test('a stored duplicate carrying no senderId still dedupes instead of failing closed', async () => {
+    mocks.messageFindUnique.mockResolvedValue({
+      id: 'message-dom-legacy',
+      chatId: 'chat-c4',
+      direction: 'inbound',
+      metadata: {},
+      chat,
+    })
+
+    const replay = await POST(domRequest())
+
+    expect(replay.status).toBe(200)
+    await expect(replay.json()).resolves.toMatchObject({ deduped: true })
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+  })
+
+  test('a replay that collides records the stored message sender as the incoming evidence', async () => {
+    // This leg passes requirePeerSenderProof: false, so the stored sender never decides the
+    // outcome - it survives only as recorded evidence. No dedupe assertion can pin that, so
+    // without this the branch could pass null and the audit would lose the sender silently.
+    // The stored chat carries a different senderId on purpose, proving the recorded incoming
+    // value comes from the stored MESSAGE rather than from the chat it points at.
+    const storedChat = provenPrivateChat({ id: 'chat-other' }, { senderId: '902299999999' })
+    mocks.messageFindUnique.mockResolvedValue({
+      id: 'message-dom-1',
+      chatId: 'chat-other',
+      direction: 'inbound',
+      metadata: { senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' },
+      chat: storedChat,
+    })
+
+    const replay = await POST(domRequest())
+
+    expect(replay.status).toBe(409)
+    expect(mocks.appendCollision).toHaveBeenCalledWith({
+      chatId: 'chat-other',
+      evidence: expect.objectContaining({
+        reason: 'message_chat_mismatch',
+        incomingSenderId: DOM_PEER,
+        existingSenderId: '902299999999',
+      }),
+    })
+  })
+
+  test.each([
+    ['no identity of this Contact carries the stored peer, or it belongs to another Contact', { status: 'peer_identity_not_found' }],
+    ['Contact is archived or missing', { status: 'contact_not_found' }],
+    ['the peer identity has an open conflict', { status: 'peer_identity_conflicted' }],
+    ["the Chat's linked identity is missing, inactive or foreign", { status: 'linked_identity_not_found' }],
+    ['resolved Contact differs from the Chat', { ...readyPeerIdentity(), contact: { id: 'contact-other', displayName: 'X' } }],
+    ['the peer identity names another peer', readyPeerIdentity({ externalId: '902200000999' })],
+    ['the peer identity is not MAX', readyPeerIdentity({ channel: 'telegram' })],
+    ['the peer identity is stamped for another provider account', readyPeerIdentity({ providerAccountId: '902100000999' })],
+  ])('rejects when %s', async (_label, resolved) => {
+    mocks.resolvePeerIdentity.mockResolvedValue(resolved)
+    await expectUnproven(await POST(domRequest()))
+  })
+
+  test('fails without writing any collision or conflict when the Contacts lookup throws', async () => {
+    mocks.resolvePeerIdentity.mockRejectedValue(new Error('CONTACT_OWNERSHIP_BUSY'))
+    const response = await POST(domRequest())
+    expect(response.status).toBe(500)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('fails without writing any collision or conflict when the claimant lookup throws', async () => {
+    mocks.chatFindMany.mockRejectedValue(new Error('connection reset'))
+    const response = await POST(domRequest())
+    expect(response.status).toBe(500)
+    expect(mocks.appendCollision).not.toHaveBeenCalled()
+    expect(mocks.markIdentityConflict).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test.each([
+    ['stored sender missing', {}, { senderId: undefined }],
+    ['stored sender is the chat id', {}, { senderId: DOM_CHAT }],
+    ['stored sender is the raw chat id', {}, { senderId: '511708938', rawExternalChatId: '511708938' }],
+    ['Chat has no identity link', { contactIdentityId: null }, {}],
+    ['Chat has no Contact link', { contactId: null }, {}],
+  ])('rejects without proof when %s', async (_label, columns, storedMetadata) => {
+    chat = provenPrivateChat(columns, storedMetadata)
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('rejects an unresolved shortId key that only a DOM event ever named', async () => {
+    const shortId = '197100100'
+    chat = provenPrivateChat({ externalChatId: shortId }, { senderId: undefined, chatKind: undefined, rawExternalChatId: shortId })
+    const response = await POST(domRequest({
+      chatId: shortId,
+      rawChatId: shortId,
+      externalId: `max-dom-${shortId}-7ef524501d31775e`,
+      chatKind: 'unknown',
+      domRoute: attestedRoute({ uiRouteId: shortId, source: 'protocol_chat_id' }),
+    }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_UNPROVEN' })
+    expectNoDomMessage()
+  })
+
+  test('rejects a route-id alias even when it normalizes to the proven conversation', async () => {
+    await expectUnproven(await POST(domRequest({ chatId: DOM_ROUTE, rawChatId: DOM_ROUTE, externalId: `max-dom-${DOM_ROUTE}-7ef524501d31775e` })))
+  })
+
+  test('rejects when the raw chat id differs from the canonical chat id', async () => {
+    await expectUnproven(await POST(domRequest({ rawChatId: DOM_ROUTE })))
+  })
+
+  test('rejects a stale legacy Chat that carries no provider stamps', async () => {
+    chat = provenPrivateChat({}, { chatKind: undefined, providerAccountId: undefined })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' })
+    expectNoDomMessage()
+  })
+
+  test.each([
+    ['placeholder id of another chat', { externalId: 'max-dom-902400000777-7ef524501d31775e' }],
+    ['provider-shaped id', { externalId: 'd301a0bdbcf79419e8' }],
+    ['short hash', { externalId: `max-dom-${DOM_CHAT}-7ef5` }],
+    ['uppercase hash', { externalId: `max-dom-${DOM_CHAT}-7EF524501D31775E` }],
+    ['trailing suffix', { externalId: `${DOM_EXTERNAL_ID}-x` }],
+    ['live DOM recovery source', { source: 'live_dom_recovery' }],
+    ['history source', { source: 'history' }],
+    ['no source', { source: null }],
+    ['empty sender field', { senderId: '' }],
+    ['attachments present', { attachments: [{ type: 'image', url: 'https://i.example/x.jpg' }], messageType: 'image' }],
+  ])('rejects a forged or partial DOM-fallback marker: %s', async (_label, event) => {
+    const response = await POST(domRequest(event))
+    expect([200, 409]).toContain(response.status)
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['a deletion', { deleted: true }],
+    ['a non-text message without attachments', { messageType: 'video' }],
+    ['a text event with an attachment that has no source', { attachments: [{ type: 'image' }] }],
+  ])('never binds %s', async (_label, event) => {
+    await POST(domRequest(event))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  test('rejects a route-id alias in chatId even when rawChatId is canonical', async () => {
+    await expectUnproven(await POST(domRequest({ chatId: DOM_ROUTE, rawChatId: DOM_CHAT })))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+  })
+
+  test('never treats a non-numeric route as a page route, even for a matching stored sender', async () => {
+    chat = provenPrivateChat({ externalChatId: '902400000777' }, { senderId: 'peer-x', rawExternalChatId: '902400000777' })
+    mocks.chatFindMany.mockImplementation(async () => [chat])
+    mocks.resolvePeerIdentity.mockResolvedValue(readyPeerIdentity({ externalId: 'peer-x' }))
+    const event = { chatId: '902400000777', rawChatId: '902400000777', externalId: 'max-dom-902400000777-7ef524501d31775e' }
+    await expectUnproven(await POST(domRequest({ ...event, domRoute: attestedRoute({ uiRouteId: 'peer-x', source: 'dialog_participant' }) })))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+  })
+
+  test('never binds a Chat of another channel that shares the external id', async () => {
+    chat = provenPrivateChat({ channel: 'telegram' })
+    const response = await POST(domRequest())
+    expect(response.status).toBe(409)
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('keeps the existing mismatch failure for a DOM event that carries another sender', async () => {
+    const response = await POST(domRequest({ senderId: '902200000999' }))
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({ error: 'MAX_SENDER_IDENTITY_COLLISION' })
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expectNoDomMessage()
+  })
+
+  test('leaves a valid provider-framed inbound unchanged', async () => {
+    const response = await POST(domRequest({
+      externalId: 'd301a0bdbd00000001',
+      senderId: DOM_PEER,
+      senderName: 'User A',
+      source: undefined,
+      domRoute: undefined,
+    }))
+    expect(response.status).toBe(200)
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.not.objectContaining({ senderIdProof: expect.anything() }),
+    }))
+    expect(mocks.resolveContact).toHaveBeenCalledOnce()
+    expect(mocks.recordReachability).toHaveBeenCalledOnce()
+  })
+  // `live_dom_recovery` is the SAME trust class as `dom_fallback`, reached by different
+  // evidence. Its externalId is the real provider message id - canonical so the provider
+  // path and DOM recovery dedupe against each other - which embeds no chat id and so cannot
+  // satisfy the synthetic invariant by design. In production that made the better-evidenced
+  // inbound the one skipping this proof, and the refusal then left the pending provider id
+  // unconfirmed, wedging every later inbound on the chat.
+  const LIVE_PROVIDER_ID = 'd301a0e7130fd21954'
+
+  test('accepts a live_dom_recovery inbound bound by provider id and attested route', async () => {
+    await expectBound(await POST(domRequest({ source: 'live_dom_recovery', externalId: LIVE_PROVIDER_ID })))
+
+    // the EXISTING peer proof ran, unchanged
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledOnce()
+    expect(mocks.resolvePeerIdentity).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-c4',
+      peerExternalId: DOM_PEER,
+      linkedIdentityId: DOM_CHATKEY_IDENTITY,
+    }))
+    expect(mocks.upsertMessage).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-c4',
+      metadata: expect.objectContaining({ senderId: DOM_PEER, senderIdProof: 'bound_private_conversation' }),
+    }))
+  })
+
+  test('refuses a live_dom_recovery inbound whose chat binding does not agree', async () => {
+    await expectUnproven(await POST(domRequest({
+      source: 'live_dom_recovery',
+      externalId: LIVE_PROVIDER_ID,
+      rawChatId: '902400000777',
+    })))
+  })
+
+  test('refuses a live_dom_recovery inbound whose route is not fully attested', async () => {
+    await expectUnproven(await POST(domRequest({
+      source: 'live_dom_recovery',
+      externalId: LIVE_PROVIDER_ID,
+      domRoute: attestedRoute({ verified: false }),
+    })))
+  })
+
+  test('refuses a live_dom_recovery inbound whose peer cannot be proven', async () => {
+    mocks.chatFindMany.mockImplementation(async () => [chat, provenPrivateChat({ id: 'chat-other', externalChatId: '902400000777' })])
+    await expectUnproven(await POST(domRequest({ source: 'live_dom_recovery', externalId: LIVE_PROVIDER_ID })))
+  })
+
+  test('never binds a live_dom_recovery inbound that presents a synthetic id', async () => {
+    // Claiming provider evidence while carrying a minted id must not reach the
+    // provider-backed binding. Such an event is dropped as an unrecoverable placeholder on
+    // this source - it is not stored and the peer proof never runs for it.
+    await POST(domRequest({ source: 'live_dom_recovery' }))
+    expect(mocks.resolvePeerIdentity).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.createConversation).not.toHaveBeenCalled()
+  })
+
+  test('still refuses a dom_fallback inbound carrying a real provider id', async () => {
+    // The synthetic-id invariant on the dom_fallback path is untouched.
+    await expectUnproven(await POST(domRequest({ externalId: LIVE_PROVIDER_ID })))
+  })
+})
+
+describe('MAX webhook M2: own messages carry MAX\'s evidence, peer read marks are receipts, DOM copies are taken over', () => {
+  const chat = existingChat({
+    senderId: 'peer-sender',
+    chatKind: 'private',
+    providerAccountId: 'max-account-b',
+    connectionId: 'max_scraper',
+  })
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.stubEnv('MAX_SCRAPER_WEBHOOK_SECRET', WEBHOOK_SECRET)
+    mocks.messageFindUnique.mockResolvedValue(null)
+    mocks.messageFindMany.mockResolvedValue([])
+    mocks.chatFindUnique.mockResolvedValue(chat)
+    mocks.patchConversation.mockResolvedValue({ conversation: chat })
+    mocks.shadowStart.mockResolvedValue({ session: { complete: mocks.shadowComplete } })
+    mocks.shadowComplete.mockResolvedValue(undefined)
+    mocks.emitMessage.mockResolvedValue(undefined)
+    mocks.isResolvedContact.mockReturnValue(false)
+    mocks.selectSenderCandidate.mockReturnValue({ status: 'none', candidateCount: 0 })
+    mocks.upsertMessage.mockResolvedValue({ message: { id: 'message-in-1', chatId: 'chat-1' } })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const own = (overrides: Record<string, unknown> = {}) => request({
+    externalId: PROVIDER_ID,
+    isOutgoing: true,
+    senderId: 'account-user',
+    text: 'ответ с телефона',
+    timestamp: 1759433123000,
+    ...overrides,
+  })
+
+  test('an own message the CRM never sent is recorded as sent with provider_echo evidence, never delivered', async () => {
+    ownMessageCreatedAs('message-own-1')
+    const response = await POST(own())
+    expect(response.status).toBe(200)
+    expect(mocks.createChannelMessage).toHaveBeenCalledOnce()
+    const created = mocks.createChannelMessage.mock.calls[0][0]
+    expect(created).toMatchObject({
+      contract: 'messaging.CreateChannelMessageCommand.v1',
+      chatId: 'chat-1',
+      direction: 'outbound',
+      channel: 'max',
+      externalId: PROVIDER_ID,
+      content: 'ответ с телефона',
+    })
+    expect(created).not.toHaveProperty('status')
+    expect(mocks.applyEvidence).toHaveBeenCalledTimes(2)
+    for (const [command] of mocks.applyEvidence.mock.calls) {
+      expect(command).toEqual({
+        contract: 'messaging.PatchMessageDeliveryCommand.v2',
+        chatId: 'chat-1',
+        channel: 'max',
+        providerMessageId: PROVIDER_ID,
+        evidence: 'provider_echo',
+        content: 'ответ с телефона',
+        providerSentAt: new Date(1759433123000),
+      })
+    }
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.outboundWorkflow).toHaveBeenCalledOnce()
+  })
+
+  test('an own message that is a CRM send settles that send instead of adding a row', async () => {
+    mocks.applyEvidence.mockResolvedValue(evidenceResult('applied', 'crm-send-1', { matchedBy: 'unresolved_content' }))
+    mocks.messageFindUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
+      where.id === 'crm-send-1' ? { id: 'crm-send-1', chatId: 'chat-1', direction: 'outbound', status: 'sent' } : null)
+    const response = await POST(own())
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ messageId: 'crm-send-1' })
+    expect(mocks.applyEvidence).toHaveBeenCalledOnce()
+    expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  test('an own message read back by the catch-up is history_readback evidence', async () => {
+    ownMessageCreatedAs('message-own-2')
+    const response = await POST(own({ source: 'catchup' }))
+    expect(response.status).toBe(200)
+    expect(mocks.applyEvidence.mock.calls.map(([command]) => command.evidence)).toEqual(['history_readback', 'history_readback'])
+    expect(mocks.outboundWorkflow).not.toHaveBeenCalled()
+  })
+
+  test('a concurrent delivery that created the row first is found by the evidence, not duplicated', async () => {
+    mocks.applyEvidence
+      .mockResolvedValueOnce(evidenceResult('no_match'))
+      .mockResolvedValueOnce(evidenceResult('unchanged', 'message-own-3'))
+    mocks.createChannelMessage.mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }))
+    mocks.messageFindUnique.mockImplementation(async ({ where }: { where: { id?: string } }) =>
+      where.id === 'message-own-3' ? { id: 'message-own-3', chatId: 'chat-1' } : null)
+    const response = await POST(own())
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ messageId: 'message-own-3' })
+  })
+
+  test('contention leaves nothing claimed and asks the scraper to retry', async () => {
+    mocks.applyEvidence.mockResolvedValue(evidenceResult('refused', null, { reason: 'contention' }))
+    const response = await POST(own())
+    expect(response.status).toBe(503)
+    expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['a DOM mirror id', { externalId: 'max-mirror-902454841098-0123456789abcdef', messageType: 'image', attachments: [{ type: 'photo', url: 'https://i.example/1.jpg' }] }],
+    ['no id at all', { externalId: undefined, messageType: 'image', attachments: [{ type: 'photo', url: 'https://i.example/1.jpg' }] }],
+    ['a minted text id', { externalId: 'max-mirror-902454841098-fedcba9876543210' }],
+  ])('an own message with %s is never recorded', async (_label, overrides) => {
+    const response = await POST(own(overrides))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(['outgoing_without_provider_id', 'text_without_provider_identity']).toContain(body.skipped)
+    expect(mocks.applyEvidence).not.toHaveBeenCalled()
+    expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  const readMark = (overrides: Record<string, unknown> = {}) => request({
+    event: 'read_mark',
+    chatId: 'max-conversation-900',
+    readerId: 'peer-sender',
+    mark: 1759433200000,
+    source: 'op130',
+    ...overrides,
+  })
+
+  test('a peer read mark is a read receipt for each own message at or before it, by MAX\'s own time', async () => {
+    const readId = providerIdAt(1759433100000, 3)
+    const laterId = providerIdAt(1759433300000, 4)
+    mocks.messageFindMany.mockResolvedValue([{ id: 'out-2', externalId: laterId }, { id: 'out-1', externalId: readId }])
+    mocks.applyEvidence.mockResolvedValue(evidenceResult('applied', 'out-1'))
+    const response = await POST(readMark())
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true, applied: 1 })
+    expect(mocks.messageFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ chatId: 'chat-1', channel: 'max', direction: 'outbound', status: { in: ['sent', 'delivered'] } }),
+    }))
+    expect(mocks.applyEvidence).toHaveBeenCalledOnce()
+    expect(mocks.applyEvidence).toHaveBeenCalledWith({
+      contract: 'messaging.PatchMessageDeliveryCommand.v2',
+      chatId: 'chat-1',
+      channel: 'max',
+      providerMessageId: readId,
+      evidence: 'read_receipt',
+    })
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+    expect(mocks.shadowStart).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['our own read mark', { readerId: 'max-account-b' }, 200, 'own_read_mark'],
+    ['an unknown conversation', {}, 200, 'unknown_conversation'],
+    ['a conversation of another account', {}, 200, 'provider_account_mismatch'],
+    ['a mark that is not a time', { mark: 'soon' }, 400, null],
+  ])('a read mark on %s applies nothing', async (label, overrides, status, skipped) => {
+    if (label === 'an unknown conversation') mocks.chatFindUnique.mockResolvedValue(null)
+    if (label === 'a conversation of another account') mocks.chatFindUnique.mockResolvedValue(existingChat({ providerAccountId: 'max-account-a' }))
+    const response = await POST(readMark(overrides))
+    expect(response.status).toBe(status)
+    if (skipped) await expect(response.json()).resolves.toMatchObject({ skipped, applied: 0 })
+    expect(mocks.applyEvidence).not.toHaveBeenCalled()
+  })
+
+  const inbound = (overrides: Record<string, unknown> = {}) => request({
+    externalId: PROVIDER_ID,
+    senderId: 'peer-sender',
+    text: 'длинное сообщение   водителя',
+    timestamp: Number(BigInt(`0x${PROVIDER_ID.slice(2)}`) >> 16n),
+    ...overrides,
+  })
+
+  test('D-04: the provider event of a text already stored from the page takes that DOM copy over', async () => {
+    const providerMs = Number(BigInt(`0x${PROVIDER_ID.slice(2)}`) >> 16n)
+    mocks.messageFindMany.mockResolvedValue([
+      { id: 'dom-other', externalId: 'max-dom-max-conversation-900-aaaaaaaaaaaaaaaa', content: 'другое', metadata: {}, sentAt: new Date(providerMs + 1000) },
+      { id: 'dom-1', externalId: 'max-dom-max-conversation-900-0123456789abcdef', content: 'длинное сообщение водителя', metadata: { source: 'dom_fallback' }, sentAt: new Date(providerMs + 4000) },
+    ])
+    mocks.replaceMessage.mockResolvedValue({ message: { id: 'dom-1', chatId: 'chat-1' } })
+    const response = await POST(inbound())
+    expect(response.status).toBe(200)
+    expect(mocks.messageFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        chatId: 'chat-1', direction: 'inbound', type: 'text', externalId: { startsWith: 'max-dom-' },
+        sentAt: { gte: new Date(providerMs - 60_000), lte: new Date(providerMs + 600_000) },
+      }),
+      orderBy: { sentAt: 'asc' },
+    }))
+    expect(mocks.replaceMessage).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: 'dom-1',
+      externalId: PROVIDER_ID,
+      content: 'длинное сообщение   водителя',
+      metadata: expect.objectContaining({ upgradedFromExternalId: 'max-dom-max-conversation-900-0123456789abcdef' }),
+    }))
+    expect(mocks.replaceMessage.mock.calls[0][0].metadata).not.toHaveProperty('source')
+    expect(mocks.upsertMessage).not.toHaveBeenCalled()
+  })
+
+  test('D-04: no DOM copy of that text, or the provider id already stored, is an ordinary provider row', async () => {
+    mocks.messageFindMany.mockResolvedValue([{ id: 'dom-other', externalId: 'max-dom-max-conversation-900-aaaaaaaaaaaaaaaa', content: 'другое', metadata: {} }])
+    let response = await POST(inbound())
+    expect(response.status).toBe(200)
+    expect(mocks.replaceMessage).not.toHaveBeenCalled()
+    expect(mocks.upsertMessage).toHaveBeenCalledOnce()
+
+    mocks.upsertMessage.mockClear()
+    mocks.messageFindMany.mockClear()
+    // Already stored: the duplicate check answers before any DOM copy is looked for.
+    mocks.messageFindUnique.mockImplementation(async ({ where }: { where: { externalId?: string } }) =>
+      where.externalId === PROVIDER_ID ? { id: 'message-in-1', chatId: 'chat-1', chat } : null)
+    response = await POST(inbound())
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ deduped: true, messageId: 'message-in-1' })
+    expect(mocks.messageFindMany).not.toHaveBeenCalled()
+    expect(mocks.replaceMessage).not.toHaveBeenCalled()
   })
 })

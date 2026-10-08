@@ -224,6 +224,19 @@ class MaxWebReplyBridge {
             replyToId = BigInt.asUintN(64, BigInt(message.link.id)).toString()
           }
         } catch {}
+        let senderId = null
+        try {
+          const sender = message?.sender
+          const rawSender = sender != null && typeof sender === 'object' ? sender.id : sender
+          if (rawSender != null) senderId = BigInt.asUintN(64, BigInt(rawSender)).toString()
+        } catch {}
+        let attachmentCount = 0
+        try {
+          const attaches = message?.attaches
+          attachmentCount = Array.isArray(attaches)
+            ? attaches.length
+            : (typeof attaches?.length === 'number' ? attaches.length : (typeof attaches?.size === 'number' ? attaches.size : 0))
+        } catch {}
         return {
           ok: true,
           providerChatId: String(chatKey),
@@ -234,6 +247,8 @@ class MaxWebReplyBridge {
             timestamp: Number(message.time) || null,
             isOutgoing: Boolean(message.isOut),
             replyToId,
+            senderId,
+            attachmentCount,
           },
         }
       } catch (error) {
@@ -262,6 +277,8 @@ class MaxWebReplyBridge {
       timestamp: timestampMs(result.message?.timestamp),
       isOutgoing: Boolean(result.message?.isOutgoing),
       replyToExternalId,
+      senderId: /^\d{1,20}$/.test(String(result.message?.senderId || '')) ? String(result.message.senderId) : null,
+      attachmentCount: Number(result.message?.attachmentCount) || 0,
     }
   }
 

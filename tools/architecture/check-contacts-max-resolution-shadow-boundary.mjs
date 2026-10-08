@@ -504,6 +504,17 @@ function assertConsumerBoundary(source) {
             reason: 'collisionReason',
         },
         {
+            // DOM-fallback replay leg: the stored provider message is found before the peer proof
+            // runs, so the shadow session completes on the duplicate path and legacy contact
+            // resolution is never reached.
+            owner_chain: ['POST'],
+            argument_kind: 'object',
+            status_kind: 'literal',
+            status: 'no_contact',
+            reason_kind: 'literal',
+            reason: 'existing_provider_message',
+        },
+        {
             owner_chain: ['POST'],
             argument_kind: 'object',
             status_kind: 'literal',

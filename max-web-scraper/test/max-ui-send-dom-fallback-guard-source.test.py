@@ -3,8 +3,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'index.js'
 source = SRC.read_text(encoding='utf-8')
-ui_start = source.index('async function sendTextViaUi')
-ui_end = source.index('function waitForUiSendAck', ui_start)
+ui_start = source.index('async function sendText(')
+ui_end = source.index('function maskPhoneForLog', ui_start)
 ui_block = source[ui_start:ui_end]
 
 
