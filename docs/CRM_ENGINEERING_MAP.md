@@ -317,10 +317,14 @@ Each entry lists what the code actually does.
 - **Purpose**: MAX messenger via a web scraper (the only transport on main).
 - **Key paths**
   - `max-web-scraper/index.js` (Express app, send paths, DOM recovery),
-    `transport/TransportInterceptor.js` (WebSocket hook + decoder),
+    `transport/TransportInterceptor.js` (WebSocket hook; decodes MAX Web's binary
+    frames — version, cmd, int16 seq and opcode, LZ4 block, one msgpack value — and
+    correlates the scraper's own requests by seq, from 30000, and opcode),
     `session/SessionController.js`, `parser/MessageParser.js`,
-    `sync/{MessageSync,InitialHistorySync,NameSync}.js`,
-    `media/MediaPipeline.js`, `lib/MaxWebReplyBridge.js`.
+    `sync/{MessageSync,InitialHistorySync,NameSync}.js` (known-chat catch-up after a
+    restart), `media/MediaPipeline.js`, `lib/MaxWebReplyBridge.js`,
+    `lib/DomRouteAttestation.js` (proof that DOM-recovered text was read from the
+    conversation it is forwarded for).
   - `G/app/api/webhooks/max/route.ts` — the only live ingress;
     `G/app/api/webhook/max/reaction/route.ts` — reaction ingress.
   - `G/modules/max-channel/public/v1/messaging-delivery-capability.ts`,
@@ -334,6 +338,15 @@ Each entry lists what the code actually does.
 - **State location**: MAX conversation state is carried in `Chat.metadata`
   (`providerAccountId`, `senderId`, `chatKind`); scraper state is in the Playwright
   profile volume and JSON files. No MAX session state is persisted in Postgres.
+  Stored MAX ids (`Chat.externalChatId`, `senderId`, `providerAccountId`) are
+  protocol ids `(0xd2 << 32) | realId` — the msgpack int32 ext marker folded into
+  the number; MAX Web itself uses the real id. They are a stable bijection and are
+  never rewritten; comparisons and requests use the real id
+  (`maxRealIdFromProtocolId`, `sameMaxChatId`). See I-47.
+- **Uses Contacts (public only)**: `resolveInboundConversationPeerIdentityV1`
+  (`contacts.ResolveInboundConversationPeerIdentityQuery.v1`, the inbound peer
+  proof) and the `identityExternalId` selector of
+  `PrepareContactConversationIdentityCommand.v1` (outbound peer by provider id).
 - **Extension points**: `MaxChannelDeliveryV1`; webhook payload `source` /
   `chatKind`; the `OP` opcode table in `TransportInterceptor.js`.
 - **Tests**: `G/app/api/webhooks/max/route.test.ts`,
@@ -712,6 +725,10 @@ codes (`PERSON_CONFIRMATION_REQUIRED` and the `TELEGRAM_*` family).
 `MessageParser.toCrmPayload` → `forwardToWebhook` (adds `accountId`, `chatKind`,
 header `x-max-scraper-webhook-secret`) →
 `POST G/app/api/webhooks/max/route.ts` → `isAuthorizedMaxScraperWebhookV1` →
+(a `read_mark` event, from an op:130 push, goes to `applyMaxPeerReadMark` and
+stops) → for a DOM-fallback event: the attested route (`DomRouteAttestation`)
+and the Contacts peer proof `resolveInboundConversationPeerIdentityV1`, and a
+stored replay answers `deduped` before the collision guard (I-48) →
 collision checks → `createExternalConversationV1` / `patchExternalConversationV1`
 → `upsertExternalMessageV1` → `attachMessageMediaV2` →
 `ConversationWorkflowService.onInboundMessage` → F-01 → SSE broadcast +
@@ -1226,6 +1243,24 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   confirmation fields, or a UI-send proof bound to `clientMessageId`.** —
   `validateMaxTextDeliveryResultV1` — `gravity-mvp/test/max-delivery-validation.test.ts`.
   Note: the UI proof means the compose box cleared, not a provider receipt.
+- **I-46 A MAX text send is proven only by MAX's op:64 response (cmd 1) to that
+  exact request — same seq, same opcode.** MAX pushes no echo to the sending
+  session, so nothing else counts; an `unknown` outcome is never resent (I-10a).
+  — `TransportInterceptor.js` send correlation — `max-web-scraper/test/*`,
+  `gravity-mvp/test/max-delivery-validation.test.ts`.
+- **I-47 MAX ids are compared in the real-id space; stored protocol ids are never
+  rewritten.** — `maxRealIdFromProtocolId`, `sameMaxChatId` —
+  `max-web-scraper/test/*`. Exactly-once text (M1) depends on it: without the
+  real-id comparison the op:64 request match never sees a live send.
+- **I-48 A DOM-fallback inbound is bound to a conversation only after Contacts
+  proves its peer, and a stored replay dedupes before the collision guard.** —
+  `resolveInboundConversationPeerIdentityV1`, the replay branch of the MAX webhook
+  — `G/app/api/webhooks/max/route.test.ts`,
+  `check-contacts-max-resolution-shadow-boundary.mjs`.
+- **I-49 A MAX send addresses the peer by provider id, never the conversation-key
+  identity.** Contacts applies every gate it owns to the row it selects. —
+  `outbound-conversation-identity.ts` (`identityExternalId`) —
+  `outbound-conversation-identity.test.ts`, `gravity-mvp/test/max-outbound-send.test.ts`.
 
 ### Calling
 
@@ -1553,7 +1588,8 @@ Fields: **Path** · **Evidence** · **Why** · **Confidence** · **Risk if remov
 - **C-40** MAX contact-resolution shadow
   (`G/lib/contacts/max-contact-resolution-shadow.ts`, flag
   `CONTACT_RESOLUTION_SHADOW_MAX`) · log-only; appears to compare against the same
-  executor it shadows · LOW · a boundary control covers it · contacts.
+  executor it shadows · LOW · a boundary control covers it (six exact completions,
+  including the DOM-fallback replay) · contacts.
 - **C-41** Root `check-last-call.sql`, `last-call-uuid.sql`, `start-all.bat`,
   `gravity-mvp/*.sql` · ad-hoc; `start-all.bat` is cited by docs · LOW–MEDIUM ·
   pinned · platform.
