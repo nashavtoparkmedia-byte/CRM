@@ -52,6 +52,8 @@ export interface ContactConversationPersistencePortV1 {
         channel: ContactConversationChannelV1
         identityId: string | null
         phoneId: string | null
+        /** Exact provider identifier of the identity to prepare; null when unselected. */
+        identityExternalId?: string | null
         purpose: ContactConversationPurposeV1
     }): Promise<PrepareContactConversationIdentityPersistenceResultV1>
     getPreferredActiveContactPhone(contactId: string, phoneId: string | null): Promise<string | null>
@@ -87,6 +89,7 @@ export function createPrepareContactConversationIdentityHandlerV1(port: ContactC
             channel: parsed.channel,
             identityId: parsed.identityId,
             phoneId: parsed.phoneId,
+            identityExternalId: parsed.identityExternalId ?? null,
             purpose: parsed.purpose,
         })
 

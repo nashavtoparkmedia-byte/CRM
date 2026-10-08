@@ -36,6 +36,8 @@ test('provider-backed DOM reply restores only body and exact reply identity', as
         timestamp: 1783762168000,
         isOutgoing: false,
         replyToId: providerDecimalFromId(replyToExternalId),
+        senderId: '902264026154',
+        attachmentCount: 0,
       },
     }),
   })
@@ -54,6 +56,8 @@ test('provider-backed DOM reply restores only body and exact reply identity', as
     timestamp: 1783762168000,
     isOutgoing: false,
     replyToExternalId,
+    senderId: '902264026154',
+    attachmentCount: 0,
   })
 })
 
@@ -245,5 +249,5 @@ test('real provider reply target still route-correlates the MAX Web chat before 
   assert.match(sendBlock, /const routeMatches = Array\.from\(core\.module\.Wa\.chats\.values \|\| \[\]\)/)
   assert.match(sendBlock, /const chat = routeMatches\.length === 1/)
   assert.match(sendBlock, /: await core\.module\.Wa\.chats\.getLazy\(requestedChatKey\)/)
-  assert.match(scraperSource, /replyBridge\.sendReply\([\s\S]*?\{ uiChatId: directUiRouteId \}[\s\S]*?\)/)
+  assert.match(scraperSource, /replyBridge\.sendReply\(protocolChatId, text, replyProviderId, cid, \{ uiChatId: uiRouteId \}\)/)
 })
