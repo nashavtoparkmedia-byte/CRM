@@ -1,10 +1,52 @@
 /**
+ * What an adapter proves about one text send (S2 evidence contract).
+ *
+ *   provider_ack   — the provider answered for THIS message (an RPC result, a
+ *                    response frame correlated to our own request);
+ *   provider_echo  — the provider echoed THIS message back, correlated to it;
+ *   client_action  — the adapter acted (queued locally, submitted a UI form)
+ *                    but holds no provider answer for this message.
+ *
+ * `providerMessageId` is the provider's id for this message. It is required for
+ * provider_ack and provider_echo; a client_action may carry a client-minted id.
+ * A result without `evidence` is a legacy result and keeps legacy behaviour.
+ * Messaging reads results through `readTextDeliveryResultV1` (delivery-state-policy).
+ */
+export type TextDeliveryEvidenceV1 = 'client_action' | 'provider_ack' | 'provider_echo'
+
+export interface TextDeliveryResultV1 {
+    evidence: TextDeliveryEvidenceV1
+    providerMessageId: string | null
+    resolvedChatId?: string | null
+}
+
+/**
+ * A send failure the adapter can prove: nothing carrying the message reached
+ * the provider (`safe_to_redeliver`), or the provider or a gate before dispatch
+ * refused it and a retry cannot change that (`terminal`). Any other error is
+ * treated as an unknown outcome.
+ */
+export interface ChannelDeliveryErrorV1 extends Error {
+    readonly name: 'ChannelDeliveryErrorV1'
+    readonly deliveryOutcome: 'safe_to_redeliver' | 'terminal'
+    readonly deliveryErrorCode: string | null
+}
+
+export function channelDeliveryErrorV1(
+    message: string,
+    deliveryOutcome: ChannelDeliveryErrorV1['deliveryOutcome'],
+    deliveryErrorCode: string | null = null,
+): ChannelDeliveryErrorV1 {
+    return Object.assign(new Error(message), { name: 'ChannelDeliveryErrorV1' as const, deliveryOutcome, deliveryErrorCode })
+}
+
+/**
  * Runtime-only ports for the three channel owners. Messaging owns the send
  * workflow; channel contexts register the concrete transport capabilities at
  * process startup. This keeps provider SDKs and session state out of Messaging.
  */
 export interface WhatsAppChannelDeliveryV1 {
-    sendText(input: { connectionId?: string, chatId: string, content: string, quotedMessageId?: string }): Promise<{ externalId: string }>
+    sendText(input: { connectionId?: string, chatId: string, content: string, quotedMessageId?: string }): Promise<{ externalId: string } | TextDeliveryResultV1>
     sendMedia(input: { connectionId?: string, chatId: string, base64: string, filename: string, mimeType: string, caption?: string, sendAsVoice: boolean, sendAsDocument: boolean }): Promise<{ externalId: string }>
     sendReaction(input: { connectionId?: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
 }
@@ -19,6 +61,9 @@ export interface MaxTextDeliveryResultV1 {
     outcome: 'delivered' | 'pending'
     externalId: string | null
     resolvedChatId: string | null
+    /** Typed evidence (S2). When present it alone decides; `outcome` is then ignored. */
+    evidence?: TextDeliveryEvidenceV1
+    providerMessageId?: string | null
 }
 
 export interface MaxTransportBindingV1 {

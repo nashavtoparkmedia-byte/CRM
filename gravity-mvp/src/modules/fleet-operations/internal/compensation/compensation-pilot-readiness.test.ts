@@ -98,6 +98,15 @@ const input = (overrides: Partial<PilotInputReadV1> = {}): PilotInputReadV1 => (
 })
 
 describe('Gate 1: PILOT CANDIDATE READY', () => {
+    it('0. stays order-independent: a driver whose first month ended inside the last 72 h is not a candidate', () => {
+        // The pilot may still serve such a driver for a last-day order of that
+        // month through the order's own grace, which Gate 2 applies through the
+        // catalogue rule; Gate 1 states the first month at `now`, reads no
+        // orders, and so refuses — conservative, never a false positive.
+        const gate = pilotCandidateFactsGateV1(driver(), PILOT_PARKS, new Date('2026-10-02T12:00:00.000Z'))
+        expect(gate).toMatchObject({ passed: false, reason: 'outside_first_calendar_month', firstMonthKey: FIRST_MONTH_KEY })
+    })
+
     it('1. refuses when the Yandex facts were never populated', () => {
         const gate = pilotCandidateFactsGateV1(
             driver({
@@ -281,6 +290,17 @@ describe('Gate 2: PILOT INPUT READY', () => {
             NOW,
         )
         expect(gate.counts.catalogueOrderCount).toBe(0)
+    })
+
+    it('19c. after the first month, counts only a last-day order whose 72 h window is still open', () => {
+        const lastDay = order({ externalOrderId: 'ext-order-last-day', endedAt: new Date('2026-09-30T18:30:00.000Z') })
+        const ordinary = order({ externalOrderId: 'ext-order-ordinary', endedAt: new Date('2026-09-12T10:00:00.000Z') })
+        const inGrace = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-02T12:00:00.000Z'))
+        expect(inGrace.counts.catalogueOrderCount).toBe(1)
+        expect(inGrace.ready).toBe(true)
+        const atDeadline = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-03T18:30:00.000Z'))
+        expect(atDeadline.counts.catalogueOrderCount).toBe(0)
+        expect(atDeadline.ready === false && atDeadline.reason).toBe('no_cash_orders')
     })
 
     it('20. an order aged at most 45 minutes is fresh for submission', () => {

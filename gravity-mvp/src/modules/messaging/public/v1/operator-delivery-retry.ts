@@ -1,4 +1,5 @@
 import { MessageService, isSafeToRedeliver } from '@/lib/MessageService'
+import { deriveDeliveryStateV1, type DeliveryStateV1 } from './delivery-state-policy'
 import { broadcastChatMessageV1 } from './message-stream'
 
 export interface OperatorRetriedMessageV1 {
@@ -12,6 +13,8 @@ export interface OperatorRetriedMessageV1 {
     retryable: boolean
     deliveryOutcome: string | null
     errorSchemaVersion: number | null
+    /** What the row's evidence proves (S2), derived as the server and the UI derive it everywhere. */
+    deliveryState: DeliveryStateV1 | null
 }
 
 export type OperatorDeliveryRetryResultV1 = {
@@ -61,6 +64,7 @@ export async function retryFailedOutboundMessageV1(messageId: unknown): Promise<
         retryable: row.status === 'failed' && isSafeToRedeliver(metadata),
         deliveryOutcome: row.status === 'failed' ? optionalString(metadata.deliveryOutcome) : null,
         errorSchemaVersion: row.status === 'failed' && typeof metadata.errorSchemaVersion === 'number' ? metadata.errorSchemaVersion : null,
+        deliveryState: deriveDeliveryStateV1(row),
     }
     // Other open views of this conversation settle on the same row.
     broadcastChatMessageV1(row.chatId, row)

@@ -64,7 +64,7 @@ const RESULT_TEXT: Record<string, string> = {
     reject_requires_reason: 'Укажите причину отказа.',
     payout_authorization_active: 'Выплата уже начата. Сначала отмените одобрение.',
     another_payout_in_progress: 'У этого водителя уже есть незакрытая выплата.',
-    daily_limit_reached: 'У водителя уже есть выплата за этот день.',
+    daily_limit_reached: 'За день этого заказа у водителя уже есть компенсация.',
     authorization_too_old_reconcile: 'Одобрение старше суток. Отметьте «Исход неизвестен» и закройте сверкой.',
     reconciliation_required: 'Исход прошлой выплаты неизвестен. Закройте сверку.',
     reconciliation_not_open: 'Сверка уже закрыта.',
@@ -209,7 +209,7 @@ export default function CompensationApplicationDetail({
                 <section className="mt-4 rounded-md border border-border p-4" data-testid="authorization-block">
                     <h2 className="text-[15px] font-medium text-foreground">Выплата</h2>
                     <p className="mt-2 text-[13px] text-muted">
-                        Одобрил {application.authorization.openedByLabel ?? '—'} · день выплаты {application.authorization.intendedBusinessDay}
+                        Одобрил {application.authorization.openedByLabel ?? '—'} · день заказа {application.authorization.intendedBusinessDay}
                     </p>
                     {application.authorization.beyondUnaidedRecall && (
                         <p className="mt-1 text-[13px] text-destructive">
@@ -232,7 +232,7 @@ export default function CompensationApplicationDetail({
                 <section className="mt-4 rounded-md border border-border p-4" data-testid="settlement-block">
                     <h2 className="text-[15px] font-medium text-foreground">Выплачено</h2>
                     <p className="mt-2 text-[13px] text-muted">
-                        {rublesFromKopecks(application.settlement.amountKopecks)} · {application.settlement.businessDay} ·
+                        {rublesFromKopecks(application.settlement.amountKopecks)} · выплачено {application.settlement.businessDay} ·
                         {' '}{application.settlement.settledByLabel ?? '—'}
                     </p>
                 </section>

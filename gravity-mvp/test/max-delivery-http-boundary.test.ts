@@ -116,7 +116,27 @@ describe('MAX HTTP 2xx delivery boundary', () => {
 
     afterEach(() => unregisterOutboundPreparer?.())
 
-    it('preserves a consistent real d301 delivery through max-actions and the capability', async () => {
+    it('preserves a real d301 id MAX answered for this send as provider_ack through the capability', async () => {
+        mockHttpPayload({
+            success: true,
+            providerAccountId,
+            externalId: providerId,
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+            proofKind: 'provider_ack',
+            deliveryProof: { kind: 'provider_ack', providerMessageId: providerId, requestSeq: 22 },
+        })
+
+        await expect(sendThroughRealHttpBoundary()).resolves.toEqual({
+            outcome: 'delivered',
+            externalId: providerId,
+            resolvedChatId: null,
+            evidence: 'provider_ack',
+            providerMessageId: providerId,
+        })
+    })
+
+    it('keeps a d301 id without a correlated proof a client action', async () => {
         mockHttpPayload({
             success: true,
             providerAccountId,
@@ -126,9 +146,11 @@ describe('MAX HTTP 2xx delivery boundary', () => {
         })
 
         await expect(sendThroughRealHttpBoundary()).resolves.toEqual({
-            outcome: 'delivered',
-            externalId: providerId,
+            outcome: 'pending',
+            externalId: null,
             resolvedChatId: null,
+            evidence: 'client_action',
+            providerMessageId: null,
         })
     })
 

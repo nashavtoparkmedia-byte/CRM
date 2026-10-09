@@ -262,8 +262,8 @@ test('malformed previous anchor cannot reject a pending live provider id', () =>
   )
 })
 
-test('binary op71 refuses a malformed stored provider anchor without touching the socket', async () => {
-  const transport = new TransportInterceptor()
+test('catch-up refuses a malformed stored provider anchor without touching the socket', async () => {
+  const transport = new TransportInterceptor({ stateDir: fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'max-anchor-')) })
   let socketCalls = 0
   transport._page = {
     evaluate: async () => {
@@ -275,9 +275,11 @@ test('binary op71 refuses a malformed stored provider anchor without touching th
   transport._lastMsgRawHex.set('902454841098', 'd31c00786efba474')
 
   await assert.rejects(
-    transport.sendBinaryOp71('902454841098'),
-    /Refusing op:71 with invalid provider anchor/,
+    transport.forceHistoryCatchup('902454841098', 'd31c00786efba474'),
+    /No provider message id to catch up from/,
   )
+  assert.equal(transport.noteGapFloor('902454841098', 'd31c00786efba474'), false)
+  assert.deepEqual(transport.gapFloors(), {})
   assert.equal(socketCalls, 0)
 })
 
@@ -294,8 +296,8 @@ test('live inbound recovery uses guarded DOM batches without injecting active op
   const transportSource = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
   const scraperSource = fs.readFileSync(require.resolve('../index'), 'utf8')
 
-  const markStart = transportSource.indexOf('// op:128 cmd:1 (browser mark-as-received)')
-  const markEnd = transportSource.indexOf('const maxHex', markStart)
+  const markStart = transportSource.indexOf('\n  _handleOutgoingFrame(frame) {')
+  const markEnd = transportSource.indexOf('\n  _resolveBrowserAckChatId(', markStart)
   assert.notEqual(markStart, -1)
   assert.notEqual(markEnd, -1)
   const markBlock = transportSource.slice(markStart, markEnd)
@@ -332,7 +334,10 @@ test('live inbound recovery uses guarded DOM batches without injecting active op
   assert.notEqual(incomingStart, -1)
   assert.notEqual(incomingEnd, -1)
   const incomingBlock = scraperSource.slice(incomingStart, incomingEnd)
-  assert.match(incomingBlock, /scheduleAutomaticDomMirrorRecovery\(String\(chatId\), 'empty_op71_after_op128'\)/)
+  // No DOM recovery on a timer after every push: a decoded push is the live
+  // path's to persist, and recovery is driven by the inbound ledger.
+  assert.doesNotMatch(incomingBlock, /scheduleAutomaticDomMirrorRecovery/)
+  assert.match(incomingBlock, /!pushEnvelope\?\.message && looksLikeDomRecoverableMediaPayload\(data\.payload\)/)
   assert.doesNotMatch(incomingBlock, /const anchorHex|hasPendingLive/)
 })
 
@@ -415,7 +420,7 @@ test('provider-backed DOM reply recovery forwards only reply body text', () => {
   const pendingIndex = forwardBlock.indexOf('const pendingProviderId =')
   const quoteIndex = forwardBlock.indexOf("looksLikeDomReplyQuoteText(chatId, latest)")
   const leafIndex = forwardBlock.indexOf('latest = { ...latest, text: leafText')
-  const externalIndex = forwardBlock.indexOf('const externalId = isOutgoingCandidate')
+  const externalIndex = forwardBlock.indexOf('const externalId = resolvedProviderId || stableDomCandidateMessageId(')
 
   assert.ok(pendingIndex > -1 && quoteIndex > -1 && leafIndex > -1 && externalIndex > -1)
   assert.ok(pendingIndex < quoteIndex, 'provider id must be checked before quote handling')
@@ -435,7 +440,7 @@ test('single live DOM text after unsafe op128 can recover without direct anchor'
   assert.match(liveRecoveryBlock, /liveWindowDetails\.recentOp128Count > 0/)
   assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates\(\s*recoverable,\s*Math\.min\(recoverable\.length, liveWindowDetails\.recentOp128Count\)/s)
   assert.match(liveRecoveryBlock, /candidate\._liveDomSeriesCandidate = true/)
-  assert.match(source, /source: isOutgoingCandidate \? 'max_web_mirror' : \(resolvedProviderId \? 'live_dom_recovery' : 'dom_fallback'\)/)
+  assert.match(source, /source: resolvedProviderId \? 'live_dom_recovery' : 'dom_fallback'/)
 })
 
 
@@ -611,3 +616,1152 @@ test('phone UI unrelated and background frames stay pending', () => {
   assert.equal(result.chatId, null)
   assert.equal(result.observedFrameCount, 2)
 })
+
+// ─── M1: exactly-once text transport ─────────────────────────────────────────
+// Frames are built the way MAX builds them: the encoder below is the frame
+// encoder of the MAX Web bundle (`ere`), and the LZ4 block encoder is a port of
+// its `Kne`, verified byte-identical against the bundle on 3,000 inputs. The
+// sequences come from the preserved production log of 2026-10-02 (fixture
+// max-n0-burst-20261002.json, with line numbers and the log sha256).
+
+const n0 = require('./fixtures/max-n0-burst-20261002.json')
+const {
+  MaxTextSendObservation,
+  canonicalMaxMessageIdHex,
+  decideMaxTextSendOutcome,
+  decodeMaxBinaryFrame,
+  maxMsgpackDecodeAll,
+  runSingleMaxTextSend,
+} = require('../transport/TransportInterceptor')
+const { InboundDeliveryLedger, forwardWithBoundedRetry } = require('../sync/MessageSync')
+const { MessageParser } = require('../parser/MessageParser')
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+// MAX ids travel as msgpack ext type 1 holding an int64 (d3) or uint64 (cf).
+class MaxExt {
+  constructor(hex) { this.hex = hex }
+}
+const maxIdExt = hex => new MaxExt(hex)
+const maxTimeExt = ms => new MaxExt(`d3${BigInt(ms).toString(16).padStart(16, '0')}`)
+const maxTimeOfId = id => Number(BigInt(`0x${id.slice(2)}`) >> 16n)
+
+function mpEncode(value) {
+  const out = []
+  const u8 = v => out.push(v & 0xff)
+  const be = (v, bytes) => {
+    const big = BigInt.asUintN(bytes * 8, BigInt(v))
+    for (let i = bytes - 1; i >= 0; i--) out.push(Number((big >> BigInt(8 * i)) & 0xffn))
+  }
+  const write = v => {
+    if (v === null) return u8(0xc0)
+    if (v === true) return u8(0xc3)
+    if (v === false) return u8(0xc2)
+    if (v instanceof MaxExt) {
+      const bytes = Buffer.from(v.hex, 'hex')
+      u8(0xc7); u8(bytes.length); u8(0x01)
+      for (const b of bytes) u8(b)
+      return
+    }
+    if (typeof v === 'number') {
+      if (!Number.isInteger(v)) throw new Error('floats are not used by these frames')
+      if (v >= 0 && v < 0x80) return u8(v)
+      if (v >= 0 && v < 0x100) { u8(0xcc); return u8(v) }
+      if (v >= 0 && v < 0x10000) { u8(0xcd); return be(v, 2) }
+      if (v >= 0 && v < 0x100000000) { u8(0xce); return be(v, 4) }
+      if (v >= 0) { u8(0xcf); return be(v, 8) }
+      if (v >= -32) return u8(v)
+      u8(0xd3); return be(v, 8)
+    }
+    if (typeof v === 'string') {
+      const bytes = Buffer.from(v, 'utf8')
+      if (bytes.length < 32) u8(0xa0 | bytes.length)
+      else if (bytes.length < 0x100) { u8(0xd9); u8(bytes.length) }
+      else { u8(0xda); be(bytes.length, 2) }
+      for (const b of bytes) u8(b)
+      return
+    }
+    if (Array.isArray(v)) {
+      if (v.length < 16) u8(0x90 | v.length); else { u8(0xdc); be(v.length, 2) }
+      v.forEach(write)
+      return
+    }
+    const entries = Object.entries(v).filter(([, item]) => item !== undefined)
+    if (entries.length < 16) u8(0x80 | entries.length); else { u8(0xde); be(entries.length, 2) }
+    for (const [key, item] of entries) { write(key); write(item) }
+  }
+  write(value)
+  return Buffer.from(out)
+}
+
+// Port of MAX Web's LZ4 block encoder `Kne`.
+function lz4BlockCompress(input) {
+  const MIN_MATCH = 4, LAST_LITERALS = 5, MF_LIMIT = 12, MIN_LENGTH = 13, MAX_DISTANCE = 65535
+  const HASH_LOG = 13, HASH_SIZE = 1 << HASH_LOG, SKIP_STRENGTH = 6
+  const read32 = (b, i) => (b[i] | b[i + 1] << 8 | b[i + 2] << 16 | b[i + 3] << 24) >>> 0
+  const hashAt = (b, i) => Math.imul(read32(b, i), 2654435761) >>> (32 - HASH_LOG) & (HASH_SIZE - 1)
+  const src = Uint8Array.from(input)
+  const end = src.length
+  const out = new Uint8Array(end + Math.floor(end / 255) + 16)
+  const writeLiterals = (op, anchor) => {
+    const length = end - anchor
+    if (length >= 15) {
+      out[op++] = 15 << 4
+      let rest = length - 15
+      for (; rest >= 255; rest -= 255) out[op++] = 255
+      out[op++] = rest
+    } else {
+      out[op++] = length << 4
+    }
+    for (let i = 0; i < length; i++) out[op++] = src[anchor + i]
+    return op
+  }
+  if (end === 0) return new Uint8Array()
+  if (end < MIN_LENGTH) return out.subarray(0, writeLiterals(0, 0))
+  const table = new Int32Array(HASH_SIZE).fill(0)
+  const mfLimit = end - MF_LIMIT
+  const matchLimit = end - LAST_LITERALS
+  let ip = 0, anchor = 0, op = 0
+  table[hashAt(src, ip)] = ip
+  ip++
+  let forwardHash = hashAt(src, ip)
+  for (;;) {
+    let ref
+    let forwardIp = ip, step = 1, attempts = 1 << SKIP_STRENGTH
+    do {
+      const h = forwardHash
+      ip = forwardIp
+      forwardIp += step
+      step = attempts++ >>> SKIP_STRENGTH
+      if (forwardIp > mfLimit) return out.subarray(0, writeLiterals(op, anchor))
+      ref = table[h]
+      table[h] = ip
+      forwardHash = hashAt(src, forwardIp)
+    } while (ref + MAX_DISTANCE < ip || read32(src, ref) !== read32(src, ip))
+    while (ip > anchor && ref > 0 && src[ip - 1] === src[ref - 1]) { ip--; ref-- }
+    const literalLength = ip - anchor
+    let token = op++
+    if (literalLength >= 15) {
+      out[token] = 15 << 4
+      let rest = literalLength - 15
+      for (; rest >= 255; rest -= 255) out[op++] = 255
+      out[op++] = rest
+    } else {
+      out[token] = literalLength << 4
+    }
+    for (let i = 0; i < literalLength; i++) out[op++] = src[anchor + i]
+    for (;;) {
+      const distance = ip - ref
+      out[op++] = distance & 255
+      out[op++] = (distance >>> 8) & 255
+      let matchLength = 0
+      while (ip + MIN_MATCH + matchLength < matchLimit && src[ip + MIN_MATCH + matchLength] === src[ref + MIN_MATCH + matchLength]) matchLength++
+      ip += MIN_MATCH + matchLength
+      if (matchLength >= 15) {
+        out[token] |= 15
+        matchLength -= 15
+        for (; matchLength >= 510; matchLength -= 510) { out[op++] = 255; out[op++] = 255 }
+        if (matchLength >= 255) { matchLength -= 255; out[op++] = 255 }
+        out[op++] = matchLength
+      } else {
+        out[token] |= matchLength
+      }
+      anchor = ip
+      if (ip > mfLimit) return out.subarray(0, writeLiterals(op, anchor))
+      table[hashAt(src, ip - 2)] = ip - 2
+      ref = table[hashAt(src, ip)]
+      table[hashAt(src, ip)] = ip
+      if (ref + MAX_DISTANCE >= ip && read32(src, ref) === read32(src, ip)) { token = op++; out[token] = 0; continue }
+      forwardHash = hashAt(src, ++ip)
+      break
+    }
+  }
+}
+
+// MAX Web's frame encoder (`ere`): payloads over 32 bytes are LZ4-compressed.
+function encodeMaxFrame({ cmd, seq, opcode, payload }) {
+  let body = payload === undefined ? Buffer.alloc(0) : mpEncode(payload)
+  let compression = 0
+  if (body.length > 32) {
+    const compressed = Buffer.from(lz4BlockCompress(body))
+    compression = Math.min(Math.ceil(body.length / compressed.length), 255)
+    body = compressed
+  }
+  const frame = Buffer.alloc(10 + body.length)
+  frame[0] = 10
+  frame[1] = cmd
+  frame.writeInt16BE(seq, 2)
+  frame.writeInt16BE(opcode, 4)
+  frame[6] = compression
+  frame[7] = (body.length >>> 16) & 255
+  frame[8] = (body.length >>> 8) & 255
+  frame[9] = body.length & 255
+  body.copy(frame, 10)
+  return frame
+}
+
+// The reader this change replaces: msgpack from byte 9, no decompression, last object wins.
+function legacyDecodePayload(frame) {
+  const values = maxMsgpackDecodeAll(frame.subarray(9))
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i] !== null && typeof values[i] === 'object') return values[i]
+  }
+  return null
+}
+
+const ACCOUNT = Number(n0.accountId)
+const PEER = Number(n0.peerId)
+const CHAT = Number(n0.chatId)
+
+function peerPush(message, seq, unread) {
+  return encodeMaxFrame({
+    cmd: 0,
+    seq,
+    opcode: 128,
+    payload: {
+      chatId: CHAT,
+      message: {
+        sender: PEER,
+        id: maxIdExt(message.id),
+        time: maxTimeExt(maxTimeOfId(message.id)),
+        text: message.text,
+        type: 'USER',
+        attaches: [],
+        elements: [],
+      },
+      unread,
+      mark: maxTimeExt(maxTimeOfId(message.id)),
+    },
+  })
+}
+
+function pageAck(seq, messageId) {
+  // The page acknowledges a push with {chatId, messageId}; its chat id is the
+  // 32-bit web route and the id is its own uint64 re-encoding.
+  return encodeMaxFrame({ cmd: 1, seq, opcode: 128, payload: { chatId: Number(n0.uiRouteId), messageId: maxIdExt(`cf${messageId.slice(2)}`) } })
+}
+
+// Points the first LZ4 back-reference before the start of the output - a block
+// MAX Web's own decoder rejects.
+function corruptFirstMatchOffset(frame) {
+  const corrupted = Buffer.from(frame)
+  let ip = 10
+  const token = corrupted[ip++]
+  let literalLength = token >>> 4
+  if (literalLength === 15) {
+    let extra
+    do { extra = corrupted[ip++]; literalLength += extra } while (extra === 255)
+  }
+  ip += literalLength
+  corrupted[ip] = 0xff
+  corrupted[ip + 1] = 0xff
+  return corrupted
+}
+
+function hexBytes(spaced) {
+  return Buffer.from(spaced.split(' ').join(''), 'hex')
+}
+
+test('M1 codec: the bundle frame layout explains every real header class in the N0 log', () => {
+  const frames = [
+    ...n0.realOutgoingFrames.op128Acks,
+    ...n0.realOutgoingFrames.op64Requests,
+    n0.realOutgoingFrames.op6,
+    n0.realOutgoingFrames.op19,
+    n0.realOutgoingFrames.op272,
+    n0.realOutgoingFrames.op302,
+  ]
+  for (const frame of frames) {
+    const bytes = hexBytes(frame.first20Hex)
+    assert.equal(bytes[0], 10, `version, line ${frame.line}`)
+    assert.equal(((bytes[7] << 16) | (bytes[8] << 8) | bytes[9]) + 10, frame.byteLength, `length, line ${frame.line}`)
+  }
+  // Opcodes are int16: the old reader took byte 5 and saw 16 and 46.
+  assert.equal(hexBytes(n0.realOutgoingFrames.op272.first20Hex).readInt16BE(4), 272)
+  assert.equal(hexBytes(n0.realOutgoingFrames.op302.first20Hex).readInt16BE(4), 302)
+  // Byte 6 is the compression factor, not cmd: op:19 (814 bytes) is compressed 2x,
+  // op:64 requests 1x, and cmd sits in byte 1.
+  const op19 = hexBytes(n0.realOutgoingFrames.op19.first20Hex)
+  assert.deepEqual([op19[1], op19[6]], [0, 2])
+  for (const request of n0.realOutgoingFrames.op64Requests) {
+    const bytes = hexBytes(request.first20Hex)
+    assert.deepEqual([bytes[1], bytes.readInt16BE(4), bytes[6]], [0, 64, 1])
+  }
+})
+
+test('M1 codec: the page acknowledgement of the "1" push is reproduced byte for byte', () => {
+  const real = n0.realOutgoingFrames.op128Acks[0]
+  const rebuilt = pageAck(0x6e, n0.inbound.messages[0].id)
+  assert.equal(rebuilt.length, real.byteLength)
+  assert.equal(rebuilt.subarray(0, 20).toString('hex'), real.first20Hex.split(' ').join(''))
+  const decoded = decodeMaxBinaryFrame(rebuilt)
+  assert.equal(decoded.ok, true)
+  assert.deepEqual([decoded.cmd, decoded.seq, decoded.opcode, decoded.compression], [1, 0x6e, 128, 1])
+  assert.equal(decoded.payload.chatId, Number(n0.uiRouteId))
+  assert.equal(canonicalMaxMessageIdHex(decoded.payload.messageId), n0.inbound.messages[0].id)
+})
+
+test('M1 codec: long Cyrillic text with emoji and a line break decodes byte-equal; the old reader garbled it', () => {
+  const text = [
+    'Здравствуйте! Подтверждаю заказ 🚕 на 10:30, подъеду к главному входу.',
+    'Здравствуйте! Подтверждаю заказ 🚕 на 10:30, подъеду к главному входу, номер машины А123ВС ✅',
+    'Если что-то изменится — напишите, пожалуйста, заранее. Спасибо!',
+  ].join('\n')
+  assert.ok(text.length >= 200)
+  const message = { id: 'd301a0fe2a00001111', text }
+  const frame = peerPush(message, 50, 1)
+  assert.ok(frame[6] > 0, 'MAX compresses this payload')
+
+  const decoded = decodeMaxBinaryFrame(frame)
+  assert.equal(decoded.ok, true)
+  assert.equal(decoded.payload.message.text, text)
+  assert.ok(!decoded.payload.message.text.includes('�'))
+
+  const legacy = legacyDecodePayload(frame)
+  assert.notEqual(legacy?.message?.text, text, 'the old reader cannot read an LZ4 block with back-references')
+
+  const transport = new TransportInterceptor()
+  transport._myUserId = String(ACCOUNT)
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  transport._handleBinaryFrame(frame)
+  assert.equal(emitted.length, 1)
+  assert.equal(emitted[0].text, text)
+  assert.equal(emitted[0].id, message.id)
+  assert.equal(emitted[0].timestamp, maxTimeOfId(message.id))
+  assert.equal(emitted[0].isOutgoing, false)
+})
+
+test('M1 codec: an undecodable frame is dropped whole, never mined for a stray id', () => {
+  const frame = corruptFirstMatchOffset(peerPush({ id: 'd301a0fe2a00002222', text: 'проверка '.repeat(20) }, 51, 1))
+  const decoded = decodeMaxBinaryFrame(frame)
+  assert.deepEqual([decoded.ok, decoded.reason], [false, 'lz4_corrupt'])
+  const truncated = decodeMaxBinaryFrame(peerPush({ id: 'd301a0fe2a00002223', text: 'x' }, 52, 1).subarray(0, 20))
+  assert.deepEqual([truncated.ok, truncated.reason], [false, 'truncated_payload'])
+  const transport = new TransportInterceptor()
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  transport._handleBinaryFrame(frame)
+  assert.equal(emitted.length, 0)
+  assert.equal(transport._pendingNewMsgIds.length, 0)
+})
+
+test('M1 codec: op:19 carries the profile on every login; a refused login is not a send-ready socket', () => {
+  const transport = new TransportInterceptor()
+  const authed = []
+  transport.onWsAuth(id => authed.push(id))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 1, opcode: 19, payload: { token: 'x'.repeat(40), profile: { contact: { id: ACCOUNT, names: [{ name: 'YOKO' }] } } } }))
+  assert.equal(transport._myUserId, n0.accountId)
+  assert.equal(transport._wsConnected, true)
+  assert.deepEqual(authed, [n0.accountId])
+
+  // A refusal MAX Web itself does not log out on leaves the principal as it
+  // was; the ones it does log out on end the session (M2, D-11, tested below).
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 1, opcode: 19, payload: { error: 'proto.state', message: 'try again' } }))
+  assert.equal(transport._wsConnected, false)
+  assert.equal(transport._myUserId, n0.accountId, 'an error answer never replaces the proven principal')
+})
+
+function wireInboundLikeIndex(transport, ledger, crm, delaysMs = [5, 10, 20]) {
+  // index.js: transport.onMessage -> inboundLedger.enqueue(chat, handleIncoming);
+  // handleIncoming: beginForward -> forwardWithBoundedRetry -> markPersisted on 2xx.
+  transport.onMessage(msg => {
+    ledger.enqueue(String(msg.chatId), async () => {
+      if (!ledger.beginForward(msg.id)) return
+      try {
+        const payload = MessageParser.toCrmPayload(msg)
+        const result = await forwardWithBoundedRetry(crm, payload, { delaysMs })
+        if (result.status >= 200 && result.status < 300) ledger.markPersisted(payload.externalId, payload.chatId)
+      } finally {
+        ledger.releaseForward(msg.id)
+      }
+    })
+  })
+}
+
+test('M1 inbound: the N0 burst 1,2,3,3,3,3,4 is persisted as seven rows in sent order', async () => {
+  assert.deepEqual(n0.inbound.messages.map(m => m.text), n0.inbound.sentByPeer)
+  const transport = new TransportInterceptor()
+  transport._myUserId = String(ACCOUNT)
+  const ledger = new InboundDeliveryLedger({ graceMs: 1000 })
+  const stored = []
+  const attempts = new Map()
+  const crm = async payload => {
+    const attempt = (attempts.get(payload.externalId) || 0) + 1
+    attempts.set(payload.externalId, attempt)
+    // Later messages answer faster, so any parallel forwarding would reorder.
+    await sleep(Math.max(1, 30 - 4 * stored.length))
+    // The CRM answers 503 once for "2": seen-after-2xx plus the bounded retry keep it.
+    if (payload.text === '2' && attempt === 1) return { status: 503, data: 'restarting' }
+    stored.push(payload)
+    return { status: 200, data: '{}' }
+  }
+  wireInboundLikeIndex(transport, ledger, crm)
+
+  n0.inbound.messages.forEach((message, index) => transport._handleBinaryFrame(peerPush(message, 100 + index, index + 1)))
+  for (let i = 0; i < 200 && stored.length < 7; i++) await sleep(10)
+
+  assert.deepEqual(stored.map(p => p.text), ['1', '2', '3', '3', '3', '3', '4'])
+  assert.deepEqual(stored.map(p => p.externalId), n0.inbound.messages.map(m => m.id))
+  assert.equal(new Set(stored.map(p => p.externalId)).size, 7)
+  const sentAt = stored.map(p => Date.parse(p.timestamp))
+  assert.deepEqual(sentAt, [...sentAt].sort((a, b) => a - b), 'provider timestamps, in sent order')
+  assert.equal(attempts.get(n0.inbound.messages[1].id), 2)
+  for (const message of n0.inbound.messages) assert.equal(ledger.isPersisted(message.id), true)
+})
+
+test('M1 inbound: the old reader could not decode every push of the burst; the bundle layout decodes all', () => {
+  let legacyReadable = 0
+  for (const [index, message] of n0.inbound.messages.entries()) {
+    const frame = peerPush(message, 100 + index, index + 1)
+    assert.equal(decodeMaxBinaryFrame(frame).payload.message.text, message.text)
+    const legacy = legacyDecodePayload(frame)
+    if (legacy?.message?.text === message.text && legacy?.message?.id?.hex === message.id) legacyReadable += 1
+  }
+  assert.ok(legacyReadable < n0.inbound.messages.length, `old reader decoded ${legacyReadable}/7`)
+})
+
+test('M1 inbound: a push the page acknowledged but the CRM never stored is handed to recovery by its exact id', async () => {
+  const transport = new TransportInterceptor()
+  transport._myUserId = String(ACCOUNT)
+  const unpersisted = []
+  const ledger = new InboundDeliveryLedger({ graceMs: 30, onUnpersisted: event => unpersisted.push(event) })
+  const crm = async payload => ({ status: 200, data: '{}', payload })
+  wireInboundLikeIndex(transport, ledger, crm)
+  transport.onBrowserMessageAck(({ chatId, messageId }) => ledger.noteBrowserAck(chatId, messageId))
+
+  const [one, two, three] = n0.inbound.messages
+  // "1" decodes and is stored; "2" arrives as a frame nobody can read (the N0
+  // unsafe_pending_id case); "3" decodes and is stored. The page acknowledges all three.
+  transport._handleBinaryFrame(peerPush(one, 100, 1))
+  const broken = corruptFirstMatchOffset(peerPush(two, 101, 2))
+  assert.equal(decodeMaxBinaryFrame(broken).ok, false)
+  transport._handleBinaryFrame(broken)
+  transport._handleBinaryFrame(peerPush(three, 102, 3))
+  for (const [seq, message] of [[0x6e, one], [0x01, two], [0x02, three]]) {
+    transport._handleOutgoingFrame({ ...decodeMaxBinaryFrame(pageAck(seq, message.id)), socket: 'ws-1' })
+  }
+  await sleep(120)
+
+  assert.equal(ledger.isPersisted(one.id), true)
+  assert.equal(ledger.isPersisted(three.id), true)
+  assert.deepEqual(unpersisted.map(event => event.messageId), [two.id])
+  assert.equal(unpersisted[0].chatId, n0.chatId, 'the 32-bit route in the acknowledgement resolves to the provider chat')
+})
+
+test('M1 inbound ledger: an in-flight forward is decided by the CRM answer, not by a clock', async () => {
+  const fired = []
+  const ledger = new InboundDeliveryLedger({ graceMs: 15, onUnpersisted: event => fired.push(event.messageId) })
+  assert.equal(ledger.beginForward('d301aa'), true)
+  assert.equal(ledger.beginForward('d301aa'), false, 'one id is forwarded once at a time')
+  ledger.noteBrowserAck('902454841098', 'd301aa')
+  await sleep(60)
+  assert.deepEqual(fired, [], 'still in flight: recovery waits')
+  ledger.markPersisted('d301aa', '902454841098')
+  await sleep(40)
+  assert.deepEqual(fired, [])
+  assert.equal(ledger.beginForward('d301aa'), false, 'a stored id is never forwarded again')
+
+  ledger.beginForward('d301bb')
+  ledger.noteBrowserAck('902454841098', 'd301bb')
+  ledger.releaseForward('d301bb')
+  await sleep(40)
+  assert.deepEqual(fired, ['d301bb'], 'a failed forward goes to recovery once')
+})
+
+test('M1 inbound: a forward is retried only on 5xx or network errors and a refusal is returned as is', async () => {
+  let calls = 0
+  const refused = await forwardWithBoundedRetry(async () => { calls += 1; return { status: 409 } }, {}, { delaysMs: [1, 1, 1] })
+  assert.deepEqual([refused.status, refused.attempts, calls], [409, 1, 1])
+  calls = 0
+  const flaky = await forwardWithBoundedRetry(async () => {
+    calls += 1
+    if (calls < 3) throw new Error('ECONNRESET')
+    return { status: 200 }
+  }, {}, { delaysMs: [1, 1, 1] })
+  assert.deepEqual([flaky.status, flaky.attempts], [200, 3])
+  calls = 0
+  const down = await forwardWithBoundedRetry(async () => { calls += 1; return { status: 502 } }, {}, { delaysMs: [1, 1, 1] })
+  assert.deepEqual([down.status, down.attempts, calls], [502, 4, 4])
+})
+
+function outgoingRequest(seq, text, cid) {
+  return decodeMaxBinaryFrame(encodeMaxFrame({
+    cmd: 0,
+    seq,
+    opcode: 64,
+    payload: {
+      chatId: maxIdExt(`cf${BigInt(n0.chatId).toString(16).padStart(16, '0')}`),
+      message: { text, cid: maxIdExt(`d3${BigInt.asUintN(64, BigInt(cid)).toString(16).padStart(16, '0')}`), elements: [], attaches: [] },
+      notify: true,
+    },
+  }))
+}
+
+function sendResponse(seq, text, cid, providerMessageId) {
+  return encodeMaxFrame({
+    cmd: 1,
+    seq,
+    opcode: 64,
+    payload: {
+      chatId: CHAT,
+      message: {
+        sender: ACCOUNT,
+        id: maxIdExt(providerMessageId),
+        time: maxTimeExt(maxTimeOfId(providerMessageId)),
+        text,
+        cid: maxIdExt(`d3${BigInt.asUintN(64, BigInt(cid)).toString(16).padStart(16, '0')}`),
+        type: 'USER',
+        attaches: [],
+      },
+      unread: 0,
+      mark: maxTimeExt(maxTimeOfId(providerMessageId)),
+    },
+  })
+}
+
+test('M1 outbound: the N0 sequence 5,5,5,6,6,7 is one physical send per call, each with its own id', async () => {
+  const transport = new TransportInterceptor()
+  transport._myUserId = String(ACCOUNT)
+  transport._wsConnected = true
+  const wire = []
+  const results = []
+  let previousId = null
+  for (const [index, send] of n0.outbound.sends.entries()) {
+    // The second "6" was typed into a page whose socket had just closed; in the
+    // model it is sent after the re-login, with an id of its own.
+    const seq = send.requestSeq ?? 0x19
+    const providerMessageId = send.responseId ?? `d3${((BigInt(Date.parse('2026-10-02T19:25:59.500Z')) << 16n) | 0x5e0bn).toString(16).padStart(16, '0')}`
+    const cid = -(1790969144000 + index)
+    let reauthAt = null
+    if (send.socketClosedLine) {
+      transport._wsConnected = false
+      setTimeout(() => {
+        reauthAt = Date.now()
+        transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 1, opcode: 19, payload: { token: 't'.repeat(40), profile: { contact: { id: ACCOUNT } } } }))
+      }, 60)
+    }
+    let actionAt = null
+    let actions = 0
+    const result = await runSingleMaxTextSend({
+      transport,
+      chatId: n0.chatId,
+      text: send.text,
+      ensureReady: () => transport.waitForSendReadySocket({ stableMs: 20, timeoutMs: 2000, pollMs: 5 }),
+      performAction: async () => {
+        actions += 1
+        actionAt = Date.now()
+        const request = outgoingRequest(seq, send.text, cid)
+        wire.push(request)
+        transport._handleOutgoingFrame({ ...request, socket: 'ws-1' })
+        if (previousId) {
+          // N0 hazards: a reactions snapshot and a stale op:64 answer, both
+          // carrying the PREVIOUS message's id, arrive before the real answer.
+          transport._handleBinaryFrame(encodeMaxFrame({ cmd: 0, seq: 3, opcode: 180, payload: { messagesReactions: { [previousId]: {} } } }))
+          transport._handleBinaryFrame(sendResponse(seq + 9, send.text, cid, previousId))
+        }
+        setTimeout(() => transport._handleBinaryFrame(sendResponse(seq, send.text, cid, providerMessageId)), 5)
+        return { performed: true, kind: 'compose', inspectWithoutRequest: async () => ({ composeRetainedText: false }) }
+      },
+      requestTimeoutMs: 300,
+      answerTimeoutMs: 500,
+    })
+    assert.equal(actions, 1)
+    if (send.socketClosedLine) assert.ok(reauthAt !== null && actionAt >= reauthAt, 'nothing is typed before the socket re-authenticates')
+    assert.equal(result.outcome, 'accepted', `send ${index}`)
+    assert.equal(result.providerMessageId, providerMessageId, `send ${index} gets its own id`)
+    results.push(result)
+    previousId = result.providerMessageId
+  }
+  assert.equal(wire.length, 6, 'six physical sends for six intended sends')
+  assert.deepEqual(wire.map(frame => frame.payload.message.text), n0.outbound.sentByCrm)
+  assert.equal(new Set(results.map(r => r.providerMessageId)).size, 6)
+  assert.notEqual(results[5].providerMessageId, results[3].providerMessageId, '"7" never receives the id of "6"')
+  assert.ok(results.every(r => r.extraRequestFrames === 0))
+})
+
+test('M1 outbound: the wire, not the compose box, decides the answer of one call', async () => {
+  const transport = new TransportInterceptor()
+  const ready = async () => ({ ready: true })
+  const run = (performAction, extra = {}) => runSingleMaxTextSend({
+    transport, chatId: n0.chatId, text: '6', ensureReady: ready, performAction, requestTimeoutMs: 40, answerTimeoutMs: 40, ...extra,
+  })
+
+  // The request left the page and MAX's answer was not seen: requested, no id.
+  const requested = await run(async () => {
+    transport._handleOutgoingFrame({ ...outgoingRequest(30, '6', -1), socket: 'ws-1' })
+    return { performed: true, kind: 'compose' }
+  })
+  assert.deepEqual([requested.outcome, requested.providerMessageId ?? null, requested.requestSeq], ['requested', null, 30])
+
+  // No frame, compose box still holds the text: the page never took the submit.
+  const notSubmitted = await run(async () => ({ performed: true, kind: 'compose', inspectWithoutRequest: async () => ({ composeRetainedText: true }) }))
+  assert.equal(notSubmitted.outcome, 'not_dispatched')
+
+  // No frame, compose box emptied (the N0 second "6"): unknown, never success.
+  const swallowed = await run(async () => ({ performed: true, kind: 'compose', inspectWithoutRequest: async () => ({ composeRetainedText: false }) }))
+  assert.deepEqual([swallowed.outcome, swallowed.reason], ['unknown', 'submitted_without_send_frame'])
+
+  // Socket never ready: nothing is typed at all.
+  let typed = false
+  const notReady = await runSingleMaxTextSend({
+    transport, chatId: n0.chatId, text: '6',
+    ensureReady: async () => ({ ready: false, reason: 'socket_not_authenticated' }),
+    performAction: async () => { typed = true; return { performed: true } },
+  })
+  assert.deepEqual([notReady.outcome, notReady.reason, typed], ['not_dispatched', 'socket_not_authenticated', false])
+
+  // The action broke midway: unknown.
+  const broke = await run(async () => { throw new Error('Target closed') })
+  assert.equal(broke.outcome, 'unknown')
+
+  // MAX answered the request with an error.
+  const rejected = await run(async () => {
+    transport._handleOutgoingFrame({ ...outgoingRequest(31, '6', -2), socket: 'ws-1' })
+    setTimeout(() => transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 31, opcode: 64, payload: { error: 'chat.denied', message: 'denied' } })), 2)
+    return { performed: true, kind: 'compose' }
+  })
+  assert.deepEqual([rejected.outcome, rejected.reason], ['rejected', 'chat.denied'])
+  assert.equal(transport._sendObservations.size, 0, 'every observation is closed')
+})
+
+test('M1 outbound: an answer for the right seq but another chat, text or cid is ignored', () => {
+  const observation = new MaxTextSendObservation({ chatId: n0.chatId, text: '5' })
+  observation.onOutgoingFrame({ ...outgoingRequest(40, '5', -7), socket: 'ws-1' })
+  const answer = (overrides) => {
+    const decoded = decodeMaxBinaryFrame(sendResponse(40, '5', -7, 'd301a0fe1478805e09'))
+    return { ...decoded, payload: { ...decoded.payload, ...overrides(decoded.payload) } }
+  }
+  observation.onIncomingFrame(answer(() => ({ chatId: 902144614300 })))
+  observation.onIncomingFrame(answer(payload => ({ message: { ...payload.message, text: '6' } })))
+  observation.onIncomingFrame(answer(payload => ({ message: { ...payload.message, cid: maxIdExt('d3ffffffffffffff00') } })))
+  assert.equal(observation.response, null)
+  assert.equal(observation.ignoredResponses, 3)
+  observation.onIncomingFrame(answer(() => ({})))
+  assert.equal(observation.response.providerMessageId, 'd301a0fe1478805e09')
+})
+
+test('M1 outbound: a page re-send is recorded, and a reply proven only by the store read-back is accepted', () => {
+  const resent = decideMaxTextSendOutcome({
+    action: { performed: true, kind: 'compose' },
+    evidence: { request: { seq: 5 }, extraRequests: [{ seq: 9 }], response: { providerMessageId: 'd301a0fe1478805e09' } },
+  })
+  assert.deepEqual([resent.outcome, resent.extraRequestFrames], ['accepted', 1])
+
+  const storeOnly = decideMaxTextSendOutcome({ action: { performed: true, kind: 'reply', storeConfirmedId: 'd301a0fe1478805e09' }, evidence: {} })
+  assert.deepEqual([storeOnly.outcome, storeOnly.proofKind], ['accepted', 'provider_store_readback'])
+
+  const conflict = decideMaxTextSendOutcome({
+    action: { performed: true, kind: 'reply', storeConfirmedId: 'd301a0fe1483c85e09' },
+    evidence: { request: { seq: 5 }, response: { providerMessageId: 'd301a0fe1478805e09' } },
+  })
+  assert.deepEqual([conflict.outcome, conflict.reason], ['unknown', 'provider_id_conflict'])
+
+  const replyNotStarted = decideMaxTextSendOutcome({ action: { performed: false, notDispatchedReason: 'reply_not_started:max_web_core_not_found' }, evidence: {} })
+  assert.equal(replyNotStarted.outcome, 'not_dispatched')
+})
+
+test('M1 outbound: the send-ready gate refuses when no authenticated socket appears', async () => {
+  const transport = new TransportInterceptor()
+  transport._myUserId = String(ACCOUNT)
+  transport._wsConnected = false
+  const startedAt = Date.now()
+  const readiness = await transport.waitForSendReadySocket({ stableMs: 20, timeoutMs: 120, pollMs: 5 })
+  assert.deepEqual(readiness, { ready: false, reason: 'socket_not_authenticated' })
+  assert.ok(Date.now() - startedAt >= 100)
+
+  const unproven = new TransportInterceptor()
+  unproven._wsConnected = true
+  assert.deepEqual(await unproven.waitForSendReadySocket({ stableMs: 10, timeoutMs: 200, pollMs: 5 }), { ready: false, reason: 'provider_account_unproven' })
+})
+
+function freshTransport() {
+  const transport = new TransportInterceptor({ stateDir: fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'max-m1-state-')) })
+  // Anchors persisted by other tests in this process must not leak in.
+  transport._lastMsgRawHex.clear()
+  transport._lastSeenMsgId.clear()
+  transport._persistLastMsgRawHex = () => {}
+  transport._myUserId = String(ACCOUNT)
+  return transport
+}
+
+function chatListEntry(chatId, message) {
+  return {
+    id: chatId,
+    type: 'DIALOG',
+    owner: ACCOUNT,
+    participants: { [String(ACCOUNT)]: 0, [String(PEER)]: 0 },
+    lastMessage: {
+      sender: PEER,
+      id: maxIdExt(message.id),
+      time: maxTimeExt(maxTimeOfId(message.id)),
+      text: message.text,
+      type: 'USER',
+      // A forwarded original is content of this message, never a message of the chat.
+      link: { type: 'FORWARD', message: { sender: 902000000001, id: maxIdExt('d301a0fe7f00000001'), text: 'пересланное', type: 'USER' } },
+    },
+  }
+}
+
+test('M1 decoded chat lists: an unseen chat is only anchored and old conversations are never replayed', () => {
+  const transport = freshTransport()
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  const old = { id: 'd301a0f000000000aa', text: 'старое сообщение' }
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 7, opcode: 53, payload: { chats: [chatListEntry(902100000001, old)], marker: maxTimeExt(1) } }))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 2, opcode: 48, payload: { chats: [chatListEntry(902100000002, old)] } }))
+  assert.equal(emitted.length, 0)
+  assert.equal(transport._lastMsgRawHex.get('902100000001'), old.id)
+  assert.equal(transport._lastMsgRawHex.get('902100000002'), old.id)
+})
+
+test('M1 decoded chat lists: a lastMessage newer than the anchor is emitted once, never silently confirmed', () => {
+  const transport = freshTransport()
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  const chatId = 902100000003
+  const before = { id: 'd301a0fe1412085642', text: '1' }
+  const missed = { id: 'd301a0fe14238c2c0a', text: '4' }
+  // "1" arrived as a push; "4" arrived while the socket was down and is only
+  // visible in the chat list the page loads after it reconnects.
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 0, seq: 9, opcode: 128, payload: { chatId, message: { sender: PEER, id: maxIdExt(before.id), time: maxTimeExt(maxTimeOfId(before.id)), text: before.text, type: 'USER' }, unread: 1 } }))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 3, opcode: 48, payload: { chats: [chatListEntry(chatId, missed)] } }))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 8, opcode: 53, payload: { chats: [chatListEntry(chatId, missed)] } }))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 9, opcode: 53, payload: { chats: [chatListEntry(chatId, before)] } }))
+  assert.deepEqual(emitted.map(m => [m.id, m.text]), [[before.id, '1'], [missed.id, '4']])
+  assert.ok(!emitted.some(m => m.id === 'd301a0fe7f00000001'), 'a forwarded original is never emitted')
+  assert.equal(transport._lastMsgRawHex.get(String(chatId)), missed.id)
+})
+
+test('M1 decoded history: an unanchored chat is anchored; an anchored chat gets only newer messages', () => {
+  const transport = freshTransport()
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  const history = (chatId, ids) => encodeMaxFrame({
+    cmd: 1,
+    seq: 11,
+    opcode: 49,
+    payload: {
+      chatId,
+      messages: ids.map((id, index) => ({ sender: PEER, id: maxIdExt(id), time: maxTimeExt(maxTimeOfId(id)), text: `h${index}`, type: 'USER' })),
+    },
+  })
+  transport._handleBinaryFrame(history(902100000004, ['d301a0f000000000a1', 'd301a0f000000000a2', 'd301a0f000000000a3']))
+  assert.equal(emitted.length, 0)
+  assert.equal(transport._lastMsgRawHex.get('902100000004'), 'd301a0f000000000a3')
+  transport._handleBinaryFrame(history(902100000004, ['d301a0f000000000a2', 'd301a0f000000000a3', 'd301a0f000000000a4']))
+  assert.deepEqual(emitted.map(m => m.id), ['d301a0f000000000a4'])
+})
+
+// ─── M2: coverage and recovery ───────────────────────────────────────────────
+// Everything below models MAX's real wire forms, read from the MAX Web bundle
+// the page runs (_app/immutable/chunks/CGK0xiLg.js): user and chat ids are ext
+// type 1 holding an int32 (d2 + 4 bytes); the page holds them as BigInt ids
+// and writes those back as a uint64 (cf) ext; message ids and times are int64
+// exts. The golden frames were produced by the page's own encoder (`ere` with
+// @msgpack's encoder and the page's ext codec) for the requests the scraper
+// builds; the production encoder must produce exactly these bytes.
+
+const os = require('node:os')
+const path = require('node:path')
+const vm = require('node:vm')
+const {
+  OWN_REQUEST_SEQ_BASE,
+  WS_INIT_SCRIPT,
+  encodeMaxBinaryFrame,
+  maxMessageIdTimeMs,
+  maxRealIdFromProtocolId,
+  sameMaxChatId,
+} = require('../transport/TransportInterceptor')
+const { recoveryStatePath } = require('../sync/MessageSync')
+
+const REAL_ACCOUNT = 228621088
+const REAL_PEER = 320893994
+const REAL_CHAT = 511708938
+const int32Ext = value => maxIdExt(`d2${BigInt.asUintN(32, BigInt(value)).toString(16).padStart(8, '0')}`)
+const pageIdExt = value => maxIdExt(`cf${BigInt(value).toString(16).padStart(16, '0')}`)
+const messageIdBig = id => BigInt.asIntN(64, BigInt(`0x${id.slice(2)}`))
+const tempStateDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'max-m2-state-'))
+
+function m2Transport({ stateDir = tempStateDir(), page = null } = {}) {
+  const transport = new TransportInterceptor({ stateDir })
+  transport._myUserId = String(ACCOUNT)
+  transport._wsConnected = true
+  if (page) transport._page = page
+  return transport
+}
+
+// A page whose socket takes every frame the scraper writes; `answer` plays MAX.
+function scriptedPage(sent, answer = null) {
+  return {
+    evaluate: async (fn, base64) => {
+      if (typeof base64 !== 'string') return undefined
+      const bytes = Buffer.from(base64, 'base64')
+      sent.push(bytes)
+      if (answer) setTimeout(() => answer(decodeMaxBinaryFrame(bytes)), 1)
+      return { ok: true }
+    },
+  }
+}
+
+test('M2 ids: chat and user ids are int32 exts; the protocol id keeps the marker byte and the route is the real id', () => {
+  const decoded = maxMsgpackDecodeAll(mpEncode({ chatId: int32Ext(REAL_CHAT), sender: int32Ext(REAL_PEER), owner: int32Ext(REAL_ACCOUNT) }))[0]
+  assert.deepEqual([String(decoded.chatId), String(decoded.sender), String(decoded.owner)], [n0.chatId, n0.peerId, n0.accountId],
+    'the ids the CRM stores are what the scraper decodes from the wire')
+  assert.equal(maxRealIdFromProtocolId(n0.chatId), BigInt(REAL_CHAT))
+  assert.equal(maxRealIdFromProtocolId(n0.accountId) ^ maxRealIdFromProtocolId(n0.peerId), BigInt(REAL_CHAT), 'a dialog is the XOR of its two users')
+  assert.equal(String(maxRealIdFromProtocolId(n0.chatId)), n0.uiRouteId)
+  const scraper = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const overrides = [...scraper.slice(scraper.indexOf('const UI_CHAT_ID_OVERRIDES'), scraper.indexOf('function protocolChatIdForUiRoute'))
+    .matchAll(/'(\d+)': '(\d+)'/g)]
+  assert.equal(overrides.length, 4)
+  for (const [, protocolId, route] of overrides) {
+    assert.equal(String(maxRealIdFromProtocolId(protocolId)), route, `static route of ${protocolId} is its real id`)
+  }
+  assert.equal(sameMaxChatId(pageIdExt(REAL_CHAT), n0.chatId), true, "the page's own id names the protocol chat")
+  assert.equal(sameMaxChatId(int32Ext(REAL_CHAT).hex ? n0.chatId : null, n0.chatId), true)
+  assert.equal(sameMaxChatId(pageIdExt(REAL_CHAT + 2), n0.chatId), false)
+  assert.equal(maxMessageIdTimeMs('d301a0fe1412085642'), maxTimeOfId('d301a0fe1412085642'))
+})
+
+test('M2 encoder: every request the scraper builds is byte-identical to the page\'s own encoder', () => {
+  const chat = BigInt(REAL_CHAT)
+  const msgId = messageIdBig('d301a0fe1412085642')
+  const golden = [
+    [{ cmd: 0, seq: 30000, opcode: 49, payload: { chatId: chat, from: 1759433123000, forward: 40, backward: 0, getMessages: true } },
+      '0a007530003101000043f02185a6636861744964c70901cf000000001e800f0aa466726f6dcf00000199a662e4b8a7666f727761726428a86261636b0a00e000ab6765744d65737361676573c3'],
+    [{ cmd: 0, seq: 30001, opcode: 66, payload: { chatId: chat, messageIds: [msgId], forMe: false } },
+      '0a007531004201000035f01183a6636861744964c70901cf000000001e800f0aaa6d657373616765496473911800f00001a0fe1412085642a5666f724d65c2'],
+    [{ cmd: 0, seq: 30002, opcode: 178, payload: { chatId: chat, messageId: msgId, reaction: { reactionType: 'EMOJI', id: '👍' } } },
+      '0a00753200b20200004bf20d83a6636861744964c70901cf000000001e800f0aa96d6573736167651600f40401a0fe1412085642a87265616374696f6e82ac0a00f00354797065a5454d4f4a49a26964a4f09f918d'],
+    [{ cmd: 0, seq: 30004, opcode: 32, payload: { contactIds: [BigInt(REAL_PEER)] } },
+      '0a00753400200000001981aa636f6e7461637449647391c70901cf000000001320742a'],
+    [{ cmd: 0, seq: 30005, opcode: 80, payload: { count: 1 } }, '0a00753500500000000881a5636f756e7401'],
+    [{ cmd: 0, seq: 30006, opcode: 64, payload: { chatId: chat, message: { cid: 1790969144000n, text: 'подпись к фото', attaches: [{ _type: 'PHOTO', photoToken: 'tok-abcdef0123456789' }] }, notify: true } },
+      '0a00753600400200008bf31183a6636861744964c70901cf000000001e800f0aa76d65737361676583a363691900f05601a0fe1462c0a474657874bad0bfd0bed0b4d0bfd0b8d181d18c20d0ba20d184d0bed182d0bea861747461636865739182a55f74797065a550484f544faa70686f746f546f6b656eb4746f6b2d61626364656630313233343536373839a66e6f74696679c3'],
+    [{ cmd: 0, seq: 30008, opcode: 88, payload: { fileId: 12345678, chatId: chat, messageId: msgId, itemType: 'REGULAR' } },
+      '0a007538005801000047f21984a666696c654964ce00bc614ea6636861744964c70901cf000000001e800f0aa96d6573736167651600f00a01a0fe1412085642a86974656d54797065a7524547554c4152'],
+    [{ cmd: 0, seq: 30009, opcode: 64, payload: { chatId: chat, message: { cid: 1n, text: 'повтор '.repeat(200), attaches: [] }, notify: true } },
+      '0a00753900401c000060f51183a6636861744964c70901cf000000001e800f0aa76d65737361676583a363691900ff0a00000001a474657874da0a28d0bfd0bed0b2d182d0bed180200d00ffffffffffffffffffff12f003a8617474616368657390a66e6f74696679c3'],
+    [{ cmd: 0, seq: -5, opcode: 75, payload: { chatId: -123n, subscribe: true, n: -70000, f: 1.25, big: 2 ** 40 } },
+      '0a00fffb004b0200003bd285a6636861744964c70901d3ff0100f10a85a9737562736372696265c3a16ed2fffeee90a166cb3ff4000100d0a3626967cf0000010000000000'],
+  ]
+  for (const [frame, pageHex] of golden) {
+    const bytes = encodeMaxBinaryFrame(frame)
+    assert.equal(bytes.toString('hex'), pageHex, `op:${frame.opcode} seq:${frame.seq}`)
+    const decoded = decodeMaxBinaryFrame(bytes)
+    assert.equal(decoded.ok, true)
+    assert.deepEqual([decoded.cmd, decoded.seq, decoded.opcode], [frame.cmd, frame.seq, frame.opcode])
+  }
+  // A map value left undefined is left out, as the page's ignoreUndefined does.
+  const video = encodeMaxBinaryFrame({ cmd: 0, seq: 30007, opcode: 64, payload: { chatId: chat, message: { cid: 1790969144001n, text: '', attaches: [{ _type: 'VIDEO', videoId: 5555, token: undefined, duration: null }] }, notify: true } })
+  assert.equal(video.toString('hex'), '0a007537004002000066f31183a6636861744964c70901cf000000001e800f0aa76d65737361676583a363691900f03101a0fe1462c1a474657874a0a861747461636865739183a55f74797065a5564944454fa7766964656f4964cd15b3a86475726174696f6ec0a66e6f74696679c3')
+})
+
+test('M2 send correlation: the page\'s real op:64 request (the real chat id) is this send\'s; another chat\'s is not', () => {
+  const request = (seq, chatId) => decodeMaxBinaryFrame(encodeMaxFrame({
+    cmd: 0, seq, opcode: 64,
+    payload: { chatId, message: { text: '5', cid: maxIdExt('d3ffffffff00000005'), elements: [], attaches: [] }, notify: true },
+  }))
+  const answer = (seq, id) => decodeMaxBinaryFrame(encodeMaxFrame({
+    cmd: 1, seq, opcode: 64,
+    payload: { chatId: int32Ext(REAL_CHAT), message: { sender: int32Ext(REAL_ACCOUNT), id: maxIdExt(id), time: maxTimeExt(maxTimeOfId(id)), text: '5', cid: maxIdExt('d3ffffffff00000005'), type: 'USER', attaches: [] }, unread: 0 },
+  }))
+  const other = new MaxTextSendObservation({ chatId: n0.chatId, text: '5' })
+  other.onOutgoingFrame(request(21, pageIdExt(REAL_CHAT + 2)))
+  assert.equal(other.request, null, "another chat's request is never this send's")
+
+  const observation = new MaxTextSendObservation({ chatId: n0.chatId, text: '5' })
+  observation.onOutgoingFrame(request(22, pageIdExt(REAL_CHAT)))
+  assert.equal(observation.request?.seq, 22, 'the page names the chat by its real id')
+  observation.onIncomingFrame(answer(22, 'd301a0fe1483c80001'))
+  assert.deepEqual(decideMaxTextSendOutcome({ action: { performed: true }, evidence: observation.snapshot() }), {
+    outcome: 'accepted', providerMessageId: 'd301a0fe1483c80001', proofKind: 'provider_ack', requestSeq: 22, extraRequestFrames: 0,
+  })
+})
+
+test('M2 own requests: the page\'s format, a reserved seq, an answer only its caller sees', async () => {
+  const sent = []
+  const transport = m2Transport({ page: scriptedPage(sent) })
+  const raw = []
+  transport.onRawFrame(data => raw.push(data))
+  const msgId = messageIdBig('d301a0fe1412085642')
+
+  const pending = transport.requestBinary(66, { chatId: BigInt(REAL_CHAT), messageIds: [msgId], forMe: false }, { purpose: 'delete' })
+  await sleep(5)
+  assert.equal(sent.length, 1)
+  const frame = decodeMaxBinaryFrame(sent[0])
+  assert.deepEqual([frame.ok, frame.cmd, frame.opcode], [true, 0, 66])
+  assert.ok(frame.seq >= OWN_REQUEST_SEQ_BASE, 'a seq the page never reaches')
+  assert.equal(maxRealIdFromProtocolId(frame.payload.chatId), BigInt(REAL_CHAT), 'the real chat id, as the page sends it')
+  // CDP reports the frame the scraper wrote: it is not taken for the page's own.
+  transport._handleOutgoingFrame({ ...frame, socket: 'ws-1' })
+  assert.equal(transport._pageOutSeqHigh, -1)
+  // The same seq under another opcode is not this request's answer.
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: frame.seq, opcode: 49, payload: { messages: [] } }))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: frame.seq, opcode: 66, payload: { messageIds: [maxIdExt('d301a0fe1412085642')] } }))
+  const answer = await pending
+  assert.equal(answer.messageIds.length, 1)
+  assert.equal(raw.filter(data => data.opcode === 66).length, 0, 'the answer reaches only its caller')
+
+  const refused = transport.requestBinary(66, { chatId: BigInt(REAL_CHAT), messageIds: [msgId], forMe: false })
+  await sleep(5)
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: decodeMaxBinaryFrame(sent[1]).seq, opcode: 66, payload: { error: 'message.not.found', message: 'gone' } }))
+  await assert.rejects(refused, error => error.refused === true && error.maxError === 'message.not.found' && error.dispatched === true)
+
+  await assert.rejects(transport.requestBinary(49, { chatId: 1n }, { timeoutMs: 20 }), error => error.dispatched === true && error.reason === 'timeout')
+
+  const lost = transport.requestBinary(49, { chatId: 1n })
+  await sleep(5)
+  transport._rejectOwnRequestsOnSocketLoss()
+  await assert.rejects(lost, error => error.dispatched === true && error.reason === 'socket_closed')
+
+  // The page's own frames move its counter; near the reserved range the scraper stops.
+  transport._handleOutgoingFrame({ ...decodeMaxBinaryFrame(encodeMaxFrame({ cmd: 0, seq: 40, opcode: 1, payload: { interactive: false } })), socket: 'ws-1' })
+  assert.equal(transport._pageOutSeqHigh, 40)
+  transport._pageOutSeqHigh = OWN_REQUEST_SEQ_BASE - 10
+  const before = sent.length
+  await assert.rejects(transport.requestBinary(49, { chatId: 1n }), error => error.dispatched === false && error.reason === 'page_seq_near_reserved_range')
+  assert.equal(sent.length, before, 'nothing is written')
+
+  const offlineSent = []
+  const offline = m2Transport({ page: scriptedPage(offlineSent) })
+  offline._wsConnected = false
+  await assert.rejects(offline.requestBinary(49, { chatId: 1n }), error => error.dispatched === false && error.reason === 'socket_not_authenticated')
+  assert.equal(offlineSent.length, 0)
+})
+
+test('M2 wire guard: MAX closing the socket right after scraper wire actions twice switches them off', async () => {
+  const sent = []
+  const transport = m2Transport({ page: scriptedPage(sent) })
+  transport._wireIntervention.lastAt = Date.now() - 10_000
+  transport._noteSocketClosedForIntervention()
+  assert.equal(transport._wireIntervention.closesAfter, 0, 'a close long after an action does not count')
+  transport._wireIntervention.lastAt = Date.now()
+  transport._noteSocketClosedForIntervention()
+  assert.equal(transport._wireIntervention.disabled, false)
+  transport._wireIntervention.lastAt = Date.now()
+  transport._noteSocketClosedForIntervention()
+  assert.equal(transport._wireIntervention.disabled, true)
+  await assert.rejects(transport.requestBinary(49, { chatId: 1n }), error => error.dispatched === false && /^wire_intervention_disabled/.test(error.reason))
+  assert.equal(sent.length, 0)
+  // A withheld page read mark counts as a wire action too.
+  const marks = m2Transport()
+  marks._handleFrame(JSON.stringify({ __diag: 'read_mark_withheld', seq: 7, cmd: 0 }))
+  assert.equal(marks.wireInterventionState().readMarksWithheld, 1)
+  assert.ok(Date.now() - marks._wireIntervention.lastAt < 1000)
+})
+
+const GAP_ANCHOR = { id: 'd301a0fe1412085642', text: '1' }
+const GAP_TWO = { id: 'd301a0fe1416a84e11', text: '2' }
+const GAP_THREE = { id: 'd301a0fe1417a12c06', text: '3' }
+const GAP_OWN = { id: 'd301a0fe141a222c07', text: 'ответ с телефона', sender: ACCOUNT }
+const GAP_LAST = { id: 'd301a0fe14238c2c0a', text: '4' }
+const historyMessage = m => ({ sender: m.sender ?? PEER, id: maxIdExt(m.id), time: maxTimeExt(maxTimeOfId(m.id)), text: m.text, type: 'USER', attaches: [] })
+
+function snapshotAfterReconnect(transport, last) {
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 3, opcode: 48, payload: { chats: [{ id: CHAT, type: 'DIALOG', owner: ACCOUNT, participants: { [String(ACCOUNT)]: 0, [String(PEER)]: 0 }, lastMessage: historyMessage(last) }] } }))
+}
+
+test('M2 catch-up: a snapshot past the anchor opens a gap; the page\'s own history request fills it, once', async () => {
+  const stateDir = tempStateDir()
+  const sent = []
+  let transport
+  const page = scriptedPage(sent, frame => transport._handleBinaryFrame(encodeMaxFrame({
+    cmd: 1, seq: frame.seq, opcode: 49,
+    payload: { messages: [GAP_ANCHOR, GAP_TWO, GAP_THREE, GAP_OWN, GAP_LAST].map(historyMessage) },
+  })))
+  transport = m2Transport({ stateDir, page })
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  transport._rememberConfirmedMessageAnchor(n0.chatId, GAP_ANCHOR.id, { markSeen: true })
+
+  snapshotAfterReconnect(transport, GAP_LAST)
+  assert.deepEqual(emitted.map(m => m.text), ['4'], 'the snapshot carries only the last message')
+  assert.deepEqual(transport.gapFloors(), { [n0.chatId]: GAP_ANCHOR.id }, 'the old anchor is where the hole starts')
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(stateDir, 'catch-up-gaps.json'), 'utf8')), { [n0.chatId]: GAP_ANCHOR.id }, 'kept on the volume')
+  clearTimeout(transport._catchUp.timer)
+
+  const summary = await transport.runCatchUp({ reason: 'test' })
+  assert.equal(sent.length, 1, 'one history request')
+  const request = decodeMaxBinaryFrame(sent[0])
+  assert.equal(request.opcode, 49)
+  assert.equal(maxRealIdFromProtocolId(request.payload.chatId), BigInt(REAL_CHAT))
+  assert.deepEqual([request.payload.from, request.payload.forward, request.payload.backward, request.payload.getMessages],
+    [maxTimeOfId(GAP_ANCHOR.id) - 1, 40, 0, true])
+  assert.deepEqual(emitted.map(m => m.text), ['4', '2', '3', 'ответ с телефона'], 'the missed messages, in order, and "4" only once')
+  const own = emitted.find(m => m.id === GAP_OWN.id)
+  assert.deepEqual([own.isOutgoing, own.source], [true, 'catchup'], 'a missed message of our own is a history read-back')
+  assert.equal(emitted.find(m => m.id === GAP_TWO.id).source, undefined, 'a missed peer message is delivered as a live one')
+  assert.deepEqual(summary.chats.map(c => [c.chatId, c.emitted, c.closed]), [[n0.chatId, 3, true]])
+  assert.deepEqual(transport.gapFloors(), {})
+  assert.equal(transport._lastMsgRawHex.get(n0.chatId), GAP_LAST.id)
+})
+
+test('M2 catch-up: an answer that does not reach back to the floor, a refusal or a lost socket keeps the gap; a restart keeps it', async () => {
+  const stateDir = tempStateDir()
+  const sent = []
+  let transport
+  let answerWith = frame => transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: frame.seq, opcode: 49, payload: { messages: [GAP_THREE, GAP_LAST].map(historyMessage) } }))
+  transport = m2Transport({ stateDir, page: scriptedPage(sent, frame => answerWith(frame)) })
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+  transport._rememberConfirmedMessageAnchor(n0.chatId, GAP_ANCHOR.id, { markSeen: true })
+  transport._persistLastMsgRawHex()
+  snapshotAfterReconnect(transport, GAP_LAST)
+  clearTimeout(transport._catchUp.timer)
+
+  let summary = await transport.runCatchUp({ reason: 'test' })
+  assert.equal(summary.chats[0].reason, 'answer_does_not_cover_floor')
+  assert.deepEqual(transport.gapFloors(), { [n0.chatId]: GAP_ANCHOR.id }, 'not proven filled: "2" may still be missing')
+
+  answerWith = frame => transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: frame.seq, opcode: 49, payload: { error: 'chat.not.found' } }))
+  summary = await transport.runCatchUp({ reason: 'test' })
+  assert.deepEqual([summary.chats[0].reason, summary.chats[0].stop], ['refused:chat.not.found', false])
+  assert.deepEqual(transport.gapFloors(), { [n0.chatId]: GAP_ANCHOR.id })
+
+  transport._wsConnected = false
+  summary = await transport.runCatchUp({ reason: 'test' })
+  clearTimeout(transport._catchUp.timer)
+  assert.deepEqual([summary.deferred, summary.blocker], [true, 'socket_not_authenticated'])
+
+  // A recreate starts from the volume: the anchor and the open gap are both still there.
+  const restarted = new TransportInterceptor({ stateDir })
+  assert.deepEqual(restarted.gapFloors(), { [n0.chatId]: GAP_ANCHOR.id })
+  assert.equal(restarted._lastMsgRawHex.get(n0.chatId), GAP_LAST.id)
+})
+
+test('M2 session loss (D-11): the op:19 refusals on which MAX Web logs out, and op:20, end the proven session', () => {
+  const transport = m2Transport({ page: scriptedPage([]) })
+  const losses = []
+  transport.onSessionLoss(loss => losses.push(loss.reason))
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 1, opcode: 19, payload: { error: 'proto.state', message: 'later' } }))
+  assert.deepEqual([transport._wsConnected, transport._myUserId, losses], [false, n0.accountId, []], 'any other refusal only makes the socket not send-ready')
+
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 1, opcode: 19, payload: { error: 'login.token', message: 'token expired' } }))
+  assert.deepEqual(losses, ['login_refused:login.token'])
+  assert.equal(transport.isAuthenticated(), false)
+  assert.equal(transport.ownRequestBlocker(), 'socket_not_authenticated')
+  assert.equal(transport.sessionLoss().previousAccountId, n0.accountId)
+
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 1, opcode: 19, payload: { token: 'x'.repeat(40), profile: { contact: { id: ACCOUNT } } } }))
+  assert.deepEqual([transport.sessionLoss(), transport._myUserId], [null, n0.accountId], 'a new login proves the account again')
+
+  for (const error of ['login.blocked', 'login.flood', 'user.not.found']) {
+    const t = m2Transport()
+    t._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 1, opcode: 19, payload: { error } }))
+    assert.equal(t.sessionLoss()?.reason, `login_refused:${error}`)
+  }
+  const logout = m2Transport()
+  logout._handleBinaryFrame(encodeMaxFrame({ cmd: 0, seq: 5, opcode: 20, payload: {} }))
+  assert.equal(logout.sessionLoss()?.reason, 'logout')
+})
+
+test('M2 read receipts: a peer\'s read mark is forwarded once per advance; our own and an unread marker never', () => {
+  const transport = m2Transport()
+  const marks = []
+  transport.onReadMark(event => marks.push([event.chatId, event.readerId, event.mark, event.source]))
+  const mark = maxTimeOfId(GAP_LAST.id)
+  const push = payload => transport._handleBinaryFrame(encodeMaxFrame({ cmd: 0, seq: 40 + marks.length, opcode: 130, payload: { chatId: int32Ext(REAL_CHAT), unread: 0, ...payload } }))
+  push({ userId: int32Ext(REAL_PEER), mark: maxTimeExt(mark) })
+  push({ userId: int32Ext(REAL_PEER), mark: maxTimeExt(mark) })
+  push({ userId: int32Ext(REAL_PEER), mark: maxTimeExt(mark - 5000) })
+  push({ userId: int32Ext(REAL_ACCOUNT), mark: maxTimeExt(mark + 9000) })
+  push({ userId: int32Ext(REAL_PEER), mark: maxTimeExt(mark + 9000), setAsUnread: true })
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 60, opcode: 48, payload: { chats: [{
+    id: CHAT, type: 'DIALOG', owner: ACCOUNT,
+    participants: { [n0.accountId]: maxTimeExt(mark + 20_000), [n0.peerId]: maxTimeExt(mark + 2000) },
+  }] } }))
+  assert.deepEqual(marks, [
+    [n0.chatId, n0.peerId, mark, 'op130'],
+    [n0.chatId, n0.peerId, mark + 2000, 'op48'],
+  ])
+})
+
+test('M2 route attestation: MAX answering the page\'s own subscribe or history request proves the route; an error answer refuses it', async () => {
+  const transport = m2Transport()
+  const pageRequest = (seq, opcode, chatId, extra = {}) => transport._handleOutgoingFrame({
+    ...decodeMaxBinaryFrame(encodeMaxFrame({ cmd: 0, seq, opcode, payload: { chatId, ...extra } })), socket: 'ws-1',
+  })
+  pageRequest(12, 75, pageIdExt(REAL_CHAT), { subscribe: true })
+  assert.equal(transport.routeAttestation(n0.chatId), null, 'a request alone proves nothing')
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 12, opcode: 75, payload: {} }))
+  assert.deepEqual([transport.routeAttestation(n0.chatId)?.accepted, transport.routeAttestation(n0.chatId)?.error], [true, null])
+
+  pageRequest(13, 49, pageIdExt(424242), { from: -1, backward: 30, getMessages: true })
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 3, seq: 13, opcode: 49, payload: { error: 'chat.not.found' } }))
+  assert.deepEqual([transport.routeAttestation('424242')?.accepted, transport.routeAttestation('424242')?.error], [false, 'chat.not.found'])
+
+  pageRequest(14, 75, pageIdExt(777), { subscribe: false })
+  transport._handleBinaryFrame(encodeMaxFrame({ cmd: 1, seq: 14, opcode: 75, payload: {} }))
+  assert.equal(transport.routeAttestation('777'), null, 'leaving a chat is not opening it')
+  assert.equal(await transport.waitForRouteAttestation(n0.chatId, { sinceMs: Date.now() + 60_000, timeoutMs: 20, pollMs: 5 }), null, 'only an answer after the route was opened counts')
+})
+
+test('M2 the scraper page never marks a message read (D-19): the in-page hook withholds op:50 and nothing else', () => {
+  const diag = []
+  class FakeSocket {
+    constructor(url) { this.url = url; this.sent = []; this.listeners = {} }
+    send(data) { this.sent.push(Buffer.from(data instanceof ArrayBuffer ? new Uint8Array(data) : data)) }
+    addEventListener(type, fn) { this.listeners[type] = fn }
+  }
+  const context = { btoa, atob, Uint8Array, ArrayBuffer, WebSocket: FakeSocket, __maxWsReceive: data => diag.push(JSON.parse(data)) }
+  context.window = context
+  vm.runInNewContext(WS_INIT_SCRIPT, context)
+  const ws = new context.WebSocket('wss://api.oneme.ru/websocket')
+  const toArrayBuffer = frame => frame.buffer.slice(frame.byteOffset, frame.byteOffset + frame.length)
+  const readMark = encodeMaxBinaryFrame({ cmd: 0, seq: 77, opcode: 50, payload: { type: 'READ_MESSAGE', chatId: BigInt(REAL_CHAT), messageId: messageIdBig(GAP_LAST.id), mark: maxTimeOfId(GAP_LAST.id) } })
+  const resent = encodeMaxBinaryFrame({ cmd: 2, seq: 77, opcode: 50, payload: { type: 'READ_MESSAGE', chatId: BigInt(REAL_CHAT), mark: 1 } })
+  const send = encodeMaxBinaryFrame({ cmd: 0, seq: 78, opcode: 64, payload: { chatId: BigInt(REAL_CHAT), message: { text: 'x', cid: 1n } } })
+  ws.send(toArrayBuffer(readMark))
+  ws.send(toArrayBuffer(resent))
+  ws.send(toArrayBuffer(send))
+  assert.deepEqual(ws.sent.map(frame => frame.readInt16BE(4)), [64], 'read marks, re-sent ones included, never leave the page; everything else does')
+  assert.deepEqual(diag.filter(d => d.__diag === 'read_mark_withheld').map(d => [d.seq, d.cmd]), [[77, 0], [77, 2]])
+  context.window.__maxSuppressReadMarks = false
+  ws.send(toArrayBuffer(readMark))
+  assert.equal(ws.sent.length, 2, 'the close guard can switch the hook off')
+  assert.equal(typeof context.window.__maxWsSend, 'undefined', 'no JSON frame sender exists in the page')
+})
+
+test('M2 recovery state lives on the volume (D-09), a legacy copy is moved there once', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'max-m2-root-'))
+  fs.writeFileSync(path.join(root, 'last_activity.json'), JSON.stringify({ ts: 1 }))
+  const moved = recoveryStatePath('last_activity.json', { rootDir: root })
+  assert.equal(moved, path.join(root, 'user_data', 'last_activity.json'))
+  assert.deepEqual(JSON.parse(fs.readFileSync(moved, 'utf8')), { ts: 1 })
+  assert.equal(fs.existsSync(path.join(root, 'last_activity.json')), false)
+  assert.equal(recoveryStatePath('last_activity.json', { rootDir: root }), moved)
+
+  const read = file => fs.readFileSync(require.resolve(file), 'utf8')
+  assert.match(read('../sync/MessageSync'), /const DEDUP_PATH\s+= recoveryStatePath\('last_seen_dedupe\.json'\)/)
+  assert.match(read('../sync/InitialHistorySync'), /const DONE_FLAG = recoveryStatePath\('\.initial_sync_done'\)/)
+  assert.match(read('../sync/InitialHistorySync'), /const LAST_ACTIVITY_PATH = recoveryStatePath\('last_activity\.json'\)/)
+  assert.match(read('../index'), /const LAST_ACTIVITY_PATH\s+= recoveryStatePath\('last_activity\.json'\)/)
+  assert.doesNotMatch(read('../index'), /path\.join\(__dirname, 'last_activity\.json'\)/)
+  assert.match(read('../transport/TransportInterceptor'), /const DEFAULT_STATE_DIR = path\.join\(__dirname, '\.\.', 'user_data'\)/)
+})
+
+test('M2 wiring: session loss stops sends, catch-up runs only while the page is free, no JSON frame and no DOM outgoing copy', () => {
+  const scraper = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const transportSource = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
+  const loss = scraper.slice(scraper.indexOf('transport.onSessionLoss('), scraper.indexOf('transport.configureCatchUp('))
+  assert.match(loss, /isReady = false/)
+  assert.match(loss, /session\.isLoggedIn = false/)
+  assert.match(scraper, /transport\.configureCatchUp\(\{ isBusy: \(\) => uiSendInProgress \|\| domFallbackRunning \|\| isSending \}\)/)
+  assert.match(scraper, /transport\.scheduleCatchUp\(4_000, 'reconnect'\)/)
+  assert.match(scraper, /transport\.scheduleCatchUp\(6_000, 'startup'\)/)
+  assert.match(scraper, /transport\.onReadMark\(event => \{\n\s+queueReadMarkForCrm\(event\)/)
+  assert.match(scraper, /event: 'read_mark',/)
+  const candidate = scraper.slice(scraper.indexOf('async function forwardDomCandidate('), scraper.indexOf('const pendingProviderId = reason'))
+  assertBeforeOrder(candidate, "if (isOutgoingCandidate) {", "return { skipped: 'outgoing_without_provider_id'")
+  assert.doesNotMatch(transportSource, /JSON\.stringify\(\{ ver: 11/)
+  assert.doesNotMatch(transportSource, /sendBinaryOp71|sendBinaryReaction|_op71Prefix|_browserLastBinFrameSeq/)
+  assert.doesNotMatch(scraper, /transport\.sendBinaryReaction|transport\.sendFrame\(OP\.(?:SEND_MESSAGE|DELETE_MESSAGE|SEND_REACTION|REMOVE_REACTION)/)
+})
+
+function assertBeforeOrder(source, first, second) {
+  const a = source.indexOf(first)
+  const b = source.indexOf(second)
+  assert.ok(a >= 0 && b > a, `${first} before ${second}`)
+}

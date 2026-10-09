@@ -191,6 +191,12 @@ export function pilotScheduleFollowUpV1(outcome: {
         case 'park_not_enabled':
         case 'invalid_day':
             return 'unavailable'
+        case 'order_window_closed':
+            // The catalogue only lists orders whose window is open, so this is
+            // reached only when the window closed between the listing and the
+            // request. The driver is asked to try again, and the rebuilt
+            // catalogue then refuses the order itself.
+            return 'check_failed'
         default:
             return 'check_failed'
     }

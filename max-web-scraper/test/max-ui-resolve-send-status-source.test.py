@@ -58,40 +58,29 @@ def _branch_body(text, header):
     raise AssertionError('unbalanced braces after ' + header)
 
 
-def test_attempted_ui_send_is_terminal_even_without_a_bound_chat_id():
-    assert 'uiSendAttempted: true' in source
-    assert "const uiSendAttempted = Boolean(liveResult && typeof liveResult === 'object' && liveResult.uiSendAttempted === true)" in source
-
-    branch = _branch_body(source, 'if (uiSendAttempted) {')
-
-    # Every exit from the branch is a return, so an attempted UI send can never fall
-    # through into a second send of the same message, with or without a chat id.
-    # There are three: the unproven-submit failure, the proven send reported with its
-    # delivery proof, and the proof-less fallback when the caller supplied no
-    # clientMessageId to bind a proof to.
-    assert 'res.status(502)' in branch
-    assert 'success: true,' in branch
-    assert branch.count('return res.') == 3, branch.count('return res.')
-    assert 'normalizeTextSendResult' not in branch
-
-    # Both responses precede the protocol send path in the enclosing handler.
-    attempted = source.index('if (uiSendAttempted) {')
-    protocol_send = source.index('const sendResult = normalizeTextSendResult', attempted)
-    assert source.index('return res.status(502)', attempted) < protocol_send
-    assert source.index('return res.json({', attempted) < protocol_send
+def test_send_message_never_types_into_a_phone_lookup():
+    # A phone number names a person, not a MAX conversation. Reaching it meant
+    # searching the MAX UI and typing the message into whatever opened - an
+    # unproven route. /send-message refuses it before anything is typed.
+    handler = source[source.index("app.post('/send-message'"):source.index("// Поставить/снять emoji-реакцию")]
+    assert 'resolvePhoneLive(' not in handler
+    assert "if (!digits || (digits.length >= 10 && digits.length <= 11)) {" in handler
+    assert "{ outcome: 'refused', code: 'MAX_ROUTE_UNRESOLVED', reason: digits ? 'phone_target' : 'invalid_target' }" in handler
+    refused = handler.index("code: 'MAX_ROUTE_UNRESOLVED'")
+    assert refused < handler.index('enqueueSend('), 'a phone target must be refused before the send queue'
 
 
-def test_ui_send_reports_send_requested_and_marks_unbound_results():
-    assert "deliveryConfirmed: false," in source
-    assert "deliveryStatus: 'send_requested'," in source
-    assert "source: liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'," in source
-
-
-def test_bound_chat_id_is_persisted_for_later_sends():
-    attempted = source.index('if (uiSendAttempted) {')
-    branch = source[attempted:source.index('return res.json({', attempted)]
-    assert 'savePhoneChatId(digits, liveId)' in branch
-    assert 'contactStore._map.set(liveId' in branch
+def test_text_send_answers_come_only_from_the_decided_outcome():
+    helper = _text_send_answer_helper()
+    # delivered only with a correlated provider id; a request without MAX's answer
+    # is send_requested with no id; every failure carries its contract code.
+    assert helper.count("deliveryStatus: 'delivered',") == 1
+    assert "case 'accepted':" in helper
+    assert "deliveryStatus: 'send_requested'," in helper
+    assert "code: 'MAX_SEND_UNCONFIRMED'," in helper
+    assert "code: 'MAX_SEND_NOT_DISPATCHED'," in helper
+    assert "code: 'MAX_SEND_OUTCOME_UNKNOWN'," in helper
+    assert "code: 'MAX_SEND_REJECTED'," in helper
 
 
 def test_a_send_is_claimed_only_when_the_typed_text_left_the_compose_box():
@@ -112,18 +101,12 @@ def test_a_send_is_claimed_only_when_the_typed_text_left_the_compose_box():
     assert returned < poll, 'an unproven submit must return before binding a chat id'
 
 
-def test_unproven_submit_is_reported_as_failure_not_as_success():
-    attempted = source.index('if (uiSendAttempted) {')
-    guard = source.index('if (liveResult.submitObserved !== true) {', attempted)
-    ok_return = source.index("success: true,", attempted)
-    assert guard < ok_return, 'the unproven-submit guard must precede any success response'
-    branch = source[guard:source.index('}', source.index('res.status(502)', guard))]
-    assert 'success: false,' in branch
-    assert "deliveryStatus: 'failed'," in branch
-    assert 'error:' in branch
-    # Still terminal: it returns rather than falling through to a protocol send.
-    protocol_send = source.index('const sendResult = normalizeTextSendResult', guard)
-    assert source.index('res.status(502)', guard) < protocol_send
+def test_an_unknown_outcome_is_never_reported_as_success():
+    helper = _text_send_answer_helper()
+    unknown = helper.index("code: 'MAX_SEND_OUTCOME_UNKNOWN',")
+    default = helper.index('default:')
+    assert default < unknown, 'an unrecognised outcome must fall to unknown, never to success'
+    assert 'success: false,' in helper[default:unknown]
 
 
 def test_self_echo_must_carry_this_requests_text():
@@ -184,12 +167,7 @@ def test_multiline_message_is_not_submitted_one_line_at_a_time():
 
 def test_new_send_log_lines_do_not_emit_the_raw_phone():
     assert 'function maskPhoneForLog(value)' in source
-    for line in (
-        '[Send] UI send for ${maskPhoneForLog(digits)} did not take effect',
-        '[Send] UI-resolved: ${maskPhoneForLog(digits)}',
-        '[Send] UI send attempted for ${maskPhoneForLog(digits)}',
-    ):
-        assert line in source, line
+    assert "[Send] refused target ${digits ? maskPhoneForLog(digits) : 'none'}" in source
 
 
 def test_unreadable_compose_is_never_scored_as_a_cleared_box():
@@ -213,11 +191,19 @@ def test_binding_failure_after_a_proven_submit_does_not_unwind_to_not_found():
     assert 'boundChatId = null' in source[guard:terminal]
 
 
-def test_direct_ui_text_send_proves_the_exact_text_cleared():
-    # An empty compose box is also what a failed fill leaves behind, so emptiness
-    # alone must not mint deliveryProof{actionConfirmed:true}.
-    assert 'const sent = isUiTextSubmitObserved(beforeText, afterText, text)' in source
+def test_compose_submit_is_judged_by_the_wire_not_the_box():
+    # An emptied compose box is what MAX Web also shows for text typed while its
+    # socket was down. The box only decides between "not dispatched" (it still
+    # holds the exact text) and "unknown"; it never proves a send.
+    block = source[source.index('async function submitTextThroughCompose'):source.index('async function submitReplyThroughPage')]
+    assert 'isUiTextSubmitObserved' not in block
+    assert 'inspectWithoutRequest: async () => {' in block
+    assert 'return { composeRetainedText: retained }' in block
     assert "const sent = !String(afterText || '').trim()" not in source
+
+
+def _text_send_answer_helper():
+    return source[source.index('function textSendHttpAnswer('):source.index("app.post('/send-message'")]
 
 
 def _json_responses(branch):
@@ -241,44 +227,21 @@ def _json_responses(branch):
                     break
 
 
-def test_a_proven_ui_resolve_send_reports_its_delivery_proof():
-    # A submit confirmed against the compose box is the same action-bound evidence the
-    # direct-UI and UI-fallback paths report as a proof. Reporting it as merely
-    # 'send_requested' left the canonical message 'sent' without a provider id, so
-    # recovery marked it failed and retryable and the retry job sent a second copy.
-    branch = _branch_body(source, 'if (uiSendAttempted) {')
-    assert 'if (clientMessageId) {' in branch
-    assert 'const proven = uiTextDeliveredResult(' in branch
-    assert '...proven,' in branch
-    # The proof is only mintable when there is a clientMessageId to bind it to, so the
-    # weaker answer must remain reachable rather than asserting an unverifiable delivery.
-    assert "deliveryStatus: 'send_requested'," in branch
-    proven = branch.index('if (clientMessageId) {')
-    fallback = branch.index("deliveryStatus: 'send_requested',")
-    assert proven < fallback, 'the proven response must be chosen before the fallback'
+def test_no_ui_action_is_minted_as_a_delivery_proof():
+    # The compose box clearing was recorded as delivered for a message that never
+    # left the page (2026-10-02 19:25:58). No UI action is a delivery proof.
+    assert 'function uiTextDeliveredResult(' not in source
+    assert "kind: 'ui_send_action'" not in source
+    import re
+    assert not re.search(r'\bactionConfirmed: true', source)
 
 
-def test_the_delivery_proof_is_bound_to_this_operation():
-    # uiTextDeliveredResult stamps the caller's clientMessageId into the proof, and the
-    # consumer refuses any proof whose clientMessageId does not match the message it sent.
-    helper = _branch_body(source, 'function uiTextDeliveredResult(')
-    assert "kind: 'ui_send_action'," in helper
-    assert 'clientMessageId: clientMessageId ? String(clientMessageId) : null,' in helper
-    assert 'actionConfirmed: true,' in helper
-    assert "deliveryStatus: 'delivered'," in helper
-    assert 'deliveryConfirmed: true,' in helper
-
-
-def test_every_ui_send_success_echoes_the_live_account():
-    # Gravity's MAX transport rejects any send result that does not echo the exact
-    # live account (MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH) and records the message as
-    # failed, even though the contact received it. A route-level "mentions
-    # providerAccountId somewhere" check cannot see a single response that omits it.
-    branch = _branch_body(source, 'if (uiSendAttempted) {')
-    successes = [r for r in _json_responses(branch) if 'success: true' in r]
-    assert len(successes) == 2, len(successes)
-    for response in successes:
-        assert 'providerAccountId,' in response, response
-    # The echoed value is the one the live-account guard proved for this request.
-    handler = source[source.index("app.post('/send-message'"):source.index('if (uiSendAttempted) {')]
+def test_every_text_send_answer_echoes_the_live_account():
+    # Gravity's MAX transport rejects a send result that does not echo the exact
+    # live account (MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH).
+    helper = _text_send_answer_helper()
+    base = helper[helper.index('const base = {'):helper.index('switch (result?.outcome)')]
+    assert 'providerAccountId,' in base
+    assert helper.count('...base,') == 6
+    handler = source[source.index("app.post('/send-message'"):source.index("// Поставить/снять emoji-реакцию")]
     assert 'const providerAccountId = requireLiveMaxProviderAccount(req, res)' in handler

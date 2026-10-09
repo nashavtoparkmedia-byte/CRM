@@ -1,5 +1,6 @@
-import { sendMaxTransportTextV1 } from '@/modules/max-channel/application/messaging-transport'
+import { maxTextSendFailureMessageV1, readMaxTextSendFailureV1, sendMaxTransportTextV1 } from '@/modules/max-channel/application/messaging-transport'
 import {
+    channelDeliveryErrorV1,
     registerMaxChannelDeliveryV1,
     type MaxChannelDeliveryV1,
     type MaxTextDeliveryResultV1,
@@ -56,6 +57,29 @@ function isRealMaxMessageId(value: unknown): value is string {
     return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
 }
 
+/**
+ * A reply goes out as a reply or not at all. The quoted message must carry a
+ * real MAX provider id; a synthetic DOM-recovery id, or a quoted row with no id
+ * at all (its context arrives without an id), is refused before anything is
+ * dispatched instead of being sent as plain text.
+ */
+function assertMaxReplyTargetAddressableV1(options: {
+    quotedMsgId?: string
+    quotedText?: string
+    quotedSentAt?: string
+    quotedDirection?: string
+}): void {
+    const quotedMsgId = optionalString(options.quotedMsgId)
+    const quotedContext = Boolean(
+        optionalString(options.quotedText)
+        || optionalString(options.quotedSentAt)
+        || optionalString(options.quotedDirection),
+    )
+    if (quotedMsgId ? !isRealMaxMessageId(quotedMsgId) : quotedContext) {
+        throw new Error(maxTextSendFailureMessageV1('MAX_REPLY_TARGET_NOT_ADDRESSABLE') ?? 'MAX_REPLY_TARGET_NOT_ADDRESSABLE')
+    }
+}
+
 function validateMaxTextDeliveryResultV1(
     raw: unknown,
     expected: { clientMessageId?: string; providerAccountId: string },
@@ -84,23 +108,43 @@ function validateMaxTextDeliveryResultV1(
         && raw.deliveryConfirmed === true
         && raw.deliveryStatus === 'delivered'
 
+    // Only a provider id correlated to this send confirms it: MAX's response to
+    // the page's own op:64 request (provider_ack), or the page store's record of
+    // the reply it just sent (provider_store_readback), naming that same id.
+    // An id without that proof - the old answers took one from any frame - or
+    // a UI action alone (the compose box clearing: on 2026-10-02 a message
+    // typed while the socket was down was recorded delivered and never sent)
+    // is a client action, nothing more.
     const proof = isRecord(raw.deliveryProof) ? raw.deliveryProof : null
-    const expectedClientMessageId = optionalString(expected.clientMessageId)
-    const validatedUiProof = Boolean(
-        !externalId
+    const proofKind = optionalString(raw.proofKind) ?? (proof ? optionalString(proof.kind) : null)
+    const correlatedProviderProof = Boolean(
+        externalId
         && confirmationFieldsAgree
-        && expectedClientMessageId
-        && proof?.kind === 'ui_send_action'
-        && proof.actionConfirmed === true
-        && proof.clientMessageId === expectedClientMessageId,
+        && (proofKind === 'provider_ack' || proofKind === 'provider_store_readback')
+        && (!proof || optionalString(proof.providerMessageId) === externalId),
     )
-    const validatedProviderProof = Boolean(externalId && confirmationFieldsAgree)
 
     return {
-        outcome: validatedProviderProof || validatedUiProof ? 'delivered' : 'pending',
-        externalId,
+        outcome: correlatedProviderProof ? 'delivered' : 'pending',
+        externalId: correlatedProviderProof ? externalId : null,
         resolvedChatId,
+        // S2: the typed evidence alone decides; a send is never 'delivered' here.
+        evidence: correlatedProviderProof ? 'provider_ack' : 'client_action',
+        providerMessageId: correlatedProviderProof ? externalId : null,
     }
+}
+
+function refusedBeforeDispatchV1(error: unknown): Error {
+    const message = error instanceof Error ? error.message : String(error)
+    const code = /^[A-Z][A-Z0-9_]+/.exec(message)?.[0] ?? 'MAX_SEND_REFUSED'
+    return channelDeliveryErrorV1(message, 'terminal', code)
+}
+
+/** A failed send as Messaging's typed failure when its outcome is proven; any other error unchanged. */
+function typedMaxTextSendFailureV1(error: unknown): unknown {
+    const failure = readMaxTextSendFailureV1(error)
+    if (!failure || !(error instanceof Error)) return error
+    return channelDeliveryErrorV1(error.message, failure.outcome, failure.code)
 }
 
 async function post(
@@ -124,22 +168,35 @@ async function post(
 const capability: MaxChannelDeliveryV1 = {
     assertTransportBinding: assertMaxTransportBindingV1,
     async sendText(input) {
-        assertMaxTransportBindingV1({
-            providerAccountId: input.options.providerAccountId,
-            connectionId: input.options.connectionId,
-            isPersonal: input.options.isPersonal === true,
-        })
-        const providerAccountId = requireMaxTransportAccountV1(input.options.providerAccountId)
-        const raw = await sendMaxTransportTextV1({
-            target: input.target,
-            content: input.content,
-            providerAccountId,
-            connectionId: input.options.connectionId,
-            isPersonal: input.options.isPersonal === true,
-            quotedMsgId: input.options.quotedMsgId,
-            uiChatId: input.options.uiChatId,
-            clientMessageId: input.options.clientMessageId,
-        })
+        let providerAccountId: string
+        try {
+            assertMaxTransportBindingV1({
+                providerAccountId: input.options.providerAccountId,
+                connectionId: input.options.connectionId,
+                isPersonal: input.options.isPersonal === true,
+            })
+            providerAccountId = requireMaxTransportAccountV1(input.options.providerAccountId)
+            assertMaxReplyTargetAddressableV1(input.options)
+        } catch (error) {
+            // A binding or reply-target refusal: nothing was dispatched, and a
+            // repeat is refused again.
+            throw refusedBeforeDispatchV1(error)
+        }
+        let raw: Record<string, unknown>
+        try {
+            raw = await sendMaxTransportTextV1({
+                target: input.target,
+                content: input.content,
+                providerAccountId,
+                connectionId: input.options.connectionId,
+                isPersonal: input.options.isPersonal === true,
+                quotedMsgId: input.options.quotedMsgId,
+                uiChatId: input.options.uiChatId,
+                clientMessageId: input.options.clientMessageId,
+            })
+        } catch (error) {
+            throw typedMaxTextSendFailureV1(error)
+        }
         return validateMaxTextDeliveryResultV1(raw, {
             clientMessageId: input.options?.clientMessageId,
             providerAccountId,

@@ -1,3 +1,4 @@
+import { deriveDeliveryStateV1, isDeliveryStateV1, type DeliveryStateV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import type { Message } from './useMessages'
 
 /**
@@ -62,6 +63,17 @@ export function hasUnknownDeliveryOutcome(message: Message): boolean {
     return message.status === 'failed' && message.metadata?.deliveryOutcome === 'unknown'
 }
 
+/**
+ * What this outbound row's evidence proves (S2), as the server derives it:
+ * the state the server answered for this device's own send until a canonical
+ * copy of the row arrives, then the row's own status and evidence. Null while
+ * this device's request is still in flight, and for anything not outbound.
+ */
+export function outboundDeliveryState(message: Message): DeliveryStateV1 | null {
+    if (message.direction !== 'outbound' || message.status === 'sending') return null
+    return message.deliveryState ?? deriveDeliveryStateV1(message)
+}
+
 function withoutKeys(metadata: Message['metadata'], keys: readonly string[]): Message['metadata'] {
     if (!metadata || !keys.some(key => key in metadata)) return metadata
     const rest = { ...metadata }
@@ -113,7 +125,7 @@ export function mergeCanonicalRow(current: Message, incoming: Message): Message 
     if (incoming.status === undefined) return { ...current, ...incoming, status: current.status, channel }
     if (!isLocalSendFailure(current)) {
         if (current.status === 'sending' && incoming.status === 'sent') {
-            return { ...current, ...incoming, channel, status: 'sending' }
+            return { ...current, ...incoming, channel, status: 'sending', deliveryState: incoming.deliveryState }
         }
         if (rank(incoming.status) < rank(current.status)) {
             return { ...current, id: incoming.id || current.id, clientMessageId: current.clientMessageId ?? incoming.clientMessageId }
@@ -124,6 +136,9 @@ export function mergeCanonicalRow(current: Message, incoming: Message): Message 
         ...incoming,
         channel,
         metadata: withoutLocalFailure(incoming.metadata ?? current.metadata),
+        // A canonical row carries its own status and evidence; a state from an
+        // earlier answer must not outlive them.
+        deliveryState: incoming.deliveryState,
     }
 }
 
@@ -136,6 +151,7 @@ export interface SendAnswer {
     retryable?: boolean
     deliveryOutcome?: string | null
     errorSchemaVersion?: number | null
+    deliveryState?: string | null
 }
 
 /**
@@ -167,6 +183,7 @@ export function applySendAnswer(current: Message, answer: SendAnswer): Message {
         status,
         ...(answer.externalId ? { externalId: answer.externalId } : {}),
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        deliveryState: isDeliveryStateV1(answer.deliveryState) ? answer.deliveryState : undefined,
     }
 }
 

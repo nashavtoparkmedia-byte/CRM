@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
     compensationEligibilityFactsFromFleetProfileV1,
     compensationPilotEligibilityV1,
+    compensationPilotFirstMonthV1,
     isParkSelfEmployedV1,
     parkFirstCalendarMonthV1,
     type CompensationEligibilityFactsV1,
@@ -77,6 +78,36 @@ describe('first calendar month window', () => {
             .toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
         expect(compensationPilotEligibilityV1(lateHire, new Date('2026-10-01T06:00:00.000Z')))
             .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month' })
+    })
+})
+
+describe('the facts half of eligibility, with no clock', () => {
+    it('names the first month and its window from the hire date alone', () => {
+        expect(compensationPilotFirstMonthV1(facts())).toEqual({
+            ok: true,
+            firstMonth: { year: 2026, month: 9 },
+            firstMonthKey: '2026-09',
+            windowStartsAt: new Date('2026-08-31T19:00:00.000Z'),
+            windowEndsAt: new Date('2026-09-30T19:00:00.000Z'),
+        })
+    })
+
+    it('refuses on the facts in the same order as the clocked decision, and never on the clock', () => {
+        expect(compensationPilotFirstMonthV1(facts({ isSelfEmployed: null, parkHireDate: null })))
+            .toEqual({ ok: false, reason: 'self_employment_unknown' })
+        expect(compensationPilotFirstMonthV1(facts({ isSelfEmployed: false, parkHireDate: null })))
+            .toEqual({ ok: false, reason: 'not_self_employed' })
+        expect(compensationPilotFirstMonthV1(facts({ parkHireDate: null })))
+            .toEqual({ ok: false, reason: 'hire_date_unknown' })
+    })
+
+    it('is the month the clocked decision states, before and after it refuses on the clock', () => {
+        const first = compensationPilotFirstMonthV1(facts())
+        if (!first.ok) throw new Error(first.reason)
+        expect(compensationPilotEligibilityV1(facts(), new Date('2026-09-20T06:00:00.000Z')))
+            .toMatchObject({ eligible: true, firstMonthKey: first.firstMonthKey, windowEndsAt: first.windowEndsAt })
+        expect(compensationPilotEligibilityV1(facts(), first.windowEndsAt))
+            .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: first.firstMonthKey })
     })
 })
 

@@ -19,6 +19,7 @@ import {
     createPrepareContactConversationIdentityHandlerV1,
     createResolveChannelContactHandlerV1,
 } from '../public/v1/contact-conversation-handler'
+import { createResolveInboundConversationPeerIdentityHandlerV1 } from '../public/v1/inbound-conversation-peer-identity-handler'
 import { legacyPrismaContactConversationPortV1 } from '../public/v1/legacy-prisma-contact-conversation-adapter'
 import {
     addPhoneToContactV1 as addPhoneToContact,
@@ -61,6 +62,7 @@ const deleteContactForRetention = createDeleteContactForRetentionHandlerV1(conta
 const resolveChannelContact = createResolveChannelContactHandlerV1(legacyPrismaContactConversationPortV1)
 const prepareContactConversationIdentity = createPrepareContactConversationIdentityHandlerV1(legacyPrismaContactConversationPortV1)
 const getPreferredActiveContactPhone = createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
+const resolveInboundConversationPeerIdentity = createResolveInboundConversationPeerIdentityHandlerV1(legacyPrismaContactConversationPortV1)
 const resolveContactLineage = createResolveContactLineageHandlerV1(legacyPrismaContactLineagePortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
@@ -75,6 +77,7 @@ export const deleteContactForRetentionV1 = (...args: Parameters<typeof deleteCon
 export const resolveChannelContactV1 = (...args: Parameters<typeof resolveChannelContact>) => resolveChannelContact(...args)
 export const prepareContactConversationIdentityV1 = (...args: Parameters<typeof prepareContactConversationIdentity>) => prepareContactConversationIdentity(...args)
 export const getPreferredActiveContactPhoneV1 = (...args: Parameters<typeof getPreferredActiveContactPhone>) => getPreferredActiveContactPhone(...args)
+export const resolveInboundConversationPeerIdentityV1 = (...args: Parameters<typeof resolveInboundConversationPeerIdentity>) => resolveInboundConversationPeerIdentity(...args)
 export const addPhoneToContactV1 = (...args: Parameters<typeof addPhoneToContact>) => addPhoneToContact(...args)
 export const attachPhoneToIdentityV1 = (...args: Parameters<typeof attachPhoneToIdentity>) => attachPhoneToIdentity(...args)
 export const cleanupDanglingContactIdentitiesV1 = (...args: Parameters<typeof cleanupDanglingContactIdentities>) => cleanupDanglingContactIdentities(...args)

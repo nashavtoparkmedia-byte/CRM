@@ -143,11 +143,18 @@ export interface CompensationPilotIngestionPortV1 {
     /** Mode, park enablement and catalogue progress, in database time. */
     readCatalogueFacts(externalParkId: string): Promise<PilotCatalogueFactsV1>
     requestHotRefresh(externalParkId: string): Promise<PilotScheduleOutcomeV1>
+    /**
+     * Asks ingestion to confirm one listed order with the provider. The stored
+     * completion instant goes along so ingestion can admit the confirmation by
+     * the order's own submission window, the same authority this service lists
+     * the order by, rather than by the generic day horizon alone.
+     */
     requestOrderConfirmation(input: {
         externalParkId: string
         dayKey: string
         externalOrderId: string
         providerBookedAt: Date | null
+        endedAt: Date
     }): Promise<PilotScheduleOutcomeV1>
     readOrderConfirmation(input: {
         externalParkId: string
@@ -406,6 +413,7 @@ async function confirmationFollowUpV1(
         dayKey,
         externalOrderId: order.externalOrderId,
         providerBookedAt: order.providerBookedAt,
+        endedAt: order.endedAt,
     }))
 }
 

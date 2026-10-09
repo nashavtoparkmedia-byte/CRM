@@ -23,7 +23,8 @@ import {
     type CashOrderIngestionStoreV1,
     type CashOrderPageWriteV1,
 } from './cash-order-ingestion-store'
-import { businessDayStartV1, cashOrderDayCoveredV1 } from './cash-order-ingestion-windows'
+import { businessDayStartV1, cashOrderDayCoveredV1, reconciliationFloorV1, targetedDayWithinHorizonV1 } from './cash-order-ingestion-windows'
+import { compensationSubmissionDeadlineV1 } from './compensation-submission-window'
 import type { CashOrderActiveLinkV1, CashOrderActiveParkV1 } from './cash-order-park-authority'
 import type { CashOrderPageRequestV1, CashOrderPageResponseV1 } from './yandex-cash-order-source'
 
@@ -933,5 +934,185 @@ describe('targeted day confirmation', () => {
         expect(cashOrderConfirmationForOrderV1(runtime.readDayConfirmation(YOKO, DAY), 'o1')).toMatchObject({ state: 'confirmed' })
         expect(result.parks[0].reconciliation?.slices).toBeGreaterThan(0)
         expect(store.order(YOKO, 'o1')).toBeDefined()
+    })
+})
+
+// ── Claim-specific confirmation horizon ───────────────────────────────────
+
+describe('claim-specific confirmation horizon', () => {
+    /** 31 October 23:30 Yekaterinburg: an order completed on the last calendar day of its month. */
+    const LAST_DAY_ENDED_AT = new Date('2026-10-31T18:30:00.000Z')
+    const LAST_DAY_BOOKED_AT = new Date('2026-10-31T18:10:00.000Z')
+    const LAST_DAY = '2026-10-31'
+    const DEADLINE = compensationSubmissionDeadlineV1(LAST_DAY_ENDED_AT)
+    /** 30 October 10:00 Yekaterinburg: an ordinary order of October, claimable until the month ends. */
+    const ORDINARY_ENDED_AT = new Date('2026-10-30T05:00:00.000Z')
+    const ORDINARY_BOOKED_AT = new Date('2026-10-30T04:40:00.000Z')
+    const ORDINARY_DAY = '2026-10-30'
+
+    function lastDayWorld(now: Date) {
+        const w = world('write', [YOKO])
+        vi.setSystemTime(now)
+        w.fleet.add(YOKO, { id: 'last', bookedAt: LAST_DAY_BOOKED_AT })
+        return w
+    }
+
+    it('is the deadline the monetary core stores: completion plus 72 hours', () => {
+        expect(DEADLINE).toEqual(new Date('2026-11-03T18:30:00.000Z'))
+    })
+
+    it('admits a claim inside the generic day horizon exactly as before, now carrying its completion instant', async () => {
+        // The common case: an order of the current month, day well inside the
+        // horizon, window open until the month ends. The order-level rule must
+        // change nothing here.
+        const { runtime, store, fleet } = world('write', [YOKO])
+        const dayStart = businessDayStartV1('2026-09-15')
+        const bookedAt = new Date(dayStart.getTime() + 5 * HOUR)
+        fleet.add(YOKO, { id: 'o1', bookedAt })
+        expect(targetedDayWithinHorizonV1('2026-09-15', new Date())).toBe(true)
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: '2026-09-15',
+            order: { externalOrderId: 'o1', providerBookedAt: bookedAt, endedAt: new Date(bookedAt.getTime() + 20 * MINUTE) },
+        })).toEqual({ status: 'scheduled' })
+        await settle(runtime.dayConfirmationSettled(YOKO, '2026-09-15'))
+        const snapshot = runtime.readDayConfirmation(YOKO, '2026-09-15')
+        expect(snapshot?.outcome).toBe('decided')
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'o1')).toMatchObject({ state: 'confirmed', via: 'narrow' })
+        expect(store.order(YOKO, 'o1')).toBeDefined()
+    })
+
+    it('confirms a stale last-day order one millisecond before its deadline, although the day horizon has aged out', async () => {
+        const now = new Date(DEADLINE.getTime() - 1)
+        const { runtime, store, fleet } = lastDayWorld(now)
+        expect(targetedDayWithinHorizonV1(LAST_DAY, now)).toBe(false)
+        const scheduled = await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
+        })
+        expect(scheduled).toEqual({ status: 'scheduled' })
+        await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        const snapshot = runtime.readDayConfirmation(YOKO, LAST_DAY)
+        expect(snapshot?.outcome).toBe('decided')
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'last')).toMatchObject({ state: 'confirmed', via: 'narrow' })
+        expect(store.order(YOKO, 'last')).toBeDefined()
+        expect(fleet.requestsFor(YOKO)).toHaveLength(1)
+    })
+
+    it('refuses the same order at its exact deadline and after it: nothing scheduled, no record, no provider request', async () => {
+        for (const now of [DEADLINE, new Date(DEADLINE.getTime() + HOUR)]) {
+            const { runtime, fleet } = lastDayWorld(now)
+            expect(await runtime.requestDayConfirmation({
+                externalParkId: YOKO, dayKey: LAST_DAY,
+                order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
+            })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
+            expect(runtime.readDayConfirmation(YOKO, LAST_DAY)).toBeNull()
+            expect(fleet.requests).toHaveLength(0)
+        }
+    })
+
+    it('refuses an ordinary previous-month order after its month closed, even while the day horizon still admits its day', async () => {
+        // 1 November 12:00 Yekaterinburg: 30 October is still inside the generic horizon.
+        const now = new Date('2026-11-01T07:00:00.000Z')
+        const { runtime, fleet } = world('write', [YOKO])
+        vi.setSystemTime(now)
+        fleet.add(YOKO, { id: 'ordinary', bookedAt: ORDINARY_BOOKED_AT })
+        expect(targetedDayWithinHorizonV1(ORDINARY_DAY, now)).toBe(true)
+        expect(compensationSubmissionDeadlineV1(ORDINARY_ENDED_AT)).toEqual(new Date('2026-10-31T19:00:00.000Z'))
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: ORDINARY_DAY,
+            order: { externalOrderId: 'ordinary', providerBookedAt: ORDINARY_BOOKED_AT, endedAt: ORDINARY_ENDED_AT },
+        })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
+        expect(runtime.readDayConfirmation(YOKO, ORDINARY_DAY)).toBeNull()
+        expect(fleet.requests).toHaveLength(0)
+    })
+
+    it('keeps the generic day horizon for a day-only request: no blanket extension of previous-month days', async () => {
+        // 3 November 12:00 Yekaterinburg: the day horizon for 31 October has aged out.
+        const now = new Date('2026-11-03T07:00:00.000Z')
+        const { runtime, fleet } = lastDayWorld(now)
+        expect(reconciliationFloorV1(now)).toEqual(new Date('2026-10-30T07:00:00.000Z'))
+        expect(targetedDayWithinHorizonV1(LAST_DAY, now)).toBe(false)
+        expect((await runtime.requestDayConfirmation({ externalParkId: YOKO, dayKey: LAST_DAY })).status).toBe('scheduled')
+        await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.outcome).toBe('failed:day_outside_horizon')
+        expect(fleet.requests).toHaveLength(0)
+        // A legacy order-bearing request without the completion instant is a day request too.
+        const legacy = world('write', [YOKO])
+        vi.setSystemTime(now)
+        expect((await legacy.runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY, order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT },
+        })).status).toBe('scheduled')
+        await settle(legacy.runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        expect(legacy.runtime.readDayConfirmation(YOKO, LAST_DAY)?.outcome).toBe('failed:day_outside_horizon')
+    })
+
+    it('keeps every order\'s own horizon on a shared day record: an expired order neither joins nor governs', async () => {
+        // 3 November 12:00 Yekaterinburg, three orders completed on 31 October:
+        // 'last' (23:30, open until 3 Nov 23:30), 'later' (22:00, open until
+        // 3 Nov 22:00) and 'early' (01:00, closed since 3 Nov 01:00).
+        const now = new Date('2026-11-03T07:00:00.000Z')
+        const { runtime, fleet } = lastDayWorld(now)
+        const laterBookedAt = new Date('2026-10-31T16:40:00.000Z')
+        const earlyBookedAt = new Date('2026-10-30T19:40:00.000Z')
+        fleet.add(YOKO, { id: 'later', bookedAt: laterBookedAt })
+        fleet.add(YOKO, { id: 'early', bookedAt: earlyBookedAt })
+        expect(targetedDayWithinHorizonV1(LAST_DAY, now)).toBe(false)
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
+        })).toEqual({ status: 'scheduled' })
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'early', providerBookedAt: earlyBookedAt, endedAt: new Date('2026-10-30T20:00:00.000Z') },
+        })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'later', providerBookedAt: laterBookedAt, endedAt: new Date('2026-10-31T17:00:00.000Z') },
+        })).toEqual({ status: 'joined' })
+        await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        const snapshot = runtime.readDayConfirmation(YOKO, LAST_DAY)
+        expect(snapshot?.orders.map((order) => order.externalOrderId).sort()).toEqual(['last', 'later'])
+        expect(snapshot?.outcome).toBe('decided')
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'last')).toMatchObject({ state: 'confirmed', via: 'narrow' })
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'later')).toMatchObject({ state: 'confirmed', via: 'narrow' })
+        // Only the two admitted orders were asked about: one narrow query each.
+        expect(fleet.requestsFor(YOKO)).toHaveLength(2)
+        expect(fleet.requestsFor(YOKO).every((request) => request.bookedTo.getTime() - request.bookedFrom.getTime() === 10 * MINUTE)).toBe(true)
+    })
+
+    it('refuses an expired claim that arrives while a record admitted by another order is running', async () => {
+        const now = new Date('2026-11-03T07:00:00.000Z')
+        const { runtime, fleet } = lastDayWorld(now)
+        fleet.latencyMs = 3_000
+        expect((await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
+        })).status).toBe('scheduled')
+        expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.outcome).toBe('running')
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'early', providerBookedAt: null, endedAt: new Date('2026-10-30T20:00:00.000Z') },
+        })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
+        await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.orders.map((order) => order.externalOrderId)).toEqual(['last'])
+    })
+
+    it('leaves background reconciliation untouched: a targeted claim confirmation moves no pass state', async () => {
+        const now = new Date(DEADLINE.getTime() - 1)
+        const { runtime, store } = lastDayWorld(now)
+        await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: LAST_DAY,
+            order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
+        })
+        await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
+        // The confirmation really ran and decided; only then is "untouched" a statement.
+        expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.outcome).toBe('decided')
+        expect(store.progress(YOKO)).toEqual({
+            lastHotSuccessAt: null,
+            reconciliationPassStartedAt: null,
+            reconciliationFloorBookedAt: null,
+            reconciliationCursorBookedAt: null,
+            lastReconciliationCompletedAt: null,
+        })
     })
 })

@@ -18,8 +18,7 @@ def test_incoming_uses_shared_known_chat_writer():
 
 
 def test_successful_outbound_adds_chat_to_restart_catchup():
-    assert 'rememberKnownChatId(returnChatId)' in source
-    assert 'if (uiChatId) rememberKnownChatId(uiChatId)' in source
+    assert 'if (answer.body.success) rememberKnownChatId(digits)' in source
 
 
 def test_dom_recovery_adds_chat_to_restart_catchup():

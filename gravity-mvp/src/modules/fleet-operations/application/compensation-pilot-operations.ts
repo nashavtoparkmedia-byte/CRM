@@ -42,7 +42,7 @@ const pilotIngestionPortV1: CompensationPilotIngestionPortV1 = {
     requestOrderConfirmation: (input) => requestCashOrderDayConfirmationV1({
         externalParkId: input.externalParkId,
         dayKey: input.dayKey,
-        order: { externalOrderId: input.externalOrderId, providerBookedAt: input.providerBookedAt },
+        order: { externalOrderId: input.externalOrderId, providerBookedAt: input.providerBookedAt, endedAt: input.endedAt },
     }),
     async readOrderConfirmation(input) {
         const confirmation = readCashOrderOrderConfirmationV1(input)

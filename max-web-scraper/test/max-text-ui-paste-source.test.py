@@ -3,11 +3,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'index.js'
 source = SRC.read_text(encoding='utf-8')
-start = source.index('async function sendTextViaUi')
-end = source.index('function waitForUiSendAck', start)
+start = source.index('async function submitTextThroughCompose')
+end = source.index('async function submitReplyThroughPage', start)
 block = source[start:end]
 helper_start = source.index('async function fillEditableText')
-helper_end = source.index('async function sendTextViaUi', helper_start)
+helper_end = source.index('async function fillMaxMediaCaption', helper_start)
 helper = source[helper_start:helper_end]
 
 
@@ -23,4 +23,7 @@ def test_fill_editable_text_has_insert_text_and_dom_event_fallback():
 
 
 def test_ui_text_send_still_sends_once_after_text_insert():
-    assert "page.keyboard.press('Enter')" in block
+    # One Enter is the one physical action of the call: no second Enter and no
+    # send-button click after it.
+    assert block.count("page.keyboard.press('Enter')") == 1
+    assert '.click()' not in block

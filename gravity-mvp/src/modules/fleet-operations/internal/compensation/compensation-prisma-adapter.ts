@@ -36,7 +36,6 @@ import {
     type SubmitCompensationApplicationCommandV1,
     type SubmitCompensationApplicationResultV1,
 } from '@/contracts/fleet-operations/v1'
-import { compensationBusinessDayKeyV1 } from './compensation-calendar'
 import {
     compensationApplicationIdV1,
     compensationAuditEventIdV1,
@@ -55,7 +54,9 @@ import {
     compensationAttemptDecisionV1,
     compensationCancelDecisionV1,
     compensationFinalizeDecisionV1,
+    compensationPayoutSlotDayV1,
     compensationRowLockOrderV1,
+    compensationSettlementBusinessDayV1,
     type CompensationApplicationStatusV1,
 } from './compensation-policy'
 import {
@@ -98,10 +99,13 @@ export type CompensationErrorCodeV1 =
 /**
  * How far a caller's operation timestamp may sit from the database clock.
  *
- * The daily payout slot is the one monetary fact that would otherwise be
- * decided by a caller-supplied instant rather than by verified evidence, so the
- * slot is taken from the database clock and the caller's timestamp only has to
- * agree with it.
+ * A caller's instant stamps a preparation's expiry and age gate and a
+ * settlement's `settledAt`, so it is verified against the database clock
+ * rather than trusted. The order-day slot never depends on it: the slot is
+ * keyed by the order's own business day (`compensationPayoutSlotDayV1`), and
+ * the settlement day is named by the database instant this helper returns
+ * (`compensationSettlementBusinessDayV1`), because within this tolerance the
+ * caller may sit on the other side of local midnight.
  */
 const COMPENSATION_CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
 
@@ -657,6 +661,18 @@ export async function startCompensationPayoutV1(
         const { application } = await lockApplicationChain(tx, locks, command.applicationId)
         if (application.status !== 'PENDING') fail('not_pending', `application is ${application.status}`)
 
+        // The slot this preparation would hold is the ORDER's business day,
+        // read from the claim's immutable `orderEndedAt`. A plain read, on
+        // purpose: the claim is row-locked by submit and by finalize, each at
+        // the claim's own rank below the payout authorization, and a
+        // non-locking SELECT of an immutable column neither takes nor needs a
+        // place in the frozen order.
+        const claimDays = await tx.$queryRawUnsafe<Array<{ orderEndedAt: Date }>>(
+            `SELECT "orderEndedAt" FROM "CompensationOrderClaim" WHERE "id" = $1`,
+            application.orderClaimId,
+        )
+        const intendedBusinessDay = compensationPayoutSlotDayV1(claimDays[0].orderEndedAt)
+
         const open = await lockOpenAuthorization(tx, locks, command.applicationId)
         if (open) {
             if (open.state === 'unknown_outcome') {
@@ -673,14 +689,13 @@ export async function startCompensationPayoutV1(
             }
         }
 
-        // The business day is captured here, atomically, and finalize never
-        // recomputes it. That is what stops finalize from discovering a new
-        // daily-limit conflict after money has left the dispatcher.
-        // Taken from the database clock, not from the caller: this is the one
-        // monetary fact a caller could otherwise choose, and choosing it would
-        // free a slot the person has already consumed.
-        const serverNow = await assertAgreesWithDatabaseClock(tx, command.startedAt)
-        const intendedBusinessDay = compensationBusinessDayKeyV1(serverNow)
+        // The slot is claimed here, atomically, and finalize never recomputes
+        // it. That is what stops finalize from discovering a new daily-limit
+        // conflict after money has left the dispatcher. Neither the caller nor
+        // the clock can choose the day: it is the order's own, so waiting for
+        // midnight frees nothing. The clock check still guards `startedAt`,
+        // which stamps the preparation's expiry and its unaided-recall age.
+        await assertAgreesWithDatabaseClock(tx, command.startedAt)
 
         const dayTaken = await tx.$queryRawUnsafe<Array<{ id: string }>>(
             `SELECT "id" FROM "CompensationPayoutAuthorization"
@@ -688,7 +703,9 @@ export async function startCompensationPayoutV1(
                AND "state" IN ('active','unknown_outcome','finalized') LIMIT 1`,
             application.compensationPersonId, intendedBusinessDay,
         )
-        if (dayTaken.length > 0) fail('daily_limit_reached', `person already has a payout for ${intendedBusinessDay}`)
+        if (dayTaken.length > 0) {
+            fail('daily_limit_reached', `person already has a compensated order on ${intendedBusinessDay}`)
+        }
 
         const personBusy = await tx.$queryRawUnsafe<Array<{ id: string }>>(
             `SELECT "id" FROM "CompensationPayoutAuthorization"
@@ -777,8 +794,9 @@ async function finalizeInTransaction(
             command.payoutAuthorizationId,
         )
         const authorization = authorizations[0]
-        // The age gate reads this instant, so it may not be caller-chosen either.
-        await assertAgreesWithDatabaseClock(tx, command.finalizedAt)
+        // The age gate reads this instant, so it may not be caller-chosen
+        // either; the verified database instant also names the settlement day.
+        const serverNow = await assertAgreesWithDatabaseClock(tx, command.finalizedAt)
         const decision = compensationFinalizeDecisionV1(
             authorization, command.authorizationFence, command.finalizedAt, viaReconciliation,
         )
@@ -811,6 +829,11 @@ async function finalizeInTransaction(
         // The amount was frozen when the authorization opened.
         const amountKopecks = authorization.amountKopecks
         const settlementId = compensationDerivedIdV1('comp_settle', authorization.id)
+        // The settlement day is the day money was paid, from the database
+        // clock: not the order-day slot the authorization holds, and not the
+        // caller's `finalizedAt`, which may sit across local midnight within
+        // the allowed skew. `settledAt` keeps the caller's instant as before.
+        const settlementBusinessDay = compensationSettlementBusinessDayV1(serverNow)
 
         await tx.$executeRawUnsafe(
             `UPDATE "CompensationBudgetPeriod"
@@ -827,7 +850,7 @@ async function finalizeInTransaction(
                  "settledByPrincipal","settledByLabel","createdAt")
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())`,
             settlementId, application.id, authorization.id, application.orderClaimId, period.id,
-            application.compensationPersonId, amountKopecks, authorization.intendedBusinessDay,
+            application.compensationPersonId, amountKopecks, settlementBusinessDay,
             command.finalizedAt, command.principal.principalId, command.principal.operatorLabel,
         )
         await tx.$executeRawUnsafe(
@@ -869,7 +892,7 @@ async function finalizeInTransaction(
             settlementId,
             applicationId: application.id,
             amountKopecks,
-            businessDay: authorization.intendedBusinessDay,
+            businessDay: settlementBusinessDay,
         }
     }
 }

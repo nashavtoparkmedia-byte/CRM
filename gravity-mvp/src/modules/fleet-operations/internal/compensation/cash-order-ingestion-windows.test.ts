@@ -195,6 +195,14 @@ describe('day confirmation windows', () => {
         expect(targetedDayWithinHorizonV1('2026-08-31', now)).toBe(false)
     })
 
+    it('ages a previous-month day out of the generic horizon 72 h after its start, regardless of any order', () => {
+        // 31 October in Yekaterinburg starts 30 Oct 19:00 UTC; the day horizon
+        // ends 72 h later, while a last-day order's own window may run on.
+        expect(targetedDayWithinHorizonV1('2026-10-31', d('2026-11-02T19:00:00.000Z'))).toBe(true)
+        expect(targetedDayWithinHorizonV1('2026-10-31', d('2026-11-02T19:01:00.000Z'))).toBe(false)
+        expect(reconciliationFloorV1(d('2026-11-03T07:00:00.000Z'))).toEqual(d('2026-10-30T07:00:00.000Z'))
+    })
+
     it('narrows to five minutes either side of the stored booking time', () => {
         expect(narrowBookingWindowV1(d('2026-09-16T08:25:00.000Z'))).toEqual({
             from: d('2026-09-16T08:20:00.000Z'),

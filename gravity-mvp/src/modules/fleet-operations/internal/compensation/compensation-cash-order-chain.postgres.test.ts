@@ -276,6 +276,20 @@ proof('cash order chain on real PostgreSQL', () => {
         expect(catalogue).toMatchObject({ eligible: false, reason: 'outside_first_calendar_month' })
     })
 
+    it('keeps a last-day order claimable for 72 hours after its month, and nothing else', async () => {
+        await ingestCashOrderPageV1([
+            fleetOrder({ id: 'l'.repeat(32), ended_at: '2026-09-30T18:30:00.000Z' }),
+            fleetOrder({ id: 'm'.repeat(32), ended_at: '2026-09-12T10:00:00.000Z' }),
+        ], CONTEXT, ingestionPort())
+        const stored = await storedOrders()
+        const inGrace = cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, new Date('2026-10-02T09:00:00.000Z'))
+        expect(inGrace.eligible).toBe(true)
+        if (!inGrace.eligible) return
+        expect(inGrace.orders.map((order) => order.externalOrderId)).toEqual(['l'.repeat(32)])
+        expect(cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, new Date('2026-10-03T18:30:00.000Z')))
+            .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month', orders: [] })
+    })
+
     it('charges an August order to the August period even when submitted in September', async () => {
         // 31 Aug 18:00 Yekaterinburg, ingested and claimed on 2 September.
         const augustOrder = fleetOrder({

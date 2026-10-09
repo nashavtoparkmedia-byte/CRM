@@ -114,6 +114,13 @@ export type PilotCandidateFactsGateV1 =
  * park scope costs nothing, and so an ineligible driver is never looked up in
  * another owner's data.
  *
+ * The month test is the driver-level one, taken at `now`. A driver whose first
+ * month ended less than 72 hours ago may still claim a last-day order of that
+ * month through the pilot (cashOrderCatalogueV1 keeps such an order through
+ * its own submission window), but Gate 1 reads no orders by design and does
+ * not count them: in that tail this proof is conservative, never a false
+ * positive, and Gate 2 applies that same catalogue rule to every candidate.
+ *
  * `isSelfEmployed` stays decisive: an `employmentType` of `selfemployed` with a
  * boolean that is not exactly true does not pass, because the boolean is what
  * the park actually stated.

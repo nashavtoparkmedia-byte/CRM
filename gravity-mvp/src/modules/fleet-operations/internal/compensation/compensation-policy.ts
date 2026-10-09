@@ -8,6 +8,8 @@
  * money left the external dispatcher.
  */
 
+import { compensationBusinessDayKeyV1 } from './compensation-calendar'
+
 /**
  * The single total order for every owner-local monetary row lock.
  *
@@ -119,14 +121,40 @@ export type CompensationPayoutAuthorizationStateV1 =
 export const COMPENSATION_PAYOUT_HOLD_STATES_V1 = ['active', 'unknown_outcome'] as const
 
 /**
- * States that consume the person's daily payout slot. `finalized` is included
- * so that a completed payout keeps the day claimed for the rest of that day.
+ * States that hold the person's compensation slot for one ORDER business day
+ * (`compensationPayoutSlotDayV1`). `finalized` is included so that a paid order
+ * keeps its day claimed for good: the key is the order's day, not the payout
+ * day, so the slot is never freed by waiting for midnight. `cancelled`, which
+ * is also how a reconciliation resolved as not paid ends, releases it.
  */
 export const COMPENSATION_PAYOUT_DAY_SLOT_STATES_V1 = [
     'active',
     'unknown_outcome',
     'finalized',
 ] as const
+
+/**
+ * The compensation slot a payout authorization holds: the Asia/Yekaterinburg
+ * business day on which the ORDER ended, never the day the manager prepares or
+ * confirms the payout. A person is compensated for at most one cash order per
+ * such day, across every profile and park. The argument is the immutable
+ * `CompensationOrderClaim.orderEndedAt`, so every preparation of the same
+ * order, on any calendar day, derives the same key.
+ */
+export function compensationPayoutSlotDayV1(orderEndedAt: Date): string {
+    return compensationBusinessDayKeyV1(orderEndedAt)
+}
+
+/**
+ * The business day a settlement records as the day money was paid. It is a
+ * reporting fact, takes no part in the order-day slot, and is derived from the
+ * database instant the finalize transaction verified, never from the caller's
+ * `finalizedAt`: within the clock skew tolerance the caller may legally sit on
+ * the other side of local midnight.
+ */
+export function compensationSettlementBusinessDayV1(serverNow: Date): string {
+    return compensationBusinessDayKeyV1(serverNow)
+}
 
 /** UX threshold after which the operator is warned that preparation is stale. */
 export const COMPENSATION_PAYOUT_STALE_AFTER_MS = 30 * 60 * 1000

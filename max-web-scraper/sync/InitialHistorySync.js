@@ -3,11 +3,13 @@
 const fs   = require('fs')
 const path = require('path')
 
-const { OP }           = require('../transport/TransportInterceptor')
+const { OP, maxRealIdFromProtocolId } = require('../transport/TransportInterceptor')
 const { MessageParser } = require('../parser/MessageParser')
+const { recoveryStatePath } = require('./MessageSync')
 
-// Флаг-файл: если существует — initial sync уже был выполнён
-const DONE_FLAG = path.join(__dirname, '..', '.initial_sync_done')
+// Флаг-файл: если существует — initial sync уже был выполнён. On the user_data
+// volume, so a container recreate does not forget it (D-09).
+const DONE_FLAG = recoveryStatePath('.initial_sync_done')
 
 // Максимум страниц пагинации — защита от бесконечного цикла
 const MAX_PAGES = 500
@@ -167,7 +169,7 @@ class InitialHistorySync {
       try {
         result = await this._transport.sendFrame(
           OP.GET_HISTORY,
-          { chatId, from, forward: 0, backward: HISTORY_BATCH, getMessages: true },
+          { chatId: maxRealIdFromProtocolId(chatId), from, forward: 0, backward: HISTORY_BATCH, getMessages: true },
           { waitResponse: true }
         )
       } catch (e) {
@@ -220,7 +222,7 @@ class InitialHistorySync {
   // ─── Catch-up при рестарте ───────────────────────────────────────────────
 
   async _catchUpIfNeeded() {
-    const LAST_ACTIVITY_PATH = path.join(__dirname, '..', 'last_activity.json')
+    const LAST_ACTIVITY_PATH = recoveryStatePath('last_activity.json')
     const CATCH_UP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000  // до 7 дней назад
 
     let sinceTs
@@ -282,7 +284,7 @@ class InitialHistorySync {
       do {
         const result = await this._transport.sendFrame(
           OP.GET_HISTORY,
-          { chatId, from: fromTs, forward: HISTORY_BATCH, backward: 0, getMessages: true },
+          { chatId: maxRealIdFromProtocolId(chatId), from: fromTs, forward: HISTORY_BATCH, backward: 0, getMessages: true },
           { waitResponse: true }
         )
         const messages = (result && result.messages) ? result.messages : []

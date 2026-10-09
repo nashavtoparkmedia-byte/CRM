@@ -61,6 +61,27 @@ export interface PrepareContactConversationIdentityCommandV1 {
     channel: ContactConversationChannelV1
     identityId: string | null
     phoneId: string | null
+    /**
+     * Optional EXACT outbound selector: address the identity by the provider
+     * identifier it carries instead of by its internal `identityId`.
+     *
+     * It exists for a caller that knows the peer only as a provider id and must
+     * not learn Contacts-owned row ids to send. A conversation can legitimately
+     * be linked to one identity while the peer speaking in it is a different
+     * identity of the same Contact, so `identityId` alone cannot name that peer.
+     *
+     * It changes only HOW the exact identity is addressed. Every gate this
+     * command already applies — same-Contact ownership, active, conflict,
+     * reachability by `purpose` — is applied to the identity it selects, and it
+     * adds no sendability policy of its own. Because `(channel, externalId)` is
+     * globally unique it selects at most one row and never falls back to another
+     * identity of the Contact.
+     *
+     * It is an exact selector, so it cannot be combined with the other selector
+     * axes: supplying it together with `identityId` or `phoneId` is rejected as
+     * ambiguous input rather than silently given a precedence.
+     */
+    identityExternalId?: string | null
     purpose: ContactConversationPurposeV1
 }
 
@@ -126,7 +147,7 @@ function invalid(message: string): never {
     throw new ContactConversationContractValidationError('INVALID_CONTRACT', message)
 }
 
-function parseEnvelope(
+export function parseEnvelope(
     input: unknown,
     expectedContract: string,
     contractPrefix: string,
@@ -150,11 +171,11 @@ function parseEnvelope(
     return input
 }
 
-function requireNonEmptyString(value: unknown, field: string): asserts value is string {
+export function requireNonEmptyString(value: unknown, field: string): asserts value is string {
     if (typeof value !== 'string' || value.trim() === '') invalid(`${field} is required`)
 }
 
-function requireChannel(value: unknown): asserts value is ContactConversationChannelV1 {
+export function requireChannel(value: unknown): asserts value is ContactConversationChannelV1 {
     if (typeof value !== 'string' || !CHANNELS.has(value as ContactConversationChannelV1)) {
         invalid('channel is invalid')
     }
@@ -164,12 +185,29 @@ function requireNullableNonEmptyString(value: unknown, field: string): asserts v
     if (value !== null) requireNonEmptyString(value, field)
 }
 
-function requireLegacyIdentifier(value: unknown, field: string): asserts value is string {
+export function requireLegacyIdentifier(value: unknown, field: string): asserts value is string {
     if (typeof value !== 'string' || value.length === 0) invalid(`${field} is required`)
 }
 
 function requireNullableLegacyIdentifier(value: unknown, field: string): asserts value is string | null {
     if (value !== null) requireLegacyIdentifier(value, field)
+}
+
+/**
+ * An optional field: absent and explicitly null both mean "not selected", and any
+ * present value must be an exact trimmed provider identifier. Whitespace padding is
+ * refused rather than trimmed, because the stored identifier is compared byte for byte.
+ */
+function requireAbsentOrExactString(
+    value: unknown,
+    field: string,
+): asserts value is string | null | undefined {
+    if (value === null || value === undefined) return
+    requireNonEmptyString(value, field)
+    // An identifier that needs trimming is not exact. Refusing it here is louder and
+    // earlier than letting a padded value become an ordinary lookup miss, which reads
+    // as "this Contact has no such identity" and hides a caller bug.
+    if (value !== value.trim()) invalid(`${field} must be exact and unpadded`)
 }
 
 export function parseResolveChannelContactCommandV1(input: unknown): ResolveChannelContactCommandV1 {
@@ -193,12 +231,23 @@ export function parsePrepareContactConversationIdentityCommandV1(
         input,
         PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
         'contacts.PrepareContactConversationIdentityCommand.',
-        ['contract', 'contactId', 'channel', 'identityId', 'phoneId', 'purpose'],
+        ['contract', 'contactId', 'channel', 'identityId', 'identityExternalId', 'phoneId', 'purpose'],
     )
     requireLegacyIdentifier(value.contactId, 'contactId')
     requireChannel(value.channel)
     requireNullableLegacyIdentifier(value.identityId, 'identityId')
     requireNullableLegacyIdentifier(value.phoneId, 'phoneId')
+    requireAbsentOrExactString(value.identityExternalId, 'identityExternalId')
+    // Exactly one exact selector, or none. Two selectors would need a precedence
+    // rule, and a precedence rule is how a caller ends up authorizing a send for
+    // an identity it did not name.
+    if (
+        value.identityExternalId !== null
+        && value.identityExternalId !== undefined
+        && (value.identityId !== null || value.phoneId !== null)
+    ) {
+        invalid('identityExternalId cannot be combined with identityId or phoneId')
+    }
     if (value.purpose !== 'open_conversation' && value.purpose !== 'send_in_bound_conversation') {
         throw new Error('contacts.PrepareContactConversationIdentityCommand.purpose must be exact')
     }

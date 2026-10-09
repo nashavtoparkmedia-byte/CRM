@@ -85,36 +85,79 @@ export function parkFirstCalendarMonthV1(parkHireDate: Date): CompensationCalend
     return compensationCalendarMonthV1(parkHireDate)
 }
 
+/** The facts gate's own refusals: every reason except the clocked one. */
+export type CompensationPilotFactsRefusalV1 =
+    Exclude<CompensationIneligibilityReasonV1, 'outside_first_calendar_month'>
+
+export type CompensationPilotFirstMonthV1 =
+    | {
+        ok: true
+        /** The driver's first calendar month in the park. */
+        firstMonth: CompensationCalendarMonthV1
+        firstMonthKey: string
+        windowStartsAt: Date
+        windowEndsAt: Date
+    }
+    | { ok: false; reason: CompensationPilotFactsRefusalV1 }
+
+/**
+ * The facts half of eligibility, with no clock: park-SMZ and the hire month.
+ *
+ * Stated on its own because two callers need the month without the "now is
+ * inside it" test: the clocked decision below, and the order catalogue, which
+ * judges each first-month order by that order's own submission window so that
+ * a last-day order keeps its 72-hour grace after the month has rolled over.
+ * Both read this one gate, in this one order, so they can never disagree
+ * about which month is the first or why a driver is refused on the facts.
+ */
+export function compensationPilotFirstMonthV1(
+    facts: CompensationEligibilityFactsV1,
+): CompensationPilotFirstMonthV1 {
+    if (facts.isSelfEmployed === null || facts.isSelfEmployed === undefined) {
+        return { ok: false, reason: 'self_employment_unknown' }
+    }
+    if (!isParkSelfEmployedV1(facts)) return { ok: false, reason: 'not_self_employed' }
+    if (!facts.parkHireDate) return { ok: false, reason: 'hire_date_unknown' }
+
+    const firstMonth = parkFirstCalendarMonthV1(facts.parkHireDate)
+    return {
+        ok: true,
+        firstMonth,
+        firstMonthKey: compensationPeriodKeyV1(firstMonth),
+        windowStartsAt: compensationMonthStartInstantV1(firstMonth),
+        windowEndsAt: compensationMonthEndInstantV1(firstMonth),
+    }
+}
+
 /**
  * The pilot window runs from the hire instant to the end of that same calendar
  * month. A driver hired on the 28th gets a short window; that is the product
  * rule, not an accident, and widening it is a product decision rather than a
  * rounding choice.
+ *
+ * This is the driver-level statement at one instant, and it says nothing
+ * about individual orders: an order completed on the month's last calendar
+ * day keeps the monetary core's 72-hour submission grace past this window,
+ * and the order catalogue (cashOrderCatalogueV1) is where that grace applies,
+ * order by order, never as a widening of this decision.
  */
 export function compensationPilotEligibilityV1(
     facts: CompensationEligibilityFactsV1,
     now: Date,
 ): CompensationEligibilityDecisionV1 {
-    if (facts.isSelfEmployed === null || facts.isSelfEmployed === undefined) {
-        return { eligible: false, reason: 'self_employment_unknown', firstMonthKey: null }
-    }
-    if (!isParkSelfEmployedV1(facts)) {
-        return { eligible: false, reason: 'not_self_employed', firstMonthKey: null }
-    }
-    if (!facts.parkHireDate) {
-        return { eligible: false, reason: 'hire_date_unknown', firstMonthKey: null }
+    const first = compensationPilotFirstMonthV1(facts)
+    if (!first.ok) return { eligible: false, reason: first.reason, firstMonthKey: null }
+
+    if (now.getTime() < first.windowStartsAt.getTime() || now.getTime() >= first.windowEndsAt.getTime()) {
+        return { eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: first.firstMonthKey }
     }
 
-    const firstMonth = parkFirstCalendarMonthV1(facts.parkHireDate)
-    const firstMonthKey = compensationPeriodKeyV1(firstMonth)
-    const windowStartsAt = compensationMonthStartInstantV1(firstMonth)
-    const windowEndsAt = compensationMonthEndInstantV1(firstMonth)
-
-    if (now.getTime() < windowStartsAt.getTime() || now.getTime() >= windowEndsAt.getTime()) {
-        return { eligible: false, reason: 'outside_first_calendar_month', firstMonthKey }
+    return {
+        eligible: true,
+        firstMonth: first.firstMonth,
+        firstMonthKey: first.firstMonthKey,
+        windowEndsAt: first.windowEndsAt,
     }
-
-    return { eligible: true, firstMonth, firstMonthKey, windowEndsAt }
 }
 
 /**

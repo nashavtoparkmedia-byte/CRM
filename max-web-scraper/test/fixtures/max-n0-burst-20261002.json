@@ -1,0 +1,266 @@
+{
+  "provenance": {
+    "evidenceDir": "/opt/codex-work/yoko-n0-max-burst-evidence-20261002",
+    "scraperLog": "max-scraper-48cc3c9573ba.raw-json.log",
+    "scraperLogSha256": "664dae6be228209ad765231782253eed49310f20d5c71e6733ea77dae15ebe7d",
+    "gravityLog": "gravity-4ed1d4dd56d4.raw-json.log",
+    "gravityLogSha256": "a0ca767c2f7a1ea55d05cfcbea4a2a859f5391f805e2442c1108e6afaa00bba6",
+    "release": "10318827e484fec466ba994a2a7b7ffe070f7336",
+    "note": "Line numbers are 1-based records in the preserved N0 copies. Values marked observed:false could not be read from the log (the old decoder garbled or never received them) and are reconstructed as MAX ids are built: (server ms << 16) | 16-bit suffix."
+  },
+  "accountId": "902171753248",
+  "peerId": "902264026154",
+  "chatId": "902454841098",
+  "uiRouteId": "511708938",
+  "realOutgoingFrames": {
+    "op128Acks": [
+      {
+        "line": 9049,
+        "time": "2026-10-02T19:25:23.434578697Z",
+        "byteLength": 47,
+        "first20Hex": "0a 01 00 6e 00 80 01 00 00 25 f0 14 82 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 9096,
+        "time": "2026-10-02T19:25:24.692873165Z",
+        "byteLength": 47,
+        "first20Hex": "0a 01 00 01 00 80 01 00 00 25 f0 14 82 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 9145,
+        "time": "2026-10-02T19:25:24.843732873Z",
+        "byteLength": 47,
+        "first20Hex": "0a 01 00 02 00 80 01 00 00 25 f0 14 82 a6 63 68 61 74 49 64"
+      }
+    ],
+    "op64Requests": [
+      {
+        "line": 9816,
+        "time": "2026-10-02T19:25:46.476386303Z",
+        "byteLength": 92,
+        "first20Hex": "0a 00 00 16 00 40 01 00 00 52 f0 18 83 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 10028,
+        "time": "2026-10-02T19:25:49.566076654Z",
+        "byteLength": 92,
+        "first20Hex": "0a 00 00 18 00 40 01 00 00 52 f0 18 83 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 10205,
+        "time": "2026-10-02T19:25:52.446420521Z",
+        "byteLength": 92,
+        "first20Hex": "0a 00 00 17 00 40 01 00 00 52 f0 18 83 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 10392,
+        "time": "2026-10-02T19:25:55.33963235Z",
+        "byteLength": 92,
+        "first20Hex": "0a 00 00 17 00 40 01 00 00 52 f0 18 83 a6 63 68 61 74 49 64"
+      },
+      {
+        "line": 10917,
+        "time": "2026-10-02T19:26:01.319702161Z",
+        "byteLength": 92,
+        "first20Hex": "0a 00 00 14 00 40 01 00 00 52 f0 18 83 a6 63 68 61 74 49 64"
+      }
+    ],
+    "op6": {
+      "line": 42,
+      "time": "2026-10-02T18:46:01.17445964Z",
+      "byteLength": 338,
+      "first20Hex": "0a 00 00 00 00 06 02 00 01 48 f5 12 82 a9 75 73 65 72 41 67"
+    },
+    "op19": {
+      "line": 47,
+      "time": "2026-10-02T18:46:01.273428074Z",
+      "byteLength": 814,
+      "first20Hex": "0a 00 00 01 00 13 02 00 03 24 f1 ff ff de 87 a5 74 6f 6b 65"
+    },
+    "op272": {
+      "line": 60,
+      "time": "2026-10-02T18:46:01.399035119Z",
+      "byteLength": 23,
+      "first20Hex": "0a 00 00 05 01 10 00 00 00 0d 81 aa 66 6f 6c 64 65 72 53 79"
+    },
+    "op302": {
+      "line": 70,
+      "time": "2026-10-02T18:46:01.671415908Z",
+      "byteLength": 24,
+      "first20Hex": "0a 00 00 06 01 2e 00 00 00 0e 81 ab 62 61 6e 6e 65 72 73 53"
+    }
+  },
+  "inbound": {
+    "sentByPeer": [
+      "1",
+      "2",
+      "3",
+      "3",
+      "3",
+      "3",
+      "4"
+    ],
+    "storedBy10318827": [
+      "1",
+      "3",
+      "3",
+      "3",
+      "3",
+      "4"
+    ],
+    "observedChain": [
+      {
+        "line": 9043,
+        "event": "op128 push decoded (literal-only LZ4)",
+        "text": "1",
+        "id": "d301a0fe1412085642"
+      },
+      {
+        "line": 9052,
+        "event": "socket closed 39 ms after the push - handleIncoming had sent its op:32 JSON phone lookup"
+      },
+      {
+        "line": 9091,
+        "event": "op128 push garbled by the old decoder",
+        "decodedAs": {
+          "__maxId": true,
+          "hex": "d3000001a0fdf88e6e"
+        }
+      },
+      {
+        "line": 9093,
+        "event": "[op128] ignored pending msg ID d3000001a0fdf88e: unsafe_pending_id - the lost 2"
+      },
+      {
+        "line": 9139,
+        "event": "op128 push decoded",
+        "text": "3",
+        "id": "d301a0fe1417a12c06"
+      },
+      {
+        "line": 9148,
+        "event": "socket closed again; 3,3,4 were never pushed"
+      },
+      {
+        "line": 9426,
+        "event": "DOM recovery skipped dom_live_window_filtered: 2 (the 1 and the unpersisted 2) and stored 3,3,3,4 with synthetic ids"
+      }
+    ],
+    "messages": [
+      {
+        "text": "1",
+        "id": "d301a0fe1412085642",
+        "observed": true,
+        "pushLine": 9043
+      },
+      {
+        "text": "2",
+        "id": "d301a0fe1416a84e11",
+        "observed": false,
+        "pushLine": 9091
+      },
+      {
+        "text": "3",
+        "id": "d301a0fe1417a12c06",
+        "observed": true,
+        "pushLine": 9139
+      },
+      {
+        "text": "3",
+        "id": "d301a0fe141a222c07",
+        "observed": false
+      },
+      {
+        "text": "3",
+        "id": "d301a0fe141d602c08",
+        "observed": false
+      },
+      {
+        "text": "3",
+        "id": "d301a0fe14208a2c09",
+        "observed": false
+      },
+      {
+        "text": "4",
+        "id": "d301a0fe14238c2c0a",
+        "observed": false
+      }
+    ]
+  },
+  "outbound": {
+    "sentByCrm": [
+      "5",
+      "5",
+      "5",
+      "6",
+      "6",
+      "7"
+    ],
+    "receivedByOwner": [
+      "5",
+      "5",
+      "5",
+      "6",
+      "7",
+      "7"
+    ],
+    "sends": [
+      {
+        "text": "5",
+        "requestLine": 9816,
+        "requestSeq": 22,
+        "responseId": "d301a0fe146c745e09",
+        "responseObserved": true,
+        "scraperAnswered": null,
+        "crmMessageId": "msg_1790969144239"
+      },
+      {
+        "text": "5",
+        "requestLine": 10028,
+        "requestSeq": 24,
+        "responseId": "d301a0fe1478805e09",
+        "responseObserved": true,
+        "scraperAnswered": "d301a0fe1478805e09",
+        "crmMessageId": "msg_1790969144434"
+      },
+      {
+        "text": "5",
+        "requestLine": 10205,
+        "requestSeq": 23,
+        "responseId": "d301a0fe1483c85e09",
+        "responseObserved": true,
+        "scraperAnswered": "d301a0fe1483c85e09",
+        "crmMessageId": "msg_1790969145225"
+      },
+      {
+        "text": "6",
+        "requestLine": 10392,
+        "requestSeq": 23,
+        "responseId": "d301a0fe148f1253a5",
+        "responseObserved": true,
+        "scraperAnswered": "d301a0fe148f1253a5",
+        "crmMessageId": "msg_1790969146162"
+      },
+      {
+        "text": "6",
+        "requestLine": null,
+        "socketClosedLine": 10579,
+        "composeLine": 10580,
+        "reauthLine": 10593,
+        "scraperAnswered": null,
+        "crmMessageId": "msg_1790969146823",
+        "note": "typed while the socket was down; the compose box cleared; no op:64 frame ever left; recorded delivered"
+      },
+      {
+        "text": "7",
+        "requestLine": 10917,
+        "requestSeq": 20,
+        "responseId": "d301a0fe14a6965e0a",
+        "responseObserved": false,
+        "scraperAnswered": "d301a0fe148f1253a5",
+        "crmMessageId": "msg_1790969147233",
+        "note": "the old listener took the id of the previous 6; finalize hit the unique index; v1 recovery made the row retryable and the retry job sent 7 again at 19:32:16 (line 19945), id d301a0fe1a5f0d52cf"
+      }
+    ]
+  }
+}

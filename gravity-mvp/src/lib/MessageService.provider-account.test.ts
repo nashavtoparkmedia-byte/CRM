@@ -163,9 +163,20 @@ describe('MessageService conversation transport routing', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         identityFixtures.clear()
-        mocks.prepareIdentity.mockImplementation(async (command: { identityId: string }) => (
-            identityFixtures.get(command.identityId) ?? { status: 'identity_not_found' }
-        ))
+        // The Contacts command carries two exact, mutually exclusive selector axes: the
+        // identity's row id, or the exact provider id it carries. MAX addresses its peer by
+        // provider id, because a conversation's linked identity is legitimately not the peer.
+        // Both axes select at most one identity and neither falls back to the other.
+        mocks.prepareIdentity.mockImplementation(async (
+            command: { identityId: string | null; identityExternalId?: string | null },
+        ) => {
+            if (command.identityExternalId) {
+                return [...identityFixtures.values()].find(
+                    fixture => fixture.identity?.externalId === command.identityExternalId,
+                ) ?? { status: 'identity_not_found' }
+            }
+            return identityFixtures.get(command.identityId ?? '') ?? { status: 'identity_not_found' }
+        })
         mocks.messageCreate.mockResolvedValue({ id: 'message-created' })
         mocks.messageUpdate.mockResolvedValue({})
         mocks.messageUpdateMany.mockResolvedValue({ count: 1 })
@@ -689,9 +700,14 @@ describe('MessageService conversation transport routing', () => {
             },
         })
 
+        // The retry still fails closed, and now says so more precisely. A MAX send addresses
+        // the peer recorded in metadata.senderId, so a conversation whose recorded peer has
+        // no identity on this Contact is refused as not sendable rather than as a mismatch
+        // between the conversation's linked identity and its peer - the comparison that was
+        // never valid for this topology. Nothing is sent and the stored Message is untouched.
         await expect(MessageService.retrySend('message-1')).resolves.toEqual({
             success: false,
-            error: 'CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH',
+            error: 'CONTACT_CONVERSATION_IDENTITY_NOT_SENDABLE:identity_not_found',
         })
 
         expect(mocks.messageUpdate).not.toHaveBeenCalled()

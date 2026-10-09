@@ -22,6 +22,7 @@ const INBOUND = 'Можно уточнить время смены?'
 const SENDING = 'Отправляется'
 const DELIVERED = 'Доставлено'
 const SENT = 'Отправлено'
+const AWAITING_PROOF = 'Ожидает подтверждения'
 const NOT_SENT = 'Не отправлено'
 const UNKNOWN = 'Статус доставки неизвестен'
 const RETRY = 'Повторить'
@@ -217,15 +218,33 @@ describe('a text send settles through the canonical path', () => {
     expect(statuses(DELIVERED)).toHaveLength(1)
   })
 
-  test('a transport that accepted without proof shows as sent, not delivered', async () => {
+  // S2: a send the provider has not acknowledged claims nothing — no ✓, no ✓✓.
+  test('a transport that accepted without proof awaits confirmation, neither sent nor delivered', async () => {
     const chat = chatId('pending')
     await open(chat)
-    sendReplies.push({ status: 200, body: { success: true, id: 'msg_p', status: 'sent', deliveryConfirmed: false } })
+    sendReplies.push({ status: 200, body: { success: true, id: 'msg_p', status: 'sent', deliveryConfirmed: false, deliveryState: 'send_requested' } })
 
     await sendText('Принято')
 
-    expect(statuses(SENT)).toHaveLength(1)
+    expect(statuses(AWAITING_PROOF)).toHaveLength(1)
+    expect(statuses(SENT)).toHaveLength(0)
     expect(statuses(DELIVERED)).toHaveLength(0)
+    // Drawn as pending: a clock, never a tick.
+    expect(statuses(AWAITING_PROOF)[0].querySelector('.lucide-clock')).not.toBeNull()
+    expect(statuses(AWAITING_PROOF)[0].querySelector('.lucide-check')).toBeNull()
+  })
+
+  test('a send the provider acknowledged shows one tick, not two', async () => {
+    const chat = chatId('accepted')
+    await open(chat)
+    sendReplies.push({ status: 200, body: { success: true, id: 'msg_acc', status: 'sent', externalId: 'provider-1', deliveryState: 'provider_accepted' } })
+
+    await sendText('Принято провайдером')
+
+    expect(statuses(SENT)).toHaveLength(1)
+    expect(statuses(AWAITING_PROOF)).toHaveLength(0)
+    expect(statuses(DELIVERED)).toHaveLength(0)
+    expect(statuses(SENT)[0].querySelectorAll('.lucide-check')).toHaveLength(1)
   })
 
   test('two taps before the composer re-renders send one intent', async () => {
