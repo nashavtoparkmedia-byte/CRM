@@ -1061,7 +1061,7 @@ class PredecessorRollbackSemanticTests(ReleaseEnvironmentBase):
         }
 
     def predecessor_profile(self, sources=PREDECESSOR_SOURCES):
-        return {"profile_id": "crm-ba90ed4b6717-gravity-max-source-v1", "release_environment": {
+        return {"profile_id": "crm-10318827e484-gravity-max-source-v1", "release_environment": {
             "name": NAME, "sources": dict(sources), "attached_by": "release-activate", "attached_on_rollback": False}}
 
     def rollback_projection(self, candidate_command, release_value):

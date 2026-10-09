@@ -1,14 +1,14 @@
-# Runtime 2.0.0-22 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-23 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
 
-- application commit `10318827e484fec466ba994a2a7b7ffe070f7336`;
-- coordinated profile `crm-10318827e484-gravity-max-source-v1`;
-- Stage A builder `46e6107187776929db52ca127061b0c99a21ce71`;
-- hosted artifact run `36978099367`, artifact `11215210912`;
-- Gravity image `sha256:0247864ab320fa86498da0d69610ce9a910a46d92ded420091b7c4d6b0aa6152`;
-- MAX scraper image `sha256:f9e09bd8c2dcc98c309e440b82f7e8586aac406f2510bbaf9be90d98908b252a`.
+- application commit `effcbf6da378dd95515a19c5e0fa48703cdb4348`;
+- coordinated profile `crm-effcbf6da378-gravity-max-source-v1`;
+- Stage A builder `1ff81813a15bd59471037dc472f375dcc8dcbbf2`;
+- hosted artifact run `37974353523`, artifact `11639220834`;
+- Gravity image `sha256:05232a87f9acb7d43903a9357226273adfc6fd6b6dc7348d1383b1a17dd8e3b9`;
+- MAX scraper image `sha256:c8a801a1d6f1fc812e4b3938f791e4c786ae7e565137994f9f1e5ef0c47e7423`.
 
 It does not rebuild application images and does not authorize an arbitrary
 revision, image, service, path, Docker command, shell, database migration, or
@@ -19,7 +19,7 @@ zero-argument `database-status`, `release-preflight`, `release-activate`, and
 The trusted Runtime core, base policy, and sudoers file are byte-identical to
 the current Runtime v10 authority. The predecessor observer is version 2
 (`yoko.crm.predecessor-recreation-observation.v2`, see below); it keeps the
-v1 install slot because the pinned core fixes the install-manifest file set. Runtime 2.0.0-21,
+v1 install slot because the pinned core fixes the install-manifest file set. Runtime 2.0.0-22,
 the installed predecessor, is the exact direct control-plane rollback and is not
 modified by this builder.
 
@@ -97,12 +97,11 @@ read from runtime input and there is no list to extend.
   attaches one fixed source per service:
   `/var/lib/crm/release-staging/messaging-be6b8eb8/{gravity-mvp,max-web-scraper}.env`.
   The directory keeps the name it was staged under for the be6b8eb8 Messaging
-  release. The cold-cache repair 10318827 is that release plus the outbound
-  chatType fix plus the inbound DOM-fallback repair plus the topology repair
-  plus this cold-cache repair, and needs the same single secret, so
-  re-staging the material under a new name would be a production write with no
-  benefit. It is a secret source path, not an
-  artifact or image binding.
+  release. The converged main application effcbf6d carries that release's MAX
+  webhook contract and needs the same single secret, which 2.0.0-22 already
+  attached to both pair services from these exact sources, so re-staging the
+  material under a new name would be a production write with no benefit. It is
+  a secret source path, not an artifact or image binding.
 - The source directory must be root-owned `0700` with every ancestor
   root-owned and not group- or other-writable. Each source must be a
   single-link root-owned `0600` file containing exactly
@@ -156,28 +155,31 @@ interrupted or failed install after `dpkg -i` reinstalls the exact predecessor
 package; if that rollback itself fails, the bootstrap guard is kept so every
 activation verb refuses until the predecessor is restored.
 
-The installer also requires the already-installed 2.0.0-21 interim package
-(`packaging/predecessor-observability-v2/`: the byte-identical
-`crm-ba90ed4b6717` profile plus predecessor observation v2) at its exact
+The installer also requires the already-installed 2.0.0-22 package (the
+`crm-10318827e484` profile plus predecessor observation v2) at its exact
 root-owned content-addressed rollback path and validates it against SHA-256
-`619f4ebe43dfca98942d9557e0d2fb28aa4b7f819079a7baa28f7ea2eb5cd283`; the
+`1c78ce00eca19b8ef87bd200138105ec9d47a9b07968de0b42f68e9d58d972df`; the
 installed predecessor must report observer
 `1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a`.
 Any successor installation failure restores that exact package automatically.
-The original 2.0.0-21 DEB `17b97c40…` stays in the store as that interim
-package's own rollback.
+The 2.0.0-21 interim DEB stays in the store as that package's own rollback;
+`packaging/predecessor-observability-v2/` is the historical builder of that
+interim package and is not part of this release.
 
-The predecessor is the MAX-normalized live pair proven by the Phase 3 authority
-snapshot `17b8ead7543c3cf54ab58976b65c9e6d480fee0a077a3eaf2d396649bfabacf7`
-(predecessor identity `f48c638e…`). The sealer pins every semantic identity of
-that snapshot's `sealing` block (images, container ids, config hashes, volume,
-database, ledger, audit and unrelated-service fingerprint) and still requires a
-capture younger than 15 minutes, so a seal uses a fresh recapture that must
-reproduce Phase 3 exactly; only capture timestamps may differ.
+The predecessor is the live pair proven by the 2.0.0-23 authority snapshot
+`4f5611f998408eccf20e7965b2caf7af5e34e7d1060a054fe773ceb9555f9da1`
+(predecessor identity `175a76cb…`): Gravity `458ff5cb…` (application
+04053538, the image-only Telegram person-confirmation overlay over the 2.0.0-22
+activation overlay) and MAX `26acfcfa…` (the 2.0.0-22 target, unchanged). The
+sealer pins every semantic identity of that snapshot's `sealing` block (images,
+container ids, config hashes, volume, database, ledger, audit and
+unrelated-service fingerprint) and still requires a capture younger than 15
+minutes, so a seal uses a fresh recapture that must reproduce the authority
+snapshot exactly; only capture timestamps may differ.
 
 Generated material under `generated/` and `dist/` is untracked. Sealing must
 start from a clean exact builder commit, a fresh read-only production snapshot,
 clean sparse checkouts of the accepted application and Stage A builder, and
 the authenticated Stage A handoff. Independent configured reviewers must bind
 the final commit/tree, package, seal, bootstrap, Stage A artifact, and the
-2.0.0-21 rollback before installation.
+2.0.0-22 rollback before installation.

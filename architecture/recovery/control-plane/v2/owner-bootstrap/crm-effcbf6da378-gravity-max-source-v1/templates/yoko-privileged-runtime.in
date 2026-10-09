@@ -15,13 +15,13 @@ from typing import Any
 
 
 RUNTIME_ABI = "2.0.0"
-PACKAGE_VERSION = "2.0.0-22"
+PACKAGE_VERSION = "2.0.0-23"
 TEST_ENV = "YOKO_PRIVILEGED_RUNTIME_TEST_ROOT"
 CORE_PATH = "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py"
 CORE_SHA256 = "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa"
 PREDECESSOR_OBSERVABILITY_PATH = "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py"
 PREDECESSOR_OBSERVABILITY_SHA256 = "1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a"
-PROFILE_ID = "crm-10318827e484-gravity-max-source-v1"
+PROFILE_ID = "crm-effcbf6da378-gravity-max-source-v1"
 PROFILE_RUNTIME_PATH = f"/usr/local/libexec/yoko-privileged-runtime/{PROFILE_ID}.py"
 PROFILE_ROOT = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
 PROFILE_MANIFEST_PATH = PROFILE_ROOT + "/manifest.v1.json"

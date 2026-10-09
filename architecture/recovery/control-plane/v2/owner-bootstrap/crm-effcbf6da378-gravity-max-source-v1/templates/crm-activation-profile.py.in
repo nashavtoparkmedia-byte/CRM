@@ -17,7 +17,7 @@ from types import MappingProxyType
 from typing import Any, Iterator, Mapping
 
 
-PROFILE_ID = "crm-10318827e484-gravity-max-source-v1"
+PROFILE_ID = "crm-effcbf6da378-gravity-max-source-v1"
 PROFILE_DIR = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
 PROFILE_PATH = PROFILE_DIR + "/profile.v1.json"
 SEALED_INPUTS_PATH = PROFILE_DIR + "/sealed-inputs.v1.json"
@@ -36,10 +36,10 @@ DB_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]{0,62}")
 PROFILE_SCHEMA = "yoko.crm.coordinated-pair-activation-profile.v1"
 STATE_SCHEMA = "yoko.crm.coordinated-pair-state.v1"
 RECEIPT_SCHEMA = "yoko.crm.coordinated-artifact-admission.v1"
-TARGET_GRAVITY = "yoko/crm-gravity-mvp:10318827e484-46e6107187776929db52ca127061b0c99a21ce71-coordinated-v1"
-TARGET_MAX = "yoko/crm-max-scraper:10318827e484-46e6107187776929db52ca127061b0c99a21ce71-coordinated-v1"
-ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-4dbe322a88fb5a635ffa5abc2d1d22071ba941fc"
-ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-ede5efb412d462a01bb9965f97a698a2c4b4bd3f"
+TARGET_GRAVITY = "yoko/crm-gravity-mvp:effcbf6da378-1ff81813a15bd59471037dc472f375dcc8dcbbf2-coordinated-v1"
+TARGET_MAX = "yoko/crm-max-scraper:effcbf6da378-1ff81813a15bd59471037dc472f375dcc8dcbbf2-coordinated-v1"
+ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-458ff5cb42fecec5f040a6e918705a267a1cf5e9"
+ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-26acfcfab7304d30285c9990dfccaa8a9e148b3b"
 
 # The one environment variable name this release is allowed to add, and the only two services it
 # may be added to. Everything here is a sealed constant: nothing is read from runtime input, there
@@ -137,12 +137,12 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile["profile_id"] != PROFILE_ID
         or profile["host"] != "jvxthcorvm"
         or profile["runtime_abi"] != "2.0.0"
-        or profile["package_version"] != "2.0.0-22"
+        or profile["package_version"] != "2.0.0-23"
         or profile["accepted_application"] != {
-            "commit": "10318827e484fec466ba994a2a7b7ffe070f7336",
-            "tree": "b1ba84f39bf1037416b8ae94d61c64ce174e39fa",
-            "gravity_subtree": "6d69f52c8d9501069e4efe6eded125ab1933fb54",
-            "max_subtree": "40350ce0ee163fbdfa6f760faffb9760931ee96d",
+            "commit": "effcbf6da378dd95515a19c5e0fa48703cdb4348",
+            "tree": "7ce42906256d8e240d43e0d3b6dff9ec165ccbfe",
+            "gravity_subtree": "33ddcb753125ff66d14374dd2e47cea495b1e871",
+            "max_subtree": "9fde27e1a3282b8f115de7708bff4eefc195e6c9",
         }
         or profile["enabled_zero_argument_profiles"] != [
             "database-status", "release-preflight", "release-activate", "rollback"
@@ -158,13 +158,13 @@ def _load_profile(core: Any) -> dict[str, Any]:
         "ACTIVATION_PROFILE_INVALID",
     )
     if stage_a != {
-        "builder_commit": "46e6107187776929db52ca127061b0c99a21ce71",
-        "builder_tree": "9b9d4009275d4cbc413f643fb063a7368ef53bff",
-        "run_id": 36978099367,
-        "artifact_id": 11215210912,
-        "artifact_name": "coordinated-gravity-max-10318827e484-46e6107187776929db52ca127061b0c99a21ce71",
-        "artifact_digest": "sha256:29c52cbbdb86aa8d8766e05aa5c7d856ec1d692e2133edab511d025d918b5da0",
-        "artifact_bytes": 4806116003,
+        "builder_commit": "1ff81813a15bd59471037dc472f375dcc8dcbbf2",
+        "builder_tree": "1cf2c00933d4bb4bb143c313473610a4884c1a66",
+        "run_id": 37974353523,
+        "artifact_id": 11639220834,
+        "artifact_name": "coordinated-gravity-max-effcbf6da378-1ff81813a15bd59471037dc472f375dcc8dcbbf2",
+        "artifact_digest": "sha256:e04e5f4b1e6432726c4d7941a7176fc118faa48f0dcc46af543ecff40af27462",
+        "artifact_bytes": 4821729953,
     }:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     deployment = _exact_dict(
@@ -433,7 +433,7 @@ def _validate_target_image(core: Any, record: dict[str, Any], reference: str, co
         or image.get("Os") != "linux"
         or image.get("Architecture") != "amd64"
         or not isinstance(labels, dict)
-        or labels.get("org.opencontainers.image.revision") != "10318827e484fec466ba994a2a7b7ffe070f7336"
+        or labels.get("org.opencontainers.image.revision") != "effcbf6da378dd95515a19c5e0fa48703cdb4348"
         or labels.get("yoko.activation.profile") != PROFILE_ID
     ):
         raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_MISMATCH", 74)

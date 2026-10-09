@@ -2,21 +2,21 @@
 set -euo pipefail
 umask 077
 
-PROFILE_ID='crm-10318827e484-gravity-max-source-v1'
+PROFILE_ID='crm-effcbf6da378-gravity-max-source-v1'
 EXPECTED_HOST='jvxthcorvm'
 EXPECTED_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
-HANDOFF='/opt/codex-work/yoko-stage-a-handoff-10318827/release-output'
+HANDOFF='/opt/codex-work/yoko-stage-a-handoff-effcbf6d/release-output'
 ARTIFACT_PARENT='/var/lib/yoko-privileged-runtime/coordinated-artifacts'
-ARTIFACT_STORE="$ARTIFACT_PARENT/29c52cbbdb86aa8d8766e05aa5c7d856ec1d692e2133edab511d025d918b5da0"
+ARTIFACT_STORE="$ARTIFACT_PARENT/e04e5f4b1e6432726c4d7941a7176fc118faa48f0dcc46af543ecff40af27462"
 BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'
 BOOTSTRAP_GUARD='/var/lib/yoko-privileged-runtime/activation-bootstrap-installing.v1'
 BOOTSTRAP_LOCK_DIR='/run/lock/yoko-privileged-runtime'
 BOOTSTRAP_LOCK="$BOOTSTRAP_LOCK_DIR/coordinated-bootstrap.lock"
-NEW_DEB='yoko-privileged-runtime_2.0.0-22_all.deb'
+NEW_DEB='yoko-privileged-runtime_2.0.0-23_all.deb'
 NEW_DEB_SHA='@NEW_DEB_SHA256@'
 NEW_DEB_STORE="$BOOTSTRAP_STORE/$NEW_DEB_SHA"
-OLD_DEB='yoko-privileged-runtime_2.0.0-21_all.deb'
-OLD_DEB_SHA='619f4ebe43dfca98942d9557e0d2fb28aa4b7f819079a7baa28f7ea2eb5cd283'
+OLD_DEB='yoko-privileged-runtime_2.0.0-22_all.deb'
+OLD_DEB_SHA='1c78ce00eca19b8ef87bd200138105ec9d47a9b07968de0b42f68e9d58d972df'
 OLD_DEB_STORE="$BOOTSTRAP_STORE/$OLD_DEB_SHA"
 OLD_DEB_PATH="$OLD_DEB_STORE/$OLD_DEB"
 EXPECTED_AUDIT_RECORDS='@AUDIT_RECORD_COUNT@'
@@ -34,14 +34,14 @@ runtime_json() {
 # Every helper below is also called from conditions (`||`, `if`), where bash
 # disables errexit inside the function; each step therefore returns explicitly.
 old_identity() {
-    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-21' || return 1
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-21" and e.get("activation_profile")=="crm-ba90ed4b6717-gravity-max-source-v1" else 1)' || return 1
+    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-22' || return 1
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-22" and e.get("activation_profile")=="crm-10318827e484-gravity-max-source-v1" else 1)' || return 1
     runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("predecessor_observability_sha256")=="1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a" else 1)' || return 1
 }
 
 new_identity() {
-    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-22' || return 1
-    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-22" and e.get("activation_profile")=="crm-10318827e484-gravity-max-source-v1" else 1)' || return 1
+    test "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-23' || return 1
+    runtime_json version | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-23" and e.get("activation_profile")=="crm-effcbf6da378-gravity-max-source-v1" else 1)' || return 1
     runtime_json self-check | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("coordinated_pair")==["gravity-mvp","max-web-scraper"] else 1)' || return 1
 }
 
@@ -120,7 +120,7 @@ trap 'exit 143' TERM
 test "$#" -eq 0
 test "$(/usr/bin/id -u)" = '0'
 test "$(/usr/bin/id -ru)" = '0'
-[[ "$EXPECTED_DIR" =~ ^/root/yoko-coordinated-runtime-2\.0\.0-22\.[A-Za-z0-9]{6,}/payload$ ]]
+[[ "$EXPECTED_DIR" =~ ^/root/yoko-coordinated-runtime-2\.0\.0-23\.[A-Za-z0-9]{6,}/payload$ ]]
 test "$(/usr/bin/readlink -f -- "$0")" = "$EXPECTED_DIR/install.sh"
 test "$(/bin/hostname)" = "$EXPECTED_HOST"
 
@@ -152,7 +152,7 @@ root=pathlib.Path(sys.argv[1])
 expected={
  "install.sh":0o500,
  "payload-manifest.json":0o400,
- "yoko-privileged-runtime_2.0.0-22_all.deb":0o400,
+ "yoko-privileged-runtime_2.0.0-23_all.deb":0o400,
  "SEALED_RELEASE.json":0o400,
  "artifact-admission.v1.json":0o400,
  "runtime-rollback-SEALED_RELEASE.json":0o400,
@@ -166,9 +166,9 @@ directories={str(item.relative_to(root)) for item in root.rglob('*') if item.is_
 if observed != set(expected) or directories != {"review"}: raise SystemExit('payload allowlist mismatch')
 manifest=json.loads((root/'payload-manifest.json').read_text(encoding='ascii'))
 if set(manifest)!={"schema","profile_id","new_package","direct_rollback","files"}: raise SystemExit('payload manifest keys')
-if manifest["schema"]!='yoko.crm.coordinated-owner-bootstrap-payload.v1' or manifest["profile_id"]!='crm-10318827e484-gravity-max-source-v1': raise SystemExit('payload identity')
-if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-22","architecture":"all"}: raise SystemExit('successor identity')
-if manifest["direct_rollback"]!={"name":"yoko-privileged-runtime","version":"2.0.0-21","sha256":"619f4ebe43dfca98942d9557e0d2fb28aa4b7f819079a7baa28f7ea2eb5cd283","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/619f4ebe43dfca98942d9557e0d2fb28aa4b7f819079a7baa28f7ea2eb5cd283/yoko-privileged-runtime_2.0.0-21_all.deb"}: raise SystemExit('rollback identity')
+if manifest["schema"]!='yoko.crm.coordinated-owner-bootstrap-payload.v1' or manifest["profile_id"]!='crm-effcbf6da378-gravity-max-source-v1': raise SystemExit('payload identity')
+if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-23","architecture":"all"}: raise SystemExit('successor identity')
+if manifest["direct_rollback"]!={"name":"yoko-privileged-runtime","version":"2.0.0-22","sha256":"1c78ce00eca19b8ef87bd200138105ec9d47a9b07968de0b42f68e9d58d972df","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/1c78ce00eca19b8ef87bd200138105ec9d47a9b07968de0b42f68e9d58d972df/yoko-privileged-runtime_2.0.0-22_all.deb"}: raise SystemExit('rollback identity')
 if set(manifest["files"]) != set(expected)-{"payload-manifest.json"}: raise SystemExit('payload file registry')
 for name,mode in expected.items():
  path=root/name; value=path.lstat()
@@ -180,7 +180,7 @@ PY
 
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/$NEW_DEB" | /usr/bin/cut -d ' ' -f 1)" = "$NEW_DEB_SHA"
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Package)" = 'yoko-privileged-runtime'
-test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-22'
+test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-23'
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Architecture)" = 'all'
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/SEALED_RELEASE.json" | /usr/bin/cut -d ' ' -f 1)" = '@RELEASE_SEAL_SHA256@'
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/artifact-admission.v1.json" | /usr/bin/cut -d ' ' -f 1)" = '@ARTIFACT_RECEIPT_SHA256@'
@@ -192,7 +192,7 @@ available=$(/usr/bin/df --output=avail -B1 /var/lib/yoko-privileged-runtime | /u
 test "$available" -ge "$MINIMUM_FREE_BYTES"
 
 installed_version=$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null || true)
-if [ "$installed_version" = '2.0.0-22' ]; then
+if [ "$installed_version" = '2.0.0-23' ]; then
     if [ "$recovered_guard" -eq 1 ]; then
         new_attempted=1
     fi
@@ -212,10 +212,10 @@ PY
     clear_guard
     new_attempted=0
     trap - EXIT
-    printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"ALREADY_INSTALLED","package_version":"2.0.0-22","profile_id":"crm-10318827e484-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
+    printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"ALREADY_INSTALLED","package_version":"2.0.0-23","profile_id":"crm-effcbf6da378-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
     exit 0
 fi
-test "$installed_version" = '2.0.0-21'
+test "$installed_version" = '2.0.0-22'
 old_identity
 audit_exact
 
@@ -440,4 +440,4 @@ stored_deb_exact "$NEW_DEB_STORE" "$NEW_DEB" "$NEW_DEB_SHA"
 clear_guard
 new_attempted=0
 trap - EXIT
-printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"INSTALLED","package_version":"2.0.0-22","profile_id":"crm-10318827e484-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'
+printf '%s\n' '{"schema":"yoko.crm.coordinated-owner-bootstrap-result.v1","ok":true,"status":"INSTALLED","package_version":"2.0.0-23","profile_id":"crm-effcbf6da378-gravity-max-source-v1","application_mutated":false,"artifacts_admitted":true,"rollback_available":true}'

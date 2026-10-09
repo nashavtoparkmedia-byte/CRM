@@ -12,26 +12,30 @@ from typing import Any
 
 RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 # The snapshot describes the runtime that is installed right now, which is still
-# 2.0.0-21 under its own profile. This must not follow the successor's id or the
+# 2.0.0-22 under its own profile. This must not follow the successor's id or the
 # capture would refuse the very predecessor it exists to record.
-EXPECTED_PROFILE = "crm-ba90ed4b6717-gravity-max-source-v1"
-# The installed observer is the interim predecessor observation v2 (same-version 2.0.0-21
-# interim package 619f4ebe...). It reconstructs every predecessor from the layered stack the
-# container recorded at creation; the snapshot pins that stack by role and digest.
+EXPECTED_PROFILE = "crm-10318827e484-gravity-max-source-v1"
+# The installed observer is predecessor observation v2, installed by the 2.0.0-21 interim package
+# and carried byte-identically into 2.0.0-22. It reconstructs every predecessor from the layered
+# stack the container recorded at creation; the snapshot pins that stack by role and digest.
 PREDECESSOR_OBSERVER_SHA256 = "1d430cb9797e31a0236213e9e2c69ad2951b0f343ae6eabe5b014e664a27604a"
 OBSERVATION_SCHEMA = "yoko.crm.predecessor-recreation-observation.v2"
 BASE_COMPOSE = "/opt/crm/deploy/docker-compose.production.yml"
 BASE_COMPOSE_SHA256 = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
-RUNTIME_OVERLAY = "/var/lib/yoko-privileged-runtime/profiles/crm-ba90ed4b6717-gravity-max-source-v1/activate.compose.yml"
-DRIVER_AUTHORITY_OVERLAY = "/opt/codex-work/.release-prep/driver-authority-335cdae7/activate.driver-authority-335cdae7.compose.yml"
+# 2.0.0-22 activation created Gravity and MAX from its own profile overlay; Gravity was then
+# recreated with the image-only Telegram person-confirmation overlay (application 04053538).
+# tg-bot still runs from the 2.0.0-21 profile overlay plus the image-only Telegram hotfix overlay,
+# so that earlier profile overlay remains a recorded layer of the live stack.
+RUNTIME_OVERLAY = "/var/lib/yoko-privileged-runtime/profiles/crm-10318827e484-gravity-max-source-v1/activate.compose.yml"
+PREVIOUS_RUNTIME_OVERLAY = "/var/lib/yoko-privileged-runtime/profiles/crm-ba90ed4b6717-gravity-max-source-v1/activate.compose.yml"
+PERSON_CONFIRM_OVERLAY = "/opt/codex-work/.release-prep/tg-person-confirm-10318827/activate.tg-person-confirm-04053538.compose.yml"
 TELEGRAM_HOTFIX_OVERLAY = "/opt/crm/deploy/activate.telegram-hotfix-06e80099.compose.yml"
 PREDECESSOR_LAYERS = [
     {
-        "path": DRIVER_AUTHORITY_OVERLAY, "role": "image-only-overlay",
-        "sha256": "b42611d09358ae21f75d7ec0c4f3398459dec19d6a3ef3efbf57d3577a47b84c",
+        "path": PERSON_CONFIRM_OVERLAY, "role": "image-only-overlay",
+        "sha256": "9720687477e7217c96beaea0282c2f334e3ed59fc695b403f9419ab46d48c74c",
         "image_pins": {
-            "gravity-mvp": "yoko/crm-gravity-mvp:335cdae7391d-driver-authority-repair-v1",
-            "tg-bot": "crm/tg-bot:2808af7ecbf1-telegram-bot-delivery-contract-v1",
+            "gravity-mvp": "yoko/crm-gravity-mvp:04053538656b-telegram-driver-link-confirmation-v1",
         },
         # /opt/codex-work is caller-owned: this layer's digest is evidence; its pins are
         # re-proven by the observer against the running containers.
@@ -48,16 +52,19 @@ PREDECESSOR_LAYERS = [
     },
     {
         "path": RUNTIME_OVERLAY, "role": "runtime-profile-overlay",
+        "sha256": "38b158c3ca93f54d5293c058e2fcc98f4ed19535bc1a1ed0035f5c8d3f177816",
+    },
+    {
+        "path": PREVIOUS_RUNTIME_OVERLAY, "role": "runtime-profile-overlay",
         "sha256": "39648e2b8f07a2f5a42d26ca77fbec96c6c907465981c965005e8fe5b1f1d6cb",
     },
 ]
 PREDECESSOR_STACKS = {
-    "gravity-mvp": [BASE_COMPOSE, RUNTIME_OVERLAY, DRIVER_AUTHORITY_OVERLAY],
-    "tg-bot": [BASE_COMPOSE, RUNTIME_OVERLAY, TELEGRAM_HOTFIX_OVERLAY],
+    "gravity-mvp": [BASE_COMPOSE, RUNTIME_OVERLAY, PERSON_CONFIRM_OVERLAY],
+    "tg-bot": [BASE_COMPOSE, PREVIOUS_RUNTIME_OVERLAY, TELEGRAM_HOTFIX_OVERLAY],
     "max-web-scraper": [BASE_COMPOSE, RUNTIME_OVERLAY],
 }
-# MAX was recreated once from its own two-file stack (normalization) so that it carries
-# the name .env.production gained after its previous creation; Gravity already did.
+# Both pair containers carry the name .env.production gained in 2.0.0-21 normalization.
 NORMALIZED_ENVIRONMENT_NAME = "CRM_TELEGRAM_CONNECTION_ID"
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
@@ -175,7 +182,7 @@ def main() -> None:
     postgres = records["docker-inspect:crm.container.postgres"]["evidence"]
     database = records["database-status"]["evidence"]
     provenance = records["docker-provenance"]["evidence"]
-    if version.get("package_version") != "2.0.0-21" or version.get("activation_profile") != EXPECTED_PROFILE:
+    if version.get("package_version") != "2.0.0-22" or version.get("activation_profile") != EXPECTED_PROFILE:
         raise ValueError("installed Runtime predecessor mismatch")
     if audit.get("state") != "VALID" or not isinstance(audit.get("record_count"), int):
         raise ValueError("audit is not valid")
@@ -183,8 +190,8 @@ def main() -> None:
         raise ValueError("installed predecessor observer is not observation v2")
     validate_predecessor(predecessor)
     expected_resources = {
-        "gravity": (gravity, "crm.container.gravity_mvp", "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c"),
-        "max": (maximum, "crm.container.max_scraper", "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6"),
+        "gravity": (gravity, "crm.container.gravity_mvp", "sha256:458ff5cb42fecec5f040a6e918705a267a1cf5e9f547f5d709f0c5bc4612c8be"),
+        "max": (maximum, "crm.container.max_scraper", "sha256:26acfcfab7304d30285c9990dfccaa8a9e148b3b294633d8ae48ce4c8d633da2"),
         "postgres": (postgres, "crm.container.postgres", "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"),
     }
     for label, (record, logical, image) in expected_resources.items():
@@ -195,18 +202,18 @@ def main() -> None:
     for label, record in (("gravity", gravity), ("max", maximum)):
         if NORMALIZED_ENVIRONMENT_NAME not in (record.get("semantic") or {}).get("environment_names", []):
             raise ValueError(f"{label} predecessor is not normalized")
-    # The installed 2.0.0-21 profile was sealed against the same 63-row ledger this successor pins
-    # (the 2.0.0-16 profile before it reported that ledger as DRIFTED from its 62-row baseline, so
-    # both states stay accepted). The successor pins the ledger exactly: the count, the ledger digest
-    # (re-derived read-only from the database, independently of this runtime) and the database
-    # identity. Any other ledger still refuses the capture.
+    # The installed 2.0.0-22 profile was sealed against a 63-row ledger; the ledger has since grown to
+    # the 68 rows this successor pins, so that runtime reports DRIFTED (both states stay accepted).
+    # The successor pins the ledger exactly: the count, the ledger digest the installed runtime's
+    # read-only database-status reports, and the database identity. Any other ledger still refuses
+    # the capture.
     if (
         database.get("profile_id") != EXPECTED_PROFILE
         or database.get("read_only") is not True
         or database.get("secret_values_emitted") is not False
         or database.get("state") not in {"EXACT", "DRIFTED"}
-        or database.get("applied_migration_count") != 63
-        or database.get("migration_rows_sha256") != "78de9c8e61312c0a28669eeedba76f3626d2c41e7df3ae6bf9f2c1270c51b27c"
+        or database.get("applied_migration_count") != 68
+        or database.get("migration_rows_sha256") != "a601b75614baaea59e7712f3160fffbee690f1661e0871f3252e1b3efb8b445d"
         or database.get("database_identity_sha256") != "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
     ):
         raise ValueError("database predecessor mismatch")

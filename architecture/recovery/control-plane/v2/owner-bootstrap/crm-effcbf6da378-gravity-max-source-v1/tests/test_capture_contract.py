@@ -30,35 +30,46 @@ sys.modules[SEAL_LOADER.name] = seal
 SEAL_LOADER.exec_module(seal)
 
 
-PHASE3_PATH = Path("/opt/codex-work/yoko-v22-seal-10318827/production-snapshot-normalized-phase3.json")
-PHASE3 = json.loads(PHASE3_PATH.read_text(encoding="ascii"))
-INTERIM_PACKAGE = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21-interim/yoko-privileged-runtime_2.0.0-21_all.deb")
+# The 2.0.0-23 authority snapshot: a read-only capture of the live predecessor taken with this
+# capture tool at derivation time. The seal pins its sealing block; a fresh capture must equal it.
+AUTHORITY_PATH = Path("/opt/codex-work/yoko-v23-seal-effcbf6d/production-snapshot-authority.json")
+AUTHORITY = json.loads(AUTHORITY_PATH.read_text(encoding="ascii"))
+ROLLBACK_DIRECTORY = Path("/opt/codex-work/yoko-v23-seal-effcbf6d/rollback-2.0.0-22")
+ROLLBACK_PACKAGE = ROLLBACK_DIRECTORY / "yoko-privileged-runtime_2.0.0-22_all.deb"
+PREDECESSOR_PROFILE_SHA256 = "91d42f8783a9b0416faf995931a88889009b8a31d94c525f5ea7b4e45fbbdc95"
 
 
 class CaptureContractTests(unittest.TestCase):
-    def test_phase3_authority_snapshot_is_the_exact_normalized_predecessor(self) -> None:
-        self.assertEqual(seal.sha(PHASE3_PATH), "17b8ead7543c3cf54ab58976b65c9e6d480fee0a077a3eaf2d396649bfabacf7")
-        sealing = PHASE3["sealing"]
-        self.assertEqual(sealing["predecessor_release_critical_identity_sha256"], "f48c638e3fc5f86ebf587295d4ea45f7e1dc151769140c91efeaf0bdc7589d03")
-        self.assertEqual(sealing["gravity_image_id"], "sha256:4dbe322a88fb5a635ffa5abc2d1d22071ba941fc22ce460edde3cd185717868c")
-        self.assertEqual(sealing["max_image_id"], "sha256:ede5efb412d462a01bb9965f97a698a2c4b4bd3fb24d4ac478b1710a9943c7c6")
-        capture.validate_predecessor(PHASE3["commands"]["predecessor-observe"]["evidence"])
-        observed = PHASE3["commands"]["predecessor-observe"]["evidence"]
+    def test_authority_snapshot_is_the_exact_live_predecessor(self) -> None:
+        self.assertEqual(seal.sha(AUTHORITY_PATH), "4f5611f998408eccf20e7965b2caf7af5e34e7d1060a054fe773ceb9555f9da1")
+        sealing = AUTHORITY["sealing"]
+        self.assertEqual(sealing["predecessor_release_critical_identity_sha256"], "175a76cb275af8259c5652a9d2b82ac961ef7eb189d924ed18ac7dcf6f860154")
+        self.assertEqual(sealing["gravity_image_id"], "sha256:458ff5cb42fecec5f040a6e918705a267a1cf5e9f547f5d709f0c5bc4612c8be")
+        self.assertEqual(sealing["max_image_id"], "sha256:26acfcfab7304d30285c9990dfccaa8a9e148b3b294633d8ae48ce4c8d633da2")
+        capture.validate_predecessor(AUTHORITY["commands"]["predecessor-observe"]["evidence"])
+        observed = AUTHORITY["commands"]["predecessor-observe"]["evidence"]
         self.assertEqual(observed["release_critical_identity_sha256"], sealing["predecessor_release_critical_identity_sha256"])
-        self.assertEqual(PHASE3["commands"]["self-check"]["evidence"]["predecessor_observability_sha256"], capture.PREDECESSOR_OBSERVER_SHA256)
-        maximum = PHASE3["commands"]["docker-inspect:crm.container.max_scraper"]["evidence"]
+        self.assertEqual(AUTHORITY["commands"]["self-check"]["evidence"]["predecessor_observability_sha256"], capture.PREDECESSOR_OBSERVER_SHA256)
+        gravity = AUTHORITY["commands"]["docker-inspect:crm.container.gravity_mvp"]["evidence"]
+        maximum = AUTHORITY["commands"]["docker-inspect:crm.container.max_scraper"]["evidence"]
         self.assertEqual(maximum["mounts"], [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}])
         self.assertEqual(len(maximum["semantic"]["environment_names"]), 84)
         self.assertIn("CRM_TELEGRAM_CONNECTION_ID", maximum["semantic"]["environment_names"])
+        # The predecessor pair is itself an activated coordinated release: Gravity runs the
+        # activation command, and both pair services already carry the release name.
+        self.assertEqual(gravity["semantic"]["command"], ["npm", "run", "start"])
+        self.assertEqual(maximum["semantic"]["command"], ["node", "index.js"])
+        for record in (gravity, maximum):
+            self.assertIn(seal.RELEASE_ENVIRONMENT_NAME, record["semantic"]["environment_names"])
         # tg-bot, nginx and every other unrelated service are bound by the fingerprint the seal pins.
-        unrelated = [row for row in PHASE3["commands"]["docker-provenance"]["evidence"]["semantic"]["records"] if row.get("name") not in {"crm-gravity-mvp", "crm-max-scraper"}]
+        unrelated = [row for row in AUTHORITY["commands"]["docker-provenance"]["evidence"]["semantic"]["records"] if row.get("name") not in {"crm-gravity-mvp", "crm-max-scraper"}]
         self.assertIn("crm-tg-bot", [row["name"] for row in unrelated])
         self.assertIn("crm-nginx", [row["name"] for row in unrelated])
         self.assertEqual(capture.digest(unrelated), sealing["unrelated_semantic_fingerprint_sha256"])
 
-    def test_rollback_semantic_from_phase3_and_the_interim_predecessor_package(self) -> None:
-        profile, profile_sha = seal.predecessor_sealed_profile(INTERIM_PACKAGE)
-        semantic = seal.derive_predecessor_rollback_semantic(PHASE3, profile, profile_sha)
+    def test_rollback_semantic_from_the_authority_snapshot_and_the_2_0_0_22_package(self) -> None:
+        profile, profile_sha = seal.predecessor_sealed_profile(ROLLBACK_PACKAGE)
+        semantic = seal.derive_predecessor_rollback_semantic(AUTHORITY, profile, profile_sha)
         self.assertEqual(semantic, {
             "release_environment_name": "MAX_SCRAPER_WEBHOOK_SECRET",
             "services": {
@@ -72,9 +83,9 @@ class CaptureContractTests(unittest.TestCase):
                 },
             },
             "provenance": {
-                "predecessor_package_sha256": "619f4ebe43dfca98942d9557e0d2fb28aa4b7f819079a7baa28f7ea2eb5cd283",
-                "predecessor_profile_id": "crm-ba90ed4b6717-gravity-max-source-v1",
-                "predecessor_profile_sha256": "97dd62ea7fba53a3d7c382b723bf131b63a3dc091688de1bf4882471d4c65274",
+                "predecessor_package_sha256": "1c78ce00eca19b8ef87bd200138105ec9d47a9b07968de0b42f68e9d58d972df",
+                "predecessor_profile_id": "crm-10318827e484-gravity-max-source-v1",
+                "predecessor_profile_sha256": PREDECESSOR_PROFILE_SHA256,
                 "semantic_source": "production-snapshot docker-inspect semantic",
             },
         })
@@ -86,7 +97,7 @@ class CaptureContractTests(unittest.TestCase):
         stripped = json.loads(json.dumps(profile))
         stripped["release_environment"]["sources"].pop("max-web-scraper")
         with self.assertRaisesRegex(ValueError, "refusing to seal"):
-            seal.derive_predecessor_rollback_semantic(PHASE3, stripped, profile_sha)
+            seal.derive_predecessor_rollback_semantic(AUTHORITY, stripped, profile_sha)
 
 
     def test_sealer_reopens_only_exact_generated_review_directory_for_restart_cleanup(self) -> None:
@@ -117,20 +128,22 @@ class CaptureContractTests(unittest.TestCase):
                 seal.reopen_generated_review_for_cleanup(generated)
 
     def test_rollback_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
-        path = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21-interim/yoko-privileged-runtime_2.0.0-21_all.deb")
-        self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
+        self.assertEqual(seal.deb_metadata(ROLLBACK_PACKAGE), ["yoko-privileged-runtime", seal.ROLLBACK_VERSION, "all"])
 
-    def test_rollback_package_is_the_exact_interim_observer_package(self) -> None:
-        directory = Path("/opt/codex-work/yoko-v22-seal-10318827/rollback-2.0.0-21-interim")
-        package = directory / "yoko-privileged-runtime_2.0.0-21_all.deb"
-        self.assertEqual(seal.sha(package), seal.ROLLBACK_SHA)
-        self.assertEqual(seal.sha(directory / "package-manifest.json"), seal.ROLLBACK_SEAL_SHA)
-        manifest = json.loads((directory / "package-manifest.json").read_text(encoding="ascii"))
-        self.assertEqual(manifest["package"]["sha256"], seal.ROLLBACK_SHA)
-        self.assertEqual(manifest["observer"]["sha256"], capture.PREDECESSOR_OBSERVER_SHA256)
-        profile, digest = seal.predecessor_sealed_profile(package)
-        self.assertEqual(digest, "97dd62ea7fba53a3d7c382b723bf131b63a3dc091688de1bf4882471d4c65274")
+    def test_rollback_package_is_the_exact_installed_2_0_0_22_release(self) -> None:
+        self.assertEqual(seal.sha(ROLLBACK_PACKAGE), seal.ROLLBACK_SHA)
+        self.assertEqual(seal.sha(ROLLBACK_DIRECTORY / "SEALED_RELEASE.json"), seal.ROLLBACK_SEAL_SHA)
+        release = json.loads((ROLLBACK_DIRECTORY / "SEALED_RELEASE.json").read_text(encoding="ascii"))
+        self.assertEqual(release["package"]["sha256"], seal.ROLLBACK_SHA)
+        self.assertEqual(release["package_version"], seal.ROLLBACK_VERSION)
+        self.assertEqual(release["profile_id"], seal.ROLLBACK_PROFILE_ID)
+        self.assertEqual(release["package"]["path"], f"yoko-privileged-runtime_{seal.ROLLBACK_VERSION}_all.deb")
+        profile, digest = seal.predecessor_sealed_profile(ROLLBACK_PACKAGE)
+        self.assertEqual(digest, PREDECESSOR_PROFILE_SHA256)
         self.assertEqual(profile["profile_id"], seal.ROLLBACK_PROFILE_ID)
+        # The predecessor profile was sealed for the pair that 2.0.0-22 activated; its MAX target is
+        # exactly the MAX the live predecessor still runs.
+        self.assertEqual(profile["target"]["max_scraper"]["containerd_image_id"], AUTHORITY["sealing"]["max_image_id"])
 
     @staticmethod
     def layered_observation() -> dict:
@@ -170,11 +183,13 @@ class CaptureContractTests(unittest.TestCase):
             "digest-mismatched overlay": lambda v: v["compose_source"]["overlay_layers"][0].update(sha256="0" * 64),
             "changed image pin": lambda v: v["compose_source"]["overlay_layers"][1]["image_pins"].update({"tg-bot": "crm/tg-bot:other"}),
             "future candidate overlay": lambda v: v["compose_source"]["overlay_layers"].append({
-                "path": "/var/lib/yoko-privileged-runtime/profiles/crm-10318827e484-gravity-max-source-v1/activate.compose.yml",
+                "path": "/var/lib/yoko-privileged-runtime/profiles/crm-effcbf6da378-gravity-max-source-v1/activate.compose.yml",
                 "role": "runtime-profile-overlay", "sha256": "1" * 64,
             }),
+            "previous runtime overlay dropped": lambda v: v["compose_source"]["overlay_layers"].pop(3),
             "base compose drift": lambda v: v["compose_source"].update(compose_file_sha256="2" * 64),
-            "MAX stack drift": lambda v: v["services"][2]["reconstruction"]["layers"].append({"path": capture.DRIVER_AUTHORITY_OVERLAY}),
+            "MAX stack drift": lambda v: v["services"][2]["reconstruction"]["layers"].append({"path": capture.PERSON_CONFIRM_OVERLAY}),
+            "Gravity without the person-confirmation layer": lambda v: v["services"][0]["reconstruction"]["layers"].pop(),
             "MAX not normalized": lambda v: v["services"][2]["environment"].update(effective_key_set=["PATH"]),
             "service missing": lambda v: v["services"].pop(1),
             "environment not reconstructed": lambda v: v["services"][0]["environment"].update(effective_values_match_reconstructed_compose_and_image=False),
@@ -217,9 +232,9 @@ class CaptureContractTests(unittest.TestCase):
 
     def test_sealer_accepts_only_fresh_exact_predecessor_snapshot(self) -> None:
         completed = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
-        # A fresh capture of the Phase 3 normalized predecessor: identical sealing identities,
-        # only the capture timestamps are new.
-        sealing = dict(PHASE3["sealing"])
+        # A fresh capture of the authority predecessor: identical sealing identities, only the
+        # capture timestamps are new.
+        sealing = dict(AUTHORITY["sealing"])
         value = {
             "schema": "yoko.crm.coordinated-runtime-production-snapshot.v1",
             "started_at": (completed - dt.timedelta(seconds=1)).isoformat().replace("+00:00", "Z"),
@@ -231,16 +246,19 @@ class CaptureContractTests(unittest.TestCase):
             path = Path(raw) / "snapshot.json"
             path.write_text(json.dumps(value), encoding="ascii")
             accepted, _ = seal.validate_snapshot(path)
-            self.assertEqual(accepted["sealing"], PHASE3["sealing"])
-            # Any semantic identity that differs from the Phase 3 authority refuses the seal.
+            self.assertEqual(accepted["sealing"], AUTHORITY["sealing"])
+            # Any semantic identity that differs from the authority snapshot refuses the seal.
             for key, drifted in (
                 ("predecessor_release_critical_identity_sha256", "0" * 64),
                 ("max_container_id", "f" * 64),
                 ("max_compose_config_hash", "1" * 64),
                 ("gravity_container_id", "2" * 64),
+                ("gravity_image_id", "sha256:" + "4" * 64),
                 ("unrelated_semantic_fingerprint_sha256", "3" * 64),
-                ("audit_record_count", 86),
-                ("applied_migration_count", 64),
+                ("runtime_package_version", "2.0.0-21"),
+                ("audit_record_count", 89),
+                ("applied_migration_count", 69),
+                ("migration_rows_sha256", "5" * 64),
             ):
                 value["sealing"] = dict(sealing, **{key: drifted})
                 path.write_text(json.dumps(value), encoding="ascii")

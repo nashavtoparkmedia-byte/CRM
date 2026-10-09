@@ -34,8 +34,8 @@ class OwnerInstallerRecoveryContractTests(unittest.TestCase):
                 self.assertTrue(stripped.endswith("|| return 1"), f"{name}: {stripped}")
 
     def test_identities_require_an_installed_package_status(self) -> None:
-        self.assertIn("-f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)\" = 'install ok installed 2.0.0-21' || return 1", INSTALLER)
         self.assertIn("-f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)\" = 'install ok installed 2.0.0-22' || return 1", INSTALLER)
+        self.assertIn("-f='${Status} ${Version}' yoko-privileged-runtime 2>/dev/null)\" = 'install ok installed 2.0.0-23' || return 1", INSTALLER)
 
     def test_signals_leave_through_the_rollback_trap_with_a_failure_status(self) -> None:
         for signal, status in (("HUP", 129), ("INT", 130), ("QUIT", 131), ("TERM", 143)):
