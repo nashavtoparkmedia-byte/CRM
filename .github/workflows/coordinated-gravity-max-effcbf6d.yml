@@ -1,0 +1,582 @@
+name: Coordinated Gravity + MAX effcbf6d
+
+on:
+  push:
+    branches:
+      - codex/coordinated-gravity-max-effcbf6d
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: coordinated-gravity-max-effcbf6d-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  coordinated-artifact:
+    outputs:
+      release_artifact_id: ${{ steps.coordinated_upload.outputs.artifact-id }}
+      release_artifact_digest: ${{ steps.coordinated_upload.outputs.artifact-digest }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check out exact release builder
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: release-authority
+
+      - name: Check out fixed accepted application source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: effcbf6da378dd95515a19c5e0fa48703cdb4348
+          # Full history: the MAIN_FIRST_PARENT model anchors the exact first-parent
+          # chain down to the accepted main anchor (HEAD~36) and proves the
+          # merge-base guard against the production repair lineage of the
+          # predecessor application 10318827, which no bounded depth of main's
+          # own history contains. Everything below the anchor is proved by the
+          # accepted predecessor authority.
+          fetch-depth: 0
+          persist-credentials: false
+          path: application-source
+
+      # Read-only evidence: the accepted predecessor authority, bound separately
+      # to its own application 10318827 on the production repair lineage. Pinned
+      # to one immutable commit on a divergent builder line, which is why it
+      # cannot come from application-source or the release-authority checkout -
+      # it is not an ancestor of either.
+      - name: Check out exact accepted predecessor authority
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 46e6107187776929db52ca127061b0c99a21ce71
+          fetch-depth: 1
+          persist-credentials: false
+          path: predecessor-authority
+
+      - name: Assert dual source and builder authority
+        env:
+          EXPECTED_BUILDER_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF" = refs/heads/codex/coordinated-gravity-max-effcbf6d
+          test "$(git -C release-authority rev-parse 'HEAD^{commit}')" = "$EXPECTED_BUILDER_COMMIT"
+          test "$(git -C application-source rev-parse 'HEAD^{commit}')" = effcbf6da378dd95515a19c5e0fa48703cdb4348
+          test "$(git -C application-source rev-parse 'HEAD^{tree}')" = 7ce42906256d8e240d43e0d3b6dff9ec165ccbfe
+          test "$(git -C application-source rev-parse 'HEAD:gravity-mvp')" = 33ddcb753125ff66d14374dd2e47cea495b1e871
+          test "$(git -C application-source rev-parse 'HEAD:max-web-scraper')" = 9fde27e1a3282b8f115de7708bff4eefc195e6c9
+          # The exact first-parent chain, newest first (HEAD~k walks first parents, so
+          # every landing merge is anchored by its first parent). HEAD~36 is the accepted
+          # main anchor be6b8eb8, the last main commit whose production acceptance
+          # succeeded. Everything below it is proved by the accepted predecessor
+          # authority, not restated here.
+          test "$(git -C application-source rev-parse 'HEAD~1^{commit}')" = 8a7946b01427df42a26cf586ab008f533dfffa38
+          test "$(git -C application-source rev-parse 'HEAD~2^{commit}')" = c156ce9414640377228c0acdeba92c0ed3b30868
+          test "$(git -C application-source rev-parse 'HEAD~3^{commit}')" = 5d7cd23f139cb93ecad84abeeca3303da38b3ec9
+          test "$(git -C application-source rev-parse 'HEAD~4^{commit}')" = 8e639943648c6cf7b3a2fd9549b75462c2954082
+          test "$(git -C application-source rev-parse 'HEAD~5^{commit}')" = cfa7468ea70721b7b6aa3a8ee6ddd20900173ee2
+          test "$(git -C application-source rev-parse 'HEAD~6^{commit}')" = ac09a0523be7fb5fb7ac5fa65e2d9be2bcff79a8
+          test "$(git -C application-source rev-parse 'HEAD~7^{commit}')" = af132bf79551c645ac5173d8ffbd4de97c02768a
+          test "$(git -C application-source rev-parse 'HEAD~8^{commit}')" = eb52b92c6f57b36093e58e430cb1dc3329b5e922
+          test "$(git -C application-source rev-parse 'HEAD~9^{commit}')" = 06b4fd36d94d1851ebdd632d6132c20f73dd1c75
+          test "$(git -C application-source rev-parse 'HEAD~10^{commit}')" = 77fbd894e3082a7ddc1dc985e98d7ea4020a5662
+          test "$(git -C application-source rev-parse 'HEAD~11^{commit}')" = 9b0d125bd965ca7968e53901b8c1c40835e474a2
+          test "$(git -C application-source rev-parse 'HEAD~12^{commit}')" = 7dfa253978d0d7008a8a13212407e67dc77f5606
+          test "$(git -C application-source rev-parse 'HEAD~13^{commit}')" = c0d69f06fc7a54c1c45c19474228d441c3b65121
+          test "$(git -C application-source rev-parse 'HEAD~14^{commit}')" = 04839381b798c09ae52d3cea35b4a18597a45685
+          test "$(git -C application-source rev-parse 'HEAD~15^{commit}')" = 0c6c89621cddea7b9838211f362d4af9efec61cd
+          test "$(git -C application-source rev-parse 'HEAD~16^{commit}')" = 2247b5f6de60b0412bc57b17d0eb79ef76044168
+          test "$(git -C application-source rev-parse 'HEAD~17^{commit}')" = f9f4d75a23dcfdeabe9fc34d1a7970593eb52677
+          test "$(git -C application-source rev-parse 'HEAD~18^{commit}')" = 55c52135167adabd94752d55c79227b7e57b0a28
+          test "$(git -C application-source rev-parse 'HEAD~19^{commit}')" = 8824ece358c1c3f976c74f21b4bd006ea8fc03f8
+          test "$(git -C application-source rev-parse 'HEAD~20^{commit}')" = 6209eeb9dcc5107e14e587e5de18c4de68fe8394
+          test "$(git -C application-source rev-parse 'HEAD~21^{commit}')" = 57f070786aef0047ea4edeebd2d4202ced788761
+          test "$(git -C application-source rev-parse 'HEAD~22^{commit}')" = b82ad07939f0f3981dec082a4990cbe7cc7a059b
+          test "$(git -C application-source rev-parse 'HEAD~23^{commit}')" = 42aad7cf0be8d2eb43d9d377114fd23c78244a33
+          test "$(git -C application-source rev-parse 'HEAD~24^{commit}')" = baf2ecaad30b79a8d5d21ce0a82ba77f42f4e51c
+          test "$(git -C application-source rev-parse 'HEAD~25^{commit}')" = a8ac491fa9bde2f5130e2011f1c9d150b00308fb
+          test "$(git -C application-source rev-parse 'HEAD~26^{commit}')" = 8a83d826e27c926c7e8482a0d6d2e48d77946255
+          test "$(git -C application-source rev-parse 'HEAD~27^{commit}')" = db739dd989c75c7ff74d53a1b1ae596f29987913
+          test "$(git -C application-source rev-parse 'HEAD~28^{commit}')" = 9f87c9479ca02694183f9afa43432352a5df326c
+          test "$(git -C application-source rev-parse 'HEAD~29^{commit}')" = 59932ecd23c0847050d5efb8eb3f1e033444e67c
+          test "$(git -C application-source rev-parse 'HEAD~30^{commit}')" = bb4da9bb0d7d6c9989346bb640f37c3106c06085
+          test "$(git -C application-source rev-parse 'HEAD~31^{commit}')" = 5232cd31f7553d76929fbeb6bae56931939f5c22
+          test "$(git -C application-source rev-parse 'HEAD~32^{commit}')" = 474c0707f457c233e292a3d4b4fd60c012d72f9f
+          test "$(git -C application-source rev-parse 'HEAD~33^{commit}')" = 02f772abfbd6caa3440d31214311d4f97a34bf3d
+          test "$(git -C application-source rev-parse 'HEAD~34^{commit}')" = e014ad5fcb41c40d77cc422210fd87b573122a9c
+          test "$(git -C application-source rev-parse 'HEAD~35^{commit}')" = 4abc73f2b1f35e35c98180a5855248878cfdd850
+          test "$(git -C application-source rev-parse 'HEAD~36^{commit}')" = be6b8eb82d8c074e82a3be0cd53db26137e984be
+          # Merge-base guard: the production repair lineage of the predecessor
+          # application diverges from main exactly at the accepted anchor.
+          test "$(git -C application-source merge-base --all HEAD 10318827e484fec466ba994a2a7b7ffe070f7336)" = be6b8eb82d8c074e82a3be0cd53db26137e984be
+          builder_tree=$(git -C release-authority rev-parse 'HEAD^{tree}')
+          printf 'RELEASE_BUILDER_COMMIT=%s\n' "$EXPECTED_BUILDER_COMMIT" >> "$GITHUB_ENV"
+          printf 'RELEASE_BUILDER_TREE=%s\n' "$builder_tree" >> "$GITHUB_ENV"
+
+      - name: Download exact accepted source execution proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '11635047196'
+          path: source-authority
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: nashavtoparkmedia-byte/CRM
+          run-id: '37954364517'
+
+      - name: Download exact accepted baseline execution proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '10411840982'
+          path: baseline-authority
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: nashavtoparkmedia-byte/CRM
+          run-id: '34984925377'
+
+      - name: Capture exact public source authority identities
+        run: |
+          set -Eeuo pipefail
+          test -f source-authority/authoritative-ci-execution.json
+          test "$(find baseline-authority -mindepth 1 -printf '%P\n')" = authoritative-ci-execution.json
+          mv baseline-authority/authoritative-ci-execution.json source-authority/baseline-authoritative-ci-execution.json
+          rmdir baseline-authority
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/37954364517 \
+            --output source-authority/run.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            'https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/37954364517/jobs?per_page=100' \
+            --output source-authority/jobs.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/11635047196 \
+            --output source-authority/artifact.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/34984925377 \
+            --output source-authority/baseline-run.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            'https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/34984925377/jobs?per_page=100' \
+            --output source-authority/baseline-jobs.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/10411840982 \
+            --output source-authority/baseline-artifact.json
+
+      - name: Set up one exact Buildx and BuildKit authority
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.30.1
+          driver: docker-container
+          driver-opts: image=moby/buildkit:v0.25.2@sha256:72bda77240181301a0d5ee57d39fa58e4aabd7eff26f81bbf108088caf810f05
+
+      - name: Build and probe both fixed-source component images
+        env:
+          NEXT_PUBLIC_AVITO_LEADS_URL: ''
+          NEXT_PUBLIC_MAX_SCRAPER_PHONE: '+79221853150'
+          NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS: 'true'
+        run: |
+          set -Eeuo pipefail
+          test "$(docker buildx version | awk '{print $2}')" = v0.30.1
+          buildx_inspect=$(docker buildx inspect --bootstrap)
+          test "$(printf '%s\n' "$buildx_inspect" | awk '$1 == "Driver:" { print $2 }')" = docker-container
+          test "$(printf '%s\n' "$buildx_inspect" | awk '$1 == "BuildKit" && $2 == "version:" { print $3 }')" = v0.25.2
+
+          gravity_image="yoko/crm-gravity-mvp:effcbf6da378-${RELEASE_BUILDER_COMMIT}-coordinated-v1"
+          max_image="yoko/crm-max-scraper:effcbf6da378-${RELEASE_BUILDER_COMMIT}-coordinated-v1"
+          mkdir release-output
+
+          docker buildx build \
+            --platform linux/amd64 \
+            --pull \
+            --no-cache \
+            --provenance=false \
+            --sbom=false \
+            --build-arg "NEXT_PUBLIC_AVITO_LEADS_URL=$NEXT_PUBLIC_AVITO_LEADS_URL" \
+            --build-arg "NEXT_PUBLIC_MAX_SCRAPER_PHONE=$NEXT_PUBLIC_MAX_SCRAPER_PHONE" \
+            --build-arg "NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=$NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS" \
+            --label org.opencontainers.image.revision=effcbf6da378dd95515a19c5e0fa48703cdb4348 \
+            --label yoko.activation.profile=crm-effcbf6da378-gravity-max-source-v1 \
+            --tag "$gravity_image" \
+            --load \
+            --file application-source/gravity-mvp/Dockerfile \
+            application-source/gravity-mvp
+
+          docker buildx build \
+            --platform linux/amd64 \
+            --pull \
+            --no-cache \
+            --provenance=false \
+            --sbom=false \
+            --label org.opencontainers.image.revision=effcbf6da378dd95515a19c5e0fa48703cdb4348 \
+            --label yoko.activation.profile=crm-effcbf6da378-gravity-max-source-v1 \
+            --tag "$max_image" \
+            --load \
+            --file release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-effcbf6da378-gravity-max-source-v1/build/max-scraper.Dockerfile \
+            application-source/max-web-scraper
+
+          docker image save --output release-output/gravity-image.docker.tar "$gravity_image"
+          docker image save --output release-output/max-scraper-image.docker.tar "$max_image"
+          probe_program=$(<release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-effcbf6da378-gravity-max-source-v1/build/max-runtime-probe.js)
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --entrypoint node \
+            "$max_image" -e "$probe_program" > max-runtime-probe.json
+
+      - name: Emit and independently verify coordinated attestations
+        run: |
+          set -Eeuo pipefail
+          authority=release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-effcbf6da378-gravity-max-source-v1
+          python3 -I -B "$authority/build/emit-coordinated-release.py" \
+            --application-source application-source \
+            --builder-source release-authority \
+            --artifact-directory release-output \
+            --source-authority-evidence source-authority \
+            --predecessor-authority predecessor-authority \
+            --max-runtime-probe max-runtime-probe.json \
+            --builder-commit "$RELEASE_BUILDER_COMMIT" \
+            --builder-tree "$RELEASE_BUILDER_TREE"
+          python3 -I -B "$authority/verify-coordinated-artifact.py" \
+            --application-source application-source \
+            --builder-source release-authority \
+            --artifact-directory release-output \
+            --source-authority-evidence source-authority \
+            --predecessor-authority predecessor-authority \
+            --builder-commit "$RELEASE_BUILDER_COMMIT" \
+            --builder-tree "$RELEASE_BUILDER_TREE"
+
+      - name: Upload one exact coordinated artifact
+        id: coordinated_upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-gravity-max-effcbf6da378-${{ github.sha }}
+          path: |
+            release-output/gravity-image.docker.tar
+            release-output/gravity-image-attestation.json
+            release-output/max-scraper-image.docker.tar
+            release-output/max-scraper-image-attestation.json
+            release-output/coordinated-release-manifest.json
+            release-output/authoritative-ci-execution.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+          include-hidden-files: false
+          overwrite: true
+
+      - name: Record hosted coordinated artifact identity
+        env:
+          ARTIFACT_ID: ${{ steps.coordinated_upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.coordinated_upload.outputs.artifact-digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$ARTIFACT_ID"
+          printf '%s\n' "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/$ARTIFACT_ID" \
+            --output coordinated-artifact-identity.json
+          python3 -I - "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$RELEASE_BUILDER_COMMIT" <<'PY'
+          import json, pathlib, sys
+          artifact_id, digest, builder = sys.argv[1:]
+          value = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
+          expected_name = f'coordinated-gravity-max-effcbf6da378-{builder}'
+          if (
+              value.get('id') != int(artifact_id)
+              or value.get('name') != expected_name
+              or value.get('digest') != f'sha256:{digest}'
+              or value.get('expired') is not False
+              or type(value.get('size_in_bytes')) is not int
+              or value['size_in_bytes'] <= 0
+          ):
+              raise SystemExit('hosted coordinated artifact identity mismatch')
+          print(json.dumps({
+              'artifact_name': value['name'],
+              'artifact_id': value['id'],
+              'artifact_digest': value['digest'],
+              'artifact_bytes': value['size_in_bytes'],
+          }, sort_keys=True))
+          PY
+
+      - name: Publish exact release identities as public annotations
+        env:
+          ARTIFACT_ID: ${{ steps.coordinated_upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.coordinated_upload.outputs.artifact-digest }}
+        run: |
+          set -Eeuo pipefail
+          test -z "$(git -C application-source status --porcelain=v1 --untracked-files=all)"
+          python3 -I - "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$RELEASE_BUILDER_COMMIT" "$RELEASE_BUILDER_TREE" <<'PY'
+          import json, pathlib, subprocess, sys
+          artifact_id, digest, builder, builder_tree = sys.argv[1:]
+          manifest = json.loads(pathlib.Path('release-output/coordinated-release-manifest.json').read_text(encoding='utf8'))
+          identity = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
+          source = pathlib.Path('application-source')
+          def rev(value):
+              return subprocess.run(['git', '-C', str(source), 'rev-parse', value], check=True, capture_output=True, text=True).stdout.strip()
+          components = manifest['components']
+          authority = manifest['source_authority']
+          baseline = authority['baseline']
+          rows = [
+              ('source', f"commit={rev('HEAD^{commit}')} tree={rev('HEAD^{tree}')} gravity_subtree={rev('HEAD:gravity-mvp')} max_subtree={rev('HEAD:max-web-scraper')} clean=true"),
+              ('builder', f'commit={builder} tree={builder_tree}'),
+              ('source-authority', (
+                  f"event={authority['run']['event']} branch={authority['run']['branch']} run_id={authority['run']['id']} "
+                  f"lineage_model={authority['lineage']['model']} "
+                  f"first_parent={authority['lineage']['first_parent']} "
+                  f"chain_length={authority['lineage']['chain_length']} "
+                  f"anchor={authority['lineage']['anchor']['commit']} "
+                  f"anchor_is_accepted_baseline={str(authority['lineage']['anchor']['production_accepted']).lower()} "
+                  f"predecessor_application={authority['lineage']['predecessor_application']['commit']} "
+                  f"blast_base={authority['execution_proof']['blast_base_commit']} "
+                  f"proof_artifact_id={authority['proof_artifact']['id']} "
+                  f"proof_artifact_digest={authority['proof_artifact']['digest']}"
+              )),
+              ('baseline-authority', (
+                  f"event={baseline['run']['event']} branch={baseline['run']['branch']} "
+                  f"commit={baseline['commit']} run_id={baseline['run']['id']} "
+                  f"proof_artifact_id={baseline['proof_artifact']['id']} "
+                  f"proof_artifact_digest={baseline['proof_artifact']['digest']}"
+              )),
+          ]
+          for key, label in (('gravity', 'gravity'), ('max_scraper', 'max-scraper')):
+              value = components[key]
+              rows.append((label, (
+                  f"image_id={value['image_id']} containerd_image_id={value['containerd_image_id']} "
+                  f"archive_sha256={value['docker_archive']['sha256']} archive_bytes={value['docker_archive']['bytes']} "
+                  f"reference={value['image_reference']}"
+              )))
+          rows.append(('artifact', f"id={identity['id']} name={identity['name']} digest={identity['digest']} bytes={identity['size_in_bytes']}"))
+          if manifest['application']['commit'] != rev('HEAD^{commit}') or identity['id'] != int(artifact_id) or identity['digest'] != f'sha256:{digest}':
+              raise SystemExit('public release identity mismatch')
+          if (
+              authority['run']['event'] != 'push'
+              or authority['run']['branch'] != 'main'
+              or authority['lineage']['model'] != 'MAIN_FIRST_PARENT'
+              or authority['lineage']['anchor']['commit'] != baseline['commit']
+              or authority['lineage']['anchor']['production_accepted'] is not True
+              or authority['execution_proof']['blast_base_commit'] != authority['lineage']['first_parent']
+              or authority['lineage']['first_parent'] != rev('HEAD^1')
+              or authority['lineage']['predecessor_application']['merge_base'] != baseline['commit']
+          ):
+              raise SystemExit('public release lineage misrepresentation')
+          for title, text in rows:
+              print(f'::notice title=stage-a-{title}::{text}')
+          PY
+
+  authenticated-transport:
+    needs: coordinated-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact release builder for transport
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: release-authority
+
+      - name: Assert exact transport builder authority
+        env:
+          EXPECTED_BUILDER_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF" = refs/heads/codex/coordinated-gravity-max-effcbf6d
+          test "$(git -C release-authority rev-parse 'HEAD^{commit}')" = "$EXPECTED_BUILDER_COMMIT"
+          printf 'RELEASE_BUILDER_COMMIT=%s\n' "$EXPECTED_BUILDER_COMMIT" >> "$GITHUB_ENV"
+
+      - name: Capture exact authenticated release artifact identity
+        env:
+          ARTIFACT_ID: ${{ needs.coordinated-artifact.outputs.release_artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.coordinated-artifact.outputs.release_artifact_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$ARTIFACT_ID"
+          printf '%s\n' "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/$ARTIFACT_ID" \
+            --output coordinated-artifact-identity.json
+          python3 -I - "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$RELEASE_BUILDER_COMMIT" "$GITHUB_RUN_ID" <<'PY'
+          import json, pathlib, sys
+          artifact_id, digest, builder, run_id = sys.argv[1:]
+          value = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
+          workflow_run = value.get('workflow_run')
+          if (
+              value.get('id') != int(artifact_id)
+              or value.get('name') != f'coordinated-gravity-max-effcbf6da378-{builder}'
+              or value.get('digest') != f'sha256:{digest}'
+              or value.get('expired') is not False
+              or type(value.get('size_in_bytes')) is not int
+              or value['size_in_bytes'] <= 0
+              or type(workflow_run) is not dict
+              or workflow_run.get('id') != int(run_id)
+              or workflow_run.get('head_branch') != 'codex/coordinated-gravity-max-effcbf6d'
+              or workflow_run.get('head_sha') != builder
+          ):
+              raise SystemExit('authenticated release artifact identity mismatch')
+          PY
+
+      - name: Prepare and verify bounded authenticated artifact transport
+        env:
+          ARTIFACT_ID: ${{ needs.coordinated-artifact.outputs.release_artifact_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          authority=release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-effcbf6da378-gravity-max-source-v1
+          test -n "$ARTIFACT_ID"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/$ARTIFACT_ID/zip" \
+            | python3 -I -B "$authority/build/chunk-hosted-artifact.py" \
+                --identity coordinated-artifact-identity.json \
+                --output-directory coordinated-transport \
+                --builder-commit "$RELEASE_BUILDER_COMMIT" \
+                --run-id "$GITHUB_RUN_ID"
+          python3 -I -B "$authority/verify-artifact-transport.py" \
+            --identity coordinated-artifact-identity.json \
+            --transport-directory coordinated-transport \
+            --builder-commit "$RELEASE_BUILDER_COMMIT" \
+            --run-id "$GITHUB_RUN_ID"
+
+      - name: Upload transport part 000
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-000
+          path: coordinated-transport/coordinated-artifact.zip.part-000
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 001
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-001
+          path: coordinated-transport/coordinated-artifact.zip.part-001
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 002
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-002
+          path: coordinated-transport/coordinated-artifact.zip.part-002
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 003
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-003
+          path: coordinated-transport/coordinated-artifact.zip.part-003
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 004
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-004
+          path: coordinated-transport/coordinated-artifact.zip.part-004
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 005
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-005
+          path: coordinated-transport/coordinated-artifact.zip.part-005
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 006
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-006
+          path: coordinated-transport/coordinated-artifact.zip.part-006
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 007
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-007
+          path: coordinated-transport/coordinated-artifact.zip.part-007
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 008
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-008
+          path: coordinated-transport/coordinated-artifact.zip.part-008
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 009
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-part-009
+          path: coordinated-transport/coordinated-artifact.zip.part-009
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload exact transport manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-effcbf6da378-${{ github.sha }}-manifest
+          path: coordinated-transport/coordinated-artifact-transport-manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Verify hosted transport artifact identities
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          authority=release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-effcbf6da378-gravity-max-source-v1
+          for attempt in 1 2 3 4 5 6; do
+            if curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+              --output hosted-transport-artifacts.json \
+              && python3 -I -B "$authority/build/verify-hosted-transport-registry.py" \
+              --artifact-inventory hosted-transport-artifacts.json \
+              --source-identity coordinated-artifact-identity.json \
+              --builder-commit "$RELEASE_BUILDER_COMMIT" \
+              --run-id "$GITHUB_RUN_ID"; then
+              exit 0
+            fi
+            test "$attempt" -lt 6
+            sleep 5
+          done
+          exit 1
