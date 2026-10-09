@@ -162,19 +162,26 @@ export async function requestCashOrderHotRefreshV1(externalParkId: string): Prom
 /**
  * Schedules, or joins, confirmation of an enabled park's business day
  * (`YYYY-MM-DD`, Asia/Yekaterinburg), optionally for one order. Never waits
- * for the provider.
+ * for the provider. An order carrying its stored completion instant is
+ * confirmed on behalf of a claim: ingestion admits it by that order's own
+ * submission window and refuses it (`order_window_closed`) once that window
+ * has closed, whatever the day's generic horizon says.
  */
 export async function requestCashOrderDayConfirmationV1(input: {
     externalParkId: string
     dayKey: string
-    order?: { externalOrderId: string; providerBookedAt: Date | null }
+    order?: { externalOrderId: string; providerBookedAt: Date | null; endedAt?: Date | null }
 }): Promise<CashOrderRefreshRequestV1> {
     const outcome = await runtime.requestDayConfirmation({
         externalParkId: input.externalParkId,
         dayKey: input.dayKey,
         order: input.order === undefined
             ? undefined
-            : { externalOrderId: input.order.externalOrderId, providerBookedAt: input.order.providerBookedAt },
+            : {
+                externalOrderId: input.order.externalOrderId,
+                providerBookedAt: input.order.providerBookedAt,
+                endedAt: input.order.endedAt ?? null,
+            },
     })
     return outcome.status === 'not_scheduled'
         ? { status: 'not_scheduled', reason: outcome.reason }
