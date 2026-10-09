@@ -2278,6 +2278,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-one-order-per-day-slot-key-main-8a7946b0-20261009",
+      "reviewed_at": "2026-10-09T00:00:00Z",
+      "reviewed_by": "CASH_ONE_ORDER_PER_DAY_SLOT_KEY_CURRENT_MAIN_RECONCILE_EXECUTOR_REVIEW_8A7946B0",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_CASH_ONE_ORDER_PER_DAY_SPECULATIVE_CURRENT_MAIN_RECONCILE_8A7946B0_20261009",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 8a7946b0, whose tail is max-m1m2-combined-unit-main-5d7cd23f-20261008 (the Cash last-day grace landing added no amendment). It is a rebind-only amendment: the reviewed triple does not move, so it is admitted by the rebind-only resolver semantics main carries since #157. It replaces, on the current-main lineage, the same rebind the frozen candidate a6d066d8 recorded against main 8e639943, derived again against the chain main publishes now."
+      },
+      "reason": "Records the one source fingerprint the Cash 1 ORDER/DAY order-day slot key moves on top of main 8a7946b0 without moving the reviewed denominator: 2,696 tracked executable surfaces, context-owned 1,461 and governed exclusions 1,235 are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from the exact fingerprint the 2026-08-13 review approved, which main's chain never rebound before: the compensation application detail screen now labels the authorization's stored day as the order day the compensation slot holds, labels the settlement's day as the day the money was paid, and states the daily-limit refusal as one compensation per order day. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes. The triple is this repository's own derivation over this tree (preview on the clean reconcile merge commit a4b84dcb).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/[applicationId]/CompensationApplicationDetail.tsx",
+          "previous_source_sha256": "c5200c7aa552dd44355959e7f08d77c0a6b93d8bb68e0669f3940c5b2a5c8966",
+          "current_source_sha256": "a1f1d891a0d01d086eecd987e1be46ca755ab0badb7724b1e2e5dd0559e2f32d",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation application detail screen keeps every reviewed ownership field. It changes three operator-facing strings only: the authorization line now reads the stored day as the order day the compensation slot holds, the settlement line names its day as the day the money was paid, and the daily-limit refusal says the driver already has a compensation for that order's day. It still renders the actions the server said are open and reports the result code the server returned, never a state of its own; it adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
