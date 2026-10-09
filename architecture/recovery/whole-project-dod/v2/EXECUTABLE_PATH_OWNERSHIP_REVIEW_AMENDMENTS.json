@@ -2322,6 +2322,105 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "calling-c3a-campaign-live-dial-main-effcbf6d-20261009",
+      "reviewed_at": "2026-10-09T00:00:00Z",
+      "reviewed_by": "CALLING_C3A_CAMPAIGN_LIVE_DIAL_TARGET_LOCK_RECONCILIATION_EXECUTOR_REVIEW_20261009",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V4_1_AUTHORIZED_C3A_FINAL_TARGET_LOCK_RECONCILE_20261009",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at effcbf6d, whose tail is cash-one-order-per-day-slot-key-main-8a7946b0-20261009. It supersedes the earlier C3a amendment anchored on main eb52b92c (calling-c3a-campaign-live-dial-main-eb52b92c-20261005, carried by the unlanded candidates dc204f30, f95c43a6 and afe91015), which is deliberately not carried forward: its predecessor denominator (2,674) is no longer main's tail, so the same surfaces are reviewed again against the published chain rather than replayed."
+      },
+      "reason": "Records the tracked executable surfaces the Calling C3a Campaign Live Dial Foundation adds on top of main effcbf6d: 2,696 + 9 = 2,705 surfaces, context-owned 1,461 -> 1,470, governed exclusions unchanged at 1,235. All nine new paths live under gravity-mvp/src/modules/calling and are owned by the calling context through its manifest owned_paths: the campaign live-dial application capability, the Calling runtime readiness it shares with the controlled route, the campaign live-readiness projection, the provider-effect journal, the bridge scenario loader that serves a campaign's frozen scenario snapshot, the internal live-dial adapter, and the three Vitest suites beside them. None reaches a governed exclusion or an exact inventory, and none is relocated from another path, so no path retires. One reviewed exact-inventory assignment rewrites its bytes in the same movement: the bridge's session-resolution route resolves a campaign Call's frozen scenario snapshot through the Calling loader, so this amendment carries exactly one source-fingerprint rebind. The repository's own derivation over this tree reports no exact-inventory path without a reviewed assignment. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no surface or assignment belonging to T1, RCQ1, #41, Messaging S1 and S2, the contact-conversations query, MAX M1+M2, Cash, the entry gate, Call Alerts or any other landed track is touched. The current triple is the repository's own derivation over this exact clean candidate (aea08898), read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization; no value is carried from an earlier C3a candidate.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2705,
+        "tracked_inventory_sha256": "c7377e72780a77cf1610084b9b0ea33e24e87da174baf8193a3a6b6a175c8e10",
+        "coverage_sha256": "9bd054d52649342ffb2cbc15972a8720c91c611407f00e8cbc86fb3f21b706e1"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/ai-calls/sessions/by-fs-uuid/[fsUuid]/route.ts",
+          "previous_source_sha256": "c07014074e14b5538cfc97b5ef329ec19333502c8b8a7a4199335f1256b49305",
+          "current_source_sha256": "6c665d1f5987e74b28347a7f31c5a171985bc9fac31fed332affb17ebf9e823b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The bridge's session-resolution route now resolves the Call and its scenario through the Calling-owned bridge scenario loader. A Call that belongs to a campaign attempt executes the scenario snapshot the campaign froze, verified against the Call and its fingerprint, and a corrupt snapshot answers 409 instead of silently falling back to edited live data; every other Call resolves through the live scenario row exactly as before. The response shape the bridge consumes ({id, name, systemPrompt, questions, targetDurationSec}) is unchanged. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime functional owner, gravity_runtime_remainder exclusion, exact_runtime_inventory membership and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-dial.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-readiness.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-readiness.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-call-provider-effect-journal.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/calling-runtime-readiness.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-bridge-scenario-loader.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-bridge-scenario-loader.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-live-dial-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-live-dial-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
