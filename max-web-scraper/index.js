@@ -18,15 +18,20 @@ const {
   selectPendingLiveDomCandidates,
   evaluatePhoneResolutionUiSend,
   isUiTextSubmitObserved,
+  canonicalMaxMessageIdHex,
+  maxRealIdAsPlainNumber,
+  maxRealIdFromProtocolId,
+  runSingleMaxTextSend,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
-const { MessageSync }              = require('./sync/MessageSync')
+const { MessageSync, InboundDeliveryLedger, forwardWithBoundedRetry, recoveryStatePath } = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { deriveMaxChatKind }        = require('./lib/ChatKind')
+const { attestDomRead, domCandidateExtraction, pageSample } = require('./lib/DomRouteAttestation')
 const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
 
@@ -43,6 +48,8 @@ const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
 const BIDIRECTIONAL_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.bidirectional_history_recovery_v1')
+// On the volume (D-09): every recreate used to start without it.
+const LAST_ACTIVITY_PATH   = recoveryStatePath('last_activity.json')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -155,6 +162,33 @@ function isRealMaxMessageId(id) {
   return /^d301/i.test(String(id || ''))
 }
 
+// Ids in a request the scraper builds are the ids the page itself would send
+// (see maxRealIdFromProtocolId): a chat by its real id, a message by its
+// 64-bit id, both as BigInt - which the frame encoder writes as MAX's id ext.
+function maxChatIdForRequest(protocolChatId) {
+  const real = maxRealIdFromProtocolId(protocolChatId)
+  if (real === null || real === 0n) throw Object.assign(new Error(`not a MAX chat id: ${protocolChatId}`), { dispatched: false, reason: 'invalid_chat_id' })
+  return real
+}
+
+function maxMessageIdForRequest(messageId) {
+  const hex = canonicalMaxMessageIdHex(typeof messageId === 'object' ? messageId : String(messageId || ''))
+  const id = hex ? maxRealIdFromProtocolId({ __maxId: true, hex }) : null
+  if (id === null) throw Object.assign(new Error(`not a MAX message id: ${messageId}`), { dispatched: false, reason: 'invalid_message_id' })
+  return id
+}
+
+function maxMessageIdFromResponse(response) {
+  return canonicalMaxMessageIdHex(response?.message?.id) || null
+}
+
+// A media id MAX handed out (videoId, fileId) goes back the way the page sends
+// it back: as the plain number its codec decoded it to.
+function plainMaxIdForRequest(value) {
+  if (typeof value === 'string' && /^(?:d3|cf)[0-9a-f]{16}$/i.test(value)) return maxRealIdAsPlainNumber({ __maxId: true, hex: value })
+  return maxRealIdAsPlainNumber(value) ?? value
+}
+
 function stableTextCid(seed) {
   if (!seed) return -Date.now()
   const digest = crypto.createHash('sha1').update(String(seed)).digest()
@@ -190,21 +224,6 @@ function normalizeMediaSendResult(result) {
   }
 }
 
-function uiTextDeliveredResult(source = 'ui_text_no_provider_id', clientMessageId = null) {
-  return {
-    externalId: null,
-    maxMessageId: null,
-    deliveryConfirmed: true,
-    deliveryStatus: 'delivered',
-    source,
-    deliveryProof: {
-      kind: 'ui_send_action',
-      clientMessageId: clientMessageId ? String(clientMessageId) : null,
-      actionConfirmed: true,
-    },
-  }
-}
-
 function readKnownChatIds() {
   let known = []
   try { known = JSON.parse(fs.readFileSync(KNOWN_CHATS_PATH, 'utf8')) } catch {}
@@ -235,50 +254,6 @@ function rememberKnownChatId(chatId) {
       fs.writeFileSync(KNOWN_CHATS_PATH, JSON.stringify(known))
     }
   } catch {}
-}
-
-function normalizeTextSendResult(result) {
-  if (result && typeof result === 'object' && !Buffer.isBuffer(result)) {
-    const externalId = typeof result.externalId === 'string'
-      ? result.externalId
-      : (typeof result.maxMessageId === 'string' ? result.maxMessageId : null)
-    const maxMessageId = typeof result.maxMessageId === 'string' ? result.maxMessageId : externalId
-    const hasExplicitError = Object.prototype.hasOwnProperty.call(result, 'error')
-      && result.error !== null
-      && result.error !== undefined
-      && result.error !== ''
-    const explicitError = typeof result.error === 'string' && result.error.trim()
-      ? result.error.trim()
-      : null
-    const hasExplicitFailure = result.success === false || result.failed === true || result.failure === true
-    if (hasExplicitFailure || hasExplicitError) {
-      return {
-        ...result,
-        success: false,
-        error: explicitError || 'MAX text delivery failed',
-        externalId,
-        maxMessageId,
-        deliveryConfirmed: false,
-        deliveryStatus: 'failed',
-      }
-    }
-    const deliveryStatus = result.deliveryStatus || result.status || (result.deliveryConfirmed === true ? 'delivered' : 'send_requested')
-    return {
-      ...result,
-      externalId,
-      maxMessageId,
-      deliveryConfirmed: result.deliveryConfirmed === true && deliveryStatus === 'delivered',
-      deliveryStatus,
-    }
-  }
-  const externalId = result ? String(result) : null
-  const deliveryConfirmed = isRealMaxMessageId(externalId)
-  return {
-    externalId,
-    maxMessageId: externalId,
-    deliveryConfirmed,
-    deliveryStatus: deliveryConfirmed ? 'delivered' : 'send_requested',
-  }
 }
 
 function isConfirmedMediaSendResult(result) {
@@ -526,115 +501,6 @@ function extractReactionCountersFromMap(messagesReactions) {
   }
 
   return countersByMessage
-}
-
-function hexFromMaxReactionBlob(value) {
-  if (value == null) return ''
-  const raw = String(value)
-  if (/^[0-9a-f]+$/i.test(raw) && raw.length % 2 === 0) return raw.toLowerCase()
-  return Buffer.from(raw, 'utf8').toString('hex').toLowerCase()
-}
-
-function maxMessageSuffix(messageId) {
-  const hex = String(messageId || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
-  if (hex.length < 12) return ''
-  return hex.slice(-12)
-}
-
-function compactReactionSnapshotMatches(messagesReactions, messageId) {
-  if (!messagesReactions || !messageId) return false
-  const suffix = maxMessageSuffix(messageId)
-  if (!suffix) return false
-  const countersMarker = Buffer.from('counters').toString('hex')
-  for (const value of Object.values(messagesReactions)) {
-    if (typeof value !== 'string') continue
-    const hex = hexFromMaxReactionBlob(value)
-    if (hex.includes(countersMarker) && hex.includes(suffix)) return true
-  }
-  return false
-}
-
-function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remove = false, timeoutMs = 15_000 } = {}) {
-  if (!transport?._rawHandlers || !messageId) return Promise.resolve(null)
-  const expectedMessageId = String(messageId)
-  const expectedChatId = chatId != null ? String(chatId) : null
-  const expectedEmoji = emoji ? normalizeReactionEmoji(emoji) : ''
-
-  return new Promise(resolve => {
-    let done = false
-    const cleanup = () => {
-      const index = transport._rawHandlers.indexOf(handler)
-      if (index >= 0) transport._rawHandlers.splice(index, 1)
-    }
-    const finish = confirmation => {
-      if (done) return
-      done = true
-      clearTimeout(timer)
-      cleanup()
-      resolve(confirmation)
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    const matches = externalMsgId => String(externalMsgId || '') === expectedMessageId
-
-    const handler = data => {
-      try {
-        if (![135, 155, 180].includes(data?.opcode)) return
-        const payload = data.payload || {}
-
-        if (data.opcode === 180 && payload.messagesReactions) {
-          const byMessage = extractReactionCountersFromMap(payload.messagesReactions)
-          if (byMessage.has(expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180',
-              counters: byMessage.get(expectedMessageId),
-            })
-            return
-          }
-          if (compactReactionSnapshotMatches(payload.messagesReactions, expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180_compact',
-              counters: expectedEmoji ? [{ reaction: expectedEmoji, count: remove ? 0 : 1 }] : undefined,
-            })
-            return
-          }
-        }
-
-        if (data.opcode === 155 && matches(payload.messageId || payload.id)) {
-          const counters = normalizeReactionCounters(payload.reactionInfo || payload)
-          if (counters.length > 0 || remove) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op155',
-              counters,
-            })
-            return
-          }
-        }
-
-        if (data.opcode === 135 && payload.chat) {
-          const chatMatches = !expectedChatId || !payload.chat.id || String(payload.chat.id) === expectedChatId
-          if (chatMatches && matches(payload.chat.lastReactedMessageId)) {
-            const reaction = normalizeReactionEmoji(payload.chat.lastReaction || expectedEmoji)
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op135',
-              reaction,
-              counters: reaction ? [{ reaction, count: remove ? 0 : 1 }] : undefined,
-            })
-          }
-        }
-      } catch (e) {
-        console.warn(`[sendReaction] confirmation parse failed: ${e.message}`)
-      }
-    }
-    transport._rawHandlers.push(handler)
-  })
 }
 
 function normalizeReactionCounters(source) {
@@ -894,6 +760,10 @@ async function forwardToWebhook(payload) {
     chatKind: deriveMaxChatKind(...providerChatModels),
   }
   trackImportedMessage(normalizedPayload.chatId, normalizedPayload.timestamp)
+  return postToCrmWebhook(normalizedPayload)
+}
+
+function postToCrmWebhook(normalizedPayload) {
   const url  = new URL(CRM_WEBHOOK_URL)
   const body = JSON.stringify(normalizedPayload)
   const mod  = url.protocol === 'https:' ? https : http
@@ -945,9 +815,80 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     return
   }
 
+  // Seen means persisted: the id is marked only after the CRM answered 2xx
+  // (below). Marking it before the forward made any failed forward final.
   if (messageSync.isDuplicate(msg)) return
-  messageSync.markSeen(msg)
+  const ledgerId = msg.id ? String(msg.id) : null
+  if (ledgerId && !inboundLedger.beginForward(ledgerId)) return
+  try {
+    await forwardIncomingMessage(msg, mediaPipeline, messageSync, transport, rawChatId)
+  } finally {
+    if (ledgerId) inboundLedger.releaseForward(ledgerId)
+  }
+}
 
+function inboundChatKey(chatId) {
+  return chatId != null ? normalizeMaxChatId(chatId) : ''
+}
+
+/**
+ * The page acknowledged a push (op:128 cmd 1) and the CRM still has no row for
+ * it: the frame did not decode, the forward failed, or the CRM refused it. The
+ * message is read back from the page's own provider store by that exact id and
+ * forwarded like a live push. Only when the store cannot answer does the
+ * guarded DOM recovery run, handed this provider id - never a guess by window.
+ */
+async function recoverUnpersistedLiveMessage({ chatId, messageId }, attempt = 0) {
+  if (!messageId || inboundLedger.isPersisted(messageId) || inboundLedger.isInFlight(messageId)) return
+  if (!isReady || !page) return
+  if ((uiSendInProgress || domFallbackRunning) && attempt < 8) {
+    // Let the page finish a send or a DOM read first; the store read below
+    // does not navigate, so after a bounded wait it proceeds regardless.
+    setTimeout(() => recoverUnpersistedLiveMessage({ chatId, messageId }, attempt + 1).catch(() => {}), 1500)
+    return
+  }
+  console.warn(`[inboundLedger] page acknowledged chatId=${chatId} msgId=${messageId} but the CRM has not stored it; recovering by provider id`)
+  const route = resolveUiRouteIdForChat(chatId)
+  let providerMessage = null
+  try {
+    providerMessage = await new MaxWebReplyBridge(page).readProviderMessage(chatId, messageId, { uiChatId: route.uiRouteId })
+  } catch (error) {
+    console.warn(`[inboundLedger] provider store read failed chatId=${chatId} msgId=${messageId}: ${error.message}`)
+  }
+  if (providerMessage?.attachmentCount > 0) {
+    // Media cannot be rebuilt from the store read; the media recovery path takes
+    // it, and its id is never handed to text recovery, which would pair it with
+    // whatever text row it found.
+    console.warn(`[inboundLedger] msgId=${messageId} is media; handing it to the media DOM recovery`)
+    scheduleDomFallbackForRecentMedia('loose_op128_media')
+    return
+  }
+  if (providerMessage?.senderId && providerMessage.text) {
+    const providerChatId = /^\d{12,}$/.test(String(providerMessage.providerChatId || '')) ? providerMessage.providerChatId : chatId
+    const recovered = {
+      id: providerMessage.providerMessageId,
+      chatId: providerChatId,
+      from: providerMessage.senderId,
+      text: providerMessage.text,
+      timestamp: providerMessage.timestamp || Date.now(),
+      type: 'text',
+      attachments: [],
+      isOutgoing: providerMessage.isOutgoing,
+      replyToMessageId: providerMessage.replyToExternalId || null,
+      forwardedFromId: null,
+      status: null,
+    }
+    return inboundLedger.enqueue(inboundChatKey(providerChatId), () => handleIncoming(recovered, mediaPipeline, sync, transport))
+  }
+  // The store could not supply a forwardable message: the guarded DOM recovery
+  // runs for this chat with this provider id at the head of its pending queue
+  // (the store read there replaces the DOM text with the provider's own).
+  const registration = transport?.registerPendingLiveTextIdForDomRecovery?.(chatId, messageId)
+  console.warn(`[inboundLedger] msgId=${messageId} handed to DOM recovery chatId=${chatId} pending=${registration?.registered ? 'queued' : (registration?.reason || 'n/a')}`)
+  scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')
+}
+
+async function forwardIncomingMessage(msg, mediaPipeline, messageSync, transport, rawChatId) {
   if (!msg.isOutgoing && !transport?._myUserId && msg.status) {
     const status = String(msg.status).toUpperCase()
     if (['SENT', 'DELIVERED', 'READ'].includes(status)) {
@@ -956,38 +897,20 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     }
   }
 
-  // Исходящее echo от сообщения, которое /send-message сейчас перехватывает
-  // для получения реального conversation ID. Пропускаем здесь — CRM сам
-  // обновит externalChatId когда /send-message вернёт ответ.
-  if (msg.isOutgoing && msg.id && capturedEchoIds.has(String(msg.id))) {
-    console.log(`[handleIncoming] Echo msgId=${msg.id} suppressed — captured by /send-message`)
-    messageSync.markSeen(msg)
-    return
-  }
-
   let payload = MessageParser.toCrmPayload(msg)
   if (msg.rawChatId && String(msg.rawChatId) !== String(msg.chatId)) {
     payload = { ...payload, rawChatId: msg.rawChatId }
-  }
-  if (!msg.isOutgoing && !(msg.attachments && msg.attachments.length) && String(payload.text || '').trim()) {
-    rememberRecentDirectInboundText(payload.chatId, payload.text, payload.externalId, payload.timestamp)
   }
 
   // Добавляем имя и телефон контакта из ContactStore.
   // В MAX opcode 128: chatId — это ID БЕСЕДЫ (не userId отправителя!),
   // senderId/from — userId реального отправителя.
-  // Для входящих: ищем телефон по senderId. Если нет в store — запрашиваем op:32.
-  // Для исходящих echo: senderId=наш userId → getPhone вернёт null, это нормально.
+  // Only what is already cached: the op:32 lookup this path used to send is a
+  // JSON frame on MAX's binary socket, and MAX closed the socket on every one
+  // of them (6/6 on 2026-10-02) - a 4 s wait and a reconnect storm per message.
+  // Enrichment is the CRM's job after the message is stored.
   const senderName = contactStore.getName(payload.senderId)
-  let contactPhone = contactStore.getPhone(String(payload.senderId))
-
-  if (!contactPhone && !msg.isOutgoing && payload.senderId && transport) {
-    const freshPhone = await getContactPhone(payload.senderId)
-    if (freshPhone) {
-      console.log(`[handleIncoming] op:32 resolved: sender=${payload.senderId} → phone=${freshPhone}`)
-      contactPhone = freshPhone
-    }
-  }
+  const contactPhone = contactStore.getPhone(String(payload.senderId))
 
   if (senderName)   payload = { ...payload, senderName, driverName: senderName }
   if (contactPhone) payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
@@ -1127,25 +1050,33 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     payload = { ...payload, attachments: downloaded }
   }
 
-  try {
-    const result = await forwardToWebhook(payload)
-    if (result.status >= 200 && result.status < 300) {
-      if (result.skipped) {
-        console.warn(`[App] CRM webhook skipped_by_crm_webhook=${result.skipped} chatId=${payload.chatId} externalId=${payload.externalId || 'none'} text="${(payload.text || '').slice(0, 50)}"`)
-      } else {
-        console.log(`[App] → CRM: chatId=${payload.chatId} text="${(payload.text || '').slice(0, 50)}"`)
-      }
+  // Bounded retry: the CRM upserts MAX messages by provider id, so a second
+  // attempt cannot duplicate. Only a 2xx settles the message; anything else
+  // leaves it unseen and unsettled, so the page's acknowledgement of this push
+  // hands it to recovery instead of it being lost.
+  const result = await forwardWithBoundedRetry(forwardToWebhook, payload)
+  if (result.status >= 200 && result.status < 300) {
+    messageSync.markSeen(msg)
+    if (payload.externalId) inboundLedger.markPersisted(payload.externalId, payload.chatId, result.skipped ? `skipped:${result.skipped}` : 'stored')
+    if (result.skipped) {
+      console.warn(`[App] CRM webhook skipped_by_crm_webhook=${result.skipped} chatId=${payload.chatId} externalId=${payload.externalId || 'none'} text="${(payload.text || '').slice(0, 50)}"`)
     } else {
-      console.error(`[App] CRM webhook вернул ${result.status} для chatId=${payload.chatId} — сообщение потеряно! body:`, result.data?.slice(0, 200))
+      if (!msg.isOutgoing && !(payload.attachments && payload.attachments.length) && String(payload.text || '').trim()) {
+        // DOM recovery yields only to rows the CRM has actually stored.
+        rememberRecentDirectInboundText(payload.chatId, payload.text, payload.externalId, payload.timestamp)
+      }
+      console.log(`[App] → CRM: chatId=${payload.chatId} externalId=${payload.externalId || 'none'} attempts=${result.attempts} text="${(payload.text || '').slice(0, 50)}"`)
     }
-  } catch (e) {
-    console.error('[App] Webhook forward failed (network):', e.message, '— chatId:', payload.chatId)
+  } else if (result.error) {
+    console.error(`[App] Webhook forward failed after ${result.attempts} attempt(s): ${result.error.message} — chatId: ${payload.chatId} externalId=${payload.externalId || 'none'}; left unsettled for recovery`)
+  } else {
+    console.error(`[App] CRM webhook вернул ${result.status} для chatId=${payload.chatId} externalId=${payload.externalId || 'none'} after ${result.attempts} attempt(s); left unsettled for recovery. body:`, result.data?.slice(0, 200))
   }
 
   // Сохраняем timestamp последней активности для catch-up при рестарте
   try {
     fs.writeFileSync(
-      path.join(__dirname, 'last_activity.json'),
+      LAST_ACTIVITY_PATH,
       JSON.stringify({ ts: Date.now() })
     )
   } catch {}
@@ -1154,133 +1085,312 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   rememberKnownChatId(payload.chatId)
 }
 
-// ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
+// ─── Peer read marks → CRM ───────────────────────────────────────────────────
+// A peer's read mark (see TransportInterceptor._notePeerReadMark) goes to the
+// same webhook as an event of its own; the CRM turns it into a read receipt
+// for each of our messages at or before the mark. One mark per chat and reader
+// waits at a time: a newer mark replaces an older one still queued.
+const pendingReadMarks = new Map()
+let readMarkFlushTimer = null
+let readMarkFlushing = false
+
+function queueReadMarkForCrm(event) {
+  if (!event?.chatId || !event?.readerId || !Number.isFinite(event?.mark)) return
+  const key = `${event.chatId}:${event.readerId}`
+  const queued = pendingReadMarks.get(key)
+  if (queued && queued.mark >= event.mark) return
+  pendingReadMarks.set(key, event)
+  if (!readMarkFlushTimer && !readMarkFlushing) readMarkFlushTimer = setTimeout(flushReadMarksToCrm, 500)
+}
+
+async function forwardReadMarkToWebhook(event) {
+  const providerAccountId = liveAuthenticatedMaxProviderAccountId()
+  if (!providerAccountId) throw new Error('MAX_PROVIDER_ACCOUNT_UNPROVEN')
+  return postToCrmWebhook({
+    event: 'read_mark',
+    accountId: providerAccountId,
+    chatId: normalizeMaxChatId(event.chatId),
+    rawChatId: String(event.chatId),
+    readerId: String(event.readerId),
+    mark: event.mark,
+    source: event.source || null,
+  })
+}
+
+async function flushReadMarksToCrm() {
+  readMarkFlushTimer = null
+  readMarkFlushing = true
+  try {
+    while (pendingReadMarks.size) {
+      const [key, event] = pendingReadMarks.entries().next().value
+      pendingReadMarks.delete(key)
+      const result = await forwardWithBoundedRetry(forwardReadMarkToWebhook, event)
+      const applied = result?.json && typeof result.json === 'object' ? result.json.applied : null
+      if (result.status >= 200 && result.status < 300) {
+        console.log(`[readMark] → CRM chatId=${event.chatId} reader=${event.readerId} mark=${event.mark} source=${event.source} applied=${applied ?? 'n/a'}`)
+      } else {
+        console.warn(`[readMark] CRM did not take chatId=${event.chatId} mark=${event.mark}: ${result.error?.message || result.status}`)
+        transport?.forgetPeerReadMark?.(event.chatId, event.readerId, event.mark)
+      }
+    }
+  } finally {
+    readMarkFlushing = false
+    if (pendingReadMarks.size && !readMarkFlushTimer) readMarkFlushTimer = setTimeout(flushReadMarksToCrm, 500)
+  }
+}
+
+// ─── Отправка текста ─────────────────────────────────────────────────────────
+//
+// One /send-message call is at most ONE physical send. Every text leaves through
+// the page MAX Web runs - its compose box, or for a reply its own send function -
+// so the page encodes the frame. The scraper never injects an op:64 of its own:
+// a JSON frame on MAX's binary socket closes it, and the old protocol attempt
+// was followed, on its 30 s timeout, by typing the same text into the page - a
+// second physical send inside one call. The outcome comes only from the wire
+// (runSingleMaxTextSend): the page's op:64 request for this chat and text, and
+// MAX's response to that request's seq.
+
+/**
+ * The web route a text may be sent through, or null. Only an attested route is
+ * used: one of the reviewed static overrides. Deriving one (from the protocol
+ * chat id or a participant) is route resolution, which is not proven for
+ * sending, so such a chat fails closed with MAX_ROUTE_UNRESOLVED and nothing is
+ * dispatched. A CRM-supplied route that disagrees with the attested one is
+ * refused rather than trusted.
+ */
+// MAX Web's route for a chat is /<the chat's real id> (its _buildUrl). The
+// static overrides above are exactly that projection of four protocol ids,
+// written down before the id encoding was understood (see
+// maxRealIdFromProtocolId). Any other chat is sent to on its canonical route,
+// and only after MAX has accepted the page's own subscribe or history request
+// for that chat on that route (prepareTextSendSurface).
+function canonicalWebRouteForChat(protocolChatId) {
+  const real = maxRealIdFromProtocolId(protocolChatId)
+  return real === null || real === 0n ? null : real.toString()
+}
+
+function resolveAttestedTextSendRoute(chatId, uiChatId) {
+  const protocolChatId = String(chatId ?? '')
+  const attested = UI_CHAT_ID_OVERRIDES[protocolChatId]
+  const requested = String(uiChatId ?? '').trim()
+  if (attested) {
+    if (requested && requested !== String(attested)) return { route: null, reason: 'route_conflict' }
+    return { route: { uiRouteId: String(attested), source: 'static_override' } }
+  }
+  const canonical = canonicalWebRouteForChat(protocolChatId)
+  if (!canonical) return { route: null, reason: 'route_unresolved' }
+  if (requested && requested !== canonical) {
+    // A stored uiChatId (a legacy phone-era id) is a hint older code kept; it
+    // never replaces the route MAX Web itself uses.
+    console.warn(`[sendText] stored uiChatId ignored for chatId=${protocolChatId}: canonical route ${canonical}`)
+  }
+  return { route: { uiRouteId: canonical, source: 'canonical_real_id', requiresAttestation: true } }
+}
+
+function isPageOnWebRoute(uiRouteId) {
+  try {
+    return new URL(page.url()).pathname.replace(/\/+$/, '') === `/${uiRouteId}`
+  } catch {
+    return false
+  }
+}
+
+async function waitForDomRecoveryToFinish(timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs
+  while (domFallbackRunning && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+  return !domFallbackRunning
+}
+
+/**
+ * Brings the page to a state where a send can start: no DOM recovery holding
+ * the page, the chat open when the compose box is used (navigating only when
+ * it is not already open - every navigation reloads the page and its socket),
+ * and an authenticated socket that has stayed up.
+ */
+async function openTextSendRoute(uiRouteId, protocolChatId) {
+  if (transport) transport._activeUiChatId = String(protocolChatId)
+  console.log(`[sendText] opening https://web.max.ru/${uiRouteId}`)
+  await page.goto(`https://web.max.ru/${uiRouteId}`, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+  return isPageOnWebRoute(uiRouteId)
+}
+
+async function prepareTextSendSurface(route, protocolChatId, { needsComposeRoute }) {
+  const uiRouteId = route.uiRouteId
+  if (!page || !isReady) return { ready: false, reason: 'page_not_ready' }
+  if (!(await waitForDomRecoveryToFinish())) return { ready: false, reason: 'dom_recovery_busy' }
+  let openedAt = 0
+  if (needsComposeRoute && !isPageOnWebRoute(uiRouteId)) {
+    openedAt = Date.now()
+    if (!(await openTextSendRoute(uiRouteId, protocolChatId))) return { ready: false, reason: 'route_not_open' }
+  }
+  let socket = await transport.waitForSendReadySocket({ stableMs: 1200, timeoutMs: 20_000 })
+  if (!socket.ready || !needsComposeRoute || !route.requiresAttestation) return socket
+
+  // Nothing is typed into a route MAX has not accepted as this chat.
+  let attestation = await transport.waitForRouteAttestation(protocolChatId, { sinceMs: openedAt, timeoutMs: 4_000 })
+  if (!attestation && !openedAt) {
+    // Already on the route, but no answer recorded for it: open it again so the
+    // page asks MAX once more.
+    openedAt = Date.now()
+    if (!(await openTextSendRoute(uiRouteId, protocolChatId))) return { ready: false, reason: 'route_not_open' }
+    socket = await transport.waitForSendReadySocket({ stableMs: 1200, timeoutMs: 20_000 })
+    if (!socket.ready) return socket
+    attestation = await transport.waitForRouteAttestation(protocolChatId, { sinceMs: openedAt, timeoutMs: 4_000 })
+  }
+  if (!attestation) return { ready: false, reason: 'route_unattested' }
+  if (!attestation.accepted) {
+    return { ready: false, reason: `route_refused:${attestation.error}`, refusedCode: 'MAX_ROUTE_UNRESOLVED' }
+  }
+  return socket
+}
+
+async function findComposeInput() {
+  const composeSelectors = [
+    'div[contenteditable][role="textbox"]',
+    'div[contenteditable="true"]:not([role="search"])',
+    'div[contenteditable]',
+    'textarea',
+  ]
+  for (const sel of composeSelectors) {
+    const candidates = page.locator(sel)
+    const count = await candidates.count().catch(() => 0)
+    for (let i = count - 1; i >= 0; i--) {
+      const el = candidates.nth(i)
+      if (await el.isVisible({ timeout: 400 }).catch(() => false)) {
+        console.log(`[sendTextUi] compose input: ${sel} #${i}`)
+        return el
+      }
+    }
+  }
+  return null
+}
+
+async function readComposeText(locator) {
+  return locator.evaluate(el =>
+    (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)
+      ? el.value
+      : (el.innerText || el.textContent || '')
+  ).catch(() => '')
+}
+
+async function clearComposeInput(locator) {
+  await locator.click({ timeout: 1_000 }).catch(() => {})
+  const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+  await page.keyboard.press(`${modifier}+A`).catch(() => {})
+  await page.keyboard.press('Backspace').catch(() => {})
+}
+
+/**
+ * Types the text into the open chat and presses Enter once. That single Enter
+ * is the one physical action of the call. If the wire then shows no op:64 for
+ * this text, the compose box decides: still holding the exact text means the
+ * page never took the submit (cleared, nothing dispatched); an emptied box
+ * means the page took it and the outcome is unknown.
+ */
+async function submitTextThroughCompose(uiRouteId, text) {
+  if (!isPageOnWebRoute(uiRouteId)) return { performed: false, notDispatchedReason: 'route_not_open' }
+  const composeEl = await findComposeInput()
+  if (!composeEl) {
+    await page.screenshot({ path: '/tmp/max_send_ui_no_compose.png', fullPage: false }).catch(() => {})
+    return { performed: false, notDispatchedReason: 'compose_not_found' }
+  }
+  await fillEditableText(composeEl, text)
+  const filledText = await readComposeText(composeEl)
+  console.log(`[sendTextUi] filled text: "${String(filledText || '').slice(0, 60)}"`)
+  if (normalizeUiSendText(filledText) !== normalizeUiSendText(text)) {
+    await clearComposeInput(composeEl)
+    return { performed: false, notDispatchedReason: 'compose_fill_mismatch' }
+  }
+  if (!isPageOnWebRoute(uiRouteId)) {
+    await clearComposeInput(composeEl)
+    return { performed: false, notDispatchedReason: 'route_changed_before_submit' }
+  }
+  await page.keyboard.press('Enter')
+  return {
+    performed: true,
+    kind: 'compose',
+    inspectWithoutRequest: async () => {
+      const remaining = await readComposeText(composeEl)
+      const retained = normalizeUiSendText(remaining) === normalizeUiSendText(text)
+      if (retained) await clearComposeInput(composeEl)
+      if (!retained) await page.screenshot({ path: '/tmp/max_send_ui_no_frame.png', fullPage: false }).catch(() => {})
+      return { composeRetainedText: retained }
+    },
+  }
+}
+
+/**
+ * Sends a reply through MAX Web's own send function. The page encodes and sends
+ * it; failures the bridge reports before that call are not dispatched.
+ */
+async function submitReplyThroughPage(protocolChatId, text, replyProviderId, cid, uiRouteId) {
+  try {
+    const replyBridge = new MaxWebReplyBridge(page)
+    const replyResult = await replyBridge.sendReply(protocolChatId, text, replyProviderId, cid, { uiChatId: uiRouteId })
+    const storeConfirmedId = isRealMaxMessageId(replyResult?.providerMessageId) ? replyResult.providerMessageId : null
+    if (storeConfirmedId) console.log(`[sendText] MAX Web store holds the reply msgId=${storeConfirmedId}`)
+    return { performed: true, kind: 'reply', storeConfirmedId }
+  } catch (error) {
+    const reason = String(error?.message || error)
+    if (/max_web_core_not_found|max_web_chat_not_loaded|max_web_reply_target_not_loaded|MAX Web page is not available|requires real MAX provider message id/i.test(reason)) {
+      return { performed: false, notDispatchedReason: `reply_not_started:${reason.slice(0, 120)}` }
+    }
+    return { performed: true, kind: 'reply', unknownReason: `reply_send_failed:${reason.slice(0, 120)}` }
+  }
+}
 
 async function sendText(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId, quotedMessageContext) {
-  const cid = stableTextCid(clientMessageId)
-  const message = { text, cid, elements: [], attaches: [] }
-  if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
-  let resolvedReplyToMessageId = replyToMessageId ? String(replyToMessageId) : null
-  let resolvedReplyChatId = null
-
-  const directUiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
-  if (directUiRouteId && !replyToMessageId) {
-    const directText = text
-    const ackPromise = waitForUiSendAck(transport, 15_000)
-    const uiSent = await sendTextViaUi(directUiRouteId, directText, chatId).catch(uiErr => {
-      console.warn(`[sendText] Direct UI send failed: ${uiErr.message}`)
-      return false
-    })
-    if (uiSent) {
-      const ackId = await ackPromise
-      if (ackId && isRealMaxMessageId(ackId)) {
-        console.log(`[sendText] Direct UI sent chatId=${chatId} route=${directUiRouteId} msgId=${ackId}`)
-        return ackId
-      }
-      console.log(`[sendText] Direct UI sent chatId=${chatId} route=${directUiRouteId} without provider id`)
-      return uiTextDeliveredResult('direct_ui_no_provider_id', clientMessageId)
-    }
+  const protocolChatId = String(chatId ?? '')
+  const { route, reason: routeReason } = resolveAttestedTextSendRoute(protocolChatId, uiChatId)
+  if (!route) {
+    console.warn(`[sendText] refused chatId=${protocolChatId}: ${routeReason}; nothing dispatched`)
+    return { outcome: 'refused', code: 'MAX_ROUTE_UNRESOLVED', reason: routeReason }
   }
 
-  const sendProtocolText = async (timeoutMs) => {
-    const wsChatId = chatId
-    if (replyToMessageId) {
-      const replyBridge = new MaxWebReplyBridge(page)
-      if (!isRealMaxMessageId(resolvedReplyToMessageId)) {
-        const resolved = await replyBridge.resolveProviderId(
-          wsChatId,
-          quotedMessageContext || {},
-          { uiChatId: directUiRouteId },
-        )
-        console.log(
-          `[sendText] reply target scan chatId=${chatId} route=${directUiRouteId || 'none'} ` +
-          `candidates=${resolved.candidateCount} text=${resolved.textMatchCount} ` +
-          `direction=${resolved.directionMatchCount} time=${resolved.timeWindowMatchCount} ` +
-          `routeMatches=${resolved.routeMatchCount} storeChat=${resolved.providerChatId || 'none'}`,
-        )
-        if (!isRealMaxMessageId(resolved.providerMessageId)) {
-          throw new Error(`Reply target has no unambiguous MAX provider id: ${resolved.reason}`)
-        }
-        resolvedReplyToMessageId = resolved.providerMessageId
-        resolvedReplyChatId = resolved.providerChatId || null
-        console.log(`[sendText] resolved DOM reply target chatId=${chatId} providerId=${resolvedReplyToMessageId.slice(0, 18)} via=${resolved.reason}`)
-      }
-      console.log(`[sendText] reply via MAX Web store chatId=${chatId} uiRoute=${directUiRouteId || 'none'}`)
-      const ackPromise = waitForUiSendAck(transport, timeoutMs)
-      const replyResult = await replyBridge.sendReply(
-        resolvedReplyChatId || wsChatId,
-        text,
-        resolvedReplyToMessageId,
-        cid,
-        { uiChatId: directUiRouteId },
+  let replyProviderId = replyToMessageId ? String(replyToMessageId) : null
+  if (replyProviderId && !isRealMaxMessageId(replyProviderId)) {
+    // A read-only lookup in the page's provider store; a reply is never
+    // downgraded to plain text, so an unresolved target refuses the send.
+    let resolved = null
+    try {
+      resolved = await new MaxWebReplyBridge(page).resolveProviderId(
+        protocolChatId,
+        quotedMessageContext || {},
+        { uiChatId: route.uiRouteId },
       )
-      const storeConfirmedId = isRealMaxMessageId(replyResult?.providerMessageId)
-        ? replyResult.providerMessageId
-        : null
-      if (storeConfirmedId) {
-        console.log(`[sendText] MAX Web store confirmed reply msgId=${storeConfirmedId}`)
-      }
-      const maxMsgId = storeConfirmedId || await ackPromise
-      if (!isRealMaxMessageId(maxMsgId)) {
-        throw new Error('Timeout: MAX Web reply confirmation')
-      }
-      console.log(`[Send] MAX assigned reply msgId=${maxMsgId} for chatId=${chatId}`)
-      return maxMsgId
+    } catch (error) {
+      resolved = { providerMessageId: null, reason: String(error?.message || error).slice(0, 120) }
     }
-
-    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId: wsChatId, message, notify: true }, { waitResponse: true, timeoutMs })
-    // MAX responds with the created message; extract its server-assigned ID
-    const maxMsgId = resp?.message?.id ? String(resp.message.id) : null
-    if (maxMsgId) console.log(`[Send] MAX assigned msgId=${maxMsgId} for chatId=${chatId}`)
-    return maxMsgId
+    if (!isRealMaxMessageId(resolved?.providerMessageId)) {
+      console.warn(`[sendText] reply target not addressable chatId=${protocolChatId}: ${resolved?.reason || 'unresolved'}`)
+      return { outcome: 'refused', code: 'MAX_REPLY_TARGET_NOT_ADDRESSABLE', reason: resolved?.reason || 'unresolved' }
+    }
+    replyProviderId = resolved.providerMessageId
   }
 
+  const cid = stableTextCid(clientMessageId)
+  // The page is claimed from navigation to the end of the evidence wait, so no
+  // DOM recovery can navigate it away between the readiness check and the send.
+  uiSendInProgress = true
+  uiSendEpoch += 1
+  let result
   try {
-    return await sendProtocolText(30_000)
-  } catch (e) {
-    // Re-throw MAX protocol errors (not.found, etc.) — these are real failures, not timeouts
-    if (e.maxError) throw e
-    const isWsFail = e.message && e.message.startsWith('WS send failed')
-    if (isWsFail) {
-      console.error(`[sendText] WS send FAILED (window.__maxWs not ready): ${e.message}`)
-    } else {
-      console.warn(`[sendText] No ack from MAX (timeout) — treating delivery as failed`)
-    }
-    if (!e.maxError) {
-      if (replyToMessageId) {
-        const isOpcode64Timeout = /Timeout: (?:opcode 64|MAX Web reply)/i.test(String(e.message || ''))
-        if (isOpcode64Timeout && typeof transport?.waitForStableWs === 'function') {
-          console.warn('[sendText] reply send timed out; waiting for stable WS and retrying once with same cid')
-          const stable = await transport.waitForStableWs(800, 8_000).catch(() => false)
-          if (stable) {
-            try {
-              return await sendProtocolText(15_000)
-            } catch (retryErr) {
-              console.warn(`[sendText] reply quick retry failed: ${retryErr.message}`)
-            }
-          }
-        }
-        console.warn('[sendText] reply send failed without MAX confirmation; not downgrading to plain UI text')
-        throw e
-      }
-      const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId
-      const ackPromise = waitForUiSendAck(transport, 15_000)
-      const uiSent = await sendTextViaUi(uiRouteId, text, chatId).catch(uiErr => {
-        console.warn(`[sendText] UI fallback failed: ${uiErr.message}`)
-        return false
-      })
-      if (uiSent) {
-        const ackId = await ackPromise
-        if (ackId && isRealMaxMessageId(ackId)) {
-          console.log(`[sendText] UI fallback sent chatId=${chatId} msgId=${ackId}`)
-          return ackId
-        }
-        console.log(`[sendText] UI fallback sent chatId=${chatId} without provider id`)
-        return uiTextDeliveredResult('ui_fallback_no_provider_id', clientMessageId)
-      }
-    }
-    throw e
+    result = await runSingleMaxTextSend({
+      transport,
+      chatId: protocolChatId,
+      text,
+      ensureReady: () => prepareTextSendSurface(route, protocolChatId, { needsComposeRoute: !replyProviderId }),
+      performAction: replyProviderId
+        ? () => submitReplyThroughPage(protocolChatId, text, replyProviderId, cid, route.uiRouteId)
+        : () => submitTextThroughCompose(route.uiRouteId, text),
+    })
+  } finally {
+    uiSendInProgress = false
   }
+  console.log(`[sendText] chatId=${protocolChatId} route=${route.uiRouteId} outcome=${result.outcome}${result.providerMessageId ? ` msgId=${result.providerMessageId}` : ''}${result.reason ? ` reason=${result.reason}` : ''} requestSeq=${result.requestSeq ?? 'none'} extraRequestFrames=${result.extraRequestFrames}`)
+  return { ...result, route }
 }
 
 function maskPhoneForLog(value) {
@@ -1320,155 +1430,6 @@ async function fillEditableText(locator, value) {
       ? el.value
       : (el.textContent || '')
   ).catch(() => '')
-}
-
-async function sendTextViaUi(chatId, text, protocolChatId = null) {
-  if (!page || !isReady) return false
-
-  uiSendInProgress = true
-  try {
-    const targetUrl = `https://web.max.ru/${chatId}`
-    if (transport) transport._activeUiChatId = protocolChatId ? String(protocolChatId) : protocolChatIdForUiRoute(chatId)
-    console.log(`[sendTextUi] opening ${targetUrl}`)
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
-    await page.waitForTimeout(1800)
-
-    const composeSelectors = [
-      'div[contenteditable][role="textbox"]',
-      'div[contenteditable="true"]:not([role="search"])',
-      'div[contenteditable]',
-      'textarea',
-    ]
-
-    let composeEl = null
-    for (const sel of composeSelectors) {
-      const candidates = page.locator(sel)
-      const count = await candidates.count().catch(() => 0)
-      for (let i = count - 1; i >= 0; i--) {
-        const el = candidates.nth(i)
-        if (await el.isVisible({ timeout: 400 }).catch(() => false)) {
-          composeEl = el
-          console.log(`[sendTextUi] compose input: ${sel} #${i}`)
-          break
-        }
-      }
-      if (composeEl) break
-    }
-
-    if (!composeEl) {
-      await page.screenshot({ path: '/tmp/max_send_ui_no_compose.png', fullPage: false }).catch(() => {})
-      return false
-    }
-
-    const beforeText = await fillEditableText(composeEl, text)
-    console.log(`[sendTextUi] filled text: "${String(beforeText || '').slice(0, 60)}"`)
-
-    await page.keyboard.press('Enter')
-    await page.waitForTimeout(700)
-
-    let afterText = await composeEl.textContent().catch(() => '')
-    if (String(afterText || '').trim()) {
-      const sendSelectors = [
-        'button[aria-label*="Send message" i]',
-        'button[title*="Send" i]',
-        'button:has-text("Send")',
-        'button[aria-label*="Отправ" i]',
-        'button[title*="Отправ" i]',
-      ]
-      for (const sel of sendSelectors) {
-        const btn = page.locator(sel).first()
-        if (await btn.isVisible({ timeout: 350 }).catch(() => false)) {
-          await btn.click()
-          console.log(`[sendTextUi] clicked send button: ${sel}`)
-          break
-        }
-      }
-      await page.waitForTimeout(700)
-      afterText = await composeEl.textContent().catch(() => '')
-    }
-
-    // An empty box is not proof of a send: a failed fill leaves it empty too, and
-    // that would mint a delivery proof for a message MAX never received.
-    const sent = isUiTextSubmitObserved(beforeText, afterText, text)
-    if (!sent) {
-      await page.screenshot({ path: '/tmp/max_send_ui_not_sent.png', fullPage: false }).catch(() => {})
-    }
-    return sent
-  } finally {
-    uiSendInProgress = false
-  }
-}
-function waitForUiSendAck(transport, timeoutMs = 60_000) {
-  if (!transport?._rawHandlers) return Promise.resolve(null)
-  return new Promise(resolve => {
-    let done = false
-    let bestId = null
-    let fallbackTimer = null
-    const cleanup = () => {
-      const index = transport._rawHandlers.indexOf(handler)
-      if (index >= 0) transport._rawHandlers.splice(index, 1)
-    }
-    const finish = value => {
-      if (done) return
-      done = true
-      clearTimeout(timer)
-      if (fallbackTimer) clearTimeout(fallbackTimer)
-      cleanup()
-      resolve(value)
-    }
-    const idsRelated = (a, b) => {
-      const aa = String(a || '').replace(/[^a-fA-F0-9]/g, '')
-      const bb = String(b || '').replace(/[^a-fA-F0-9]/g, '')
-      if (!aa || !bb) return false
-      return aa.includes(bb.slice(-10)) || bb.includes(aa.slice(-10))
-    }
-    const considerId = (id, immediate = false) => {
-      if (!id) return
-      const idStr = String(id)
-      const related = bestId ? idsRelated(bestId, idStr) : true
-      const preferProtocolMsgId = related && /^d301/i.test(idStr) && !/^d301/i.test(String(bestId || ''))
-      if (!bestId || (related && (preferProtocolMsgId || idStr.length > String(bestId).length))) {
-        bestId = idStr
-      }
-      if (immediate && bestId) finish(bestId)
-      if (!fallbackTimer) {
-        fallbackTimer = setTimeout(() => finish(bestId), Math.min(timeoutMs, 2500))
-      }
-    }
-    const collectIds = (value, out = [], depth = 0) => {
-      if (value == null || depth > 7) return out
-      const direct = extractMaxId(value)
-      if (direct) out.push(direct)
-      if (Array.isArray(value)) {
-        for (const item of value) collectIds(item, out, depth + 1)
-      } else if (typeof value === 'object') {
-        if (Array.isArray(value.__complexEntries)) {
-          for (const entry of value.__complexEntries) {
-            collectIds(entry?.key, out, depth + 1)
-            collectIds(entry?.value, out, depth + 1)
-          }
-        }
-        for (const [key, item] of Object.entries(value)) {
-          if (key === '__complexEntries') continue
-          collectIds(item, out, depth + 1)
-        }
-      }
-      return out
-    }
-    const handler = data => {
-      if (data?.opcode === OP.SEND_MESSAGE && data?.cmd === 2) {
-        const maxMsgId = extractMaxId(data.payload?.message?.id || data.payload?.id || data.payload)
-        considerId(maxMsgId)
-        return
-      }
-      if (![53, 71, 128, 180].includes(data?.opcode)) return
-      for (const id of collectIds(data.payload)) {
-        if (!bestId || idsRelated(bestId, id)) considerId(id, String(id).length > String(bestId || '').length)
-      }
-    }
-    const timer = setTimeout(() => finish(null), timeoutMs)
-    transport._rawHandlers.push(handler)
-  })
 }
 
 async function fillMaxMediaCaption(caption) {
@@ -1729,6 +1690,7 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
   const tmpPath = path.join('/tmp', `max_upload_${Date.now()}_${safeName}`)
 
   uiSendInProgress = true
+  uiSendEpoch += 1
   try {
     fs.writeFileSync(tmpPath, fileBuffer)
     maxDeliveryLog({
@@ -1979,6 +1941,11 @@ const domRecoveredTextCounts = new Map()
 let domFallbackRunning = false
 let domFallbackScheduledAt = 0
 let uiSendInProgress = false
+// Every claim and every move of the shared page is counted, so a DOM read can prove that
+// nothing else used or moved the page while it was reading (lib/DomRouteAttestation.js).
+let uiSendEpoch = 0
+let mainFrameNavigationEpoch = 0
+let lastMainFrameNavigationAt = 0
 const automaticDomRecoveryTimers = new Map()
 const recentCrmOutboundTexts = []
 const RECENT_CRM_OUTBOUND_TTL_MS = 10 * 60 * 1000
@@ -2729,6 +2696,20 @@ async function materializeDomFallbackAttachments(uiRouteId, attachments = []) {
   return out
 }
 
+// One sample of everything that can move or claim the shared page around a DOM read.
+function domPageSample(uiRouteId) {
+  return pageSample({
+    url: page ? page.url() : '',
+    uiRouteId,
+    uiSendInProgress,
+    dialogBusy: _dialogBusy,
+    uiSendEpoch,
+    navigationEpoch: mainFrameNavigationEpoch,
+    lastNavigationAt: lastMainFrameNavigationAt,
+    now: Date.now(),
+  })
+}
+
 async function scrapeRecentDomMessages(uiRouteId) {
   if (!page || !isReady) return []
 
@@ -2751,9 +2732,12 @@ async function scrapeRecentDomMessages(uiRouteId) {
   }).catch(() => {})
   await page.waitForTimeout(500)
 
+  const before = domPageSample(uiRouteId)
   const candidates = await page.evaluate(() => {
     const viewportW = window.innerWidth || 1280
     const viewportH = window.innerHeight || 720
+    // Read in the same page task as the DOM snapshot below.
+    const readPathname = location.pathname
     const rows = [...document.querySelectorAll('[role="listitem"], .item, [class*="messageWrapper"]')]
     const candidates = []
 
@@ -2874,6 +2858,8 @@ async function scrapeRecentDomMessages(uiRouteId) {
         displayMinute: timeInfo.minute,
         hasReplyQuote,
         isOutgoing: /messageWrapper--isOut|message--isOut/.test(`${message.className || ''} ${message.querySelector('[class*="message--isOut"]')?.className || ''}`),
+        isMessageWrapper: message.matches('[class*="messageWrapper"]'),
+        readPathname,
       })
     }
 
@@ -2902,7 +2888,7 @@ async function scrapeRecentDomMessages(uiRouteId) {
       if (childText === text && el.children.length > 0) continue
 
       const timeInfo = displayTime(text)
-      textRows.push({ text, attachments: [], x: rect.left, y: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height, viewportW, displayTime: timeInfo.label, displayMinute: timeInfo.minute, isOutgoing: false })
+      textRows.push({ text, attachments: [], x: rect.left, y: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height, viewportW, displayTime: timeInfo.label, displayMinute: timeInfo.minute, isOutgoing: false, isMessageWrapper: false, readPathname })
     }
 
     const seen = new Set()
@@ -2917,11 +2903,19 @@ async function scrapeRecentDomMessages(uiRouteId) {
       .slice(-12)
   })
 
+  const after = domPageSample(uiRouteId)
   return candidates
     .map(candidate => {
       const cleaned = cleanDomMessageText(candidate.text)
       const attachments = Array.isArray(candidate.attachments) ? candidate.attachments : []
-      return { ...candidate, text: cleaned, attachments }
+      const verified = attestDomRead({ uiRouteId, before, readPathname: candidate.readPathname, after })
+      return {
+        ...candidate,
+        text: cleaned,
+        attachments,
+        extraction: domCandidateExtraction(candidate.isMessageWrapper),
+        _domRoute: { uiRouteId: String(uiRouteId), verified },
+      }
     })
     .filter(candidate => candidate.text || candidate.attachments.length > 0)
 }
@@ -3018,17 +3012,6 @@ function stableDomCandidateMessageId(chatId, text, attachments = [], candidate =
   return stableDomMediaMessageId(chatId, `${text || ''}:pos=${x}:${y}`, attachments)
 }
 
-function stableDomMirrorMessageId(chatId, text, attachments = [], candidate = {}) {
-  const day = Math.floor(Date.now() / 86_400_000)
-  const minute = Number.isFinite(candidate.displayMinute) ? candidate.displayMinute : candidate.displayTime || 'unknown'
-  const attachmentSignature = attachments
-    .map(att => `${att.type || ''}:${att.name || ''}:${att.size || ''}`)
-    .join('|')
-  const signature = `${chatId}:${day}:${minute}:${comparableDomText(text)}:${attachmentSignature}`
-  const hash = crypto.createHash('sha1').update(signature).digest('hex').slice(0, 16)
-  return `max-mirror-${chatId}-${hash}`
-}
-
 async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual', options = {}) {
   if (!latest?.text && !latest?.attachments?.length) return { skipped: 'no_content' }
   if (latest.text && !latest.attachments?.length && isDomNoiseText(latest.text)) return { skipped: 'noise_text', text: latest.text }
@@ -3039,17 +3022,18 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   if (isOutgoingCandidate && !options.includeOutgoing) {
     return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW }
   }
-  if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
-    return { skipped: 'crm_outbound_already_recorded', text: latest.text }
+  // The page draws an outgoing message before MAX has accepted it, so a DOM
+  // copy of one proves nothing about the provider and carries no provider id.
+  // Messages of our own account reach the CRM only with MAX's id: pushed from
+  // another session, or read back by the catch-up.
+  if (isOutgoingCandidate) {
+    return { skipped: 'outgoing_without_provider_id', text: latest.text }
   }
-  if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
-    return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
-  }
-  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+  const pendingProviderId = reason === 'empty_op71_after_op128' && latest.text && !latest.attachments?.length
     ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
     : null
   let resolvedProviderId = pendingProviderId
-  const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+  const replyParts = reason === 'empty_op71_after_op128' && latest.text && !latest.attachments?.length
     ? domReplyQuoteParts(latest.text)
     : null
   const replyBridge = new MaxWebReplyBridge(page)
@@ -3130,16 +3114,26 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const text = attachments.length > 0 ? cleanDomMediaCaption(latest.text, attachments) : latest.text
   if (!text && !attachments.length) return { skipped: 'no_download_source', rawAttachments: latest.attachments?.length || 0 }
 
-  const externalId = isOutgoingCandidate
-    ? stableDomMirrorMessageId(chatId, text, attachments, latest)
-    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
+  const externalId = resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest)
+  // Committed only once the CRM has accepted it, below. Marking it here made a refused
+  // message permanently unretryable and, for a provider-backed candidate, left the
+  // pending head both unconfirmed and already-seen - a per-chat inbound deadlock.
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
-  domFallbackSeen.add(externalId)
 
   const messageType = attachments[0]?.type || 'text'
   const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
   const crmPhone = normalizePhoneForCrmPayload(options.phone || cachedPhone)
   const crmSenderName = options.senderName || options.name || null
+  // What page this text was read from, for the CRM to bind it to a proven conversation.
+  const resolvedRoute = resolveUiRouteIdForChat(chatId)
+  const domRoute = {
+    uiRouteId: String(uiRouteId),
+    source: resolvedRoute.source,
+    extraction: latest?.extraction === 'message_element' ? 'message_element' : 'generic_text_rows',
+    verified: latest?._domRoute?.verified === true
+      && latest._domRoute.uiRouteId === String(uiRouteId)
+      && String(resolvedRoute.uiRouteId) === String(uiRouteId),
+  }
   console.log(`[domFallback] ${reason} chatId=${chatId} text="${String(text || '').slice(0, 80)}" attachments=${attachments.length}`)
   rememberKnownChatId(chatId)
   if (crmPhone) savePhoneChatId(crmPhone, chatId)
@@ -3150,16 +3144,26 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     timestamp: latest._providerTimestamp || options.timestamp || Date.now(),
     messageType,
     attachments,
-    isOutgoing: isOutgoingCandidate,
-    source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    isOutgoing: false,
+    source: resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback',
+    domRoute,
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
-  if (pendingProviderId && result.status >= 200 && result.status < 300 && !result.skipped) {
+  const webhookAccepted = result.status >= 200 && result.status < 300
+  const webhookStored = webhookAccepted && !result.skipped
+  if (webhookAccepted) domFallbackSeen.add(externalId)
+  if (pendingProviderId && webhookStored) {
     transport?.confirmPendingLiveTextIdForDomRecovery?.(chatId, pendingProviderId)
   }
-  if (!isOutgoingCandidate && reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
+  if (pendingProviderId && !webhookAccepted) {
+    // ONE pending provider id belongs to ONE candidate. This one was not accepted, so
+    // its id stays at the head for a later retry and the caller must not hand the same
+    // head to the next candidate.
+    return { skipped: 'pending_provider_not_accepted', providerBackedRetry: true, externalId, text, webhook: result }
+  }
+  if (reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
     rememberDomRecoveredText(chatId, text)
   }
   if (result.status >= 200 && result.status < 300 && result.skipped) {
@@ -3369,6 +3373,9 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
       })
       if (result?.success) results.push(result)
       else if (result?.skipped) skipped[result.skipped] = (skipped[result.skipped] || 0) + 1
+      // A provider-backed candidate the CRM did not accept keeps the pending head, so
+      // no later candidate in this batch may be processed against that same head.
+      if (result?.providerBackedRetry) break
     }
     return {
       success: results.length > 0,
@@ -3390,30 +3397,17 @@ let _dialogBusy      = false  // защита от параллельных вы
 async function syncContacts(timeoutMs = 8000) {
   if (!transport || !isReady) return false
 
-  const fresh = await new Promise((resolve) => {
-    let done = false
-    const timer = setTimeout(() => {
-      const idx = transport._rawHandlers.indexOf(handler)
-      if (idx > -1) transport._rawHandlers.splice(idx, 1)
-      done = true; resolve(false)
-    }, timeoutMs)
-
-    function handler(data) {
-      if (data.opcode === 32 && data.payload?.contacts) {
-        clearTimeout(timer)
-        const idx = transport._rawHandlers.indexOf(handler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-        contactStore.ingest(data.payload)
-        if (!done) { done = true; resolve(true) }
-      }
-    }
-    transport._rawHandlers.push(handler)
-
-    // Try to trigger a contacts refresh by sending opcode 32 as a request
-    // MAX server should respond with cmd:1 payload.contacts OR push a fresh opcode 32
-    transport.sendFrame(32, {}, { waitResponse: false })
-      .catch(e => console.warn('[syncContacts] sendFrame(32) failed:', e.message))
-  })
+  // The answer to the scraper's own request comes back to this call only.
+  const fresh = await transport.requestBinary(OP.CONTACTS, {}, { timeoutMs, purpose: 'contacts_sync' })
+    .then(payload => {
+      if (!payload?.contacts) return false
+      contactStore.ingest(payload)
+      return true
+    })
+    .catch(e => {
+      console.warn('[syncContacts] op:32 failed:', e.message)
+      return false
+    })
 
   if (fresh) {
     _lastContactSync = Date.now()
@@ -3433,36 +3427,18 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
   if (existing) return existing
 
   if (!transport || !isReady) return null
-  const userIdNum = Number(senderId)
-  if (isNaN(userIdNum)) return null
-
-  return new Promise((resolve) => {
-    let done = false
-    const timer = setTimeout(() => { done = true; resolve(null) }, timeoutMs)
-
-    function handler(data) {
-      if (data.opcode === 32 && data.payload?.contacts) {
-        const found = (data.payload.contacts || []).find(c => String(c.id) === String(senderId))
-        if (found) {
-          clearTimeout(timer)
-          const idx = transport._rawHandlers.indexOf(handler)
-          if (idx > -1) transport._rawHandlers.splice(idx, 1)
-          contactStore.ingest(data.payload)
-          if (!done) { done = true; resolve(found.phone ? String(found.phone) : null) }
-        }
-      }
-    }
-    transport._rawHandlers.push(handler)
-
-    transport.sendFrame(OP.CONTACTS, { contactIds: [userIdNum] }, { waitResponse: false })
-      .catch(e => {
-        clearTimeout(timer)
-        const idx = transport._rawHandlers.indexOf(handler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-        if (!done) { done = true; resolve(null) }
-        console.warn('[getContactPhone] op:32 failed:', e.message)
-      })
-  })
+  const contactId = maxRealIdFromProtocolId(senderId)
+  if (contactId === null) return null
+  try {
+    const payload = await transport.requestBinary(OP.CONTACTS, { contactIds: [contactId] }, { timeoutMs, purpose: 'contact_lookup' })
+    const found = (payload?.contacts || []).find(c => maxRealIdFromProtocolId(c?.id) === contactId)
+    if (!found) return null
+    contactStore.ingest(payload)
+    return found.phone ? String(found.phone) : null
+  } catch (e) {
+    console.warn('[getContactPhone] op:32 failed:', e.message)
+    return null
+  }
 }
 
 // ─── "Найти по номеру" dialog ─────────────────────────────────────────────────
@@ -4051,6 +4027,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // the route signal below would then read a conversation that has nothing to
             // do with this send. Claim the page for the whole compose-and-bind window.
             uiSendInProgress = true
+            uiSendEpoch += 1
             try {
             // Dismiss "Add to contacts" banner if present (it may overlay compose area)
             const bannerDismiss = page.locator('button[aria-label*="Hide" i][aria-label*="contacts" i]').first()
@@ -4763,7 +4740,7 @@ async function resolvePhoneLive(digits, messageToSend = null) {
  * Returns the upload response JSON: {photos: {"<photoId>": {token: "..."}}}
  */
 async function uploadImageToMax(transport, fileBuffer, filename, mimeType) {
-  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_IMAGE_URL, { count: 1 }, { waitResponse: true })
+  const uploadResp = await transport.requestBinary(OP.GET_UPLOAD_IMAGE_URL, { count: 1 }, { purpose: 'media_upload_url' })
   if (!uploadResp?.url) throw new Error('Не получен URL для загрузки изображения')
   const uploadName = safeUploadFilename(filename, 'image.jpg')
 
@@ -4855,7 +4832,7 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
     uploadResponse: { hasPhotoToken: Boolean(photoToken), keys: Object.keys(uploadData || {}) },
   })
 
-  const cid = -Date.now()
+  const cid = BigInt(Date.now())
   maxDeliveryLog({
     operation: 'send',
     status: 'send_requested',
@@ -4863,12 +4840,12 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-    chatId,
+  const resp = await transport.requestBinary(OP.SEND_MESSAGE, {
+    chatId: maxChatIdForRequest(chatId),
     message: { cid, text: caption || '', attaches: [{ _type: 'PHOTO', photoToken }] },
     notify: true,
-  }, { waitResponse: true })
-  const maxMessageId = resp?.message?.id ? String(resp.message.id) : null
+  }, { timeoutMs: 15_000, purpose: 'media_send' })
+  const maxMessageId = maxMessageIdFromResponse(resp)
   maxDeliveryLog({
     operation: 'echo',
     status: isRealMaxMessageId(maxMessageId) ? 'max_echo_received' : 'send_requested',
@@ -4896,14 +4873,16 @@ async function sendMessageWithRetry(transport, chatId, messagePayload, maxRetrie
       await new Promise(r => setTimeout(r, initialDelay))
     }
     try {
-      const cid = -Date.now()
-      const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-        chatId,
+      const cid = BigInt(Date.now())
+      const resp = await transport.requestBinary(OP.SEND_MESSAGE, {
+        chatId: maxChatIdForRequest(chatId),
         message: { ...messagePayload, cid },
         notify: true,
-      }, { waitResponse: true })
-      return resp?.message?.id ? String(resp.message.id) : null
+      }, { timeoutMs: 15_000, purpose: 'media_send' })
+      return maxMessageIdFromResponse(resp)
     } catch (e) {
+      // Only MAX's own "not ready yet" refusal is retried: the message was
+      // refused, so nothing was sent. A timeout is never retried here.
       if (e.maxError === 'attachment.not.ready' && attempt < maxRetries) {
         console.log(`[sendMsgRetry] attachment.not.ready — will retry`)
         continue
@@ -4925,7 +4904,7 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_VIDEO_URL, { count: 1 }, { waitResponse: true })
+  const urlResp = await transport.requestBinary(OP.GET_UPLOAD_VIDEO_URL, { count: 1 }, { purpose: 'media_upload_url' })
   const info = urlResp?.info?.[0]
   if (!info?.url || info?.videoId == null) {
     throw new Error(`Не получен URL для загрузки видео. Ответ: ${JSON.stringify(urlResp)}`)
@@ -4951,7 +4930,7 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
 
   const maxMessageId = await sendMessageWithRetry(transport, chatId, {
     text:    caption || '',
-    attaches: [{ _type: 'VIDEO', videoId: info.videoId, token: info.token || undefined, duration: null }],
+    attaches: [{ _type: 'VIDEO', videoId: plainMaxIdForRequest(info.videoId), token: info.token || undefined, duration: null }],
   })
   maxDeliveryLog({
     operation: 'echo',
@@ -4977,7 +4956,7 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
     protocolChatId: String(chatId),
     uploadId: filename,
   })
-  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_FILE_URL, { count: 1 }, { waitResponse: true })
+  const urlResp = await transport.requestBinary(OP.GET_UPLOAD_FILE_URL, { count: 1 }, { purpose: 'media_upload_url' })
   const info = urlResp?.info?.[0]
   if (!info?.url || info?.fileId == null) {
     throw new Error(`Не получен URL для загрузки файла. Ответ: ${JSON.stringify(urlResp)}`)
@@ -5003,7 +4982,7 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 
   const maxMessageId = await sendMessageWithRetry(transport, chatId, {
     text:    caption || '',
-    attaches: [{ _type: 'FILE', fileId: info.fileId, name: filename, size: fileBuffer.length }],
+    attaches: [{ _type: 'FILE', fileId: plainMaxIdForRequest(info.fileId), name: filename, size: fileBuffer.length }],
   })
   maxDeliveryLog({
     operation: 'echo',
@@ -5019,195 +4998,44 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 
 // ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
 
-async function sendReaction(transport, chatId, messageId, emoji) {
-  const reactionId = reactionIdByEmoji.get(String(emoji)) || emoji
-  try {
-    const confirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      emoji,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, reactionId, false, true)
-    console.log(`[sendReaction] binary sent chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId}`)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-    })
-    const confirmation = await confirmationPromise
-    if (confirmation?.reactionConfirmed) {
-      console.log(`[sendReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: confirmation.source,
-        counters: confirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-    }
-    console.warn(`[sendReaction] unsigned binary not confirmed, trying signed message id chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-    const signedConfirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      emoji,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, reactionId, false, false)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-      source: 'binary_frame_signed',
-    })
-    const signedConfirmation = await signedConfirmationPromise
-    if (signedConfirmation?.reactionConfirmed) {
-      console.log(`[sendReaction] confirmed via ${signedConfirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)} signed=true`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: signedConfirmation.source,
-        counters: signedConfirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: signedConfirmation.source, counters: signedConfirmation.counters }
-    }
-    const noConfirmation = new Error('Binary reaction frame was not confirmed by MAX')
-    noConfirmation.noConfirmation = true
-    throw noConfirmation
-  } catch (binaryErr) {
-    console.warn(`[sendReaction] ${binaryErr.noConfirmation ? 'binary not confirmed' : 'binary failed'}, trying JSON fallback: ${binaryErr.message}`)
+// The page's own requests (bundle): op:178 {chatId, postId, messageId,
+// reaction:{reactionType:'EMOJI', id}} and op:179 {chatId, postId, messageId}.
+// MAX's response to that request - matched by seq, never a later push - is the
+// proof the reaction was applied; its reactionInfo is the message's new state.
+async function sendReactionRequest(transport, opcode, chatId, messageId, reaction) {
+  const request = {
+    chatId: maxChatIdForRequest(chatId),
+    messageId: maxMessageIdForRequest(messageId),
+    ...(reaction ? { reaction } : {}),
   }
-  const basePayload = {
-    chatId,
-    messageId: String(messageId),
-    reaction: { reactionType: 'EMOJI', id: reactionId },
-  }
-  const payloads = [basePayload, { ...basePayload, postId: null }]
-  let lastErr = null
-  let resp = null
-  for (const payload of payloads) {
-    try {
-      const confirmationPromise = waitForReactionConfirmation(transport, {
-        chatId,
-        messageId,
-        emoji,
-        timeoutMs: 15_000,
-      })
-      resp = await transport.sendFrame(OP.SEND_REACTION, payload, { waitResponse: true, timeoutMs: 15_000 })
-      const confirmation = await confirmationPromise
-      if (confirmation?.reactionConfirmed) {
-        console.log(`[sendReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-        maxDeliveryLog({
-          operation: 'reaction',
-          status: 'max_echo_received',
-          conversationId: String(chatId),
-          protocolChatId: String(chatId),
-          maxMessageId: String(messageId),
-          externalId: String(messageId),
-          source: confirmation.source,
-          counters: confirmation.counters,
-        })
-        return { frameSent: true, reactionConfirmed: true, responseReceived: Boolean(resp), deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-      }
-      break
-    } catch (e) {
-      lastErr = e
-      console.warn(`[sendReaction] variant failed chatId=${chatId} msgId=${String(messageId).slice(0, 16)}: ${e.message}`)
-    }
-  }
-  if (!resp && lastErr) throw lastErr
-  console.log(`[sendReaction] frame response chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId} resp=${JSON.stringify(resp).slice(0, 160)}`)
+  const response = await transport.requestBinary(opcode, request, { timeoutMs: 15_000, purpose: opcode === OP.SEND_REACTION ? 'reaction' : 'reaction_remove' })
   maxDeliveryLog({
     operation: 'reaction',
-    status: 'send_requested',
+    status: 'max_echo_received',
     conversationId: String(chatId),
     protocolChatId: String(chatId),
     maxMessageId: String(messageId),
     externalId: String(messageId),
+    source: `op${opcode}_response`,
   })
-  return { frameSent: true, reactionConfirmed: false, responseReceived: Boolean(resp), deliveryStatus: 'send_requested', source: 'json_response' }
+  return {
+    frameSent: true,
+    reactionConfirmed: true,
+    deliveryStatus: 'delivered',
+    source: `op${opcode}_response`,
+    counters: response?.reactionInfo ?? null,
+  }
+}
+
+async function sendReaction(transport, chatId, messageId, emoji) {
+  const reactionId = reactionIdByEmoji.get(String(emoji)) || emoji
+  console.log(`[sendReaction] chatId=${chatId} msgId=${String(messageId).slice(0, 16)} reaction=${reactionId}`)
+  return sendReactionRequest(transport, OP.SEND_REACTION, chatId, messageId, { reactionType: 'EMOJI', id: reactionId })
 }
 
 async function removeReaction(transport, chatId, messageId) {
-  try {
-    const confirmationPromise = waitForReactionConfirmation(transport, {
-      chatId,
-      messageId,
-      remove: true,
-      timeoutMs: 15_000,
-    })
-    await transport.sendBinaryReaction(chatId, messageId, null, true, true)
-    console.log(`[removeReaction] binary sent chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-    maxDeliveryLog({
-      operation: 'reaction',
-      status: 'send_requested',
-      conversationId: String(chatId),
-      protocolChatId: String(chatId),
-      maxMessageId: String(messageId),
-      externalId: String(messageId),
-    })
-    const confirmation = await confirmationPromise
-    if (confirmation?.reactionConfirmed) {
-      console.log(`[removeReaction] confirmed via ${confirmation.source} chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        conversationId: String(chatId),
-        protocolChatId: String(chatId),
-        maxMessageId: String(messageId),
-        externalId: String(messageId),
-        source: confirmation.source,
-        counters: confirmation.counters,
-      })
-      return { frameSent: true, reactionConfirmed: true, deliveryStatus: 'delivered', source: confirmation.source, counters: confirmation.counters }
-    }
-    const noConfirmation = new Error('Binary remove-reaction frame was not confirmed by MAX')
-    noConfirmation.noConfirmation = true
-    throw noConfirmation
-  } catch (binaryErr) {
-    console.warn(`[removeReaction] ${binaryErr.noConfirmation ? 'binary not confirmed' : 'binary failed'}, trying JSON fallback: ${binaryErr.message}`)
-  }
-  const basePayload = {
-    chatId,
-    messageId: String(messageId),
-  }
-  const payloads = [basePayload, { ...basePayload, postId: null }]
-  let lastErr = null
-  let resp = null
-  for (const payload of payloads) {
-    try {
-      resp = await transport.sendFrame(OP.REMOVE_REACTION, payload, { waitResponse: true, timeoutMs: 15_000 })
-      break
-    } catch (e) {
-      lastErr = e
-      console.warn(`[removeReaction] variant failed chatId=${chatId} msgId=${String(messageId).slice(0, 16)}: ${e.message}`)
-    }
-  }
-  if (!resp && lastErr) throw lastErr
-  console.log(`[removeReaction] frame response chatId=${chatId} msgId=${String(messageId).slice(0, 16)} resp=${JSON.stringify(resp).slice(0, 160)}`)
-  maxDeliveryLog({
-    operation: 'reaction',
-    status: 'send_requested',
-    conversationId: String(chatId),
-    protocolChatId: String(chatId),
-    maxMessageId: String(messageId),
-    externalId: String(messageId),
-  })
-  return { frameSent: true, reactionConfirmed: false, responseReceived: Boolean(resp), deliveryStatus: 'send_requested', source: 'json_response' }
+  console.log(`[removeReaction] chatId=${chatId} msgId=${String(messageId).slice(0, 16)}`)
+  return sendReactionRequest(transport, OP.REMOVE_REACTION, chatId, messageId, null)
 }
 
 // ─── Резолв видео/файла: opcode 83 / 88 ──────────────────────────────────────
@@ -5265,11 +5093,17 @@ async function resolveAttachmentUrl(transport, att, chatId, messageId) {
   }
   if ((type === 'file' || type === 'document' || type === 'audio' || type === 'voice') && (att.fileId || att.token)) {
     opcode = OP.RESOLVE_FILE
-    payload = { fileId: att.fileId || att.token, ...(att.token ? { token: att.token } : {}), chatId, messageId: String(messageId) }
+    // The page's own op:88 request: {fileId, chatId, messageId, itemType}.
+    payload = {
+      fileId: att.fileId ? plainMaxIdForRequest(att.fileId) : att.token,
+      chatId: maxChatIdForRequest(chatId),
+      messageId: maxMessageIdForRequest(messageId),
+      itemType: 'REGULAR',
+    }
   } else {
     return null
   }
-  const resp = await transport.sendFrame(opcode, payload, { waitResponse: true })
+  const resp = await transport.requestBinary(opcode, payload, { purpose: 'resolve_file' })
   console.log(`[ResolveAttachment] opcode=${opcode} payload=${JSON.stringify(redactForStructuredLog(payload))} response=${JSON.stringify(redactForStructuredLog(resp)).slice(0, 800)}`)
   return findFirstUrl(resp)
 }
@@ -5344,10 +5178,24 @@ const contactStore = new ContactStore()
 
 const chatCache = new Map()  // chatId → chat object (собирается из opcode 48 при старте)
 
-// messageIds исходящих сообщений, чьё echo мы перехватываем в /send-message.
-// handleIncoming пропустит эти echo чтобы не создать дубль-чат до того как
-// CRM обновит externalChatId на реальный conversation ID.
-const capturedEchoIds = new Set()
+// What the CRM has stored per provider message id, and the per-chat inbound
+// order (see InboundDeliveryLedger). A push the page acknowledged but the CRM
+// has not stored goes to recoverUnpersistedLiveMessage instead of vanishing.
+const inboundLedger = new InboundDeliveryLedger({
+  graceMs: 4000,
+  onUnpersisted: event => {
+    recoverUnpersistedLiveMessage(event).catch(e =>
+      console.error(`[inboundLedger] recovery failed chatId=${event.chatId} msgId=${event.messageId}: ${e.message}`))
+  },
+})
+
+// The automatic history requests (op:49 catch-up on every reconnect, the
+// one-time 7-day import) are JSON frames on MAX's binary socket. MAX closed the
+// socket on every one of them (159/159 on 2026-10-02) without ever answering,
+// and each close started a reconnect storm. Off until catch-up is rebuilt on
+// the page's own encoding; live pushes and the acknowledgement ledger are the
+// inbound path meanwhile.
+const SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED = false
 
 let page               = null
 let context            = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
@@ -5408,6 +5256,12 @@ async function init() {
   })
 
   page = context.pages()[0] || await context.newPage()
+  // Counts every main-frame navigation, including same-document pushState and reloads.
+  page.on('framenavigated', frame => {
+    if (frame !== page.mainFrame()) return
+    mainFrameNavigationEpoch += 1
+    lastMainFrameNavigationAt = Date.now()
+  })
 
   // 1. Инжектируем WS-хук ДО навигации
   await transport.injectHooks(page)
@@ -5631,17 +5485,20 @@ async function init() {
     if (data.opcode === OP.INCOMING_MSG) {
       if (!isReady) return
       const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
-      if (!payloadIsEmpty && looksLikeDomRecoverableMediaPayload(data.payload)) {
+      const pushEnvelope = Array.isArray(data.payload)
+        ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+        : data.payload
+      // A push that decoded into a message is the live path's to persist; DOM
+      // recovery is no longer started on a timer after every push. It runs
+      // only for loose media that came without a message, and - through the
+      // inbound ledger - for a push the page acknowledged that the CRM has not
+      // stored.
+      if (!payloadIsEmpty && !pushEnvelope?.message && looksLikeDomRecoverableMediaPayload(data.payload)) {
         scheduleDomFallbackForRecentMedia('loose_op128_media')
       }
       if (payloadIsEmpty) {
         console.log('[op128] Пустой payload — пропускаем (op:71 через JSON убивает WS, используем только пассивный перехват)')
       }
-      setTimeout(() => {
-        const chatId = latestRecentOp128ChatId()
-        if (!chatId) return
-        scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')
-      }, 700)
     }
 
     // Логируем остальные неизвестные push-опкоды
@@ -5652,10 +5509,33 @@ async function init() {
     }
   })
 
+  // One chat at a time, in the order the page received the pushes, so a burst
+  // is stored in the order it was sent.
   transport.onMessage(msg => {
-    handleIncoming(msg, mediaPipeline, sync, transport).catch(e =>
-      console.error('[App] handleIncoming error:', e.message)
-    )
+    inboundLedger.enqueue(inboundChatKey(msg?.chatId), () => handleIncoming(msg, mediaPipeline, sync, transport))
+      .catch(e => console.error('[App] handleIncoming error:', e.message))
+  })
+
+  transport.onBrowserMessageAck(({ chatId, messageId }) => {
+    inboundLedger.noteBrowserAck(chatId, messageId)
+  })
+
+  // D-11: MAX ended the session (a definitive op:19 refusal, a logout). The
+  // account is unproven from here, so every send answers 503 unproven, and the
+  // session controller's next check finds the page logged out and waits for QR.
+  transport.onSessionLoss(loss => {
+    isReady = false
+    session.isLoggedIn = false
+    transport.clearRouteAttestations()
+    maxDeliveryLog({ operation: 'session', status: 'failed', reason: loss.reason })
+  })
+
+  // Catch-up runs only while the page is free: never during a send or a DOM recovery.
+  transport.configureCatchUp({ isBusy: () => uiSendInProgress || domFallbackRunning || isSending })
+
+  // A peer's read mark is a read receipt for our messages at or before it.
+  transport.onReadMark(event => {
+    queueReadMarkForCrm(event)
   })
 
   // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс (фоллбэк)
@@ -5744,6 +5624,13 @@ async function init() {
         return
       }
 
+      if (!SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED) {
+        // The page's own chat snapshots after the login note any gap; the
+        // binary catch-up fills it (TransportInterceptor.runCatchUp).
+        console.log('[App] WS reconnected, userId:', userId, '— binary catch-up for open gaps:', Object.keys(transport.gapFloors()).length)
+        transport.scheduleCatchUp(4_000, 'reconnect')
+        return
+      }
       console.log('[App] WS reconnected, userId:', userId, '— catch-up...')
       const result = await initialSync.runIfNeeded('from_connection_time')
       console.log('[App] Reconnect catch-up:', result)
@@ -5753,13 +5640,22 @@ async function init() {
 
     console.log('[App] WS auth OK, userId:', userId)
     markReady(`ws-auth:${userId}`)
+    // Gaps left by the last process (on the volume) are filled once the page's
+    // startup snapshots have arrived.
+    transport.scheduleCatchUp(6_000, 'startup')
     if (_wsReadyAt === 0) { _wsReadyAt = Date.now(); loadPhoneChatIdCache() }
     session.isLoggedIn = true  // сразу, до sync — чтобы _waitForQrLogin вышел немедленно
 
-    const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
-    console.log('[App] Initial sync:', syncResult)
+    if (SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED || !['from_connection_time', 'none'].includes(HISTORY_IMPORT_MODE)) {
+      // An explicit operator import mode still runs when it is set; the
+      // automatic restart catch-up does not.
+      const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
+      console.log('[App] Initial sync:', syncResult)
+    } else {
+      console.log(`[App] Initial sync: automatic catch-up disabled (history mode: ${HISTORY_IMPORT_MODE})`)
+    }
 
-    await runBidirectionalHistoryRecoverySafely()
+    if (SCRAPER_INJECTED_HISTORY_REQUESTS_ENABLED) await runBidirectionalHistoryRecoverySafely()
 
     // PR-П: периодический name-sync для outbound-only placeholder-чатов.
     // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,
@@ -5775,7 +5671,7 @@ async function init() {
     // Записываем время ПОСЛЕ catch-up — следующий рестарт будет подтягивать с этого момента
     try {
       fs.writeFileSync(
-        path.join(__dirname, 'last_activity.json'),
+        LAST_ACTIVITY_PATH,
         JSON.stringify({ ts: Date.now() })
       )
     } catch {}
@@ -6013,6 +5909,101 @@ app.post('/debug/dom-identity', async (req, res) => {
   }
 })
 
+// The HTTP answer for one text send. The codes are the adapter contract the
+// CRM classifies by: MAX_SEND_NOT_DISPATCHED (nothing reached MAX, safe to send
+// again), MAX_SEND_OUTCOME_UNKNOWN (an action was taken without proof either
+// way - never to be re-sent automatically), and refusals that dispatched
+// nothing (MAX_ROUTE_UNRESOLVED, MAX_REPLY_TARGET_NOT_ADDRESSABLE) or that MAX
+// itself answered (MAX_SEND_REJECTED). Only a correlated provider id is
+// reported as delivered; a request seen on the wire without MAX's answer is
+// reported as send_requested with no id.
+function textSendHttpAnswer(result, { chatId, providerAccountId }) {
+  const base = {
+    chatId: String(chatId),
+    providerAccountId,
+    requestSeq: result?.requestSeq ?? null,
+    extraRequestFrames: result?.extraRequestFrames ?? 0,
+  }
+  switch (result?.outcome) {
+    case 'accepted':
+      return {
+        status: 200,
+        body: {
+          success: true,
+          ...base,
+          externalId: result.providerMessageId,
+          maxMessageId: result.providerMessageId,
+          deliveryConfirmed: true,
+          deliveryStatus: 'delivered',
+          source: result.proofKind === 'provider_store_readback' ? 'reply_store_readback' : 'op64_response',
+          proofKind: result.proofKind,
+          deliveryProof: { kind: result.proofKind, providerMessageId: result.providerMessageId, requestSeq: base.requestSeq },
+        },
+      }
+    case 'requested':
+      return {
+        status: 200,
+        body: {
+          success: true,
+          ...base,
+          externalId: null,
+          maxMessageId: null,
+          deliveryConfirmed: false,
+          deliveryStatus: 'send_requested',
+          source: 'op64_request_without_response',
+          proofKind: 'client_frame',
+          code: 'MAX_SEND_UNCONFIRMED',
+        },
+      }
+    case 'not_dispatched':
+      return {
+        status: 503,
+        body: {
+          success: false,
+          ...base,
+          code: 'MAX_SEND_NOT_DISPATCHED',
+          reason: result.reason || null,
+          error: 'MAX_SEND_NOT_DISPATCHED: nothing reached MAX; the message can be sent again',
+        },
+      }
+    case 'rejected':
+      return {
+        status: 422,
+        body: {
+          success: false,
+          ...base,
+          code: 'MAX_SEND_REJECTED',
+          outcomeClass: 'MAX_SEND_REFUSED',
+          reason: result.reason || null,
+          error: 'MAX_SEND_REJECTED: MAX refused the message (MAX_SEND_REFUSED)',
+        },
+      }
+    case 'refused':
+      return {
+        status: 422,
+        body: {
+          success: false,
+          ...base,
+          code: result.code,
+          outcomeClass: 'MAX_SEND_REFUSED',
+          reason: result.reason || null,
+          error: `${result.code}: nothing was dispatched (MAX_SEND_REFUSED)`,
+        },
+      }
+    default:
+      return {
+        status: 502,
+        body: {
+          success: false,
+          ...base,
+          code: 'MAX_SEND_OUTCOME_UNKNOWN',
+          reason: result?.reason || null,
+          error: 'MAX_SEND_OUTCOME_UNKNOWN: MAX may have received the message; it must not be sent again automatically',
+        },
+      }
+  }
+}
+
 app.post('/send-message', async (req, res) => {
   let { chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId } = req.body
   if (!message) {
@@ -6021,225 +6012,56 @@ app.post('/send-message', async (req, res) => {
   if (!chatId && !phone) {
     return res.status(400).json({ error: 'chatId or phone is required' })
   }
-  // Normalize: если передан phone без chatId — используем его как chatId (будет резолвится как телефон)
   if (!chatId && phone) chatId = phone
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
-  const crmOutboundDomGuard = rememberCrmOutboundText(message, chatId, uiChatId, phone)
 
-  // Detect if chatId looks like a phone number (10-11 digits).
-  // MAX internal IDs are now 12 digits (9021XXXXXXXX), so anything 12+ is a MAX ID.
-  // Russian phones: 10 digits (without country code) or 11 digits (with country code 7).
-  const chatIdStr = String(chatId || '')
-  const digits = chatIdStr.replace(/\D/g, '')
-  const looksLikePhone = digits.length >= 10 && digits.length <= 11
-
-  if (looksLikePhone) {
-    // Must resolve phone → MAX internal userId before sending
-    const fromStore = contactStore ? contactStore.findByPhone(digits) : null
-    if (fromStore) {
-      console.log(`[Send] contactStore: ${digits} → chatId ${fromStore}`)
-      chatId = fromStore
-      extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId)
-    } else {
-      const liveResult = await resolvePhoneLive(digits, message)
-      // liveResult is either a plain chatId string, or an object from the UI send path.
-      const uiSendAttempted = Boolean(liveResult && typeof liveResult === 'object' && liveResult.uiSendAttempted === true)
-      const liveId = typeof liveResult === 'string'
-        ? liveResult
-        : (liveResult?.chatId ? String(liveResult.chatId) : null)
-      if (uiSendAttempted) {
-        // A UI send attempt is terminal for this HTTP operation: never issue a second
-        // protocol send, whether or not a send-bound signal supplied the chat id.
-        if (liveResult.submitObserved !== true) {
-          // The text never left the compose box. Reporting success here would record a
-          // message the contact will never receive, so fail the operation instead.
-          console.error(`[Send] UI send for ${maskPhoneForLog(digits)} did not take effect; reporting failure`)
-          return res.status(502).json({
-            success: false,
-            error: 'MAX UI send did not take effect: the message was not submitted',
-            phone: digits,
-            chatId: null,
-            deliveryConfirmed: false,
-            deliveryStatus: 'failed',
-          })
-        }
-        if (liveId) {
-          console.log(`[Send] UI-resolved: ${maskPhoneForLog(digits)} → chatId ${liveId} via ${liveResult.chatIdSource}`)
-          extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
-          if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
-          savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
-        } else {
-          console.warn(`[Send] UI send attempted for ${maskPhoneForLog(digits)} without a send-bound chat id`)
-        }
-        // Every success response echoes the live account this request was checked
-        // against above; Gravity rejects a send result without it as
-        // MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH and records a delivered message as failed.
-        //
-        // The compose box was observed to clear of the exact typed text. Bound to the
-        // CRM's clientMessageId, that is the same action proof the direct-UI and
-        // UI-fallback paths report. Answering 'send_requested' left the message 'sent'
-        // with no provider id, so recovery marked it failed and retryable after five
-        // minutes and the retry job sent the contact a second copy. Without a
-        // clientMessageId there is nothing to bind a proof to, so keep the weaker answer.
-        if (clientMessageId) {
-          const proven = uiTextDeliveredResult(
-            liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
-            clientMessageId,
-          )
-          return res.json({
-            success: true,
-            chatId: liveId,
-            providerAccountId,
-            ...proven,
-          })
-        }
-        return res.json({
-          success: true,
-          chatId: liveId,
-          providerAccountId,
-          externalId: null,
-          deliveryConfirmed: false,
-          deliveryStatus: 'send_requested',
-          source: liveId ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
-        })
-      }
-      if (liveId) {
-        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}`)
-        chatId = liveId
-        extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
-        // Cache for subsequent sends in this session
-        if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
-        // Dialog used returnHome() (SPA nav) — WS stays alive. waitForStableWs resolves
-        // immediately if _wsConnected is already true. Acts as a safety net if WS dropped.
-        if (!transport._wsConnected) {
-          console.log('[Send] WS not connected after dialog, waiting for stable WS...')
-          const wsReady = await transport.waitForStableWs(400, 18_000)
-          console.log(`[Send] WS stable: ${wsReady}`)
-        }
-      } else {
-        console.warn(`[Send] Phone ${digits} not found — contactStore has ${contactStore?._map.size || 0} contacts`)
-        return res.status(404).json({
-          error: `Контакт не найден в MAX. Дождитесь первого входящего сообщения от контакта, или добавьте номер ${digits} в адресную книгу MAX.`,
-          phone: digits,
-        })
-      }
-    }
+  // A phone number names a person, not a MAX conversation: reaching it meant
+  // searching the MAX UI and typing the message into whatever opened. That is
+  // an unproven route, so it fails closed before anything is typed.
+  const digits = String(chatId || '').replace(/\D/g, '')
+  if (!digits || (digits.length >= 10 && digits.length <= 11)) {
+    const answer = textSendHttpAnswer(
+      { outcome: 'refused', code: 'MAX_ROUTE_UNRESOLVED', reason: digits ? 'phone_target' : 'invalid_target' },
+      { chatId: digits, providerAccountId },
+    )
+    console.warn(`[Send] refused target ${digits ? maskPhoneForLog(digits) : 'none'}: ${answer.body.reason}; nothing dispatched`)
+    return res.status(answer.status).json(answer.body)
   }
+  rememberCrmOutboundText(message, digits, uiChatId, phone)
 
-  // Also try phone field when chatId was null initially
-  if (!chatId && phone && contactStore) {
-    const resolved = contactStore.findByPhone(String(phone))
-    if (resolved) {
-      console.log(`[Send] phone field resolved: ${phone} → chatId ${resolved}`)
-      chatId = resolved
-    }
-  }
-
-  if (!chatId) {
-    return res.status(400).json({ error: 'chatId required' })
-  }
-  extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId, uiChatId)
-
-  // Для первой отправки по номеру телефона ждём эхо от MAX чтобы узнать
-  // реальный conversation ID (chatId в opcode 128 ≠ userId контакта).
-  // Перехватываем echo через rawHandler ДО отправки — echo может прийти
-  // раньше ack op:64. Подавляем echo в handleIncoming через capturedEchoIds
-  // чтобы не создать дубль-чат до того как CRM обновит externalChatId.
-  let echoConvId = null
-  let echoRawHandler = null
-  let echoResolve = null
-
-  if (looksLikePhone) {
-    const echoPromise = new Promise((resolve) => {
-      echoResolve = resolve
-      echoRawHandler = function (data) {
-        if (data.opcode !== 128) return
-        const ep = Array.isArray(data.payload)
-          ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
-          : data.payload
-        if (ep?.message?.id && ep.chatId) {
-          const sender = String(ep.message.sender || '')
-          if (sender === transport._myUserId) {
-            const idx = transport._rawHandlers.indexOf(echoRawHandler)
-            if (idx > -1) transport._rawHandlers.splice(idx, 1)
-            echoRawHandler = null
-            resolve(String(ep.chatId))
-          }
-        }
-      }
-      transport._rawHandlers.push(echoRawHandler)
-    })
-
-    try {
-      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(
-        transport,
-        Number(chatId),
-        message,
-        quotedMsgId,
-        uiChatId,
-        clientMessageId,
-        { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
-      )))
-      if (sendResult.success === false || sendResult.error) {
-        throw new Error(sendResult.error || 'MAX text delivery failed')
-      }
-      const maxMsgId = sendResult.externalId || sendResult.maxMessageId || null
-
-      if (maxMsgId) {
-        capturedEchoIds.add(String(maxMsgId))
-        // Ждём echo до 3 секунд
-        echoConvId = await Promise.race([
-          echoPromise,
-          new Promise(r => setTimeout(() => r(null), 3000)),
-        ])
-        capturedEchoIds.delete(String(maxMsgId))
-      }
-      // Убираем rawHandler если ещё висит (timeout)
-      if (echoRawHandler) {
-        const idx = transport._rawHandlers.indexOf(echoRawHandler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-      }
-
-      const returnChatId = echoConvId || String(chatId)
-      extendCrmOutboundTextGuard(crmOutboundDomGuard, returnChatId)
-      if (echoConvId && echoConvId !== String(chatId)) {
-        console.log(`[Send] Conversation ID from echo: ${chatId} → ${echoConvId}`)
-      }
-      rememberKnownChatId(returnChatId)
-      if (uiChatId) rememberKnownChatId(uiChatId)
-      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, providerAccountId, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
-    } catch (e) {
-      if (echoRawHandler) {
-        const idx = transport._rawHandlers.indexOf(echoRawHandler)
-        if (idx > -1) transport._rawHandlers.splice(idx, 1)
-      }
-      const isMaxErr = e.maxError
-      console.error(`[Send] sendText failed: ${e.message}`)
-      res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
-    }
-    return
-  }
-
+  let result
   try {
-    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(
+    result = await enqueueSend(() => sendText(
       transport,
-      Number(chatId),
+      digits,
       message,
       quotedMsgId,
       uiChatId,
       clientMessageId,
       { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
-    )))
-    if (sendResult.success === false || sendResult.error) {
-      throw new Error(sendResult.error || 'MAX text delivery failed')
-    }
-    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, providerAccountId, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
+    ))
   } catch (e) {
-    const isMaxErr = e.maxError
-    console.error(`[Send] sendText failed: ${e.message}`)
-    res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
+    // sendText decides every outcome itself; an exception here means the call
+    // broke at a point where an action may already have been taken.
+    console.error(`[Send] sendText broke: ${e.message}`)
+    result = { outcome: 'unknown', reason: `send_call_failed:${String(e.message || e).slice(0, 120)}` }
   }
+  const answer = textSendHttpAnswer(result, { chatId: digits, providerAccountId })
+  maxDeliveryLog({
+    operation: 'send',
+    status: answer.body.success ? answer.body.deliveryStatus : 'failed',
+    outcome: result.outcome,
+    code: answer.body.code || null,
+    reason: result.reason || null,
+    protocolChatId: digits,
+    maxMessageId: answer.body.externalId || null,
+    requestSeq: answer.body.requestSeq,
+    extraRequestFrames: answer.body.extraRequestFrames,
+    clientMessageId: clientMessageId || null,
+  })
+  if (answer.body.success) rememberKnownChatId(digits)
+  return res.status(answer.status).json(answer.body)
 })
 
 // Поставить/снять emoji-реакцию на сообщение
@@ -6285,19 +6107,28 @@ app.post('/delete-message', async (req, res) => {
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   try {
-    // Opcode 66 = DELETE_MESSAGE. Confirmed from web.max.ru bundle:
-    // yield*r(66,{...revertId(chatId), messageIds:[id,...], forMe:!forAll})
-    // forMe:false = delete for everyone, forMe:true = delete only for sender
-    const result = await transport.sendFrame(OP.DELETE_MESSAGE, {
-      chatId:     Number(chatId),
-      messageIds: [String(messageId)],
+    // Opcode 66 = DELETE_MESSAGE, the page's own request (bundle):
+    // yield*r(66,{chatId:e.id,postId,messageIds:i,forMe:!n}) - forMe:false is
+    // delete for everyone. MAX answers with the ids it removed and any it could not.
+    const providerMessageId = maxMessageIdForRequest(messageId)
+    const result = await transport.requestBinary(OP.DELETE_MESSAGE, {
+      chatId:     maxChatIdForRequest(chatId),
+      messageIds: [providerMessageId],
       forMe:      false,
-    }, { waitResponse: true })
-    console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`, JSON.stringify(result).slice(0, 100))
+    }, { timeoutMs: 15_000, purpose: 'delete' })
+    const failed = Array.isArray(result?.failedMessageIds)
+      && result.failedMessageIds.some(id => canonicalMaxMessageIdHex(id) === canonicalMaxMessageIdHex(String(messageId)))
+    if (failed) {
+      console.warn(`[delete-message] MAX could not delete chatId=${chatId} msgId=${messageId}`)
+      return res.status(422).json({ error: 'MAX_DELETE_REFUSED: MAX could not delete the message', code: 'MAX_DELETE_REFUSED' })
+    }
+    console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`)
     res.json({ success: true, providerAccountId })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
-    res.status(500).json({ error: e.message })
+    if (e.dispatched === false) return res.status(503).json({ error: `MAX_DELETE_NOT_DISPATCHED: ${e.reason || e.message}`, code: 'MAX_DELETE_NOT_DISPATCHED' })
+    if (e.refused) return res.status(422).json({ error: `MAX_DELETE_REFUSED: ${e.maxError}`, code: 'MAX_DELETE_REFUSED' })
+    res.status(502).json({ error: `MAX_DELETE_OUTCOME_UNKNOWN: ${e.reason || e.message}`, code: 'MAX_DELETE_OUTCOME_UNKNOWN' })
   }
 })
 
@@ -6437,7 +6268,13 @@ app.get('/contacts', (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: sendQueue.length })
+  const sessionLoss = transport?.sessionLoss?.() || null
+  res.json({
+    status: sessionLoss ? 'session_lost' : (isReady ? 'ready' : 'initializing'),
+    isReady,
+    queueLength: sendQueue.length,
+    ...(sessionLoss ? { sessionLoss } : {}),
+  })
 })
 
 app.get('/status', (req, res) => {
@@ -6453,6 +6290,10 @@ app.get('/status', (req, res) => {
       wsConnected:   !!transport?._wsConnected,
       authenticated: !!transport?.isAuthenticated?.(),
       myUserId:      transport?._myUserId || null,
+      sessionLoss:   transport?.sessionLoss?.() || null,
+      wire:          transport?.wireInterventionState?.() || null,
+      openGaps:      transport ? Object.keys(transport.gapFloors()).length : 0,
+      catchUp:       transport?._catchUp ? { running: transport._catchUp.running, lastRunAt: transport._catchUp.lastRunAt || null, lastResult: transport._catchUp.lastResult } : null,
     },
   })
 })
@@ -6565,7 +6406,7 @@ app.post('/import-history', async (req, res) => {
     const sinceTs = Date.now() - daysBack * 24 * 60 * 60 * 1000
     try {
       fs.writeFileSync(
-        path.join(__dirname, 'last_activity.json'),
+        LAST_ACTIVITY_PATH,
         JSON.stringify({ ts: sinceTs })
       )
     } catch {}
@@ -6574,7 +6415,7 @@ app.post('/import-history', async (req, res) => {
     sync.clear()
   } else if (mode === 'available_history') {
     // Сбрасываем last_activity чтобы захватить максимально доступную историю
-    try { fs.unlinkSync(path.join(__dirname, 'last_activity.json')) } catch {}
+    try { fs.unlinkSync(LAST_ACTIVITY_PATH) } catch {}
     InitialHistorySync.resetDoneFlag()
     sync.clear()  // сбрасываем dedup чтобы не пропустить сообщения при реимпорте
   } else if (mode === 'from_connection_time') {

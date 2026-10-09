@@ -7,8 +7,10 @@ import {
 } from '@/modules/contacts/internal/contact-ownership-coordinator'
 import { identityEvidenceState, jsonRecord } from './contact-evidence-state'
 import type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
+import type { InboundConversationPeerIdentityPersistencePortV1 } from './inbound-conversation-peer-identity-handler'
 
-export const legacyPrismaContactConversationPortV1: ContactConversationPersistencePortV1 = {
+export const legacyPrismaContactConversationPortV1: ContactConversationPersistencePortV1
+    & InboundConversationPeerIdentityPersistencePortV1 = {
     async resolveChannelContact(input) {
         const resolved = await ContactService.resolveContact(
             input.channel,
@@ -30,18 +32,114 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
         }
     },
 
+    /**
+     * Resolve the identity an INBOUND peer speaks from, inside a conversation that already
+     * exists. The conversation's linked identity is not necessarily the peer's identity: a
+     * Chat can be linked to an identity whose externalId is the conversation key while the
+     * peer is a different identity of the same Contact. Both rows are locked for the read.
+     *
+     * Reachability is not consulted: this never authorizes a send.
+     */
+    async resolveInboundConversationPeerIdentity(input) {
+        return runContactOwnershipTransaction(async transaction => {
+            await lockContactOwnershipRows(transaction, {
+                contactIds: [input.contactId],
+                identityIds: [input.linkedIdentityId],
+                identities: [{ channel: input.channel, externalId: input.peerExternalId }],
+            })
+            const contact = await transaction.contact.findUnique({ where: { id: input.contactId } })
+            if (!contact || contact.isArchived) return { status: 'contact_not_found' as const }
+
+            // The conversation's own link must still name an active identity of this Contact
+            // on this channel. Its conflict state is deliberately not consulted: a rejected
+            // inbound event opens a conflict on that identity, and requiring it clean here
+            // would let one rejection lock the conversation permanently.
+            const linkedIdentity = await transaction.contactIdentity.findFirst({
+                where: {
+                    id: input.linkedIdentityId,
+                    contactId: input.contactId,
+                    channel: input.channel,
+                    isActive: true,
+                },
+                select: { id: true },
+            })
+            if (!linkedIdentity) return { status: 'linked_identity_not_found' as const }
+
+            // (channel, externalId) is globally unique, so this is the only identity that can
+            // carry the peer. Requiring it to belong to this Contact answers "does this
+            // Contact own the peer" and "does another Contact claim it" in one read.
+            const peerIdentity = await transaction.contactIdentity.findFirst({
+                where: {
+                    channel: input.channel,
+                    externalId: input.peerExternalId,
+                    contactId: input.contactId,
+                    isActive: true,
+                },
+            })
+            if (!peerIdentity) return { status: 'peer_identity_not_found' as const }
+
+            const hasOpenIdentityConflict = Array.isArray(jsonRecord(contact.customFields).identityConflicts)
+                && (jsonRecord(contact.customFields).identityConflicts as unknown[]).some(item => {
+                    const conflict = jsonRecord(item)
+                    return conflict.status === 'open' && conflict.identityId === peerIdentity.id
+                })
+            if (
+                identityEvidenceState(peerIdentity.metadata).conflictState === 'conflicted'
+                || hasOpenIdentityConflict
+            ) {
+                return { status: 'peer_identity_conflicted' as const }
+            }
+
+            return {
+                status: 'ready' as const,
+                contact: { id: contact.id, displayName: contact.displayName },
+                peerIdentity: {
+                    kind: 'inbound_peer_identity' as const,
+                    id: peerIdentity.id,
+                    channel: input.channel,
+                    externalId: peerIdentity.externalId,
+                    providerAccountId: (() => {
+                        const providerAccountId = identityEvidenceState(peerIdentity.metadata).providerAccountId
+                        return providerAccountId === 'legacy' ? null : providerAccountId
+                    })(),
+                },
+            }
+        })
+    },
+
     async prepareContactConversationIdentity(input) {
         return runContactOwnershipTransaction(async transaction => {
+            const identityExternalId = input.identityExternalId ?? null
             await lockContactOwnershipRows(transaction, {
                 contactIds: [input.contactId],
                 identityIds: input.identityId ? [input.identityId] : [],
                 phoneIds: input.phoneId ? [input.phoneId] : [],
+                ...(identityExternalId
+                    ? { identities: [{ channel: input.channel, externalId: identityExternalId }] }
+                    : {}),
             })
             const contact = await transaction.contact.findUnique({ where: { id: input.contactId } })
             if (!contact || contact.isArchived) return { status: 'contact_not_found' as const }
 
             let identity
-            if (input.identityId !== null) {
+            if (identityExternalId !== null) {
+                // EXACT selector. (channel, externalId) is globally unique, so at most one
+                // row can carry this identifier; scoping the read to this Contact proves
+                // same-Contact ownership in the same read, and a foreign, inactive,
+                // wrong-channel or absent row all report identically, disclosing nothing
+                // about another Contact. Returning here is what makes the selector exact:
+                // an external id that does not resolve can never fall through to a sibling
+                // identity of the Contact, to the ambiguity path, or to a phone.
+                identity = await transaction.contactIdentity.findFirst({
+                    where: {
+                        channel: input.channel,
+                        externalId: identityExternalId,
+                        contactId: input.contactId,
+                        isActive: true,
+                    },
+                })
+                if (!identity) return { status: 'identity_not_found' as const }
+            } else if (input.identityId !== null) {
                 identity = await transaction.contactIdentity.findFirst({
                 where: {
                     id: input.identityId,

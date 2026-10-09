@@ -67,6 +67,7 @@ import {
 } from './cash-order-park-authority'
 import { CashOrderParkTenureQueueV1 } from './cash-order-park-tenure-queue'
 import { parseCompensationBusinessDayKeyV1 } from './compensation-calendar'
+import { cashOrderSubmissionOpenV1 } from './compensation-cash-order-ingestion'
 import {
     emptyCashOrderRequestStatsV1,
     HOT_REQUEST_PROFILE_V1,
@@ -163,12 +164,22 @@ export type CashOrderScheduleOutcomeV1 =
         status: 'not_scheduled'
         reason: 'mode_not_write' | 'park_not_enabled' | 'refresh_in_flight' | 'hot_pass_recent'
             | 'provider_deferred' | 'state_read_failed' | 'invalid_day'
+            /** The order's own submission window has closed; nothing is scheduled or joined for it. */
+            | 'order_window_closed'
     }
 
 interface DayOrderStateV1 {
     externalOrderId: string
     providerBookedAt: Date | null
+    /** The stored completion instant of an order confirmed on behalf of a claim; null for a day-only or legacy request. */
+    endedAt: Date | null
     narrow: 'pending' | 'not_applicable' | 'ran'
+}
+
+/** The stored completion instant an order-bearing request carries, or null when it carries none usable. */
+function claimEndedAtV1(order: { endedAt?: Date | null } | undefined): Date | null {
+    const endedAt = order?.endedAt
+    return endedAt instanceof Date && !Number.isNaN(endedAt.getTime()) ? endedAt : null
 }
 
 interface DayRecordV1 {
@@ -1022,11 +1033,21 @@ export class CashOrderIngestionRuntimeV1 {
      * Schedules, or joins, the confirmation of business day D of a park. An
      * order joining with a stored booking time gets its narrow query ahead of
      * any remaining fallback slice.
+     *
+     * A request made on behalf of a claim carries the order's stored
+     * completion instant, and that order's own canonical submission window —
+     * the same authority the pilot lists it by and the monetary core refuses it
+     * by — decides whether confirming it is still worth a provider request. An
+     * order whose window has closed is refused here, before it can create or
+     * join a record, so an expired claim never spends a day record's budget nor
+     * rides on another order's admission; an order whose window is open is
+     * admitted even when the generic day horizon below has aged out, see
+     * runDayConfirmation. A day-only request keeps the day horizon alone.
      */
     async requestDayConfirmation(input: {
         externalParkId: string
         dayKey: string
-        order?: { externalOrderId: string; providerBookedAt: Date | null }
+        order?: { externalOrderId: string; providerBookedAt: Date | null; endedAt?: Date | null }
     }): Promise<CashOrderScheduleOutcomeV1> {
         if (this.config.mode !== 'write') return { status: 'not_scheduled', reason: 'mode_not_write' }
         if (!this.enabled(input.externalParkId)) return { status: 'not_scheduled', reason: 'park_not_enabled' }
@@ -1034,6 +1055,21 @@ export class CashOrderIngestionRuntimeV1 {
             parseCompensationBusinessDayKeyV1(input.dayKey)
         } catch {
             return { status: 'not_scheduled', reason: 'invalid_day' }
+        }
+        const endedAt = claimEndedAtV1(input.order)
+        if (endedAt !== null) {
+            // Database time, like every freshness and deadline decision in the
+            // monetary core; read before the record lookup so the lookup, the
+            // join and the registration below stay one synchronous step.
+            let dbNow: Date
+            try {
+                dbNow = await this.ports.store.readDatabaseNow()
+            } catch {
+                return { status: 'not_scheduled', reason: 'state_read_failed' }
+            }
+            if (!cashOrderSubmissionOpenV1({ endedAt }, dbNow)) {
+                return { status: 'not_scheduled', reason: 'order_window_closed' }
+            }
         }
         const key = `${input.externalParkId}|${input.dayKey}`
         const existing = this.dayRecords.get(key)
@@ -1077,13 +1113,29 @@ export class CashOrderIngestionRuntimeV1 {
         return { status: 'scheduled' }
     }
 
-    private joinOrder(record: DayRecordV1, order: { externalOrderId: string; providerBookedAt: Date | null }): void {
+    private joinOrder(record: DayRecordV1, order: { externalOrderId: string; providerBookedAt: Date | null; endedAt?: Date | null }): void {
         if (record.orders.has(order.externalOrderId)) return
         record.orders.set(order.externalOrderId, {
             externalOrderId: order.externalOrderId,
             providerBookedAt: order.providerBookedAt,
+            endedAt: claimEndedAtV1(order),
             narrow: order.providerBookedAt === null ? 'not_applicable' : 'pending',
         })
+    }
+
+    /**
+     * Whether a joined order's own submission window is still open: the
+     * claim-specific admission of a day record. It is evaluated at setup, on
+     * the same database clock as the day horizon, so a record whose claims all
+     * expired between request and setup is refused exactly like a day that
+     * aged out, and a closed-window order never admits anything (it is refused
+     * before it can join).
+     */
+    private claimWindowOpenV1(record: DayRecordV1, dbNow: Date): boolean {
+        for (const order of record.orders.values()) {
+            if (order.endedAt !== null && cashOrderSubmissionOpenV1({ endedAt: order.endedAt }, dbNow)) return true
+        }
+        return false
     }
 
     private effectiveOutcome(record: DayRecordV1): CashOrderTargetedOutcomeV1 {
@@ -1118,7 +1170,9 @@ export class CashOrderIngestionRuntimeV1 {
                     }
                     if (record.startDb === null) {
                         const dbNow = setup.dbNow as Date
-                        if (!targetedDayWithinHorizonV1(record.dayKey, dbNow)) {
+                        // The generic day horizon is background reconciliation's
+                        // reach; a claim is admitted by its order's own window.
+                        if (!targetedDayWithinHorizonV1(record.dayKey, dbNow) && !this.claimWindowOpenV1(record, dbNow)) {
                             record.outcome = 'failed:day_outside_horizon'
                             return
                         }

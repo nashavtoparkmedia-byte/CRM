@@ -211,6 +211,15 @@ Each entry lists what the code actually does.
   `resolved` (the canonical Contact after Contacts' merge lineage), `unresolved`,
   `ambiguous` (the recorded `metadata.contactResolution.status`, whatever link the
   Chat carries) or `not_found`; no provider, account or transport detail crosses it.
+- **Delivery-truth extension points (S2)**: a channel adapter answers a text send
+  with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
+  `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
+  'safe_to_redeliver' | 'terminal')` where that is known; any other error is
+  `unknown`. Later provider evidence enters through `applyMessageDeliveryEvidenceV1`
+  (`messaging.PatchMessageDeliveryCommand.v2`), and `deriveDeliveryStateV1`
+  (`delivery-state-policy.ts`) is the only delivery-state derivation (seven states:
+  `send_requested`, `provider_accepted`, `delivered`, `read`,
+  `failed_safe_to_retry`, `failed_not_safe_to_retry`, `indeterminate`).
 - **Tests**: colocated vitest under `G/modules/messaging/**`,
   `G/lib/MessageService.provider-account.test.ts`,
   `G/app/api/messages/*/route.test.ts`; `tools/architecture/check-messaging-*-boundary.mjs`.
@@ -308,10 +317,14 @@ Each entry lists what the code actually does.
 - **Purpose**: MAX messenger via a web scraper (the only transport on main).
 - **Key paths**
   - `max-web-scraper/index.js` (Express app, send paths, DOM recovery),
-    `transport/TransportInterceptor.js` (WebSocket hook + decoder),
+    `transport/TransportInterceptor.js` (WebSocket hook; decodes MAX Web's binary
+    frames — version, cmd, int16 seq and opcode, LZ4 block, one msgpack value — and
+    correlates the scraper's own requests by seq, from 30000, and opcode),
     `session/SessionController.js`, `parser/MessageParser.js`,
-    `sync/{MessageSync,InitialHistorySync,NameSync}.js`,
-    `media/MediaPipeline.js`, `lib/MaxWebReplyBridge.js`.
+    `sync/{MessageSync,InitialHistorySync,NameSync}.js` (known-chat catch-up after a
+    restart), `media/MediaPipeline.js`, `lib/MaxWebReplyBridge.js`,
+    `lib/DomRouteAttestation.js` (proof that DOM-recovered text was read from the
+    conversation it is forwarded for).
   - `G/app/api/webhooks/max/route.ts` — the only live ingress;
     `G/app/api/webhook/max/reaction/route.ts` — reaction ingress.
   - `G/modules/max-channel/public/v1/messaging-delivery-capability.ts`,
@@ -325,6 +338,15 @@ Each entry lists what the code actually does.
 - **State location**: MAX conversation state is carried in `Chat.metadata`
   (`providerAccountId`, `senderId`, `chatKind`); scraper state is in the Playwright
   profile volume and JSON files. No MAX session state is persisted in Postgres.
+  Stored MAX ids (`Chat.externalChatId`, `senderId`, `providerAccountId`) are
+  protocol ids `(0xd2 << 32) | realId` — the msgpack int32 ext marker folded into
+  the number; MAX Web itself uses the real id. They are a stable bijection and are
+  never rewritten; comparisons and requests use the real id
+  (`maxRealIdFromProtocolId`, `sameMaxChatId`). See I-47.
+- **Uses Contacts (public only)**: `resolveInboundConversationPeerIdentityV1`
+  (`contacts.ResolveInboundConversationPeerIdentityQuery.v1`, the inbound peer
+  proof) and the `identityExternalId` selector of
+  `PrepareContactConversationIdentityCommand.v1` (outbound peer by provider id).
 - **Extension points**: `MaxChannelDeliveryV1`; webhook payload `source` /
   `chatKind`; the `OP` opcode table in `TransportInterceptor.js`.
 - **Tests**: `G/app/api/webhooks/max/route.test.ts`,
@@ -479,7 +501,7 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | Model | Main writers | Main readers | Public contract | Cross-domain access observed |
 |---|---|---|---|---|
 | `Chat` | `G/modules/messaging/public/v1/legacy-prisma-*-adapter` (conversation family), `G/lib/ConversationWorkflowService.ts` (raw SQL), `G/lib/MessageService.ts` | `MessageService.listConversations`, routes, channel code | `upsertChannelConversationV1`, `createExternalConversationV1`, `ensureConversationContactLinkV1`, `channelConversationWorkflowV1`; read: `resolveConversationContactV1` (`ResolveConversationContactQuery.v1`) | Direct writes in `G/app/api/messages/send-media/route.ts`, `send-image/route.ts`, `G/app/messages/open/route.ts`. Direct reads from `G/app/tg-actions.ts`, `G/lib/whatsapp/WhatsAppService.ts`, `G/app/api/webhooks/*` |
-| `Message` | `MessageService.send/retrySend/recoverStuckMessages`, messaging adapters, `G/lib/messageEvents.ts` (aiStatus) | `MessageService.listMessages`, AI pipeline, channel dedupe lookups | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1`, `patchMessageDeliveryV1` | Direct writes in `G/app/api/messages/{send-media,send-image,delete}/route.ts` |
+| `Message` | `MessageService.send/retrySend/recoverStuckMessages`, messaging adapters, `G/lib/messageEvents.ts` (aiStatus) | `MessageService.listMessages`, AI pipeline, channel dedupe lookups | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1`, `patchMessageDeliveryV1`; late evidence: `applyMessageDeliveryEvidenceV1` (`PatchMessageDeliveryCommand.v2`) | Direct writes in `G/app/api/messages/{send-media,send-image,delete}/route.ts` |
 | `MessageAttachment` | attach-media adapters (v1, v2) | `G/app/api/attachments/[id]/route.ts` | `attachMessageMediaV1` / `V2` | Direct write in `send-media/route.ts` |
 | `MessageEventLog` | `G/lib/messageEvents.ts` (insert), event-log adapter (claim/complete/fail) | the claim only | `claimMessageEventV1` | — |
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
@@ -703,6 +725,10 @@ codes (`PERSON_CONFIRMATION_REQUIRED` and the `TELEGRAM_*` family).
 `MessageParser.toCrmPayload` → `forwardToWebhook` (adds `accountId`, `chatKind`,
 header `x-max-scraper-webhook-secret`) →
 `POST G/app/api/webhooks/max/route.ts` → `isAuthorizedMaxScraperWebhookV1` →
+(a `read_mark` event, from an op:130 push, goes to `applyMaxPeerReadMark` and
+stops) → for a DOM-fallback event: the attested route (`DomRouteAttestation`)
+and the Contacts peer proof `resolveInboundConversationPeerIdentityV1`, and a
+stored replay answers `deduped` before the collision guard (I-48) →
 collision checks → `createExternalConversationV1` / `patchExternalConversationV1`
 → `upsertExternalMessageV1` → `attachMessageMediaV2` →
 `ConversationWorkflowService.onInboundMessage` → F-01 → SSE broadcast +
@@ -726,7 +752,9 @@ checks → `assertPrivateWhatsAppConversationConnectionV1` →
 `prisma.message.create` (status `sent`) → SSE → `switch(channel)` →
 `get{WhatsApp,Telegram,Max}ChannelDeliveryV1().sendText` → `message.update`
 (status, `externalId`, metadata) → SSE → `ConversationWorkflowService.onOutboundMessage`
-→ reachability record.
+→ reachability record. A typed result (S2) leaves the row `sent` with its evidence in
+`metadata.delivery`; reachability is recorded for it only on `provider_ack` /
+`provider_echo` (a legacy adapter's `delivered` records it as before).
 MAX leg: `sendMaxTransportTextV1`
 (`G/modules/max-channel/application/messaging-transport.ts`) → scraper
 `POST /send-message` → result validated by `validateMaxTextDeliveryResultV1`.
@@ -752,6 +780,11 @@ capability first and persist afterwards, with direct Prisma writes.
   row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
   lease holder may finalise it (I-11).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
+- late evidence: `applyMessageDeliveryEvidenceV1` matches the exact provider id
+  (another chat's, direction's or channel's row holding it is refused), else the
+  oldest unsettled same-text send in the chat from 10 min before `providerSentAt`
+  (+60 s tolerance); it only strengthens a row, settles it by compare-and-set, and
+  revokes an in-flight `retryLeaseId` so that attempt's answer never overwrites it.
 
 **F-13 Realtime**
 `G/lib/messageStreamBus.ts` (in-process map) →
@@ -1134,6 +1167,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   send stand; any other owner makes this row `failed` with `PROVIDER_ID_CONFLICT`
   and outcome `unknown`. — `providerIdOwnership` in `G/lib/MessageService.ts` —
   `shared-retry-safety.test.ts`, `shared-retry-safety.postgres.test.ts`.
+- **I-10c Delivery evidence only strengthens.** Repeated, out-of-order or weaker
+  evidence is `unchanged`; Telegram `device_receipt` is refused. —
+  `message-delivery-evidence-handler.ts`, `provenDeliveryRankV1` —
+  `message-delivery-evidence-handler.test.ts`, `delivery-evidence-contract.test.ts`,
+  `delivery-evidence-contract.postgres.test.ts`.
+- **I-10d A typed send is never `delivered` at send time.** Acceptance and a client
+  action both leave the row `sent`; only the recorded evidence tells them apart. —
+  `MessageService.send`, `deriveDeliveryStateV1` — `delivery-state-policy.test.ts`,
+  `delivery-evidence-contract.test.ts`.
 - **I-11 A retry is admitted once** (compare-and-set on `status='failed'` +
   `updatedAt`; finalisation fenced by lease id) —
   `G/lib/MessageService.provider-account.test.ts`.
@@ -1201,6 +1243,24 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   confirmation fields, or a UI-send proof bound to `clientMessageId`.** —
   `validateMaxTextDeliveryResultV1` — `gravity-mvp/test/max-delivery-validation.test.ts`.
   Note: the UI proof means the compose box cleared, not a provider receipt.
+- **I-46 A MAX text send is proven only by MAX's op:64 response (cmd 1) to that
+  exact request — same seq, same opcode.** MAX pushes no echo to the sending
+  session, so nothing else counts; an `unknown` outcome is never resent (I-10a).
+  — `TransportInterceptor.js` send correlation — `max-web-scraper/test/*`,
+  `gravity-mvp/test/max-delivery-validation.test.ts`.
+- **I-47 MAX ids are compared in the real-id space; stored protocol ids are never
+  rewritten.** — `maxRealIdFromProtocolId`, `sameMaxChatId` —
+  `max-web-scraper/test/*`. Exactly-once text (M1) depends on it: without the
+  real-id comparison the op:64 request match never sees a live send.
+- **I-48 A DOM-fallback inbound is bound to a conversation only after Contacts
+  proves its peer, and a stored replay dedupes before the collision guard.** —
+  `resolveInboundConversationPeerIdentityV1`, the replay branch of the MAX webhook
+  — `G/app/api/webhooks/max/route.test.ts`,
+  `check-contacts-max-resolution-shadow-boundary.mjs`.
+- **I-49 A MAX send addresses the peer by provider id, never the conversation-key
+  identity.** Contacts applies every gate it owns to the row it selects. —
+  `outbound-conversation-identity.ts` (`identityExternalId`) —
+  `outbound-conversation-identity.test.ts`, `gravity-mvp/test/max-outbound-send.test.ts`.
 
 ### Calling
 
@@ -1536,7 +1596,8 @@ Fields: **Path** · **Evidence** · **Why** · **Confidence** · **Risk if remov
 - **C-40** MAX contact-resolution shadow
   (`G/lib/contacts/max-contact-resolution-shadow.ts`, flag
   `CONTACT_RESOLUTION_SHADOW_MAX`) · log-only; appears to compare against the same
-  executor it shadows · LOW · a boundary control covers it · contacts.
+  executor it shadows · LOW · a boundary control covers it (six exact completions,
+  including the DOM-fallback replay) · contacts.
 - **C-41** Root `check-last-call.sql`, `last-call-uuid.sql`, `start-all.bat`,
   `gravity-mvp/*.sql` · ad-hoc; `start-all.bat` is cited by docs · LOW–MEDIUM ·
   pinned · platform.

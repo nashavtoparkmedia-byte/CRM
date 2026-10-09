@@ -32,6 +32,8 @@ export { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 export type { ExternalConversationPersistencePortV1 } from './external-conversation-handler'
 export { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
 export type { ChannelMessagePersistencePortV1 } from './channel-message-handler'
+export { createApplyMessageDeliveryEvidenceHandlerV1 } from './message-delivery-evidence-handler'
+export type { DeliveryEvidenceRowV1, DeliveryEvidenceWriteV1, MessageDeliveryEvidencePortV1 } from './message-delivery-evidence-handler'
 export { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from './channel-conversation-handler'
 export type { ChannelConversationPersistencePortV1 } from './channel-conversation-handler'
 export { createDeleteRetainedMessagesHandlerV1, createPurgeMessageRetryMetadataHandlerV1 } from './message-retention-handler'
@@ -80,6 +82,7 @@ export {
     type PreparedOutboundConversationV1,
 } from './outbound-conversation-identity-runtime'
 export {
+    applyMessageDeliveryEvidenceV1,
     attachBinaryMessageMediaV1,
     attachMessageMediaV1,
     cancelHistoryImportJobV1,
