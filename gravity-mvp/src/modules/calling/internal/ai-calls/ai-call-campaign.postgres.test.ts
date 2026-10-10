@@ -1349,4 +1349,98 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         })
         await expect(occupancyCount()).resolves.toBe(0)
     })
+
+    it('scopes a live effect to its own campaign slot while it still holds a global slot', async () => {
+        // Campaign A sorts first, so its single member is claimed first; after its
+        // deferral it stays off the claim path for its 250 ms recheck window, which
+        // leaves every cycle below to Campaign B's first dispatches.
+        const campaignA = `${PREFIX}:scope-a`
+        const campaignB = `${PREFIX}:scope-b`
+        const liveCallA = `${campaignA}:call`
+        await prepareCampaign({ id: campaignA, targets: ['scope-a-live'], concurrentLimit: 1, ratePerMinute: 60_000 })
+        await prepareCampaign({
+            id: campaignB, targets: ['scope-b-first', 'scope-b-second'], concurrentLimit: 1, ratePerMinute: 60_000,
+        })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 2, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        const { worker: linkA } = await linkedLiveEffect({
+            campaignId: campaignA, target: 'scope-a-live', callId: liveCallA, nowMs,
+        })
+        await expect(linkA()).resolves.toMatchObject({ kind: 'blocked', reason: 'dial_reconciliation_deferred' })
+        const attemptA = (await aiCallCampaignPrismaPort.getCampaign(campaignA))!.attempts[0]
+        expect(attemptA).toMatchObject({ state: 'running', callId: liveCallA, dispatchState: 'acceptance_unknown' })
+        await expect(occupancyCount()).resolves.toBe(1)
+
+        const dispatchedB: string[] = []
+        const dialB: AiCallCampaignDialPort = {
+            async reconcile() { return null },
+            async dispatch(request) {
+                dispatchedB.push(request.targetRef)
+                const callId = `${campaignB}:call:${request.targetRef}`
+                await prisma.call.create({
+                    data: {
+                        id: callId,
+                        direction: 'outbound',
+                        status: 'completed',
+                        fromNumber: '+70000000000',
+                        toNumber: request.phoneE164,
+                        managerId: null,
+                        fsUuid: `${callId}:fs`,
+                        startedAt: new Date(nowMs),
+                        endedAt: new Date(nowMs),
+                    },
+                })
+                return {
+                    callId,
+                    effectRef: `effect:${request.launchId}`,
+                    terminal: { eventId: `result:${request.launchId}`, kind: 'success', outcomeCode: 'qualified' },
+                }
+            },
+        }
+        const workerB = createAiCallCampaignWorkerRuntime({
+            dial: dialB,
+            workerId: 'scope-worker-b',
+            clock: () => new Date(nowMs),
+            claimLeaseMs: 5_000,
+            admissionLeaseMs: 5_000,
+        })
+        const callsB = async () => (await database.$queryRawUnsafe<Array<{ id: string }>>(`
+            SELECT "id" FROM "Call" WHERE "id" LIKE $1 ORDER BY "id"
+        `, `${campaignB}:%`)).map((row) => row.id)
+
+        // 1. Campaign B's only local slot is free even though A's call is live: one
+        //    global slot remains, so B's first dispatch is admitted and dials once.
+        nowMs += 10
+        await expect(workerB()).resolves.toMatchObject({ kind: 'completed', memberState: 'succeeded' })
+        expect(dispatchedB).toEqual(['scope-b-first'])
+        await expect(callsB()).resolves.toEqual([`${campaignB}:call:scope-b-first`])
+        // B's own effect has settled; the one remaining occupant is A's live call.
+        await expect(occupancyCount()).resolves.toBe(1)
+
+        // 2. Shrink the global limit to one. A's live call alone now exhausts it, and
+        //    B's local slot is still free, so the next B first dispatch can only be
+        //    refused by global occupancy that Campaign A holds.
+        nowMs += 10
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: new Date(nowMs),
+        })
+        nowMs += 10
+        const refused = await workerB()
+        expect(refused).toMatchObject({ kind: 'blocked', reason: 'global_concurrency' })
+        expect(dispatchedB).toEqual(['scope-b-first'])
+        await expect(callsB()).resolves.toEqual([`${campaignB}:call:scope-b-first`])
+        const viewB = await aiCallCampaignPrismaPort.getCampaign(campaignB)
+        const secondB = viewB!.attempts.find((attempt) => attempt.id === (refused as { attemptId: string }).attemptId)
+        expect(secondB).toMatchObject({ callId: null, dispatchState: 'not_dispatched' })
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "AiCallAdmissionLease"
+            WHERE "attemptId"=$1 AND "releasedAt" IS NULL
+        `, secondB!.id)).resolves.toEqual([{ count: 0 }])
+        // A's live call is untouched by either decision.
+        expect((await aiCallCampaignPrismaPort.getCampaign(campaignA))!.attempts[0])
+            .toMatchObject({ id: attemptA.id, state: 'running', callId: liveCallA })
+        await expect(occupancyCount()).resolves.toBe(1)
+    })
 })

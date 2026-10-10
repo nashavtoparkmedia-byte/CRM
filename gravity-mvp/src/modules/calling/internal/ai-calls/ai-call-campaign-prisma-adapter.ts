@@ -330,55 +330,6 @@ async function updateCampaignTerminalState(tx: RawSqlExecutor, campaign: Campaig
 }
 
 /**
- * Durable live-effect occupancy.
- *
- * Capacity is allocated once, at admission, and released once, at the terminal. What
- * changes in between is only which branch observes it:
- *
- *   L  a linked, dispatched, unsettled attempt — a telephone effect that may be
- *      physically alive. It stays counted across lease expiry, worker crash, worker
- *      restart and process restart, because it is attempt state and not a lease.
- *   R  an unreleased worker/admission lease for an unsettled attempt — the
- *      pre-effect reservation, which also covers the window between
- *      `beginDialExecution` and the adapter's link commit (the execution heartbeat
- *      keeps that lease alive while the adapter runs).
- *
- * UNION, not UNION ALL: an attempt in both branches is one occupant. The attempt
- * being admitted is excluded — provably redundant for a genuine first dispatch,
- * kept as an invariant guard.
- *
- * Correctness does not depend on this query being serialized by itself:
- * `acquireAdmission` already holds `AiCallAdmissionControl id='global' FOR UPDATE`
- * before it runs, so every competitor for a slot is serialized behind that row.
- */
-const OCCUPANCY_SETTLED_STATES = "('succeeded','retryable_failure','permanent_failure','cancelled')"
-
-function occupancyCountQuery(campaignScoped: boolean): string {
-    const scopeL = campaignScoped ? 'AND a."campaignId"=$2' : ''
-    const scopeR = campaignScoped ? 'AND l."campaignId"=$2' : ''
-    return `
-        SELECT COUNT(*)::int AS "count", MIN(occupancy."retryAt") AS "retryAt" FROM (
-            SELECT a."id" AS "attemptId", NULL::timestamptz AS "retryAt"
-              FROM "AiCallCampaignAttempt" a
-             WHERE a."callId" IS NOT NULL
-               AND a."dispatchState" <> 'not_dispatched'
-               AND a."resultEventId" IS NULL
-               AND a."state" NOT IN ${OCCUPANCY_SETTLED_STATES}
-               ${scopeL}
-            UNION
-            SELECT l."attemptId" AS "attemptId", l."leaseUntil" AS "retryAt"
-              FROM "AiCallAdmissionLease" l
-              JOIN "AiCallCampaignAttempt" a2 ON a2."id"=l."attemptId"
-             WHERE l."releasedAt" IS NULL
-               AND a2."resultEventId" IS NULL
-               AND a2."state" NOT IN ${OCCUPANCY_SETTLED_STATES}
-               ${scopeR}
-        ) occupancy
-        WHERE occupancy."attemptId" <> $1
-    `
-}
-
-/**
  * When to look again after being blocked by occupancy.
  *
  * A live telephone call has no lease TTL to wait on, so the cadence is a bounded
@@ -1123,10 +1074,49 @@ export const aiCallCampaignPrismaPort = {
                 return { kind: 'acquired' as const, grant: { ...reconciliationGrant, replayed: true } }
             }
 
-            const globalCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(
-                occupancyCountQuery(false),
-                attempt.id,
-            )
+            // Durable live-effect occupancy.
+            //
+            // Capacity is allocated once, at admission, and released once, at the
+            // terminal. What changes in between is only which branch observes it:
+            //
+            //   L  a linked, dispatched, unsettled attempt — a telephone effect that
+            //      may be physically alive. It stays counted across lease expiry,
+            //      worker crash, worker restart and process restart, because it is
+            //      attempt state and not a lease.
+            //   R  an unreleased worker/admission lease for an unsettled attempt — the
+            //      pre-effect reservation, which also covers the window between
+            //      `beginDialExecution` and the adapter's link commit (the execution
+            //      heartbeat keeps that lease alive while the adapter runs).
+            //
+            // UNION, not UNION ALL: an attempt in both branches is one occupant. The
+            // attempt being admitted is excluded — provably redundant for a genuine
+            // first dispatch, kept as an invariant guard.
+            //
+            // The global and campaign queries are the same statement except for the
+            // two `"campaignId"=$2` scope predicates; both stay static literals so the
+            // credential analyzer can classify each call site.
+            //
+            // Correctness does not depend on these queries being serialized by
+            // themselves: the `AiCallAdmissionControl id='global' FOR UPDATE` lock
+            // above already serializes every competitor for a slot behind that row.
+            const globalCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(`
+                SELECT COUNT(*)::int AS "count", MIN(occupancy."retryAt") AS "retryAt" FROM (
+                    SELECT a."id" AS "attemptId", NULL::timestamptz AS "retryAt"
+                      FROM "AiCallCampaignAttempt" a
+                     WHERE a."callId" IS NOT NULL
+                       AND a."dispatchState" <> 'not_dispatched'
+                       AND a."resultEventId" IS NULL
+                       AND a."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+                    UNION
+                    SELECT l."attemptId" AS "attemptId", l."leaseUntil" AS "retryAt"
+                      FROM "AiCallAdmissionLease" l
+                      JOIN "AiCallCampaignAttempt" a2 ON a2."id"=l."attemptId"
+                     WHERE l."releasedAt" IS NULL
+                       AND a2."resultEventId" IS NULL
+                       AND a2."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+                ) occupancy
+                WHERE occupancy."attemptId" <> $1
+            `, attempt.id)
             if ((globalCounts[0]?.count ?? 0) >= control.concurrentLimit) {
                 const retryAt = occupancyRetryAt(globalCounts[0]?.retryAt ?? null, input.now)
                 await appendAudit(tx, campaign.id, {
@@ -1141,11 +1131,26 @@ export const aiCallCampaignPrismaPort = {
                     retryAt,
                 }
             }
-            const campaignCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(
-                occupancyCountQuery(true),
-                attempt.id,
-                campaign.id,
-            )
+            const campaignCounts = await tx.$queryRawUnsafe<Array<{ count: number; retryAt: Date | null }>>(`
+                SELECT COUNT(*)::int AS "count", MIN(occupancy."retryAt") AS "retryAt" FROM (
+                    SELECT a."id" AS "attemptId", NULL::timestamptz AS "retryAt"
+                      FROM "AiCallCampaignAttempt" a
+                     WHERE a."callId" IS NOT NULL
+                       AND a."dispatchState" <> 'not_dispatched'
+                       AND a."resultEventId" IS NULL
+                       AND a."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+                       AND a."campaignId"=$2
+                    UNION
+                    SELECT l."attemptId" AS "attemptId", l."leaseUntil" AS "retryAt"
+                      FROM "AiCallAdmissionLease" l
+                      JOIN "AiCallCampaignAttempt" a2 ON a2."id"=l."attemptId"
+                     WHERE l."releasedAt" IS NULL
+                       AND a2."resultEventId" IS NULL
+                       AND a2."state" NOT IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+                       AND l."campaignId"=$2
+                ) occupancy
+                WHERE occupancy."attemptId" <> $1
+            `, attempt.id, campaign.id)
             if ((campaignCounts[0]?.count ?? 0) >= campaign.concurrentLimit) {
                 const retryAt = occupancyRetryAt(campaignCounts[0]?.retryAt ?? null, input.now)
                 await appendAudit(tx, campaign.id, {
