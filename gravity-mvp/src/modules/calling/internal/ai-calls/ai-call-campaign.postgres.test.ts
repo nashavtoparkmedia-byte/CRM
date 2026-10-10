@@ -1353,13 +1353,14 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
     it('scopes a live effect to its own campaign slot while it still holds a global slot', async () => {
         // Campaign A sorts first, so its single member is claimed first; after its
         // deferral it stays off the claim path for its 250 ms recheck window, which
-        // leaves every cycle below to Campaign B's first dispatches.
+        // leaves every cycle below to Campaign B's first dispatches. Which B member
+        // dials first follows member id order, so nothing below assumes it.
         const campaignA = `${PREFIX}:scope-a`
         const campaignB = `${PREFIX}:scope-b`
         const liveCallA = `${campaignA}:call`
         await prepareCampaign({ id: campaignA, targets: ['scope-a-live'], concurrentLimit: 1, ratePerMinute: 60_000 })
         await prepareCampaign({
-            id: campaignB, targets: ['scope-b-first', 'scope-b-second'], concurrentLimit: 1, ratePerMinute: 60_000,
+            id: campaignB, targets: ['scope-b-one', 'scope-b-two'], concurrentLimit: 1, ratePerMinute: 60_000,
         })
         await aiCallCampaignPrismaPort.configureGlobalAdmission({
             concurrentLimit: 2, ratePerMinute: 60_000, now: BASE,
@@ -1414,8 +1415,9 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         //    global slot remains, so B's first dispatch is admitted and dials once.
         nowMs += 10
         await expect(workerB()).resolves.toMatchObject({ kind: 'completed', memberState: 'succeeded' })
-        expect(dispatchedB).toEqual(['scope-b-first'])
-        await expect(callsB()).resolves.toEqual([`${campaignB}:call:scope-b-first`])
+        expect(dispatchedB).toHaveLength(1)
+        const admittedCallB = `${campaignB}:call:${dispatchedB[0]}`
+        await expect(callsB()).resolves.toEqual([admittedCallB])
         // B's own effect has settled; the one remaining occupant is A's live call.
         await expect(occupancyCount()).resolves.toBe(1)
 
@@ -1429,8 +1431,8 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         nowMs += 10
         const refused = await workerB()
         expect(refused).toMatchObject({ kind: 'blocked', reason: 'global_concurrency' })
-        expect(dispatchedB).toEqual(['scope-b-first'])
-        await expect(callsB()).resolves.toEqual([`${campaignB}:call:scope-b-first`])
+        expect(dispatchedB).toHaveLength(1)
+        await expect(callsB()).resolves.toEqual([admittedCallB])
         const viewB = await aiCallCampaignPrismaPort.getCampaign(campaignB)
         const secondB = viewB!.attempts.find((attempt) => attempt.id === (refused as { attemptId: string }).attemptId)
         expect(secondB).toMatchObject({ callId: null, dispatchState: 'not_dispatched' })
