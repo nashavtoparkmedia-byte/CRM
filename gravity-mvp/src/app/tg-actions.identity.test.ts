@@ -29,6 +29,12 @@ const mocks = vi.hoisted(() => ({
     inboundWorkflow: vi.fn(),
     emitMessage: vi.fn(),
     recordReachability: vi.fn(),
+    patchMessageDelivery: vi.fn(),
+    attachMessageMedia: vi.fn(),
+    attachBinaryMedia: vi.fn(),
+    downloadMedia: vi.fn(),
+    attachmentCount: vi.fn(),
+    attachmentFindFirst: vi.fn(),
     admittedChat: null as null | Record<string, unknown>,
     providerAccountId: '7000',
 }))
@@ -53,6 +59,7 @@ vi.mock('telegram', () => ({
         async sendMessage(target: unknown, input: unknown) { return mocks.sendMessage(target, input) }
         async sendFile(target: unknown, input: unknown) { return mocks.sendFile(target, input) }
         async invoke(input: unknown) { return mocks.invoke(input) }
+        async downloadMedia(message: unknown, input: unknown) { return mocks.downloadMedia(message, input) }
         addEventHandler(handler: (event: unknown) => Promise<void>) { this.handlers.push(handler) }
     },
     Api: {
@@ -89,8 +96,8 @@ vi.mock('@/lib/prisma', () => ({
             findUnique: mocks.messageFindUnique,
         },
         messageAttachment: {
-            count: vi.fn(),
-            findFirst: vi.fn(),
+            count: mocks.attachmentCount,
+            findFirst: mocks.attachmentFindFirst,
         },
         chat: { findUnique: mocks.chatFindUnique },
         $queryRaw: mocks.queryRaw,
@@ -113,8 +120,8 @@ vi.mock('@/modules/messaging/public/v1/transport-registry-lifecycle', () => ({
 
 vi.mock('@/modules/messaging/public/v1', () => ({
     appendConversationIdentityCollisionV1: mocks.appendCollision,
-    attachBinaryMessageMediaV1: vi.fn(),
-    attachMessageMediaV1: vi.fn(),
+    attachBinaryMessageMediaV1: mocks.attachBinaryMedia,
+    attachMessageMediaV1: mocks.attachMessageMedia,
     createChannelMessageV1: mocks.createMessage,
     deleteConversationsByIdV1: vi.fn(),
     deleteHistoryImportJobsForChannelV1: vi.fn(),
@@ -122,7 +129,7 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     ensureConversationContactLinkV1: mocks.ensureContactLink,
     patchChannelConversationV1: mocks.patchConversation,
     patchHistoryImportJobV1: mocks.patchImportJob,
-    patchMessageDeliveryV1: vi.fn(),
+    patchMessageDeliveryV1: mocks.patchMessageDelivery,
     patchMessageMetadataV1: mocks.patchMessageMetadata,
     prepareOutboundConversationV1: mocks.prepareOutbound,
     upsertChannelConversationV1: mocks.upsertConversation,
@@ -840,6 +847,635 @@ describe('GramJS private conversation identity admission', () => {
                 connectionId: undefined,
                 proof: { chatId: chat.id, identityTarget: PEER },
             })).rejects.toThrow()
+        })
+    })
+
+    // D1′ safe MTProto ingress: F9, HOLD, exact-key-first dedupe, isolation,
+    // bounded error codes and B3-a strict import reporting.
+    describe('D1′ safe MTProto ingress', () => {
+        const OTP_TEXT = 'Код входа в Telegram: 51734. Никому не сообщайте этот код.'
+        const nowSeconds = () => Math.floor(Date.now() / 1000)
+
+        beforeEach(() => {
+            for (const mock of [
+                mocks.messageFindUnique,
+                mocks.messageFindFirst,
+                mocks.patchMessageDelivery,
+                mocks.attachMessageMedia,
+                mocks.attachBinaryMedia,
+                mocks.downloadMedia,
+                mocks.attachmentCount,
+                mocks.attachmentFindFirst,
+                mocks.getMessages,
+                mocks.getDialogs,
+                mocks.patchMessageMetadata,
+            ]) mock.mockReset()
+            mocks.messageFindUnique.mockResolvedValue(null)
+            mocks.messageFindFirst.mockResolvedValue(null)
+            mocks.patchMessageDelivery.mockResolvedValue({})
+            mocks.attachMessageMedia.mockResolvedValue({})
+            mocks.attachBinaryMedia.mockResolvedValue({})
+            mocks.downloadMedia.mockResolvedValue(Buffer.from('media'))
+            mocks.attachmentCount.mockResolvedValue(0)
+            mocks.attachmentFindFirst.mockResolvedValue(null)
+            mocks.getMessages.mockResolvedValue([])
+            mocks.getDialogs.mockResolvedValue([])
+            mocks.patchMessageMetadata.mockResolvedValue({})
+            mocks.createMessage.mockImplementation(async (command: { externalId: string }) => ({
+                message: { ...command, id: `message:${command.externalId}` },
+            }))
+        })
+
+        function logs(): string {
+            return [console.log, console.warn, console.error]
+                .flatMap(spy => vi.mocked(spy).mock.calls)
+                .map(call => call.map(String).join(' '))
+                .join('\n')
+        }
+
+        function privateMessage(input: {
+            peer: string
+            id?: number
+            text?: string
+            out?: boolean
+            date?: number
+            extra?: Record<string, unknown>
+        }) {
+            return {
+                out: input.out ?? false,
+                ...(input.id === undefined ? {} : { id: input.id }),
+                peerId: { userId: BigInt(input.peer) },
+                message: input.text ?? 'exact identity text',
+                date: input.date ?? nowSeconds(),
+                sender: { firstName: 'Exact', lastName: 'Peer' },
+                chat: { firstName: 'Exact', lastName: 'Peer' },
+                ...input.extra,
+            }
+        }
+
+        function userDialog(peer: string, extra: Record<string, unknown> = {}) {
+            return { isUser: true, unreadCount: 0, date: nowSeconds(), entity: { id: BigInt(peer), firstName: `Peer ${peer}` }, ...extra }
+        }
+
+        function messagesByPeer(map: Record<string, unknown[]>) {
+            mocks.getMessages.mockImplementation(async (entity: { id: bigint }) => map[entity.id.toString()] ?? [])
+        }
+
+        async function runCatchUp(dialogs: unknown[], providerAccountId = '7500') {
+            const connectionId = `telegram-d1-catchup-${connectionSequence}`
+            mocks.providerAccountId = providerAccountId
+            mocks.telegramConnectionFindMany.mockResolvedValue([connection(connectionId)])
+            mocks.getDialogs.mockResolvedValue(dialogs)
+            await initTelegramListeners()
+            const marker = `[TG-CATCHUP] summary conn=${connectionId} `
+            await vi.waitFor(() => expect(logs()).toContain(marker))
+            return logs().split('\n').find(line => line.includes(marker))!
+        }
+
+        async function runImport(dialogs: unknown[], providerAccountId = '7600', mode = 'available_history') {
+            const connectionId = `telegram-d1-import-${connectionSequence}`
+            mocks.providerAccountId = providerAccountId
+            mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+            mocks.getDialogs.mockResolvedValueOnce([]).mockResolvedValueOnce(dialogs)
+            await importTelegramHistory(`job-d1-${connectionSequence}`, mode, undefined, connectionId)
+            const final = mocks.patchImportJob.mock.calls
+                .map(call => call[0] as { patch: Record<string, any> })
+                .filter(command => command.patch.status === 'completed' || command.patch.status === 'failed')
+                .at(-1)
+            return final!.patch
+        }
+
+        function expectNothingPersistedOrPublished() {
+            expect(mocks.createMessage).not.toHaveBeenCalled()
+            expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
+            expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+            expect(mocks.emitMessage).not.toHaveBeenCalled()
+        }
+
+        describe('F9 exact Telegram service peer 777000', () => {
+            test('live inbound and outbound for 777000 write, publish and log nothing of the message', async () => {
+                const handler = await initializeListener(`telegram-f9-live-${connectionSequence}`, '7100')
+
+                await handler({ message: privateMessage({ peer: '777000', id: 1, text: OTP_TEXT }) })
+                await handler({ message: privateMessage({ peer: '777000', id: 2, text: OTP_TEXT, out: true }) })
+
+                expect(mocks.upsertConversation).not.toHaveBeenCalled()
+                expect(mocks.resolveContact).not.toHaveBeenCalled()
+                expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+                expect(mocks.messageFindUnique).not.toHaveBeenCalled()
+                expect(mocks.messageFindFirst).not.toHaveBeenCalled()
+                expectNothingPersistedOrPublished()
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=live')
+                expect(logs()).not.toContain('51734')
+                expect(logs()).not.toContain('Код входа')
+            })
+
+            test('catch-up never fetches the 777000 dialog', async () => {
+                const summary = await runCatchUp([userDialog('777000', { unreadCount: 3 })])
+
+                expect(mocks.getMessages).not.toHaveBeenCalled()
+                expect(mocks.upsertConversation).not.toHaveBeenCalled()
+                expect(summary).toContain('serviceSkipped=1')
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=catch-up')
+            })
+
+            test('a processor reached directly still drops 777000 before any write', async () => {
+                messagesByPeer({ '42': [
+                    privateMessage({ peer: '777000', id: 6, text: OTP_TEXT, out: true }),
+                    privateMessage({ peer: '777000', id: 3, text: OTP_TEXT }),
+                ] })
+
+                const summary = await runCatchUp([userDialog('42')])
+
+                expect(mocks.upsertConversation).not.toHaveBeenCalled()
+                expectNothingPersistedOrPublished()
+                expect(summary).toContain('serviceSkipped=2')
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=import')
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=mirror')
+                expect(logs()).not.toContain('51734')
+            })
+
+            test('history import neither admits nor fetches the 777000 dialog', async () => {
+                messagesByPeer({ '777000': [privateMessage({ peer: '777000', id: 4, text: OTP_TEXT })] })
+
+                const patch = await runImport([userDialog('777000')])
+
+                expect(mocks.getMessages).not.toHaveBeenCalled()
+                expect(mocks.upsertConversation).not.toHaveBeenCalled()
+                expect(patch.detailsJson.completeness.serviceSkipped).toBe(1)
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=import')
+                expect(logs()).not.toContain('51734')
+            })
+
+            test.each(['77700', '7770000', '1777000'])('peer %s is an ordinary peer and is processed', async peer => {
+                const handler = await initializeListener(`telegram-f9-negative-${peer}-${connectionSequence}`, '7101')
+
+                await handler({ message: privateMessage({ peer, id: 5 }) })
+
+                expect(mocks.upsertConversation).toHaveBeenCalledWith(expect.objectContaining({ externalChatId: `telegram:${peer}` }))
+                expect(mocks.createMessage).toHaveBeenCalledWith(expect.objectContaining({ externalId: `telegram:7101:${peer}:5` }))
+            })
+        })
+
+        describe('HOLD: attribution not proven in this event', () => {
+            test.each([
+                ['CONTACT_CONVERSATION_DRIVER_MISMATCH', 'held'],
+                ['CONTACT_CONVERSATION_OWNERSHIP_MISMATCH', 'held'],
+                ['CONTACT_IDENTITY_LINK_MISMATCH', 'held'],
+                ['CONTACT_IDENTITY_LINK_STALE', 'held_transient'],
+                ['CONTACT_CONVERSATION_LINK_STALE', 'held_transient'],
+            ])('%s holds a live message without persistence, publication or workflow', async (code, outcome) => {
+                const handler = await initializeListener(`telegram-hold-${code}-${connectionSequence}`, '7110')
+                mocks.ensureContactLink.mockRejectedValueOnce(new Error(code))
+
+                await handler({ message: privateMessage({ peer: '42', id: 10, text: 'private text that must not leak' }) })
+
+                expect(mocks.ensureContactLink).toHaveBeenCalledOnce()
+                expect(mocks.recordReachability).not.toHaveBeenCalled()
+                expect(mocks.patchConversation).not.toHaveBeenCalled()
+                expect(mocks.messageFindUnique).not.toHaveBeenCalled()
+                expectNothingPersistedOrPublished()
+                expect(logs()).toContain(`${outcome} code=${code}`)
+                expect(logs()).not.toContain('private text')
+            })
+
+            test.each([
+                [{ code: 'P2010', meta: { code: '55P03', message: 'canceling statement due to lock timeout' } }, 'PG_LOCK_TIMEOUT'],
+                [{ code: 'P2028', meta: { error: 'Transaction already closed' } }, 'P2028'],
+            ])('a database lock or transaction failure in the link is a transient hold (%#)', async (shape, expected) => {
+                const handler = await initializeListener(`telegram-hold-db-${expected}-${connectionSequence}`, '7111')
+                mocks.ensureContactLink.mockRejectedValueOnce(Object.assign(new Error('Raw query failed for text "private body"'), shape))
+
+                await handler({ message: privateMessage({ peer: '42', id: 11, text: 'private body' }) })
+
+                expectNothingPersistedOrPublished()
+                expect(logs()).toContain(`held_transient code=${expected}`)
+                expect(logs()).not.toContain('private body')
+            })
+
+            test('blocked contact resolution holds before any link', async () => {
+                const handler = await initializeListener(`telegram-hold-resolution-${connectionSequence}`, '7112')
+                mocks.isResolvedContact.mockReturnValueOnce(false)
+                mocks.resolveContact.mockResolvedValueOnce({ status: 'ambiguous', candidateContactIds: ['a', 'b'], warnings: [] })
+
+                await handler({ message: privateMessage({ peer: '42', id: 12 }) })
+
+                expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+                expectNothingPersistedOrPublished()
+                expect(logs()).toContain('held code=CONTACT_RESOLUTION_BLOCKED:ambiguous')
+            })
+
+            test('catch-up stops a held dialog after its first message and still finishes the others', async () => {
+                mocks.ensureContactLink.mockImplementation(async (command: { chatId: string }) => {
+                    if (command.chatId === 'chat:telegram:42') throw new Error('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+                    return { completed: true }
+                })
+                messagesByPeer({
+                    '42': [13, 12, 11].map(id => privateMessage({ peer: '42', id })),
+                    '43': [22, 21].map(id => privateMessage({ peer: '43', id })),
+                })
+
+                const summary = await runCatchUp([userDialog('42'), userDialog('43'), { isUser: false, entity: { id: 5n } }])
+
+                expect(mocks.ensureContactLink.mock.calls.filter(call => call[0].chatId === 'chat:telegram:42')).toHaveLength(1)
+                expect(mocks.createMessage).toHaveBeenCalledTimes(2)
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([
+                    'telegram:7500:43:21',
+                    'telegram:7500:43:22',
+                ])
+                expect(summary).toContain('dialogs=2 fetched=5 saved=2 duplicates=0')
+                expect(summary).toContain('held=3 heldTransient=0 rejected=0 failed=0 skipped=0 serviceSkipped=0 failedDialogs=0')
+                expect(logs()).toContain('[TG-CATCHUP] Finished. Processed 5 messages.')
+            })
+
+            test('a failing message does not abort the catch-up run', async () => {
+                mocks.createMessage
+                    .mockRejectedValueOnce(Object.assign(new Error('Invalid `prisma.message.create()` invocation: content "secret"'), { name: 'PrismaClientValidationError' }))
+                messagesByPeer({ '43': [32, 31].map(id => privateMessage({ peer: '43', id })) })
+
+                const summary = await runCatchUp([userDialog('43')])
+
+                expect(mocks.createMessage).toHaveBeenCalledTimes(2)
+                expect(summary).toContain('fetched=2 saved=1')
+                expect(summary).toContain('failed=1')
+                expect(logs()).toContain('message failed conn=')
+                expect(logs()).toContain('code=PRISMA_VALIDATION')
+                expect(logs()).not.toContain('secret')
+            })
+
+            test('history import holds a dialog without fetching it, finishes the rest and reports partial', async () => {
+                mocks.ensureContactLink.mockImplementation(async (command: { chatId: string }) => {
+                    if (command.chatId === 'chat:telegram:126') throw new Error('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+                    return { completed: true }
+                })
+                messagesByPeer({
+                    '126': [privateMessage({ peer: '126', id: 41 })],
+                    '127': [privateMessage({ peer: '127', id: 42 })],
+                })
+
+                const patch = await runImport([userDialog('126'), userDialog('127')])
+
+                expect(mocks.getMessages.mock.calls.map(call => call[0].id.toString())).toEqual(['127'])
+                expect(mocks.createMessage).toHaveBeenCalledTimes(1)
+                expect(patch.resultType).toBe('partial')
+                expect(patch.detailsJson.completeness.heldDialogs).toBe(1)
+                expect(logs()).toContain('Dialog held job=')
+            })
+        })
+
+        describe('exact-key-first deduplication', () => {
+            test('two provider messages with identical text one second apart are both persisted live', async () => {
+                const handler = await initializeListener(`telegram-dedupe-live-${connectionSequence}`, '7200')
+                const date = nowSeconds()
+
+                await handler({ message: privateMessage({ peer: '42', id: 5001, text: 'ok', date }) })
+                await handler({ message: privateMessage({ peer: '42', id: 5002, text: 'ok', date: date + 1 }) })
+
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([
+                    'telegram:7200:42:5001',
+                    'telegram:7200:42:5002',
+                ])
+                expect(mocks.messageFindFirst).not.toHaveBeenCalled()
+                expect(mocks.inboundWorkflow).toHaveBeenCalledTimes(2)
+            })
+
+            test('identical repeated messages are both persisted by catch-up and by import', async () => {
+                const date = nowSeconds()
+                messagesByPeer({ '43': [6002, 6001].map(id => privateMessage({ peer: '43', id, text: 'ok', date })) })
+                await runCatchUp([userDialog('43')], '7201')
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([
+                    'telegram:7201:43:6001',
+                    'telegram:7201:43:6002',
+                ])
+
+                mocks.createMessage.mockClear()
+                messagesByPeer({ '44': [7002, 7001].map(id => privateMessage({ peer: '44', id, text: 'ok', date })) })
+                const patch = await runImport([userDialog('44')], '7202')
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId).sort()).toEqual([
+                    'telegram:7202:44:7001',
+                    'telegram:7202:44:7002',
+                ])
+                expect(patch.detailsJson.newMessages).toBe(2)
+            })
+
+            test('the same provider message twice is one row', async () => {
+                const stored = new Map<string, { id: string }>()
+                mocks.createMessage.mockImplementation(async (command: { externalId: string }) => {
+                    stored.set(command.externalId, { id: `message:${command.externalId}` })
+                    return { message: { ...command, id: `message:${command.externalId}` } }
+                })
+                mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId: string } }) => stored.get(query.where.externalId) ?? null)
+                const handler = await initializeListener(`telegram-dedupe-same-${connectionSequence}`, '7203')
+
+                await handler({ message: privateMessage({ peer: '42', id: 5003 }) })
+                await handler({ message: privateMessage({ peer: '42', id: 5003 }) })
+
+                expect(mocks.createMessage).toHaveBeenCalledOnce()
+                expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+                expect(logs()).toContain('DB-DEDUP: skipped existing=message:telegram:7203:42:5003')
+            })
+
+            test('a concurrent writer of the same key is a benign duplicate only when its row is found', async () => {
+                const handler = await initializeListener(`telegram-dedupe-race-${connectionSequence}`, '7204')
+                const unique = () => Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
+                mocks.createMessage.mockRejectedValueOnce(unique())
+                mocks.messageFindUnique
+                    .mockResolvedValueOnce(null)
+                    .mockResolvedValueOnce(null)
+                    .mockResolvedValueOnce({ id: 'winner' })
+
+                await handler({ message: privateMessage({ peer: '42', id: 5004 }) })
+
+                expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+                expect(logs()).toContain('DB-DEDUP: concurrent writer existing=winner')
+                expect(logs()).not.toContain('Error (conn=')
+
+                mocks.createMessage.mockRejectedValueOnce(unique())
+                await handler({ message: privateMessage({ peer: '42', id: 5005 }) })
+                expect(logs()).toContain('failed code=P2002')
+            })
+
+            test('a legacy bare-id row is never a duplicate of another provider account\'s message', async () => {
+                const handler = await initializeListener(`telegram-dedupe-legacy-${connectionSequence}`, '7205')
+                const legacy = (overrides: Record<string, unknown> = {}) => ({
+                    chatId: 'chat:telegram:42', direction: 'inbound', channel: 'telegram', content: 'same text', ...overrides,
+                })
+                const byKey = (rows: Record<string, unknown>) => async (query: { where: { externalId: string } }) => rows[query.where.externalId] ?? null
+
+                // Same chat, direction and content: provenance unproven -> held, never a duplicate.
+                mocks.messageFindUnique.mockImplementation(byKey({ '1001': legacy() }))
+                await handler({ message: privateMessage({ peer: '42', id: 1001, text: 'same text' }) })
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+                expect(logs()).toContain('LEGACY-HOLD chat=chat:telegram:42')
+                expect(logs()).not.toContain('DB-DEDUP')
+
+                // Different content proves a different message.
+                mocks.messageFindUnique.mockImplementation(byKey({ '1002': legacy({ content: 'other text' }) }))
+                await handler({ message: privateMessage({ peer: '42', id: 1002, text: 'same text' }) })
+                // Another chat is not this conversation.
+                mocks.messageFindUnique.mockImplementation(byKey({ '1003': legacy({ chatId: 'chat:telegram:99' }) }))
+                await handler({ message: privateMessage({ peer: '42', id: 1003, text: 'same text' }) })
+                // Another account's exact key for the same peer and message id.
+                mocks.messageFindUnique.mockImplementation(byKey({ 'telegram:7999:42:1004': { id: 'other-account' } }))
+                await handler({ message: privateMessage({ peer: '42', id: 1004, text: 'same text' }) })
+
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([
+                    'telegram:7205:42:1002',
+                    'telegram:7205:42:1003',
+                    'telegram:7205:42:1004',
+                ])
+            })
+
+            test('a cross-account legacy collision is counted as held, not as a duplicate, by catch-up', async () => {
+                mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId: string } }) => (
+                    query.where.externalId === '1101'
+                        ? { chatId: 'chat:telegram:43', direction: 'inbound', channel: 'telegram', content: 'same text' }
+                        : null
+                ))
+                messagesByPeer({ '43': [privateMessage({ peer: '43', id: 1101, text: 'same text' })] })
+
+                const summary = await runCatchUp([userDialog('43')], '7206')
+
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+                expect(summary).toContain('duplicates=0 reconciledSend=0 heldLegacy=1')
+            })
+
+            test('an MTProto event with a valid id never consults a content window', async () => {
+                const handler = await initializeListener(`telegram-dedupe-window-${connectionSequence}`, '7207')
+                mocks.messageFindFirst.mockResolvedValue({ id: 'bot-event-row' })
+
+                await handler({ message: privateMessage({ peer: '42', id: 1201, text: 'same text' }) })
+
+                expect(mocks.messageFindFirst).not.toHaveBeenCalled()
+                expect(mocks.createMessage).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'telegram:7207:42:1201' }))
+            })
+
+            test('an event without a provider id keeps the content window against this account\'s local keys only', async () => {
+                const handler = await initializeListener(`telegram-dedupe-noid-${connectionSequence}`, '7208')
+                mocks.messageFindFirst.mockResolvedValueOnce({ id: 'local-row' })
+
+                await handler({ message: privateMessage({ peer: '42', text: 'no id text' }) })
+
+                expect(mocks.messageFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+                    where: expect.objectContaining({
+                        direction: 'inbound',
+                        OR: [{ externalId: { startsWith: 'telegram:7208:42:local-' } }],
+                    }),
+                }))
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+            })
+
+            test('mirror reconciles one CRM send row without a provider id, then mirrors a second identical phone message', async () => {
+                const handler = await initializeListener(`telegram-dedupe-mirror-${connectionSequence}`, '7209')
+                mocks.messageFindFirst.mockResolvedValueOnce({ id: 'crm-send-row' }).mockResolvedValueOnce(null)
+
+                await handler({ message: privateMessage({ peer: '84', id: 8001, text: 'ok', out: true }) })
+                await handler({ message: privateMessage({ peer: '84', id: 8002, text: 'ok', out: true }) })
+
+                expect(mocks.messageFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+                    where: expect.objectContaining({ direction: 'outbound', content: 'ok', externalId: null }),
+                }))
+                expect(mocks.patchMessageDelivery).toHaveBeenCalledWith(expect.objectContaining({
+                    messageId: 'crm-send-row',
+                    externalId: 'telegram:7209:84:8001',
+                    status: 'delivered',
+                }))
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual(['telegram:7209:84:8002'])
+            })
+
+            test('import stamps a CRM send row instead of duplicating it', async () => {
+                mocks.messageFindFirst.mockResolvedValueOnce({ id: 'crm-send-row' })
+                messagesByPeer({ '126': [privateMessage({ peer: '126', id: 9101, text: 'ok', out: true })] })
+
+                const patch = await runImport([userDialog('126')], '7210')
+
+                expect(mocks.patchMessageDelivery).toHaveBeenCalledWith(expect.objectContaining({
+                    messageId: 'crm-send-row',
+                    externalId: 'telegram:7210:126:9101',
+                }))
+                expect(mocks.createMessage).not.toHaveBeenCalled()
+                expect(patch.detailsJson.completeness.reconciledSendMessages).toBe(1)
+            })
+        })
+
+        describe('B3-a strict import completeness', () => {
+            test('an import that saved messages is partial, never full, with its own counts', async () => {
+                mocks.queryRaw.mockResolvedValue([{ msg_count: 500n, chat_count: 9n, contact_count: 7n, min_date: null, max_date: null }])
+                messagesByPeer({ '126': [privateMessage({ peer: '126', id: 3001 })] })
+
+                const patch = await runImport([userDialog('126')])
+
+                expect(patch.resultType).toBe('partial')
+                expect(patch.messagesImported).toBe(1)
+                expect(patch.chatsScanned).toBe(1)
+                expect(patch.detailsJson.completeness).toMatchObject({ basis: 'bounded-fetch', proof: 'none', dialogsCapHit: false })
+                expect(patch.detailsJson.databaseContext.telegramMessagesSinceCutoff).toBe(500)
+            })
+
+            test('an empty run is live_only and never borrows database totals', async () => {
+                mocks.queryRaw.mockResolvedValue([{ msg_count: 50n, chat_count: 3n, contact_count: 2n, min_date: new Date(), max_date: new Date() }])
+
+                const patch = await runImport([])
+
+                expect(patch.resultType).toBe('live_only')
+                expect(patch.messagesImported).toBe(0)
+                expect(patch.chatsScanned).toBe(0)
+                expect(patch.contactsFound).toBe(0)
+                expect(patch.coveredPeriodFrom).toBeNull()
+            })
+
+            test('dialog and message caps are reported as incomplete', async () => {
+                const rooms = Array.from({ length: 99 }, (_, index) => ({ isUser: false, date: nowSeconds(), entity: { id: BigInt(index + 1000) } }))
+                messagesByPeer({ '126': Array.from({ length: 200 }, (_, index) => privateMessage({ peer: '126', id: 4000 + index })) })
+
+                const patch = await runImport([...rooms, userDialog('126')])
+
+                expect(patch.resultType).toBe('partial')
+                expect(patch.detailsJson.completeness).toMatchObject({
+                    dialogsReturned: 100,
+                    dialogsCapHit: true,
+                    messagesCap: 200,
+                    dialogsWithMessageCapHit: 1,
+                })
+            })
+
+            test('a dialog list that ends before the window is not a dialog cap', async () => {
+                const old = nowSeconds() - 200 * 24 * 60 * 60
+                const rooms = Array.from({ length: 99 }, (_, index) => ({ isUser: false, date: nowSeconds(), entity: { id: BigInt(index + 2000) } }))
+
+                const patch = await runImport([...rooms, { isUser: false, date: old, entity: { id: 3000n } }])
+
+                expect(patch.detailsJson.completeness.dialogsCapHit).toBe(false)
+            })
+
+            test('a failing message is isolated and makes the run partial', async () => {
+                messagesByPeer({ '126': [privateMessage({ peer: '126', id: 0 }), privateMessage({ peer: '126', id: 3002 })] })
+
+                const patch = await runImport([userDialog('126')])
+
+                expect(mocks.createMessage).toHaveBeenCalledOnce()
+                expect(patch.detailsJson.completeness.failedMessages).toBe(1)
+                expect(patch.resultType).toBe('partial')
+                expect(logs()).toContain('code=TELEGRAM_MESSAGE_IDENTITY_UNPROVEN')
+            })
+        })
+
+        describe('bounded ingress error codes', () => {
+            test('media persistence errors never log data URLs, file names or Prisma text', async () => {
+                const prismaText = () => Object.assign(
+                    new Error('Invalid `prisma.messageAttachment.create()` invocation: { url: "data:application/pdf;base64,SUVEU0VDUkVU", fileName: "Иванов_паспорт.pdf" }'),
+                    { name: 'PrismaClientValidationError' },
+                )
+                mocks.attachMessageMedia.mockRejectedValue(prismaText())
+                mocks.attachBinaryMedia.mockRejectedValue(prismaText())
+                const media = {
+                    media: { className: 'MessageMediaDocument', document: { mimeType: 'application/pdf', attributes: [{ fileName: 'Иванов_паспорт.pdf' }] } },
+                    downloadMedia: vi.fn(async () => Buffer.from('pdf')),
+                }
+                const handler = await initializeListener(`telegram-log-media-${connectionSequence}`, '7300')
+
+                await handler({ message: privateMessage({ peer: '42', id: 9201, text: '', extra: media }) })
+                await handler({ message: privateMessage({ peer: '42', id: 9202, text: '', out: true, extra: media }) })
+                mocks.messageFindUnique.mockResolvedValueOnce({ id: 'existing-media-row' })
+                await handler({ message: privateMessage({ peer: '42', id: 9201, text: '', extra: media }) })
+
+                expect(logs()).toContain('Media download failed for msg=')
+                expect(logs()).toContain('Media download failed: code=PRISMA_VALIDATION')
+                expect(logs()).toContain('MEDIA retry failed for existing msg=existing-media-row: code=PRISMA_VALIDATION')
+                for (const leaked of ['base64', 'SUVEU0VDUkVU', 'Иванов', 'Invalid `prisma', 'application/pdf']) {
+                    expect(logs()).not.toContain(leaked)
+                }
+            })
+
+            test.each([
+                ['UNCLASSIFIED', new Error('79991234567')],
+                ['UNCLASSIFIED', Object.assign(new Error('provider said 79991234567'), { code: '79991234567' })],
+                ['UNCLASSIFIED', { errorMessage: 'PHONE_NUMBER_INVALID_79991234567', message: 'PHONE_NUMBER_INVALID 79991234567' }],
+                ['TG_FLOOD_WAIT', { errorMessage: 'FLOOD_WAIT_30', message: 'A wait of 30 seconds is required for Ivan' }],
+                ['PG_LOCK_TIMEOUT', Object.assign(new Error('Raw query failed'), { code: 'P2010', meta: { code: '55P03', message: 'lock timeout for Ivan' } })],
+                ['CONTACT_RESOLUTION_BLOCKED', new Error('CONTACT_RESOLUTION_BLOCKED:ivan_petrov_79991234567')],
+                ['UNCLASSIFIED', new Error('TELEGRAM_PEER_ID_UNPROVEN79991234567')],
+                ['UNCLASSIFIED', new Error('SOME_PROVIDER_SECRET_TOKEN for Ivan')],
+                ['UNCLASSIFIED', 'plain string error with Ivan 79991234567'],
+                ['JS_TYPE_ERROR', new TypeError("Cannot read properties of undefined (reading 'Ivan')")],
+            ])('a provider-controlled error is logged only as %s (case %#)', async (expected, error) => {
+                const handler = await initializeListener(`telegram-log-code-${expected}-${connectionSequence}`, '7301')
+                mocks.upsertConversation.mockRejectedValueOnce(error)
+
+                await handler({ message: privateMessage({ peer: '42', id: 9301 }) })
+
+                expect(logs()).toMatch(new RegExp(`code=${expected}(?![A-Z_:])`))
+                for (const leaked of ['79991234567', 'Ivan', 'ivan', '30 seconds', 'SECRET', 'lock timeout for']) {
+                    expect(logs()).not.toContain(leaked)
+                }
+            })
+
+            test('workflow and publication failures log codes only', async () => {
+                mocks.inboundWorkflow.mockRejectedValueOnce(new Error('update failed for "secret body"'))
+                mocks.emitMessage.mockRejectedValueOnce(new Error('broadcast failed for "secret body"'))
+                const handler = await initializeListener(`telegram-log-workflow-${connectionSequence}`, '7302')
+
+                await handler({ message: privateMessage({ peer: '42', id: 9401, text: 'secret body' }) })
+
+                await vi.waitFor(() => expect(logs()).toContain('emitMessageReceived error: code=UNCLASSIFIED'))
+                expect(logs()).toContain('onInboundMessage error: code=UNCLASSIFIED')
+                expect(logs()).not.toContain('secret body')
+            })
+
+            test('reaction and import-job update failures log codes only', async () => {
+                const connectionId = `telegram-log-reaction-${connectionSequence}`
+                await initializeListener(connectionId, '7303')
+                const reactionHandler = mocks.clients.at(-1)!.handlers[1]
+                mocks.messageFindUnique.mockResolvedValueOnce({
+                    id: 'reacted-message',
+                    chatId: 'chat-reacted',
+                    metadata: {},
+                    chat: { channel: 'telegram', externalChatId: 'telegram:4242', metadata: { providerAccountId: '7303', connectionId, peerId: '4242' } },
+                })
+                mocks.patchMessageMetadata.mockRejectedValueOnce(new Error('metadata write failed for peer 4242 "Ivan"'))
+
+                await reactionHandler({ msgId: 301, peer: { userId: 4242n }, reactions: { results: [{ reaction: { emoticon: '👍' }, count: 1 }] } })
+                expect(logs()).toContain('[TG-REACTION] Error: code=UNCLASSIFIED')
+
+                mocks.patchImportJob.mockRejectedValue(new Error('patch failed: detailsJson {"secret":"Ivan"}'))
+                await runImport([])
+                expect(logs()).toContain('[TG-IMPORT] updateTgImportJob error: code=UNCLASSIFIED')
+                expect(logs()).not.toContain('Ivan')
+                expect(logs()).not.toContain('detailsJson')
+            })
+
+            test('no ingress log statement can reference message text, names, provider ids or raw error text', () => {
+                const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
+                const ingressFunctions = [
+                    'logTelegramServicePeerSkipped',
+                    'rejectTelegramConversationCollision',
+                    'admitTelegramPrivateConversation',
+                    'processInboundTelegramMessage',
+                    'processOutboundMirrorMessage',
+                    'ensureOutboundTelegramAttachment',
+                    'catchUpMissedMessages',
+                    'processReactionUpdate',
+                    'attachInboundListener',
+                    'importTelegramHistory',
+                    'updateTgImportJob',
+                ]
+                const forbidden = /\.message\b|\.stack\b|JSON\.stringify|\b(?:text|content|msgText|fileName|mimeType|senderName|recipientName|senderId|recipientId|peerId|externalMsgId|rawExternalMsgId|username|firstName|lastName)\b|,\s*(?:err|error|e|retryErr|mediaErr|chatErr|messageError|dialogError)\s*\)/
+                let checked = 0
+                for (const name of ingressFunctions) {
+                    const start = source.search(new RegExp(`\\n(?:export )?(?:async )?function ${name}\\(`))
+                    expect(start, name).toBeGreaterThan(-1)
+                    const rest = source.slice(start + 1)
+                    const end = rest.search(/\n(?:export )?(?:async )?function |\n\/\*\*|\ntype |\nconst /)
+                    const body = end === -1 ? rest : rest.slice(0, end)
+                    const statements = body.split('\n').filter(line => /console\.(?:log|warn|error)\(|opsLog\(/.test(line))
+                    for (const statement of statements) {
+                        expect(statement.trim(), name).not.toMatch(forbidden)
+                        checked++
+                    }
+                }
+                expect(checked).toBeGreaterThan(30)
+            })
         })
     })
 })

@@ -536,6 +536,287 @@ function exactTelegramProviderMessageId(
     return /^\d+$/.test(raw) && raw !== '0' ? raw : null
 }
 
+// Telegram's service-notifications account delivers login codes to the
+// personal account as an ordinary private message. The exact peer is dropped
+// before any persistence, publication or text-bearing log on every MTProto
+// ingress path; no other peer is filtered.
+const TELEGRAM_SERVICE_PEER_ID = '777000'
+
+function isTelegramServicePeer(peerId: unknown): boolean {
+    return peerId !== null && peerId !== undefined && String(peerId) === TELEGRAM_SERVICE_PEER_ID
+}
+
+type TelegramIngressLogPhase = TelegramPrivateIngressPhase | 'live' | 'catch-up'
+
+function logTelegramServicePeerSkipped(phase: TelegramIngressLogPhase, connectionId: string): void {
+    console.log(`[TG-INGRESS] telegram_mtproto_service_peer_skipped phase=${phase} conn=${connectionId}`)
+}
+
+// Ingress logs carry one bounded code, never error text: Prisma, GramJS and
+// validation errors can echo message text, media data URLs, file names, names
+// or provider ids. Only the closed sets below are emitted; everything else,
+// including any provider-controlled or numeric token, is UNCLASSIFIED.
+const TELEGRAM_INGRESS_ERROR_CODES = new Set([
+    'TELEGRAM_PEER_ID_UNPROVEN',
+    'TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN',
+    'TELEGRAM_CONNECTION_ID_UNPROVEN',
+    'TELEGRAM_PROVIDER_ACCOUNT_ID_CHANGED',
+    'TELEGRAM_MESSAGE_IDENTITY_UNPROVEN',
+    'TELEGRAM_CONVERSATION_IDENTITY_COLLISION',
+    'CONTACT_CONVERSATION_DRIVER_MISMATCH',
+    'CONTACT_CONVERSATION_OWNERSHIP_MISMATCH',
+    'CONTACT_RESOLUTION_BLOCKED',
+    'CONTACT_IDENTITY_LINK_MISMATCH',
+    'CONTACT_IDENTITY_LINK_STALE',
+    'CONTACT_CONVERSATION_LINK_STALE',
+    'CONVERSATION_IDENTITY_COLLISION_CHAT_NOT_FOUND',
+])
+const TELEGRAM_INGRESS_ERROR_DETAILS = new Set([
+    'channel_mismatch',
+    'conversation_key_mismatch',
+    'transport_connection_mismatch',
+    'peer_identity_mismatch',
+    'chat_kind_mismatch',
+    'ambiguous',
+    'archived',
+    'error',
+    'group_skipped',
+    'identity_phone_conflict',
+    'merge_cycle',
+    'phone_evidence_blocked',
+    'unknown_kind_limited',
+])
+const PRISMA_INGRESS_ERROR_CODES = new Set([
+    'P1001', 'P1002', 'P1008', 'P1017', 'P2002', 'P2003', 'P2010', 'P2024', 'P2025', 'P2028', 'P2034',
+])
+const POSTGRES_INGRESS_ERROR_CODES = new Map([
+    ['55P03', 'PG_LOCK_TIMEOUT'],
+    ['40001', 'PG_SERIALIZATION_FAILURE'],
+    ['40P01', 'PG_DEADLOCK'],
+    ['57014', 'PG_QUERY_CANCELED'],
+])
+const TELEGRAM_RPC_INGRESS_ERROR_CODES = new Set([
+    'FILE_REFERENCE_EXPIRED',
+    'FILE_ID_INVALID',
+    'FILE_MIGRATE',
+    'FLOOD_WAIT',
+    'LOCATION_INVALID',
+    'MEDIA_EMPTY',
+    'MSG_ID_INVALID',
+    'NETWORK_MIGRATE',
+    'PEER_ID_INVALID',
+    'RPC_CALL_FAIL',
+    'TIMEOUT',
+    'AUTH_KEY_UNREGISTERED',
+    'SESSION_REVOKED',
+])
+const ERROR_NAME_INGRESS_CODES = new Map([
+    ['TypeError', 'JS_TYPE_ERROR'],
+    ['RangeError', 'JS_RANGE_ERROR'],
+    ['TimeoutError', 'TIMEOUT'],
+    ['AbortError', 'ABORTED'],
+    ['PrismaClientValidationError', 'PRISMA_VALIDATION'],
+    ['PrismaClientInitializationError', 'PRISMA_INITIALIZATION'],
+    ['PrismaClientUnknownRequestError', 'PRISMA_UNKNOWN_REQUEST'],
+    ['PrismaClientRustPanicError', 'PRISMA_PANIC'],
+])
+
+function telegramIngressErrorCode(error: unknown): string {
+    if (!error || typeof error !== 'object') return 'UNCLASSIFIED'
+    const record = error as { code?: unknown; meta?: unknown; errorMessage?: unknown; message?: unknown; name?: unknown }
+    if (typeof record.code === 'string') {
+        if (PRISMA_INGRESS_ERROR_CODES.has(record.code)) {
+            const databaseCode = metadataRecord(record.meta).code
+            return (typeof databaseCode === 'string' && POSTGRES_INGRESS_ERROR_CODES.get(databaseCode)) || record.code
+        }
+        const databaseCode = POSTGRES_INGRESS_ERROR_CODES.get(record.code)
+        if (databaseCode) return databaseCode
+    }
+    if (typeof record.errorMessage === 'string') {
+        const rpcCode = record.errorMessage.replace(/_\d+$/u, '')
+        if (TELEGRAM_RPC_INGRESS_ERROR_CODES.has(rpcCode)) return `TG_${rpcCode}`
+    }
+    if (typeof record.message === 'string') {
+        const head = /^([A-Z][A-Z_]*[A-Z])(?::([a-z][a-z_]*[a-z]))?(?![A-Za-z0-9_])/u.exec(record.message)
+        if (head && TELEGRAM_INGRESS_ERROR_CODES.has(head[1])) {
+            return head[2] && TELEGRAM_INGRESS_ERROR_DETAILS.has(head[2]) ? `${head[1]}:${head[2]}` : head[1]
+        }
+    }
+    return (typeof record.name === 'string' && ERROR_NAME_INGRESS_CODES.get(record.name)) || 'UNCLASSIFIED'
+}
+
+type TelegramIngressOutcome =
+    | 'saved'
+    | 'duplicate'
+    | 'reconciled_send'
+    | 'held_legacy'
+    | 'held'
+    | 'held_transient'
+    | 'rejected'
+    | 'failed'
+    | 'service_skipped'
+    | 'skipped'
+
+type TelegramIngressFailure = 'rejected' | 'held' | 'held_transient' | 'failed'
+
+const TELEGRAM_REJECTED_CODES = new Set([
+    'TELEGRAM_PEER_ID_UNPROVEN',
+    'TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN',
+    'TELEGRAM_CONNECTION_ID_UNPROVEN',
+    'TELEGRAM_CONVERSATION_IDENTITY_COLLISION',
+])
+const TELEGRAM_HELD_CODES = new Set([
+    'CONTACT_CONVERSATION_DRIVER_MISMATCH',
+    'CONTACT_CONVERSATION_OWNERSHIP_MISMATCH',
+    'CONTACT_RESOLUTION_BLOCKED',
+    'CONTACT_IDENTITY_LINK_MISMATCH',
+])
+const TELEGRAM_HELD_TRANSIENT_CODES = new Set([
+    'CONTACT_IDENTITY_LINK_STALE',
+    'CONTACT_CONVERSATION_LINK_STALE',
+    'PG_LOCK_TIMEOUT',
+    'PG_SERIALIZATION_FAILURE',
+    'PG_DEADLOCK',
+    'PG_QUERY_CANCELED',
+    'P1001',
+    'P1002',
+    'P1008',
+    'P1017',
+    'P2024',
+    'P2028',
+    'P2034',
+])
+
+/**
+ * HOLD: an event whose attribution this admission could not prove. Nothing of
+ * it is persisted, published, queued for AI or fed to workflow; admission's own
+ * pre-link writes (Chat upsert, contact resolution) stay as they are. HOLD is
+ * not message persistence and not loss prevention: the content stays only with
+ * the provider and is recovered only if it is fetched again.
+ */
+function classifyTelegramIngressFailure(code: string): TelegramIngressFailure {
+    const base = code.split(':')[0]
+    if (TELEGRAM_REJECTED_CODES.has(base)) return 'rejected'
+    if (TELEGRAM_HELD_CODES.has(base)) return 'held'
+    if (TELEGRAM_HELD_TRANSIENT_CODES.has(base)) return 'held_transient'
+    return 'failed'
+}
+
+type TelegramStoredMessageMatch =
+    | { kind: 'none' }
+    | { kind: 'duplicate'; messageId: string }
+    | { kind: 'held_legacy' }
+    | { kind: 'reconcile_send'; messageId: string }
+
+/**
+ * Exact-key-first dedupe. An event with a valid provider message id is a
+ * duplicate only of the row carrying its exact account+peer+message key; two
+ * different provider messages are never collapsed by content or time.
+ * - A pre-2026-09-02 row keyed by the bare provider id records no provider
+ *   account, so it is never treated as this event's duplicate. When it is in
+ *   the same chat, direction and content the event is held instead of written
+ *   twice (held_legacy); different content proves a different message.
+ * - Outbound only: a CRM send row that does not carry a provider id yet is
+ *   reconciled by content and the existing window and then stamped with the
+ *   exact key, so it cannot absorb a second event. The claim is not
+ *   compare-and-set; concurrent identical sends remain an open dependency.
+ * An event without a provider id keeps the content+time window, restricted to
+ * this account's local keys (and, outbound, to CRM send rows); that path is not
+ * exact.
+ */
+async function findStoredTelegramMessage(input: {
+    chatId: string
+    exactExternalId: string | null
+    providerMessageId: string | null
+    providerAccountId: string
+    peerId: string
+    direction: 'inbound' | 'outbound'
+    content: string
+    sentAt: Date
+    windowMs: number
+}): Promise<TelegramStoredMessageMatch> {
+    const sentAt = {
+        gte: new Date(input.sentAt.getTime() - input.windowMs),
+        lte: new Date(input.sentAt.getTime() + input.windowMs),
+    }
+    if (input.exactExternalId && input.providerMessageId) {
+        const exact = await prisma.message.findUnique({
+            where: { externalId: input.exactExternalId },
+            select: { id: true },
+        })
+        if (exact) return { kind: 'duplicate', messageId: exact.id }
+        const legacy = await prisma.message.findUnique({
+            where: { externalId: input.providerMessageId },
+            select: { chatId: true, direction: true, channel: true, content: true },
+        })
+        if (
+            legacy
+            && legacy.chatId === input.chatId
+            && legacy.direction === input.direction
+            && legacy.channel === 'telegram'
+            && legacy.content === input.content
+        ) {
+            return { kind: 'held_legacy' }
+        }
+        if (input.direction === 'outbound') {
+            const pendingSend = await prisma.message.findFirst({
+                where: {
+                    chatId: input.chatId,
+                    direction: 'outbound',
+                    content: input.content,
+                    externalId: null,
+                    sentAt,
+                },
+                orderBy: { createdAt: 'asc' },
+                select: { id: true },
+            })
+            if (pendingSend) return { kind: 'reconcile_send', messageId: pendingSend.id }
+        }
+        return { kind: 'none' }
+    }
+    const fallback = await prisma.message.findFirst({
+        where: {
+            chatId: input.chatId,
+            direction: input.direction,
+            content: input.content,
+            sentAt,
+            OR: [
+                { externalId: { startsWith: `telegram:${input.providerAccountId}:${input.peerId}:local-` } },
+                ...(input.direction === 'outbound' ? [{ externalId: null }] : []),
+            ],
+        },
+        select: { id: true },
+    })
+    return fallback ? { kind: 'duplicate', messageId: fallback.id } : { kind: 'none' }
+}
+
+/**
+ * Inserts under the unique external key. A concurrent writer of the same key
+ * (P2002) is a benign duplicate only when the winning row is actually found.
+ */
+async function createTelegramMessageOrFindWinner(input: {
+    chatId: string
+    direction: 'inbound' | 'outbound'
+    content: string
+    type: string
+    sentAt: Date
+    externalId: string
+    metadata: Record<string, unknown>
+}): Promise<{ created: true; message: any } | { created: false; messageId: string }> {
+    try {
+        const result = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: input.chatId, direction: input.direction, content: input.content, channel: 'telegram', type: input.type as any, sentAt: input.sentAt, status: 'delivered', externalId: input.externalId, metadata: input.metadata })
+        return { created: true, message: result.message }
+    } catch (error: unknown) {
+        if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error
+        const winner = await prisma.message.findUnique({
+            where: { externalId: input.externalId },
+            select: { id: true },
+        })
+        if (!winner) throw error
+        return { created: false, messageId: winner.id }
+    }
+}
+
 async function rejectTelegramConversationCollision(
     chat: TelegramPrivateConversation,
     input: {
@@ -584,7 +865,7 @@ async function rejectTelegramConversationCollision(
                 },
             })
         } catch (error: unknown) {
-            console.error('[TG-IDENTITY] Failed to mark linked identity conflicted:', error)
+            console.error(`[TG-IDENTITY] Failed to mark linked identity conflicted: code=${telegramIngressErrorCode(error)}`)
         }
     }
     throw new Error(`TELEGRAM_CONVERSATION_IDENTITY_COLLISION:${reason}`)
@@ -721,15 +1002,19 @@ async function processInboundTelegramMessage(
     providerAccountId: string,
     loggerPrefix = 'TG-LISTENER',
     phase: 'inbound' | 'import' = 'inbound',
-) {
+): Promise<TelegramIngressOutcome> {
     if (message && !message.out) {
         // Only PeerUser denotes a private conversation. A group/channel update
         // may still have fromId.userId; treating that sender as the dialog peer
         // would manufacture a private Chat from a room message.
         const senderId = message.peerId?.userId?.toString()
+        if (isTelegramServicePeer(senderId)) {
+            logTelegramServicePeerSkipped(phase, connectionId)
+            return 'service_skipped'
+        }
         const mediaInfo = detectTgMediaType(message)
         const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
-        if (!senderId || !text) return
+        if (!senderId || !text) return 'skipped'
 
         const rawExternalMsgId = message.id?.toString()
         const externalMsgId = rawExternalMsgId
@@ -740,12 +1025,10 @@ async function processInboundTelegramMessage(
         // drop the message rather than file it under "now".
         const validated = validateTgDate(message.date)
         if (!validated) {
-            console.warn(`[${loggerPrefix}] skip bad-ts msgId=${externalMsgId} date=${message.date}`)
-            return
+            console.warn(`[${loggerPrefix}] skip bad-ts conn=${connectionId}`)
+            return 'skipped'
         }
         const now = validated
-
-        console.log(`[${loggerPrefix}] INBOUND connId=${connectionId} senderId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
 
         // Derive display name from GramJS sender entity
         const senderName = (() => {
@@ -767,27 +1050,28 @@ async function processInboundTelegramMessage(
             displayName: senderName,
             lastMessageAt: now,
         })
+        console.log(`[${loggerPrefix}] INBOUND conn=${connectionId} chat=${unifiedChat.id}`)
 
-        // 3. DE-DUPLICATION: by externalId or content+time
-        const existing = await (prisma.message as any).findFirst({
-            where: {
-                OR: [
-                    ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                    {
-                        chatId: unifiedChat.id,
-                        content: text,
-                        direction: 'inbound',
-                        sentAt: {
-                            gte: new Date(now.getTime() - 5000),
-                            lte: new Date(now.getTime() + 5000)
-                        }
-                    }
-                ]
-            }
+        // 3. DE-DUPLICATION: exact provider key first (see findStoredTelegramMessage)
+        const stored = await findStoredTelegramMessage({
+            chatId: unifiedChat.id,
+            exactExternalId: externalMsgId,
+            providerMessageId: externalMsgId ? rawExternalMsgId : null,
+            providerAccountId,
+            peerId: senderId,
+            direction: 'inbound',
+            content: text,
+            sentAt: now,
+            windowMs: 5000,
         })
+        if (stored.kind === 'held_legacy') {
+            console.log(`[${loggerPrefix}] LEGACY-HOLD chat=${unifiedChat.id}`)
+            return 'held_legacy'
+        }
+        const existing = stored.kind === 'duplicate' ? { id: stored.messageId } : null
 
         if (existing) {
-            console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
+            console.log(`[${loggerPrefix}] DB-DEDUP: skipped existing=${existing.id}`)
             // Self-heal: if a prior attempt created the message but the media
             // download failed (e.g. connection dropped mid-deploy), retry it
             // here — this path re-runs on every catchup/restart, so a message
@@ -810,12 +1094,17 @@ async function processInboundTelegramMessage(
                         }
                     }
                 } catch (retryErr: any) {
-                    console.error(`[${loggerPrefix}] MEDIA retry failed for existing msg=${existing.id}:`, retryErr.message)
+                    console.error(`[${loggerPrefix}] MEDIA retry failed for existing msg=${existing.id}: code=${telegramIngressErrorCode(retryErr)}`)
                 }
             }
+            return 'duplicate'
         } else {
             const msgType = mediaInfo?.type || 'text'
-            const savedMsgResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'inbound', content: text, channel: 'telegram', type: msgType as any, sentAt: now, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
+            const savedMsgResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
+            if (!savedMsgResult.created) {
+                console.log(`[${loggerPrefix}] DB-DEDUP: concurrent writer existing=${savedMsgResult.messageId}`)
+                return 'duplicate'
+            }
             const savedMsg = savedMsgResult.message as any
 
             // Download and save media attachment (photo, voice, video, document, sticker)
@@ -830,58 +1119,65 @@ async function processInboundTelegramMessage(
                             const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
                             const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
                             await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: savedMsg.id, mediaType: msgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
-                            console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} ${mimeType} for msg=${savedMsg.id}`)
+                            console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} for msg=${savedMsg.id}`)
                         }
                     }
                 } catch (mediaErr: any) {
-                    console.error(`[${loggerPrefix}] Media download failed for msg=${savedMsg.id}:`, mediaErr.message)
+                    console.error(`[${loggerPrefix}] Media download failed for msg=${savedMsg.id}: code=${telegramIngressErrorCode(mediaErr)}`)
                 }
             }
 
-            console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
+            console.log(`[${loggerPrefix}] SAVED inbound message=${savedMsg.id} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
             ConversationWorkflowService.onInboundMessage(unifiedChat.id, now).catch(e =>
-                console.error(`[${loggerPrefix}] onInboundMessage error:`, e.message)
+                console.error(`[${loggerPrefix}] onInboundMessage error: code=${telegramIngressErrorCode(e)}`)
             )
             emitMessageReceived(savedMsg).catch(e =>
-                console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
+                console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(e)}`)
             )
+            return 'saved'
         }
     }
+    return 'skipped'
 }
 
 /**
  * Mirrors outbound messages sent from any Telegram client (not via CRM).
  * Called when GramJS fires NewMessage with message.out === true.
  *
- * Dedup strategy:
- *   1. Check externalId (set by sendTelegramMessage if CRM sent it)
- *   2. Check content+time within 30s (handles race: GramJS fires before DB update)
- *   3. If found → update externalId if missing, skip create
- *   4. If not found → external send, create new outbound message
+ * Dedup strategy (findStoredTelegramMessage):
+ *   1. Exact externalId (set by sendTelegramMessage if CRM sent it)
+ *   2. A CRM send row that has no provider id yet, by content+time within 30s
+ *      (handles race: GramJS fires before DB update); it is stamped with the
+ *      exact id so it cannot absorb another event
+ *   3. If not found → external send, create new outbound message
  */
 async function processOutboundMirrorMessage(
     message: any,
     connectionId: string,
     providerAccountId: string,
     loggerPrefix = 'TG-MIRROR',
-) {
-    if (!message?.out) return
+): Promise<TelegramIngressOutcome> {
+    if (!message?.out) return 'skipped'
 
     // Recipient = the person we're writing TO (only private chats)
     const recipientId = message.peerId?.userId?.toString()
-    if (!recipientId) return  // group/channel — skip
+    if (isTelegramServicePeer(recipientId)) {
+        logTelegramServicePeerSkipped('mirror', connectionId)
+        return 'service_skipped'
+    }
+    if (!recipientId) return 'skipped'  // group/channel — skip
 
     const mediaInfo = detectTgMediaType(message)
     const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
     // Skip only if there's truly nothing to save (no text, no media)
-    if (!text && !mediaInfo) return
+    if (!text && !mediaInfo) return 'skipped'
 
     const rawExternalMsgId = message.id?.toString()
     const externalMsgId = rawExternalMsgId
         ? telegramMessageExternalId(providerAccountId, recipientId, rawExternalMsgId)
         : null
     const validated = validateTgDate(message.date)
-    if (!validated) return
+    if (!validated) return 'skipped'
     const sentAt = validated
 
     let recipient: any = message.chat ?? null
@@ -909,37 +1205,39 @@ async function processOutboundMirrorMessage(
     })
 
     const msgType = mediaInfo?.type || 'text'
-    const contentForDedup = text
 
-    // Dedup: by externalId OR by content+time (30s window handles send→event race)
-    const existing = await (prisma.message as any).findFirst({
-        where: {
-            OR: [
-                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                {
-                    chatId: chat.id,
-                    content: contentForDedup,
-                    direction: 'outbound',
-                    sentAt: {
-                        gte: new Date(sentAt.getTime() - 30000),
-                        lte: new Date(sentAt.getTime() + 30000),
-                    },
-                },
-            ],
-        },
+    // Dedup: exact provider key first; content+time only for a CRM send row
+    // that has no provider id yet (30s window handles send→event race)
+    const stored = await findStoredTelegramMessage({
+        chatId: chat.id,
+        exactExternalId: externalMsgId,
+        providerMessageId: externalMsgId ? rawExternalMsgId : null,
+        providerAccountId,
+        peerId: recipientId,
+        direction: 'outbound',
+        content: text,
+        sentAt,
+        windowMs: 30000,
     })
-
-    if (existing) {
-        if (!existing.externalId && externalMsgId) {
-            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: externalMsgId, status: 'delivered' })
+    if (stored.kind === 'held_legacy') {
+        console.log(`[${loggerPrefix}] LEGACY-HOLD chat=${chat.id}`)
+        return 'held_legacy'
+    }
+    if (stored.kind === 'reconcile_send' || stored.kind === 'duplicate') {
+        if (stored.kind === 'reconcile_send' && externalMsgId) {
+            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
         }
-        await ensureOutboundTelegramAttachment(message, existing.id, msgType, loggerPrefix)
-        console.log(`[${loggerPrefix}] DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
-        return
+        await ensureOutboundTelegramAttachment(message, stored.messageId, msgType, loggerPrefix)
+        console.log(`[${loggerPrefix}] DEDUP: skipped existing=${stored.messageId}`)
+        return stored.kind === 'reconcile_send' ? 'reconciled_send' : 'duplicate'
     }
 
     // New outbound message sent from outside CRM — mirror it
-    const savedResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: chat.id, direction: 'outbound', content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
+    const savedResult = await createTelegramMessageOrFindWinner({ chatId: chat.id, direction: 'outbound', content: text, type: msgType, sentAt, externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
+    if (!savedResult.created) {
+        console.log(`[${loggerPrefix}] DEDUP: concurrent writer existing=${savedResult.messageId}`)
+        return 'duplicate'
+    }
     const saved = savedResult.message as any
 
     await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
@@ -947,11 +1245,12 @@ async function processOutboundMirrorMessage(
     // Update chat's lastMessageAt
     await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: chat.id }, patch: { lastMessageAt: sentAt } })
 
-    console.log(`[${loggerPrefix}] MIRRORED outbound msgId=${externalMsgId} type=${msgType} chat=${chat.id}`)
+    console.log(`[${loggerPrefix}] MIRRORED outbound message=${saved.id} type=${msgType} chat=${chat.id}`)
 
     emitMessageReceived(saved).catch(e =>
-        console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
+        console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(e)}`)
     )
+    return 'saved'
 }
 
 async function ensureOutboundTelegramAttachment(
@@ -987,7 +1286,7 @@ async function ensureOutboundTelegramAttachment(
             data: buffer,
         })
     } catch (mediaErr: any) {
-        console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
+        console.error(`[${loggerPrefix}] Media download failed: code=${telegramIngressErrorCode(mediaErr)} msg=${messageId}`)
     }
 }
 
@@ -996,41 +1295,87 @@ async function catchUpMissedMessages(
     connectionId: string,
     providerAccountId: string,
 ) {
+    const counts: Record<TelegramIngressOutcome, number> = {
+        saved: 0,
+        duplicate: 0,
+        reconciled_send: 0,
+        held_legacy: 0,
+        held: 0,
+        held_transient: 0,
+        rejected: 0,
+        failed: 0,
+        service_skipped: 0,
+        skipped: 0,
+    }
+    let dialogCount = 0
+    let failedDialogs = 0
+    let serviceDialogs = 0
+    let fetched = 0
+    let runError: string | null = null
     try {
         console.log(`[TG-CATCHUP] Fetching recent dialogs for connectionId=${connectionId}`)
         const dialogs = await client.getDialogs({ limit: 30 })
-        let processedCount = 0
         for (const dialog of dialogs) {
             if (!dialog.isUser) continue
-            // Telegram Web may mark a message read before CRM reconnects. Replay
-            // a bounded recent window in both directions; processors dedupe by
-            // stable provider message id.
-            const total = Math.min(Math.max((dialog.unreadCount || 0) + 10, 20), 50)
-            const messages = await client.getMessages(dialog.entity, { limit: total })
-            for (const msg of messages.reverse()) {
-                if (msg?.out) {
-                    await processOutboundMirrorMessage(
-                        msg,
-                        connectionId,
-                        providerAccountId,
-                        'TG-CATCHUP-OUT',
-                    )
-                } else {
-                    await processInboundTelegramMessage(
-                        msg,
-                        connectionId,
-                        providerAccountId,
-                        'TG-CATCHUP',
-                        'import',
-                    )
+            // F9: the service peer's dialog is never fetched.
+            if (isTelegramServicePeer(dialog.entity?.id)) {
+                serviceDialogs++
+                logTelegramServicePeerSkipped('catch-up', connectionId)
+                continue
+            }
+            dialogCount++
+            try {
+                // Telegram Web may mark a message read before CRM reconnects. Replay
+                // a bounded recent window in both directions; processors dedupe by
+                // stable provider message id.
+                const total = Math.min(Math.max((dialog.unreadCount || 0) + 10, 20), 50)
+                const messages = await client.getMessages(dialog.entity, { limit: total })
+                const ordered = [...messages].reverse()
+                for (let index = 0; index < ordered.length; index++) {
+                    const msg = ordered[index]
+                    fetched++
+                    let outcome: TelegramIngressOutcome
+                    try {
+                        outcome = msg?.out
+                            ? await processOutboundMirrorMessage(
+                                msg,
+                                connectionId,
+                                providerAccountId,
+                                'TG-CATCHUP-OUT',
+                            )
+                            : await processInboundTelegramMessage(
+                                msg,
+                                connectionId,
+                                providerAccountId,
+                                'TG-CATCHUP',
+                                'import',
+                            )
+                    } catch (messageError: unknown) {
+                        const code = telegramIngressErrorCode(messageError)
+                        outcome = classifyTelegramIngressFailure(code)
+                        console.warn(`[TG-CATCHUP] message ${outcome} conn=${connectionId} code=${code}`)
+                    }
+                    counts[outcome]++
+                    if (outcome === 'held' || outcome === 'held_transient' || outcome === 'rejected') {
+                        // The same admission fails the same way for the rest of
+                        // this dialog; do not repeat its pre-link writes.
+                        const remaining = ordered.length - index - 1
+                        fetched += remaining
+                        counts[outcome] += remaining
+                        break
+                    }
                 }
-                processedCount++
+            } catch (dialogError: unknown) {
+                failedDialogs++
+                console.warn(`[TG-CATCHUP] dialog failed conn=${connectionId} code=${telegramIngressErrorCode(dialogError)}`)
             }
         }
-        console.log(`[TG-CATCHUP] Finished. Processed ${processedCount} messages.`)
-    } catch (err: any) {
-        console.error(`[TG-CATCHUP] Error: ${err.message}`)
+    } catch (err: unknown) {
+        runError = telegramIngressErrorCode(err)
+        console.error(`[TG-CATCHUP] Error: code=${runError}`)
     }
+    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs}${runError ? ` error=${runError}` : ''}`)
+    if (!runError) console.log(`[TG-CATCHUP] Finished. Processed ${fetched} messages.`)
 }
 
 /**
@@ -1088,9 +1433,9 @@ async function processReactionUpdate(
         const { broadcastChatMessageV1: broadcastChatMessage } = await import('@/modules/messaging/public/v1/message-stream')
         broadcastChatMessage(message.chatId, { id: message.id, metadata: updatedMetadata })
 
-        console.log(`[TG-REACTION] msg=${message.id} reactions=${JSON.stringify(reactionsMap)}`)
+        console.log(`[TG-REACTION] msg=${message.id} reactions=${Object.keys(reactionsMap).length}`)
     } catch (err: any) {
-        console.error(`[TG-REACTION] Error:`, err.message)
+        console.error(`[TG-REACTION] Error: code=${telegramIngressErrorCode(err)}`)
     }
 }
 
@@ -1105,15 +1450,21 @@ function attachInboundListener(
     }
 
     client.addEventHandler(async (event: any) => {
+        const msg = event.message
+        // F9: the exact service peer never reaches either processor.
+        if (isTelegramServicePeer(msg?.peerId?.userId)) {
+            logTelegramServicePeerSkipped('live', connectionId)
+            return
+        }
         try {
-            const msg = event.message
             if (msg?.out) {
                 await processOutboundMirrorMessage(msg, connectionId, providerAccountId, 'TG-MIRROR')
             } else {
                 await processInboundTelegramMessage(msg, connectionId, providerAccountId, 'TG-LISTENER')
             }
-        } catch (err: any) {
-            console.error(`[TG-LISTENER] Error (conn=${connectionId}):`, err.message)
+        } catch (err: unknown) {
+            const code = telegramIngressErrorCode(err)
+            console.error(`[TG-LISTENER] Error (conn=${connectionId}): ${classifyTelegramIngressFailure(code)} code=${code}`)
         }
     }, new NewMessage({ incoming: true, outgoing: true }))
 
@@ -1767,7 +2118,7 @@ export async function importTelegramHistory(
         client = await getTelegramClient(connection)
         providerAccountId = await attestTelegramProviderAccount(client, connection.id)
     } catch (err: any) {
-        console.error(`[TG-IMPORT] Failed to get client: ${err.message}`)
+        console.error(`[TG-IMPORT] Failed to get client: code=${telegramIngressErrorCode(err)}`)
         await updateTgImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
         return
     }
@@ -1794,17 +2145,40 @@ export async function importTelegramHistory(
     let totalContacts = 0
     let minDate: Date | null = null
     let maxDate: Date | null = null
+    // Completeness evidence for a bounded fetch (B3-a strict).
+    const dialogLimit = 100
+    const msgLimit = mode === 'from_connection_time' ? 20 : 200
+    let existingMessages = 0
+    let heldLegacyMessages = 0
+    let reconciledSendMessages = 0
+    let failedMessages = 0
+    let heldDialogs = 0
+    let rejectedDialogs = 0
+    let failedDialogs = 0
+    let serviceSkipped = 0
+    let dialogsWithMessageCapHit = 0
 
     try {
         // 5. Fetch dialogs (up to 100)
-        const dialogs = await client.getDialogs({ limit: 100 })
+        const dialogs = await client.getDialogs({ limit: dialogLimit })
         console.log(`[TG-IMPORT] Found ${dialogs.length} dialogs`)
+        const unpinnedDialogs = dialogs.filter((dialog: any) => !dialog.pinned)
+        const oldestDialogAt = unpinnedDialogs.length > 0
+            ? validateTgDate((unpinnedDialogs[unpinnedDialogs.length - 1] as any).message?.date ?? (unpinnedDialogs[unpinnedDialogs.length - 1] as any).date)
+            : null
+        const dialogsCapHit = dialogs.length >= dialogLimit && (!oldestDialogAt || oldestDialogAt >= cutoff)
 
         for (const dialog of dialogs) {
             if (!dialog.isUser) continue // skip groups/channels for now
-            totalChats++
 
             const peerId = dialog.entity?.id?.toString()
+            // F9: the service peer's dialog is neither admitted nor fetched.
+            if (isTelegramServicePeer(peerId)) {
+                serviceSkipped++
+                logTelegramServicePeerSkipped('import', connection.id)
+                continue
+            }
+            totalChats++
             if (!peerId) continue
 
             const providerDisplayName = (dialog.entity as any)?.firstName
@@ -1821,9 +2195,19 @@ export async function importTelegramHistory(
                 })
                 totalContacts++
 
-                // Fetch messages — determine limit based on mode
-                const msgLimit = mode === 'from_connection_time' ? 20 : 200
+                // Fetch messages — limit determined by mode (msgLimit)
                 const messages = await client.getMessages(dialog.entity!, { limit: msgLimit })
+                if (messages.length >= msgLimit) {
+                    // Newest-first page: if its oldest message is still inside the
+                    // window, older messages of the window were not fetched.
+                    const fetchedDates = messages
+                        .map((msg: any) => validateTgDate(msg.date))
+                        .filter((date): date is Date => date !== null)
+                    const oldestFetched = fetchedDates.length > 0
+                        ? new Date(Math.min(...fetchedDates.map(date => date.getTime())))
+                        : null
+                    if (!oldestFetched || oldestFetched >= cutoff) dialogsWithMessageCapHit++
+                }
 
                 let chatMaxTs: Date | null = null
                 for (const msg of messages) {
@@ -1837,32 +2221,50 @@ export async function importTelegramHistory(
                     if (!minDate || ts < minDate) minDate = ts
                     if (!maxDate || ts > maxDate) maxDate = ts
                     if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
-
-                    const rawExternalMsgId = msg.id?.toString()
-                    const externalMsgId = rawExternalMsgId
-                        ? telegramMessageExternalId(providerAccountId, peerId, rawExternalMsgId)
-                        : null
-                    const isOutbound = !!msg.out
-                    const histMsgType = histMediaInfo?.type || 'text'
-
-                    // Dedup
-                    const existing = await (prisma.message as any).findFirst({
-                        where: {
-                            OR: [
-                                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                                {
-                                    chatId: unifiedChat.id,
-                                    content: msgText,
-                                    direction: isOutbound ? 'outbound' : 'inbound',
-                                    sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
-                                }
-                            ]
-                        }
-                    })
-
                     totalMessages++
-                    if (!existing) {
-                        const savedHistResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, channel: 'telegram', type: histMsgType as any, sentAt: ts, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
+
+                    // One failing message never costs the rest of the dialog.
+                    try {
+                        const rawExternalMsgId = msg.id?.toString()
+                        const externalMsgId = rawExternalMsgId
+                            ? telegramMessageExternalId(providerAccountId, peerId, rawExternalMsgId)
+                            : null
+                        const isOutbound = !!msg.out
+                        const histMsgType = histMediaInfo?.type || 'text'
+
+                        // Dedup: exact provider key first (see findStoredTelegramMessage)
+                        const stored = await findStoredTelegramMessage({
+                            chatId: unifiedChat.id,
+                            exactExternalId: externalMsgId,
+                            providerMessageId: externalMsgId ? rawExternalMsgId : null,
+                            providerAccountId,
+                            peerId,
+                            direction: isOutbound ? 'outbound' : 'inbound',
+                            content: msgText,
+                            sentAt: ts,
+                            windowMs: 5000,
+                        })
+                        if (stored.kind === 'held_legacy') {
+                            heldLegacyMessages++
+                            continue
+                        }
+                        if (stored.kind === 'reconcile_send') {
+                            if (externalMsgId) {
+                                await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
+                            }
+                            reconciledSendMessages++
+                            continue
+                        }
+                        if (stored.kind === 'duplicate') {
+                            existingMessages++
+                            continue
+                        }
+
+                        const savedHistResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
+                        if (!savedHistResult.created) {
+                            existingMessages++
+                            continue
+                        }
                         const savedHistMsg = savedHistResult.message as any
 
                         // Download media for history import
@@ -1894,6 +2296,9 @@ export async function importTelegramHistory(
                         }
 
                         newMessages++
+                    } catch (messageError: unknown) {
+                        failedMessages++
+                        console.warn(`[TG-IMPORT] message failed job=${jobId} code=${telegramIngressErrorCode(messageError)}`)
                     }
                 }
 
@@ -1912,7 +2317,12 @@ export async function importTelegramHistory(
                     })
                 }
             } catch (chatErr: any) {
-                console.error(`[TG-IMPORT] Dialog error peerId=${peerId}: ${chatErr.message}`)
+                const code = telegramIngressErrorCode(chatErr)
+                const outcome = classifyTelegramIngressFailure(code)
+                if (outcome === 'held' || outcome === 'held_transient') heldDialogs++
+                else if (outcome === 'rejected') rejectedDialogs++
+                else failedDialogs++
+                console.error(`[TG-IMPORT] Dialog ${outcome} job=${jobId} code=${code}`)
             }
         }
 
@@ -1930,28 +2340,59 @@ export async function importTelegramHistory(
         const dbChatCount = Number(db?.chat_count ?? 0)
         const dbContactCount = Number(db?.contact_count ?? 0)
 
-        const finalMessages = totalMessages > 0 ? totalMessages : dbMsgCount
-        const finalChats = totalChats > 0 ? totalChats : dbChatCount
-        const finalContacts = totalContacts > 0 ? totalContacts : dbContactCount
-        const finalMinDate = minDate ?? db?.min_date ?? null
-        const finalMaxDate = maxDate ?? db?.max_date ?? null
-
-        // 7. Complete
-        const resultType = finalMessages > 0 ? 'full' : 'live_only'
+        // 7. Complete. A bounded fetch never proves the whole period, so this
+        // job is never 'full' (B3-a strict): it is 'partial' whenever it saw any
+        // in-window message or any cap, hold or failure, else 'live_only'.
+        // Counts are this run's own; database totals are context only.
+        const incomplete = dialogsCapHit
+            || dialogsWithMessageCapHit > 0
+            || heldDialogs > 0
+            || rejectedDialogs > 0
+            || failedDialogs > 0
+            || failedMessages > 0
+            || heldLegacyMessages > 0
+        const resultType = totalMessages > 0 || incomplete ? 'partial' : 'live_only'
         await updateTgImportJob(jobId, {
             status: 'completed',
             resultType,
-            messagesImported: finalMessages,
-            chatsScanned: finalChats,
-            contactsFound: finalContacts,
+            messagesImported: totalMessages,
+            chatsScanned: totalChats,
+            contactsFound: totalContacts,
             finishedAt: new Date(),
-            coveredPeriodFrom: finalMinDate,
-            coveredPeriodTo: finalMaxDate,
-            detailsJson: { newMessages, existingMessages: finalMessages - newMessages },
+            coveredPeriodFrom: minDate,
+            coveredPeriodTo: maxDate,
+            detailsJson: {
+                newMessages,
+                existingMessages,
+                completeness: {
+                    basis: 'bounded-fetch',
+                    requestedFrom: cutoff.toISOString(),
+                    dialogsReturned: dialogs.length,
+                    dialogsCap: dialogLimit,
+                    dialogsCapHit,
+                    messagesCap: msgLimit,
+                    dialogsWithMessageCapHit,
+                    heldDialogs,
+                    rejectedDialogs,
+                    failedDialogs,
+                    failedMessages,
+                    heldLegacyMessages,
+                    reconciledSendMessages,
+                    serviceSkipped,
+                    archivedFolderCoverage: 'unverified',
+                    providerDeletionCoverage: 'none',
+                    proof: 'none',
+                },
+                databaseContext: {
+                    telegramMessagesSinceCutoff: dbMsgCount,
+                    telegramChats: dbChatCount,
+                    telegramContacts: dbContactCount,
+                },
+            },
         })
-        console.log(`[TG-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new), ${finalChats} chats, ${finalContacts} contacts`)
+        console.log(`[TG-IMPORT] Completed job=${jobId}: result=${resultType} ${totalMessages} msgs (${newMessages} new), ${totalChats} chats, ${totalContacts} contacts`)
     } catch (err: any) {
-        console.error(`[TG-IMPORT] Fatal error job=${jobId}: ${err.message}`)
+        console.error(`[TG-IMPORT] Fatal error job=${jobId}: code=${telegramIngressErrorCode(err)}`)
         await updateTgImportJob(jobId, {
             status: 'failed',
             resultType: 'failed',
@@ -1979,7 +2420,7 @@ async function updateTgImportJob(jobId: string, data: {
     try {
         await patchHistoryImportJobV1({ contract: PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, jobId, patch: data })
     } catch (err: any) {
-        console.error(`[TG-IMPORT] updateTgImportJob error: ${err.message}`)
+        console.error(`[TG-IMPORT] updateTgImportJob error: code=${telegramIngressErrorCode(err)}`)
     }
 }
 
