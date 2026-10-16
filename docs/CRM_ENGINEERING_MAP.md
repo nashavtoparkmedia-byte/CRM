@@ -675,11 +675,16 @@ Fleet sync: reconciler adapter → `runDriverClusterContactOwnershipV1`.
 **F-04 Telegram MTProto inbound**
 `G/instrumentation.ts` → `initializeOperationalTelegramRuntimeV1` →
 `initTelegramListeners` (`G/app/tg-actions.ts`) → `NewMessage` handler →
-`processInboundTelegramMessage` → `admitTelegramPrivateConversation`
-(`upsertChannelConversationV1`, `externalChatId = telegram:<peerId>`) → F-01 →
-`createChannelMessageV1` (`externalId = telegram:<account>:<peer>:<msgId>`) →
-`attachMessageMediaV1` → `channelConversationWorkflowV1.onInboundMessage` →
-`publishPersistedMessageV1`.
+exact service-peer guard (I-50) → `processInboundTelegramMessage` →
+`admitTelegramPrivateConversation` (`upsertChannelConversationV1`,
+`externalChatId = telegram:<peerId>`) → F-01 → exact-key-first dedupe
+(`findStoredTelegramMessage`, I-52) → `createChannelMessageV1`
+(`externalId = telegram:<account>:<peer>:<msgId>`) → `attachMessageMediaV1` →
+`channelConversationWorkflowV1.onInboundMessage` → `publishPersistedMessageV1`.
+An admission that cannot prove attribution is classified by the caller and the
+event is held (I-51). Mirror, catch-up and history import follow the same
+admission and dedupe; catch-up and import isolate each message and dialog
+(I-53).
 
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
@@ -1232,6 +1237,53 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `tg-bot/src/services/crmIntegration.js`, `tg-bot/src/services/botRuntime.js` —
   `tg-bot/src/security/crmForwardOutcome.test.js`,
   `tg-bot/src/security/botRuntimeUpdateLifecycle.test.js`.
+- **I-50 Telegram's service peer `777000` never enters the CRM.** The exact
+  PeerUser id is dropped before any persistence, publication or text-bearing log
+  on live inbound, live mirror, catch-up (its dialog is not fetched) and history
+  import (its dialog is neither admitted nor fetched). No other peer is filtered;
+  historical rows and old log lines are a separate security incident. —
+  `isTelegramServicePeer` in `G/app/tg-actions.ts` — `tg-actions.identity.test.ts`
+  (F9 block).
+- **I-51 An MTProto message becomes visible only after its attribution is proven
+  in the same event.** A `CONTACT_CONVERSATION_DRIVER_MISMATCH`,
+  `OWNERSHIP_MISMATCH`, `CONTACT_RESOLUTION_BLOCKED:*` or
+  `CONTACT_IDENTITY_LINK_MISMATCH` from admission (and the transient link, lock
+  and transaction failures) HOLDS the event: no `Message`, attachment,
+  `MessageEventLog`, SSE, AI, workflow, reachability, link or `driverId` write.
+  Admission's own pre-link writes (Chat upsert, contact resolution and its
+  conflict records) are not undone. HOLD is not persistence and not loss
+  prevention: the content stays with the provider and is recovered only if it is
+  fetched again. The admission helper, its single link call and its three call
+  sites are unchanged; classification happens in the callers. —
+  `classifyTelegramIngressFailure` — `tg-actions.identity.test.ts` (HOLD block),
+  `check-messaging-conversation-contact-link-boundary.mjs` (placement pin).
+- **I-52 An MTProto event with a valid provider id is a duplicate only of its exact
+  `telegram:<account>:<peer>:<msgId>` row in the admitted Chat, direction and
+  Telegram channel.** The same key on any other row is a `key_conflict`: nothing is
+  written, no media is attached, no delivery is stamped, nothing is published or fed
+  to workflow, and the event is counted and logged with a bounded code. Identical
+  text in a time window never collapses two provider messages. A P2002 winner is a
+  duplicate only when it is found and is this event's own (same Chat, direction and
+  channel; for a synthetic `local-<ms>` key also the same content); otherwise it is a
+  `key_conflict` and the insert wrote nothing. A pre-2026-09-02 row keyed by the bare id records
+  no provider account, so it is never this event's duplicate; with the same chat,
+  direction and content the event is held as `held_legacy` instead of written twice.
+  Outbound only, a CRM send row without a provider id is reconciled by content and
+  the existing window and stamped with the exact id; that claim is not
+  compare-and-set. An event without a provider id keeps the content window against
+  this account's local keys only and is not exact. Not exactly-once: concurrent
+  reconciliation of identical sends and held events are open. —
+  `findStoredTelegramMessage`, `isOwnTelegramMessageRow`,
+  `createTelegramMessageOrFindWinner` — `tg-actions.identity.test.ts` (dedupe and
+  F1/F2 blocks).
+- **I-53 Catch-up and history import are bounded and say so.** Each message and
+  dialog is isolated; a held or rejected dialog is not re-admitted for the rest of
+  a catch-up run, and each run logs one counts-only summary. A history import is
+  never `full`: it is `partial` when it saw any in-window message or any cap, hold,
+  key conflict or failure, else `live_only`, with run-local counts and a `completeness` block in
+  `detailsJson` (database totals are context only). Ingress logs carry a bounded
+  code, never error text. — `catchUpMissedMessages`, `importTelegramHistory`,
+  `telegramIngressErrorCode` — `tg-actions.identity.test.ts` (B3-a and log blocks).
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.
@@ -1398,7 +1450,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-09 | Scraper result webhook target has no path in the base compose file (`CRM_WEBHOOK_URL: http://gravity-mvp:3002`) while the worker posts to it verbatim and the receiver is `/api/monitoring/fleet-check/callback` | compose L485, L517; `yandex-fleet-scraper/src/worker.ts` `fireWebhook` | HIGH for base compose; production overlay unknown |
 | R-10 | Fleet-check quota comparison uses fields the scraper `/admin/stats` does not return | `G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` L71; `/admin/stats` in `yandex-fleet-scraper/src/api.ts` returns queue counts only | HIGH |
 | R-11 | tg-bot falls back to secret `'secret'` when `BOT_CRM_SECRET` is unset | `tg-bot/src/services/crmAction.js` L29 | HIGH |
-| R-12 | `getTelegramClient` triggers `catchUpMissedMessages` on every cached-client fetch | `G/app/tg-actions.ts` L1316, L1323 | HIGH |
+| R-12 | `getTelegramClient` triggers `catchUpMissedMessages` on every cached-client fetch | `G/app/tg-actions.ts` L1721, L1728 | HIGH |
 | R-14 | `/api/ai-calls/dev-simulate` is enabled unless an env flag is exactly `'false'` | `G/app/api/ai-calls/dev-simulate/route.ts` L41 | HIGH |
 | R-15 | Retention has only a 24 h interval with no startup run; a process restarted more often than daily never runs it | `G/instrumentation.ts` | MEDIUM |
 | R-16 | Operational log tables grow without cleanup (`cron_health_log` gets a row per watchdog tick) | `G/lib/cron-health.ts`; no cleanup caller | MEDIUM |
@@ -1406,6 +1458,13 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback) | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
+| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge |
+| R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
+| R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
+| R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
+| R-25 | CRM send reconciliation in the MTProto mirror/import is not compare-and-set; concurrent identical sends can cross-assign provider ids until a later fetch | `findStoredTelegramMessage` (outbound branch); no conditional claim in the messaging port | LOW |
+| R-26 | MTProto recovery is bounded (catch-up 30 dialogs × 20–50 messages, import 100 × 200): a held or missed event is recovered only if fetched again; no durable per-event hold record exists | `G/app/tg-actions.ts` `catchUpMissedMessages`, `importTelegramHistory` | HIGH until a replay design exists |
+| R-27 | A `key_conflict` event is refused, not stored: an exact key already on another Chat, direction or channel needs investigation, and a second distinct id-less event in the same second shares the synthetic `local-<ms>` key, so it is counted and logged but never persisted | `G/app/tg-actions.ts` `findStoredTelegramMessage`, `createTelegramMessageOrFindWinner` | MEDIUM |
 
 ## 10. Cleanup candidates
 
@@ -1612,7 +1671,7 @@ Not refactor requests. Each names the concrete way a future change goes wrong.
 |---|---|---|
 | X-01 | `max-web-scraper/index.js` (6960) | One file, one shared Playwright page, ~20 mutable top-level flags acting as mutexes; send, import, sync and probe paths interleave. Correctness depends on flag-check order |
 | X-02 | `max-web-scraper/transport/TransportInterceptor.js` (2372) | Hand-written decoder of the provider WebSocket protocol; id coercion accepts several shapes; file side effects |
-| X-03 | `G/app/tg-actions.ts` (2211) | A `'use server'` file that is the whole MTProto runtime: process-lifetime Maps, timers, and every export is also a client-invocable action. State is lost on restart |
+| X-03 | `G/app/tg-actions.ts` (2720) | A `'use server'` file that is the whole MTProto runtime: process-lifetime Maps, timers, and every export is also a client-invocable action. State is lost on restart |
 | X-04 | `G/lib/whatsapp/WhatsAppService.ts` (2995) | The ingest pipeline exists three times (live, `syncHistory`, `importWhatsAppHistory`); a rule changed in one path silently diverges |
 | X-05 | `G/lib/MessageService.ts` (1365) | The per-channel `switch` is repeated in `send`, `retrySend`, `ChannelAdapterRegistry` and the media/reaction/delete routes; MAX chat-id drift can move messages and delete a Chat inside `send` |
 | X-06 | `G/lib/ContactService.ts` (1103) + executor + coordinator | Invariants are split across planner, executor and postconditions; much state lives in untyped `Contact.customFields` |
