@@ -1159,9 +1159,9 @@ describe('GramJS private conversation identity admission', () => {
             })
 
             test('the same provider message twice is one row', async () => {
-                const stored = new Map<string, { id: string }>()
+                const stored = new Map<string, Record<string, unknown>>()
                 mocks.createMessage.mockImplementation(async (command: { externalId: string }) => {
-                    stored.set(command.externalId, { id: `message:${command.externalId}` })
+                    stored.set(command.externalId, { ...command, id: `message:${command.externalId}` })
                     return { message: { ...command, id: `message:${command.externalId}` } }
                 })
                 mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId: string } }) => stored.get(query.where.externalId) ?? null)
@@ -1182,7 +1182,7 @@ describe('GramJS private conversation identity admission', () => {
                 mocks.messageFindUnique
                     .mockResolvedValueOnce(null)
                     .mockResolvedValueOnce(null)
-                    .mockResolvedValueOnce({ id: 'winner' })
+                    .mockResolvedValueOnce({ id: 'winner', chatId: 'chat:telegram:42', direction: 'inbound', channel: 'telegram', content: 'exact identity text' })
 
                 await handler({ message: privateMessage({ peer: '42', id: 5004 }) })
 
@@ -1297,6 +1297,149 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.createMessage).not.toHaveBeenCalled()
                 expect(patch.detailsJson.completeness.reconciledSendMessages).toBe(1)
             })
+
+            describe('F1/F2: a row found by its external key must be this event\'s own', () => {
+                const pdf = () => ({
+                    media: { className: 'MessageMediaDocument', document: { mimeType: 'application/pdf', attributes: [{ fileName: 'scan.pdf' }] } },
+                    downloadMedia: vi.fn(async () => Buffer.from('pdf')),
+                })
+                const row = (overrides: Record<string, unknown> = {}) => ({
+                    id: 'stored-row', chatId: 'chat:telegram:42', direction: 'inbound', channel: 'telegram', content: 'same text', ...overrides,
+                })
+                const byKey = (rows: Record<string, unknown>) => async (query: { where: { externalId: string } }) => rows[query.where.externalId] ?? null
+                const uniqueViolation = () => Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
+
+                // A real unique index: a second insert of a stored key fails with P2002.
+                function uniqueKeyStore() {
+                    const rows = new Map<string, Record<string, unknown>>()
+                    mocks.createMessage.mockImplementation(async (command: { externalId: string }) => {
+                        if (rows.has(command.externalId)) throw uniqueViolation()
+                        const created = { ...command, id: `message:${rows.size + 1}` }
+                        rows.set(command.externalId, created)
+                        return { message: created }
+                    })
+                    mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId: string } }) => rows.get(query.where.externalId) ?? null)
+                    return rows
+                }
+
+                function expectStoredRowUntouched() {
+                    expect(mocks.attachmentCount).not.toHaveBeenCalled()
+                    expect(mocks.downloadMedia).not.toHaveBeenCalled()
+                    expect(mocks.attachMessageMedia).not.toHaveBeenCalled()
+                    expect(mocks.attachBinaryMedia).not.toHaveBeenCalled()
+                    expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
+                    expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+                    expect(mocks.emitMessage).not.toHaveBeenCalled()
+                }
+
+                test.each([
+                    ['another chat', { chatId: 'chat:telegram:99' }],
+                    ['the other direction', { direction: 'outbound' }],
+                    ['another channel', { channel: 'max' }],
+                ])('live inbound: its exact key stored in %s is a key conflict; no media attach, stamp, publication or workflow', async (_where, overrides) => {
+                    const handler = await initializeListener(`telegram-key-conflict-in-${connectionSequence}`, '7220')
+                    mocks.messageFindUnique.mockImplementation(byKey({ 'telegram:7220:42:9401': row(overrides) }))
+
+                    await handler({ message: privateMessage({ peer: '42', id: 9401, text: '', extra: pdf() }) })
+
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                    expectStoredRowUntouched()
+                    expect(logs()).toContain('[TG-LISTENER] KEY-CONFLICT chat=chat:telegram:42 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
+                    expect(logs()).not.toContain('DB-DEDUP')
+                    expect(logs()).not.toContain('stored-row')
+                })
+
+                test('mirror: its exact key stored in another chat is a key conflict; no delivery stamp or attachment', async () => {
+                    const handler = await initializeListener(`telegram-key-conflict-out-${connectionSequence}`, '7221')
+                    mocks.messageFindUnique.mockImplementation(byKey({ 'telegram:7221:84:9402': row({ chatId: 'chat:telegram:99', direction: 'outbound' }) }))
+
+                    await handler({ message: privateMessage({ peer: '84', id: 9402, text: '', out: true, extra: pdf() }) })
+
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                    expect(mocks.messageFindFirst).not.toHaveBeenCalled()
+                    expectStoredRowUntouched()
+                    expect(logs()).toContain('[TG-MIRROR] KEY-CONFLICT chat=chat:telegram:84 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
+                    expect(logs()).not.toContain('DEDUP')
+                })
+
+                test('a P2002 winner in another chat is a key conflict, not a concurrent duplicate', async () => {
+                    const handler = await initializeListener(`telegram-key-conflict-race-${connectionSequence}`, '7222')
+                    mocks.createMessage.mockRejectedValueOnce(uniqueViolation())
+                    mocks.messageFindUnique
+                        .mockResolvedValueOnce(null)
+                        .mockResolvedValueOnce(null)
+                        .mockResolvedValueOnce(row({ chatId: 'chat:telegram:99' }))
+
+                    await handler({ message: privateMessage({ peer: '42', id: 9403, text: '', extra: pdf() }) })
+
+                    expect(mocks.createMessage).toHaveBeenCalledOnce()
+                    expectStoredRowUntouched()
+                    expect(logs()).toContain('[TG-LISTENER] KEY-CONFLICT chat=chat:telegram:42 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
+                    expect(logs()).not.toContain('concurrent writer')
+                    expect(logs()).not.toContain('Error (conn=')
+                })
+
+                test('catch-up and import count a key conflict and still process the rest of the dialog', async () => {
+                    mocks.messageFindUnique.mockImplementation(byKey({ 'telegram:7223:43:9501': row({ chatId: 'chat:telegram:99' }) }))
+                    messagesByPeer({ '43': [9502, 9501].map(id => privateMessage({ peer: '43', id })) })
+                    const summary = await runCatchUp([userDialog('43')], '7223')
+                    expect(summary).toContain('saved=1 duplicates=0 reconciledSend=0 heldLegacy=0 keyConflicts=1 held=0')
+                    expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual(['telegram:7223:43:9502'])
+
+                    mocks.createMessage.mockClear()
+                    mocks.messageFindUnique.mockImplementation(byKey({ 'telegram:7224:44:9601': row({ chatId: 'chat:telegram:99' }) }))
+                    messagesByPeer({ '44': [9602, 9601].map(id => privateMessage({ peer: '44', id })) })
+                    const patch = await runImport([userDialog('44')], '7224')
+                    expect(patch.resultType).toBe('partial')
+                    expect(patch.detailsJson.newMessages).toBe(1)
+                    expect(patch.detailsJson.existingMessages).toBe(0)
+                    expect(patch.detailsJson.completeness.keyConflictMessages).toBe(1)
+                    expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual(['telegram:7224:44:9602'])
+                })
+
+                test('two different id-less messages with the same timestamp: the second is a key conflict, never a false duplicate or an overwrite', async () => {
+                    const rows = uniqueKeyStore()
+                    const handler = await initializeListener(`telegram-local-key-${connectionSequence}`, '7230')
+                    const date = nowSeconds()
+                    const key = `telegram:7230:42:local-${date * 1000}`
+
+                    await handler({ message: privateMessage({ peer: '42', text: 'first message', date }) })
+                    await handler({ message: privateMessage({ peer: '42', text: 'second message', date }) })
+
+                    expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([key, key])
+                    expect([...rows.values()]).toEqual([expect.objectContaining({ externalId: key, content: 'first message' })])
+                    expect(logs()).toContain('[TG-LISTENER] KEY-CONFLICT chat=chat:telegram:42 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
+                    expect(logs()).not.toContain('concurrent writer')
+                    expect(logs()).not.toContain('second message')
+                    expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+                    expect(mocks.emitMessage).toHaveBeenCalledOnce()
+
+                    // The same id-less message racing itself is still a benign duplicate.
+                    await handler({ message: privateMessage({ peer: '42', text: 'first message', date }) })
+                    expect(logs()).toContain('DB-DEDUP: concurrent writer existing=message:1')
+                    expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+                    expect(rows.size).toBe(1)
+                })
+
+                test('mirror and import report a same-second id-less collision as a key conflict', async () => {
+                    const rows = uniqueKeyStore()
+                    const handler = await initializeListener(`telegram-local-key-out-${connectionSequence}`, '7231')
+                    const date = nowSeconds()
+
+                    await handler({ message: privateMessage({ peer: '84', text: 'first sent', date, out: true }) })
+                    await handler({ message: privateMessage({ peer: '84', text: 'second sent', date, out: true }) })
+                    expect(logs()).toContain('[TG-MIRROR] KEY-CONFLICT chat=chat:telegram:84 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
+                    expect(logs()).not.toContain('concurrent writer')
+                    expect(mocks.emitMessage).toHaveBeenCalledOnce()
+
+                    messagesByPeer({ '45': ['first imported', 'second imported'].map(text => privateMessage({ peer: '45', text, date })) })
+                    const patch = await runImport([userDialog('45')], '7232')
+                    expect(patch.detailsJson.newMessages).toBe(1)
+                    expect(patch.detailsJson.existingMessages).toBe(0)
+                    expect(patch.detailsJson.completeness.keyConflictMessages).toBe(1)
+                    expect([...rows.values()].map(stored => stored.content)).toEqual(['first sent', 'first imported'])
+                })
+            })
         })
 
         describe('B3-a strict import completeness', () => {
@@ -1377,7 +1520,7 @@ describe('GramJS private conversation identity admission', () => {
 
                 await handler({ message: privateMessage({ peer: '42', id: 9201, text: '', extra: media }) })
                 await handler({ message: privateMessage({ peer: '42', id: 9202, text: '', out: true, extra: media }) })
-                mocks.messageFindUnique.mockResolvedValueOnce({ id: 'existing-media-row' })
+                mocks.messageFindUnique.mockResolvedValueOnce({ id: 'existing-media-row', chatId: 'chat:telegram:42', direction: 'inbound', channel: 'telegram' })
                 await handler({ message: privateMessage({ peer: '42', id: 9201, text: '', extra: media }) })
 
                 expect(logs()).toContain('Media download failed for msg=')
@@ -1449,6 +1592,7 @@ describe('GramJS private conversation identity admission', () => {
                 const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
                 const ingressFunctions = [
                     'logTelegramServicePeerSkipped',
+                    'logTelegramMessageKeyConflict',
                     'rejectTelegramConversationCollision',
                     'admitTelegramPrivateConversation',
                     'processInboundTelegramMessage',

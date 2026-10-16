@@ -650,6 +650,7 @@ type TelegramIngressOutcome =
     | 'duplicate'
     | 'reconciled_send'
     | 'held_legacy'
+    | 'key_conflict'
     | 'held'
     | 'held_transient'
     | 'rejected'
@@ -706,12 +707,33 @@ type TelegramStoredMessageMatch =
     | { kind: 'none' }
     | { kind: 'duplicate'; messageId: string }
     | { kind: 'held_legacy' }
+    | { kind: 'key_conflict' }
     | { kind: 'reconcile_send'; messageId: string }
+
+type TelegramMessageOwner = { chatId: string; direction: 'inbound' | 'outbound' }
+
+// A row found by an external key is this event's only if it lives in the
+// admitted Chat, in the same direction, on the Telegram channel.
+function isOwnTelegramMessageRow(
+    row: { chatId: string; direction: string; channel: string | null },
+    owner: TelegramMessageOwner,
+): boolean {
+    return row.chatId === owner.chatId && row.direction === owner.direction && row.channel === 'telegram'
+}
+
+// KEY-CONFLICT: a row already holds this event's external key but is not this
+// event's. Nothing is written, attached, stamped, published or fed to
+// workflow; the event is counted and stays with the provider.
+function logTelegramMessageKeyConflict(loggerPrefix: string, chatId: string): void {
+    console.warn(`[${loggerPrefix}] KEY-CONFLICT chat=${chatId} code=TELEGRAM_MESSAGE_KEY_CONFLICT`)
+}
 
 /**
  * Exact-key-first dedupe. An event with a valid provider message id is a
- * duplicate only of the row carrying its exact account+peer+message key; two
- * different provider messages are never collapsed by content or time.
+ * duplicate only of the row carrying its exact account+peer+message key in the
+ * admitted Chat, direction and channel; the same key anywhere else is a
+ * key_conflict. Two different provider messages are never collapsed by content
+ * or time.
  * - A pre-2026-09-02 row keyed by the bare provider id records no provider
  *   account, so it is never treated as this event's duplicate. When it is in
  *   the same chat, direction and content the event is held instead of written
@@ -742,9 +764,13 @@ async function findStoredTelegramMessage(input: {
     if (input.exactExternalId && input.providerMessageId) {
         const exact = await prisma.message.findUnique({
             where: { externalId: input.exactExternalId },
-            select: { id: true },
+            select: { id: true, chatId: true, direction: true, channel: true },
         })
-        if (exact) return { kind: 'duplicate', messageId: exact.id }
+        if (exact) {
+            return isOwnTelegramMessageRow(exact, input)
+                ? { kind: 'duplicate', messageId: exact.id }
+                : { kind: 'key_conflict' }
+        }
         const legacy = await prisma.message.findUnique({
             where: { externalId: input.providerMessageId },
             select: { chatId: true, direction: true, channel: true, content: true },
@@ -790,9 +816,17 @@ async function findStoredTelegramMessage(input: {
     return fallback ? { kind: 'duplicate', messageId: fallback.id } : { kind: 'none' }
 }
 
+type TelegramMessageCreateResult =
+    | { kind: 'created'; message: any }
+    | { kind: 'duplicate'; messageId: string }
+    | { kind: 'key_conflict' }
+
 /**
  * Inserts under the unique external key. A concurrent writer of the same key
- * (P2002) is a benign duplicate only when the winning row is actually found.
+ * (P2002) is a benign duplicate only when the winning row is found and is this
+ * event's: same Chat, direction and channel and, for a synthetic local key
+ * (second resolution, no provider id), the same content. Any other winner is a
+ * key_conflict; the insert wrote nothing and nothing is overwritten.
  */
 async function createTelegramMessageOrFindWinner(input: {
     chatId: string
@@ -801,19 +835,22 @@ async function createTelegramMessageOrFindWinner(input: {
     type: string
     sentAt: Date
     externalId: string
+    syntheticKey: boolean
     metadata: Record<string, unknown>
-}): Promise<{ created: true; message: any } | { created: false; messageId: string }> {
+}): Promise<TelegramMessageCreateResult> {
     try {
         const result = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: input.chatId, direction: input.direction, content: input.content, channel: 'telegram', type: input.type as any, sentAt: input.sentAt, status: 'delivered', externalId: input.externalId, metadata: input.metadata })
-        return { created: true, message: result.message }
+        return { kind: 'created', message: result.message }
     } catch (error: unknown) {
         if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error
         const winner = await prisma.message.findUnique({
             where: { externalId: input.externalId },
-            select: { id: true },
+            select: { id: true, chatId: true, direction: true, channel: true, content: true },
         })
         if (!winner) throw error
-        return { created: false, messageId: winner.id }
+        if (!isOwnTelegramMessageRow(winner, input)) return { kind: 'key_conflict' }
+        if (input.syntheticKey && winner.content !== input.content) return { kind: 'key_conflict' }
+        return { kind: 'duplicate', messageId: winner.id }
     }
 }
 
@@ -1068,6 +1105,10 @@ async function processInboundTelegramMessage(
             console.log(`[${loggerPrefix}] LEGACY-HOLD chat=${unifiedChat.id}`)
             return 'held_legacy'
         }
+        if (stored.kind === 'key_conflict') {
+            logTelegramMessageKeyConflict(loggerPrefix, unifiedChat.id)
+            return 'key_conflict'
+        }
         const existing = stored.kind === 'duplicate' ? { id: stored.messageId } : null
 
         if (existing) {
@@ -1100,8 +1141,12 @@ async function processInboundTelegramMessage(
             return 'duplicate'
         } else {
             const msgType = mediaInfo?.type || 'text'
-            const savedMsgResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
-            if (!savedMsgResult.created) {
+            const savedMsgResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
+            if (savedMsgResult.kind === 'key_conflict') {
+                logTelegramMessageKeyConflict(loggerPrefix, unifiedChat.id)
+                return 'key_conflict'
+            }
+            if (savedMsgResult.kind === 'duplicate') {
                 console.log(`[${loggerPrefix}] DB-DEDUP: concurrent writer existing=${savedMsgResult.messageId}`)
                 return 'duplicate'
             }
@@ -1223,6 +1268,10 @@ async function processOutboundMirrorMessage(
         console.log(`[${loggerPrefix}] LEGACY-HOLD chat=${chat.id}`)
         return 'held_legacy'
     }
+    if (stored.kind === 'key_conflict') {
+        logTelegramMessageKeyConflict(loggerPrefix, chat.id)
+        return 'key_conflict'
+    }
     if (stored.kind === 'reconcile_send' || stored.kind === 'duplicate') {
         if (stored.kind === 'reconcile_send' && externalMsgId) {
             await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
@@ -1233,8 +1282,12 @@ async function processOutboundMirrorMessage(
     }
 
     // New outbound message sent from outside CRM — mirror it
-    const savedResult = await createTelegramMessageOrFindWinner({ chatId: chat.id, direction: 'outbound', content: text, type: msgType, sentAt, externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
-    if (!savedResult.created) {
+    const savedResult = await createTelegramMessageOrFindWinner({ chatId: chat.id, direction: 'outbound', content: text, type: msgType, sentAt, externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
+    if (savedResult.kind === 'key_conflict') {
+        logTelegramMessageKeyConflict(loggerPrefix, chat.id)
+        return 'key_conflict'
+    }
+    if (savedResult.kind === 'duplicate') {
         console.log(`[${loggerPrefix}] DEDUP: concurrent writer existing=${savedResult.messageId}`)
         return 'duplicate'
     }
@@ -1300,6 +1353,7 @@ async function catchUpMissedMessages(
         duplicate: 0,
         reconciled_send: 0,
         held_legacy: 0,
+        key_conflict: 0,
         held: 0,
         held_transient: 0,
         rejected: 0,
@@ -1374,7 +1428,7 @@ async function catchUpMissedMessages(
         runError = telegramIngressErrorCode(err)
         console.error(`[TG-CATCHUP] Error: code=${runError}`)
     }
-    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs}${runError ? ` error=${runError}` : ''}`)
+    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} keyConflicts=${counts.key_conflict} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs}${runError ? ` error=${runError}` : ''}`)
     if (!runError) console.log(`[TG-CATCHUP] Finished. Processed ${fetched} messages.`)
 }
 
@@ -2150,6 +2204,7 @@ export async function importTelegramHistory(
     const msgLimit = mode === 'from_connection_time' ? 20 : 200
     let existingMessages = 0
     let heldLegacyMessages = 0
+    let keyConflictMessages = 0
     let reconciledSendMessages = 0
     let failedMessages = 0
     let heldDialogs = 0
@@ -2248,6 +2303,11 @@ export async function importTelegramHistory(
                             heldLegacyMessages++
                             continue
                         }
+                        if (stored.kind === 'key_conflict') {
+                            keyConflictMessages++
+                            logTelegramMessageKeyConflict('TG-IMPORT', unifiedChat.id)
+                            continue
+                        }
                         if (stored.kind === 'reconcile_send') {
                             if (externalMsgId) {
                                 await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
@@ -2260,8 +2320,13 @@ export async function importTelegramHistory(
                             continue
                         }
 
-                        const savedHistResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
-                        if (!savedHistResult.created) {
+                        const savedHistResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
+                        if (savedHistResult.kind === 'key_conflict') {
+                            keyConflictMessages++
+                            logTelegramMessageKeyConflict('TG-IMPORT', unifiedChat.id)
+                            continue
+                        }
+                        if (savedHistResult.kind === 'duplicate') {
                             existingMessages++
                             continue
                         }
@@ -2342,7 +2407,8 @@ export async function importTelegramHistory(
 
         // 7. Complete. A bounded fetch never proves the whole period, so this
         // job is never 'full' (B3-a strict): it is 'partial' whenever it saw any
-        // in-window message or any cap, hold or failure, else 'live_only'.
+        // in-window message or any cap, hold, key conflict or failure, else
+        // 'live_only'.
         // Counts are this run's own; database totals are context only.
         const incomplete = dialogsCapHit
             || dialogsWithMessageCapHit > 0
@@ -2351,6 +2417,7 @@ export async function importTelegramHistory(
             || failedDialogs > 0
             || failedMessages > 0
             || heldLegacyMessages > 0
+            || keyConflictMessages > 0
         const resultType = totalMessages > 0 || incomplete ? 'partial' : 'live_only'
         await updateTgImportJob(jobId, {
             status: 'completed',
@@ -2377,6 +2444,7 @@ export async function importTelegramHistory(
                     failedDialogs,
                     failedMessages,
                     heldLegacyMessages,
+                    keyConflictMessages,
                     reconciledSendMessages,
                     serviceSkipped,
                     archivedFolderCoverage: 'unverified',
