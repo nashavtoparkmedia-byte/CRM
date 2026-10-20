@@ -51,8 +51,16 @@ describe('first calendar month window', () => {
         expect(decision).toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
     })
 
-    it('refuses the month after hire', () => {
-        const decision = compensationPilotEligibilityV1(facts(), new Date('2026-10-01T06:00:00.000Z'))
+    it('stays eligible through the 72 hours after the hire month ends, for that month\'s orders', () => {
+        // 1 October 11:00 and 3 October 23:59:59.999 Yekaterinburg.
+        expect(compensationPilotEligibilityV1(facts(), new Date('2026-10-01T06:00:00.000Z')))
+            .toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
+        expect(compensationPilotEligibilityV1(facts(), new Date('2026-10-03T18:59:59.999Z')))
+            .toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
+    })
+
+    it('refuses from 4 October 00:00 Yekaterinburg, when the hire month stops accepting claims', () => {
+        const decision = compensationPilotEligibilityV1(facts(), new Date('2026-10-03T19:00:00.000Z'))
         expect(decision).toMatchObject({ eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: '2026-09' })
     })
 
@@ -72,11 +80,13 @@ describe('first calendar month window', () => {
         expect(parkFirstCalendarMonthV1(lateAugustUtc)).toMatchObject({ year: 2026, month: 9 })
     })
 
-    it('keeps a driver hired late in the month eligible until that month ends', () => {
+    it('keeps a driver hired late in the month eligible until that month\'s claims close', () => {
         const lateHire = facts({ parkHireDate: new Date('2026-09-28T06:00:00.000Z') })
         expect(compensationPilotEligibilityV1(lateHire, new Date('2026-09-30T12:00:00.000Z')))
             .toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
-        expect(compensationPilotEligibilityV1(lateHire, new Date('2026-10-01T06:00:00.000Z')))
+        expect(compensationPilotEligibilityV1(lateHire, new Date('2026-10-02T06:00:00.000Z')))
+            .toMatchObject({ eligible: true, firstMonthKey: '2026-09' })
+        expect(compensationPilotEligibilityV1(lateHire, new Date('2026-10-04T06:00:00.000Z')))
             .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month' })
     })
 })
@@ -104,9 +114,12 @@ describe('the facts half of eligibility, with no clock', () => {
     it('is the month the clocked decision states, before and after it refuses on the clock', () => {
         const first = compensationPilotFirstMonthV1(facts())
         if (!first.ok) throw new Error(first.reason)
+        const claimsClose = new Date(first.windowEndsAt.getTime() + 72 * 60 * 60 * 1000)
         expect(compensationPilotEligibilityV1(facts(), new Date('2026-09-20T06:00:00.000Z')))
             .toMatchObject({ eligible: true, firstMonthKey: first.firstMonthKey, windowEndsAt: first.windowEndsAt })
         expect(compensationPilotEligibilityV1(facts(), first.windowEndsAt))
+            .toMatchObject({ eligible: true, firstMonthKey: first.firstMonthKey, windowEndsAt: first.windowEndsAt })
+        expect(compensationPilotEligibilityV1(facts(), claimsClose))
             .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: first.firstMonthKey })
     })
 })

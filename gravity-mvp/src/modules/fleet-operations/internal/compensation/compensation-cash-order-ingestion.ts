@@ -92,8 +92,7 @@ export type CashOrderCatalogueV1<T extends StoredCashOrderV1 = StoredCashOrderV1
 
 /**
  * Whether one order can still be submitted at `now`, by the monetary core's
- * own rule: until the end of the order's business month, or for 72 hours from
- * completion when the order completed on that month's last calendar day. This
+ * own rule: until 72 hours after the end of the order's business month. This
  * is the same deadline C1 stores on the claim and refuses against, read here
  * so the list never offers what the submit would refuse.
  */
@@ -112,12 +111,11 @@ export function cashOrderSubmissionOpenV1(order: { endedAt: Date }, now: Date): 
  * kept only while its own submission window is open.
  *
  * Inside the first month that last test changes nothing: every first-month
- * order's deadline is the month's end or later. Once the month has ended it is
- * what keeps a last-day order claimable through its 72-hour grace, and nothing
- * else: an ordinary order of the month closed with the month, and the month
- * itself is reported as over once no order is left in its grace. The driver's
- * window is never widened; the order's earned window is simply not thrown away
- * at the calendar rollover.
+ * order's deadline is 72 hours after the month's end. Once the month has ended
+ * it is what keeps the whole month claimable through those 72 hours, and the
+ * month itself is reported as over once no order is left in its grace. The
+ * driver's window is never widened; the orders' window is simply not thrown
+ * away at the calendar rollover.
  */
 export function cashOrderCatalogueV1<T extends StoredCashOrderV1>(
     facts: CompensationEligibilityFactsV1,

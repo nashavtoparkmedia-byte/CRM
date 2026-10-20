@@ -578,7 +578,7 @@ describe('refreshing the selected park', () => {
     })
 })
 
-describe('a last-day order after the first month has ended', () => {
+describe('the first month\'s orders after the month has ended: the month-end grace', () => {
     /** 30 September 23:30 Yekaterinburg: the last calendar day of the hire month. */
     const LAST_DAY_ORDER: PilotCatalogueOrderV1 = {
         ...ORDER,
@@ -588,21 +588,24 @@ describe('a last-day order after the first month has ended', () => {
         endedAt: new Date('2026-09-30T18:30:00.000Z'),
         providerBookedAt: new Date('2026-09-30T18:00:00.000Z'),
     }
-    /** 2 October: the month is over, and the last-day order's own window is still open. */
+    /** 2 October: the month is over, and its orders' shared window is still open. */
     const GRACE_NOW = new Date('2026-10-02T12:00:00.000Z')
     const GRACE_DEADLINE = compensationSubmissionWindowV1(LAST_DAY_ORDER.endedAt).submissionDeadline
     const SUBMIT_LAST_DAY = { ...SUBMIT, externalOrderId: LAST_DAY_ORDER.externalOrderId }
 
-    it('is bounded by the deadline the monetary core stores: completion plus 72 hours', () => {
-        expect(GRACE_DEADLINE).toEqual(new Date('2026-10-03T18:30:00.000Z'))
+    it('is bounded by the deadline the monetary core stores: the month\'s end plus 72 hours, for every order', () => {
+        // 4 October 00:00 Yekaterinburg, the same for the last-day and the mid-month order.
+        expect(GRACE_DEADLINE).toEqual(new Date('2026-10-03T19:00:00.000Z'))
+        expect(compensationSubmissionWindowV1(ORDER.endedAt).submissionDeadline).toEqual(GRACE_DEADLINE)
     })
 
-    it('lists the last-day order through its grace and hides the month\'s ordinary orders', async () => {
+    it('lists every order of the first month through the grace, newest first', async () => {
         const p = port({ findCashOrders: vi.fn(async () => [ORDER, LAST_DAY_ORDER]) })
         const view = await compensationSectionViewV1(PROOF, p, ingestion(), GRACE_NOW)
         expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09', remainingBudgetKopecks: 500_000 })
         if (!view.available) return
-        expect(view.orders.map((order) => order.externalOrderId)).toEqual([LAST_DAY_ORDER.externalOrderId])
+        expect(view.orders.map((order) => order.externalOrderId))
+            .toEqual([LAST_DAY_ORDER.externalOrderId, ORDER.externalOrderId])
         // The period it charges is still the order's month, read by its key.
         expect(p.findBudgetPeriod).toHaveBeenCalledWith('2026-09')
     })
@@ -664,15 +667,22 @@ describe('a last-day order after the first month has ended', () => {
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 
-    it('grants no grace to the month itself: ordinary orders close with the month', async () => {
-        const p = port({ findCashOrders: vi.fn(async () => [ORDER]) })
-        for (const now of [new Date('2026-09-30T19:00:00.000Z'), GRACE_NOW]) {
-            expect(await compensationSectionViewV1(PROOF, p, ingestion(), now))
+    it('gives a mid-month order the same grace: claimable after the month ends, refused from the deadline on', async () => {
+        const open = port({ findCashOrders: vi.fn(async () => [ORDER]) })
+        for (const now of [new Date('2026-09-30T19:00:00.000Z'), GRACE_NOW, new Date(GRACE_DEADLINE.getTime() - 1)]) {
+            expect(await compensationSectionViewV1(PROOF, open, ingestion(), now))
+                .toMatchObject({ available: true, firstMonthKey: '2026-09' })
+            expect(await submitPilotApplicationV1(SUBMIT, open, ingestion(), now))
+                .toMatchObject({ submitted: true, status: 'created' })
+        }
+        const closed = port({ findCashOrders: vi.fn(async () => [ORDER]) })
+        for (const now of [GRACE_DEADLINE, new Date(GRACE_DEADLINE.getTime() + 1)]) {
+            expect(await compensationSectionViewV1(PROOF, closed, ingestion(), now))
                 .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
-            expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), now))
+            expect(await submitPilotApplicationV1(SUBMIT, closed, ingestion(), now))
                 .toEqual({ submitted: false, refusal: 'outside_first_calendar_month' })
         }
-        expect(p.submitApplication).not.toHaveBeenCalled()
+        expect(closed.submitApplication).not.toHaveBeenCalled()
     })
 
     it('keeps the facts gates ahead of the grace: a non-SMZ driver gets nothing from a last-day order', async () => {

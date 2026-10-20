@@ -681,7 +681,7 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
     })
 
-    it('serves a last-day order through its 72 h grace after the month ended, charging the first month', async () => {
+    it('serves every first-month order through the 72 h month-end grace, charging the first month', async () => {
         await seedPerson()
         // The person was hired in September; the real-time fixture month is
         // irrelevant here, so the hire is pinned and September is opened.
@@ -698,16 +698,17 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
             fleetOrder({ id: ordinaryOrderId, short_id: 3982096, ended_at: '2026-09-12T10:00:00.000Z' }),
         ], CONTEXT, ingestionPort())
 
-        // 2 October: the month is over; the last-day order is inside its grace.
+        // 2 October: the month is over; every order of it is inside the grace.
         const graceNow = new Date('2026-10-02T12:00:00.000Z')
         const section = await compensationSectionViewV1(PROOF, port, ingestion, graceNow)
         expect(section).toMatchObject({ available: true, firstMonthKey: '2026-09', remainingBudgetKopecks: 500_000 })
         if (!section.available) return
-        expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId])
+        expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId, ordinaryOrderId])
 
-        // A stale last-day claim asks ingestion for a confirmation that carries
-        // the order's own completion instant, at the last moment of its window.
-        const lastMoment = new Date('2026-10-03T18:29:59.999Z')
+        // A stale claim asks ingestion for a confirmation that carries the
+        // order's own completion instant, at the last moment of the grace
+        // (3 October 23:59:59.999 Yekaterinburg).
+        const lastMoment = new Date('2026-10-03T18:59:59.999Z')
         await database.$executeRawUnsafe(
             `UPDATE "CompensationCashOrder" SET "observedAt" = $1 WHERE "externalOrderId" = $2`,
             new Date((await databaseNow()).getTime() - 3_600_001), lastDayOrderId,
@@ -733,18 +734,19 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         const claims = await database.$queryRawUnsafe<Array<{ submissionDeadline: Date; deadlineBasis: string; budgetPeriodKey: string }>>(
             `SELECT "submissionDeadline","deadlineBasis","budgetPeriodKey" FROM "CompensationOrderClaim"`)
         expect(claims).toHaveLength(1)
-        expect(claims[0]).toMatchObject({ deadlineBasis: 'last_day_grace', budgetPeriodKey: '2026-09' })
-        expect(new Date(claims[0].submissionDeadline).getTime()).toBe(new Date('2026-10-03T18:30:00.000Z').getTime())
+        expect(claims[0]).toMatchObject({ deadlineBasis: 'order_month_end', budgetPeriodKey: '2026-09' })
+        // 4 October 00:00 Yekaterinburg: the month's end plus 72 hours, not completion plus 72 hours.
+        expect(new Date(claims[0].submissionDeadline).getTime()).toBe(new Date('2026-10-03T19:00:00.000Z').getTime())
         expect(Number((await periodRow('2026-09')).reservedKopecks)).toBe(30_000)
 
-        // The ordinary September order closed with the month: it is not listed,
-        // so the submit refuses it before anything reaches C1.
+        // The ordinary September order is listed through the same grace; the
+        // catalogue lets it through and C1's one-PENDING rule is what answers.
         expect(await submitPilotApplicationV1(submitInput(randomUUID(), ordinaryOrderId), port, ingestion, graceNow))
-            .toEqual({ submitted: false, refusal: 'order_not_in_catalogue' })
+            .toEqual({ submitted: false, refusal: 'active_pending_exists' })
 
         // At the deadline the month is over in every sense the product has,
         // and the driver still sees what they submitted.
-        const atDeadline = await compensationSectionViewV1(PROOF, port, ingestion, new Date('2026-10-03T18:30:00.000Z'))
+        const atDeadline = await compensationSectionViewV1(PROOF, port, ingestion, new Date('2026-10-03T19:00:00.000Z'))
         expect(atDeadline).toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
         expect(atDeadline.applications).toHaveLength(1)
         expect(await count('CompensationApplication')).toBe(1)
