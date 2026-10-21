@@ -350,6 +350,33 @@ test('walks a fresh order through support, amount and screenshot to one submit',
     assert.match(harness.last().text, /Заявка отправлена/);
 });
 
+test('takes a request above the 500 ₽ cap, sends it unchanged and shows what the CRM will pay', async () => {
+    const harness = createBot();
+    await open(harness);
+    await harness.tap(orderData(O1));
+    await harness.tap('comp_support_yes');
+    assert.match(harness.last().text, /К выплате — не больше 500 ₽ и не больше стоимости заказа/);
+    await harness.text('800');
+    assert.match(harness.last().text, /Пришлите ответ поддержки Яндекса/);
+    // The CRM, not the bot, applies min(request, order, 500 ₽).
+    crm.submitAnswers.push({ submitted: true, applicationId: 'app-cap', amountKopecks: 50000, status: 'created' });
+    await harness.photo('support-reply');
+    assert.equal(crm.of('compensation_submit')[0].payload.claimedRubles, 800);
+    assert.match(harness.last().text, /Заявка отправлена\. К выплате 500 ₽/);
+});
+
+test('stops only an absurd amount locally, at the CRM request bound', async () => {
+    const harness = createBot();
+    await open(harness);
+    await harness.tap(orderData(O1));
+    await harness.tap('comp_support_yes');
+    await harness.text('100001');
+    assert.match(harness.last().text, /Слишком большая сумма/);
+    await harness.text('100000');
+    assert.match(harness.last().text, /Пришлите ответ поддержки Яндекса/);
+    assert.equal(crm.of('compensation_submit').length, 0);
+});
+
 test('lets the driver carry on while Yandex is asked about an older order', async () => {
     crm.checkStates = ['checking'];
     const harness = createBot();

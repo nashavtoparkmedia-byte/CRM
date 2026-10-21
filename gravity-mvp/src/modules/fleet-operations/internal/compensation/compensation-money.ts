@@ -12,8 +12,13 @@
  */
 
 export const KOPECKS_PER_RUBLE = 100
-/** Product cap: 1000 RUB. */
-export const MAX_COMPENSATION_KOPECKS = 100_000
+/**
+ * Product cap: 500 RUB per order (Owner decision of 2026-10-21; it was 1000).
+ * The one source of the cap for new applications. The database CHECK on
+ * CompensationApplication.amountKopecks still stops at 100 000 kopecks, the
+ * old cap, so applications stored before the change stay valid.
+ */
+export const MAX_COMPENSATION_KOPECKS = 50_000
 /** Sanity bound on driver input; the product cap above does the real clamping. */
 export const MAX_CLAIMED_RUBLES = 100_000
 
@@ -79,7 +84,7 @@ export function parseClaimedAmountKopecksV1(raw: unknown): number {
     return raw * KOPECKS_PER_RUBLE
 }
 
-/** min(claimed, verified order amount, 1000 RUB) over integers. */
+/** min(claimed, verified order amount, MAX_COMPENSATION_KOPECKS) over integers. */
 export function compensationAmountKopecksV1(claimedKopecks: number, verifiedKopecks: number): number {
     if (!Number.isInteger(claimedKopecks) || !Number.isInteger(verifiedKopecks)) {
         throw new CompensationMoneyErrorV1('CLAIMED_AMOUNT_INVALID', 'amounts must be integer kopecks')

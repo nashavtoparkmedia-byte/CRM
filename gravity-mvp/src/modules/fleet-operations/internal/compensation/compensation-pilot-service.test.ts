@@ -193,12 +193,19 @@ describe('submitting from the bot', () => {
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 
-    it('rejects above one thousand rubles without touching C1', async () => {
+    it('rejects above the monetary core\'s request bound without touching C1', async () => {
         const p = port()
-        const outcome = await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 1001 }, p, ingestion(), NOW)
+        const outcome = await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 100_001 }, p, ingestion(), NOW)
 
         expect(outcome).toEqual({ submitted: false, refusal: 'claim_above_pilot_cap' })
         expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('hands a request above the 500 RUB cap to C1 unchanged, which pays the cap', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 800 }, p, ingestion(), NOW))
+            .toMatchObject({ submitted: true })
+        expect(p.submitApplication).toHaveBeenCalledWith(expect.objectContaining({ claimedRubles: 800 }))
     })
 
     it('refuses without support confirmation or an attachment', async () => {

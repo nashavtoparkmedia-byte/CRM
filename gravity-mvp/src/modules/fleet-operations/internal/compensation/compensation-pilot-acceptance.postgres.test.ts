@@ -509,14 +509,14 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(30_000)
     })
 
-    it('refuses a claim above the pilot cap before it reaches the monetary core', async () => {
+    it('refuses a request above the monetary core\'s request bound before it reaches the monetary core', async () => {
         const catalogue = cashOrderCatalogueV1(ELIGIBLE_FACTS, await storedOrders(), NOW)
         expect(catalogue.eligible).toBe(true)
         if (!catalogue.eligible) return
 
         const gate = decidePilotSubmissionV1({
             externalOrderId: catalogue.orders[0].externalOrderId,
-            claimedRubles: 1001,
+            claimedRubles: 100_001,
             supportConfirmed: true,
             attachmentFileId: 'tg-file-support-4',
             attachmentKind: 'photo',
@@ -530,6 +530,132 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         const applications = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
             'SELECT count(*) AS count FROM "CompensationApplication"')
         expect(Number(applications[0].count)).toBe(0)
+    })
+
+    describe('the 500 RUB cap per order (Owner decision of 2026-10-21)', () => {
+        /** Submits one claim for one ingested order through C1, as the pilot port does, for its own person. */
+        async function submitClaim(externalOrderId: string, claimedRubles: number, contactId: string, idempotencyKey = randomUUID()) {
+            const order = (await storedOrders()).find((candidate) => candidate.externalOrderId === externalOrderId)
+            if (!order) throw new Error(`order ${externalOrderId} not ingested`)
+            return submitCompensationApplicationV1({
+                contract: SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
+                idempotencyKey,
+                person: provenPerson(contactId),
+                order: {
+                    provider: order.provider,
+                    externalParkId: order.externalParkId,
+                    externalOrderId: order.externalOrderId,
+                    shortOrderIdDisplay: order.shortOrderIdDisplay,
+                    rawPrice: order.rawPrice,
+                    endedAt: order.endedAt,
+                    verifiedAt: CONTEXT.observedAt,
+                },
+                claimedRubles,
+                submittedAt: NOW,
+            })
+        }
+
+        it('stores and reserves the Owner\'s four examples: min(request, Yandex price, 500 RUB)', async () => {
+            await ingestCashOrderPageV1([
+                fleetOrder({ id: '1'.repeat(32), short_id: 5000001, price: '650.0000' }),
+                fleetOrder({ id: '2'.repeat(32), short_id: 5000002, price: '650.0000' }),
+                fleetOrder({ id: '3'.repeat(32), short_id: 5000003, price: '335.5050' }),
+                fleetOrder({ id: '4'.repeat(32), short_id: 5000004, price: '1200.0000' }),
+            ], CONTEXT, ingestionPort())
+            const cases = [
+                { orderId: '1'.repeat(32), claimedRubles: 800, payable: 50_000 },
+                { orderId: '2'.repeat(32), claimedRubles: 400, payable: 40_000 },
+                { orderId: '3'.repeat(32), claimedRubles: 800, payable: 33_550 },
+                { orderId: '4'.repeat(32), claimedRubles: 500, payable: 50_000 },
+            ]
+            let reserved = 0
+            for (const [index, example] of cases.entries()) {
+                const submitted = await submitClaim(example.orderId, example.claimedRubles, `contact-cap-${index}`)
+                expect(submitted).toMatchObject({ status: 'created', amountKopecks: example.payable })
+                // The manager screen reads exactly these stored columns.
+                expect(await managerRow(submitted.applicationId)).toMatchObject({
+                    status: 'PENDING',
+                    claimedKopecks: example.claimedRubles * 100,
+                    amountKopecks: example.payable,
+                })
+                reserved += example.payable
+                expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(reserved)
+            }
+            expect(reserved).toBe(173_550)
+        })
+
+        it('approves and pays a capped claim at 500 RUB, and a rejection releases exactly 500 RUB', async () => {
+            await ingestCashOrderPageV1([
+                fleetOrder({ id: '5'.repeat(32), short_id: 5000005, price: '650.0000' }),
+                fleetOrder({ id: '6'.repeat(32), short_id: 5000006, price: '650.0000' }),
+            ], CONTEXT, ingestionPort())
+            const toPay = await submitClaim('5'.repeat(32), 800, 'contact-cap-pay')
+            const toReject = await submitClaim('6'.repeat(32), 800, 'contact-cap-reject')
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(100_000)
+
+            const authorization = await startCompensationPayoutV1({
+                contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+                applicationId: toPay.applicationId,
+                principal: MANAGER,
+                startedAt: new Date(),
+            })
+            expect(authorization.amountKopecks).toBe(50_000)
+            const settled = await finalizeCompensationPayoutV1({
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorization.payoutAuthorizationId,
+                authorizationFence: authorization.authorizationFence,
+                principal: MANAGER,
+                finalizedAt: new Date(),
+            })
+            expect(settled).toMatchObject({ status: 'settled', amountKopecks: 50_000 })
+            // A repeated "mark paid" settles nothing more.
+            expect(await finalizeCompensationPayoutV1({
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorization.payoutAuthorizationId,
+                authorizationFence: authorization.authorizationFence,
+                principal: MANAGER,
+                finalizedAt: new Date(),
+            })).toMatchObject({ status: 'replayed' })
+
+            await rejectCompensationApplicationV1({
+                contract: REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
+                applicationId: toReject.applicationId,
+                rejectionKey: randomUUID(),
+                reason: 'test: rejected after the cap change',
+                principal: MANAGER,
+                rejectedAt: new Date(),
+            })
+            expect(await periodRow(PERIOD_KEY)).toMatchObject({ reservedKopecks: 0, settledKopecks: 50_000 })
+            expect(await managerRow(toPay.applicationId)).toMatchObject({ status: 'PAID', amountKopecks: 50_000 })
+            expect(await driverStatus(toReject.applicationId)).toBe('rejected')
+        })
+
+        it('replays a repeated capped submit without a second row or a second reservation', async () => {
+            await ingestCashOrderPageV1([fleetOrder({ id: '7'.repeat(32), short_id: 5000007, price: '650.0000' })], CONTEXT, ingestionPort())
+            const key = randomUUID()
+            const first = await submitClaim('7'.repeat(32), 800, 'contact-cap-replay', key)
+            const replay = await submitClaim('7'.repeat(32), 800, 'contact-cap-replay', key)
+            expect(first).toMatchObject({ status: 'created', amountKopecks: 50_000 })
+            expect(replay).toMatchObject({ status: 'replayed', applicationId: first.applicationId, amountKopecks: 50_000 })
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(50_000)
+        })
+
+        it('fills the 5000 RUB month with exactly ten capped claims and refuses the eleventh', async () => {
+            const ids = Array.from({ length: 11 }, (_, index) => String(index).padStart(2, '0').repeat(16))
+            await ingestCashOrderPageV1(
+                ids.map((id, index) => fleetOrder({ id, short_id: 5100000 + index, price: '1200.0000' })),
+                CONTEXT, ingestionPort(),
+            )
+            for (const [index, id] of ids.slice(0, 10).entries()) {
+                expect(await submitClaim(id, 800, `contact-cap-month-${index}`)).toMatchObject({ amountKopecks: 50_000 })
+            }
+            const period = await periodRow(PERIOD_KEY)
+            expect(period).toMatchObject({ limitKopecks: 500_000, reservedKopecks: 500_000 })
+            expect(remainingBudgetKopecksV1(period)).toBe(0)
+            await expect(submitClaim(ids[10], 800, 'contact-cap-month-10'))
+                .rejects.toMatchObject({ name: 'CompensationErrorV1', code: 'budget_exhausted' })
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(500_000)
+        })
     })
 })
 

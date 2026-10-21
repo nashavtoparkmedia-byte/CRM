@@ -185,6 +185,19 @@ describe('one claim', () => {
         expect(text(screen.getByTestId('actions'))).toContain('Заявка закрыта')
     })
 
+    it('shows a request above the 500 RUB cap with the stored payable amount, and approves exactly that', () => {
+        // Requested 800, order 650: the backend stored 500 as payable.
+        render(<CompensationApplicationDetail application={detailView({
+            requestedKopecks: 80_000, orderAmountKopecks: 65_000, payableKopecks: 50_000,
+        })} />)
+        const page = text(document.body)
+        expect(page).toContain('800,00 ₽')
+        expect(page).toContain('650,00 ₽')
+        expect(page).toContain('500,00 ₽')
+        fireEvent.click(screen.getByText('Одобрить'))
+        expect(text(screen.getByTestId('confirmation'))).toContain('Одобрить 500,00 ₽')
+    })
+
     it('asks for confirmation naming the amount before authorising money', async () => {
         render(<CompensationApplicationDetail application={detailView()} />)
         fireEvent.click(screen.getByText('Одобрить'))
