@@ -937,6 +937,22 @@ async function handleUpdateDriverCar(payload: any) {
     })
     if (authorityFailure) return authorityFailure
 
+    // The link names a CRM Driver row; Yandex needs that Driver's profile id.
+    let driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { yandexDriverId: true, externalDriverProfileId: true },
+    })
+    if (!driver) {
+        driver = await prisma.driver.findFirst({
+            where: { yandexDriverId: mapping.driverId },
+            select: { yandexDriverId: true, externalDriverProfileId: true },
+        })
+    }
+    const contractorId = yandexContractorProfileId(driver)
+    if (!contractorId) {
+        return NextResponse.json({ error: 'Не нашли ваш профиль в Яндекс Флит. Обратитесь к менеджеру.' }, { status: 404 })
+    }
+
     const connection = mapping.activeParkId
         ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         : await getYandexConnectionCredentialsV1()
@@ -958,7 +974,7 @@ async function handleUpdateDriverCar(payload: any) {
     }
 
     try {
-        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${mapping.driverId}`
+        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
         const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
         if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
 

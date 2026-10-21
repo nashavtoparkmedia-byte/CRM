@@ -881,4 +881,84 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
         await expect(response.json()).resolves.toMatchObject({ linked: true, driverId: 'driver-1' })
         expect(String(mocks.providerFetch.mock.calls[0][0])).toContain(`contractor_profile_id=${PROFILE}`)
     })
+
+    describe('update_driver_car', () => {
+        const carRequest = () => actionRequest('update_driver_car', { telegramId: '123456', carId: 'car-9', ...binding })
+        const connection = { clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' }
+        const yandexOk = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) })
+
+        test('binds the car on the real profile of a Driver whose link names its CRM id', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({
+                yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
+            })
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1', account: { balance_limit: '0' } }))
+                .mockResolvedValueOnce(yandexOk({}))
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(200)
+            await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            expect(mocks.findDriver).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'driver-1' } }))
+            const calls = mocks.providerFetch.mock.calls
+            expect(calls.map(([, init]) => init.method)).toEqual(['GET', 'PUT'])
+            for (const [url] of calls) {
+                expect(String(url)).toContain(`contractor_profile_id=${PROFILE}`)
+                expect(String(url)).not.toContain('driver-1')
+                expect(String(url)).not.toContain('park-profile')
+            }
+            expect(JSON.parse(calls[1][1].body)).toMatchObject({ car_id: 'car-9', account: { balance_limit: '0' } })
+            // Person authority is proven again immediately before the provider mutation.
+            expect(mocks.authorizeDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+            expect(mocks.getYandexConnectionCredentials).toHaveBeenCalledWith(undefined, 'park-1')
+        })
+
+        test('a legacy Driver whose yandexDriverId is the profile id keeps its profile', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(yandexOk({}))
+
+            const response = await POST(carRequest())
+
+            await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            for (const [url] of mocks.providerFetch.mock.calls) {
+                expect(String(url)).toContain(`contractor_profile_id=${LEGACY_PROFILE}`)
+            }
+        })
+
+        test.each([
+            ['a Driver with only a CRM key', { yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: null }],
+            ['no Driver row for the link', null],
+        ])('%s gets a plain refusal with no credential read, GET or PUT', async (_name, row) => {
+            mocks.findDriver.mockResolvedValue(row)
+            mocks.findDriverByYandex.mockResolvedValue(null)
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(404)
+            await expect(response.json()).resolves.toEqual({
+                error: 'Не нашли ваш профиль в Яндекс Флит. Обратитесь к менеджеру.',
+            })
+            expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+            expect(mocks.providerFetch).not.toHaveBeenCalled()
+        })
+
+        test('a Yandex error on reading the profile stops before any PUT', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({
+                yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
+            })
+            mocks.providerFetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => JSON.stringify({ message: 'not found' }) })
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(502)
+            await expect(response.json()).resolves.toMatchObject({ error: 'Failed to fetch driver profile' })
+            expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
+            expect(mocks.providerFetch.mock.calls[0][1]).toMatchObject({ method: 'GET' })
+        })
+    })
 })
