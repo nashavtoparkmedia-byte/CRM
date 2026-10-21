@@ -143,6 +143,24 @@ async function requireCurrentBotDriverAuthority(
     }, { status: 409 })
 }
 
+/**
+ * The Yandex contractor profile id of a Driver row, or null when it has none.
+ * yandexDriverId holds a Yandex profile id only on legacy rows: the fleet
+ * reconciler stores a park-qualified CRM key there ("park-profile:<digest>",
+ * earlier "park:<park>:<profile>") and keeps the real profile id in
+ * externalDriverProfileId. A Yandex profile id never contains ':'.
+ */
+function yandexContractorProfileId(driver: {
+    yandexDriverId: string | null
+    externalDriverProfileId: string | null
+} | null): string | null {
+    for (const candidate of [driver?.externalDriverProfileId, driver?.yandexDriverId]) {
+        const id = candidate?.trim()
+        if (id && !id.includes(':')) return id
+    }
+    return null
+}
+
 // Check if a Telegram user is linked to a driver
 async function handleCheckLink(payload: any) {
     const { telegramId } = payload
@@ -186,16 +204,16 @@ async function handleCheckLink(payload: any) {
         // (records created by sync_user which stores the Yandex driver_profile.id).
         let driver = await prisma.driver.findUnique({
             where: { id: mapping.driverId },
-            select: { yandexDriverId: true, fullName: true }
+            select: { yandexDriverId: true, externalDriverProfileId: true, fullName: true }
         })
         if (!driver) {
             driver = await prisma.driver.findFirst({
                 where: { yandexDriverId: mapping.driverId },
-                select: { yandexDriverId: true, fullName: true }
+                select: { yandexDriverId: true, externalDriverProfileId: true, fullName: true }
             })
         }
 
-        const yandexContractorId = driver?.yandexDriverId
+        const yandexContractorId = yandexContractorProfileId(driver)
         if (driver?.fullName) driverName = driver.fullName
         if (!yandexContractorId) {
             console.warn('[check_link] driver has no yandexDriverId, skipping Yandex lookup:', mapping.driverId)
@@ -738,9 +756,9 @@ async function handleChangeLimit(payload: any) {
     //    to phone search when v2 returns 404.
     const driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { yandexDriverId: true, phone: true }
+        select: { yandexDriverId: true, externalDriverProfileId: true, phone: true }
     })
-    let contractorId = driver?.yandexDriverId
+    let contractorId = yandexContractorProfileId(driver)
 
     const yandexAuthHeaders: Record<string, string> = {
         'X-Client-ID': connection.clid,
@@ -965,8 +983,8 @@ async function handleUpdateDriverCar(payload: any) {
 
 // ────────────────────────────────────────────────────────────────────────────
 // Driver-actions bridge — proxies "Цена / Завершить / Отменить" between
-// TG bot and yandex-fleet-scraper. Resolves telegramId → Driver →
-// yandexDriverId, persists a DriverAction audit row, enqueues a scraper task,
+// TG bot and yandex-fleet-scraper. Resolves telegramId → Driver → Yandex
+// profile id, persists a DriverAction audit row, enqueues a scraper task,
 // returns taskId so the bot can poll.
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -982,7 +1000,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         return NextResponse.json({ ok: false, error: 'Missing telegramId' }, { status: 400 })
     }
 
-    // 1. Resolve telegram → driver → yandexDriverId
+    // 1. Resolve telegram → driver → Yandex profile id
     const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
         where: { telegramId: telegramIdBigInt }
@@ -1001,15 +1019,16 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     if (authorityFailure) return authorityFailure
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { id: true, fullName: true, yandexDriverId: true },
+        select: { id: true, fullName: true, yandexDriverId: true, externalDriverProfileId: true },
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { id: true, fullName: true, yandexDriverId: true },
+            select: { id: true, fullName: true, yandexDriverId: true, externalDriverProfileId: true },
         })
     }
-    if (!driver?.yandexDriverId) {
+    const yandexProfileId = yandexContractorProfileId(driver)
+    if (!driver || !yandexProfileId) {
         const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
             driverId: mapping.driverId,
             telegramId: telegramIdBigInt,
@@ -1033,7 +1052,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 2a. Profile-swap guard: if linked profile is fired, find the working twin in same park
-    let effectiveYandexId = driver.yandexDriverId!
+    let effectiveYandexId = yandexProfileId
     try {
         const conn = mapping.activeParkId
             ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
