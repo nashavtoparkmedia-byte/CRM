@@ -30,6 +30,7 @@ import {
 } from './compensation-pilot-selection'
 import { pilotCatalogueStatusV1 } from './compensation-pilot-selection'
 import type { CompensationPilotPortV1 } from './compensation-pilot-service'
+import { withOwnerPilotAdmissionV1, type OwnerPilotAdmissionEntryV1 } from './compensation-eligibility'
 import type { CompensationPilotTelegramLinkReaderV1 } from '../../public/v1/compensation-pilot-telegram-link-reader'
 
 /** At most this many in-scope Driver rows are examined in one run. */
@@ -45,6 +46,24 @@ export interface CompensationPilotReadinessPopulationPortV1 {
         externalParkIds: readonly string[]
         limit: number
     }): Promise<PilotCandidateDriverV1[]>
+}
+
+/**
+ * The population read with the configured Owner pilot admissions attached to
+ * each driver's facts, so readiness judges an admitted driver by the same
+ * facts gate the pilot itself applies.
+ */
+export function withOwnerPilotAdmissionPopulationPortV1(
+    port: CompensationPilotReadinessPopulationPortV1,
+    admissions: readonly OwnerPilotAdmissionEntryV1[],
+): CompensationPilotReadinessPopulationPortV1 {
+    if (admissions.length === 0) return port
+    return {
+        async listPilotCandidateDrivers(input) {
+            const drivers = await port.listPilotCandidateDrivers(input)
+            return drivers.map((driver) => withOwnerPilotAdmissionV1(driver, admissions))
+        },
+    }
 }
 
 /** What cash-order ingestion is asked, all of it local and read-only. */

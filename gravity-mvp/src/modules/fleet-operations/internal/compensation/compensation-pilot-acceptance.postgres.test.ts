@@ -50,6 +50,7 @@ import {
     compensationSectionViewV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
+    withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
@@ -751,6 +752,23 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         )
     }
 
+    // A confirmed person whose Driver row says park employee, hired this month.
+    async function seedParkEmployee(): Promise<void> {
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Driver"
+               ("id","yandexDriverId","fullName","externalParkId","externalDriverProfileId",
+                "isSelfEmployed","employmentType","yandexHireDate","updatedAt")
+             VALUES ($1,'park-profile:pilot-port-1','Pilot Port Park Employee',$2,$3,false,'park_employee',$4,NOW())`,
+            DRIVER_ID, PARK, PROFILE, MONTH_START,
+        )
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Contact" ("id","displayName","mainDriverId","customFields","updatedAt")
+             VALUES ($1,'Pilot Port Person',$2,$3::jsonb,NOW())`,
+            CONTACT_ID, DRIVER_ID,
+            JSON.stringify({ driverConfirmations: [{ status: 'confirmed', representativeDriverId: DRIVER_ID }] }),
+        )
+    }
+
     async function count(table: string): Promise<number> {
         const rows = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
             `SELECT count(*) AS count FROM "${table}"`)
@@ -805,6 +823,40 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         const after = await compensationSectionViewV1(PROOF, port, ingestion, NOW)
         expect(after.applications).toHaveLength(1)
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
+    })
+
+    it('admits a park employee by Owner pilot admission for the named first month only, writing no Driver fact', async () => {
+        await seedParkEmployee()
+        expect(await compensationSectionViewV1(PROOF, port, ingestion, NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+
+        const otherMonth = withOwnerPilotAdmissionPortV1(port, [
+            { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2000-01' },
+        ])
+        expect(await compensationSectionViewV1(PROOF, otherMonth, ingestion, NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+
+        const admitted = withOwnerPilotAdmissionPortV1(port, [
+            { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: PERIOD_KEY },
+        ])
+        const section = await compensationSectionViewV1(PROOF, admitted, ingestion, NOW)
+        expect(section).toMatchObject({ available: true, firstMonthKey: PERIOD_KEY, remainingBudgetKopecks: 500_000 })
+        if (!section.available) return
+        const externalOrderId = section.orders[0].externalOrderId
+
+        // 500 RUB requested against a 335.00 order: C1 pays the order amount.
+        const created = await submitPilotApplicationV1(
+            { ...submitInput(randomUUID(), externalOrderId), claimedRubles: 500 }, admitted, ingestion, NOW)
+        expect(created).toMatchObject({ submitted: true, amountKopecks: 33_500, status: 'created' })
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), admitted, ingestion, NOW))
+            .toEqual({ submitted: false, refusal: 'order_already_claimed' })
+        expect(await count('CompensationApplication')).toBe(1)
+        expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(33_500)
+
+        // The admission lives in configuration only: the stated facts are untouched.
+        expect(await database.$queryRawUnsafe(
+            `SELECT "isSelfEmployed","employmentType" FROM "Driver" WHERE "id" = $1`, DRIVER_ID))
+            .toEqual([{ isSelfEmployed: false, employmentType: 'park_employee' }])
     })
 
     it('serves every first-month order through the 72 h month-end grace, charging the first month', async () => {

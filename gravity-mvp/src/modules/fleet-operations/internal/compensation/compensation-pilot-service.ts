@@ -20,7 +20,11 @@
 
 import { cashOrderCatalogueV1 } from './compensation-cash-order-ingestion'
 import { compensationBusinessDayKeyV1 } from './compensation-calendar'
-import type { CompensationEligibilityFactsV1 } from './compensation-eligibility'
+import {
+    withOwnerPilotAdmissionV1,
+    type CompensationEligibilityFactsV1,
+    type OwnerPilotAdmissionEntryV1,
+} from './compensation-eligibility'
 import {
     freshForOrderCheckV1,
     freshForSubmissionV1,
@@ -161,6 +165,25 @@ export interface CompensationPilotIngestionPortV1 {
         dayKey: string
         externalOrderId: string
     }): Promise<PilotOrderConfirmationReadV1>
+}
+
+/**
+ * The pilot port with the configured Owner pilot admissions attached to the
+ * driver facts read. Every other method is the port's own, and nothing is
+ * written: the admission lives in the configuration and in this read only.
+ */
+export function withOwnerPilotAdmissionPortV1(
+    port: CompensationPilotPortV1,
+    admissions: readonly OwnerPilotAdmissionEntryV1[],
+): CompensationPilotPortV1 {
+    if (admissions.length === 0) return port
+    return {
+        ...port,
+        async findDriverFacts(driverId) {
+            const row = await port.findDriverFacts(driverId)
+            return row === null ? null : withOwnerPilotAdmissionV1(row, admissions)
+        },
+    }
 }
 
 export interface PilotScheduleOutcomeV1 {
