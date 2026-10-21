@@ -31,6 +31,9 @@ import {
     pilotCatalogueStatusV1,
     pilotConfirmationFollowUpV1,
     pilotListedOrderV1,
+    pilotDriverDayAllowedV1,
+    pilotDriverDayQueryV1,
+    pilotDriverDaySearchV1,
     pilotOrderSearchV1,
     pilotScheduleFollowUpV1,
     resolvePilotScopeV1,
@@ -139,9 +142,17 @@ export interface CompensationPilotPortV1 {
     >
 }
 
+/** What one on-demand driver-day request came to within the wait it was given. */
+export interface PilotDriverDayFetchV1 {
+    /** complete: the provider answered; running: not yet; failed: no answer (code says why). */
+    state: 'complete' | 'running' | 'failed'
+    code: string | null
+}
+
 /**
  * What the pilot may ask of cash-order ingestion. Every call is local or only
- * schedules work: none of them waits for Yandex.
+ * schedules work, except fetchDriverDay, which waits for Yandex for a bounded
+ * time chosen by the composition and reports `running` when that runs out.
  */
 export interface CompensationPilotIngestionPortV1 {
     /** Mode, park enablement and catalogue progress, in database time. */
@@ -159,12 +170,25 @@ export interface CompensationPilotIngestionPortV1 {
         externalOrderId: string
         providerBookedAt: Date | null
         endedAt: Date
+        /** The proven profile: on demand, a confirmation asks for this driver's day only. */
+        externalDriverProfileId?: string
     }): Promise<PilotScheduleOutcomeV1>
     readOrderConfirmation(input: {
         externalParkId: string
         dayKey: string
         externalOrderId: string
+        externalDriverProfileId?: string
     }): Promise<PilotOrderConfirmationReadV1>
+    /**
+     * On demand only: one driver's completed cash orders of one business day,
+     * asked of the provider and written when they verify. Absent outside that
+     * mode; the section then answers a day as unavailable.
+     */
+    fetchDriverDay?(input: {
+        externalParkId: string
+        externalDriverProfileId: string
+        dayKey: string
+    }): Promise<PilotDriverDayFetchV1>
 }
 
 /**
@@ -219,7 +243,7 @@ export type CompensationSectionViewV1 =
         externalParkId: string
         firstMonthKey: string
         remainingBudgetKopecks: number
-        catalogueStatus: 'ready' | 'partial' | 'stale'
+        catalogueStatus: 'ready' | 'partial' | 'stale' | 'on_demand'
         /** Business day of the database clock, so "today" is the catalogue's today. */
         todayKey: string
         orders: readonly PilotListedOrderV1[]
@@ -304,7 +328,7 @@ interface ScopedSectionV1 {
     scope: PilotScopeV1
     firstMonthKey: string
     remainingBudgetKopecks: number
-    catalogueStatus: 'ready' | 'partial' | 'stale'
+    catalogueStatus: 'ready' | 'partial' | 'stale' | 'on_demand'
     dbNow: Date
     /** The eligible catalogue of this scope, newest first. */
     orders: readonly PilotCatalogueOrderV1[]
@@ -397,11 +421,41 @@ export async function compensationSectionViewV1(
     const view = await scopedSectionV1(resolved.identity, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
     if (!view.available) return { available: false, reason: view.reason, applications: view.applications }
 
-    const section = view.section
+    let section = view.section
+    let applications = view.applications
+    const query = typeof options.search === 'string' ? options.search.trim() : ''
+    const dayKey = section.catalogueStatus === 'on_demand' && query !== '' ? pilotDriverDayQueryV1(query) : null
+    let search: PilotOrderSearchV1 | null = null
+    if (dayKey !== null) {
+        // Every rule above has already passed: the person is proven, the driver
+        // is eligible and the park and profile are the proven ones. Only now,
+        // and only for a day the driver may claim, is the provider asked.
+        if (!pilotDriverDayAllowedV1(dayKey, section.firstMonthKey, section.dbNow)) {
+            search = pilotDriverDaySearchV1([], dayKey, 'date_not_allowed')
+        } else {
+            const fetched: PilotDriverDayFetchV1 = ingestion.fetchDriverDay
+                ? await ingestion.fetchDriverDay({
+                    externalParkId: section.scope.externalParkId,
+                    externalDriverProfileId: section.scope.externalDriverProfileId,
+                    dayKey,
+                })
+                : { state: 'failed', code: 'driver_day_unavailable' }
+            // Rebuilt from storage: whatever the answer wrote is listed by the
+            // same catalogue rules every other list uses.
+            const rebuilt = await scopedSectionV1(resolved.identity, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
+            if (!rebuilt.available) return { available: false, reason: rebuilt.reason, applications: rebuilt.applications }
+            section = rebuilt.section
+            applications = rebuilt.applications
+            const listed = section.orders.map((order) => pilotListedOrderV1(order, section.claimedOrderIds))
+            search = pilotDriverDaySearchV1(
+                listed,
+                dayKey,
+                fetched.state === 'complete' ? 'date' : fetched.state === 'running' ? 'date_checking' : 'date_unavailable',
+            )
+        }
+    }
     const orders = section.orders.map((order) => pilotListedOrderV1(order, section.claimedOrderIds))
-    const search = typeof options.search === 'string' && options.search.trim() !== ''
-        ? pilotOrderSearchV1(orders, options.search)
-        : null
+    if (search === null && query !== '') search = pilotOrderSearchV1(orders, query)
     return {
         available: true,
         scopeKey: section.scope.scopeKey,
@@ -412,22 +466,27 @@ export async function compensationSectionViewV1(
         todayKey: compensationBusinessDayKeyV1(section.dbNow),
         orders,
         search,
-        applications: view.applications,
+        applications,
     }
 }
 
 async function confirmationFollowUpV1(
-    scope: PilotScopeV1,
+    section: { scope: PilotScopeV1; catalogueStatus: ScopedSectionV1['catalogueStatus'] },
     order: PilotCatalogueOrderV1,
     dbNow: Date,
     ingestion: CompensationPilotIngestionPortV1,
     retry: boolean,
 ): Promise<'checking' | 'not_confirmed' | 'check_failed' | 'unavailable'> {
+    const scope = section.scope
     const dayKey = compensationBusinessDayKeyV1(order.endedAt)
+    // On demand an order is confirmed through its own driver's day, so the
+    // proven profile goes along; every other mode keeps the park-day request.
+    const driver = section.catalogueStatus === 'on_demand' ? { externalDriverProfileId: scope.externalDriverProfileId } : {}
     const read = await ingestion.readOrderConfirmation({
         externalParkId: scope.externalParkId,
         dayKey,
         externalOrderId: order.externalOrderId,
+        ...driver,
     })
     const next = pilotConfirmationFollowUpV1(read, order, dbNow, { retry })
     if (next !== 'request') return next
@@ -437,6 +496,7 @@ async function confirmationFollowUpV1(
         externalOrderId: order.externalOrderId,
         providerBookedAt: order.providerBookedAt,
         endedAt: order.endedAt,
+        ...driver,
     }))
 }
 
@@ -486,7 +546,7 @@ export async function checkPilotOrderV1(
     if (listed.claimed) return { state: 'already_claimed', order: listed, refusal: null }
     if (freshForOrderCheckV1(order, section.dbNow)) return { state: 'fresh', order: listed, refusal: null }
 
-    const state = await confirmationFollowUpV1(section.scope, order, section.dbNow, ingestion, input.retry)
+    const state = await confirmationFollowUpV1(section, order, section.dbNow, ingestion, input.retry)
     return { state, order: listed, refusal: null }
 }
 
@@ -593,7 +653,7 @@ export async function submitPilotApplicationV1(
     const order = section.orders.find((candidate) => candidate.externalOrderId === gate.order.externalOrderId)
     if (!order) return { submitted: false, refusal: 'order_not_in_catalogue' }
     if (!freshForSubmissionV1(order, section.dbNow)) {
-        const state = await confirmationFollowUpV1(section.scope, order, section.dbNow, ingestion, false)
+        const state = await confirmationFollowUpV1(section, order, section.dbNow, ingestion, false)
         return { submitted: false, refusal: SUBMIT_FOLLOW_UP_REFUSAL[state] }
     }
 

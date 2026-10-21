@@ -35,10 +35,13 @@ import {
 } from '../internal/compensation/compensation-pilot-service'
 import {
     cashOrderPilotParkScopeV1,
+    fetchCashOrderDriverDayV1,
     readCashOrderCatalogueFactsV1,
+    readCashOrderDriverDayOrderConfirmationV1,
     readCashOrderOrderConfirmationV1,
     readCashOrderParkAuthorityV1,
     requestCashOrderDayConfirmationV1,
+    requestCashOrderDriverDayConfirmationV1,
     requestCashOrderHotRefreshV1,
 } from './cash-order-ingestion-operations'
 
@@ -62,16 +65,34 @@ const pilotPortV1 = withOwnerPilotAdmissionPortV1(
     ownerPilotAdmissionsV1.admissions,
 )
 
+/** On demand confirms an order through its driver's day, never through the park's. */
+function onDemandV1(): boolean {
+    return cashOrderPilotParkScopeV1().mode === 'on_demand'
+}
+
 const pilotIngestionPortV1: CompensationPilotIngestionPortV1 = {
     readCatalogueFacts: (externalParkId) => readCashOrderCatalogueFactsV1(externalParkId),
     requestHotRefresh: (externalParkId) => requestCashOrderHotRefreshV1(externalParkId),
-    requestOrderConfirmation: (input) => requestCashOrderDayConfirmationV1({
-        externalParkId: input.externalParkId,
-        dayKey: input.dayKey,
-        order: { externalOrderId: input.externalOrderId, providerBookedAt: input.providerBookedAt, endedAt: input.endedAt },
-    }),
+    requestOrderConfirmation: (input) => (onDemandV1() && input.externalDriverProfileId
+        ? requestCashOrderDriverDayConfirmationV1({
+            externalParkId: input.externalParkId,
+            externalDriverProfileId: input.externalDriverProfileId,
+            dayKey: input.dayKey,
+        })
+        : requestCashOrderDayConfirmationV1({
+            externalParkId: input.externalParkId,
+            dayKey: input.dayKey,
+            order: { externalOrderId: input.externalOrderId, providerBookedAt: input.providerBookedAt, endedAt: input.endedAt },
+        })),
     async readOrderConfirmation(input) {
-        const confirmation = readCashOrderOrderConfirmationV1(input)
+        const confirmation = onDemandV1() && input.externalDriverProfileId
+            ? readCashOrderDriverDayOrderConfirmationV1({
+                externalParkId: input.externalParkId,
+                externalDriverProfileId: input.externalDriverProfileId,
+                dayKey: input.dayKey,
+                externalOrderId: input.externalOrderId,
+            })
+            : readCashOrderOrderConfirmationV1(input)
         return {
             state: confirmation.state,
             startedAt: confirmation.startedAt,
@@ -79,6 +100,7 @@ const pilotIngestionPortV1: CompensationPilotIngestionPortV1 = {
             code: confirmation.code,
         }
     },
+    fetchDriverDay: (input) => fetchCashOrderDriverDayV1(input),
 }
 
 /**

@@ -27,9 +27,11 @@ import {
     COMPENSATION_BUSINESS_TIME_ZONE,
     compensationBusinessDayKeyV1,
     compensationCalendarMonthV1,
+    compensationDayStartInstantV1,
     compensationMonthStartInstantV1,
+    parseCompensationBusinessDayKeyV1,
 } from './compensation-calendar'
-import type { StoredCashOrderV1 } from './compensation-cash-order-ingestion'
+import { cashOrderSubmissionOpenV1, type StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 
 const MINUTE = 60_000
 
@@ -209,19 +211,22 @@ export interface PilotCatalogueFactsV1 extends CashOrderIngestionProgressV1 {
     dbNow: Date
 }
 
-export type PilotCatalogueStatusV1 = 'ready' | 'partial' | 'stale' | 'disabled'
+export type PilotCatalogueStatusV1 = 'ready' | 'partial' | 'stale' | 'disabled' | 'on_demand'
 
 /**
  * Whether the local catalogue can be shown, and how much to trust its
  * completeness. An empty catalogue with status ready means there are no
  * orders; disabled means there is no catalogue for this park at all.
  *
- *   disabled  ingestion does not write this park
- *   stale     no successful hot pass for over 10 minutes
- *   partial   reconciliation has not yet covered the current month
- *   ready     otherwise
+ *   disabled   ingestion does not write this park
+ *   on_demand  there is no park catalogue by design: the driver picks a day
+ *              and that driver's day is asked for (requestDriverDay)
+ *   stale      no successful hot pass for over 10 minutes
+ *   partial    reconciliation has not yet covered the current month
+ *   ready      otherwise
  */
 export function pilotCatalogueStatusV1(facts: PilotCatalogueFactsV1): PilotCatalogueStatusV1 {
+    if (facts.mode === 'on_demand') return facts.parkEnabled ? 'on_demand' : 'disabled'
     if (facts.mode !== 'write' || !facts.parkEnabled) return 'disabled'
     if (hotAgeExceededV1(facts.lastHotSuccessAt, facts.dbNow)) return 'stale'
     const monthStart = compensationMonthStartInstantV1(compensationCalendarMonthV1(facts.dbNow))
@@ -295,7 +300,15 @@ export const PILOT_SEARCH_LIMIT_V1 = 20
 
 export interface PilotOrderSearchV1 {
     query: string
-    kind: 'time' | 'number' | 'unsupported'
+    /**
+     * time, number, unsupported: a search of the local list.
+     * date*: on demand, one business day of this driver asked for:
+     *   date              the provider answered; the matches are that day (maybe none)
+     *   date_checking     the answer is not in yet
+     *   date_unavailable  the provider could not be asked or failed — never "no orders"
+     *   date_not_allowed  a day the driver cannot claim; the provider was not asked
+     */
+    kind: 'time' | 'number' | 'unsupported' | 'date' | 'date_checking' | 'date_unavailable' | 'date_not_allowed'
     /** Every match, newest first. Never narrowed to one on the driver's behalf. */
     matches: PilotListedOrderV1[]
     truncated: boolean
@@ -328,5 +341,54 @@ export function pilotOrderSearchV1(orders: readonly PilotListedOrderV1[], rawQue
         kind,
         matches: matches.slice(0, PILOT_SEARCH_LIMIT_V1),
         truncated: matches.length > PILOT_SEARCH_LIMIT_V1,
+    }
+}
+
+const DRIVER_DAY_QUERY = /^(\d{4})-(\d{2})-(\d{2})$/u
+
+/** The business day a date query names (`YYYY-MM-DD`), or null for any other query. */
+export function pilotDriverDayQueryV1(rawQuery: string): string | null {
+    const query = rawQuery.trim()
+    if (!DRIVER_DAY_QUERY.test(query)) return null
+    try {
+        parseCompensationBusinessDayKeyV1(query)
+    } catch {
+        return null
+    }
+    return query
+}
+
+/**
+ * Whether a driver may ask for this day: a day of their first month, already
+ * begun on the business clock, in a month that still accepts claims. Anything
+ * else is answered without asking the provider.
+ */
+export function pilotDriverDayAllowedV1(dayKey: string, firstMonthKey: string, dbNow: Date): boolean {
+    let dayStart: Date
+    try {
+        dayStart = compensationDayStartInstantV1(parseCompensationBusinessDayKeyV1(dayKey))
+    } catch {
+        return false
+    }
+    if (dayKey.slice(0, 7) !== firstMonthKey) return false
+    if (dayStart.getTime() > dbNow.getTime()) return false
+    return cashOrderSubmissionOpenV1({ endedAt: dayStart }, dbNow)
+}
+
+/**
+ * The answer to one picked day: that day's listed orders, bounded like every
+ * search, or none at all for a day the driver may not pick.
+ */
+export function pilotDriverDaySearchV1(
+    orders: readonly PilotListedOrderV1[],
+    dayKey: string,
+    kind: 'date' | 'date_checking' | 'date_unavailable' | 'date_not_allowed',
+): PilotOrderSearchV1 {
+    const day = kind === 'date_not_allowed' ? [] : orders.filter((order) => order.dayKey === dayKey)
+    return {
+        query: dayKey,
+        kind,
+        matches: day.slice(0, PILOT_SEARCH_LIMIT_V1),
+        truncated: day.length > PILOT_SEARCH_LIMIT_V1,
     }
 }

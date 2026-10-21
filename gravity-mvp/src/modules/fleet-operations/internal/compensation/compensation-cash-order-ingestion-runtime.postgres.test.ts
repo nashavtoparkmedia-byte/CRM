@@ -34,8 +34,15 @@ function fleet(orders: FleetOrder[]) {
     const requests: CashOrderPageRequestV1[] = []
     const fetchPage = async (request: CashOrderPageRequestV1): Promise<CashOrderPageResponseV1> => {
         requests.push(request)
+        const driverDay = request.driverDay ?? null
         const matching = orders
             .filter((order) => {
+                if (driverDay !== null) {
+                    const ended = Date.parse(String(order.ended_at))
+                    return (order.driver_profile as { id: string }).id === driverDay.externalDriverProfileId
+                        && ended >= driverDay.endedFrom.getTime() && ended < driverDay.endedTo.getTime()
+                        && order.status === 'complete' && order.payment_method === 'cash'
+                }
                 const bookedAt = Date.parse(order.booked_at)
                 return bookedAt >= request.bookedFrom.getTime() && bookedAt <= request.bookedTo.getTime()
             })
@@ -59,7 +66,7 @@ function order(id: string, bookedAt: Date, overrides: Record<string, unknown> = 
     }
 }
 
-function runtimeFor(mode: 'write', fetchPage: CashOrderIngestionPortsV1['fetchPage']) {
+function runtimeFor(mode: 'write' | 'on_demand', fetchPage: CashOrderIngestionPortsV1['fetchPage']) {
     const store: CashOrderIngestionStoreV1 = {
         ...legacyPrismaCashOrderIngestionStoreV1,
         readAuthoritySnapshot: async () => ({
@@ -168,5 +175,42 @@ proof('cash-order ingestion runtime on real PostgreSQL', () => {
         await runtime.dayConfirmationSettled(PARK, dayKey)
         expect(cashOrderConfirmationForOrderV1(runtime.readDayConfirmation(PARK, dayKey), 'target')).toMatchObject({ state: 'removed' })
         expect(await stored('target')).toBeNull()
+    })
+
+    it('on demand writes one driver\'s completed cash orders of one day, under the park lease, and never ticks', async () => {
+        const profile = 'b'.repeat(32)
+        const endedAt = new Date(Date.now() - 2 * HOUR)
+        const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Yekaterinburg' }).format(endedAt)
+        const booked = new Date(endedAt.getTime() - 20 * 60_000)
+        const source = fleet([
+            // The anonymised control case: a completed cash order of 363.0000.
+            order('mine', booked, { price: '363.0000', driver_profile: { id: profile } }),
+            order('mine-cashless', booked, { payment_method: 'cashless', driver_profile: { id: profile } }),
+            order('theirs', booked, { driver_profile: { id: 'c'.repeat(32) } }),
+        ])
+        const runtime = runtimeFor('on_demand', source.fetchPage)
+
+        expect(await runtime.runTick()).toEqual({ mode: 'on_demand', parks: [], errors: [] })
+        expect(source.requests).toHaveLength(0)
+        expect(await checkpoint()).toBeUndefined()
+
+        const request = await runtime.requestDriverDay({ externalParkId: PARK, externalDriverProfileId: profile, dayKey })
+        expect(request.status).toBe('scheduled')
+        if (request.status === 'not_scheduled') return
+        await request.completion
+        expect(runtime.readDriverDay(PARK, profile, dayKey)).toMatchObject({ outcome: 'complete', acceptedOrderIds: ['mine'] })
+        expect(source.requests).toHaveLength(1)
+        expect(source.requests[0].driverDay?.externalDriverProfileId).toBe(profile)
+
+        const rows = await database.$queryRawUnsafe<Array<{ externalOrderId: string; amountKopecks: number; externalDriverProfileId: string }>>(
+            `SELECT "externalOrderId","amountKopecks","externalDriverProfileId" FROM "CompensationCashOrder" WHERE "externalParkId" = $1`, PARK)
+        expect(rows).toEqual([{ externalOrderId: 'mine', amountKopecks: 36_300, externalDriverProfileId: profile }])
+        const row = await checkpoint()
+        // The lease is back, and on demand moved no park progress at all.
+        expect(row).toMatchObject({ leaseToken: null, lastHotSuccessAt: null, lastReconciliationCompletedAt: null })
+        expect(row.lastRunSummary).toMatchObject({ targeted: { target: 'driver_day', dayKey, outcome: 'complete', accepted: 1 } })
+
+        expect((await runtime.requestDriverDay({ externalParkId: PARK, externalDriverProfileId: profile, dayKey })).status).toBe('cached')
+        expect(source.requests).toHaveLength(1)
     })
 })
