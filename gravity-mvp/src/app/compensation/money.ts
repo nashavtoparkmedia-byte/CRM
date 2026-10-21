@@ -10,3 +10,6 @@ export const MANAGER_STATE_LABELS: Record<string, string> = {
     paid: 'Выплачена',
     rejected: 'Отклонена',
 }
+
+/** The status value that asks for every status, as opposed to no status chosen (the inbox). */
+export const MANAGER_BOARD_ALL_STATES = 'all'

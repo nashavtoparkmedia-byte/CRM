@@ -50,7 +50,7 @@ beforeEach(() => {
     compensationManagerActionV1.mockResolvedValue({ code: 'performed', state: 'awaiting_payment' })
     compensationManagerEvidenceSourceV1.mockResolvedValue({ fileId: 'tg-file-1', kind: 'photo' })
     readTelegramBotFileV1.mockResolvedValue({
-        ok: true, contentType: 'image/jpeg', bytes: new Uint8Array([1, 2, 3]),
+        ok: true, contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
     })
 })
 
@@ -131,6 +131,13 @@ describe('acting on an application', () => {
         expect(compensationManagerActionV1).not.toHaveBeenCalled()
     })
 
+    it('refuses an approval when the file is not an image or a PDF, whatever it is called', async () => {
+        readTelegramBotFileV1.mockResolvedValue({ ok: true, contentType: 'image/jpeg', bytes: new Uint8Array([0x3c, 0x68, 0x74, 0x6d, 0x6c]) })
+        expect(await runCompensationManagerAction({ applicationId: 'app-1', action: 'approve' }))
+            .toEqual({ code: 'evidence_unavailable', state: null })
+        expect(compensationManagerActionV1).not.toHaveBeenCalled()
+    })
+
     it('says plainly when there is no screenshot at all', async () => {
         compensationManagerEvidenceSourceV1.mockResolvedValue(null)
         expect(await runCompensationManagerAction({ applicationId: 'app-1', action: 'approve' }))
@@ -179,7 +186,7 @@ describe('acting on an application', () => {
 describe('the screenshot itself', () => {
     it('hands the stored file id straight to the channel that holds it', async () => {
         expect(await managerEvidence('app-1')).toEqual({
-            ok: true, contentType: 'image/jpeg', bytes: new Uint8Array([1, 2, 3]),
+            ok: true, contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
         })
         expect(compensationManagerEvidenceSourceV1).toHaveBeenCalledWith('app-1')
         expect(readTelegramBotFileV1).toHaveBeenCalledWith({ fileId: 'tg-file-1' })

@@ -127,7 +127,27 @@ describe('the filters', () => {
         render(<CompensationFilters periodKey="2026-09" state={null} externalParkId={null} parks={parks} />)
         const options = Array.from(screen.getByLabelText('Статус').querySelectorAll('option'))
             .map((option) => (option as HTMLOptionElement).value)
-        expect(options).toEqual(['', 'new', 'awaiting_payment', 'reconciliation', 'paid', 'rejected'])
+        expect(options).toEqual(['all', 'new', 'awaiting_payment', 'reconciliation', 'paid', 'rejected'])
+    })
+
+    it('opens as the inbox: no month chosen, new applications of every month', () => {
+        render(<CompensationFilters periodKey={null} state="new" externalParkId={null} parks={parks} />)
+        expect((screen.getByLabelText('Месяц') as HTMLInputElement).value).toBe('')
+        expect((screen.getByLabelText('Статус') as HTMLSelectElement).value).toBe('new')
+        expect(screen.queryByText('Все месяцы')).toBeNull()
+
+        fireEvent.change(screen.getByLabelText('Парк'), { target: { value: 'park-1' } })
+        expect(push).toHaveBeenLastCalledWith('/compensation?status=new&park=park-1')
+        fireEvent.change(screen.getByLabelText('Статус'), { target: { value: 'all' } })
+        expect(push).toHaveBeenLastCalledWith('/compensation?status=all')
+        fireEvent.change(screen.getByLabelText('Месяц'), { target: { value: '2026-10' } })
+        expect(push).toHaveBeenLastCalledWith('/compensation?month=2026-10&status=new')
+    })
+
+    it('goes back to every month in one step, keeping the other choices', () => {
+        render(<CompensationFilters periodKey="2026-09" state="paid" externalParkId={null} parks={parks} />)
+        fireEvent.click(screen.getByText('Все месяцы'))
+        expect(push).toHaveBeenLastCalledWith('/compensation?status=paid')
     })
 })
 
@@ -135,6 +155,7 @@ describe('the list', () => {
     const row = {
         applicationId: 'app-1',
         state: 'new',
+        periodKey: '2026-09',
         orderDate: '18.09',
         orderId: '3982091',
         driverName: 'Иванов Иван',
@@ -149,6 +170,7 @@ describe('the list', () => {
         render(<CompensationApplicationList rows={[row]} />)
         const list = screen.getByTestId('application-list')
         expect(text(list)).toContain('Иванов Иван')
+        expect(text(list)).toContain('Бюджет 2026-09')
         expect(text(list)).toContain('3982091')
         expect(text(list)).toContain('300,00 ₽')
         expect(text(list)).toContain('335,00 ₽')
@@ -257,11 +279,73 @@ describe('one claim', () => {
         await waitFor(() => expect(text(screen.getByRole('status'))).toContain('some_new_code'))
     })
 
-    it('shows the screenshot through the application, never through a file id', () => {
-        const { container } = render(<CompensationApplicationDetail application={detailView()} />)
-        expect(container.querySelector('[data-testid="evidence-image"]')!.getAttribute('src'))
-            .toBe('/compensation/app-1/evidence')
-        expect(container.innerHTML).not.toContain('tg-file')
+    describe('the support reply', () => {
+        const fetchMock = vi.fn()
+        const respond = (status: number, type: string | null, bytes = [1, 2, 3]) =>
+            fetchMock.mockResolvedValue(new Response(status === 200 ? new Uint8Array(bytes) : JSON.stringify({ error: 'x' }), {
+                status, headers: type === null ? {} : { 'content-type': type },
+            }))
+
+        beforeEach(() => {
+            fetchMock.mockReset()
+            vi.stubGlobal('fetch', fetchMock)
+            URL.createObjectURL = vi.fn(() => 'blob:support-reply')
+            URL.revokeObjectURL = vi.fn()
+        })
+        afterEach(() => vi.unstubAllGlobals())
+
+        it('asks for it through the application, never through a file id, with the session', async () => {
+            respond(200, 'image/jpeg')
+            const { container } = render(<CompensationApplicationDetail application={detailView()} />)
+            await screen.findByTestId('evidence-image')
+            expect(fetchMock).toHaveBeenCalledWith('/compensation/app-1/evidence', { credentials: 'same-origin', cache: 'no-store' })
+            expect(container.innerHTML).not.toContain('tg-file')
+        })
+
+        it.each(['image/jpeg', 'image/png'])('shows %s as an image that opens in full size', async (type) => {
+            respond(200, type)
+            render(<CompensationApplicationDetail application={detailView()} />)
+            expect((await screen.findByTestId('evidence-image')).getAttribute('src')).toBe('blob:support-reply')
+            expect(screen.getByTestId('evidence-open').getAttribute('href')).toBe('blob:support-reply')
+            expect(screen.queryByTestId('evidence-pdf')).toBeNull()
+        })
+
+        it('shows a PDF as a document, never as a broken image, and opens it whole', async () => {
+            respond(200, 'application/pdf', [0x25, 0x50, 0x44, 0x46, 0x2d])
+            render(<CompensationApplicationDetail application={detailView()} />)
+            const pdf = await screen.findByTestId('evidence-pdf')
+            expect(pdf.getAttribute('type')).toBe('application/pdf')
+            expect(pdf.getAttribute('data')).toBe('blob:support-reply')
+            expect(screen.queryByTestId('evidence-image')).toBeNull()
+            expect(text(screen.getByTestId('evidence-open'))).toBe('Открыть PDF целиком')
+        })
+
+        it.each([
+            [404, 'не найден'],
+            [413, 'больше 8 МБ'],
+            [415, 'не поддерживается'],
+            [401, 'войдите в CRM'],
+            [502, 'недоступен'],
+        ])('answers %i with a sentence, not a broken picture', async (status, words) => {
+            respond(status, 'application/json')
+            render(<CompensationApplicationDetail application={detailView()} />)
+            expect(text(await screen.findByTestId('evidence-error'))).toContain(words)
+            expect(screen.queryByTestId('evidence-image')).toBeNull()
+            expect(screen.queryByTestId('evidence-pdf')).toBeNull()
+        })
+
+        it('refuses to render a type it does not know, and says why', async () => {
+            respond(200, 'text/html')
+            render(<CompensationApplicationDetail application={detailView()} />)
+            expect(text(await screen.findByTestId('evidence-error'))).toContain('не поддерживается')
+            expect(URL.createObjectURL).not.toHaveBeenCalled()
+        })
+
+        it('says the file is unavailable when the request itself fails', async () => {
+            fetchMock.mockRejectedValue(new TypeError('network'))
+            render(<CompensationApplicationDetail application={detailView()} />)
+            expect(text(await screen.findByTestId('evidence-error'))).toContain('недоступен')
+        })
     })
 
     it('says when the screenshot was never attached, and that approval is closed', () => {
