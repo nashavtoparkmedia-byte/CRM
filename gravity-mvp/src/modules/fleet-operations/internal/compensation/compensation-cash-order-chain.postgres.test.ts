@@ -268,25 +268,28 @@ proof('cash order chain on real PostgreSQL', () => {
         expect(catalogue).toMatchObject({ eligible: false, reason: 'self_employment_unknown' })
     })
 
-    it('shows nothing once the first calendar month has passed', async () => {
+    it('shows nothing once the first calendar month and its 72-hour grace have passed', async () => {
         await ingestCashOrderPageV1([fleetOrder()], CONTEXT, ingestionPort())
+        // 4 October 00:00 Yekaterinburg.
         const catalogue = cashOrderCatalogueV1(
-            ELIGIBLE_FACTS, await storedOrders(), new Date('2026-10-02T09:00:00.000Z'),
+            ELIGIBLE_FACTS, await storedOrders(), new Date('2026-10-03T19:00:00.000Z'),
         )
         expect(catalogue).toMatchObject({ eligible: false, reason: 'outside_first_calendar_month' })
     })
 
-    it('keeps a last-day order claimable for 72 hours after its month, and nothing else', async () => {
+    it('keeps every order of the first month claimable for 72 hours after the month ends, then nothing', async () => {
         await ingestCashOrderPageV1([
             fleetOrder({ id: 'l'.repeat(32), ended_at: '2026-09-30T18:30:00.000Z' }),
             fleetOrder({ id: 'm'.repeat(32), ended_at: '2026-09-12T10:00:00.000Z' }),
         ], CONTEXT, ingestionPort())
         const stored = await storedOrders()
-        const inGrace = cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, new Date('2026-10-02T09:00:00.000Z'))
-        expect(inGrace.eligible).toBe(true)
-        if (!inGrace.eligible) return
-        expect(inGrace.orders.map((order) => order.externalOrderId)).toEqual(['l'.repeat(32)])
-        expect(cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, new Date('2026-10-03T18:30:00.000Z')))
+        for (const now of [new Date('2026-10-02T09:00:00.000Z'), new Date('2026-10-03T18:59:59.999Z')]) {
+            const inGrace = cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, now)
+            expect(inGrace.eligible).toBe(true)
+            if (!inGrace.eligible) return
+            expect(inGrace.orders.map((order) => order.externalOrderId)).toEqual(['l'.repeat(32), 'm'.repeat(32)])
+        }
+        expect(cashOrderCatalogueV1(ELIGIBLE_FACTS, stored, new Date('2026-10-03T19:00:00.000Z')))
             .toMatchObject({ eligible: false, reason: 'outside_first_calendar_month', orders: [] })
     })
 

@@ -27,6 +27,7 @@ import {
     compensationPeriodKeyV1,
     type CompensationCalendarMonthV1,
 } from './compensation-calendar'
+import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
 
 /** Values observed live across all six parks. */
 export const YANDEX_EMPLOYMENT_TYPES_V1 = [
@@ -106,7 +107,7 @@ export type CompensationPilotFirstMonthV1 =
  * Stated on its own because two callers need the month without the "now is
  * inside it" test: the clocked decision below, and the order catalogue, which
  * judges each first-month order by that order's own submission window so that
- * a last-day order keeps its 72-hour grace after the month has rolled over.
+ * the month's orders stay claimable through the 72 hours after it ends.
  * Both read this one gate, in this one order, so they can never disagree
  * about which month is the first or why a driver is refused on the facts.
  */
@@ -135,11 +136,13 @@ export function compensationPilotFirstMonthV1(
  * rule, not an accident, and widening it is a product decision rather than a
  * rounding choice.
  *
- * This is the driver-level statement at one instant, and it says nothing
- * about individual orders: an order completed on the month's last calendar
- * day keeps the monetary core's 72-hour submission grace past this window,
- * and the order catalogue (cashOrderCatalogueV1) is where that grace applies,
- * order by order, never as a widening of this decision.
+ * This is the driver-level statement at one instant: can this driver still be
+ * served for first-month orders? Orders count only inside the first month, but
+ * the monetary core keeps every order of a month claimable for 72 hours after
+ * the month ends, so the driver stays eligible until that same instant
+ * (compensationPeriodSubmissionClosesAtV1) and not a moment longer. Which
+ * orders are actually still open is decided order by order in the catalogue
+ * (cashOrderCatalogueV1).
  */
 export function compensationPilotEligibilityV1(
     facts: CompensationEligibilityFactsV1,
@@ -148,7 +151,8 @@ export function compensationPilotEligibilityV1(
     const first = compensationPilotFirstMonthV1(facts)
     if (!first.ok) return { eligible: false, reason: first.reason, firstMonthKey: null }
 
-    if (now.getTime() < first.windowStartsAt.getTime() || now.getTime() >= first.windowEndsAt.getTime()) {
+    const submissionClosesAt = compensationPeriodSubmissionClosesAtV1(first.firstMonth)
+    if (now.getTime() < first.windowStartsAt.getTime() || now.getTime() >= submissionClosesAt.getTime()) {
         return { eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: first.firstMonthKey }
     }
 

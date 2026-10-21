@@ -71,10 +71,22 @@ describe('parseClaimedAmountKopecksV1', () => {
 })
 
 describe('compensationAmountKopecksV1', () => {
-    it('takes the minimum of claim, verified amount and the 1000 RUB cap', () => {
-        expect(compensationAmountKopecksV1(50_000, 80_000)).toBe(50_000)
-        expect(compensationAmountKopecksV1(80_000, 50_000)).toBe(50_000)
+    it('takes the minimum of claim, verified amount and the 500 RUB cap', () => {
+        expect(MAX_COMPENSATION_KOPECKS).toBe(50_000)
+        expect(compensationAmountKopecksV1(30_000, 80_000)).toBe(30_000)
+        expect(compensationAmountKopecksV1(80_000, 30_000)).toBe(30_000)
         expect(compensationAmountKopecksV1(300_000, 400_000)).toBe(MAX_COMPENSATION_KOPECKS)
+    })
+
+    it('pays the Owner\'s four examples to the kopeck', () => {
+        // Requested 800, order 650 -> 500 (the cap).
+        expect(compensationAmountKopecksV1(80_000, parseVerifiedAmountKopecksV1('650.0000'))).toBe(50_000)
+        // Requested 400, order 650 -> 400 (the request).
+        expect(compensationAmountKopecksV1(40_000, parseVerifiedAmountKopecksV1('650.0000'))).toBe(40_000)
+        // Requested 800, order 335.5050 -> 335.50 (the order, fraction of a kopeck dropped).
+        expect(compensationAmountKopecksV1(80_000, parseVerifiedAmountKopecksV1('335.5050'))).toBe(33_550)
+        // Requested 500, order 1200 -> 500.
+        expect(compensationAmountKopecksV1(50_000, parseVerifiedAmountKopecksV1('1200.0000'))).toBe(50_000)
     })
 
     it('never exceeds the verified order amount, for any claim', () => {

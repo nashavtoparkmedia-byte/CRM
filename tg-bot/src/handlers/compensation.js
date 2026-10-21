@@ -54,7 +54,7 @@ const REFUSAL_TEXT = {
     attachment_missing: 'Нужен ответ поддержки Яндекса — пришлите фото или файл.',
     claim_not_whole_rubles: 'Введите сумму целым числом рублей.',
     claim_below_minimum: 'Сумма должна быть больше нуля.',
-    claim_above_pilot_cap: 'Максимум 1000 ₽.',
+    claim_above_pilot_cap: 'Слишком большая сумма. Введите сумму целым числом рублей.',
     order_not_in_catalogue: 'Этот заказ больше недоступен для компенсации.',
     order_already_claimed: 'По этому заказу заявка уже есть.',
     budget_exhausted: 'Месячный бюджет компенсаций исчерпан.',
@@ -531,7 +531,7 @@ compensationScene.action('comp_support_yes', async (ctx) => {
     if (ctx.scene.state.step !== 'confirm_support') return ctx.reply(STALE_LIST_TEXT);
     ctx.scene.state.supportConfirmed = true;
     ctx.scene.state.step = 'enter_amount';
-    await ctx.reply('Сколько рублей запрашиваете? Целым числом, максимум 1000.');
+    await ctx.reply('Сколько рублей запрашиваете? Целым числом. К выплате — не больше 500 ₽ и не больше стоимости заказа.');
 });
 
 compensationScene.action('comp_resubmit', async (ctx) => {
@@ -567,8 +567,11 @@ compensationScene.on('text', async (ctx) => {
         await ctx.reply('Введите целое число рублей, например 300.');
         return;
     }
-    if (amount > 1000) {
-        await ctx.reply('Максимум 1000 ₽. Введите другую сумму.');
+    // A request above the 500 ₽ cap is valid: the CRM pays at most 500 ₽ and
+    // the confirmation states the amount. Only an absurd number stops here, at
+    // the CRM's own input bound.
+    if (amount > 100000) {
+        await ctx.reply(REFUSAL_TEXT.claim_above_pilot_cap);
         return;
     }
     ctx.scene.state.claimedRubles = amount;
