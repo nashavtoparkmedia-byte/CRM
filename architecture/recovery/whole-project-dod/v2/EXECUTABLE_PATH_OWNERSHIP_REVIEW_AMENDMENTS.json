@@ -2322,6 +2322,85 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-manager-inbox-evidence-viewer-3cb09a00-20261021",
+      "reviewed_at": "2026-10-21T00:00:00Z",
+      "reviewed_by": "CASH_MANAGER_INBOX_EVIDENCE_VIEWER_EXECUTOR_REVIEW_3CB09A00",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "PRODUCT_CURATOR_AUTHORIZED_CASH_PILOT_MANAGER_INBOX_EVIDENCE_VIEWER_FEATURE_BRANCH_20261021",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is cash-one-order-per-day-slot-key-main-8a7946b0-20261009 (the month-end grace and 500 RUB cap commits of this branch add no amendment). It is a rebind-only amendment: the reviewed triple does not move, so it is admitted by the rebind-only resolver semantics main carries since #157, and each rebind of a path rebound before starts from the exact fingerprint that earlier amendment approved."
+      },
+      "reason": "Records the source fingerprints the Cash manager inbox and evidence viewer move on top of the 500 RUB cap commit 3cb09a00 without moving the reviewed denominator: 2,696 tracked executable surfaces, context-owned 1,461 and governed exclusions 1,235 are unchanged, no path becomes tracked and none retires. Six reviewed exact-inventory assignments of the compensation manager screens move their bytes and are rebound from their approved fingerprints: the board opens as the inbox of new applications of every month and shows each row's budget month, and the support reply is shown as an image or a PDF through the existing signed-in evidence route, typed from the file's own bytes. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/page.tsx",
+          "previous_source_sha256": "2001f3641ddecf8019b1973f39f9445e3f3a39f1112f212095cd9a47b127247a",
+          "current_source_sha256": "2c41673425346944579f3262dd639e1ec864c939cde8933482e8271d9317ce81",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation board keeps every reviewed ownership field. It now opens, when no month and no status are chosen, as the inbox of new applications of every budget month, shows a heading saying so, passes the chosen month (or none) to the filters and keeps the chosen month and status in the paging link. It still reads the board only through manager-data, renders what the server returned and decides nothing; it adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/manager-data.ts",
+          "previous_source_sha256": "b36a0cdf4266dfe00fc870a82da55034fffcec359d331829391c219c69c3c0db",
+          "current_source_sha256": "f750853f3802f261568280a344213c301329b7f4f5351170404b7452378e660a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The manager screens' server-only read module keeps every reviewed ownership field. managerBoard asks the existing fleet-operations public list for the new state with no month filter when nothing is chosen (the store already accepted a null month), and still reads the budget for one month; managerEvidence now decides the evidence type from the file's own leading bytes (JPEG, PNG, GIF, WebP, PDF) and refuses anything else as unsupported, instead of trusting the name-derived type the Telegram channel reports. It reads the same public surfaces as before and adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/money.ts",
+          "previous_source_sha256": "58ca2d1cf6cade1a22d9b10bc2705610800c7c79f9b95087c8f2fc45cfb85d4d",
+          "current_source_sha256": "6657ae68c51fc3e80b5f405645e94d1b7c78be666d26dad2f2d97b586ab9fd68",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The screens' formatting module keeps every reviewed ownership field. It adds one string constant, the status value that asks for every status, shared by the server board and the client filters. It formats only; it adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/CompensationFilters.tsx",
+          "previous_source_sha256": "844f0dbe4ac5c50ddcb309e817e49b453c771ba9a711316f5637cb73db54d362",
+          "current_source_sha256": "51d596e8b89d86c07fa3b1dd38b32447d89e3b23d4c32b9d0cb47c8249c1114b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The board filters keep every reviewed ownership field. The month is now optional (no month means every month), a button clears it, and the all-statuses choice is sent explicitly; every choice still goes into the URL for the server to render. It adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/CompensationApplicationList.tsx",
+          "previous_source_sha256": "8000d4c4539d16d9b53970154c3fc8697f178a79610b11d8ed87030bd9382954",
+          "current_source_sha256": "dc07148a4abd271a0fcbc153f141ce40cebd2e82314011ed9fc50877d70f56f8",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The application list keeps every reviewed ownership field. Each row now also shows the budget month the application is charged to. It renders the rows it is given and decides nothing; it adds no model access, no write and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/[applicationId]/CompensationApplicationDetail.tsx",
+          "previous_source_sha256": "a1f1d891a0d01d086eecd987e1be46ca755ab0badb7724b1e2e5dd0559e2f32d",
+          "current_source_sha256": "428581a38677c808d3f32ce60c9312bc309872e570167f607521d0a9234dccbf",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation application detail screen keeps every reviewed ownership field. The support reply is now shown by a client viewer that fetches it through the existing signed-in evidence route of the same application and shows an image inline, a PDF in the browser's PDF viewer, or a plain sentence when the route refuses or fails, instead of a bare image tag that showed a PDF as a broken picture. It still renders the actions the server said are open and reports the result code the server returned; it adds no model access, no write, no new endpoint and no credential. Lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime and governed exclusion gravity_runtime_remainder are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
