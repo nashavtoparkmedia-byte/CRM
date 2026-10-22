@@ -827,6 +827,25 @@ describe('on demand: the driver picks a day and only that driver\'s day is asked
         expect(i.fetchDriverDay).not.toHaveBeenCalled()
     })
 
+    it('serves an Owner-admitted park employee for the admitted month, and asks nothing without the admission', async () => {
+        const i = onDemand()
+        const parkEmployee = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        expect(await compensationSectionViewV1(PROOF, parkEmployee, i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+
+        const otherMonth = withOwnerPilotAdmissionPortV1(parkEmployee, [{ externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-10' }])
+        expect(await compensationSectionViewV1(PROOF, otherMonth, i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+
+        const admitted = withOwnerPilotAdmissionPortV1(parkEmployee, [{ externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-09' }])
+        const view = await compensationSectionViewV1(PROOF, admitted, i, NOW, { search: '2026-09-12' })
+        expect(view.available && view.search).toMatchObject({ kind: 'date' })
+        expect(i.fetchDriverDay).toHaveBeenCalledTimes(1)
+        expect(i.fetchDriverDay).toHaveBeenCalledWith({ externalParkId: PARK, externalDriverProfileId: PROFILE, dayKey: '2026-09-12' })
+    })
+
     it('treats a day query outside on-demand mode as an ordinary unsupported search', async () => {
         const i = ingestion({ fetchDriverDay: vi.fn(async () => ({ state: 'complete' as const, code: null })) })
         const view = await compensationSectionViewV1(PROOF, port(), i, NOW, { search: '2026-09-12' })
