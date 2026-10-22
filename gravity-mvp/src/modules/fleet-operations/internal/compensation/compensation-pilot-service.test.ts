@@ -7,6 +7,7 @@ import {
     requestPilotRefreshV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
+    withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
     type CompensationPilotPortV1,
     type PilotDriverFactsV1,
@@ -724,5 +725,47 @@ describe('the first month\'s orders after the month has ended: the month-end gra
             externalParkId: PARK, dayKey: '2026-09-30', externalOrderId: LAST_DAY_ORDER.externalOrderId,
         }))
         expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+})
+
+describe('Owner pilot admission on the pilot port', () => {
+    const PARK_EMPLOYEE: PilotDriverFactsV1 = {
+        ...ELIGIBLE_DRIVER,
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: new Date('2026-09-02T06:00:00.000Z') },
+    }
+    const ADMISSION = { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-09' }
+
+    it('is the same port when nothing is admitted', () => {
+        const p = port()
+        expect(withOwnerPilotAdmissionPortV1(p, [])).toBe(p)
+    })
+
+    it('lists and submits for an admitted park employee, through C1 unchanged', async () => {
+        const p = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        const admitted = withOwnerPilotAdmissionPortV1(p, [ADMISSION])
+        const view = await compensationSectionViewV1(PROOF, admitted, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        const result = await submitPilotApplicationV1(SUBMIT, admitted, ingestion(), NOW)
+        expect(result).toMatchObject({ submitted: true, applicationId: 'app-1' })
+        expect(p.submitApplication).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses as before when the admission names another profile or month', async () => {
+        const p = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        for (const admission of [{ ...ADMISSION, externalDriverProfileId: 'd'.repeat(32) }, { ...ADMISSION, monthKey: '2026-10' }]) {
+            const view = await compensationSectionViewV1(PROOF, withOwnerPilotAdmissionPortV1(p, [admission]), ingestion(), NOW)
+            expect(view).toMatchObject({ available: false, reason: 'not_self_employed' })
+        }
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('changes only the facts read: every other port method is the original', () => {
+        const p = port()
+        const admitted = withOwnerPilotAdmissionPortV1(p, [ADMISSION])
+        for (const name of ['confirmMainDriver', 'resolveContactLineage', 'findCashOrders', 'findBudgetPeriod',
+            'findClaimedOrderIds', 'findDriverApplications', 'submitApplication'] as const) {
+            expect(admitted[name]).toBe(p[name])
+        }
+        expect(admitted.findDriverFacts).not.toBe(p.findDriverFacts)
     })
 })
