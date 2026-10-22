@@ -3,9 +3,12 @@
  *
  * YOKO_CASH_ORDER_INGESTION_MODE selects what the scheduled runtime may do:
  *
- *   off      no provider request and no write from any trigger (the default,
- *            and what an empty, unknown or retired value means)
- *   write    every trigger, full catalogue writes
+ *   off        no provider request and no write from any trigger (the default,
+ *              and what an empty, unknown or retired value means)
+ *   write      every trigger, full catalogue writes
+ *   on_demand  no background tick and no park-wide request of any kind; the
+ *              only provider request is one driver's completed cash orders of
+ *              one business day, asked for by that driver (requestDriverDay)
  *
  * `dry_run` was once a third scheduled mode. It is retired: it was never
  * read-only. A scheduled dry run still created its checkpoint row, took and
@@ -31,7 +34,7 @@
 
 import { CASH_ORDER_INGESTION_TIMING_V1 as T } from './cash-order-ingestion-budget'
 
-export const CASH_ORDER_INGESTION_MODES_V1 = ['off', 'write'] as const
+export const CASH_ORDER_INGESTION_MODES_V1 = ['off', 'write', 'on_demand'] as const
 export type CashOrderIngestionModeV1 = typeof CASH_ORDER_INGESTION_MODES_V1[number]
 
 /** Values that once selected a scheduled mode and now fail closed. */

@@ -22,6 +22,7 @@ import { cashOrderRowIdV1 } from './compensation-cash-order-ingestion'
 import type { CashOrderRejectionV1 } from './compensation-cash-order-projection'
 import {
     requestCashOrderPageV1,
+    type CashOrderDriverDayFilterV1,
     type CashOrderPageFetcherV1,
     type CashOrderProviderCredentialV1,
     type CashOrderProviderFailureV1,
@@ -36,6 +37,8 @@ export type CashOrderSliceFailureV1 =
     | 'provider_pagination_invalid'
     | 'slice_truncated'
     | 'targeted_budget_exhausted'
+    /** A driver-day page held another profile or another day: the filter was not honoured. */
+    | 'provider_filter_not_applied'
     | CashOrderProviderFailureV1
     | 'park_time_budget_exhausted'
 
@@ -114,6 +117,15 @@ export interface CashOrderSliceInputV1 {
     finalProgress: { expected: CashOrderIngestionProgressV1; next: CashOrderIngestionProgressV1 } | null
     /** Asked before every request; false ends the slice without fetching. */
     admitPage?: () => boolean
+    /**
+     * One driver's day instead of the booked_at window. Every page is then
+     * checked against it before anything is written: a single order of another
+     * profile, or an accepted order ending outside the day, fails the slice
+     * there, so an ignored filter can neither write nor walk the park's pages.
+     */
+    driverDay?: CashOrderDriverDayFilterV1 | null
+    /** Overrides SLICE_PAGE_CAP for a slice that must stay smaller. */
+    pageCap?: number
     stats: CashOrderRequestStatsV1
     sleep: (durationMs: number) => Promise<void>
     random: () => number
@@ -137,6 +149,21 @@ export type CashOrderSliceResultV1 =
         removedOrderIds: Set<string>
     }
 
+/**
+ * Whether one raw order is what a driver-day request asked for: this profile,
+ * completed, cash, ended inside the day. The provider was asked to filter on
+ * every one of these, so a single order that is not proves the filter was not
+ * applied, and the whole page is distrusted rather than partly used.
+ */
+export function driverDayOrderMatchesV1(raw: unknown, driverDay: CashOrderDriverDayFilterV1): boolean {
+    const order = (raw ?? {}) as { driver_profile?: { id?: unknown }; status?: unknown; payment_method?: unknown; ended_at?: unknown }
+    if (order.driver_profile?.id !== driverDay.externalDriverProfileId) return false
+    if (order.status !== 'complete' || order.payment_method !== 'cash') return false
+    if (typeof order.ended_at !== 'string') return false
+    const ended = Date.parse(order.ended_at)
+    return Number.isFinite(ended) && ended >= driverDay.endedFrom.getTime() && ended < driverDay.endedTo.getTime()
+}
+
 export async function runCashOrderSliceV1(input: CashOrderSliceInputV1): Promise<CashOrderSliceResultV1> {
     const counters = emptyCashOrderSliceCountersV1()
     const acceptedOrderIds = new Set<string>()
@@ -147,7 +174,7 @@ export async function runCashOrderSliceV1(input: CashOrderSliceInputV1): Promise
     const seenCursors = new Set<string>()
     let cursor: string | null = null
     for (;;) {
-        if (counters.pages >= T.SLICE_PAGE_CAP) return fail('slice_truncated')
+        if (counters.pages >= (input.pageCap ?? T.SLICE_PAGE_CAP)) return fail('slice_truncated')
         if (input.admitPage && !input.admitPage()) return fail('targeted_budget_exhausted')
 
         const outcome = await requestCashOrderPageV1({
@@ -155,6 +182,7 @@ export async function runCashOrderSliceV1(input: CashOrderSliceInputV1): Promise
             bookedFrom: input.window.from,
             bookedTo: input.window.to,
             cursor,
+            driverDay: input.driverDay ?? null,
         }, {
             fetchPage: input.fetchPage,
             budget: input.budget,
@@ -182,6 +210,11 @@ export async function runCashOrderSliceV1(input: CashOrderSliceInputV1): Promise
         })
         if (!classification.consistent) return fail('provider_page_inconsistent')
         const decisions = classification.decisions
+
+        const driverDay = input.driverDay ?? null
+        if (driverDay !== null && !outcome.orders.every((raw) => driverDayOrderMatchesV1(raw, driverDay))) {
+            return fail('provider_filter_not_applied')
+        }
 
         if (input.mode === 'write') {
             try {

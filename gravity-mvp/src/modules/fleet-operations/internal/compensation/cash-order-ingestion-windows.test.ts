@@ -258,6 +258,7 @@ describe('ingestion mode and enabled parks', () => {
             expect(parseCashOrderIngestionModeV1(value)).toBe('off')
         }
         expect(parseCashOrderIngestionModeV1('write')).toBe('write')
+        expect(parseCashOrderIngestionModeV1(' on_demand ')).toBe('on_demand')
     })
 
     // Retired 2026-09-25: dry_run was never read-only, so it is no longer a

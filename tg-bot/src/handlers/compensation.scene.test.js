@@ -80,6 +80,8 @@ function createFakeCrm() {
             fake.refreshStatus = 'scheduled';
             fake.failures = {};
             fake.delays = {};
+            // On demand: how the CRM answers each picked day (default: the provider answered).
+            fake.dayKinds = {};
         },
         scopeKey() {
             return fake.selectedPark === 'park-b' ? SCOPE_B : SCOPE_A;
@@ -101,6 +103,21 @@ function createFakeCrm() {
                     if (refusal) return { available: false, reason: refusal, applications: [] };
                     if (fake.catalogueStatus === 'disabled') return { available: false, reason: 'catalogue_disabled', applications: [] };
                     const query = payload.search || null;
+                    if (fake.catalogueStatus === 'on_demand' && query && /^\d{4}-\d{2}-\d{2}$/.test(query)) {
+                        const kind = fake.dayKinds[query] || 'date';
+                        const dayOrders = kind === 'date' ? fake.orders.filter((candidate) => candidate.dayKey === query) : [];
+                        return {
+                            available: true,
+                            scopeKey: fake.scopeKey(),
+                            monthKey: '2026-09',
+                            remainingBudgetKopecks: 500_000,
+                            catalogueStatus: 'on_demand',
+                            todayKey: TODAY,
+                            orders: fake.orders,
+                            search: { query, kind, truncated: false, externalOrderIds: dayOrders.map((m) => m.externalOrderId) },
+                            applications: [],
+                        };
+                    }
                     const matches = query
                         ? fake.orders.filter((candidate) => candidate.shortOrderId === query
                             || String(Math.floor(candidate.amountKopecks / 100)) === query
@@ -524,3 +541,87 @@ test('answers refused chat authority as a binding problem', async () => {
     await open(harness);
     assert.match(harness.last().text, /Не удалось подтвердить привязку этого чата/);
 });
+
+// ── On demand: the driver picks a day ──────────────────────────────────────
+
+test('on demand opens on a date picker of the first month, asking the CRM nothing else', async () => {
+    crm.reset();
+    crm.catalogueStatus = 'on_demand';
+    const harness = createBot();
+    await open(harness);
+    assert.match(harness.last().text, /Выберите дату, когда завершился заказ/);
+    const data = harness.buttons().map((button) => button.callback_data);
+    assert.deepEqual(data.slice(0, 7), ['2026-09-18', '2026-09-17', '2026-09-16', '2026-09-15', '2026-09-14', '2026-09-13', '2026-09-12'].map((day) => `comp_day:${day}`));
+    assert.ok(data.includes('comp_day_other'));
+    assert.ok(!data.includes('comp_refresh'));
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+    assert.equal(crm.calls[0].payload.search, undefined);
+});
+
+test('a picked day lists only that day, and an order from it goes through the usual claim', async () => {
+    crm.reset();
+    crm.catalogueStatus = 'on_demand';
+    const harness = createBot();
+    await open(harness);
+    await harness.tap(`comp_day:${TODAY}`);
+    assert.equal(crm.of('compensation_section').pop().payload.search, TODAY);
+    assert.match(harness.last().text, /Заказы за 18\.09/);
+    const offered = harness.buttons().map((button) => button.callback_data).filter((data) => data.startsWith('comp_o:'));
+    assert.deepEqual(offered, [O1, O2, O3].map((candidate) => orderData(candidate)));
+    await harness.tap(orderData(O1));
+    await harness.tap('comp_support_yes');
+    await harness.text('500');
+    await harness.photo('support-reply');
+    const submit = crm.of('compensation_submit').pop();
+    assert.equal(submit.payload.externalOrderId, O1.externalOrderId);
+    assert.equal(submit.payload.claimedRubles, 500);
+});
+
+test('tells no orders, still checking, Yandex unavailable and a day out of reach apart', async () => {
+    crm.reset();
+    crm.catalogueStatus = 'on_demand';
+    crm.orders = [];
+    crm.dayKinds = { '2026-09-16': 'date_checking', '2026-09-15': 'date_unavailable', '2026-09-01': 'date_not_allowed' };
+    const harness = createBot();
+    await open(harness);
+
+    await harness.tap('comp_day:2026-09-17');
+    assert.match(harness.last().text, /За 17\.09 завершённых заказов за наличные не найдено/);
+
+    await harness.tap('comp_day:2026-09-16');
+    assert.match(harness.last().text, /Проверяем заказы за 16\.09/);
+    assert.ok(harness.buttons().some((button) => button.callback_data === 'comp_day:2026-09-16'));
+
+    await harness.tap('comp_day:2026-09-15');
+    assert.match(harness.last().text, /Яндекс сейчас не отвечает/);
+    assert.doesNotMatch(harness.last().text, /не найдено/);
+
+    await harness.tap('comp_day:2026-09-01');
+    assert.match(harness.last().text, /Эту дату выбрать нельзя/);
+});
+
+test('another date is typed as DD.MM and checked before the CRM is asked', async () => {
+    crm.reset();
+    crm.catalogueStatus = 'on_demand';
+    const harness = createBot();
+    await open(harness);
+    await harness.tap('comp_day_other');
+    const before = crm.calls.length;
+    await harness.text('31.02');
+    assert.match(harness.last().text, /Такой даты нет/);
+    await harness.text('завтра');
+    assert.match(harness.last().text, /Введите дату как ДД\.ММ/);
+    assert.equal(crm.calls.length, before);
+    await harness.text('5.09');
+    assert.equal(crm.of('compensation_section').pop().payload.search, '2026-09-05');
+});
+
+test('the usual park list stays as it was outside on-demand mode', async () => {
+    crm.reset();
+    const harness = createBot();
+    await open(harness);
+    assert.match(harness.last().text, /Сегодня:/);
+    assert.ok(harness.buttons().some((button) => button.callback_data === 'comp_refresh'));
+    assert.ok(!harness.buttons().some((button) => String(button.callback_data).startsWith('comp_day')));
+});
+

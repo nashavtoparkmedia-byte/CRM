@@ -8,7 +8,10 @@
  * by another rule there.
  *
  *   compensation_section      → the selected park's local list (today, earlier,
- *                               search), remaining budget, existing applications
+ *                               search), remaining budget, existing applications;
+ *                               in on-demand mode a date picker, and for a picked
+ *                               day (`search: 'YYYY-MM-DD'`) that driver's orders
+ *                               of that day, asked of Yandex by the CRM
  *   compensation_order_check  → whether a chosen order may go on, and whether
  *                               Yandex is being asked about it
  *   compensation_refresh      → schedules a refresh of the park's list
@@ -101,6 +104,8 @@ const AUTHORITY_REFUSED_TEXT = 'Не удалось подтвердить пр�
 const STALE_LIST_TEXT = 'Этот список устарел. Откройте «💰 Компенсация наличных» заново.';
 
 const EARLIER_PAGE_SIZE = 8;
+// On demand: how many recent days of the first month get a button of their own.
+const DAY_BUTTONS = 7;
 // Telegram refuses callback data over 64 bytes.
 const CALLBACK_DATA_LIMIT = 64;
 
@@ -204,10 +209,109 @@ function header(view) {
         + (hint ? `\n${hint}` : '');
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const dayOf = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10)));
+const keyOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const shortDate = (key) => `${key.slice(8, 10)}.${key.slice(5, 7)}`;
+
+/**
+ * The days a driver can pick: the most recent days of their first month that
+ * have begun, newest first. The CRM sends its own business "today" and month,
+ * so this is arithmetic on its keys and never the bot's clock; the CRM checks
+ * the picked day again before it asks Yandex anything.
+ */
+function pickableDays(view) {
+    const monthStart = dayOf(`${view.monthKey}-01`);
+    const nextMonth = new Date(monthStart);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    const last = Math.min(dayOf(view.todayKey), nextMonth.getTime() - DAY_MS);
+    const days = [];
+    for (let at = last; at >= monthStart && days.length < DAY_BUTTONS; at -= DAY_MS) days.push(keyOf(at));
+    return days;
+}
+
+async function showDays(ctx, view) {
+    const state = ctx.scene.state;
+    state.step = 'list';
+    state.monthKey = view.monthKey;
+    state.todayKey = view.todayKey;
+    const days = pickableDays(view);
+    const buttons = [];
+    for (let index = 0; index < days.length; index += 4) {
+        buttons.push(days.slice(index, index + 4).map((key) => Markup.button.callback(shortDate(key), `comp_day:${key}`)));
+    }
+    buttons.push([Markup.button.callback('Другая дата', 'comp_day_other')]);
+    buttons.push([Markup.button.callback('Отмена', 'comp_cancel')]);
+    await ctx.reply(
+        `${header(view)}\n\nВыберите дату, когда завершился заказ:${applicationsSummary(view.applications)}`,
+        Markup.inlineKeyboard(buttons),
+    );
+}
+
+/**
+ * One picked day. The CRM asks Yandex for this driver's completed cash orders
+ * of that day only; "none", "still checking" and "Yandex unavailable" are
+ * different answers and are never shown as one another.
+ */
+async function showDay(ctx, dayKey) {
+    const state = ctx.scene.state;
+    // A second tap while the first is being answered asks nothing new.
+    if (state.dayInFlight) {
+        await ctx.reply('Уже проверяем заказы, подождите несколько секунд.');
+        return;
+    }
+    state.step = 'list';
+    state.dayInFlight = true;
+    let view;
+    try {
+        view = await loadSection(ctx, dayKey);
+    } finally {
+        state.dayInFlight = false;
+    }
+    if (!view) return;
+
+    const search = view.search || { kind: 'unsupported', externalOrderIds: [], truncated: false };
+    const byId = new Map(view.orders.map((order) => [order.externalOrderId, order]));
+    const matches = search.externalOrderIds.map((id) => byId.get(id)).filter(Boolean);
+    const date = shortDate(dayKey);
+    const other = [Markup.button.callback('Другая дата', 'comp_days')];
+    const cancel = [Markup.button.callback('Отмена', 'comp_cancel')];
+
+    if (search.kind === 'date' && matches.length > 0) {
+        const buttons = matches.map((order) => orderButton(ctx, view.scopeKey, order, false));
+        buttons.push(other, cancel);
+        return ctx.reply(`Заказы за ${date} — выберите нужный:`, Markup.inlineKeyboard(buttons));
+    }
+    if (search.kind === 'date') {
+        return ctx.reply(`За ${date} завершённых заказов за наличные не найдено.`, Markup.inlineKeyboard([other, cancel]));
+    }
+    if (search.kind === 'date_checking') {
+        return ctx.reply(
+            `Проверяем заказы за ${date} в Яндексе. Нажмите «Показать» через несколько секунд.`,
+            Markup.inlineKeyboard([[Markup.button.callback('Показать', `comp_day:${dayKey}`)], other, cancel]),
+        );
+    }
+    if (search.kind === 'date_unavailable') {
+        return ctx.reply(
+            `Яндекс сейчас не отвечает — заказы за ${date} проверить не удалось. Попробуйте чуть позже.`,
+            Markup.inlineKeyboard([[Markup.button.callback('Попробовать ещё раз', `comp_day:${dayKey}`)], other, cancel]),
+        );
+    }
+    if (search.kind === 'date_not_allowed') {
+        return ctx.reply(
+            'Эту дату выбрать нельзя: компенсация — за заказы первого месяца работы, не позже сегодняшнего дня.',
+            Markup.inlineKeyboard([other, cancel]),
+        );
+    }
+    return ctx.reply('Не получилось показать заказы за эту дату.', Markup.inlineKeyboard([other, cancel]));
+}
+
 async function showToday(ctx) {
     ctx.scene.state.step = 'list';
     const view = await loadSection(ctx, null);
     if (!view) return;
+    // On demand there is no park list to show: the driver picks a day.
+    if (view.catalogueStatus === 'on_demand') return showDays(ctx, view);
 
     const today = view.orders.filter((order) => order.dayKey === view.todayKey);
     const earlierCount = view.orders.length - today.length;
@@ -446,6 +550,25 @@ compensationScene.action('comp_today', async (ctx) => {
     return showToday(ctx);
 });
 
+compensationScene.action('comp_days', async (ctx) => {
+    await ctx.answerCbQuery();
+    return showToday(ctx);
+});
+
+compensationScene.action(/^comp_day:(\d{4}-\d{2}-\d{2})$/, async (ctx) => {
+    await ctx.answerCbQuery();
+    return showDay(ctx, ctx.match[1]);
+});
+
+compensationScene.action('comp_day_other', async (ctx) => {
+    await ctx.answerCbQuery();
+    ctx.scene.state.step = 'pick_day';
+    await ctx.reply(
+        'Введите дату, когда завершился заказ, например 21.10.',
+        Markup.inlineKeyboard([[Markup.button.callback('К выбору даты', 'comp_days')]]),
+    );
+});
+
 compensationScene.action(/^comp_earlier:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     return showEarlier(ctx, Number(ctx.match[1]));
@@ -553,6 +676,21 @@ compensationScene.on('text', async (ctx) => {
     const raw = (ctx.message.text || '').trim();
 
     if (step === 'search') return showSearch(ctx, raw);
+
+    if (step === 'pick_day') {
+        const match = /^(\d{1,2})[./](\d{1,2})$/u.exec(raw);
+        const year = (ctx.scene.state.monthKey || '').slice(0, 4);
+        if (!match || !/^\d{4}$/u.test(year)) {
+            await ctx.reply('Введите дату как ДД.ММ, например 21.10.');
+            return;
+        }
+        const dayKey = `${year}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+        if (Number.isNaN(dayOf(dayKey)) || keyOf(dayOf(dayKey)) !== dayKey) {
+            await ctx.reply('Такой даты нет. Введите дату как ДД.ММ, например 21.10.');
+            return;
+        }
+        return showDay(ctx, dayKey);
+    }
 
     if (step === 'attach') {
         await ctx.reply(REFUSAL_TEXT.attachment_missing);

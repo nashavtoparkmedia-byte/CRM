@@ -101,12 +101,16 @@ export interface CashOrderIngestionScheduleV1 {
     firstRunDelayMs: number
 }
 
-/** Whether the scheduler should register at all. Mode off registers nothing. */
+/**
+ * Whether the scheduler should register at all. Only write mode has a
+ * background pass: off registers nothing, and on demand registers nothing
+ * either, because it never reads a park, only a driver's day when asked.
+ */
 export function cashOrderIngestionScheduleV1(): CashOrderIngestionScheduleV1 {
     const mode = parseCashOrderIngestionModeV1(process.env.YOKO_CASH_ORDER_INGESTION_MODE)
     const tick = cashOrderIngestionTickScheduleV1()
     return {
-        enabled: mode !== 'off',
+        enabled: mode === 'write',
         intervalMs: tick.intervalMs,
         firstRunDelayMs: tick.firstRunDelayMs,
     }
@@ -224,8 +228,85 @@ export function readCashOrderOrderConfirmationV1(input: {
     }
 }
 
+/** How long a Telegram request waits for one driver-day answer before reporting it as running. */
+const DRIVER_DAY_WAIT_MS = 8_000
+
+export interface CashOrderDriverDayFetchDtoV1 {
+    state: 'complete' | 'running' | 'failed'
+    code: string | null
+}
+
+/**
+ * On demand: asks for one driver's completed cash orders of one business day
+ * and waits for the answer at most `waitMs`. It never waits without bound: a
+ * request still running is reported as running and keeps going, and the next
+ * identical request joins it or reads its cached answer.
+ */
+export async function fetchCashOrderDriverDayV1(
+    input: { externalParkId: string; externalDriverProfileId: string; dayKey: string },
+    waitMs: number = DRIVER_DAY_WAIT_MS,
+): Promise<CashOrderDriverDayFetchDtoV1> {
+    const request = await runtime.requestDriverDay(input)
+    if (request.status === 'not_scheduled') return { state: 'failed', code: request.reason }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const settled = await Promise.race([
+        request.completion.then(() => true),
+        new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => resolve(false), waitMs)
+            timer.unref?.()
+        }),
+    ])
+    if (timer !== undefined) clearTimeout(timer)
+    const snapshot = runtime.readDriverDay(input.externalParkId, input.externalDriverProfileId, input.dayKey)
+    if (!settled || snapshot === null || snapshot.outcome === 'running') return { state: 'running', code: null }
+    if (snapshot.outcome === 'complete') return { state: 'complete', code: null }
+    return { state: 'failed', code: snapshot.outcome.replace(/^failed:/u, '') }
+}
+
+/** On demand: confirms a listed order by asking for its driver's day again. Never waits. */
+export async function requestCashOrderDriverDayConfirmationV1(input: {
+    externalParkId: string
+    externalDriverProfileId: string
+    dayKey: string
+}): Promise<CashOrderRefreshRequestV1> {
+    const request = await runtime.requestDriverDay(input)
+    if (request.status === 'not_scheduled') return { status: 'not_scheduled', reason: request.reason }
+    return { status: request.status === 'scheduled' ? 'scheduled' : 'joined', reason: null }
+}
+
+/**
+ * On demand: what the latest request for the order's driver day established
+ * about one order, in the shape the day confirmation reports. Only a complete
+ * answer reports `not_returned`.
+ */
+export function readCashOrderDriverDayOrderConfirmationV1(input: {
+    externalParkId: string
+    externalDriverProfileId: string
+    dayKey: string
+    externalOrderId: string
+}): CashOrderOrderConfirmationDtoV1 {
+    const snapshot = runtime.readDriverDay(input.externalParkId, input.externalDriverProfileId, input.dayKey)
+    if (snapshot === null) return { state: 'undetermined', via: null, connectionId: null, startedAt: null, endedAt: null, code: null }
+    if (snapshot.acceptedOrderIds.includes(input.externalOrderId)) {
+        return { state: 'confirmed', via: 'narrow', connectionId: snapshot.connectionId, startedAt: null, endedAt: null, code: null }
+    }
+    if (snapshot.removedOrderIds.includes(input.externalOrderId)) {
+        return { state: 'removed', via: 'narrow', connectionId: snapshot.connectionId, startedAt: null, endedAt: null, code: null }
+    }
+    switch (snapshot.outcome) {
+        case 'running':
+            return { state: 'running', via: null, connectionId: null, startedAt: null, endedAt: null, code: null }
+        case 'complete':
+            return { state: 'not_returned', via: null, connectionId: snapshot.connectionId, startedAt: snapshot.startDb, endedAt: snapshot.endedDb, code: null }
+        case 'incomplete':
+            return { state: 'incomplete', via: null, connectionId: null, startedAt: null, endedAt: snapshot.endedDb, code: null }
+        default:
+            return { state: 'failed', via: null, connectionId: null, startedAt: null, endedAt: snapshot.endedDb, code: snapshot.outcome.replace(/^failed:/u, '') }
+    }
+}
+
 export interface CashOrderCatalogueFactsDtoV1 {
-    mode: 'off' | 'dry_run' | 'write'
+    mode: 'off' | 'dry_run' | 'write' | 'on_demand'
     /** Enabled for ingestion, with a valid park configuration. */
     parkEnabled: boolean
     dbNow: Date
