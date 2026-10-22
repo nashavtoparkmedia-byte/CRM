@@ -161,6 +161,50 @@ function yandexContractorProfileId(driver: {
     return null
 }
 
+const PROFILE_PARK_UNPROVEN_TEXT = 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.'
+
+/**
+ * The Yandex profile and park a bot action may act on. A profile id means
+ * something only in the park of the Driver row it came from, so a selected
+ * park that differs from that park is refused rather than guessed, and no
+ * default park is ever chosen. A legacy row with no recorded park acts in the
+ * park the driver selected, where set_active_park checked the driver's phone.
+ */
+function driverYandexTarget(driver: {
+    yandexDriverId: string | null
+    externalDriverProfileId: string | null
+    externalParkId: string | null
+} | null, selectedParkId: string | null | undefined):
+    | { ok: true; profileId: string; parkId: string }
+    | { ok: false; reason: 'NO_PROFILE' | 'PARK_UNPROVEN' } {
+    const profileId = yandexContractorProfileId(driver)
+    if (!profileId) return { ok: false, reason: 'NO_PROFILE' }
+    const profilePark = driver?.externalParkId?.trim() || null
+    const selected = selectedParkId?.trim() || null
+    if (selected && profilePark && selected !== profilePark) return { ok: false, reason: 'PARK_UNPROVEN' }
+    const parkId = selected ?? profilePark
+    return parkId ? { ok: true, profileId, parkId } : { ok: false, reason: 'PARK_UNPROVEN' }
+}
+
+/** The last ten digits of a phone: the only form two phone spellings are compared in. */
+function phoneKey(value: unknown): string | null {
+    const digits = typeof value === 'string' ? value.replace(/\D/g, '') : ''
+    return digits.length >= 10 ? digits.slice(-10) : null
+}
+
+/**
+ * The single Yandex profile of a park listing whose phone is exactly the
+ * driver's, or null: no match and more than one match both pick nothing, so a
+ * search never hands a driver's action to someone else's profile.
+ */
+function uniqueProfileByPhone(profiles: any[], phone: string | null | undefined, eligible: (profile: any) => boolean = () => true): any | null {
+    const key = phoneKey(phone)
+    if (!key) return null
+    const matches = profiles.filter((profile) => eligible(profile)
+        && (profile?.driver_profile?.phones || []).some((candidate: unknown) => phoneKey(candidate) === key))
+    return matches.length === 1 ? matches[0] : null
+}
+
 // Check if a Telegram user is linked to a driver
 async function handleCheckLink(payload: any) {
     const { telegramId } = payload
@@ -204,26 +248,24 @@ async function handleCheckLink(payload: any) {
         // (records created by sync_user which stores the Yandex driver_profile.id).
         let driver = await prisma.driver.findUnique({
             where: { id: mapping.driverId },
-            select: { yandexDriverId: true, externalDriverProfileId: true, fullName: true }
+            select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, fullName: true }
         })
         if (!driver) {
             driver = await prisma.driver.findFirst({
                 where: { yandexDriverId: mapping.driverId },
-                select: { yandexDriverId: true, externalDriverProfileId: true, fullName: true }
+                select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, fullName: true }
             })
         }
 
-        const yandexContractorId = yandexContractorProfileId(driver)
+        const target = driverYandexTarget(driver, mapping.activeParkId)
         if (driver?.fullName) driverName = driver.fullName
-        if (!yandexContractorId) {
-            console.warn('[check_link] driver has no yandexDriverId, skipping Yandex lookup:', mapping.driverId)
+        if (!target.ok) {
+            console.warn(`[check_link] no Yandex profile in a proven park (${target.reason}), skipping Yandex lookup:`, mapping.driverId)
             return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo })
         }
+        const yandexContractorId = target.profileId
 
-        // Use driver's activeParkId if available — otherwise fall back to any connection
-        const connection = mapping.activeParkId
-            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
-            : await getYandexConnectionCredentialsV1()
+        const connection = await getYandexConnectionCredentialsV1(undefined, target.parkId)
         if (connection) {
             const headers: Record<string, string> = {
                 'X-Client-ID': connection.clid,
@@ -291,11 +333,7 @@ async function handleCheckLink(payload: any) {
                             })
                             if (searchRes.ok) {
                                 const searchData = await searchRes.json()
-                                const matched = (searchData.driver_profiles || []).find((p: any) =>
-                                    (p.driver_profile.phones || []).some((ph: string) =>
-                                        ph.replace(/[\s+\-()]/g, '').includes(phone.replace(/[\s+\-()]/g, ''))
-                                    )
-                                )
+                                const matched = uniqueProfileByPhone(searchData.driver_profiles || [], phone)
                                 if (matched) {
                                     const carId = matched.car?.id
                                     if (carId) {
@@ -741,24 +779,27 @@ async function handleChangeLimit(payload: any) {
     })
     if (authorityFailure) return authorityFailure
 
-    // 2. Use the driver's active park connection
-    const connection = mapping.activeParkId
-        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
-        : await getYandexConnectionCredentialsV1()
+    // 2. Resolve the Yandex profile and the park it belongs to.
+    //    mapping.driverId is a CRM id — need the Yandex contractor id.
+    const driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, phone: true }
+    })
+    const target = driverYandexTarget(driver, mapping.activeParkId)
+    if (!target.ok) {
+        return target.reason === 'PARK_UNPROVEN'
+            ? NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
+            : NextResponse.json({ error: 'Не удалось найти водителя в Яндекс Флит для этого парка' }, { status: 404 })
+    }
+    let contractorId: string | null = target.profileId
+
+    // 3. Use the connection of that park. A legacy id may be absent from it, so
+    //    fall back to an exact phone match there when v2 returns 404.
+    const connection = await getYandexConnectionCredentialsV1(undefined, target.parkId)
 
     if (!connection) {
         return NextResponse.json({ error: 'No active Yandex API connection in CRM' }, { status: 500 })
     }
-
-    // 3. Resolve the correct contractor_profile_id for this park.
-    //    mapping.driverId is a CRM id — need the Yandex contractor id.
-    //    The stored yandexDriverId may belong to a different park, so fall back
-    //    to phone search when v2 returns 404.
-    const driver = await prisma.driver.findUnique({
-        where: { id: mapping.driverId },
-        select: { yandexDriverId: true, externalDriverProfileId: true, phone: true }
-    })
-    let contractorId = yandexContractorProfileId(driver)
 
     const yandexAuthHeaders: Record<string, string> = {
         'X-Client-ID': connection.clid,
@@ -794,12 +835,7 @@ async function handleChangeLimit(payload: any) {
             })
             if (searchRes.ok) {
                 const searchData = await searchRes.json()
-                const normalizedPhone = driver.phone.replace(/[\s+\-()]/g, '')
-                const matched = (searchData.driver_profiles || []).find((p: any) =>
-                    (p.driver_profile.phones || []).some((ph: string) =>
-                        ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone)
-                    )
-                )
+                const matched = uniqueProfileByPhone(searchData.driver_profiles || [], driver.phone)
                 if (matched?.driver_profile?.id) {
                     contractorId = matched.driver_profile.id
                     console.log(`[changeLimit] resolved contractor id via phone: ${contractorId}`)
@@ -940,22 +976,23 @@ async function handleUpdateDriverCar(payload: any) {
     // The link names a CRM Driver row; Yandex needs that Driver's profile id.
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { yandexDriverId: true, externalDriverProfileId: true },
+        select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { yandexDriverId: true, externalDriverProfileId: true },
+            select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
         })
     }
-    const contractorId = yandexContractorProfileId(driver)
-    if (!contractorId) {
-        return NextResponse.json({ error: 'Не нашли ваш профиль в Яндекс Флит. Обратитесь к менеджеру.' }, { status: 404 })
+    const target = driverYandexTarget(driver, mapping.activeParkId)
+    if (!target.ok) {
+        return target.reason === 'PARK_UNPROVEN'
+            ? NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
+            : NextResponse.json({ error: 'Не нашли ваш профиль в Яндекс Флит. Обратитесь к менеджеру.' }, { status: 404 })
     }
+    const contractorId = target.profileId
 
-    const connection = mapping.activeParkId
-        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
-        : await getYandexConnectionCredentialsV1()
+    const connection = await getYandexConnectionCredentialsV1(undefined, target.parkId)
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const headers: Record<string, string> = {
@@ -1005,8 +1042,6 @@ async function handleUpdateDriverCar(payload: any) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const SCRAPER_URL = process.env.YANDEX_FLEET_SCRAPER_URL || 'http://localhost:3003'
-const DRIVER_ACTIONS_PARK_ID = process.env.DRIVER_ACTIONS_PARK_ID ||
-    '45e30e9d6b824c608e5d28719cb19a6e' // Наш Автопарк / Екатеринбург (new UI)
 
 type DriverActionKind = 'GET_PRICE' | 'COMPLETE_ORDER' | 'CANCEL_ORDER'
 
@@ -1035,16 +1070,39 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     if (authorityFailure) return authorityFailure
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { id: true, fullName: true, yandexDriverId: true, externalDriverProfileId: true },
+        select: { id: true, fullName: true, phone: true, yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { id: true, fullName: true, yandexDriverId: true, externalDriverProfileId: true },
+            select: { id: true, fullName: true, phone: true, yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
         })
     }
-    const yandexProfileId = yandexContractorProfileId(driver)
-    if (!driver || !yandexProfileId) {
+    const target = driverYandexTarget(driver, mapping.activeParkId)
+    if (driver && !target.ok && target.reason === 'PARK_UNPROVEN') {
+        const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+            driverId: mapping.driverId,
+            telegramId: telegramIdBigInt,
+        })
+        if (recordAuthorityFailure) return recordAuthorityFailure
+        await recordDriverActionV1({
+            contract: RECORD_DRIVER_ACTION_COMMAND_V1,
+            data: {
+                driverId: driver.id,
+                kind,
+                requestedBy: String(telegramId),
+                status: 'ESCALATED_TO_MANAGER',
+                errorMessage: 'selected park is not the park of the Yandex profile',
+            },
+        }).catch(() => {})
+        return NextResponse.json({
+            ok: false,
+            error: 'YANDEX_PROFILE_PARK_UNPROVEN',
+            status: 'ESCALATED_TO_MANAGER',
+            message: PROFILE_PARK_UNPROVEN_TEXT,
+        })
+    }
+    if (!driver || !target.ok) {
         const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
             driverId: mapping.driverId,
             telegramId: telegramIdBigInt,
@@ -1067,19 +1125,18 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
 
-    // 2a. Profile-swap guard: if linked profile is fired, find the working twin in same park
-    let effectiveYandexId = yandexProfileId
+    // 2a. Profile-swap guard: if the linked profile is fired, use the driver's own
+    //     working twin in the same park — only the single one with the driver's phone.
+    let effectiveYandexId = target.profileId
     try {
-        const conn = mapping.activeParkId
-            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
-            : await getYandexConnectionCredentialsV1()
+        const conn = await getYandexConnectionCredentialsV1(undefined, target.parkId)
         if (conn && driver.fullName) {
             const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
                 headers: { 'X-Client-ID': conn.clid, 'X-Api-Key': conn.apiKey, 'Accept-Language': 'ru', 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     query: { park: { id: conn.parkId }, text: driver.fullName },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'work_status'], car: [], account: [], current_status: [] },
+                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                     limit: 10, offset: 0
                 })
             })
@@ -1088,7 +1145,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 const profiles: any[] = checkData.driver_profiles || []
                 const linked = profiles.find((p: any) => p.driver_profile.id === effectiveYandexId)
                 if (linked?.driver_profile.work_status === 'fired') {
-                    const twin = profiles.find((p: any) =>
+                    const twin = uniqueProfileByPhone(profiles, driver.phone, (p: any) =>
                         p.driver_profile.id !== effectiveYandexId &&
                         p.driver_profile.work_status !== 'fired'
                     )
@@ -1117,7 +1174,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             body: JSON.stringify({
                 kind,
                 driverYandexId: effectiveYandexId,
-                parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
+                parkId: target.parkId,
                 reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
             }),
         })
