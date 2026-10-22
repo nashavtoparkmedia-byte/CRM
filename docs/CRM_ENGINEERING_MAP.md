@@ -1,6 +1,8 @@
 Verified against main: `04839381b798c09ae52d3cea35b4a18597a45685`
 Tree: `8e80f60b549271d588df3539e2145b6ad022e3aa`
 Generated/verified: 2026-10-03
+Partial update 2026-10-22: §2.7, F-22, F-23 and I-31a describe the on-demand cash-order mode, verified against its
+own change on top of main `5dc489cd`; the rest of the map is as verified above.
 
 # YOKO CRM — Engineering Map
 
@@ -402,12 +404,34 @@ Each entry lists what the code actually does.
   - `yandex-fleet-scraper/src/{api.ts,worker.ts,infrastructure/bullmq.ts}`.
 - **Key paths (compensation)** — `COMP` = `G/modules/fleet-operations/internal/compensation`
   - `COMP/compensation-prisma-adapter.ts` — monetary core (raw SQL in transactions).
-  - `COMP/cash-order-ingestion-runtime.ts`, `yandex-cash-order-source.ts`,
+  - `COMP/cash-order-ingestion-runtime.ts`, `cash-order-ingestion-slice.ts`,
+    `cash-order-ingestion-config.ts`, `yandex-cash-order-source.ts`,
     `legacy-prisma-cash-order-ingestion-adapter.ts`, `cash-order-park-authority.ts`.
-  - `COMP/compensation-pilot-service.ts`, `compensation-manager-service.ts`.
+  - `COMP/compensation-pilot-service.ts`, `compensation-pilot-selection.ts`,
+    `compensation-manager-service.ts`.
   - `G/modules/fleet-operations/application/{compensation-manager,compensation-pilot,compensation-budget-period,cash-order-ingestion}-operations.ts`.
   - UI: `G/app/compensation/`; bot scene: `tg-bot/src/handlers/compensation.js`;
     operator CLIs: `gravity-mvp/scripts/compensation-*.ts`.
+- **Cash-order ingestion modes** (`YOKO_CASH_ORDER_INGESTION_MODE`, parsed in
+  `COMP/cash-order-ingestion-config.ts`; parks in `YOKO_CASH_COMPENSATION_PARKS`):
+  - `off` (default; also any unknown or retired value): no provider request, no write.
+  - `write`: the background tick scans each enabled park (hot window + month
+    reconciliation by `booked_at`) and keeps a park-wide local catalogue; the bot lists
+    it ("today", "earlier", search, refresh) and confirms orders through park-day requests.
+  - `on_demand`: **no background scan and no park-wide request of any kind** — the
+    scheduler does not register, `runTick` does nothing, and hot refresh, park-day
+    confirmation and the preflight probe are refused. The driver picks a day in the bot;
+    after identity, eligibility (park-SMZ or an Owner admission when present), the proven
+    park and profile and the day itself are checked, `CashOrderIngestionRuntimeV1.requestDriverDay`
+    asks `orders/list` for that profile, that Yekaterinburg day (`ended_at`), `complete` and
+    `cash` only. Every returned order is re-checked; any mismatch stops the request before
+    a write (`provider_filter_not_applied`). Identical requests join, a complete answer is
+    cached for 5 min, a driver may start 6 requests per 10 min, pages are capped at 3,
+    and the park lease, page allowance, provider deferral and 429/timeout policy apply.
+    Order checks and submissions keep every rule; a stale order is re-confirmed through
+    its own driver day. The bot↔CRM contract is the same four actions: the picked day is
+    `compensation_section` `search: 'YYYY-MM-DD'`, the answer `catalogueStatus: 'on_demand'`
+    and `search.kind` `date` / `date_checking` / `date_unavailable` / `date_not_allowed`.
 - **Owns**: `Driver`, `DriverDaySummary`, `DriverEvent`, `DriverAttention`,
   `DriverAction`, `CommunicationEvent`, `ScoringThreshold`, `SyncStatus`,
   `ApiConnection`, `ApiLog`, `DailyParkStats`; the 13 `Compensation*` models (via
@@ -862,12 +886,19 @@ on main is the simulated one; live mode does not start.
 ### Cash compensation
 
 **F-22 Cash-order ingestion**
-`G/instrumentation.ts` (interval, only when `YOKO_CASH_ORDER_INGESTION_MODE` is
-not `off`) → `runScheduledCashOrderIngestionV1` → `CashOrderIngestionRuntimeV1` →
-Yandex Fleet orders API → `CompensationCashOrder` upserts + checkpoint lease.
+`write` mode: `G/instrumentation.ts` (interval, registered only when
+`cashOrderIngestionScheduleV1().enabled`, i.e. mode `write`) →
+`runScheduledCashOrderIngestionV1` → `CashOrderIngestionRuntimeV1` → Yandex Fleet
+orders API → `CompensationCashOrder` upserts + checkpoint lease.
+`on_demand` mode: no interval. `compensation_section` with a picked day →
+`compensationPilotSectionV1` → `compensationSectionViewV1` (identity, eligibility,
+scope, day checks) → `fetchCashOrderDriverDayV1` (`application/cash-order-ingestion-operations.ts`,
+waits ≤ 8 s) → `requestDriverDay` → `runCashOrderSliceV1` with the driver-day filter →
+the same `writePage` under the park lease.
 
 **F-23 Driver submission**
-tg-bot scene (`tg-bot/src/handlers/compensation.js`) →
+tg-bot scene (`tg-bot/src/handlers/compensation.js`; in `on_demand` it opens on a
+date picker and lists the picked day) →
 `POST G/app/api/webhooks/bot/route.ts` (`compensation_*` actions) →
 `compensationPilotSubmitV1` → `submitPilotApplicationV1`
 (`COMP/compensation-pilot-service.ts`) → `submitCompensationApplicationV1`
@@ -1361,6 +1392,13 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `compensation-manager-principal.ts` — its test. Exception: the session itself is
   the unsigned browser cookie (F-25); the real gate on `/compensation` is nginx
   Basic Auth (`check-compensation-edge-perimeter-boundary.mjs`).
+- **I-31a On demand never reads a park.** In mode `on_demand` the only provider
+  request is one proven driver's completed cash orders of one business day, made after
+  eligibility and the day checks; a response that is not exactly that is not written. —
+  `runTick` / `requestHotRefresh` / `requestDayConfirmation` / `requestDriverDay` in
+  `COMP/cash-order-ingestion-runtime.ts`, `driverDayOrderMatchesV1` in
+  `COMP/cash-order-ingestion-slice.ts` — `cash-order-ingestion-runtime.test.ts`
+  (on demand), `compensation-pilot-service.test.ts` (on demand).
 
 ### Fleet, work, platform
 
