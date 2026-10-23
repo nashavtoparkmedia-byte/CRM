@@ -1167,7 +1167,10 @@ export class MessageService {
                         target: rawExternalId,
                         content: message.content,
                         connectionId: connId,
-                        metadata: { messageId, chatId: message.chatId },
+                        // The redelivery is the same send intent: it carries the
+                        // quote this row recorded when it was first sent, and only
+                        // that row's own quote, so a reply never goes out unquoted.
+                        metadata: { messageId, chatId: message.chatId, quotedMsgId: nonEmptyString(meta.quotedMsgId) ?? undefined },
                     })
                     retryTypedResult = readTextDeliveryResultV1(res)
                     if (retryTypedResult) break
