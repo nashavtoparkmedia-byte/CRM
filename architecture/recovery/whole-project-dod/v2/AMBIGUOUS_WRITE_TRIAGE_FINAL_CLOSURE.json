@@ -1465,9 +1465,9 @@
     {
       "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
-      "source_sha256": "dd9c298045f4857e601b790f9b2a1d94885e126cfd6040a9b99d05b25aee64a2",
+      "source_sha256": "7e5bba9db964be7325a79995b6e6003a17a864aec60d9dbba74419161c26f385",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line": 2395,
+      "line": 2546,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1490,7 +1490,7 @@
         "min"
       ],
       "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
-      "sql_provenance_sha256": "09cc8c1490ab8e34e28279acc68d653eee5bb3ecfdec4bc3e56961483a5bfa07",
+      "sql_provenance_sha256": "e0d9ed46e5d5fce1a3aac0e9943258ceae86183bd564ee1aa7ae7849b137b349",
       "source_context": "telegram_channel",
       "source_technical_module": "telegram_provider",
       "owner_contexts": [],
@@ -4347,11 +4347,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/tg-actions.ts",
-        "line": 2395,
+        "line": 2546,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "dd9c298045f4857e601b790f9b2a1d94885e126cfd6040a9b99d05b25aee64a2",
-        "sql_provenance_sha256": "09cc8c1490ab8e34e28279acc68d653eee5bb3ecfdec4bc3e56961483a5bfa07"
+        "source_sha256": "7e5bba9db964be7325a79995b6e6003a17a864aec60d9dbba74419161c26f385",
+        "sql_provenance_sha256": "e0d9ed46e5d5fce1a3aac0e9943258ceae86183bd564ee1aa7ae7849b137b349"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4370,12 +4370,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/tg-actions.ts:2395:32",
+        "gravity-mvp/src/app/tg-actions.ts:2546:32",
         "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
         "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:dd9c298045f4857e601b790f9b2a1d94885e126cfd6040a9b99d05b25aee64a2",
-        "sql_provenance_sha256:09cc8c1490ab8e34e28279acc68d653eee5bb3ecfdec4bc3e56961483a5bfa07"
+        "source_sha256:7e5bba9db964be7325a79995b6e6003a17a864aec60d9dbba74419161c26f385",
+        "sql_provenance_sha256:e0d9ed46e5d5fce1a3aac0e9943258ceae86183bd564ee1aa7ae7849b137b349"
       ]
     },
     {
