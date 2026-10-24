@@ -1767,6 +1767,206 @@ async function getTelegramClient(connection: any) {
     return client
 }
 
+// ── Exact outbound person, reply proof and pre-dispatch outcome ──────────────
+//
+// GramJS addresses a user only with the access hash this process has learned
+// from an RPC result: a StringSession persists no entities and a short incoming
+// message carries no user, so a cold cache misses people the account talks to
+// every day. On a miss the client sweeps its recent dialogs once and looks the
+// exact numeric id up again. Nothing else is ever tried: no phone, username or
+// contact import, and never a group or channel that shares the number.
+
+const TELEGRAM_MTPROTO_REFUSED = 'TELEGRAM_MTPROTO_REFUSED'
+const TELEGRAM_MTPROTO_NOT_DISPATCHED = 'TELEGRAM_MTPROTO_NOT_DISPATCHED'
+// The published S1 adapter outcome grammar (MessageService): an error that
+// already states its outcome keeps it.
+const S1_ADAPTER_OUTCOME_CODE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:SEND_OUTCOME_UNKNOWN|NOT_DISPATCHED|REFUSED)\b/
+// Deterministic answers before dispatch: the conversation gate, the live
+// account proof, a person a fresh sweep could not find, or an unprovable quote.
+const TELEGRAM_SEND_REFUSAL_CODE = /\b(?:CONTACT_CONVERSATION_[A-Z_]+|TELEGRAM_PROVIDER_ACCOUNT_ID_[A-Z_]+|TELEGRAM_PEER_UNRESOLVED|TELEGRAM_REPLY_TARGET_NOT_ADDRESSABLE|TELEGRAM_REPLY_TARGET_UNPROVEN)\b/
+const TELEGRAM_PEER_SWEEP_DIALOGS = 200
+const TELEGRAM_PEER_SWEEP_WAIT_MS = 15_000
+const TELEGRAM_PEER_SWEEP_MAX_AGE_MS = 60_000
+const TELEGRAM_PEER_SWEEP_INTERVAL_MS = 60_000
+const TELEGRAM_MAX_MESSAGE_ID = 2_147_483_647
+
+function telegramRpcErrorCode(error: unknown): number | null {
+    const code = (error as { code?: unknown } | null)?.code
+    return typeof code === 'number' ? code : null
+}
+
+function withTelegramRpcErrorCode(message: string, error: unknown): Error {
+    const code = telegramRpcErrorCode(error)
+    return Object.assign(new Error(message), code === null ? {} : { code })
+}
+
+/**
+ * The S1 outcome of a failed text send. Before the provider call nothing that
+ * carries the message has left: a deterministic refusal, or a dead session
+ * (RPC 401), is REFUSED; anything else is NOT_DISPATCHED. Once the call began
+ * the error goes on exactly as before.
+ */
+function telegramSendFailure(error: unknown, dispatchStarted: boolean): Error {
+    if (dispatchStarted) return new Error(`Telegram delivery failed: ${(error as { message?: unknown } | null)?.message}`)
+    const detail = error instanceof Error ? error.message : String(error)
+    if (S1_ADAPTER_OUTCOME_CODE.test(detail)) return new Error(`Telegram delivery failed: ${detail}`)
+    const refused = TELEGRAM_SEND_REFUSAL_CODE.test(detail) || telegramRpcErrorCode(error) === 401
+    return new Error(`Telegram delivery failed: ${detail} (${refused ? TELEGRAM_MTPROTO_REFUSED : TELEGRAM_MTPROTO_NOT_DISPATCHED})`)
+}
+
+type TelegramPeerSweep = { startedAt: number, settled: boolean, answered: Promise<boolean> }
+
+// Single-flight per client object, so a replaced client never joins or
+// inherits another client's sweep. The FLOOD_WAIT back-off is per connection:
+// Telegram's flood window belongs to the account, not to the socket.
+const telegramPeerSweeps = new WeakMap<TelegramClient, TelegramPeerSweep>()
+const telegramPeerSweepNotBefore = new Map<string, number>()
+
+/** Joins this client's sweep in flight or starts one; null when none may start yet. */
+function telegramPeerSweep(
+    client: TelegramClient,
+    connectionId: string,
+): { started: boolean, answered: Promise<boolean> } | null {
+    const now = Date.now()
+    const current = telegramPeerSweeps.get(client)
+    // A sweep that never settles is released at a fixed age and counts as failed.
+    if (current && !current.settled && now - current.startedAt < TELEGRAM_PEER_SWEEP_MAX_AGE_MS) {
+        return { started: false, answered: current.answered }
+    }
+    if (now < (telegramPeerSweepNotBefore.get(connectionId) ?? 0)) return null
+    telegramPeerSweepNotBefore.set(connectionId, now + TELEGRAM_PEER_SWEEP_INTERVAL_MS)
+    const sweep: TelegramPeerSweep = { startedAt: now, settled: false, answered: Promise.resolve(false) }
+    // getDialogs caches every user it returns; it fetches no message history,
+    // admits nothing and writes nothing.
+    sweep.answered = client.getDialogs({ limit: TELEGRAM_PEER_SWEEP_DIALOGS }).then(
+        () => {
+            console.log(`[TG-SEND] telegram_mtproto_peer_sweep outcome=ok conn=${connectionId}`)
+            return true
+        },
+        (error: unknown) => {
+            const seconds = Number((error as { seconds?: unknown } | null)?.seconds)
+            if (telegramRpcErrorCode(error) === 420 && Number.isFinite(seconds) && seconds > 0) {
+                const notBefore = Date.now() + Math.max(TELEGRAM_PEER_SWEEP_INTERVAL_MS, seconds * 1000)
+                telegramPeerSweepNotBefore.set(connectionId, Math.max(notBefore, telegramPeerSweepNotBefore.get(connectionId) ?? 0))
+            }
+            console.warn(`[TG-SEND] telegram_mtproto_peer_sweep outcome=failed code=${telegramIngressErrorCode(error)} conn=${connectionId}`)
+            return false
+        },
+    ).finally(() => { sweep.settled = true })
+    telegramPeerSweeps.set(client, sweep)
+    return { started: true, answered: sweep.answered }
+}
+
+async function waitForTelegramPeerSweep(answered: Promise<boolean>): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timedOut = new Promise<boolean>(resolve => {
+        timer = setTimeout(() => resolve(false), TELEGRAM_PEER_SWEEP_WAIT_MS)
+    })
+    try {
+        return await Promise.race([answered, timedOut])
+    } finally {
+        clearTimeout(timer)
+    }
+}
+
+/** The proofs were made on this exact client and account; a replaced one proves nothing. */
+function assertTelegramSendClientCurrent(client: TelegramClient, connectionId: string, providerAccountId: string): void {
+    const liveAccountId = tgProviderAccountIds.get(connectionId)
+    if (clientCache.get(connectionId) !== client || !client.connected || liveAccountId === undefined) {
+        throw new Error('TELEGRAM_SEND_CLIENT_REPLACED')
+    }
+    if (liveAccountId !== providerAccountId) throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_CHANGED')
+}
+
+async function lookupExactTelegramUser(client: TelegramClient, target: string): Promise<Api.User | null> {
+    let entity: unknown
+    try {
+        entity = await client.getEntity(BigInt(target) as any)
+    } catch (error: unknown) {
+        // GramJS's own miss: this process holds no access hash for the id.
+        if (error instanceof Error && error.message.startsWith('Could not find the input entity')) return null
+        throw withTelegramRpcErrorCode(`TELEGRAM_PEER_RESOLUTION_UNAVAILABLE:${telegramIngressErrorCode(error)}`, error)
+    }
+    // GramJS looks a positive id up as a user, then as a basic group or channel
+    // with the same number; only that exact user is ever addressed.
+    return entity instanceof Api.User && entity.id?.toString() === target ? entity : null
+}
+
+async function resolveExactTelegramUserEntity(
+    client: TelegramClient,
+    connectionId: string,
+    providerAccountId: string,
+    target: string,
+): Promise<Api.User> {
+    const cached = await lookupExactTelegramUser(client, target)
+    if (cached) return cached
+    const sweep = telegramPeerSweep(client, connectionId)
+    if (!sweep || !(await waitForTelegramPeerSweep(sweep.answered))) {
+        throw new Error('TELEGRAM_PEER_RESOLUTION_UNAVAILABLE:sweep')
+    }
+    assertTelegramSendClientCurrent(client, connectionId, providerAccountId)
+    const swept = await lookupExactTelegramUser(client, target)
+    if (swept) return swept
+    // Only the call that started the sweep after its own miss may conclude the
+    // person is absent: a joined sweep may have started before this call missed.
+    throw new Error(sweep.started ? 'TELEGRAM_PEER_UNRESOLVED' : 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE:joined')
+}
+
+type TelegramReplyTarget = { id: number, legacy: boolean }
+
+/** The quote, parsed with this channel's own forms: never Number() of a composite id. */
+function telegramReplyTarget(quotedMsgId: string, providerAccountId: string, peerId: string): TelegramReplyTarget {
+    const current = exactTelegramProviderMessageId(quotedMsgId, providerAccountId, peerId)
+    const raw = current ?? (/^[1-9]\d*$/.test(quotedMsgId) ? quotedMsgId : null)
+    const id = raw === null ? 0 : Number(raw)
+    if (!Number.isSafeInteger(id) || id < 1 || id > TELEGRAM_MAX_MESSAGE_ID) {
+        throw new Error('TELEGRAM_REPLY_TARGET_NOT_ADDRESSABLE')
+    }
+    return { id, legacy: current === null }
+}
+
+/** A requested quote is a live message of this dialog, or the send is refused. */
+async function proveTelegramReplyTarget(
+    client: TelegramClient,
+    entity: Api.User,
+    quotedMsgId: string,
+    target: TelegramReplyTarget,
+    chatId: string,
+    peerId: string,
+): Promise<number> {
+    let found: unknown
+    try {
+        const [message] = await client.getMessages(entity, { ids: [target.id] })
+        found = message
+    } catch (error: unknown) {
+        throw withTelegramRpcErrorCode(`TELEGRAM_REPLY_TARGET_PROOF_UNAVAILABLE:${telegramIngressErrorCode(error)}`, error)
+    }
+    // GramJS answers nothing for an empty or foreign id; a service message
+    // cannot be quoted.
+    const peer = found instanceof Api.Message ? found.peerId : null
+    if (
+        !(found instanceof Api.Message)
+        || found.id !== target.id
+        || !(peer instanceof Api.PeerUser)
+        || peer.userId?.toString() !== peerId
+    ) {
+        throw new Error('TELEGRAM_REPLY_TARGET_UNPROVEN')
+    }
+    if (target.legacy) {
+        // A bare id names no account: it is this conversation's message only if the
+        // row this Chat stored under it carries the provider's own timestamp.
+        const stored = await (prisma.message as any).findUnique({
+            where: { externalId: quotedMsgId },
+            select: { chatId: true, sentAt: true },
+        })
+        const storedSeconds = stored?.sentAt instanceof Date ? Math.floor(stored.sentAt.getTime() / 1000) : null
+        if (!stored || stored.chatId !== chatId || storedSeconds !== found.date) {
+            throw new Error('TELEGRAM_REPLY_TARGET_UNPROVEN')
+        }
+    }
+    return target.id
+}
+
 type ExactTelegramOutboundProof = {
     chatId: string
     providerAccountId?: string
@@ -1848,16 +2048,13 @@ async function resolveExactTelegramOutboundPeer(
         throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
     }
 
-    const entity = await client.getEntity(BigInt(target) as any)
-    if (entity?.id?.toString() !== target) {
-        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
-    }
+    const entity = await resolveExactTelegramUserEntity(client, connection.id, liveProviderAccountId, target)
     return { client, connection, entity, providerAccountId: liveProviderAccountId }
 }
 
 export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string }) {
     if (!metadata?.chatId) {
-        throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
+        throw telegramSendFailure(new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED'), false)
     }
     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
     let connection
@@ -1880,6 +2077,7 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         // second transport immediately makes these conversations ambiguous and
         // they fail closed again, with no data change and no code change.
         const carrierId = await resolveLegacyTelegramCarrierV1()
+            .catch((error: unknown) => { throw telegramSendFailure(error, false) })
         connection = await (prisma as any).telegramConnection.findUnique({
             where: { id: carrierId, isActive: true },
         })
@@ -1888,12 +2086,14 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
 
     if (!connection || !connection.sessionString) {
         console.error(`[TG-SEND] ERROR: Telegram not connected or inactive. connectionId=${connectionId}`)
-        throw new Error('Telegram is not connected or selected account is inactive')
+        throw telegramSendFailure(new Error('Telegram is not connected or selected account is inactive'), false)
     }
 
     const client = await getTelegramClient(connection)
+        .catch((error: unknown) => { throw telegramSendFailure(error, false) })
     console.log(`[TG-SEND] Client connected state: ${client.connected}`)
 
+    let dispatchStarted = false
     try {
         // A Messaging-owned Chat id means this is an identity-preflighted send.
         // Re-run that proof at the transport boundary, bind it to the live
@@ -1936,79 +2136,30 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
             exactProviderAccountId = liveProviderAccountId
         }
 
-        // Normalize target: if it's a mobile number, ensure it has '+'
-        let target: any = exactPreparedTarget ?? phoneNumber
-        // Only prefix with '+' if it's a long digit string (phone number)
-        if (!exactPreparedTarget && typeof target === 'string' && target.match(/^\d+$/) && target.length >= 10 && !target.startsWith('+')) {
-            target = '+' + target
+        if (!exactPreparedTarget || !exactProviderAccountId) {
+            throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
         }
-        
-        console.log(`[TG-SEND] Target normalized to: ${target}`)
-
-        // Telethon/GramJS: Best to resolve entity first if it's not in cache
-        let entity;
-        try {
-            console.log(`[TG-SEND] Resolving entity for ${target}...`)
-            // If it's a numeric ID (no plus, just digits), try resolving as number
-            if (exactPreparedTarget) {
-                entity = await client.getEntity(BigInt(exactPreparedTarget) as any)
-            } else if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
-                try {
-                    entity = await client.getEntity(BigInt(target) as any)
-                } catch (e) {
-                     entity = await client.getEntity(target)
-                }
-            } else {
-                entity = await client.getEntity(target)
-            }
-            console.log(`[TG-SEND] Entity resolved: ${entity.id.toString()}`)
-            if (exactPreparedTarget && entity?.id?.toString() !== exactPreparedTarget) {
-                throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
-            }
-        } catch (entityErr: any) {
-            console.warn(`[TG-SEND] getEntity FAILED for ${target}: ${entityErr.message}. Attempting import...`)
-
-            if (exactPreparedTarget) {
-                throw new Error(`Cannot resolve exact Telegram peer ${exactPreparedTarget}`)
-            }
-            
-            try {
-                // Try importing contact if it's a phone number
-                if (target.startsWith('+')) {
-                    console.log(`[TG-SEND] Invoking contacts.ImportContacts for ${target}...`)
-                    const result = await client.invoke(new Api.contacts.ImportContacts({
-                        contacts: [new Api.InputPhoneContact({
-                            clientId: BigInt(Math.floor(Math.random() * 1000000)) as any,
-                            phone: target,
-                            firstName: 'Driver',
-                            lastName: ''
-                        })]
-                    }))
-                    
-                    if (result && 'users' in result && result.users.length > 0) {
-                        entity = result.users[0]
-                        console.log(`[TG-SEND] Success! Contact imported: ${entity.id.toString()}`)
-                    } else {
-                         console.error(`[TG-SEND] ImportContacts returned empty users for ${target}`)
-                         throw new Error(`Contact import returned empty result for ${target}`)
-                    }
-                } else {
-                     console.error(`[TG-SEND] Target ${target} is not a phone number, cannot import.`)
-                     throw new Error(`Target ${target} is not a valid phone number format`)
-                }
-            } catch (importErr: any) {
-                console.error(`[TG-SEND] FATAL: Failed to import contact ${target}:`, importErr.message)
-                throw new Error(`Cannot find or import user with number ${target}. They might not have a Telegram account linked to this number.`)
-            }
-        }
+        const entity = await resolveExactTelegramUserEntity(client, connection.id, exactProviderAccountId, exactPreparedTarget)
+        const replyTo = metadata?.quotedMsgId
+            ? await proveTelegramReplyTarget(
+                client,
+                entity,
+                metadata.quotedMsgId,
+                telegramReplyTarget(metadata.quotedMsgId, exactProviderAccountId, exactPreparedTarget),
+                metadata.chatId,
+                exactPreparedTarget,
+            )
+            : undefined
+        assertTelegramSendClientCurrent(client, connection.id, exactProviderAccountId)
 
         console.log(`[TG-SEND] Sending message to entity...`)
         
         // Add a safety timeout for the actual sending
         const sendOpts: any = { message }
-        if (metadata?.quotedMsgId) sendOpts.replyTo = Number(metadata.quotedMsgId)
+        if (replyTo !== undefined) sendOpts.replyTo = replyTo
+        dispatchStarted = true
         const result = await Promise.race([
-            client.sendMessage(entity || target, sendOpts),
+            client.sendMessage(entity, sendOpts),
             new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendMessage timeout (25s)')), 25000))
         ])
         
@@ -2028,7 +2179,7 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         }
     } catch (err: any) {
         console.error('[TG-SEND] SEND ERROR:', err)
-        throw new Error(`Telegram delivery failed: ${err.message}`)
+        throw telegramSendFailure(err, dispatchStarted)
     } finally {
         // We no longer disconnect here to keep the session alive in cache
         console.log(`[TG-SEND] End of call (client left active in cache)`)

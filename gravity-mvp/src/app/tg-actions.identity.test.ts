@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
     attachmentFindFirst: vi.fn(),
     admittedChat: null as null | Record<string, unknown>,
     providerAccountId: '7000',
+    getMeFailure: null as null | Error,
 }))
 
 vi.mock('telegram', () => ({
@@ -52,17 +53,26 @@ vi.mock('telegram', () => ({
         async connect() {}
         async disconnect() {}
         async isUserAuthorized() { return true }
-        async getMe() { return { id: BigInt(mocks.providerAccountId) } }
-        async getDialogs(input: unknown) { return mocks.getDialogs(input) }
-        async getMessages(entity: unknown, input: unknown) { return mocks.getMessages(entity, input) }
-        async getEntity(target: unknown) { return mocks.getEntity(target) }
-        async sendMessage(target: unknown, input: unknown) { return mocks.sendMessage(target, input) }
+        async getMe() {
+            if (mocks.getMeFailure) throw mocks.getMeFailure
+            return { id: BigInt(mocks.providerAccountId) }
+        }
+        async getDialogs(input: unknown) { return mocks.getDialogs(input, this) }
+        async getMessages(entity: unknown, input: unknown) { return mocks.getMessages(entity, input, this) }
+        async getEntity(target: unknown) { return mocks.getEntity(target, this) }
+        async sendMessage(target: unknown, input: unknown) { return mocks.sendMessage(target, input, this) }
         async sendFile(target: unknown, input: unknown) { return mocks.sendFile(target, input) }
         async invoke(input: unknown) { return mocks.invoke(input) }
         async downloadMedia(message: unknown, input: unknown) { return mocks.downloadMedia(message, input) }
         addEventHandler(handler: (event: unknown) => Promise<void>) { this.handlers.push(handler) }
     },
     Api: {
+        User: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
+        Chat: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
+        Channel: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
+        Message: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
+        MessageService: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
+        PeerUser: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
         UpdateMessageReactions: class {},
         ReactionEmoji: class { constructor(public input: unknown) {} },
         messages: { SendReaction: class { constructor(public input: unknown) {} } },
@@ -161,6 +171,12 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
     requireIntegrationAdminAccess: vi.fn(),
 }))
 
+import { Api } from 'telegram'
+// The mocked GramJS classes take plain values; the real constructors' typings do not.
+const tl = Api as unknown as Record<
+    'User' | 'Chat' | 'Channel' | 'Message' | 'MessageService' | 'PeerUser',
+    new (input: Record<string, unknown>) => object
+>
 import {
     checkTelegramReachability,
     importTelegramHistory,
@@ -272,7 +288,8 @@ describe('GramJS private conversation identity admission', () => {
             max_date: null,
         }])
         mocks.patchImportJob.mockResolvedValue({})
-        mocks.getEntity.mockImplementation(async target => ({ id: target }))
+        mocks.getMeFailure = null
+        mocks.getEntity.mockImplementation(async target => new tl.User({ id: target }))
         mocks.sendMessage.mockResolvedValue({ id: 9001 })
         mocks.sendFile.mockResolvedValue({ id: 9002 })
         mocks.invoke.mockResolvedValue({})
@@ -540,11 +557,12 @@ describe('GramJS private conversation identity admission', () => {
             .resolves.toMatchObject({ success: true, externalId: `telegram:${providerAccountId}:${peerId}:9001` })
 
         expect(mocks.prepareOutbound).toHaveBeenCalledWith(chat, connectionId)
-        expect(mocks.getEntity).toHaveBeenCalledWith(BigInt(peerId))
-        expect(mocks.getEntity).not.toHaveBeenCalledWith(`+${peerId}`)
+        expect(mocks.getEntity).toHaveBeenCalledWith(BigInt(peerId), expect.anything())
+        expect(mocks.getEntity).not.toHaveBeenCalledWith(`+${peerId}`, expect.anything())
         expect(mocks.sendMessage).toHaveBeenCalledWith(
             expect.objectContaining({ id: BigInt(peerId) }),
             { message: 'exact peer' },
+            expect.anything(),
         )
     })
 
@@ -589,7 +607,7 @@ describe('GramJS private conversation identity admission', () => {
         mocks.telegramConnectionFindUnique.mockResolvedValue(row)
         mocks.chatFindUnique.mockResolvedValue(chat)
         mocks.prepareOutbound.mockResolvedValue(prepared)
-        mocks.getEntity.mockResolvedValue({ id: BigInt(peerId) })
+        mocks.getEntity.mockResolvedValue(new tl.User({ id: BigInt(peerId) }))
 
         await expect(sendTelegramMedia(
             peerId,
@@ -783,7 +801,7 @@ describe('GramJS private conversation identity admission', () => {
             mocks.telegramConnectionFindMany.mockResolvedValue([{ id: CARRIER }])
             mocks.telegramConnectionFindUnique.mockResolvedValue(connection(CARRIER))
             mocks.chatFindUnique.mockResolvedValue(chat)
-            mocks.getEntity.mockResolvedValue({ id: BigInt(PEER) })
+            mocks.getEntity.mockResolvedValue(new tl.User({ id: BigInt(PEER) }))
             mocks.prepareOutbound.mockResolvedValue({
                 chatId: chat.id,
                 channel: 'telegram',
@@ -1620,6 +1638,758 @@ describe('GramJS private conversation identity admission', () => {
                 }
                 expect(checked).toBeGreaterThan(30)
             })
+        })
+    })
+})
+
+// TG2R: the exact outbound person, a proven reply target and the S1 outcome of
+// every pre-dispatch failure. Each client keeps its own entity cache here, as
+// GramJS does: a person resolves only on the client that learned them.
+describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
+    const ACCOUNT = '7300'
+    const PEER = '5550001'
+    const OTHER_PEER = '5550002'
+    const DATE = 1_760_000_000
+    let sequence = 0
+    let caches: Map<unknown, Set<string>>
+    let sweepDialogs: (client: unknown) => Promise<unknown>
+
+    const miss = (target: unknown) => new Error(`Could not find the input entity for {"userId":"${String(target)}"}`)
+    const cacheOf = (client: unknown) => {
+        let set = caches.get(client)
+        if (!set) caches.set(client, set = new Set())
+        return set
+    }
+    const sweeps = () => mocks.getDialogs.mock.calls.filter(([input]) => (input as { limit?: number })?.limit === 200)
+    const quote = (id: number | string, account = ACCOUNT, peer = PEER) => `telegram:${account}:${peer}:${id}`
+    const liveMessage = (id: number, date = DATE, peer = PEER) => new tl.Message({
+        id, date, peerId: new tl.PeerUser({ userId: BigInt(peer) }),
+    })
+    const tokens = (message: string) => message.match(/TELEGRAM_MTPROTO_(?:REFUSED|NOT_DISPATCHED|SEND_OUTCOME_UNKNOWN)/g) ?? []
+    // The published S1 adapter grammar (MessageService): every code in the text.
+    const s1Codes = (message: string) =>
+        [...message.matchAll(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(SEND_OUTCOME_UNKNOWN|NOT_DISPATCHED|REFUSED)\b/g)].map(match => match[1])
+    const rpcError = (code: number, errorMessage: string) => Object.assign(new Error(`${code}: ${errorMessage}`), { code, errorMessage })
+    const settle = async () => {
+        for (let round = 0; round < 20; round++) await new Promise(resolve => setImmediate(resolve))
+    }
+    async function failure(promise: Promise<unknown>): Promise<Error> {
+        const error = await promise.then(() => null, (reason: unknown) => reason)
+        expect(error).toBeInstanceOf(Error)
+        return error as Error
+    }
+    function expectOutcome(error: Error, token: 'TELEGRAM_MTPROTO_REFUSED' | 'TELEGRAM_MTPROTO_NOT_DISPATCHED', code?: string) {
+        expect(error.message).toMatch(/^Telegram delivery failed: /)
+        expect(tokens(error.message)).toEqual([token])
+        expect(s1Codes(error.message)).toEqual([token === 'TELEGRAM_MTPROTO_REFUSED' ? 'REFUSED' : 'NOT_DISPATCHED'])
+        if (code) expect(error.message).toContain(code)
+    }
+
+    function setup(options: { legacy?: boolean } = {}) {
+        const connectionId = `tg2r-${options.legacy ? 'carrier' : 'bound'}-${sequence}`
+        const chat = {
+            ...exactChat({
+                externalChatId: `telegram:${PEER}`,
+                metadata: options.legacy
+                    ? { chatKind: 'private', peerId: PEER }
+                    : { chatKind: 'private', peerId: PEER, providerAccountId: ACCOUNT, connectionId },
+            }),
+            id: `chat-tg2r-${sequence}`,
+            contactId: 'contact-tg2r',
+            contactIdentityId: 'identity-tg2r',
+        }
+        mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+        mocks.telegramConnectionFindMany.mockResolvedValue([{ id: connectionId }])
+        mocks.chatFindUnique.mockResolvedValue(chat)
+        mocks.prepareOutbound.mockResolvedValue({
+            chatId: chat.id,
+            channel: 'telegram',
+            contactId: chat.contactId,
+            contactIdentityId: chat.contactIdentityId,
+            providerAccountId: options.legacy ? null : ACCOUNT,
+            connectionId: options.legacy ? null : connectionId,
+            identityTarget: PEER,
+            target: PEER,
+            isMaxPersonal: false,
+        })
+        const send = (quotedMsgId?: string, text = 'tg2r text') => sendTelegramMessage(
+            PEER,
+            text,
+            options.legacy ? undefined : connectionId,
+            { chatId: chat.id, ...(quotedMsgId === undefined ? {} : { quotedMsgId }) },
+        )
+        return { connectionId, chat, send }
+    }
+
+    /** Creates and caches this connection's client before the scenario starts. */
+    async function warm(connectionId: string) {
+        mocks.telegramConnectionFindMany.mockResolvedValueOnce([connection(connectionId)])
+        await initTelegramListeners()
+        const client = mocks.clients.at(-1) as unknown as { connected: boolean, connect: () => Promise<void> }
+        expect(client).toBeDefined()
+        return client
+    }
+
+    function knowPeerEverywhere() {
+        mocks.getEntity.mockImplementation(async (target: unknown) => new tl.User({ id: BigInt(String(target)) }))
+    }
+
+    beforeEach(() => {
+        sequence++
+        vi.clearAllMocks()
+        mocks.clients.length = 0
+        mocks.providerAccountId = ACCOUNT
+        mocks.getMeFailure = null
+        caches = new Map()
+        sweepDialogs = async client => {
+            cacheOf(client).add(PEER)
+            return []
+        }
+        mocks.getDialogs.mockImplementation(async (input: { limit?: number }, client: unknown) =>
+            input?.limit === 200 ? sweepDialogs(client) : [])
+        mocks.getEntity.mockImplementation(async (target: unknown, client: unknown) => {
+            if (cacheOf(client).has(String(target))) return new tl.User({ id: BigInt(String(target)) })
+            throw miss(target)
+        })
+        mocks.getMessages.mockResolvedValue([])
+        mocks.sendMessage.mockResolvedValue({ id: 9101 })
+        mocks.sendFile.mockResolvedValue({ id: 9102 })
+        mocks.invoke.mockResolvedValue({})
+        mocks.messageFindUnique.mockResolvedValue(null)
+        mocks.createMessage.mockResolvedValue({ message: { id: 'never' } })
+        vi.spyOn(console, 'log').mockImplementation(() => {})
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+
+    afterEach(async () => {
+        vi.useRealTimers()
+        await stopTelegramHealthCheck()
+        vi.restoreAllMocks()
+    })
+
+    describe('exact person', () => {
+        test('a cold cache sweeps 200 dialogs once, looks the exact id up once more and sends once to that user', async () => {
+            const { send } = setup()
+
+            await expect(send()).resolves.toEqual({ success: true, externalId: quote(9101) })
+
+            expect(sweeps()).toHaveLength(1)
+            expect(sweeps()[0][0]).toEqual({ limit: 200 })
+            expect(mocks.getEntity).toHaveBeenCalledTimes(2)
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+            const [entity, options] = mocks.sendMessage.mock.calls[0]
+            expect(entity).toBeInstanceOf(Api.User)
+            expect(String((entity as { id: bigint }).id)).toBe(PEER)
+            expect(options).toEqual({ message: 'tg2r text' })
+        })
+
+        test('a person the client already knows is sent to without a sweep', async () => {
+            const { send } = setup()
+            await send()
+            await send()
+
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendMessage).toHaveBeenCalledTimes(2)
+        })
+
+        test('a fresh sweep that does not find the person refuses, and nothing is sent', async () => {
+            const { send } = setup()
+            sweepDialogs = async () => []
+
+            const error = await failure(send())
+
+            expectOutcome(error, 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PEER_UNRESOLVED')
+            expect(mocks.getEntity).toHaveBeenCalledTimes(2)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('concurrent misses share one sweep and each send goes out exactly once', async () => {
+            const { connectionId, send } = setup()
+            await warm(connectionId)
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            sweepDialogs = async client => {
+                await gate
+                cacheOf(client).add(PEER)
+                return []
+            }
+
+            const first = send(undefined, 'first')
+            const second = send(undefined, 'second')
+            await settle()
+            expect(sweeps()).toHaveLength(1)
+            release()
+
+            await expect(first).resolves.toMatchObject({ success: true })
+            await expect(second).resolves.toMatchObject({ success: true })
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendMessage.mock.calls.map(call => (call[1] as { message: string }).message).sort())
+                .toEqual(['first', 'second'])
+        })
+
+        test('only the call that started a sweep may refuse; a call that joined it is not dispatched', async () => {
+            const { connectionId, send } = setup()
+            await warm(connectionId)
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            sweepDialogs = async () => {
+                await gate
+                return []
+            }
+
+            const starter = failure(send())
+            const joiner = failure(send())
+            await settle()
+            release()
+
+            expectOutcome(await starter, 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PEER_UNRESOLVED')
+            expectOutcome(await joiner, 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a miss inside the rate window starts no sweep and is not dispatched; after it a fresh sweep runs', async () => {
+            const { send } = setup()
+            vi.useFakeTimers({ toFake: ['Date'] })
+            sweepDialogs = async () => []
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PEER_UNRESOLVED')
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+            expect(sweeps()).toHaveLength(1)
+
+            vi.setSystemTime(Date.now() + 61_000)
+            sweepDialogs = async client => {
+                cacheOf(client).add(PEER)
+                return []
+            }
+            await expect(send()).resolves.toMatchObject({ success: true })
+            expect(sweeps()).toHaveLength(2)
+        })
+
+        test('a failed sweep is not dispatched, and FLOOD_WAIT holds the next sweep back for its whole wait', async () => {
+            const { send } = setup()
+            vi.useFakeTimers({ toFake: ['Date'] })
+            const start = Date.now()
+            sweepDialogs = async () => {
+                throw Object.assign(rpcError(420, 'FLOOD_WAIT'), { seconds: 120 })
+            }
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+
+            vi.setSystemTime(start + 61_000)
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
+            expect(sweeps()).toHaveLength(1)
+
+            vi.setSystemTime(start + 121_000)
+            sweepDialogs = async client => {
+                cacheOf(client).add(PEER)
+                return []
+            }
+            await expect(send()).resolves.toMatchObject({ success: true })
+            expect(sweeps()).toHaveLength(2)
+        })
+
+        test('a sweep that never answers is waited 15 s, is joined until 60 s old, and is then released', async () => {
+            const { connectionId, send } = setup()
+            await warm(connectionId)
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+            const start = Date.now()
+            sweepDialogs = () => new Promise(() => {})
+
+            const first = failure(send())
+            await vi.advanceTimersByTimeAsync(15_000)
+            expectOutcome(await first, 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+
+            const joined = failure(send())
+            await vi.advanceTimersByTimeAsync(15_000)
+            expectOutcome(await joined, 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
+            expect(sweeps()).toHaveLength(1)
+
+            vi.setSystemTime(start + 61_000)
+            sweepDialogs = async client => {
+                cacheOf(client).add(PEER)
+                return []
+            }
+            const released = send()
+            await vi.advanceTimersByTimeAsync(0)
+            await expect(released).resolves.toMatchObject({ success: true })
+            expect(sweeps()).toHaveLength(2)
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+        })
+
+        test('a client evicted while its sweep runs proves nothing and sends nothing', async () => {
+            const { connectionId, send } = setup()
+            const client = await warm(connectionId)
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            sweepDialogs = async swept => {
+                await gate
+                cacheOf(swept).add(PEER)
+                return []
+            }
+
+            const pending = failure(send())
+            await settle()
+            client.connected = false
+            release()
+
+            expectOutcome(await pending, 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_SEND_CLIENT_REPLACED')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('media on a client evicted while its sweep runs is refused that client and sends nothing', async () => {
+            const { chat, connectionId } = setup()
+            const client = await warm(connectionId)
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            sweepDialogs = async swept => {
+                await gate
+                cacheOf(swept).add(PEER)
+                return []
+            }
+
+            const pending = sendTelegramMedia(
+                PEER, 'ZmFrZQ==', 'proof.bin', 'application/octet-stream', undefined, connectionId,
+                { chatId: chat.id, identityTarget: PEER },
+            ).then(() => null, (reason: unknown) => reason as Error)
+            await settle()
+            client.connected = false
+            release()
+
+            expect((await pending)?.message).toContain('TELEGRAM_SEND_CLIENT_REPLACED')
+            expect(mocks.sendFile).not.toHaveBeenCalled()
+        })
+
+        test('a replacement client never joins the old client\'s sweep, and the flood window stays with the connection', async () => {
+            const { connectionId, send } = setup()
+            const old = await warm(connectionId)
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+            const start = Date.now()
+            sweepDialogs = () => new Promise(() => {})
+            const stuck = failure(send())
+            await vi.advanceTimersByTimeAsync(15_000)
+            expectOutcome(await stuck, 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
+
+            old.connected = false
+            old.connect = async () => { throw new Error('socket down') }
+            sweepDialogs = async client => {
+                cacheOf(client).add(PEER)
+                return []
+            }
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
+            expect(sweeps()).toHaveLength(1)
+
+            vi.setSystemTime(start + 61_000)
+            await expect(send()).resolves.toMatchObject({ success: true })
+            expect(sweeps()).toHaveLength(2)
+            const replacement = mocks.sendMessage.mock.calls[0][2]
+            expect(replacement).not.toBe(old)
+            expect(sweeps()[1][1]).toBe(replacement)
+        })
+
+        test('the legacy carrier route resolves through the same exact sweep', async () => {
+            const { send } = setup({ legacy: true })
+
+            await expect(send()).resolves.toMatchObject({ success: true, externalId: quote(9101) })
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+        })
+
+        test.each([
+            ['a basic group', (id: bigint) => new tl.Chat({ id })],
+            ['a channel', (id: bigint) => new tl.Channel({ id })],
+        ])('%s that shares the number is never addressed', async (_label, collide) => {
+            const { send } = setup()
+            mocks.getEntity.mockImplementation(async (target: unknown, client: unknown) =>
+                cacheOf(client).has(String(target))
+                    ? new tl.User({ id: BigInt(String(target)) })
+                    : collide(BigInt(String(target))))
+
+            await expect(send()).resolves.toMatchObject({ success: true })
+            expect(mocks.sendMessage.mock.calls[0][0]).toBeInstanceOf(Api.User)
+
+            sequence++
+            const unresolved = setup()
+            sweepDialogs = async () => []
+            expectOutcome(await failure(unresolved.send()), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PEER_UNRESOLVED')
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+        })
+
+        test.each([
+            ['another user', () => new tl.User({ id: BigInt(OTHER_PEER) })],
+            ['no entity at all', () => undefined],
+        ])('%s is never resolved as the person', async (_label, answer) => {
+            const { send } = setup()
+            mocks.getEntity.mockImplementation(async () => answer())
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PEER_UNRESOLVED')
+            expect(mocks.getEntity).toHaveBeenCalledTimes(2)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['a network error', rpcError(500, 'RPC_CALL_FAIL'), 'TELEGRAM_MTPROTO_NOT_DISPATCHED'],
+            ['a dead session', rpcError(401, 'AUTH_KEY_UNREGISTERED'), 'TELEGRAM_MTPROTO_REFUSED'],
+        ] as const)('%s on the lookup is answered without a sweep', async (_label, error, token) => {
+            const { send } = setup()
+            mocks.getEntity.mockRejectedValue(error)
+
+            expectOutcome(await failure(send()), token)
+            expect(sweeps()).toHaveLength(0)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a network error on the lookup after the sweep is not dispatched', async () => {
+            const { send } = setup()
+            mocks.getEntity
+                .mockRejectedValueOnce(miss(PEER))
+                .mockRejectedValueOnce(rpcError(500, 'RPC_CALL_FAIL'))
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('text, media and reactions resolve only by the exact numeric id: no phone, username or contact import', async () => {
+            const { chat, connectionId, send } = setup()
+            sweepDialogs = async () => []
+            await failure(send())
+            sequence++
+            const media = setup()
+            await expect(sendTelegramMedia(
+                PEER, 'ZmFrZQ==', 'proof.bin', 'application/octet-stream', undefined, media.connectionId,
+                { chatId: media.chat.id, identityTarget: PEER },
+            )).rejects.toThrow('TELEGRAM_PEER_UNRESOLVED')
+
+            for (const [target] of mocks.getEntity.mock.calls) expect(typeof target).toBe('bigint')
+            expect(mocks.invoke).not.toHaveBeenCalled()
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+            expect(mocks.sendFile).not.toHaveBeenCalled()
+            expect(chat.id).not.toBe(media.chat.id)
+            expect(connectionId).not.toBe(media.connectionId)
+        })
+
+        test('media and reactions on a cold cache resolve through the same sweep', async () => {
+            const { chat, connectionId } = setup()
+
+            await expect(sendTelegramMedia(
+                PEER, 'ZmFrZQ==', 'proof.bin', 'application/octet-stream', undefined, connectionId,
+                { chatId: chat.id, identityTarget: PEER },
+            )).resolves.toEqual({ success: true, externalId: quote(9102) })
+            await sendTelegramReaction({
+                target: PEER,
+                messageId: quote(301),
+                emoji: '👍',
+                remove: false,
+                connectionId,
+                proof: { chatId: chat.id, identityTarget: PEER },
+            })
+
+            expect(sweeps()).toHaveLength(1)
+            expect(mocks.sendFile.mock.calls[0][0]).toBeInstanceOf(Api.User)
+            expect(mocks.invoke).toHaveBeenCalledOnce()
+        })
+    })
+
+    describe('account and transport', () => {
+        test('a connected client whose account changed is refused before any lookup', async () => {
+            const { connectionId, send } = setup()
+            await warm(connectionId)
+            mocks.providerAccountId = '7399'
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_PROVIDER_ACCOUNT_ID_CHANGED')
+            expect(mocks.getEntity).not.toHaveBeenCalled()
+            expect(sweeps()).toHaveLength(0)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('an account change while the proof runs leaves nothing on the old client', async () => {
+            const { connectionId, send } = setup()
+            const old = await warm(connectionId)
+            let release!: () => void
+            const gate = new Promise<void>(resolve => { release = resolve })
+            sweepDialogs = async client => {
+                await gate
+                cacheOf(client).add(PEER)
+                return []
+            }
+            const pending = failure(send())
+            await settle()
+
+            old.connected = false
+            old.connect = async () => { throw new Error('socket down') }
+            mocks.providerAccountId = '7398'
+            const replacement = await failure(send())
+            release()
+
+            expectOutcome(await pending, 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_SEND_CLIENT_REPLACED')
+            expectOutcome(replacement, 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a conversation bound to another transport is refused before any lookup', async () => {
+            const { connectionId, send } = setup()
+            mocks.prepareOutbound.mockResolvedValue({
+                chatId: `chat-tg2r-${sequence}`,
+                channel: 'telegram',
+                providerAccountId: ACCOUNT,
+                connectionId: `${connectionId}-other`,
+                identityTarget: PEER,
+                target: PEER,
+            })
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_REFUSED', 'CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+            expect(mocks.getEntity).not.toHaveBeenCalled()
+        })
+
+        test('a reconnected client proves the person again instead of reusing another client\'s proof', async () => {
+            const { connectionId, send } = setup()
+            const old = await warm(connectionId)
+            vi.useFakeTimers({ toFake: ['Date'] })
+            const start = Date.now()
+            await expect(send()).resolves.toMatchObject({ success: true })
+
+            old.connected = false
+            old.connect = async () => { throw new Error('socket down') }
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
+
+            vi.setSystemTime(start + 61_000)
+            await expect(send()).resolves.toMatchObject({ success: true })
+            const [firstClient, lastClient] = [mocks.sendMessage.mock.calls[0][2], mocks.sendMessage.mock.calls[1][2]]
+            expect(firstClient).toBe(old)
+            expect(lastClient).not.toBe(old)
+            expect(sweeps().map(call => call[1])).toEqual([old, lastClient])
+        })
+    })
+
+    describe('reply target', () => {
+        test('a current-form quote of a live message in this dialog is sent as that exact quote', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages.mockResolvedValue([liveMessage(4242)])
+
+            await expect(send(quote(4242))).resolves.toMatchObject({ success: true })
+
+            expect(mocks.getMessages).toHaveBeenCalledWith(expect.any(Api.User), { ids: [4242] }, expect.anything())
+            expect(mocks.sendMessage).toHaveBeenCalledWith(
+                expect.any(Api.User),
+                { message: 'tg2r text', replyTo: 4242 },
+                expect.anything(),
+            )
+        })
+
+        test.each([
+            ['another Telegram account', quote(4242, '7301')],
+            ['another chat', quote(4242, ACCOUNT, OTHER_PEER)],
+            ['the synthetic local key', quote('local-1760000000000')],
+            ['an id beyond 32 bits', quote(2147483648)],
+            ['a bare id beyond 32 bits', '2147483648'],
+            ['id zero', quote(0)],
+            ['a non-numeric id', 'not-a-message'],
+            ['a MAX id', 'max:-71234567890:5678'],
+            ['a WhatsApp id', 'false_79991234567@c.us_3EB0C0FFEE'],
+        ])('a quote of %s is not addressable and nothing is sent', async (_label, quoted) => {
+            const { send } = setup()
+            knowPeerEverywhere()
+
+            expectOutcome(await failure(send(quoted)), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_REPLY_TARGET_NOT_ADDRESSABLE')
+            expect(mocks.getMessages).not.toHaveBeenCalled()
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['a deleted message', [undefined]],
+            ['a service message', [new tl.MessageService({ id: 4242, date: DATE, peerId: new tl.PeerUser({ userId: BigInt(PEER) }) })]],
+            ['another dialog\'s message', [liveMessage(4242, DATE, OTHER_PEER)]],
+            ['another message id', [liveMessage(4243)]],
+        ])('a quote of %s is unproven and nothing is sent', async (_label, answer) => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages.mockResolvedValue(answer)
+
+            expectOutcome(await failure(send(quote(4242))), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_REPLY_TARGET_UNPROVEN')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a legacy bare quote is sent only for the row this chat stored with the provider\'s own time', async () => {
+            const { chat, send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages.mockResolvedValue([liveMessage(4242)])
+            mocks.messageFindUnique.mockResolvedValue({ chatId: chat.id, sentAt: new Date(DATE * 1000 + 999) })
+
+            await expect(send('4242')).resolves.toMatchObject({ success: true })
+
+            expect(mocks.messageFindUnique).toHaveBeenCalledWith({
+                where: { externalId: '4242' },
+                select: { chatId: true, sentAt: true },
+            })
+            expect(mocks.sendMessage.mock.calls[0][1]).toEqual({ message: 'tg2r text', replyTo: 4242 })
+        })
+
+        test.each([
+            ['no stored row', () => null],
+            ['a row of another chat', () => ({ chatId: 'chat-elsewhere', sentAt: new Date(DATE * 1000) })],
+            ['a different provider second', (chatId: string) => ({ chatId, sentAt: new Date((DATE + 1) * 1000) })],
+            ['a CRM send time instead of the provider time', (chatId: string) => ({ chatId, sentAt: new Date((DATE - 3) * 1000) })],
+        ])('a legacy bare quote with %s is unproven', async (_label, row) => {
+            const { chat, send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages.mockResolvedValue([liveMessage(4242)])
+            mocks.messageFindUnique.mockResolvedValue(row(chat.id))
+
+            expectOutcome(await failure(send('4242')), 'TELEGRAM_MTPROTO_REFUSED', 'TELEGRAM_REPLY_TARGET_UNPROVEN')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['a network error', rpcError(500, 'RPC_CALL_FAIL'), 'TELEGRAM_MTPROTO_NOT_DISPATCHED'],
+            ['a dead session', rpcError(401, 'SESSION_REVOKED'), 'TELEGRAM_MTPROTO_REFUSED'],
+        ] as const)('%s while proving the quote never becomes an unquoted send', async (_label, error, token) => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages.mockRejectedValue(error)
+
+            expectOutcome(await failure(send(quote(4242))), token, 'TELEGRAM_REPLY_TARGET_PROOF_UNAVAILABLE')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a client evicted while the quote is proven sends nothing', async () => {
+            const { connectionId, send } = setup()
+            const client = await warm(connectionId)
+            knowPeerEverywhere()
+            mocks.getMessages.mockImplementation(async () => {
+                client.connected = false
+                return [liveMessage(4242)]
+            })
+
+            expectOutcome(await failure(send(quote(4242))), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_SEND_CLIENT_REPLACED')
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a redelivered reply keeps its exact quote (DEP-Q forwards it on retry)', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.getMessages
+                .mockRejectedValueOnce(rpcError(500, 'RPC_CALL_FAIL'))
+                .mockResolvedValue([liveMessage(4242)])
+
+            expectOutcome(await failure(send(quote(4242))), 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
+            await expect(send(quote(4242))).resolves.toMatchObject({ success: true })
+
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+            expect(mocks.sendMessage.mock.calls[0][1]).toEqual({ message: 'tg2r text', replyTo: 4242 })
+            const service = readFileSync(`${process.cwd()}/src/lib/MessageService.ts`, 'utf8')
+            const retryLeg = service.slice(service.lastIndexOf("case 'telegram': {"))
+            expect(retryLeg.slice(0, 900)).toContain('quotedMsgId: nonEmptyString(meta.quotedMsgId)')
+        })
+    })
+
+    describe('pre-dispatch outcome, side effects and idempotency', () => {
+        test.each([
+            ['a send with no conversation', 'REFUSED', 'CONTACT_CONVERSATION_IDENTITY_REQUIRED',
+                () => { mocks.chatFindUnique.mockResolvedValue(null) }],
+            ['no active legacy carrier', 'REFUSED', 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND',
+                () => { mocks.telegramConnectionFindMany.mockResolvedValue([]) }, true],
+            ['several legacy carriers', 'REFUSED', 'CONTACT_CONVERSATION_TRANSPORT_AMBIGUOUS',
+                () => { mocks.telegramConnectionFindMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }]) }, true],
+            ['an inactive connection', 'NOT_DISPATCHED', 'Telegram is not connected',
+                () => { mocks.telegramConnectionFindUnique.mockResolvedValue(null) }],
+            ['a dead session at attestation', 'REFUSED', 'AUTH_KEY_UNREGISTERED',
+                () => { mocks.getMeFailure = rpcError(401, 'AUTH_KEY_UNREGISTERED') }],
+            ['a dropped socket at attestation', 'NOT_DISPATCHED', 'Connection dropped',
+                () => { mocks.getMeFailure = new Error('Connection dropped') }],
+            ['a conversation gate refusal', 'REFUSED', 'CONTACT_CONVERSATION_NOT_PRIVATE',
+                () => { mocks.prepareOutbound.mockRejectedValue(new Error('CONTACT_CONVERSATION_NOT_PRIVATE')) }],
+            ['a busy contact owner', 'NOT_DISPATCHED', 'CONTACT_OWNERSHIP_BUSY',
+                () => { mocks.prepareOutbound.mockRejectedValue(new Error('CONTACT_OWNERSHIP_BUSY')) }],
+        ] as Array<[string, 'REFUSED' | 'NOT_DISPATCHED', string, () => void, boolean?]>)('%s is %s before dispatch', async (_label, outcome, code, arrange, legacy = false) => {
+            const { send } = setup({ legacy })
+            arrange()
+
+            expectOutcome(await failure(send()), `TELEGRAM_MTPROTO_${outcome}`, code)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a send without a conversation id is refused before any lookup', async () => {
+            setup()
+            expectOutcome(
+                await failure(sendTelegramMessage(PEER, 'tg2r text', 'tg2r-none', {})),
+                'TELEGRAM_MTPROTO_REFUSED',
+                'CONTACT_CONVERSATION_IDENTITY_REQUIRED',
+            )
+            expect(mocks.telegramConnectionFindUnique).not.toHaveBeenCalled()
+        })
+
+        test('an outcome another owner already stated passes through unchanged', async () => {
+            const { send } = setup()
+            mocks.prepareOutbound.mockRejectedValue(new Error('MESSAGING_SEND_OUTCOME_UNKNOWN: gate state lost'))
+
+            const error = await failure(send())
+            expect(error.message).toBe('Telegram delivery failed: MESSAGING_SEND_OUTCOME_UNKNOWN: gate state lost')
+            expect(tokens(error.message)).toEqual([])
+        })
+
+        test('a failed credential read keeps its untyped error', async () => {
+            const { send } = setup()
+            mocks.telegramConnectionFindUnique.mockRejectedValue(new Error('Invalid `prisma.telegramConnection.findUnique()` invocation'))
+
+            const error = await failure(send())
+            expect(tokens(error.message)).toEqual([])
+            expect(s1Codes(error.message)).toEqual([])
+        })
+
+        test.each([
+            ['a provider refusal', rpcError(400, 'PEER_ID_INVALID')],
+            ['a dead session', rpcError(401, 'AUTH_KEY_UNREGISTERED')],
+            ['FLOOD_WAIT', rpcError(420, 'FLOOD_WAIT_30')],
+            ['a dropped socket', new Error('Not connected')],
+        ])('after dispatch, %s keeps main\'s untyped outcome', async (_label, error) => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.sendMessage.mockRejectedValue(error)
+
+            const thrown = await failure(send())
+            expect(thrown.message).toBe(`Telegram delivery failed: ${error.message}`)
+            expect(tokens(thrown.message)).toEqual([])
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+        })
+
+        test('a send that never answers within 25 s keeps main\'s untyped timeout', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+            mocks.sendMessage.mockReturnValue(new Promise(() => {}))
+
+            const pending = failure(send())
+            await vi.advanceTimersByTimeAsync(25_000)
+            const error = await pending
+            expect(error.message).toBe('Telegram delivery failed: Telegram sendMessage timeout (25s)')
+            expect(tokens(error.message)).toEqual([])
+        })
+
+        test('the sweep fetches no history, admits nothing, writes nothing and logs no dialog content', async () => {
+            const { send } = setup()
+            sweepDialogs = async client => {
+                cacheOf(client).add(PEER)
+                return [
+                    { isUser: true, entity: { id: BigInt(PEER) }, message: { message: 'private dialog text' } },
+                    { isUser: true, entity: { id: 777000n }, message: { message: 'Login code 51734' } },
+                ]
+            }
+
+            await expect(send()).resolves.toMatchObject({ success: true })
+
+            expect(mocks.getMessages).not.toHaveBeenCalled()
+            for (const writer of [
+                mocks.createMessage, mocks.upsertConversation, mocks.patchConversation,
+                mocks.emitMessage, mocks.inboundWorkflow, mocks.ensureContactLink, mocks.resolveContact,
+            ]) expect(writer).not.toHaveBeenCalled()
+            const logged = [console.log, console.warn, console.error]
+                .flatMap(spy => (spy as unknown as { mock: { calls: unknown[][] } }).mock.calls)
+                .map(call => call.map(String).join(' '))
+                .join('\n')
+            expect(logged).not.toContain('private dialog text')
+            expect(logged).not.toContain('51734')
         })
     })
 })
