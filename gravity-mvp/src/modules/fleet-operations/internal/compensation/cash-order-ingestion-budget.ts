@@ -40,7 +40,17 @@ export const CASH_ORDER_INGESTION_TIMING_V1 = Object.freeze({
     POLITE_PAGE_DELAY_MS: 400,
     PAGE_LIMIT: 500,
     SLICE_PAGE_CAP: 20,
+    /**
+     * Parks a scheduled mode (off, write) may list. A write tick shares one run
+     * deadline between them and every park needs its start floor after setup.
+     */
     MAX_ENABLED_PARKS: 3,
+    /**
+     * Parks on demand may list: the whole YOKO network. On demand never reads a
+     * park; its only request is one driver's day, asked for by that driver, so
+     * the number of enabled parks adds no provider load.
+     */
+    MAX_ON_DEMAND_ENABLED_PARKS: 6,
     MAX_DEFERRAL_SECONDS: 3_600,
     /**
      * The one-shot read-only preflight is not a scheduler tick, so it is not
@@ -55,7 +65,8 @@ const T = CASH_ORDER_INGESTION_TIMING_V1
 
 // The floors are derived quantities. Fail at import rather than drift apart.
 if (T.ADMISSION_FLOOR_MS !== T.WRITE_DB_OP_MS + T.FINISH_RESERVE_MS + T.MARGIN_MS + T.REQUEST_TIMEOUT_MIN_MS
-    || T.PARK_START_FLOOR_MS !== T.LEASE_ACQUISITION_MS + T.ADMISSION_FLOOR_MS) {
+    || T.PARK_START_FLOOR_MS !== T.LEASE_ACQUISITION_MS + T.ADMISSION_FLOOR_MS
+    || T.MAX_ENABLED_PARKS * T.PARK_START_FLOOR_MS > T.RUN_DEADLINE_MS - T.SETUP_MS) {
     throw new Error('cash-order ingestion timing constants are inconsistent')
 }
 
