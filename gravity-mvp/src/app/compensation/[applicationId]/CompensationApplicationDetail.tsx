@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 
 import { runCompensationManagerAction, type ManagerActionName } from '../actions'
 import { MANAGER_STATE_LABELS, rublesFromKopecks } from '../money'
@@ -117,6 +117,104 @@ function confirmationFor(action: ManagerActionName, view: CompensationApplicatio
     }
 }
 
+/** What the evidence route answered, as the manager reads it. Never a path, an id or a provider message. */
+const EVIDENCE_FAILURE_TEXT: Record<number, string> = {
+    401: 'Нет доступа к файлу: войдите в CRM как менеджер.',
+    403: 'Нет доступа к файлу: войдите в CRM как менеджер.',
+    404: 'Файл ответа поддержки не найден. Попросите водителя прислать его заново.',
+    413: 'Файл больше 8 МБ — показать его здесь нельзя.',
+    415: 'Этот формат файла не поддерживается для просмотра. Нужны фото (JPG, PNG) или PDF.',
+}
+const EVIDENCE_UNAVAILABLE_TEXT = 'Файл сейчас недоступен. Обновите страницу позже.'
+const EVIDENCE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
+type EvidenceViewState =
+    | { kind: 'loading' }
+    | { kind: 'image' | 'pdf'; url: string }
+    | { kind: 'failed'; message: string }
+
+/**
+ * The support reply, read through the signed-in evidence route and shown by
+ * what the server says it is: an image inline, a PDF in the browser's own
+ * viewer, and a plain sentence when it cannot be shown. The bytes stay in this
+ * page as a local object; no new address serves them.
+ */
+function EvidenceViewer({ applicationId }: { applicationId: string }) {
+    const [view, setView] = useState<EvidenceViewState>({ kind: 'loading' })
+
+    useEffect(() => {
+        let url: string | null = null
+        let cancelled = false
+        void (async () => {
+            try {
+                const response = await fetch(`/compensation/${applicationId}/evidence`, {
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                })
+                if (!response.ok) {
+                    if (!cancelled) setView({ kind: 'failed', message: EVIDENCE_FAILURE_TEXT[response.status] ?? EVIDENCE_UNAVAILABLE_TEXT })
+                    return
+                }
+                const type = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+                const kind = type === 'application/pdf' ? 'pdf' : EVIDENCE_IMAGE_TYPES.includes(type) ? 'image' : null
+                if (kind === null) {
+                    if (!cancelled) setView({ kind: 'failed', message: EVIDENCE_FAILURE_TEXT[415] })
+                    return
+                }
+                const blob = await response.blob()
+                if (cancelled) return
+                url = URL.createObjectURL(blob.slice(0, blob.size, type))
+                setView({ kind, url })
+            } catch {
+                if (!cancelled) setView({ kind: 'failed', message: EVIDENCE_UNAVAILABLE_TEXT })
+            }
+        })()
+        return () => {
+            cancelled = true
+            if (url !== null) URL.revokeObjectURL(url)
+        }
+    }, [applicationId])
+
+    if (view.kind === 'loading') {
+        return <div className="mt-3 h-24 animate-pulse rounded-md bg-surface" data-testid="evidence-loading" />
+    }
+    if (view.kind === 'failed') {
+        return <p className="mt-2 text-[13px] text-destructive" data-testid="evidence-error">{view.message}</p>
+    }
+    return (
+        <div className="mt-3">
+            {view.kind === 'image' ? (
+                <img
+                    src={view.url}
+                    alt="Ответ поддержки Яндекса"
+                    data-testid="evidence-image"
+                    className="max-h-96 rounded-md border border-border"
+                />
+            ) : (
+                <object
+                    data={view.url}
+                    type="application/pdf"
+                    data-testid="evidence-pdf"
+                    className="h-[600px] w-full rounded-md border border-border"
+                >
+                    <p className="p-4 text-[13px] text-muted">
+                        Браузер не показывает PDF внутри страницы — откройте его целиком.
+                    </p>
+                </object>
+            )}
+            <a
+                href={view.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="evidence-open"
+                className="mt-2 inline-flex text-[13px] text-primary"
+            >
+                {view.kind === 'pdf' ? 'Открыть PDF целиком' : 'Открыть в полном размере'}
+            </a>
+        </div>
+    )
+}
+
 export default function CompensationApplicationDetail({
     application,
 }: {
@@ -180,12 +278,7 @@ export default function CompensationApplicationDetail({
             <section className="mt-4 rounded-md border border-border p-4">
                 <h2 className="text-[15px] font-medium text-foreground">Ответ поддержки Яндекса</h2>
                 {application.evidence === 'present' ? (
-                    <img
-                        src={`/compensation/${application.applicationId}/evidence`}
-                        alt="Ответ поддержки Яндекса"
-                        data-testid="evidence-image"
-                        className="mt-3 max-h-96 rounded-md border border-border"
-                    />
+                    <EvidenceViewer applicationId={application.applicationId} />
                 ) : (
                     <p className="mt-2 text-[13px] text-destructive" data-testid="evidence-missing">
                         Скриншот не приложен. Одобрить заявку нельзя.

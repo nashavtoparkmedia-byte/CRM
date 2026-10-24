@@ -98,13 +98,14 @@ const input = (overrides: Partial<PilotInputReadV1> = {}): PilotInputReadV1 => (
 })
 
 describe('Gate 1: PILOT CANDIDATE READY', () => {
-    it('0. stays order-independent: a driver whose first month ended inside the last 72 h is not a candidate', () => {
-        // The pilot may still serve such a driver for a last-day order of that
-        // month through the order's own grace, which Gate 2 applies through the
-        // catalogue rule; Gate 1 states the first month at `now`, reads no
-        // orders, and so refuses — conservative, never a false positive.
-        const gate = pilotCandidateFactsGateV1(driver(), PILOT_PARKS, new Date('2026-10-02T12:00:00.000Z'))
-        expect(gate).toMatchObject({ passed: false, reason: 'outside_first_calendar_month', firstMonthKey: FIRST_MONTH_KEY })
+    it('0. stays order-independent: a driver whose first month ended inside the last 72 h is still a candidate, then is not', () => {
+        // Every order of the first month stays claimable for 72 hours after it
+        // ends, so Gate 1 holds through that grace without reading orders, and
+        // refuses from 4 October 00:00 Yekaterinburg on.
+        const inGrace = pilotCandidateFactsGateV1(driver(), PILOT_PARKS, new Date('2026-10-02T12:00:00.000Z'))
+        expect(inGrace).toMatchObject({ passed: true, firstMonthKey: FIRST_MONTH_KEY })
+        const closed = pilotCandidateFactsGateV1(driver(), PILOT_PARKS, new Date('2026-10-03T19:00:00.000Z'))
+        expect(closed).toMatchObject({ passed: false, reason: 'outside_first_calendar_month', firstMonthKey: FIRST_MONTH_KEY })
     })
 
     it('1. refuses when the Yandex facts were never populated', () => {
@@ -292,13 +293,15 @@ describe('Gate 2: PILOT INPUT READY', () => {
         expect(gate.counts.catalogueOrderCount).toBe(0)
     })
 
-    it('19c. after the first month, counts only a last-day order whose 72 h window is still open', () => {
+    it('19c. after the first month, counts every first-month order while the month-end grace is open', () => {
         const lastDay = order({ externalOrderId: 'ext-order-last-day', endedAt: new Date('2026-09-30T18:30:00.000Z') })
         const ordinary = order({ externalOrderId: 'ext-order-ordinary', endedAt: new Date('2026-09-12T10:00:00.000Z') })
         const inGrace = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-02T12:00:00.000Z'))
-        expect(inGrace.counts.catalogueOrderCount).toBe(1)
+        expect(inGrace.counts.catalogueOrderCount).toBe(2)
         expect(inGrace.ready).toBe(true)
-        const atDeadline = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-03T18:30:00.000Z'))
+        const lastMoment = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-03T18:59:59.999Z'))
+        expect(lastMoment.counts.catalogueOrderCount).toBe(2)
+        const atDeadline = pilotInputGateV1(candidate(), input({ orders: [lastDay, ordinary] }), new Date('2026-10-03T19:00:00.000Z'))
         expect(atDeadline.counts.catalogueOrderCount).toBe(0)
         expect(atDeadline.ready === false && atDeadline.reason).toBe('no_cash_orders')
     })

@@ -12,7 +12,7 @@ import {
     type PilotSubmissionContextV1,
     type PilotSubmissionRequestV1,
 } from './compensation-pilot-flow'
-import { KOPECKS_PER_RUBLE, MAX_COMPENSATION_KOPECKS } from './compensation-money'
+import { KOPECKS_PER_RUBLE, MAX_CLAIMED_RUBLES, MAX_COMPENSATION_KOPECKS } from './compensation-money'
 
 const ORDER: StoredCashOrderV1 = {
     id: 'row-1',
@@ -64,12 +64,29 @@ describe('pilot submission gate', () => {
             .toEqual({ accepted: false, refusal: 'attachment_missing' })
     })
 
-    it('caps the claim at one thousand rubles', () => {
-        expect(PILOT_MAX_CLAIMED_RUBLES).toBe(1000)
-        expect(decidePilotSubmissionV1(request({ claimedRubles: 1000 }), context()))
-            .toMatchObject({ accepted: true })
-        expect(decidePilotSubmissionV1(request({ claimedRubles: 1001 }), context()))
+    it('takes a request above the 500 RUB cap and refuses only above the monetary core\'s request bound', () => {
+        expect(PILOT_MAX_CLAIMED_RUBLES).toBe(MAX_CLAIMED_RUBLES)
+        for (const claimedRubles of [500, 501, 800, 1000, MAX_CLAIMED_RUBLES]) {
+            expect(decidePilotSubmissionV1(request({ claimedRubles }), context()))
+                .toMatchObject({ accepted: true, claimedRubles })
+        }
+        expect(decidePilotSubmissionV1(request({ claimedRubles: MAX_CLAIMED_RUBLES + 1 }), context()))
             .toEqual({ accepted: false, refusal: 'claim_above_pilot_cap' })
+    })
+
+    it('pays the Owner\'s four examples: min(request, Yandex price, 500 RUB)', () => {
+        expect(pilotPayableKopecksV1(800, { amountKopecks: 65_000 })).toBe(50_000)
+        expect(pilotPayableKopecksV1(400, { amountKopecks: 65_000 })).toBe(40_000)
+        expect(pilotPayableKopecksV1(800, { amountKopecks: 33_550 })).toBe(33_550)
+        expect(pilotPayableKopecksV1(500, { amountKopecks: 120_000 })).toBe(50_000)
+    })
+
+    it('measures the budget of an above-cap request at the cap, not at the request', () => {
+        const order = { ...ORDER, amountKopecks: 65_000 }
+        expect(decidePilotSubmissionV1(request({ claimedRubles: 800 }), context({ catalogue: [order], remainingBudgetKopecks: 50_000 })))
+            .toMatchObject({ accepted: true })
+        expect(decidePilotSubmissionV1(request({ claimedRubles: 800 }), context({ catalogue: [order], remainingBudgetKopecks: 49_999 })))
+            .toEqual({ accepted: false, refusal: 'budget_exhausted' })
     })
 
     it('refuses a fractional or non-positive claim', () => {

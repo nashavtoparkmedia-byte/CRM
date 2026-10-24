@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { fork } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { EventEmitter, once } from 'node:events'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { PassThrough } from 'node:stream'
 
 import {
   analyzeJavaScriptSurfaceIsolated,
@@ -482,6 +487,231 @@ const isolatedResult = await analyzeJavaScriptSurfaceIsolated(
 assert.deepEqual(isolatedResult.sites, directIsolatedSites)
 assert.deepEqual(isolatedResult.diagnostics, directIsolatedResult.diagnostics)
 assert.equal(isolatedResult.source_sha256, directIsolatedResult.source_sha256)
+
+// ── Isolated worker lifecycle ────────────────────────────────────────────────
+// The parent settles exactly once, at 'close', from everything it observed —
+// never from whichever of 'message' and 'exit' arrives first.
+
+// Node 20.20.2 regression: the real worker replies and then exits cleanly. Before
+// the fix every fork crashed after replying (TypeError ... kPendingMessages).
+for (let run = 0; run < 10; run += 1) {
+  const real = await analyzeJavaScriptSurfaceIsolated(
+    { path: 'fixtures/isolated-cast.ts', extension: '.ts' },
+    isolatedSource,
+    { knownModels: ['User'], relationFields: ['user.profile'], workerTimeoutMs: 30_000 },
+  )
+  assert.deepEqual(real.sites, directIsolatedSites)
+  assert.equal(real.lifecycle, null, `real worker run ${run} ended abnormally: ${real.lifecycle?.stderr}`)
+}
+
+// The pre-fix worker shape (reply, then disconnect synchronously) still reproduces
+// the Node 20.20.2 crash; its reply must be kept and the crash reported.
+const legacyWorkerDirectory = await mkdtemp(path.join(tmpdir(), 'analyze-worker-lifecycle-'))
+try {
+  const legacyWorker = path.join(legacyWorkerDirectory, 'legacy-sync-disconnect-worker.mjs')
+  await writeFile(legacyWorker, [
+    "process.once('message', (task) => {",
+    "  process.send({ ok: true, task_id: task.task_id, file: task.file_name, sites: [], diagnostics: [], source_sha256: 'legacy' })",
+    '  process.disconnect()',
+    '})',
+    '',
+  ].join('\n'))
+  for (let run = 0; run < 5; run += 1) {
+    const legacy = await analyzeJavaScriptSurfaceIsolated(
+      { path: 'fixtures/legacy.ts', extension: '.ts' },
+      'export {}',
+      { forkWorker: (forkOptions) => fork(legacyWorker, [], forkOptions), workerTimeoutMs: 30_000 },
+    )
+    assert.equal(legacy.source_sha256, 'legacy', 'a reply followed by a worker crash is kept')
+    if (process.version === 'v20.20.2') {
+      assert.equal(legacy.lifecycle?.exit_code, 1)
+      assert.match(legacy.lifecycle?.stderr ?? '', /kPendingMessages/)
+    }
+  }
+} finally {
+  await rm(legacyWorkerDirectory, { recursive: true, force: true })
+}
+
+// Deterministic event orders through a fake worker.
+const lifecycleSurface = { path: 'fixtures/lifecycle.ts', extension: '.ts' }
+const okReply = {
+  ok: true, task_id: null, file: lifecycleSurface.path, sites: [{ marker: 'kept' }], diagnostics: [], source_sha256: 'fixture',
+}
+const pendingMessagesCrash = "TypeError: Cannot set properties of null (setting 'Symbol(kPendingMessages)')\n"
+function runLifecycle(drive, workerTimeoutMs = 5_000, overrides = {}) {
+  const killed = []
+  const forkWorker = () => {
+    const child = new EventEmitter()
+    child.pid = 'pid' in overrides ? overrides.pid : 4242
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = (signal) => {
+      killed.push(signal)
+      setImmediate(() => drive.onKill?.(child, signal))
+      return true
+    }
+    child.send = () => {
+      setImmediate(() => drive(child))
+      return true
+    }
+    return child
+  }
+  const promise = analyzeJavaScriptSurfaceIsolated(lifecycleSurface, 'export {}', { forkWorker, workerTimeoutMs })
+  return { promise, killed }
+}
+async function closeWorker(child, { code = 0, signal = null, stdout = '', stderr = '' } = {}) {
+  child.stdout.end(stdout)
+  child.stderr.end(stderr)
+  await Promise.all([once(child.stdout, 'end'), once(child.stderr, 'end')])
+  child.emit('close', code, signal)
+}
+const outcome = (promise) => promise.then((value) => ({ value }), (error) => ({ error }))
+
+{ // success: reply, clean exit
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('message', okReply)
+    child.emit('exit', 0, null)
+    await closeWorker(child)
+  })
+  const result = await promise
+  assert.deepEqual(result.sites, okReply.sites)
+  assert.equal(result.lifecycle, null)
+}
+
+// reply, then an abnormal exit — in both arrival orders. 'exit' before 'message'
+// is the order that used to lose the reply and the stderr.
+for (const order of [['exit', 'message'], ['message', 'exit']]) {
+  const { promise } = runLifecycle(async (child) => {
+    for (const event of order) {
+      if (event === 'message') child.emit('message', okReply)
+      else child.emit('exit', 1, null)
+    }
+    await closeWorker(child, { code: 1, stderr: pendingMessagesCrash })
+  })
+  const result = await promise
+  assert.deepEqual(result.sites, okReply.sites, `reply kept when ${order.join(' arrives before ')}`)
+  assert.equal(result.lifecycle.exit_code, 1)
+  assert.equal(result.lifecycle.signal, null)
+  assert.equal(result.lifecycle.timed_out, false)
+  assert.equal(result.lifecycle.stderr, pendingMessagesCrash)
+}
+
+{ // reply, then killed by a signal
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('message', okReply)
+    child.emit('exit', null, 'SIGTERM')
+    await closeWorker(child, { code: null, signal: 'SIGTERM' })
+  })
+  const result = await promise
+  assert.deepEqual(result.sites, okReply.sites)
+  assert.equal(result.lifecycle.signal, 'SIGTERM')
+}
+
+{ // no reply, nonzero exit: stdout and stderr written after 'exit' are still kept
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('exit', 3, null)
+    await closeWorker(child, { code: 3, stdout: 'partial output', stderr: 'fatal: worker crashed' })
+  })
+  const { error } = await outcome(promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_EXIT')
+  assert.equal(error.exit_code, 3)
+  assert.equal(error.signal, null)
+  assert.equal(error.timed_out, false)
+  assert.equal(error.timeout_ms, null)
+  assert.equal(error.stdout, 'partial output')
+  assert.equal(error.stderr, 'fatal: worker crashed')
+  assert.match(error.message, /code=3, signal=null\): fatal: worker crashed$/)
+  assert.match(error.command.at(-1), /analyze-js-worker\.mjs$/)
+}
+
+{ // no reply, clean exit
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('exit', 0, null)
+    await closeWorker(child)
+  })
+  const { error } = await outcome(promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_EXIT')
+  assert.equal(error.exit_code, 0)
+}
+
+{ // no reply, signal termination
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('exit', null, 'SIGSEGV')
+    await closeWorker(child, { code: null, signal: 'SIGSEGV', stderr: 'segmentation fault' })
+  })
+  const { error } = await outcome(promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_EXIT')
+  assert.equal(error.exit_code, null)
+  assert.equal(error.signal, 'SIGSEGV')
+  assert.equal(error.stderr, 'segmentation fault')
+}
+
+{ // the worker reports its own failure
+  const { promise } = runLifecycle(async (child) => {
+    child.emit('message', { ok: false, error: 'Error: analysis failed' })
+    child.emit('exit', 1, null)
+    await closeWorker(child, { code: 1 })
+  })
+  const { error } = await outcome(promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_FAILURE')
+  assert.match(error.message, /analysis failed/)
+  assert.equal(error.exit_code, 1)
+}
+
+{ // timeout: killed, settled at its close, with the stderr written so far
+  const drive = async () => {}
+  drive.onKill = async (child, signal) => {
+    child.emit('exit', null, signal)
+    await closeWorker(child, { code: null, signal, stderr: 'still analyzing' })
+  }
+  const { promise, killed } = runLifecycle(drive, 1_000)
+  const { error } = await outcome(promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_TIMEOUT')
+  assert.equal(error.timed_out, true)
+  assert.equal(error.timeout_ms, 1_000)
+  assert.equal(error.signal, 'SIGKILL')
+  assert.equal(error.stderr, 'still analyzing')
+  assert.deepEqual(killed, ['SIGKILL'])
+}
+
+{ // the worker cannot be started
+  const thrown = await outcome(analyzeJavaScriptSurfaceIsolated(lifecycleSurface, 'export {}', {
+    forkWorker: () => { throw new Error('spawn EAGAIN') },
+    workerTimeoutMs: 1_000,
+  }))
+  assert.equal(thrown.error.code, 'ANALYZER_WORKER_SPAWN_FAILURE')
+  assert.match(thrown.error.message, /spawn EAGAIN/)
+  // An 'error' from a process that never started settles without a 'close'.
+  const neverStarted = runLifecycle((child) => child.emit('error', new Error('spawn ENOENT')), 1_000, { pid: undefined })
+  const { error } = await outcome(neverStarted.promise)
+  assert.equal(error.code, 'ANALYZER_WORKER_SPAWN_FAILURE')
+  assert.match(error.message, /spawn ENOENT/)
+  assert.deepEqual(neverStarted.killed, [])
+}
+
+{ // exactly once: nothing settles before 'close'; duplicates and late events change nothing
+  let closeNow
+  const gate = new Promise((resolve) => { closeNow = resolve })
+  const { promise, killed } = runLifecycle(async (child) => {
+    child.emit('exit', 1, null)
+    child.emit('message', okReply)
+    await gate
+    await closeWorker(child, { code: 1, stderr: pendingMessagesCrash })
+    child.emit('close', 1, null)
+    child.emit('message', { ok: false, error: 'late reply' })
+    child.emit('error', new Error('late error'))
+  }, 1_000)
+  let settlements = 0
+  promise.then(() => { settlements += 1 }, () => { settlements += 1 })
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.equal(settlements, 0, 'settled by exit or message before close')
+  closeNow()
+  const result = await promise
+  assert.deepEqual(result.sites, okReply.sites)
+  await new Promise((resolve) => setTimeout(resolve, 1_100))
+  assert.equal(settlements, 1)
+  assert.deepEqual(killed, [], 'the timeout outlived the settlement')
+}
 
 const dynamicSqlCall = 'await prisma.$queryRaw`SELECT id FROM "User" ${fragment}`'
 const safeUpstream = analyzePrismaWriteSites([

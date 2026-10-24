@@ -66,7 +66,11 @@ import {
     type CashOrderCredentialIdentityV1,
 } from './cash-order-park-authority'
 import { CashOrderParkTenureQueueV1 } from './cash-order-park-tenure-queue'
-import { parseCompensationBusinessDayKeyV1 } from './compensation-calendar'
+import {
+    compensationDayEndInstantV1,
+    compensationDayStartInstantV1,
+    parseCompensationBusinessDayKeyV1,
+} from './compensation-calendar'
 import { cashOrderSubmissionOpenV1 } from './compensation-cash-order-ingestion'
 import {
     emptyCashOrderRequestStatsV1,
@@ -99,6 +103,62 @@ export const CASH_ORDER_TARGETED_LIMITS_V1 = Object.freeze({
 })
 
 const L = CASH_ORDER_TARGETED_LIMITS_V1
+
+/**
+ * Bounds of the on-demand mode: one driver's completed cash orders of one
+ * business day, asked for by that driver. They sit on top of the park-wide
+ * page allowance and park lease, which every targeted request shares.
+ */
+export const CASH_ORDER_DRIVER_DAY_LIMITS_V1 = Object.freeze({
+    /** A complete answer is reused this long: a repeated tap never reaches the provider. */
+    CACHE_MS: 5 * MINUTE,
+    /** A failed or incomplete answer is reported again, not retried, for this long. */
+    FAILURE_HOLD_MS: 30 * SECOND,
+    /** Provider requests one driver may start within the window. */
+    DRIVER_STARTS: 6,
+    DRIVER_WINDOW_MS: 10 * MINUTE,
+    /** One driver's day fits one page; more than this is not a driver's day. */
+    PAGE_CAP: 3,
+    /** Everything, lease waits included, ends by then. */
+    DEADLINE_MS: 60 * SECOND,
+})
+
+const D = CASH_ORDER_DRIVER_DAY_LIMITS_V1
+
+export type CashOrderDriverDayOutcomeV1 = 'running' | 'complete' | 'incomplete' | `failed:${string}`
+
+interface DriverDayRecordV1 {
+    externalParkId: string
+    externalDriverProfileId: string
+    dayKey: string
+    registeredAtMs: number
+    settledAtMs: number | null
+    startDb: Date | null
+    endedDb: Date | null
+    connectionId: string | null
+    outcome: CashOrderDriverDayOutcomeV1
+    accepted: Set<string>
+    removed: Set<string>
+    pages: number
+    completion: Promise<void>
+}
+
+/** What one driver-day request established, in database time. */
+export interface CashOrderDriverDaySnapshotV1 {
+    outcome: CashOrderDriverDayOutcomeV1
+    acceptedOrderIds: string[]
+    removedOrderIds: string[]
+    startDb: Date | null
+    endedDb: Date | null
+    connectionId: string | null
+    pages: number
+}
+
+export type CashOrderDriverDayRequestV1 =
+    | { status: 'scheduled' | 'joined' | 'cached'; completion: Promise<void> }
+    | { status: 'not_scheduled'; reason: string }
+
+const PROFILE_ID = /^[A-Za-z0-9_-]{1,100}$/
 
 export interface CashOrderCredentialEntryV1 extends CashOrderCredentialIdentityV1, CashOrderProviderCredentialV1 {}
 
@@ -334,6 +394,8 @@ export class CashOrderIngestionRuntimeV1 {
     private readonly hotRefreshInFlight = new Set<string>()
     private readonly targetedPageTimes = new Map<string, number[]>()
     private readonly dayRecords = new Map<string, DayRecordV1>()
+    private readonly driverDayRecords = new Map<string, DriverDayRecordV1>()
+    private readonly driverDayStarts = new Map<string, number[]>()
     private lastTickStartMs: number | null = null
 
     constructor(
@@ -543,7 +605,9 @@ export class CashOrderIngestionRuntimeV1 {
     /** One scheduler tick. Never throws; job errors are returned in `errors`. */
     async runTick(): Promise<CashOrderTickResultV1> {
         const mode = this.config.mode
-        if (mode === 'off') return { mode, parks: [], errors: [] }
+        // Only write mode has a background pass. Off reads nothing, and on
+        // demand reads one driver's day when that driver asks, never a park.
+        if (mode !== 'write') return { mode, parks: [], errors: [] }
         this.lastTickStartMs = this.ports.clock.nowMs()
         if (this.config.configError !== null) return { mode, parks: [], errors: [this.config.configError] }
 
@@ -1350,5 +1414,249 @@ export class CashOrderIngestionRuntimeV1 {
     /** Test and shutdown support: settles when a day confirmation's run ends. */
     dayConfirmationSettled(externalParkId: string, dayKey: string): Promise<void> {
         return this.dayRecords.get(`${externalParkId}|${dayKey}`)?.completion ?? Promise.resolve()
+    }
+
+    /**
+     * On demand: asks the provider for one driver's completed cash orders of
+     * one business day (Asia/Yekaterinburg), and writes the ones that verify.
+     *
+     * The caller has already proven the person, the park and the profile; this
+     * still refuses anything outside on-demand mode, an unconfigured park, a
+     * malformed profile or day, a day not yet begun or whose month can no
+     * longer be claimed. Identical requests join the one in flight, a complete
+     * answer is reused for CACHE_MS and a failure is held for FAILURE_HOLD_MS,
+     * so repeated taps never multiply provider requests. A driver may start at
+     * most DRIVER_STARTS requests per window, and the park's page allowance,
+     * lease and provider deferral apply exactly as to every targeted request.
+     */
+    async requestDriverDay(input: {
+        externalParkId: string
+        externalDriverProfileId: string
+        dayKey: string
+    }): Promise<CashOrderDriverDayRequestV1> {
+        if (this.config.mode !== 'on_demand') return { status: 'not_scheduled', reason: 'mode_not_on_demand' }
+        if (!this.enabled(input.externalParkId)) return { status: 'not_scheduled', reason: 'park_not_enabled' }
+        if (!PROFILE_ID.test(input.externalDriverProfileId)) return { status: 'not_scheduled', reason: 'invalid_profile' }
+        try {
+            parseCompensationBusinessDayKeyV1(input.dayKey)
+        } catch {
+            return { status: 'not_scheduled', reason: 'invalid_day' }
+        }
+
+        const now = this.ports.clock.nowMs()
+        const key = `${input.externalParkId}|${input.externalDriverProfileId}|${input.dayKey}`
+        const existing = this.driverDayRecords.get(key)
+        if (existing) {
+            const outcome = this.effectiveDriverDayOutcome(existing)
+            if (outcome === 'running') return { status: 'joined', completion: existing.completion }
+            const settledAt = existing.settledAtMs ?? existing.registeredAtMs
+            const hold = outcome === 'complete' ? D.CACHE_MS : D.FAILURE_HOLD_MS
+            if (now - settledAt < hold) return { status: 'cached', completion: existing.completion }
+        }
+
+        const driverKey = `${input.externalParkId}|${input.externalDriverProfileId}`
+        const starts = (this.driverDayStarts.get(driverKey) ?? []).filter((at) => now - at < D.DRIVER_WINDOW_MS)
+        if (starts.length >= D.DRIVER_STARTS) {
+            this.driverDayStarts.set(driverKey, starts)
+            return { status: 'not_scheduled', reason: 'driver_rate_limited' }
+        }
+
+        let deferred: boolean
+        try {
+            deferred = await this.deferralActive(input.externalParkId)
+        } catch {
+            return { status: 'not_scheduled', reason: 'state_read_failed' }
+        }
+        if (deferred) return { status: 'not_scheduled', reason: 'provider_deferred' }
+
+        // Re-read after the awaits above: a concurrent identical request may
+        // have registered meanwhile, and two must never both reach the provider.
+        const raced = this.driverDayRecords.get(key)
+        if (raced && raced !== existing && this.effectiveDriverDayOutcome(raced) === 'running') {
+            return { status: 'joined', completion: raced.completion }
+        }
+
+        starts.push(now)
+        this.driverDayStarts.set(driverKey, starts)
+        this.pruneDriverDayRecords(now)
+        const record: DriverDayRecordV1 = {
+            externalParkId: input.externalParkId,
+            externalDriverProfileId: input.externalDriverProfileId,
+            dayKey: input.dayKey,
+            registeredAtMs: now,
+            settledAtMs: null,
+            startDb: null,
+            endedDb: null,
+            connectionId: null,
+            outcome: 'running',
+            accepted: new Set(),
+            removed: new Set(),
+            pages: 0,
+            completion: Promise.resolve(),
+        }
+        this.driverDayRecords.set(key, record)
+        record.completion = this.runDriverDay(record).finally(() => {
+            record.settledAtMs = this.ports.clock.nowMs()
+        })
+        return { status: 'scheduled', completion: record.completion }
+    }
+
+    /** What the latest request for this driver's day established, or null. */
+    readDriverDay(externalParkId: string, externalDriverProfileId: string, dayKey: string): CashOrderDriverDaySnapshotV1 | null {
+        const record = this.driverDayRecords.get(`${externalParkId}|${externalDriverProfileId}|${dayKey}`)
+        if (!record) return null
+        return {
+            outcome: this.effectiveDriverDayOutcome(record),
+            acceptedOrderIds: [...record.accepted],
+            removedOrderIds: [...record.removed],
+            startDb: record.startDb,
+            endedDb: record.endedDb,
+            connectionId: record.connectionId,
+            pages: record.pages,
+        }
+    }
+
+    private effectiveDriverDayOutcome(record: DriverDayRecordV1): CashOrderDriverDayOutcomeV1 {
+        if (record.outcome === 'running' && this.ports.clock.nowMs() - record.registeredAtMs >= D.DEADLINE_MS + L.DAY_LOST_MS) {
+            return 'failed:lost'
+        }
+        return record.outcome
+    }
+
+    /** Settled records past every reuse window are forgotten, so the map stays small. */
+    private pruneDriverDayRecords(now: number): void {
+        for (const [key, record] of this.driverDayRecords) {
+            if (record.settledAtMs !== null && now - record.settledAtMs >= D.CACHE_MS) this.driverDayRecords.delete(key)
+        }
+        for (const [key, starts] of this.driverDayStarts) {
+            if (starts.every((at) => now - at >= D.DRIVER_WINDOW_MS)) this.driverDayStarts.delete(key)
+        }
+    }
+
+    private async runDriverDay(record: DriverDayRecordV1): Promise<void> {
+        const deadlineMs = record.registeredAtMs + D.DEADLINE_MS
+        try {
+            const setup = await this.setup([record.externalParkId])
+            const result = setup.results.get(record.externalParkId) as ParkSetupV1
+            if (!result.ok) {
+                record.outcome = `failed:${result.code}`
+                return
+            }
+            const dbNow = setup.dbNow as Date
+            const day = parseCompensationBusinessDayKeyV1(record.dayKey)
+            const endedFrom = compensationDayStartInstantV1(day)
+            const endedTo = compensationDayEndInstantV1(day)
+            // Never a day that has not begun, nor one whose month no claim can
+            // still use: the same submission window the monetary core enforces.
+            if (endedFrom.getTime() > dbNow.getTime() || !cashOrderSubmissionOpenV1({ endedAt: endedFrom }, dbNow)) {
+                record.outcome = 'failed:day_not_open'
+                return
+            }
+            record.startDb = dbNow
+            record.connectionId = result.park.connectionId
+
+            const queuedAtMs = this.ports.clock.nowMs()
+            for (;;) {
+                if (this.ports.clock.nowMs() >= deadlineMs) {
+                    record.outcome = 'incomplete'
+                    return
+                }
+                const tenure = await this.acquireTargetedTenure(record.externalParkId, queuedAtMs, deadlineMs)
+                if ('failure' in tenure) {
+                    record.outcome = tenure.failure === 'deadline' ? 'incomplete' : 'failed:lease_busy'
+                    return
+                }
+                let step: 'done' | 'again'
+                try {
+                    step = await this.runDriverDayTenure(record, result.park, { endedFrom, endedTo }, tenure, deadlineMs)
+                } finally {
+                    tenure.release()
+                }
+                if (step === 'done') return
+            }
+        } catch {
+            record.outcome = 'failed:internal_error'
+        } finally {
+            record.endedDb = await this.recordTargeted(record.externalParkId, {
+                target: 'driver_day',
+                dayKey: record.dayKey,
+                outcome: record.outcome,
+                pages: record.pages,
+                accepted: record.accepted.size,
+            })
+        }
+    }
+
+    private async runDriverDayTenure(
+        record: DriverDayRecordV1,
+        park: AuthorizedParkV1,
+        day: { endedFrom: Date; endedTo: Date },
+        tenure: { budget: CashOrderBudgetV1; leaseRetryUntilMs: number },
+        deadlineMs: number,
+    ): Promise<'done' | 'again'> {
+        const token = this.ports.newToken()
+        const acquisition = await this.acquireParkLease(park, token, tenure.budget, tenure.leaseRetryUntilMs)
+        if (acquisition === null || !acquisition.acquired) {
+            const now = this.ports.clock.nowMs()
+            if (now < tenure.leaseRetryUntilMs) {
+                await this.ports.sleep(Math.min(L.LEASE_RETRY_MS, tenure.leaseRetryUntilMs - now))
+                return 'again'
+            }
+            record.outcome = now >= deadlineMs ? 'incomplete' : 'failed:lease_busy'
+            return 'done'
+        }
+        const { checkpoint, dbNow } = acquisition
+        let leaseLost = false
+        try {
+            if (this.deferred(checkpoint, park.connectionId, dbNow)) {
+                record.outcome = 'failed:provider_deferred'
+                return 'done'
+            }
+            const slice = await runCashOrderSliceV1({
+                store: this.ports.store,
+                fetchPage: this.ports.fetchPage,
+                provider: CASH_ORDER_PROVIDER_V1,
+                externalParkId: park.externalParkId,
+                connectionId: park.connectionId,
+                credential: park.credential,
+                checkpointId: checkpoint.id,
+                leaseToken: token,
+                // Carried for the request shape only; the driver-day filter replaces it.
+                window: { from: day.endedFrom, to: day.endedTo },
+                budget: tenure.budget,
+                profile: HOT_REQUEST_PROFILE_V1,
+                mode: 'write',
+                finalProgress: null,
+                admitPage: () => this.admitTargetedPage(park.externalParkId),
+                driverDay: {
+                    externalDriverProfileId: record.externalDriverProfileId,
+                    endedFrom: day.endedFrom,
+                    endedTo: day.endedTo,
+                },
+                pageCap: D.PAGE_CAP,
+                stats: emptyCashOrderRequestStatsV1(),
+                sleep: this.ports.sleep,
+                random: this.ports.random,
+                wallNowMs: this.ports.wallNowMs,
+            })
+            record.pages += slice.counters.pages
+            for (const id of slice.acceptedOrderIds) record.accepted.add(id)
+            for (const id of slice.removedOrderIds) record.removed.add(id)
+            if (slice.status === 'complete') {
+                record.outcome = 'complete'
+                return 'done'
+            }
+            leaseLost = slice.code === 'lease_lost'
+            if (slice.deferSeconds !== null && !leaseLost) {
+                await this.recordDeferral(checkpoint.id, token, slice.deferSeconds, park.connectionId)
+            }
+            // A tenure that ran out of time starts the day again in a fresh
+            // tenure; the deadline above bounds how often.
+            if (slice.code === 'park_time_budget_exhausted') return 'again'
+            record.outcome = `failed:${slice.code}`
+            return 'done'
+        } finally {
+            if (!leaseLost) await this.releaseParkLease(checkpoint.id, token)
+        }
     }
 }

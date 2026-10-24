@@ -8,6 +8,8 @@ import {
     pilotCatalogueStatusV1,
     pilotConfirmationFollowUpV1,
     pilotListedOrderV1,
+    pilotDriverDayAllowedV1,
+    pilotDriverDayQueryV1,
     pilotOrderSearchV1,
     pilotScheduleFollowUpV1,
     pilotScopeKeyV1,
@@ -234,5 +236,42 @@ describe('listing and finding orders', () => {
         const search = pilotOrderSearchV1(many, '680')
         expect(search.matches).toHaveLength(PILOT_SEARCH_LIMIT_V1)
         expect(search.truncated).toBe(true)
+    })
+})
+
+describe('on demand: the catalogue status and the day a driver picks', () => {
+    const facts = (over: Partial<PilotCatalogueFactsV1> = {}): PilotCatalogueFactsV1 => ({
+        mode: 'on_demand',
+        parkEnabled: true,
+        dbNow: new Date('2026-10-21T13:00:00.000Z'),
+        lastHotSuccessAt: null,
+        reconciliationPassStartedAt: null,
+        reconciliationFloorBookedAt: null,
+        reconciliationCursorBookedAt: null,
+        lastReconciliationCompletedAt: null,
+        ...over,
+    })
+
+    it('is on_demand for an enabled park whatever the park checkpoint says, and disabled otherwise', () => {
+        expect(pilotCatalogueStatusV1(facts())).toBe('on_demand')
+        expect(pilotCatalogueStatusV1(facts({ parkEnabled: false }))).toBe('disabled')
+        expect(pilotCatalogueStatusV1(facts({ mode: 'off' }))).toBe('disabled')
+    })
+
+    it('reads only an exact YYYY-MM-DD day, never a time or an order number', () => {
+        expect(pilotDriverDayQueryV1(' 2026-10-21 ')).toBe('2026-10-21')
+        for (const query of ['21.10', '2026-10-32', '2026-13-01', '12:00', '1000001', '2026-10-21T00:00']) {
+            expect(pilotDriverDayQueryV1(query)).toBeNull()
+        }
+    })
+
+    it('allows a begun day of the first month while that month still accepts claims', () => {
+        const dbNow = new Date('2026-10-21T13:00:00.000Z') // 21 Oct 18:00 in Yekaterinburg
+        expect(pilotDriverDayAllowedV1('2026-10-21', '2026-10', dbNow)).toBe(true)
+        expect(pilotDriverDayAllowedV1('2026-10-01', '2026-10', dbNow)).toBe(true)
+        expect(pilotDriverDayAllowedV1('2026-10-22', '2026-10', dbNow)).toBe(false)
+        expect(pilotDriverDayAllowedV1('2026-09-30', '2026-10', dbNow)).toBe(false)
+        expect(pilotDriverDayAllowedV1('2026-10-31', '2026-10', new Date('2026-11-03T18:59:59.999Z'))).toBe(true)
+        expect(pilotDriverDayAllowedV1('2026-10-31', '2026-10', new Date('2026-11-03T19:00:00.000Z'))).toBe(false)
     })
 })

@@ -81,6 +81,7 @@ export interface CashOrderPreflightInputV1 {
 /** Why a preflight could not even start. */
 export type CashOrderPreflightRefusalV1 =
     | 'ingestion_mode_write'
+    | 'ingestion_mode_on_demand'
     | 'no_enabled_parks'
     | 'park_not_enabled'
     | 'authority_read_failed'
@@ -201,6 +202,9 @@ export class CashOrderIngestionPreflightV1 {
         // write ingestion would prove nothing about that decision and would add
         // provider load to a park that is already being read.
         if (this.config.mode === 'write') return refused(this.config, 'ingestion_mode_write')
+        // On demand reads one driver's day at a time by design; a park-wide
+        // probe is exactly the load that mode exists to avoid.
+        if (this.config.mode === 'on_demand') return refused(this.config, 'ingestion_mode_on_demand')
         if (this.config.enabledParks.length === 0) return refused(this.config, 'no_enabled_parks')
 
         const requested = input.parks === undefined || input.parks.length === 0

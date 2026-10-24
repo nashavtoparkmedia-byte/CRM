@@ -661,4 +661,167 @@ describe('S1 — shared retry safety', () => {
             expect(mocks.maxSendText).toHaveBeenCalledTimes(2)
         })
     })
+
+    // DEP-Q — a quoted send is one send intent, so its redelivery is still a reply.
+    // The retry carries exactly the quote the row recorded when it was first sent,
+    // never another row's, and every gate a redelivery passes stays in force.
+    describe('DEP-Q — a reply stays a reply through retry', () => {
+        const QUOTE = 'telegram:telegram-account:4200:77'
+        const OTHER_QUOTE = 'telegram:telegram-account:4200:12'
+
+        function telegramRow(id: string, metadata: Row, fields: Row = {}): Row {
+            return failedRow(id, metadata, { chatId: CHATS.telegram.id, channel: 'telegram', content: `reply ${id}`, ...fields })
+        }
+
+        function telegramRequests(): Row[] {
+            return mocks.tgSendText.mock.calls.map(([request]) => request as Row)
+        }
+
+        it.each([
+            ['the retry job', async (id: string) => {
+                persisted(id).metadata.lastFailedAt = '2020-01-01T00:00:00.000Z'
+                await retryEligibleMessagingDeliveriesV1()
+            }],
+            ['an operator retry', async (id: string) => { await retryFailedOutboundMessageV1(id) }],
+        ] as const)('telegram: %s redelivers a safe quoted send with exactly its own quote', async (_path, retry) => {
+            mocks.tgSendText.mockRejectedValueOnce(new Error('TELEGRAM_NOT_DISPATCHED: client not connected'))
+            const first = await MessageService.send(CHATS.telegram.id, 'Reply', 'telegram', undefined, 'cmid-quoted-tg', QUOTE)
+            expect(first).toMatchObject({ success: false, deliveryOutcome: 'safe_to_redeliver' })
+            mocks.tgSendText.mockResolvedValue(accepted('telegram', 'tg-reply-77'))
+
+            await retry(first.id)
+
+            const [original, redelivery] = telegramRequests()
+            expect(telegramRequests()).toHaveLength(2)
+            expect(original.metadata).toMatchObject({ messageId: first.id, quotedMsgId: QUOTE })
+            expect(redelivery).toEqual({
+                target: original.target,
+                content: original.content,
+                connectionId: original.connectionId,
+                metadata: { messageId: first.id, chatId: CHATS.telegram.id, quotedMsgId: QUOTE },
+            })
+            expect(persisted(first.id)).toMatchObject({ status: 'delivered', externalId: 'tg-reply-77', metadata: { quotedMsgId: QUOTE } })
+            expect(mocks.creates).toHaveLength(1)
+        })
+
+        it('telegram: an unquoted send stays unquoted when it is redelivered', async () => {
+            mocks.tgSendText.mockRejectedValueOnce(new Error('TELEGRAM_NOT_DISPATCHED: client not connected'))
+            const first = await MessageService.send(CHATS.telegram.id, 'Plain', 'telegram', undefined, 'cmid-plain-tg')
+            mocks.tgSendText.mockResolvedValue(accepted('telegram', 'tg-plain'))
+
+            await retryFailedOutboundMessageV1(first.id)
+
+            expect(telegramRequests()).toHaveLength(2)
+            for (const request of telegramRequests()) expect(request.metadata.quotedMsgId).toBeUndefined()
+            expect(persisted(first.id).metadata).not.toHaveProperty('quotedMsgId')
+        })
+
+        it('telegram: a retry never inherits a quote from another message in the same conversation', async () => {
+            telegramRow('tg-quoted', { ...SAFE_V2, error: 'ECONNREFUSED', quotedMsgId: QUOTE })
+            telegramRow('tg-plain', { ...SAFE_V2, error: 'ECONNREFUSED' })
+            telegramRow('tg-other', { ...SAFE_V2, error: 'ECONNREFUSED', quotedMsgId: OTHER_QUOTE })
+            mocks.tgSendText.mockImplementation(async (request: Row) => accepted('telegram', `tg-${request.metadata.messageId}`))
+
+            await retryEligibleMessagingDeliveriesV1()
+
+            const quoteByRow = Object.fromEntries(telegramRequests().map(request => [request.metadata.messageId, request.metadata.quotedMsgId]))
+            expect(quoteByRow).toEqual({ 'tg-quoted': QUOTE, 'tg-plain': undefined, 'tg-other': OTHER_QUOTE })
+            expect(telegramRequests()).toHaveLength(3)
+        })
+
+        it.each([
+            ['unknown', { retryable: false, deliveryOutcome: 'unknown', errorSchemaVersion: 2 }],
+            ['terminal', { retryable: false, deliveryOutcome: 'terminal', errorSchemaVersion: 2 }],
+            ['v1 retryable', { retryable: true }],
+            ['no recorded outcome', {}],
+        ] as const)('telegram: a quoted row recorded as %s is never redelivered', async (_label, outcome) => {
+            telegramRow('tg-gated', { ...outcome, error: 'ECONNREFUSED', quotedMsgId: QUOTE })
+
+            await everyRetryPath(['tg-gated'])
+
+            expect(mocks.tgSendText).not.toHaveBeenCalled()
+            expect(persisted('tg-gated')).toMatchObject({ status: 'failed', metadata: { quotedMsgId: QUOTE } })
+        })
+
+        it('telegram: two concurrent retries of one quoted row dispatch it once; the losing claim sends nothing', async () => {
+            telegramRow('tg-race', { ...SAFE_V2, error: 'ECONNREFUSED', quotedMsgId: QUOTE })
+            mocks.tgSendText.mockResolvedValue(accepted('telegram', 'tg-race-id'))
+
+            const results = await Promise.all([
+                MessageService.retrySend('tg-race', { operatorInitiated: true }),
+                MessageService.retrySend('tg-race', { operatorInitiated: true }),
+            ])
+
+            expect(results.filter(result => result.success)).toHaveLength(1)
+            expect(results.filter(result => !result.success)).toHaveLength(1)
+            expect(telegramRequests()).toHaveLength(1)
+            expect(telegramRequests()[0].metadata.quotedMsgId).toBe(QUOTE)
+        })
+
+        it('telegram: a quoted row another worker has just claimed under its lease is not dispatched', async () => {
+            telegramRow('tg-leased', { ...SAFE_V2, error: 'ECONNREFUSED', quotedMsgId: QUOTE, retryLeaseId: 'other-worker' }, { status: 'sent', sentAt: new Date() })
+
+            await retryEligibleMessagingDeliveriesV1()
+            await MessageService.retrySend('tg-leased')
+            await MessageService.retrySend('tg-leased', { operatorInitiated: true })
+            await retryFailedOutboundMessageV1('tg-leased')
+
+            expect(mocks.tgSendText).not.toHaveBeenCalled()
+            expect(persisted('tg-leased')).toMatchObject({ status: 'sent', metadata: { retryLeaseId: 'other-worker', quotedMsgId: QUOTE } })
+        })
+
+        it('telegram: a quoted send whose outcome is unknown is never sent again', async () => {
+            mocks.tgSendText.mockRejectedValue(new Error('Telegram delivery failed: Telegram sendMessage timeout (25s)'))
+
+            const result = await MessageService.send(CHATS.telegram.id, 'Reply', 'telegram', undefined, 'cmid-unknown-quoted', QUOTE)
+            await everyRetryPath([result.id])
+
+            expect(result).toMatchObject({ success: false, deliveryOutcome: 'unknown' })
+            expect(telegramRequests()).toHaveLength(1)
+            expect(telegramRequests()[0].metadata.quotedMsgId).toBe(QUOTE)
+        })
+
+        it('telegram: replaying a quoted intent is idempotent, and the same key with another quote is refused', async () => {
+            mocks.tgSendText.mockResolvedValue(accepted('telegram', 'tg-once'))
+
+            const first = await MessageService.send(CHATS.telegram.id, 'Reply', 'telegram', undefined, 'cmid-replay-quoted', QUOTE)
+            const replay = await MessageService.send(CHATS.telegram.id, 'Reply', 'telegram', undefined, 'cmid-replay-quoted', QUOTE)
+            await expect(MessageService.send(CHATS.telegram.id, 'Reply', 'telegram', undefined, 'cmid-replay-quoted', OTHER_QUOTE))
+                .rejects.toThrow('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+
+            expect(replay.id).toBe(first.id)
+            expect(mocks.creates).toHaveLength(1)
+            expect(telegramRequests()).toHaveLength(1)
+        })
+
+        it('whatsapp: a redelivered quoted send keeps its existing request shape', async () => {
+            mocks.waSendText.mockRejectedValueOnce(new Error('WHATSAPP_NOT_DISPATCHED: client not ready'))
+            const first = await MessageService.send(CHATS.whatsapp.id, 'Reply', 'whatsapp', undefined, 'cmid-quoted-wa', 'wa-quoted-id')
+            mocks.waSendText.mockResolvedValue(accepted('whatsapp', 'wa-redelivered'))
+
+            await retryFailedOutboundMessageV1(first.id)
+
+            expect(mocks.waSendText).toHaveBeenCalledTimes(2)
+            expect(mocks.waSendText.mock.calls[0][0]).toMatchObject({ quotedMessageId: 'wa-quoted-id' })
+            // DEP-Q leaves WhatsApp as it is on main: its redelivery request names no quote.
+            expect(mocks.waSendText.mock.calls[1][0]).toEqual({
+                connectionId: 'whatsapp-connection',
+                chatId: CHATS.whatsapp.externalChatId,
+                content: 'Reply',
+            })
+            expect(persisted(first.id)).toMatchObject({ status: 'delivered', externalId: 'wa-redelivered', metadata: { quotedMsgId: 'wa-quoted-id' } })
+        })
+
+        it('max: a redelivered quoted send still carries its quote and its own client id', async () => {
+            mocks.maxSendText.mockRejectedValueOnce(new Error('MAX_NOT_DISPATCHED: socket not authenticated'))
+            const first = await MessageService.send(CHATS.max.id, 'Reply', 'max', undefined, 'cmid-quoted-max', 'max-quoted-id')
+            mocks.maxSendText.mockResolvedValue(accepted('max', 'd301-quoted'))
+
+            await retryFailedOutboundMessageV1(first.id)
+
+            expect(mocks.maxSendText).toHaveBeenCalledTimes(2)
+            expect(mocks.maxSendText.mock.calls[1][0].options).toMatchObject({ quotedMsgId: 'max-quoted-id', clientMessageId: 'cmid-quoted-max' })
+            expect(persisted(first.id)).toMatchObject({ status: 'delivered', externalId: 'd301-quoted' })
+        })
+    })
 })

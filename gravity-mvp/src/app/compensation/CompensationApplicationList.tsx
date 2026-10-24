@@ -5,6 +5,8 @@ import { MANAGER_STATE_LABELS, rublesFromKopecks } from './money'
 export interface CompensationApplicationRowView {
     applicationId: string
     state: string
+    /** Budget month the claim is charged to: its order's month, not the month it was filed in. */
+    periodKey: string
     orderDate: string
     orderId: string
     driverName: string | null
@@ -41,7 +43,7 @@ export default function CompensationApplicationList({ rows }: { rows: Compensati
                                 </span>
                             </div>
                             <div className="mt-1 text-[13px] text-muted">
-                                {row.driverName ?? 'Водитель не определён'} · {row.parkName}
+                                Бюджет {row.periodKey} · {row.driverName ?? 'Водитель не определён'} · {row.parkName}
                                 {row.evidence === 'missing' ? ' · без скриншота' : ''}
                             </div>
                         </div>

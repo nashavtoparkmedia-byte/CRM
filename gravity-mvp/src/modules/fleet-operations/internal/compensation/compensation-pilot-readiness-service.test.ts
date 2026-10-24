@@ -17,6 +17,7 @@ import {
     compensationPilotReadinessReportV1,
     PILOT_READINESS_POPULATION_LIMIT_V1,
     PILOT_READINESS_TELEGRAM_BATCH_V1,
+    withOwnerPilotAdmissionPopulationPortV1,
     type CompensationPilotReadinessIngestionPortV1,
     type CompensationPilotReadinessPopulationPortV1,
 } from './compensation-pilot-readiness-service'
@@ -481,5 +482,31 @@ describe('the Telegram read stays complete above the owner contract cap', () => 
         expect(report.candidates[0]).toMatchObject({ driverId: last, pilotCandidateReady: true })
         expect(report.counts.populationTruncated).toBe(false)
         expect(report.pilotCandidateProofComplete).toBe(true)
+    })
+})
+
+describe('Owner pilot admission in readiness', () => {
+    const parkEmployee = (driverId: string) => driverRow(driverId, {
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: HIRE_DATE },
+    })
+
+    it('is the same population port when nothing is admitted', () => {
+        const population = populationPort([parkEmployee('a')])
+        expect(withOwnerPilotAdmissionPopulationPortV1(population, [])).toBe(population)
+    })
+
+    it('passes the admitted park employee through gate 1 and refuses the other one as before', async () => {
+        const report = await compensationPilotReadinessReportV1(
+            pilotPort(),
+            withOwnerPilotAdmissionPopulationPortV1(populationPort([parkEmployee('a'), parkEmployee('b')]), [
+                { externalParkId: PARK, externalDriverProfileId: 'profile-a', monthKey: '2026-09' },
+            ]),
+            ingestionPort(),
+            linkReader({ a: PARK, b: PARK }),
+            NOW,
+        )
+        expect(report.pilotCandidateReady).toBe(true)
+        expect(report.counts).toMatchObject({ pilotParkDrivers: 2, candidateReady: 1 })
+        expect(report.reasons).toContainEqual({ gate: 'candidate', code: 'not_self_employed', count: 1 })
     })
 })

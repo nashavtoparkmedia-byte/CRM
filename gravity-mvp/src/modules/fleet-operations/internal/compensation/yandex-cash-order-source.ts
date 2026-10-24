@@ -1,8 +1,9 @@
 /**
  * Yandex Fleet order source for cash-order ingestion.
  *
- * One page of POST /v1/parks/orders/list, filtered by park and booked_at, with
- * an explicit timeout on every request and a retry policy that asks the run
+ * One page of POST /v1/parks/orders/list, filtered by park and booked_at, or —
+ * for the on-demand mode — by park, one driver profile and one business day of
+ * ended_at, completed cash orders only. Every request has an explicit timeout and a retry policy that asks the run
  * budget before every attempt and every sleep. The provider cursor lives only
  * inside a slice and is never stored.
  *
@@ -35,12 +36,60 @@ export interface CashOrderProviderCredentialV1 {
     parkId: string
 }
 
+/**
+ * One driver's completed cash orders of one business day. The provider is asked
+ * to filter; the answer is still verified field by field by the caller.
+ */
+export interface CashOrderDriverDayFilterV1 {
+    externalDriverProfileId: string
+    /** Inclusive start of the business day, as an instant. */
+    endedFrom: Date
+    /** Exclusive end of the business day, as an instant. */
+    endedTo: Date
+}
+
 export interface CashOrderPageRequestV1 {
     credentials: CashOrderProviderCredentialV1
     bookedFrom: Date
     bookedTo: Date
     cursor: string | null
     timeoutMs: number
+    /** When set, the request asks for this driver's day instead of a booked_at window. */
+    driverDay?: CashOrderDriverDayFilterV1 | null
+}
+
+/** The `query` object of one orders/list request. Exported for the request-shape proof. */
+export function cashOrderListQueryV1(request: Pick<CashOrderPageRequestV1, 'credentials' | 'bookedFrom' | 'bookedTo' | 'driverDay'>): Record<string, unknown> {
+    const driverDay = request.driverDay ?? null
+    if (driverDay === null) {
+        return {
+            park: {
+                id: request.credentials.parkId,
+                order: {
+                    booked_at: {
+                        from: request.bookedFrom.toISOString(),
+                        to: request.bookedTo.toISOString(),
+                    },
+                },
+            },
+        }
+    }
+    return {
+        park: {
+            id: request.credentials.parkId,
+            driver_profile: { id: driverDay.externalDriverProfileId },
+            order: {
+                // The last millisecond of the day, so the request means the same
+                // day whether the provider reads `to` as inclusive or exclusive.
+                ended_at: {
+                    from: driverDay.endedFrom.toISOString(),
+                    to: new Date(driverDay.endedTo.getTime() - 1).toISOString(),
+                },
+                statuses: ['complete'],
+                payment_methods: ['cash'],
+            },
+        },
+    }
 }
 
 export type CashOrderPageResponseV1 =
@@ -87,17 +136,7 @@ export function createYandexCashOrderPageFetcherV1(fetchImpl: typeof fetch = fet
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        query: {
-                            park: {
-                                id: request.credentials.parkId,
-                                order: {
-                                    booked_at: {
-                                        from: request.bookedFrom.toISOString(),
-                                        to: request.bookedTo.toISOString(),
-                                    },
-                                },
-                            },
-                        },
+                        query: cashOrderListQueryV1(request),
                         limit: T.PAGE_LIMIT,
                         ...(request.cursor === null ? {} : { cursor: request.cursor }),
                     }),

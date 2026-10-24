@@ -15,6 +15,9 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import { KOPECKS_PER_RUBLE, MAX_COMPENSATION_KOPECKS } from './compensation-money'
+import { PILOT_MAX_CLAIMED_RUBLES } from './compensation-pilot-flow'
+
 const REPO = path.resolve(__dirname, '..', '..', '..', '..', '..', '..')
 const read = (relative: string) => readFileSync(path.join(REPO, relative), 'utf8')
 
@@ -165,8 +168,21 @@ describe('the telegram scene calls the backend for every decision', () => {
     it('treats the local amount check as courtesy, still sending it for refusal', () => {
         // The scene may stop an obviously wrong number to keep the chat moving,
         // but the claim still goes to the CRM, whose answer is authoritative.
-        expect(SCENE).toContain('Максимум 1000 ₽')
+        // Its one local bound is the CRM's own request bound, never the cap.
+        expect(SCENE).toContain(`if (amount > ${PILOT_MAX_CLAIMED_RUBLES})`)
         expect(SCENE).toContain("callCRM('compensation_submit'")
+    })
+
+    it('states the cap the monetary core applies, and no other', () => {
+        // The prompt tells the driver the real cap; a request above it is
+        // accepted and paid at the cap, so the scene must not refuse it.
+        const capRubles = MAX_COMPENSATION_KOPECKS / KOPECKS_PER_RUBLE
+        expect(capRubles).toBe(500)
+        expect(SCENE).toContain(`К выплате — не больше ${capRubles} ₽ и не больше стоимости заказа.`)
+        expect(SCENE).not.toMatch(/1000 ₽|максимум 1000|Максимум 1000/)
+        for (const screen of MANAGER_SCREENS) {
+            expect(screen).not.toMatch(/\b(1000|100_?000|500|50_?000)\b/)
+        }
     })
 })
 

@@ -22,6 +22,7 @@ import {
     SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
 } from '../../../../contracts/fleet-operations/v1'
 import {
+    compensationBusinessDayKeyV1,
     compensationCalendarMonthV1,
     compensationMonthEndInstantV1,
     compensationMonthStartInstantV1,
@@ -50,10 +51,15 @@ import {
     compensationSectionViewV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
+    withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
 import { pilotScopeKeyV1 } from './compensation-pilot-selection'
+import { CashOrderIngestionRuntimeV1 } from './cash-order-ingestion-runtime'
+import type { CashOrderIngestionStoreV1 } from './cash-order-ingestion-store'
+import { legacyPrismaCashOrderIngestionStoreV1 } from './legacy-prisma-cash-order-ingestion-adapter'
+import type { CashOrderPageRequestV1 } from './yandex-cash-order-source'
 import { routeManagerActionV1 } from './compensation-manager-view'
 import { legacyPrismaCompensationPilotPortV1 } from './legacy-prisma-compensation-pilot-adapter'
 import {
@@ -509,14 +515,14 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(30_000)
     })
 
-    it('refuses a claim above the pilot cap before it reaches the monetary core', async () => {
+    it('refuses a request above the monetary core\'s request bound before it reaches the monetary core', async () => {
         const catalogue = cashOrderCatalogueV1(ELIGIBLE_FACTS, await storedOrders(), NOW)
         expect(catalogue.eligible).toBe(true)
         if (!catalogue.eligible) return
 
         const gate = decidePilotSubmissionV1({
             externalOrderId: catalogue.orders[0].externalOrderId,
-            claimedRubles: 1001,
+            claimedRubles: 100_001,
             supportConfirmed: true,
             attachmentFileId: 'tg-file-support-4',
             attachmentKind: 'photo',
@@ -530,6 +536,132 @@ proof('telegram pilot acceptance on real PostgreSQL', () => {
         const applications = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
             'SELECT count(*) AS count FROM "CompensationApplication"')
         expect(Number(applications[0].count)).toBe(0)
+    })
+
+    describe('the 500 RUB cap per order (Owner decision of 2026-10-21)', () => {
+        /** Submits one claim for one ingested order through C1, as the pilot port does, for its own person. */
+        async function submitClaim(externalOrderId: string, claimedRubles: number, contactId: string, idempotencyKey = randomUUID()) {
+            const order = (await storedOrders()).find((candidate) => candidate.externalOrderId === externalOrderId)
+            if (!order) throw new Error(`order ${externalOrderId} not ingested`)
+            return submitCompensationApplicationV1({
+                contract: SUBMIT_COMPENSATION_APPLICATION_COMMAND_V1,
+                idempotencyKey,
+                person: provenPerson(contactId),
+                order: {
+                    provider: order.provider,
+                    externalParkId: order.externalParkId,
+                    externalOrderId: order.externalOrderId,
+                    shortOrderIdDisplay: order.shortOrderIdDisplay,
+                    rawPrice: order.rawPrice,
+                    endedAt: order.endedAt,
+                    verifiedAt: CONTEXT.observedAt,
+                },
+                claimedRubles,
+                submittedAt: NOW,
+            })
+        }
+
+        it('stores and reserves the Owner\'s four examples: min(request, Yandex price, 500 RUB)', async () => {
+            await ingestCashOrderPageV1([
+                fleetOrder({ id: '1'.repeat(32), short_id: 5000001, price: '650.0000' }),
+                fleetOrder({ id: '2'.repeat(32), short_id: 5000002, price: '650.0000' }),
+                fleetOrder({ id: '3'.repeat(32), short_id: 5000003, price: '335.5050' }),
+                fleetOrder({ id: '4'.repeat(32), short_id: 5000004, price: '1200.0000' }),
+            ], CONTEXT, ingestionPort())
+            const cases = [
+                { orderId: '1'.repeat(32), claimedRubles: 800, payable: 50_000 },
+                { orderId: '2'.repeat(32), claimedRubles: 400, payable: 40_000 },
+                { orderId: '3'.repeat(32), claimedRubles: 800, payable: 33_550 },
+                { orderId: '4'.repeat(32), claimedRubles: 500, payable: 50_000 },
+            ]
+            let reserved = 0
+            for (const [index, example] of cases.entries()) {
+                const submitted = await submitClaim(example.orderId, example.claimedRubles, `contact-cap-${index}`)
+                expect(submitted).toMatchObject({ status: 'created', amountKopecks: example.payable })
+                // The manager screen reads exactly these stored columns.
+                expect(await managerRow(submitted.applicationId)).toMatchObject({
+                    status: 'PENDING',
+                    claimedKopecks: example.claimedRubles * 100,
+                    amountKopecks: example.payable,
+                })
+                reserved += example.payable
+                expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(reserved)
+            }
+            expect(reserved).toBe(173_550)
+        })
+
+        it('approves and pays a capped claim at 500 RUB, and a rejection releases exactly 500 RUB', async () => {
+            await ingestCashOrderPageV1([
+                fleetOrder({ id: '5'.repeat(32), short_id: 5000005, price: '650.0000' }),
+                fleetOrder({ id: '6'.repeat(32), short_id: 5000006, price: '650.0000' }),
+            ], CONTEXT, ingestionPort())
+            const toPay = await submitClaim('5'.repeat(32), 800, 'contact-cap-pay')
+            const toReject = await submitClaim('6'.repeat(32), 800, 'contact-cap-reject')
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(100_000)
+
+            const authorization = await startCompensationPayoutV1({
+                contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+                applicationId: toPay.applicationId,
+                principal: MANAGER,
+                startedAt: new Date(),
+            })
+            expect(authorization.amountKopecks).toBe(50_000)
+            const settled = await finalizeCompensationPayoutV1({
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorization.payoutAuthorizationId,
+                authorizationFence: authorization.authorizationFence,
+                principal: MANAGER,
+                finalizedAt: new Date(),
+            })
+            expect(settled).toMatchObject({ status: 'settled', amountKopecks: 50_000 })
+            // A repeated "mark paid" settles nothing more.
+            expect(await finalizeCompensationPayoutV1({
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorization.payoutAuthorizationId,
+                authorizationFence: authorization.authorizationFence,
+                principal: MANAGER,
+                finalizedAt: new Date(),
+            })).toMatchObject({ status: 'replayed' })
+
+            await rejectCompensationApplicationV1({
+                contract: REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
+                applicationId: toReject.applicationId,
+                rejectionKey: randomUUID(),
+                reason: 'test: rejected after the cap change',
+                principal: MANAGER,
+                rejectedAt: new Date(),
+            })
+            expect(await periodRow(PERIOD_KEY)).toMatchObject({ reservedKopecks: 0, settledKopecks: 50_000 })
+            expect(await managerRow(toPay.applicationId)).toMatchObject({ status: 'PAID', amountKopecks: 50_000 })
+            expect(await driverStatus(toReject.applicationId)).toBe('rejected')
+        })
+
+        it('replays a repeated capped submit without a second row or a second reservation', async () => {
+            await ingestCashOrderPageV1([fleetOrder({ id: '7'.repeat(32), short_id: 5000007, price: '650.0000' })], CONTEXT, ingestionPort())
+            const key = randomUUID()
+            const first = await submitClaim('7'.repeat(32), 800, 'contact-cap-replay', key)
+            const replay = await submitClaim('7'.repeat(32), 800, 'contact-cap-replay', key)
+            expect(first).toMatchObject({ status: 'created', amountKopecks: 50_000 })
+            expect(replay).toMatchObject({ status: 'replayed', applicationId: first.applicationId, amountKopecks: 50_000 })
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(50_000)
+        })
+
+        it('fills the 5000 RUB month with exactly ten capped claims and refuses the eleventh', async () => {
+            const ids = Array.from({ length: 11 }, (_, index) => String(index).padStart(2, '0').repeat(16))
+            await ingestCashOrderPageV1(
+                ids.map((id, index) => fleetOrder({ id, short_id: 5100000 + index, price: '1200.0000' })),
+                CONTEXT, ingestionPort(),
+            )
+            for (const [index, id] of ids.slice(0, 10).entries()) {
+                expect(await submitClaim(id, 800, `contact-cap-month-${index}`)).toMatchObject({ amountKopecks: 50_000 })
+            }
+            const period = await periodRow(PERIOD_KEY)
+            expect(period).toMatchObject({ limitKopecks: 500_000, reservedKopecks: 500_000 })
+            expect(remainingBudgetKopecksV1(period)).toBe(0)
+            await expect(submitClaim(ids[10], 800, 'contact-cap-month-10'))
+                .rejects.toMatchObject({ name: 'CompensationErrorV1', code: 'budget_exhausted' })
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(500_000)
+        })
     })
 })
 
@@ -625,6 +757,23 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         )
     }
 
+    // A confirmed person whose Driver row says park employee, hired this month.
+    async function seedParkEmployee(): Promise<void> {
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Driver"
+               ("id","yandexDriverId","fullName","externalParkId","externalDriverProfileId",
+                "isSelfEmployed","employmentType","yandexHireDate","updatedAt")
+             VALUES ($1,'park-profile:pilot-port-1','Pilot Port Park Employee',$2,$3,false,'park_employee',$4,NOW())`,
+            DRIVER_ID, PARK, PROFILE, MONTH_START,
+        )
+        await database.$executeRawUnsafe(
+            `INSERT INTO "Contact" ("id","displayName","mainDriverId","customFields","updatedAt")
+             VALUES ($1,'Pilot Port Person',$2,$3::jsonb,NOW())`,
+            CONTACT_ID, DRIVER_ID,
+            JSON.stringify({ driverConfirmations: [{ status: 'confirmed', representativeDriverId: DRIVER_ID }] }),
+        )
+    }
+
     async function count(table: string): Promise<number> {
         const rows = await database.$queryRawUnsafe<Array<{ count: bigint }>>(
             `SELECT count(*) AS count FROM "${table}"`)
@@ -681,7 +830,127 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         expect(after.applications[0]).toMatchObject({ status: 'submitted', externalOrderId })
     })
 
-    it('serves a last-day order through its 72 h grace after the month ended, charging the first month', async () => {
+    it('admits a park employee by Owner pilot admission for the named first month only, writing no Driver fact', async () => {
+        await seedParkEmployee()
+        expect(await compensationSectionViewV1(PROOF, port, ingestion, NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+
+        const otherMonth = withOwnerPilotAdmissionPortV1(port, [
+            { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2000-01' },
+        ])
+        expect(await compensationSectionViewV1(PROOF, otherMonth, ingestion, NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+
+        const admitted = withOwnerPilotAdmissionPortV1(port, [
+            { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: PERIOD_KEY },
+        ])
+        const section = await compensationSectionViewV1(PROOF, admitted, ingestion, NOW)
+        expect(section).toMatchObject({ available: true, firstMonthKey: PERIOD_KEY, remainingBudgetKopecks: 500_000 })
+        if (!section.available) return
+        const externalOrderId = section.orders[0].externalOrderId
+
+        // 500 RUB requested against a 335.00 order: C1 pays the order amount.
+        const created = await submitPilotApplicationV1(
+            { ...submitInput(randomUUID(), externalOrderId), claimedRubles: 500 }, admitted, ingestion, NOW)
+        expect(created).toMatchObject({ submitted: true, amountKopecks: 33_500, status: 'created' })
+        expect(await submitPilotApplicationV1(submitInput(randomUUID(), externalOrderId), admitted, ingestion, NOW))
+            .toEqual({ submitted: false, refusal: 'order_already_claimed' })
+        expect(await count('CompensationApplication')).toBe(1)
+        expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(33_500)
+
+        // The admission lives in configuration only: the stated facts are untouched.
+        expect(await database.$queryRawUnsafe(
+            `SELECT "isSelfEmployed","employmentType" FROM "Driver" WHERE "id" = $1`, DRIVER_ID))
+            .toEqual([{ isSelfEmployed: false, employmentType: 'park_employee' }])
+    })
+
+    it('on demand: the picked day of this driver is asked for, listed and claimed through C1', async () => {
+        await seedPerson()
+        // Nothing is catalogued in advance: on demand, the only list is the picked day.
+        await database.$executeRawUnsafe(`TRUNCATE TABLE "CompensationCashOrder" RESTART IDENTITY CASCADE`)
+        const dayKey = compensationBusinessDayKeyV1(ORDER_ENDED_AT)
+        const ended = ORDER_ENDED_AT.toISOString()
+        const booked = new Date(ORDER_ENDED_AT.getTime() - 20 * 60_000).toISOString()
+        const raw = (id: string, overrides: Record<string, unknown>) => ({
+            id, short_id: 1001, status: 'complete', payment_method: 'cash', price: '363.0000',
+            booked_at: booked, ended_at: ended, driver_profile: { id: PROFILE }, ...overrides,
+        })
+        const fleet = [
+            raw('d'.repeat(32), {}), // the anonymised control case: 363 RUB, cash, completed
+            raw('e'.repeat(32), { payment_method: 'cashless' }),
+            raw('f'.repeat(32), { driver_profile: { id: 'c'.repeat(32) } }),
+        ]
+        const requests: CashOrderPageRequestV1[] = []
+        const store: CashOrderIngestionStoreV1 = {
+            ...legacyPrismaCashOrderIngestionStoreV1,
+            readAuthoritySnapshot: async () => ({
+                dbNow: await legacyPrismaCashOrderIngestionStoreV1.readDatabaseNow(),
+                snapshot: {
+                    parks: [{ id: 'local-pilot', externalParkId: PARK }],
+                    links: [{
+                        linkId: 'link-pilot', localParkId: 'local-pilot', linkExternalParkId: PARK,
+                        parkExternalParkId: PARK, apiConnectionId: 'conn-pilot', apiConnectionParkId: PARK,
+                    }],
+                },
+            }),
+        }
+        const runtime = new CashOrderIngestionRuntimeV1({ mode: 'on_demand', enabledParks: [PARK], configError: null }, {
+            store,
+            loadCredentials: async () => [{ connectionId: 'conn-pilot', localParkId: 'local-pilot', parkId: PARK, clid: 'clid', apiKey: 'key' }],
+            fetchPage: async (request) => {
+                requests.push(request)
+                const day = request.driverDay
+                const orders = day ? fleet.filter((order) => order.driver_profile.id === day.externalDriverProfileId
+                    && order.status === 'complete' && order.payment_method === 'cash') : fleet
+                return { ok: true, orders: structuredClone(orders), cursor: null }
+            },
+            clock: { nowMs: () => performance.now() },
+            wallNowMs: () => Date.now(),
+            sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms).unref?.() }),
+            random: () => 0,
+            newToken: () => randomUUID(),
+            log: () => undefined,
+        })
+        const onDemand: CompensationPilotIngestionPortV1 = {
+            ...pilotIngestion(),
+            readCatalogueFacts: vi.fn(async () => ({
+                mode: 'on_demand', parkEnabled: true, dbNow: await databaseNow(),
+                lastHotSuccessAt: null, reconciliationPassStartedAt: null, reconciliationFloorBookedAt: null,
+                reconciliationCursorBookedAt: null, lastReconciliationCompletedAt: null,
+            })),
+            fetchDriverDay: vi.fn(async (input) => {
+                const request = await runtime.requestDriverDay(input)
+                if (request.status === 'not_scheduled') return { state: 'failed' as const, code: request.reason }
+                await request.completion
+                const outcome = runtime.readDriverDay(input.externalParkId, input.externalDriverProfileId, input.dayKey)?.outcome
+                return outcome === 'complete' ? { state: 'complete' as const, code: null } : { state: 'failed' as const, code: outcome ?? null }
+            }),
+        }
+        try {
+            const picker = await compensationSectionViewV1(PROOF, port, onDemand, NOW)
+            expect(picker).toMatchObject({ available: true, catalogueStatus: 'on_demand', search: null })
+            expect(requests).toHaveLength(0)
+
+            const section = await compensationSectionViewV1(PROOF, port, onDemand, NOW, { search: dayKey })
+            expect(requests).toHaveLength(1)
+            expect(requests[0].driverDay?.externalDriverProfileId).toBe(PROFILE)
+            expect(section.available && section.search).toMatchObject({ kind: 'date' })
+            if (!section.available || !section.search) return
+            expect(section.search.matches.map((order) => [order.externalOrderId, order.amountKopecks])).toEqual([['d'.repeat(32), 36_300]])
+
+            const created = await submitPilotApplicationV1(
+                { ...submitInput(randomUUID(), 'd'.repeat(32)), claimedRubles: 500, scopeKey: section.scopeKey }, port, onDemand, NOW)
+            expect(created).toMatchObject({ submitted: true, amountKopecks: 36_300, status: 'created' })
+            expect((await periodRow(PERIOD_KEY)).reservedKopecks).toBe(36_300)
+            expect(await count('CompensationCashOrder')).toBe(1)
+            expect(await submitPilotApplicationV1(submitInput(randomUUID(), 'd'.repeat(32)), port, onDemand, NOW))
+                .toEqual({ submitted: false, refusal: 'order_already_claimed' })
+        } finally {
+            await database.$executeRawUnsafe(`DELETE FROM "CompensationCashOrderIngestionCheckpoint" WHERE "externalParkId" = $1`, PARK)
+        }
+    })
+
+    it('serves every first-month order through the 72 h month-end grace, charging the first month', async () => {
         await seedPerson()
         // The person was hired in September; the real-time fixture month is
         // irrelevant here, so the hire is pinned and September is opened.
@@ -698,16 +967,17 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
             fleetOrder({ id: ordinaryOrderId, short_id: 3982096, ended_at: '2026-09-12T10:00:00.000Z' }),
         ], CONTEXT, ingestionPort())
 
-        // 2 October: the month is over; the last-day order is inside its grace.
+        // 2 October: the month is over; every order of it is inside the grace.
         const graceNow = new Date('2026-10-02T12:00:00.000Z')
         const section = await compensationSectionViewV1(PROOF, port, ingestion, graceNow)
         expect(section).toMatchObject({ available: true, firstMonthKey: '2026-09', remainingBudgetKopecks: 500_000 })
         if (!section.available) return
-        expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId])
+        expect(section.orders.map((order) => order.externalOrderId)).toEqual([lastDayOrderId, ordinaryOrderId])
 
-        // A stale last-day claim asks ingestion for a confirmation that carries
-        // the order's own completion instant, at the last moment of its window.
-        const lastMoment = new Date('2026-10-03T18:29:59.999Z')
+        // A stale claim asks ingestion for a confirmation that carries the
+        // order's own completion instant, at the last moment of the grace
+        // (3 October 23:59:59.999 Yekaterinburg).
+        const lastMoment = new Date('2026-10-03T18:59:59.999Z')
         await database.$executeRawUnsafe(
             `UPDATE "CompensationCashOrder" SET "observedAt" = $1 WHERE "externalOrderId" = $2`,
             new Date((await databaseNow()).getTime() - 3_600_001), lastDayOrderId,
@@ -733,18 +1003,19 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
         const claims = await database.$queryRawUnsafe<Array<{ submissionDeadline: Date; deadlineBasis: string; budgetPeriodKey: string }>>(
             `SELECT "submissionDeadline","deadlineBasis","budgetPeriodKey" FROM "CompensationOrderClaim"`)
         expect(claims).toHaveLength(1)
-        expect(claims[0]).toMatchObject({ deadlineBasis: 'last_day_grace', budgetPeriodKey: '2026-09' })
-        expect(new Date(claims[0].submissionDeadline).getTime()).toBe(new Date('2026-10-03T18:30:00.000Z').getTime())
+        expect(claims[0]).toMatchObject({ deadlineBasis: 'order_month_end', budgetPeriodKey: '2026-09' })
+        // 4 October 00:00 Yekaterinburg: the month's end plus 72 hours, not completion plus 72 hours.
+        expect(new Date(claims[0].submissionDeadline).getTime()).toBe(new Date('2026-10-03T19:00:00.000Z').getTime())
         expect(Number((await periodRow('2026-09')).reservedKopecks)).toBe(30_000)
 
-        // The ordinary September order closed with the month: it is not listed,
-        // so the submit refuses it before anything reaches C1.
+        // The ordinary September order is listed through the same grace; the
+        // catalogue lets it through and C1's one-PENDING rule is what answers.
         expect(await submitPilotApplicationV1(submitInput(randomUUID(), ordinaryOrderId), port, ingestion, graceNow))
-            .toEqual({ submitted: false, refusal: 'order_not_in_catalogue' })
+            .toEqual({ submitted: false, refusal: 'active_pending_exists' })
 
         // At the deadline the month is over in every sense the product has,
         // and the driver still sees what they submitted.
-        const atDeadline = await compensationSectionViewV1(PROOF, port, ingestion, new Date('2026-10-03T18:30:00.000Z'))
+        const atDeadline = await compensationSectionViewV1(PROOF, port, ingestion, new Date('2026-10-03T19:00:00.000Z'))
         expect(atDeadline).toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
         expect(atDeadline.applications).toHaveLength(1)
         expect(await count('CompensationApplication')).toBe(1)

@@ -50,62 +50,128 @@ function workerError(code, message, details = {}) {
   return error
 }
 
+// After a timeout kill, how long to wait for 'close' before settling without it.
+const KILLED_WORKER_CLOSE_GRACE_MS = 5_000
+
+// One isolated worker, settled exactly once at 'close' — the process has exited,
+// its stdio is drained and its IPC channel is closed, so any reply it sent has
+// been received — from everything observed, never from whichever of 'message'
+// and 'exit' happened to arrive first:
+//   reply ok                  -> resolve; a non-clean exit, signal or timeout after
+//                                the reply is returned as `lifecycle` evidence
+//   reply not ok              -> ANALYZER_WORKER_FAILURE
+//   no reply, timed out       -> ANALYZER_WORKER_TIMEOUT
+//   no reply, could not start -> ANALYZER_WORKER_SPAWN_FAILURE
+//   no reply, exit or signal  -> ANALYZER_WORKER_EXIT
+// Every rejection carries the worker command, exit code, signal, stdout, stderr
+// and timeout state. `options.forkWorker` replaces the fork for tests only.
 export async function analyzeJavaScriptSurfaceIsolated(surface, sourceText, options = {}) {
   const workerTimeoutMs = boundedInteger(options.workerTimeoutMs, DEFAULT_WORKER_TIMEOUT_MS, 1_000, 600_000)
+  const forkWorker = options.forkWorker ?? ((forkOptions) => fork(jsWorkerPath, [], forkOptions))
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint()
-    const child = fork(jsWorkerPath, [], {
+    const forkOptions = {
       silent: true,
       serialization: 'json',
       execArgv: process.execArgv.filter((argument) => !argument.startsWith('--input-type')),
-    })
-    const stderr = []
-    child.stderr?.on('data', (chunk) => stderr.push(String(chunk)))
-    let settled = false
+    }
+    const command = [process.execPath, ...forkOptions.execArgv, jsWorkerPath]
     const elapsedMs = () => Number(process.hrtime.bigint() - startedAt) / 1_000_000
-    const finish = (callback, value) => {
+    let child = null
+    try {
+      child = forkWorker(forkOptions)
+    } catch (error) {
+      reject(workerError(
+        'ANALYZER_WORKER_SPAWN_FAILURE',
+        `isolated analyzer worker failed for ${surface.path}: ${error?.message ?? error}`,
+        {
+          file: surface.path, pid: null, duration_ms: elapsedMs(), exit_code: null, signal: null,
+          timed_out: false, timeout_ms: null, stdout: '', stderr: '', command,
+        },
+      ))
+      return
+    }
+    const stdout = []
+    const stderr = []
+    let reply = null
+    let exit = null
+    let processError = null
+    let timedOut = false
+    let settled = false
+    let closeGrace = null
+    child.stdout?.on('data', (chunk) => stdout.push(String(chunk)))
+    child.stderr?.on('data', (chunk) => stderr.push(String(chunk)))
+    const settle = () => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
-      callback(value)
-    }
-    const timeout = setTimeout(() => {
-      const durationMs = elapsedMs()
-      child.kill('SIGKILL')
-      finish(reject, workerError(
-        'ANALYZER_WORKER_TIMEOUT',
-        `isolated analyzer worker timed out after ${workerTimeoutMs}ms for ${surface.path}`,
-        { file: surface.path, pid: child.pid, duration_ms: durationMs, timeout_ms: workerTimeoutMs },
-      ))
-    }, workerTimeoutMs)
-    child.once('error', (error) => {
-      finish(reject, workerError(
-        'ANALYZER_WORKER_SPAWN_FAILURE',
-        `isolated analyzer worker failed for ${surface.path}: ${error.message}`,
-        { file: surface.path, pid: child.pid, duration_ms: elapsedMs() },
-      ))
-    })
-    child.once('message', (message) => {
-      if (!message?.ok) {
-        finish(reject, workerError(
-          'ANALYZER_WORKER_FAILURE',
-          `isolated analyzer worker failed for ${surface.path}: ${message?.error ?? 'unknown error'}`,
-          { file: surface.path, pid: child.pid, duration_ms: elapsedMs() },
-        ))
-        return
-      }
-      finish(resolve, {
-        ...message,
+      clearTimeout(closeGrace)
+      const details = {
+        file: surface.path,
         pid: child.pid,
         duration_ms: elapsedMs(),
-      })
+        exit_code: exit?.code ?? null,
+        signal: exit?.signal ?? null,
+        timed_out: timedOut,
+        timeout_ms: timedOut ? workerTimeoutMs : null,
+        stdout: stdout.join(''),
+        stderr: stderr.join(''),
+        command,
+      }
+      if (reply?.ok) {
+        const clean = !timedOut && !processError && details.exit_code === 0 && details.signal === null
+        resolve({
+          ...reply,
+          pid: child.pid,
+          duration_ms: details.duration_ms,
+          lifecycle: clean ? null : { ...details, error: processError?.message ?? null },
+        })
+      } else if (reply) {
+        reject(workerError(
+          'ANALYZER_WORKER_FAILURE',
+          `isolated analyzer worker failed for ${surface.path}: ${reply.error ?? 'unknown error'}`,
+          details,
+        ))
+      } else if (timedOut) {
+        reject(workerError(
+          'ANALYZER_WORKER_TIMEOUT',
+          `isolated analyzer worker timed out after ${workerTimeoutMs}ms for ${surface.path}`,
+          details,
+        ))
+      } else if (processError && !exit) {
+        reject(workerError(
+          'ANALYZER_WORKER_SPAWN_FAILURE',
+          `isolated analyzer worker failed for ${surface.path}: ${processError.message}`,
+          details,
+        ))
+      } else {
+        reject(workerError(
+          'ANALYZER_WORKER_EXIT',
+          `isolated analyzer worker exited before returning for ${surface.path} (code=${details.exit_code}, signal=${details.signal}): ${details.stderr.trim()}`,
+          details,
+        ))
+      }
+    }
+    const timeout = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+      closeGrace = setTimeout(settle, KILLED_WORKER_CLOSE_GRACE_MS)
+    }, workerTimeoutMs)
+    child.on('message', (message) => {
+      if (reply === null) reply = message ?? { ok: false, error: 'empty reply' }
     })
     child.once('exit', (code, signal) => {
-      if (!settled) finish(reject, workerError(
-        'ANALYZER_WORKER_EXIT',
-        `isolated analyzer worker exited before returning for ${surface.path} (code=${code}, signal=${signal}): ${stderr.join('').trim()}`,
-        { file: surface.path, pid: child.pid, duration_ms: elapsedMs(), exit_code: code, signal },
-      ))
+      exit = { code, signal }
+    })
+    // 'on', not 'once': a spawn error can be followed by a send error, and an
+    // unhandled second 'error' would crash the scan itself.
+    child.on('error', (error) => {
+      processError ??= error
+      if (child.pid === undefined) settle()
+    })
+    child.once('close', (code, signal) => {
+      exit ??= { code, signal }
+      settle()
     })
     options.onStarted?.(child.pid)
     child.send({
@@ -1008,6 +1074,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
     let discovered = []
     const parseFindings = []
     let workerPid = null
+    let lifecycleAnomaly = null
     if (JS_FAMILY.has(surface.extension)) {
       const analysis = await analyzeJavaScriptSurfaceIsolated(surface, decoded.text, {
         taskId,
@@ -1020,6 +1087,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
         },
       })
       workerPid = analysis.pid
+      lifecycleAnomaly = analysis.lifecycle
       discovered = analysis.sites
       for (const diagnostic of analysis.diagnostics) {
         parseFindings.push({
@@ -1075,6 +1143,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
       worker_pid: workerPid,
       duration_ms: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
       failure: null,
+      lifecycle_anomaly: lifecycleAnomaly,
     }
   } catch (error) {
     return {
@@ -1090,7 +1159,12 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
         timeout_ms: error?.timeout_ms ?? null,
         exit_code: error?.exit_code ?? null,
         signal: error?.signal ?? null,
+        timed_out: error?.timed_out ?? null,
+        stdout: error?.stdout ?? null,
+        stderr: error?.stderr ?? null,
+        command: error?.command ?? null,
       },
+      lifecycle_anomaly: null,
     }
   }
 }
@@ -1147,6 +1221,16 @@ async function analyzeSurfacesBounded(surfaces, repositoryRoot, architecture, op
       if (result.failure) {
         workerFailures += 1
         if (result.failure.code === 'ANALYZER_WORKER_TIMEOUT') workerTimeouts += 1
+      }
+      // A complete reply whose worker then ended abnormally: the findings are kept,
+      // the lifecycle is reported as evidence.
+      if (result.lifecycle_anomaly) {
+        await emit('surface_lifecycle_anomaly', {
+          task_id: taskId,
+          file: surface.path,
+          worker_pid: result.worker_pid,
+          lifecycle: result.lifecycle_anomaly,
+        })
       }
       if (result.failure || completed % execution.progressEvery === 0 || completed === surfaces.length) {
         await emit(result.failure ? 'surface_failed' : 'progress', {
@@ -1299,7 +1383,7 @@ async function main() {
   if (progressJsonl) await writeFile(progressJsonl, '')
   const onProgress = async (event) => {
     const line = `${JSON.stringify(event)}\n`
-    if (progress) process.stderr.write(`ANALYZER_PROGRESS ${line}`)
+    if (progress || event.event === 'surface_lifecycle_anomaly') process.stderr.write(`ANALYZER_PROGRESS ${line}`)
     if (progressJsonl) await appendFile(progressJsonl, line)
   }
   const result = await analyzeRepository(repositoryRoot, {

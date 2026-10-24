@@ -251,6 +251,33 @@ describe('the provider page fetcher', () => {
         })
     })
 
+    it('asks for one driver\'s day: profile, ended_at window, completed cash only, and no booked_at', async () => {
+        const stub = stubFetch(async () => new Response(JSON.stringify({ orders: [], cursor: '' }), { status: 200 }))
+        await createYandexCashOrderPageFetcherV1(stub.impl)({
+            ...request,
+            cursor: null,
+            driverDay: {
+                externalDriverProfileId: 'b'.repeat(32),
+                endedFrom: new Date('2026-10-20T19:00:00.000Z'),
+                endedTo: new Date('2026-10-21T19:00:00.000Z'),
+            },
+        })
+        expect(JSON.parse(String(stub.calls[0].init.body))).toEqual({
+            query: {
+                park: {
+                    id: 'ext-yoko',
+                    driver_profile: { id: 'b'.repeat(32) },
+                    order: {
+                        ended_at: { from: '2026-10-20T19:00:00.000Z', to: '2026-10-21T18:59:59.999Z' },
+                        statuses: ['complete'],
+                        payment_methods: ['cash'],
+                    },
+                },
+            },
+            limit: 500,
+        })
+    })
+
     it('reads a continuation cursor', async () => {
         const stub = stubFetch(async () => new Response(JSON.stringify({ orders: [{ id: 'o1' }], cursor: 'next' }), { status: 200 }))
         expect(await createYandexCashOrderPageFetcherV1(stub.impl)(request))

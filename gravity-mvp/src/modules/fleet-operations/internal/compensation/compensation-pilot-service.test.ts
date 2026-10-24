@@ -7,6 +7,7 @@ import {
     requestPilotRefreshV1,
     resolvePilotIdentityV1,
     submitPilotApplicationV1,
+    withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
     type CompensationPilotPortV1,
     type PilotDriverFactsV1,
@@ -193,12 +194,19 @@ describe('submitting from the bot', () => {
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 
-    it('rejects above one thousand rubles without touching C1', async () => {
+    it('rejects above the monetary core\'s request bound without touching C1', async () => {
         const p = port()
-        const outcome = await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 1001 }, p, ingestion(), NOW)
+        const outcome = await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 100_001 }, p, ingestion(), NOW)
 
         expect(outcome).toEqual({ submitted: false, refusal: 'claim_above_pilot_cap' })
         expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('hands a request above the 500 RUB cap to C1 unchanged, which pays the cap', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 800 }, p, ingestion(), NOW))
+            .toMatchObject({ submitted: true })
+        expect(p.submitApplication).toHaveBeenCalledWith(expect.objectContaining({ claimedRubles: 800 }))
     })
 
     it('refuses without support confirmation or an attachment', async () => {
@@ -578,7 +586,7 @@ describe('refreshing the selected park', () => {
     })
 })
 
-describe('a last-day order after the first month has ended', () => {
+describe('the first month\'s orders after the month has ended: the month-end grace', () => {
     /** 30 September 23:30 Yekaterinburg: the last calendar day of the hire month. */
     const LAST_DAY_ORDER: PilotCatalogueOrderV1 = {
         ...ORDER,
@@ -588,21 +596,24 @@ describe('a last-day order after the first month has ended', () => {
         endedAt: new Date('2026-09-30T18:30:00.000Z'),
         providerBookedAt: new Date('2026-09-30T18:00:00.000Z'),
     }
-    /** 2 October: the month is over, and the last-day order's own window is still open. */
+    /** 2 October: the month is over, and its orders' shared window is still open. */
     const GRACE_NOW = new Date('2026-10-02T12:00:00.000Z')
     const GRACE_DEADLINE = compensationSubmissionWindowV1(LAST_DAY_ORDER.endedAt).submissionDeadline
     const SUBMIT_LAST_DAY = { ...SUBMIT, externalOrderId: LAST_DAY_ORDER.externalOrderId }
 
-    it('is bounded by the deadline the monetary core stores: completion plus 72 hours', () => {
-        expect(GRACE_DEADLINE).toEqual(new Date('2026-10-03T18:30:00.000Z'))
+    it('is bounded by the deadline the monetary core stores: the month\'s end plus 72 hours, for every order', () => {
+        // 4 October 00:00 Yekaterinburg, the same for the last-day and the mid-month order.
+        expect(GRACE_DEADLINE).toEqual(new Date('2026-10-03T19:00:00.000Z'))
+        expect(compensationSubmissionWindowV1(ORDER.endedAt).submissionDeadline).toEqual(GRACE_DEADLINE)
     })
 
-    it('lists the last-day order through its grace and hides the month\'s ordinary orders', async () => {
+    it('lists every order of the first month through the grace, newest first', async () => {
         const p = port({ findCashOrders: vi.fn(async () => [ORDER, LAST_DAY_ORDER]) })
         const view = await compensationSectionViewV1(PROOF, p, ingestion(), GRACE_NOW)
         expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09', remainingBudgetKopecks: 500_000 })
         if (!view.available) return
-        expect(view.orders.map((order) => order.externalOrderId)).toEqual([LAST_DAY_ORDER.externalOrderId])
+        expect(view.orders.map((order) => order.externalOrderId))
+            .toEqual([LAST_DAY_ORDER.externalOrderId, ORDER.externalOrderId])
         // The period it charges is still the order's month, read by its key.
         expect(p.findBudgetPeriod).toHaveBeenCalledWith('2026-09')
     })
@@ -664,15 +675,22 @@ describe('a last-day order after the first month has ended', () => {
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 
-    it('grants no grace to the month itself: ordinary orders close with the month', async () => {
-        const p = port({ findCashOrders: vi.fn(async () => [ORDER]) })
-        for (const now of [new Date('2026-09-30T19:00:00.000Z'), GRACE_NOW]) {
-            expect(await compensationSectionViewV1(PROOF, p, ingestion(), now))
+    it('gives a mid-month order the same grace: claimable after the month ends, refused from the deadline on', async () => {
+        const open = port({ findCashOrders: vi.fn(async () => [ORDER]) })
+        for (const now of [new Date('2026-09-30T19:00:00.000Z'), GRACE_NOW, new Date(GRACE_DEADLINE.getTime() - 1)]) {
+            expect(await compensationSectionViewV1(PROOF, open, ingestion(), now))
+                .toMatchObject({ available: true, firstMonthKey: '2026-09' })
+            expect(await submitPilotApplicationV1(SUBMIT, open, ingestion(), now))
+                .toMatchObject({ submitted: true, status: 'created' })
+        }
+        const closed = port({ findCashOrders: vi.fn(async () => [ORDER]) })
+        for (const now of [GRACE_DEADLINE, new Date(GRACE_DEADLINE.getTime() + 1)]) {
+            expect(await compensationSectionViewV1(PROOF, closed, ingestion(), now))
                 .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
-            expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), now))
+            expect(await submitPilotApplicationV1(SUBMIT, closed, ingestion(), now))
                 .toEqual({ submitted: false, refusal: 'outside_first_calendar_month' })
         }
-        expect(p.submitApplication).not.toHaveBeenCalled()
+        expect(closed.submitApplication).not.toHaveBeenCalled()
     })
 
     it('keeps the facts gates ahead of the grace: a non-SMZ driver gets nothing from a last-day order', async () => {
@@ -706,6 +724,152 @@ describe('a last-day order after the first month has ended', () => {
         expect(i.requestOrderConfirmation).toHaveBeenCalledWith(expect.objectContaining({
             externalParkId: PARK, dayKey: '2026-09-30', externalOrderId: LAST_DAY_ORDER.externalOrderId,
         }))
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+})
+
+describe('Owner pilot admission on the pilot port', () => {
+    const PARK_EMPLOYEE: PilotDriverFactsV1 = {
+        ...ELIGIBLE_DRIVER,
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: new Date('2026-09-02T06:00:00.000Z') },
+    }
+    const ADMISSION = { externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-09' }
+
+    it('is the same port when nothing is admitted', () => {
+        const p = port()
+        expect(withOwnerPilotAdmissionPortV1(p, [])).toBe(p)
+    })
+
+    it('lists and submits for an admitted park employee, through C1 unchanged', async () => {
+        const p = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        const admitted = withOwnerPilotAdmissionPortV1(p, [ADMISSION])
+        const view = await compensationSectionViewV1(PROOF, admitted, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        const result = await submitPilotApplicationV1(SUBMIT, admitted, ingestion(), NOW)
+        expect(result).toMatchObject({ submitted: true, applicationId: 'app-1' })
+        expect(p.submitApplication).toHaveBeenCalledTimes(1)
+    })
+
+    it('refuses as before when the admission names another profile or month', async () => {
+        const p = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        for (const admission of [{ ...ADMISSION, externalDriverProfileId: 'd'.repeat(32) }, { ...ADMISSION, monthKey: '2026-10' }]) {
+            const view = await compensationSectionViewV1(PROOF, withOwnerPilotAdmissionPortV1(p, [admission]), ingestion(), NOW)
+            expect(view).toMatchObject({ available: false, reason: 'not_self_employed' })
+        }
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('changes only the facts read: every other port method is the original', () => {
+        const p = port()
+        const admitted = withOwnerPilotAdmissionPortV1(p, [ADMISSION])
+        for (const name of ['confirmMainDriver', 'resolveContactLineage', 'findCashOrders', 'findBudgetPeriod',
+            'findClaimedOrderIds', 'findDriverApplications', 'submitApplication'] as const) {
+            expect(admitted[name]).toBe(p[name])
+        }
+        expect(admitted.findDriverFacts).not.toBe(p.findDriverFacts)
+    })
+})
+
+describe('on demand: the driver picks a day and only that driver\'s day is asked for', () => {
+    const ON_DEMAND = { ...READY_FACTS, mode: 'on_demand' }
+    const onDemand = (fetch: CompensationPilotIngestionPortV1['fetchDriverDay'] = vi.fn(async () => ({ state: 'complete' as const, code: null }))) =>
+        ingestion({ readCatalogueFacts: vi.fn(async () => ON_DEMAND), fetchDriverDay: fetch })
+    const PARK_EMPLOYEE: PilotDriverFactsV1 = {
+        ...ELIGIBLE_DRIVER,
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: new Date('2026-09-02T06:00:00.000Z') },
+    }
+
+    it('shows the date picker state without asking the provider anything', async () => {
+        const i = onDemand()
+        const view = await compensationSectionViewV1(PROOF, port(), i, NOW)
+        expect(view).toMatchObject({ available: true, catalogueStatus: 'on_demand', search: null })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+    })
+
+    it('asks for the proven park, the proven profile and the picked day, and lists that day only', async () => {
+        const i = onDemand()
+        const other = { ...ORDER, id: 'row-2', externalOrderId: 'c'.repeat(32), endedAt: new Date('2026-09-14T10:00:00.000Z') }
+        const view = await compensationSectionViewV1(PROOF, port({ findCashOrders: vi.fn(async () => [ORDER, other]) }), i, NOW, { search: '2026-09-12' })
+        expect(i.fetchDriverDay).toHaveBeenCalledTimes(1)
+        expect(i.fetchDriverDay).toHaveBeenCalledWith({ externalParkId: PARK, externalDriverProfileId: PROFILE, dayKey: '2026-09-12' })
+        expect(view.available && view.search).toMatchObject({ query: '2026-09-12', kind: 'date', truncated: false })
+        expect(view.available && view.search?.matches.map((order) => order.externalOrderId)).toEqual([ORDER.externalOrderId])
+    })
+
+    it('answers an empty provider day as no orders, and a failed one as unavailable, never as no orders', async () => {
+        const empty = await compensationSectionViewV1(PROOF, port(), onDemand(), NOW, { search: '2026-09-13' })
+        expect(empty.available && empty.search).toMatchObject({ kind: 'date', matches: [] })
+        const failed = await compensationSectionViewV1(PROOF, port(), onDemand(vi.fn(async () => ({ state: 'failed' as const, code: 'provider_rate_limited' }))), NOW, { search: '2026-09-13' })
+        expect(failed.available && failed.search).toMatchObject({ kind: 'date_unavailable', matches: [] })
+        const running = await compensationSectionViewV1(PROOF, port(), onDemand(vi.fn(async () => ({ state: 'running' as const, code: null }))), NOW, { search: '2026-09-13' })
+        expect(running.available && running.search).toMatchObject({ kind: 'date_checking' })
+        const absent = await compensationSectionViewV1(PROOF, port(), ingestion({ readCatalogueFacts: vi.fn(async () => ON_DEMAND) }), NOW, { search: '2026-09-13' })
+        expect(absent.available && absent.search).toMatchObject({ kind: 'date_unavailable' })
+    })
+
+    it('never asks the provider for a day the driver cannot claim', async () => {
+        const i = onDemand()
+        for (const day of ['2026-09-21', '2026-08-31']) {
+            const view = await compensationSectionViewV1(PROOF, port(), i, NOW, { search: day })
+            expect(view.available && view.search).toMatchObject({ kind: 'date_not_allowed', matches: [] })
+        }
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+    })
+
+    it('never asks the provider for an ineligible driver, an unproven person or another park', async () => {
+        const i = onDemand()
+        expect(await compensationSectionViewV1(PROOF, port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) }), i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(await compensationSectionViewV1(PROOF, port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }), i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'identity_not_proven' })
+        expect(await compensationSectionViewV1({ ...PROOF, selectedExternalParkId: 'park-2' }, port(), i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'selected_park_profile_unproven' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+    })
+
+    it('serves an Owner-admitted park employee for the admitted month, and asks nothing without the admission', async () => {
+        const i = onDemand()
+        const parkEmployee = port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) })
+        expect(await compensationSectionViewV1(PROOF, parkEmployee, i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+
+        const otherMonth = withOwnerPilotAdmissionPortV1(parkEmployee, [{ externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-10' }])
+        expect(await compensationSectionViewV1(PROOF, otherMonth, i, NOW, { search: '2026-09-12' }))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+
+        const admitted = withOwnerPilotAdmissionPortV1(parkEmployee, [{ externalParkId: PARK, externalDriverProfileId: PROFILE, monthKey: '2026-09' }])
+        const view = await compensationSectionViewV1(PROOF, admitted, i, NOW, { search: '2026-09-12' })
+        expect(view.available && view.search).toMatchObject({ kind: 'date' })
+        expect(i.fetchDriverDay).toHaveBeenCalledTimes(1)
+        expect(i.fetchDriverDay).toHaveBeenCalledWith({ externalParkId: PARK, externalDriverProfileId: PROFILE, dayKey: '2026-09-12' })
+    })
+
+    it('treats a day query outside on-demand mode as an ordinary unsupported search', async () => {
+        const i = ingestion({ fetchDriverDay: vi.fn(async () => ({ state: 'complete' as const, code: null })) })
+        const view = await compensationSectionViewV1(PROOF, port(), i, NOW, { search: '2026-09-12' })
+        expect(view.available && view.search).toMatchObject({ kind: 'unsupported' })
+        expect(i.fetchDriverDay).not.toHaveBeenCalled()
+    })
+
+    it('confirms an older order through its own driver day, carrying the proven profile', async () => {
+        const i = onDemand()
+        const stale = { ...ORDER, observedAt: new Date(DB_NOW.getTime() - 45 * MINUTE - 1) }
+        const outcome = await checkPilotOrderV1(
+            { ...PROOF, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false },
+            port({ findCashOrders: vi.fn(async () => [stale]) }), i, NOW,
+        )
+        expect(outcome.state).toBe('checking')
+        expect(i.requestOrderConfirmation).toHaveBeenCalledWith(expect.objectContaining({
+            externalParkId: PARK, dayKey: '2026-09-12', externalDriverProfileId: PROFILE,
+        }))
+    })
+
+    it('keeps every submission check: a stale order is re-confirmed, not submitted', async () => {
+        const p = port({ findCashOrders: vi.fn(async () => [{ ...ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }]) })
+        const result = await submitPilotApplicationV1(SUBMIT, p, onDemand(), NOW)
+        expect(result).toEqual({ submitted: false, refusal: 'order_confirmation_pending' })
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
 })

@@ -270,16 +270,23 @@ proof('compensation monetary core on real PostgreSQL', () => {
         expect((await periodRow('2026-09')).reservedKopecks).toBe(0)
     })
 
-    it('refuses an individually expired order even though its period still accepts work', async () => {
-        // Mid-month August order: its deadline was the end of August.
+    it('keeps a mid-month August order claimable on 2 September, against August, and refuses it from 4 September 00:00', async () => {
+        // Mid-month August order: its deadline is the end of August plus 72 hours.
+        const midMonth = { endedAt: new Date('2026-08-10T10:00:00.000Z'), verifiedAt: new Date('2026-08-10T10:05:00.000Z') }
+        const inGrace = await submitCompensationApplicationV1(submitCommand({
+            order: order(midMonth),
+            submittedAt: new Date('2026-09-02T09:00:00.000Z'),
+        }))
+        expect(inGrace).toMatchObject({ status: 'created', budgetPeriodKey: '2026-08' })
         await expectCode(
             submitCompensationApplicationV1(submitCommand({
-                order: order({ endedAt: new Date('2026-08-10T10:00:00.000Z'), verifiedAt: new Date('2026-08-10T10:05:00.000Z') }),
-                submittedAt: new Date('2026-09-02T09:00:00.000Z'),
+                order: order(midMonth),
+                // 4 September 00:00 Yekaterinburg.
+                submittedAt: new Date('2026-09-03T19:00:00.000Z'),
             })),
             'submission_window_closed',
         )
-        expect((await periodRow('2026-08')).reservedKopecks).toBe(0)
+        expect((await periodRow('2026-08')).reservedKopecks).toBe(inGrace.amountKopecks)
     })
 
     it('replays the same logical submit and rejects a reused key with a different intent', async () => {
@@ -1000,6 +1007,173 @@ proof('compensation monetary core on real PostgreSQL', () => {
                 { intendedBusinessDay: '2026-09-10', state: 'finalized' },
                 { intendedBusinessDay: '2026-09-11', state: 'finalized' },
             ])
+        })
+    })
+
+    describe('the 72 hours after a month ends (Owner rule of 2026-10-20)', () => {
+        const OCTOBER = { year: 2026, month: 10 }
+        const NOVEMBER = { year: 2026, month: 11 }
+        /** 4 November 00:00 Yekaterinburg: the exclusive deadline of every October order. */
+        const OCTOBER_CLOSES = new Date('2026-11-03T19:00:00.000Z')
+        const OCTOBER_ORDERS = [
+            new Date('2026-10-01T05:00:00.000Z'), // 1 October 10:00 Yekaterinburg
+            new Date('2026-10-15T10:00:00.000Z'), // 15 October 15:00
+            new Date('2026-10-30T07:00:00.000Z'), // 30 October 12:00
+            new Date('2026-10-31T18:30:00.000Z'), // 31 October 23:30
+        ]
+        const IN_GRACE = [
+            new Date('2026-11-01T07:00:00.000Z'), // 1 November 12:00
+            new Date('2026-11-02T07:00:00.000Z'), // 2 November 12:00
+            new Date('2026-11-03T18:59:59.000Z'), // 3 November 23:59:59
+        ]
+        const octoberOrder = (endedAt: Date) => order({ endedAt, verifiedAt: new Date(endedAt.getTime() + 5 * 60_000) })
+        const claimsWithDeadline = (deadline: Date, periodKey: string) => countRows(
+            `SELECT COUNT(*)::bigint AS count FROM "CompensationOrderClaim"
+             WHERE "submissionDeadline" = $1 AND "deadlineBasis" = 'order_month_end' AND "budgetPeriodKey" = $2`,
+            deadline, periodKey,
+        )
+
+        beforeEach(async () => {
+            await openPeriod(NOVEMBER)
+        })
+
+        it('accepts an order of 1, 15, 30 or 31 October on 1, 2 and 3 November up to 23:59:59, against October', async () => {
+            await openPeriod(OCTOBER)
+            for (const endedAt of OCTOBER_ORDERS) {
+                for (const submittedAt of IN_GRACE) {
+                    expect(await submitCompensationApplicationV1(submitCommand({ order: octoberOrder(endedAt), submittedAt })))
+                        .toMatchObject({ status: 'created', budgetPeriodKey: '2026-10', amountKopecks: 30_600 })
+                }
+            }
+            expect(await claimsWithDeadline(OCTOBER_CLOSES, '2026-10')).toBe(12)
+            expect((await periodRow('2026-10')).reservedKopecks).toBe(12 * 30_600)
+            expect((await periodRow('2026-11')).reservedKopecks).toBe(0)
+        })
+
+        it('refuses every October order from 4 November 00:00 Yekaterinburg, writing nothing', async () => {
+            await openPeriod(OCTOBER)
+            for (const endedAt of OCTOBER_ORDERS) {
+                for (const submittedAt of [OCTOBER_CLOSES, new Date(OCTOBER_CLOSES.getTime() + 1_000)]) {
+                    await expectCode(
+                        submitCompensationApplicationV1(submitCommand({ order: octoberOrder(endedAt), submittedAt })),
+                        'submission_window_closed',
+                    )
+                }
+            }
+            expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationApplication"`)).toBe(0)
+            expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationOrderClaim"`)).toBe(0)
+            expect((await periodRow('2026-10')).reservedKopecks).toBe(0)
+        })
+
+        it('no longer closes a last-day order 72 hours after it completed', async () => {
+            await openPeriod(OCTOBER)
+            // 31 October 01:00 Yekaterinburg, submitted 3 November 12:00: the retired
+            // rule had closed this order at 3 November 01:00.
+            expect(await submitCompensationApplicationV1(submitCommand({
+                order: octoberOrder(new Date('2026-10-30T20:00:00.000Z')),
+                submittedAt: new Date('2026-11-03T07:00:00.000Z'),
+            }))).toMatchObject({ status: 'created', budgetPeriodKey: '2026-10' })
+            expect(await claimsWithDeadline(OCTOBER_CLOSES, '2026-10')).toBe(1)
+        })
+
+        it('refuses an October claim the October budget cannot cover, while November still accepts its own', async () => {
+            await openPeriod(OCTOBER, 40_000)
+            const submittedAt = IN_GRACE[1]
+            await submitCompensationApplicationV1(submitCommand({ order: octoberOrder(OCTOBER_ORDERS[1]), submittedAt }))
+            await expectCode(
+                submitCompensationApplicationV1(submitCommand({ order: octoberOrder(OCTOBER_ORDERS[2]), submittedAt })),
+                'budget_exhausted',
+            )
+            expect((await periodRow('2026-10')).reservedKopecks).toBe(30_600)
+            const november = await submitCompensationApplicationV1(submitCommand({
+                // 2 November 10:00 Yekaterinburg.
+                order: order({ endedAt: new Date('2026-11-02T05:00:00.000Z'), verifiedAt: new Date('2026-11-02T05:05:00.000Z') }),
+                submittedAt,
+            }))
+            expect(november.budgetPeriodKey).toBe('2026-11')
+            expect((await periodRow('2026-11')).reservedKopecks).toBe(30_600)
+            expect((await periodRow('2026-10')).reservedKopecks).toBe(30_600)
+        })
+
+        it('charges October and November claims to their own months while both periods are open', async () => {
+            await openPeriod(OCTOBER)
+            const submittedAt = IN_GRACE[1]
+            const october = await submitCompensationApplicationV1(submitCommand({ order: octoberOrder(OCTOBER_ORDERS[3]), submittedAt }))
+            const november = await submitCompensationApplicationV1(submitCommand({
+                // 1 November 10:00 Yekaterinburg.
+                order: order({ endedAt: new Date('2026-11-01T05:00:00.000Z'), verifiedAt: new Date('2026-11-01T05:05:00.000Z') }),
+                submittedAt,
+            }))
+            expect(october.budgetPeriodKey).toBe('2026-10')
+            expect(november.budgetPeriodKey).toBe('2026-11')
+            expect(await periodRow('2026-10')).toMatchObject({ reservedKopecks: 30_600, state: 'open' })
+            expect(await periodRow('2026-11')).toMatchObject({ reservedKopecks: 30_600, state: 'open' })
+            expect(await claimsWithDeadline(OCTOBER_CLOSES, '2026-10')).toBe(1)
+            // November's own orders run until 4 December 00:00 Yekaterinburg.
+            expect(await claimsWithDeadline(new Date('2026-12-03T19:00:00.000Z'), '2026-11')).toBe(1)
+        })
+
+        it('answers a timely submit retried after the deadline as a replay, with no second row and no second reservation', async () => {
+            await openPeriod(OCTOBER)
+            const command = submitCommand({ order: octoberOrder(OCTOBER_ORDERS[1]), submittedAt: IN_GRACE[2] })
+            const first = await submitCompensationApplicationV1(command)
+            const retried = await submitCompensationApplicationV1({ ...command, submittedAt: new Date(OCTOBER_CLOSES.getTime() + 5_000) })
+            expect(retried).toMatchObject({ status: 'replayed', applicationId: first.applicationId, budgetPeriodKey: '2026-10' })
+            expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationApplication"`)).toBe(1)
+            expect((await periodRow('2026-10')).reservedKopecks).toBe(first.amountKopecks)
+        })
+
+        it('takes a second attempt after rejection only before the claim\'s stored deadline', async () => {
+            await openPeriod(OCTOBER)
+            const person = evidence()
+            const shared = octoberOrder(OCTOBER_ORDERS[1])
+            const first = await submitCompensationApplicationV1(submitCommand({ person, order: shared, submittedAt: IN_GRACE[0] }))
+            await rejectApplication(first.applicationId)
+            await expectCode(
+                submitCompensationApplicationV1(submitCommand({ person, order: shared, submittedAt: OCTOBER_CLOSES })),
+                'submission_window_closed',
+            )
+            const second = await submitCompensationApplicationV1(submitCommand({ person, order: shared, submittedAt: IN_GRACE[2] }))
+            expect(second.attemptNo).toBe(2)
+            expect(await claimsWithDeadline(OCTOBER_CLOSES, '2026-10')).toBe(1)
+        })
+
+        it('lets the manager approve, pay or reject a timely claim after its month stopped accepting new ones', async () => {
+            // September stops accepting new claims at 4 October 00:00 Yekaterinburg;
+            // the manager below works on the real database clock, after it.
+            const septemberCloses = compensationPeriodSubmissionClosesAtV1(SEPTEMBER)
+            expect(septemberCloses.toISOString()).toBe('2026-10-03T19:00:00.000Z')
+            expect(Date.now()).toBeGreaterThan(septemberCloses.getTime())
+            const lastMoment = new Date(septemberCloses.getTime() - 1_000)
+            const toPay = await submitCompensationApplicationV1(submitCommand({
+                order: order({ endedAt: new Date('2026-09-15T10:00:00.000Z'), verifiedAt: new Date('2026-09-15T10:05:00.000Z') }),
+                submittedAt: lastMoment,
+            }))
+            const toReject = await submitCompensationApplicationV1(submitCommand({
+                order: order({ endedAt: new Date('2026-09-16T10:00:00.000Z'), verifiedAt: new Date('2026-09-16T10:05:00.000Z') }),
+                submittedAt: lastMoment,
+            }))
+            expect((await periodRow('2026-09')).reservedKopecks).toBe(2 * 30_600)
+            // A new September claim made now is refused.
+            await expectCode(
+                submitCompensationApplicationV1(submitCommand({
+                    order: order({ endedAt: new Date('2026-09-17T10:00:00.000Z'), verifiedAt: new Date('2026-09-17T10:05:00.000Z') }),
+                    submittedAt: at(0),
+                })),
+                'submission_window_closed',
+            )
+
+            const started = await startPayout(toPay.applicationId)
+            expect((await finalizePayout(started)).status).toBe('settled')
+            expect((await rejectApplication(toReject.applicationId)).status).toBe('rejected')
+
+            expect(await periodRow('2026-09')).toMatchObject({ reservedKopecks: 0, settledKopecks: 30_600, state: 'open' })
+            expect((await periodRow('2026-11')).reservedKopecks).toBe(0)
+            expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationSettlement"`)).toBe(1)
+            // A repeated payout attempt settles nothing more.
+            expect((await finalizePayout(started)).status).toBe('replayed')
+            expect(await countRows(`SELECT COUNT(*)::bigint AS count FROM "CompensationSettlement"`)).toBe(1)
+            expect((await periodRow('2026-09')).settledKopecks).toBe(30_600)
         })
     })
 })

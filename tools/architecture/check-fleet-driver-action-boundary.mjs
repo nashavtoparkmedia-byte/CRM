@@ -20,7 +20,14 @@ check('missing telegram guard retained', consumer.includes("if (!telegramId)") &
 check('driver resolution retained', consumer.indexOf('prisma.driverTelegram.findFirst') < consumer.indexOf('prisma.driver.findUnique') && consumer.includes('where: { yandexDriverId: mapping.driverId }'), 'driver resolution drift')
 check('missing Yandex id best effort retained', consumer.includes("status: 'ESCALATED_TO_MANAGER'") && consumer.includes("errorMessage: 'driver has no yandexDriverId'") && consumer.indexOf('recordDriverActionV1({') < consumer.indexOf("error: 'NO_YANDEX_ID'"), 'escalation drift')
 check('profile swap precedes scraper call', consumer.indexOf('profile swap detected') < consumer.indexOf('fetch(`${SCRAPER_URL}/api/driver-actions`'), 'swap guard order drift')
-check('scraper request mapping retained', ['kind,', 'driverYandexId: effectiveYandexId', 'parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID', "reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null)"].every(value => consumer.includes(value)), 'scraper mapping drift')
+check('scraper request mapping retained', ['kind,', 'driverYandexId: effectiveYandexId', 'parkId: target.parkId', "reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null)"].every(value => consumer.includes(value)), 'scraper mapping drift')
+// The scraper park is scoped to the driver-action handler: the same target
+// resolution is called by other handlers, so an unscoped check would prove nothing.
+const actionStart = consumer.indexOf('async function handleDriverAction(')
+const actionNext = consumer.indexOf('\nasync function ', actionStart + 1)
+const driverAction = actionStart < 0 ? '' : consumer.slice(actionStart, actionNext < 0 ? undefined : actionNext)
+const targetResolution = 'const target = driverYandexTarget(driver, mapping.activeParkId)'
+check('scraper park is the proven profile park', driverAction.includes(targetResolution) && driverAction.indexOf(targetResolution) < driverAction.indexOf('fetch(`${SCRAPER_URL}/api/driver-actions`') && driverAction.includes('parkId: target.parkId') && !consumer.includes('DRIVER_ACTIONS_PARK_ID'), 'scraper park source drift')
 check('scraper failure audit retained', consumer.includes("status: 'FAILED'") && consumer.includes('errorMessage: `scraper unreachable: ${e.message}`') && consumer.includes("error: 'SCRAPER_DOWN'"), 'failure mapping drift')
 check('pending audit and response retained', consumer.includes("status: 'PENDING'") && consumer.includes('scraperTaskId,') && consumer.includes('actionId: action.id') && consumer.includes('taskId: scraperTaskId'), 'pending mapping drift')
 // The poll handler is scoped before assertion because the bot authority guard

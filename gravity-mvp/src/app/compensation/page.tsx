@@ -47,14 +47,20 @@ export default async function CompensationPage({
 
             <CompensationBudgetPanel budget={board.budget} />
             <CompensationFilters
-                periodKey={board.periodKey}
-                state={board.list.filter.state}
+                periodKey={board.chosenMonth}
+                state={board.inbox ? 'new' : board.chosenState}
                 externalParkId={board.list.filter.externalParkId}
                 parks={board.parks}
             />
+            {board.chosenMonth === null && board.list.filter.state === 'new' && (
+                <h2 className="mb-2 text-[15px] font-medium text-foreground" data-testid="inbox-heading">
+                    Новые заявки — все месяцы
+                </h2>
+            )}
             <CompensationApplicationList rows={board.list.rows.map((row) => ({
                 applicationId: row.applicationId,
                 state: row.state,
+                periodKey: row.periodKey,
                 orderDate: `${row.order.localDate} ${row.order.localTime}`,
                 orderId: row.order.shortOrderIdDisplay ?? row.order.externalOrderId.slice(0, 8),
                 driverName: row.driverName,
@@ -71,8 +77,8 @@ export default async function CompensationPage({
                         href={{
                             pathname: '/compensation',
                             query: {
-                                month: board.periodKey,
-                                ...(board.list.filter.state ? { status: board.list.filter.state } : {}),
+                                ...(board.chosenMonth ? { month: board.chosenMonth } : {}),
+                                ...(board.chosenState ? { status: board.chosenState } : {}),
                                 ...(board.list.filter.externalParkId ? { park: board.list.filter.externalParkId } : {}),
                                 cursor: board.list.nextCursor,
                             },

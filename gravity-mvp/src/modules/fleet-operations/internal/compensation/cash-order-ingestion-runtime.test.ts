@@ -275,6 +275,10 @@ class FakeFleet {
     latencyMs = 50
     intercept: Intercept | null = null
     requests: CashOrderPageRequestV1[] = []
+    /** Simulates a provider that silently drops the driver-day filters and pages by park. */
+    ignoreDriverDayFilter = false
+    /** Simulates a provider that honours status, payment and day but not the driver. */
+    ignoreDriverProfile = false
 
     add(park: string, order: Partial<FleetOrder> & { id: string; bookedAt: Date }): void {
         const { bookedAt, ...rest } = order
@@ -313,8 +317,17 @@ class FakeFleet {
         if (intercepted && typeof intercepted === 'object' && !('latencyMs' in intercepted)) return intercepted
         const from = request.bookedFrom.getTime()
         const to = request.bookedTo.getTime()
+        const driverDay = request.driverDay ?? null
         const matching = (this.orders.get(request.credentials.parkId) ?? [])
-            .filter((order) => order.booked_at !== null && Date.parse(order.booked_at) >= from && Date.parse(order.booked_at) <= to)
+            .filter((order) => {
+                if (driverDay === null || this.ignoreDriverDayFilter) {
+                    return order.booked_at !== null && Date.parse(order.booked_at) >= from && Date.parse(order.booked_at) <= to
+                }
+                const ended = Date.parse(order.ended_at)
+                return (this.ignoreDriverProfile || order.driver_profile.id === driverDay.externalDriverProfileId)
+                    && ended >= driverDay.endedFrom.getTime() && ended < driverDay.endedTo.getTime()
+                    && order.status === 'complete' && order.payment_method === 'cash'
+            })
             .sort((left, right) => Date.parse(right.booked_at as string) - Date.parse(left.booked_at as string))
         const offset = request.cursor === null ? 0 : Number(request.cursor)
         const page = matching.slice(offset, offset + this.pageSize).map((order) => structuredClone(order))
@@ -945,7 +958,7 @@ describe('claim-specific confirmation horizon', () => {
     const LAST_DAY_BOOKED_AT = new Date('2026-10-31T18:10:00.000Z')
     const LAST_DAY = '2026-10-31'
     const DEADLINE = compensationSubmissionDeadlineV1(LAST_DAY_ENDED_AT)
-    /** 30 October 10:00 Yekaterinburg: an ordinary order of October, claimable until the month ends. */
+    /** 30 October 10:00 Yekaterinburg: an ordinary order of October, claimable until 72 h after the month ends. */
     const ORDINARY_ENDED_AT = new Date('2026-10-30T05:00:00.000Z')
     const ORDINARY_BOOKED_AT = new Date('2026-10-30T04:40:00.000Z')
     const ORDINARY_DAY = '2026-10-30'
@@ -957,8 +970,10 @@ describe('claim-specific confirmation horizon', () => {
         return w
     }
 
-    it('is the deadline the monetary core stores: completion plus 72 hours', () => {
-        expect(DEADLINE).toEqual(new Date('2026-11-03T18:30:00.000Z'))
+    it('is the deadline the monetary core stores: the month\'s end plus 72 hours, whatever the completion time', () => {
+        // 4 November 00:00 Yekaterinburg, for the last-day order and for an ordinary one alike.
+        expect(DEADLINE).toEqual(new Date('2026-11-03T19:00:00.000Z'))
+        expect(compensationSubmissionDeadlineV1(ORDINARY_ENDED_AT)).toEqual(DEADLINE)
     })
 
     it('admits a claim inside the generic day horizon exactly as before, now carrying its completion instant', async () => {
@@ -1010,20 +1025,49 @@ describe('claim-specific confirmation horizon', () => {
         }
     })
 
-    it('refuses an ordinary previous-month order after its month closed, even while the day horizon still admits its day', async () => {
+    it('admits an ordinary previous-month order through the month-end grace, and refuses it from the deadline on', async () => {
         // 1 November 12:00 Yekaterinburg: 30 October is still inside the generic horizon.
         const now = new Date('2026-11-01T07:00:00.000Z')
         const { runtime, fleet } = world('write', [YOKO])
         vi.setSystemTime(now)
         fleet.add(YOKO, { id: 'ordinary', bookedAt: ORDINARY_BOOKED_AT })
         expect(targetedDayWithinHorizonV1(ORDINARY_DAY, now)).toBe(true)
-        expect(compensationSubmissionDeadlineV1(ORDINARY_ENDED_AT)).toEqual(new Date('2026-10-31T19:00:00.000Z'))
         expect(await runtime.requestDayConfirmation({
             externalParkId: YOKO, dayKey: ORDINARY_DAY,
             order: { externalOrderId: 'ordinary', providerBookedAt: ORDINARY_BOOKED_AT, endedAt: ORDINARY_ENDED_AT },
+        })).toEqual({ status: 'scheduled' })
+        await settle(runtime.dayConfirmationSettled(YOKO, ORDINARY_DAY))
+        expect(cashOrderConfirmationForOrderV1(runtime.readDayConfirmation(YOKO, ORDINARY_DAY), 'ordinary'))
+            .toMatchObject({ state: 'confirmed', via: 'narrow' })
+
+        const closed = world('write', [YOKO])
+        vi.setSystemTime(DEADLINE)
+        closed.fleet.add(YOKO, { id: 'ordinary', bookedAt: ORDINARY_BOOKED_AT })
+        expect(await closed.runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: ORDINARY_DAY,
+            order: { externalOrderId: 'ordinary', providerBookedAt: ORDINARY_BOOKED_AT, endedAt: ORDINARY_ENDED_AT },
         })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
-        expect(runtime.readDayConfirmation(YOKO, ORDINARY_DAY)).toBeNull()
-        expect(fleet.requests).toHaveLength(0)
+        expect(closed.runtime.readDayConfirmation(YOKO, ORDINARY_DAY)).toBeNull()
+        expect(closed.fleet.requests).toHaveLength(0)
+    })
+
+    it('admits an early-month order on the last grace day, far outside the generic day horizon', async () => {
+        // 3 November 12:00 Yekaterinburg; the order completed on 1 October 10:00.
+        const now = new Date('2026-11-03T07:00:00.000Z')
+        const endedAt = new Date('2026-10-01T05:00:00.000Z')
+        const bookedAt = new Date('2026-10-01T04:40:00.000Z')
+        const { runtime, fleet } = world('write', [YOKO])
+        vi.setSystemTime(now)
+        fleet.add(YOKO, { id: 'first-day', bookedAt })
+        expect(targetedDayWithinHorizonV1('2026-10-01', now)).toBe(false)
+        expect(await runtime.requestDayConfirmation({
+            externalParkId: YOKO, dayKey: '2026-10-01',
+            order: { externalOrderId: 'first-day', providerBookedAt: bookedAt, endedAt },
+        })).toEqual({ status: 'scheduled' })
+        await settle(runtime.dayConfirmationSettled(YOKO, '2026-10-01'))
+        expect(cashOrderConfirmationForOrderV1(runtime.readDayConfirmation(YOKO, '2026-10-01'), 'first-day'))
+            .toMatchObject({ state: 'confirmed', via: 'narrow' })
+        expect(fleet.requestsFor(YOKO)).toHaveLength(1)
     })
 
     it('keeps the generic day horizon for a day-only request: no blanket extension of previous-month days', async () => {
@@ -1047,15 +1091,16 @@ describe('claim-specific confirmation horizon', () => {
     })
 
     it('keeps every order\'s own horizon on a shared day record: an expired order neither joins nor governs', async () => {
-        // 3 November 12:00 Yekaterinburg, three orders completed on 31 October:
-        // 'last' (23:30, open until 3 Nov 23:30), 'later' (22:00, open until
-        // 3 Nov 22:00) and 'early' (01:00, closed since 3 Nov 01:00).
+        // 3 November 12:00 Yekaterinburg, two orders completed on 31 October:
+        // 'last' (23:30) and 'early' (01:00), both open until 4 Nov 00:00 by
+        // the month-end grace, and 'stale', a September order presented on the
+        // same day record, whose own window closed on 4 October.
         const now = new Date('2026-11-03T07:00:00.000Z')
         const { runtime, fleet } = lastDayWorld(now)
-        const laterBookedAt = new Date('2026-10-31T16:40:00.000Z')
         const earlyBookedAt = new Date('2026-10-30T19:40:00.000Z')
-        fleet.add(YOKO, { id: 'later', bookedAt: laterBookedAt })
+        const staleBookedAt = new Date('2026-09-30T09:40:00.000Z')
         fleet.add(YOKO, { id: 'early', bookedAt: earlyBookedAt })
+        fleet.add(YOKO, { id: 'stale', bookedAt: staleBookedAt })
         expect(targetedDayWithinHorizonV1(LAST_DAY, now)).toBe(false)
         expect(await runtime.requestDayConfirmation({
             externalParkId: YOKO, dayKey: LAST_DAY,
@@ -1063,18 +1108,18 @@ describe('claim-specific confirmation horizon', () => {
         })).toEqual({ status: 'scheduled' })
         expect(await runtime.requestDayConfirmation({
             externalParkId: YOKO, dayKey: LAST_DAY,
-            order: { externalOrderId: 'early', providerBookedAt: earlyBookedAt, endedAt: new Date('2026-10-30T20:00:00.000Z') },
+            order: { externalOrderId: 'stale', providerBookedAt: staleBookedAt, endedAt: new Date('2026-09-30T10:00:00.000Z') },
         })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
         expect(await runtime.requestDayConfirmation({
             externalParkId: YOKO, dayKey: LAST_DAY,
-            order: { externalOrderId: 'later', providerBookedAt: laterBookedAt, endedAt: new Date('2026-10-31T17:00:00.000Z') },
+            order: { externalOrderId: 'early', providerBookedAt: earlyBookedAt, endedAt: new Date('2026-10-30T20:00:00.000Z') },
         })).toEqual({ status: 'joined' })
         await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
         const snapshot = runtime.readDayConfirmation(YOKO, LAST_DAY)
-        expect(snapshot?.orders.map((order) => order.externalOrderId).sort()).toEqual(['last', 'later'])
+        expect(snapshot?.orders.map((order) => order.externalOrderId).sort()).toEqual(['early', 'last'])
         expect(snapshot?.outcome).toBe('decided')
         expect(cashOrderConfirmationForOrderV1(snapshot, 'last')).toMatchObject({ state: 'confirmed', via: 'narrow' })
-        expect(cashOrderConfirmationForOrderV1(snapshot, 'later')).toMatchObject({ state: 'confirmed', via: 'narrow' })
+        expect(cashOrderConfirmationForOrderV1(snapshot, 'early')).toMatchObject({ state: 'confirmed', via: 'narrow' })
         // Only the two admitted orders were asked about: one narrow query each.
         expect(fleet.requestsFor(YOKO)).toHaveLength(2)
         expect(fleet.requestsFor(YOKO).every((request) => request.bookedTo.getTime() - request.bookedFrom.getTime() === 10 * MINUTE)).toBe(true)
@@ -1089,9 +1134,10 @@ describe('claim-specific confirmation horizon', () => {
             order: { externalOrderId: 'last', providerBookedAt: LAST_DAY_BOOKED_AT, endedAt: LAST_DAY_ENDED_AT },
         })).status).toBe('scheduled')
         expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.outcome).toBe('running')
+        // A September order: its own window closed on 4 October.
         expect(await runtime.requestDayConfirmation({
             externalParkId: YOKO, dayKey: LAST_DAY,
-            order: { externalOrderId: 'early', providerBookedAt: null, endedAt: new Date('2026-10-30T20:00:00.000Z') },
+            order: { externalOrderId: 'stale', providerBookedAt: null, endedAt: new Date('2026-09-30T10:00:00.000Z') },
         })).toEqual({ status: 'not_scheduled', reason: 'order_window_closed' })
         await settle(runtime.dayConfirmationSettled(YOKO, LAST_DAY))
         expect(runtime.readDayConfirmation(YOKO, LAST_DAY)?.orders.map((order) => order.externalOrderId)).toEqual(['last'])
@@ -1114,5 +1160,194 @@ describe('claim-specific confirmation horizon', () => {
             reconciliationCursorBookedAt: null,
             lastReconciliationCompletedAt: null,
         })
+    })
+})
+
+// ── On demand: one driver's day ───────────────────────────────────────────
+
+describe('on demand: one driver, one business day', () => {
+    // START is 16 Sep 14:00 in Yekaterinburg; the business day began at 15 Sep 19:00 UTC.
+    const DAY = '2026-09-16'
+    const DRIVER = 'b'.repeat(32)
+    const OTHER_DRIVER = 'c'.repeat(32)
+    const dayStart = businessDayStartV1(DAY)
+    const at = (hoursIntoDay: number) => new Date(dayStart.getTime() + hoursIntoDay * HOUR)
+
+    function day(runtime: CashOrderIngestionRuntimeV1, overrides: Partial<{ externalParkId: string; externalDriverProfileId: string; dayKey: string }> = {}) {
+        return runtime.requestDriverDay({ externalParkId: YOKO, externalDriverProfileId: DRIVER, dayKey: DAY, ...overrides })
+    }
+
+    function seed(fleet: FakeFleet) {
+        // The driver's day: one cash order (the anonymised 363 RUB control case), one
+        // cashless and one cancelled; another driver's cash order the same day; the
+        // driver's cash order of the previous day.
+        fleet.add(YOKO, { id: 'mine-cash', bookedAt: at(9), price: '363.0000', driver_profile: { id: DRIVER } })
+        fleet.add(YOKO, { id: 'mine-cashless', bookedAt: at(10), payment_method: 'cashless', driver_profile: { id: DRIVER } })
+        fleet.add(YOKO, { id: 'mine-cancelled', bookedAt: at(11), status: 'cancelled', driver_profile: { id: DRIVER } })
+        fleet.add(YOKO, { id: 'theirs-cash', bookedAt: at(9.5), driver_profile: { id: OTHER_DRIVER } })
+        fleet.add(YOKO, { id: 'mine-yesterday', bookedAt: at(-5), driver_profile: { id: DRIVER } })
+    }
+
+    it('runs no background pass and no park-wide request of any kind', async () => {
+        const { runtime, fleet, credentialLoads } = world('on_demand', [YOKO])
+        seed(fleet)
+        expect(await settle(runtime.runTick())).toEqual({ mode: 'on_demand', parks: [], errors: [] })
+        expect(await runtime.requestHotRefresh(YOKO)).toEqual({ status: 'not_scheduled', reason: 'mode_not_write' })
+        expect(await runtime.requestDayConfirmation({ externalParkId: YOKO, dayKey: DAY }))
+            .toEqual({ status: 'not_scheduled', reason: 'mode_not_write' })
+        expect(fleet.requests).toHaveLength(0)
+        expect(credentialLoads.count).toBe(0)
+    })
+
+    it('registers no background schedule in on-demand mode: only write mode has one', async () => {
+        // The scheduler in instrumentation.ts registers only when this says enabled.
+        const { cashOrderIngestionScheduleV1 } = await import('../../application/cash-order-ingestion-operations')
+        try {
+            for (const [mode, enabled] of [['off', false], ['on_demand', false], ['write', true], ['dry_run', false]] as const) {
+                vi.stubEnv('YOKO_CASH_ORDER_INGESTION_MODE', mode)
+                expect(cashOrderIngestionScheduleV1().enabled).toBe(enabled)
+            }
+        } finally {
+            vi.unstubAllEnvs()
+        }
+    })
+
+    it('is refused outside on-demand mode, so write mode keeps its park passes only', async () => {
+        for (const mode of ['off', 'write'] as const) {
+            const { runtime, fleet } = world(mode, [YOKO])
+            expect(await day(runtime)).toEqual({ status: 'not_scheduled', reason: 'mode_not_on_demand' })
+            expect(fleet.requests).toHaveLength(0)
+        }
+    })
+
+    it('asks for exactly this driver and day, completed cash only, and writes only that', async () => {
+        const { runtime, store, fleet } = world('on_demand', [YOKO])
+        seed(fleet)
+        const request = await day(runtime)
+        expect(request.status).toBe('scheduled')
+        if (request.status === 'not_scheduled') return
+        await settle(request.completion)
+
+        expect(fleet.requests).toHaveLength(1)
+        expect(fleet.requests[0].driverDay).toEqual({
+            externalDriverProfileId: DRIVER,
+            endedFrom: dayStart,
+            endedTo: businessDayStartV1('2026-09-17'),
+        })
+        expect(fleet.requests[0].credentials.parkId).toBe(YOKO)
+        expect(runtime.readDriverDay(YOKO, DRIVER, DAY)).toMatchObject({ outcome: 'complete', acceptedOrderIds: ['mine-cash'], pages: 1 })
+        expect(store.order(YOKO, 'mine-cash')).toMatchObject({ externalDriverProfileId: DRIVER, amountKopecks: 36_300, rawPrice: '363.0000' })
+        for (const id of ['mine-cashless', 'mine-cancelled', 'theirs-cash', 'mine-yesterday']) expect(store.order(YOKO, id)).toBeUndefined()
+        expect(store.checkpoints.get(YOKO)?.lastRunSummary?.targeted).toMatchObject({ target: 'driver_day', dayKey: DAY, outcome: 'complete', accepted: 1 })
+        expect(JSON.stringify(store.checkpoints.get(YOKO)?.lastRunSummary)).not.toContain(DRIVER)
+    })
+
+    it('answers a day without orders as complete and empty, never as a failure', async () => {
+        const { runtime, store, fleet } = world('on_demand', [YOKO])
+        fleet.add(YOKO, { id: 'theirs-cash', bookedAt: at(9.5), driver_profile: { id: OTHER_DRIVER } })
+        const request = await day(runtime)
+        if (request.status === 'not_scheduled') throw new Error(request.reason)
+        await settle(request.completion)
+        expect(runtime.readDriverDay(YOKO, DRIVER, DAY)).toMatchObject({ outcome: 'complete', acceptedOrderIds: [] })
+        expect(store.orders.size).toBe(0)
+    })
+
+    it('joins an identical request in flight and reuses a complete answer for five minutes', async () => {
+        const { runtime, fleet } = world('on_demand', [YOKO])
+        seed(fleet)
+        const [first, second] = await Promise.all([day(runtime), day(runtime)])
+        expect([first.status, second.status].sort()).toEqual(['joined', 'scheduled'])
+        if (first.status === 'not_scheduled') throw new Error(first.reason)
+        await settle(first.completion)
+        expect(fleet.requests).toHaveLength(1)
+
+        for (let tap = 0; tap < 10; tap += 1) expect((await day(runtime)).status).toBe('cached')
+        expect(fleet.requests).toHaveLength(1)
+
+        await advance(5 * MINUTE)
+        const again = await day(runtime)
+        expect(again.status).toBe('scheduled')
+        if (again.status === 'not_scheduled') throw new Error(again.reason)
+        await settle(again.completion)
+        expect(fleet.requests).toHaveLength(2)
+    })
+
+    it('limits how many provider requests one driver may start', async () => {
+        const { runtime, fleet } = world('on_demand', [YOKO])
+        const days = ['2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15']
+        for (const dayKey of days) {
+            const request = await day(runtime, { dayKey })
+            expect(request.status).toBe('scheduled')
+            if (request.status !== 'not_scheduled') await settle(request.completion)
+        }
+        expect(await day(runtime)).toEqual({ status: 'not_scheduled', reason: 'driver_rate_limited' })
+        expect(fleet.requests).toHaveLength(6)
+        // Another driver of the same park is not held back by it.
+        const other = await day(runtime, { externalDriverProfileId: OTHER_DRIVER })
+        expect(other.status).toBe('scheduled')
+    })
+
+    it('stops at the first page, writing nothing, when the provider ignores the driver filter', async () => {
+        const { runtime, store, fleet } = world('on_demand', [YOKO])
+        fleet.pageSize = 2
+        seed(fleet)
+        fleet.ignoreDriverDayFilter = true
+        const request = await day(runtime)
+        if (request.status === 'not_scheduled') throw new Error(request.reason)
+        await settle(request.completion)
+        expect(runtime.readDriverDay(YOKO, DRIVER, DAY)?.outcome).toBe('failed:provider_filter_not_applied')
+        expect(fleet.requests).toHaveLength(1)
+        expect(store.orders.size).toBe(0)
+    })
+
+    it('refuses another driver\'s order even when status, payment and day were all honoured', async () => {
+        const { runtime, store, fleet } = world('on_demand', [YOKO])
+        seed(fleet)
+        fleet.ignoreDriverProfile = true
+        const request = await day(runtime)
+        if (request.status === 'not_scheduled') throw new Error(request.reason)
+        await settle(request.completion)
+        expect(runtime.readDriverDay(YOKO, DRIVER, DAY)?.outcome).toBe('failed:provider_filter_not_applied')
+        expect(store.orders.size).toBe(0)
+    })
+
+    it('reports a throttled provider as a failure, holds it briefly, and never as "no orders"', async () => {
+        const { runtime, store, fleet } = world('on_demand', [YOKO])
+        seed(fleet)
+        fleet.intercept = () => ({ ok: false, kind: 'http', status: 429, retryAfter: '600' })
+        const request = await day(runtime)
+        if (request.status === 'not_scheduled') throw new Error(request.reason)
+        await settle(request.completion)
+        expect(runtime.readDriverDay(YOKO, DRIVER, DAY)?.outcome).toBe('failed:provider_rate_limited')
+        expect(store.orders.size).toBe(0)
+        // The provider asked for 10 minutes: the park is deferred, so nothing is asked meanwhile.
+        expect((await day(runtime)).status).toBe('cached')
+        await advance(31_000)
+        expect(await day(runtime)).toEqual({ status: 'not_scheduled', reason: 'provider_deferred' })
+        expect(fleet.requests).toHaveLength(1)
+    })
+
+    it('reports a timed-out provider as a failure, not as an empty day', async () => {
+        const { runtime, fleet } = world('on_demand', [YOKO])
+        seed(fleet)
+        fleet.intercept = () => 'hang'
+        const request = await day(runtime)
+        if (request.status === 'not_scheduled') throw new Error(request.reason)
+        await settle(request.completion)
+        const outcome = runtime.readDriverDay(YOKO, DRIVER, DAY)?.outcome
+        expect(outcome).not.toBe('complete')
+        expect(outcome).toMatch(/^(failed:|incomplete)/u)
+    })
+
+    it('asks nothing for a malformed profile or day, a park outside the pilot, or a day not yet begun', async () => {
+        const { runtime, fleet } = world('on_demand', [YOKO])
+        expect(await day(runtime, { externalDriverProfileId: 'not a profile' })).toEqual({ status: 'not_scheduled', reason: 'invalid_profile' })
+        expect(await day(runtime, { dayKey: '2026-13-01' })).toEqual({ status: 'not_scheduled', reason: 'invalid_day' })
+        expect(await day(runtime, { externalParkId: OTHER })).toEqual({ status: 'not_scheduled', reason: 'park_not_enabled' })
+        const tomorrow = await day(runtime, { dayKey: '2026-09-17' })
+        if (tomorrow.status === 'not_scheduled') throw new Error(tomorrow.reason)
+        await settle(tomorrow.completion)
+        expect(runtime.readDriverDay(YOKO, DRIVER, '2026-09-17')?.outcome).toBe('failed:day_not_open')
+        expect(fleet.requests).toHaveLength(0)
     })
 })

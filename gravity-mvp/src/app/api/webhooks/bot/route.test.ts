@@ -765,3 +765,455 @@ describe('driver-bot cash compensation pilot', () => {
         expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
     })
 })
+
+describe('driver-bot Yandex profile id of a reconciled Driver', () => {
+    const PROFILE = '0123456789abcdef0123456789abcdef'
+    const LEGACY_PROFILE = 'fedcba9876543210fedcba9876543210'
+    const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mocks.findDriverTelegramFirst.mockResolvedValue({
+            id: 'mapping-1',
+            driverId: 'driver-1',
+            telegramId: 123456n,
+            activeParkId: 'park-1',
+            carLabel: null,
+        })
+        mocks.authorizeDriverTelegram.mockResolvedValue({
+            chatId: 'chat-1',
+            contactId: 'contact-1',
+            contactIdentityId: 'identity-1',
+            driverId: 'driver-1',
+            target: '123456',
+        })
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
+        // No provider connection: the fired-profile guard is skipped and the only
+        // fetch of a driver action is the scraper enqueue.
+        mocks.getYandexConnectionCredentials.mockResolvedValue(null)
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    function scraperAccepts() {
+        mocks.providerFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ taskId: 'task-1' }) })
+    }
+    function scraperBody() {
+        const [url, init] = mocks.providerFetch.mock.calls[0]
+        expect(String(url)).toMatch(/\/api\/driver-actions$/)
+        return JSON.parse(init.body)
+    }
+
+    test.each([
+        ['park-profile key of the multi-park reconciler', `park-profile:${'9'.repeat(32)}`],
+        ['earlier park:<park>:<profile> key', `park:${'8'.repeat(32)}:${PROFILE}`],
+    ])('get_order_price sends the real profile id, not the %s', async (_name, crmKey) => {
+        mocks.findDriver.mockResolvedValue({
+            id: 'driver-1', fullName: 'Test Driver', yandexDriverId: crmKey, externalDriverProfileId: PROFILE,
+        })
+        scraperAccepts()
+
+        const response = await POST(actionRequest('get_order_price', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ ok: true, taskId: 'task-1', status: 'PENDING' })
+        expect(scraperBody()).toMatchObject({ kind: 'GET_PRICE', driverYandexId: PROFILE, parkId: 'park-1' })
+        expect(mocks.recordDriverAction).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ driverId: 'driver-1', status: 'PENDING', scraperTaskId: 'task-1' }),
+        }))
+    })
+
+    test('a legacy Driver whose yandexDriverId is the profile id keeps working unchanged', async () => {
+        mocks.findDriver.mockResolvedValue({
+            id: 'driver-1', fullName: 'Test Driver', yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null,
+        })
+        scraperAccepts()
+
+        const response = await POST(actionRequest('cancel_order', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ ok: true, status: 'PENDING' })
+        expect(scraperBody()).toMatchObject({ kind: 'CANCEL_ORDER', driverYandexId: LEGACY_PROFILE })
+    })
+
+    test('a Driver with only a CRM key goes to the manager and never reaches the scraper', async () => {
+        mocks.findDriver.mockResolvedValue({
+            id: 'driver-1', fullName: 'Test Driver', yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: null,
+        })
+
+        const response = await POST(actionRequest('get_order_price', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'NO_YANDEX_ID' })
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+        expect(mocks.recordDriverAction).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ status: 'ESCALATED_TO_MANAGER' }),
+        }))
+    })
+
+    test('change_limit reads and writes the real profile of a reconciled Driver', async () => {
+        mocks.getYandexConnectionCredentials.mockResolvedValue({ clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' })
+        mocks.findDriver.mockResolvedValue({
+            yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE, phone: '+70000000000',
+        })
+        const profile = { account: { balance_limit: '0' } }
+        mocks.providerFetch
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify(profile) })
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify(profile) })
+            .mockResolvedValueOnce({ ok: true, status: 200, text: async () => JSON.stringify(profile) })
+
+        const response = await POST(actionRequest('change_limit', { telegramId: '123456', limitValue: 5_000, ...binding }))
+
+        await expect(response.json()).resolves.toEqual({ success: true, newLimit: 5_000 })
+        const urls = mocks.providerFetch.mock.calls.map(([url]) => String(url))
+        expect(urls).toHaveLength(3)
+        for (const url of urls) expect(url).toContain(`contractor_profile_id=${PROFILE}`)
+        expect(urls.join('\n')).not.toContain('park-profile')
+    })
+
+    test('check_link looks up the real profile of a reconciled Driver', async () => {
+        mocks.getYandexConnectionCredentials.mockResolvedValue({ clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' })
+        mocks.findDriver.mockResolvedValue({
+            yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE, fullName: 'Test Driver',
+        })
+        mocks.providerFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ person: {} }) })
+
+        const response = await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ linked: true, driverId: 'driver-1' })
+        expect(String(mocks.providerFetch.mock.calls[0][0])).toContain(`contractor_profile_id=${PROFILE}`)
+    })
+
+    describe('update_driver_car', () => {
+        const carRequest = () => actionRequest('update_driver_car', { telegramId: '123456', carId: 'car-9', ...binding })
+        const connection = { clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' }
+        const yandexOk = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) })
+
+        test('binds the car on the real profile of a Driver whose link names its CRM id', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({
+                yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
+            })
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1', account: { balance_limit: '0' } }))
+                .mockResolvedValueOnce(yandexOk({}))
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(200)
+            await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            expect(mocks.findDriver).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'driver-1' } }))
+            const calls = mocks.providerFetch.mock.calls
+            expect(calls.map(([, init]) => init.method)).toEqual(['GET', 'PUT'])
+            for (const [url] of calls) {
+                expect(String(url)).toContain(`contractor_profile_id=${PROFILE}`)
+                expect(String(url)).not.toContain('driver-1')
+                expect(String(url)).not.toContain('park-profile')
+            }
+            expect(JSON.parse(calls[1][1].body)).toMatchObject({ car_id: 'car-9', account: { balance_limit: '0' } })
+            // Person authority is proven again immediately before the provider mutation.
+            expect(mocks.authorizeDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+            expect(mocks.getYandexConnectionCredentials).toHaveBeenCalledWith(undefined, 'park-1')
+        })
+
+        test('a legacy Driver whose yandexDriverId is the profile id keeps its profile', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(yandexOk({}))
+
+            const response = await POST(carRequest())
+
+            await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            for (const [url] of mocks.providerFetch.mock.calls) {
+                expect(String(url)).toContain(`contractor_profile_id=${LEGACY_PROFILE}`)
+            }
+        })
+
+        test.each([
+            ['a Driver with only a CRM key', { yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: null }],
+            ['no Driver row for the link', null],
+        ])('%s gets a plain refusal with no credential read, GET or PUT', async (_name, row) => {
+            mocks.findDriver.mockResolvedValue(row)
+            mocks.findDriverByYandex.mockResolvedValue(null)
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(404)
+            await expect(response.json()).resolves.toEqual({
+                error: 'Не нашли ваш профиль в Яндекс Флит. Обратитесь к менеджеру.',
+            })
+            expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+            expect(mocks.providerFetch).not.toHaveBeenCalled()
+        })
+
+        test('a Yandex error on reading the profile stops before any PUT', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({
+                yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
+            })
+            mocks.providerFetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => JSON.stringify({ message: 'not found' }) })
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(502)
+            await expect(response.json()).resolves.toMatchObject({ error: 'Failed to fetch driver profile' })
+            expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
+            expect(mocks.providerFetch.mock.calls[0][1]).toMatchObject({ method: 'GET' })
+        })
+    })
+})
+
+describe('driver-bot acts only on the driver\'s own profile in its own park', () => {
+    const PROFILE = '0123456789abcdef0123456789abcdef'
+    const LEGACY_PROFILE = 'fedcba9876543210fedcba9876543210'
+    const TWIN = '1111111111111111111111111111111a'
+    const NAMESAKE = '2222222222222222222222222222222b'
+    const PHONE = '+79030000001'
+    const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
+    const PARK_UNPROVEN = 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.'
+    const yandex = (body: unknown, status = 200) => ({
+        ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body),
+    })
+    const listing = (...profiles: Array<{ id: string; status: string; phones: string[] }>) => yandex({
+        driver_profiles: profiles.map((p) => ({ driver_profile: { id: p.id, work_status: p.status, phones: p.phones } })),
+    })
+
+    function link(activeParkId: string | null) {
+        mocks.findDriverTelegramFirst.mockResolvedValue({
+            id: 'mapping-1', driverId: 'driver-1', telegramId: 123456n, activeParkId, carLabel: null,
+        })
+    }
+    function card(externalParkId: string | null, overrides: Record<string, unknown> = {}) {
+        mocks.findDriver.mockResolvedValue({
+            id: 'driver-1', fullName: 'Test Driver', phone: PHONE,
+            yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE, externalParkId,
+            ...overrides,
+        })
+    }
+    function scraperBody() {
+        const call = mocks.providerFetch.mock.calls.find(([url]) => String(url).endsWith('/api/driver-actions'))
+        expect(call).toBeDefined()
+        return JSON.parse(call![1].body)
+    }
+    const credentialParks = () => mocks.getYandexConnectionCredentials.mock.calls.map((args) => args[1])
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mocks.authorizeDriverTelegram.mockResolvedValue({
+            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
+        })
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
+        mocks.findDriverByYandex.mockResolvedValue(null)
+        mocks.getYandexConnectionCredentials.mockImplementation(async (_scope: unknown, parkId?: string) => ({
+            clid: 'clid-1', apiKey: 'api-key-1', parkId: parkId ?? 'newest-connection',
+        }))
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    test('an order action runs in the selected park when it is the profile\'s park', async () => {
+        link('park-a')
+        card('park-a')
+        mocks.providerFetch
+            .mockResolvedValueOnce(listing({ id: PROFILE, status: 'working', phones: [PHONE] }))
+            .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+        const response = await POST(actionRequest('get_order_price', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ ok: true, taskId: 'task-1' })
+        expect(scraperBody()).toMatchObject({ driverYandexId: PROFILE, parkId: 'park-a' })
+        expect(credentialParks()).toEqual(['park-a'])
+    })
+
+    test('with no park selected an order action runs in the profile\'s own park, never a default one', async () => {
+        link(null)
+        card('park-b')
+        mocks.providerFetch
+            .mockResolvedValueOnce(listing({ id: PROFILE, status: 'working', phones: [PHONE] }))
+            .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+        await POST(actionRequest('complete_order', { telegramId: '123456', ...binding }))
+
+        expect(scraperBody()).toMatchObject({ kind: 'COMPLETE_ORDER', driverYandexId: PROFILE, parkId: 'park-b' })
+        expect(credentialParks()).toEqual(['park-b'])
+    })
+
+    test('a legacy row with no recorded park acts in the park the driver selected', async () => {
+        link('park-a')
+        card(null, { yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+        mocks.providerFetch
+            .mockResolvedValueOnce(listing({ id: LEGACY_PROFILE, status: 'working', phones: [PHONE] }))
+            .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+        await POST(actionRequest('get_order_price', { telegramId: '123456', ...binding }))
+
+        expect(scraperBody()).toMatchObject({ driverYandexId: LEGACY_PROFILE, parkId: 'park-a' })
+    })
+
+    test.each(['get_order_price', 'complete_order', 'cancel_order'])(
+        '%s in a park that is not the profile\'s park goes to the manager and reaches nothing',
+        async (action) => {
+            link('park-a')
+            card('park-b')
+
+            const response = await POST(actionRequest(action, { telegramId: '123456', ...binding }))
+
+            await expect(response.json()).resolves.toEqual({
+                ok: false, error: 'YANDEX_PROFILE_PARK_UNPROVEN', status: 'ESCALATED_TO_MANAGER', message: PARK_UNPROVEN,
+            })
+            expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+            expect(mocks.providerFetch).not.toHaveBeenCalled()
+            expect(mocks.recordDriverAction).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ driverId: 'driver-1', status: 'ESCALATED_TO_MANAGER' }),
+            }))
+        },
+    )
+
+    test('a legacy row with no recorded park and no selection is refused, not sent to a default park', async () => {
+        link(null)
+        card(null, { yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+
+        const response = await POST(actionRequest('cancel_order', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'YANDEX_PROFILE_PARK_UNPROVEN' })
+        expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test.each([
+        ['change_limit', { limitValue: 5_000 }],
+        ['update_driver_car', { carId: 'car-9' }],
+    ])('%s in a park that is not the profile\'s park is refused in plain words, reading no credential', async (action, extra) => {
+        link('park-a')
+        card('park-b')
+
+        const response = await POST(actionRequest(action, { telegramId: '123456', ...extra, ...binding }))
+
+        expect(response.status).toBe(409)
+        await expect(response.json()).resolves.toEqual({ error: PARK_UNPROVEN })
+        expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('check_link in a park that is not the profile\'s park shows the link without asking Yandex', async () => {
+        link('park-a')
+        card('park-b')
+
+        const response = await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))
+
+        await expect(response.json()).resolves.toMatchObject({ linked: true, driverId: 'driver-1', carInfo: null })
+        expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    describe('a fired profile is swapped only for the driver\'s own working twin', () => {
+        beforeEach(() => {
+            link('park-a')
+            card('park-a')
+        })
+
+        test('a namesake with another phone is never used', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(listing(
+                    { id: PROFILE, status: 'fired', phones: [PHONE] },
+                    { id: NAMESAKE, status: 'working', phones: ['+79035555555'] },
+                ))
+                .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+            await POST(actionRequest('cancel_order', { telegramId: '123456', ...binding }))
+
+            expect(scraperBody()).toMatchObject({ driverYandexId: PROFILE })
+        })
+
+        test('the single working profile with the driver\'s phone is used', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(listing(
+                    { id: PROFILE, status: 'fired', phones: [PHONE] },
+                    { id: NAMESAKE, status: 'working', phones: ['+79035555555'] },
+                    { id: TWIN, status: 'working', phones: ['8 (903) 000-00-01'] },
+                ))
+                .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+            await POST(actionRequest('cancel_order', { telegramId: '123456', ...binding }))
+
+            expect(scraperBody()).toMatchObject({ driverYandexId: TWIN, parkId: 'park-a' })
+        })
+
+        test('two working profiles with the driver\'s phone are ambiguous and neither is used', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(listing(
+                    { id: PROFILE, status: 'fired', phones: [PHONE] },
+                    { id: TWIN, status: 'working', phones: [PHONE] },
+                    { id: NAMESAKE, status: 'working', phones: [PHONE] },
+                ))
+                .mockResolvedValueOnce(yandex({ taskId: 'task-1' }))
+
+            await POST(actionRequest('cancel_order', { telegramId: '123456', ...binding }))
+
+            expect(scraperBody()).toMatchObject({ driverYandexId: PROFILE })
+        })
+    })
+
+    describe('change_limit phone fallback picks only an exact, unique match', () => {
+        beforeEach(() => {
+            link(null)
+            card(null, { yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.findDriverTelegramFirst.mockResolvedValue({
+                id: 'mapping-1', driverId: 'driver-1', telegramId: 123456n, activeParkId: 'park-a', carLabel: null,
+            })
+        })
+        const limit = () => POST(actionRequest('change_limit', { telegramId: '123456', limitValue: 5_000, ...binding }))
+        const urls = () => mocks.providerFetch.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`)
+
+        test('the single profile with exactly the driver\'s phone receives the limit', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandex({}, 404))
+                .mockResolvedValueOnce(listing({ id: TWIN, status: 'working', phones: ['+7 903 000 00 01'] }))
+                .mockResolvedValueOnce(yandex({ account: { balance_limit: '0' } }))
+                .mockResolvedValueOnce(yandex({ account: { balance_limit: '5000' } }))
+
+            const response = await limit()
+
+            await expect(response.json()).resolves.toEqual({ success: true, newLimit: 5_000 })
+            expect(urls().at(-1)).toBe(`PUT https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${TWIN}`)
+        })
+
+        test.each([
+            ['two profiles share the driver\'s phone', [
+                { id: TWIN, status: 'working', phones: [PHONE] },
+                { id: NAMESAKE, status: 'working', phones: [PHONE] },
+            ]],
+            ['a longer number merely contains the driver\'s digits', [
+                { id: NAMESAKE, status: 'working', phones: ['+7903000000177'] },
+            ]],
+        ])('nobody else receives the limit when %s', async (_name, profiles) => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(yandex({}, 404))
+                .mockResolvedValueOnce(listing(...profiles))
+                .mockResolvedValueOnce(yandex({ message: 'not found' }, 404))
+
+            const response = await limit()
+
+            expect(response.status).toBe(502)
+            expect(urls().some((url) => url.startsWith('PUT'))).toBe(false)
+            expect(urls().join('\n')).not.toContain(TWIN)
+            expect(urls().join('\n')).not.toContain(NAMESAKE)
+        })
+    })
+
+    test('no driver handler reads credentials without a park or names a default park', () => {
+        const route = readFileSync(resolve(process.cwd(), 'src/app/api/webhooks/bot/route.ts'), 'utf8')
+        const body = (name: string) => {
+            const start = route.indexOf(`async function ${name}(`)
+            expect(start).toBeGreaterThanOrEqual(0)
+            const next = route.indexOf('\nasync function ', start + 1)
+            return route.slice(start, next === -1 ? undefined : next)
+        }
+        for (const handler of ['handleCheckLink', 'handleChangeLimit', 'handleUpdateDriverCar', 'handleDriverAction']) {
+            expect(body(handler)).not.toContain('getYandexConnectionCredentialsV1()')
+            expect(body(handler)).toContain('driverYandexTarget(driver, mapping.activeParkId)')
+        }
+        expect(route).not.toContain('DRIVER_ACTIONS_PARK_ID')
+    })
+})

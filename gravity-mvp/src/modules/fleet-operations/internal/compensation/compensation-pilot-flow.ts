@@ -14,13 +14,18 @@
  */
 
 import {
+    MAX_CLAIMED_RUBLES,
     MAX_COMPENSATION_KOPECKS,
     KOPECKS_PER_RUBLE,
 } from './compensation-money'
 import type { StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 
-/** The pilot asks for whole rubles and will not take more than this. */
-export const PILOT_MAX_CLAIMED_RUBLES = MAX_COMPENSATION_KOPECKS / KOPECKS_PER_RUBLE
+/**
+ * The largest request the pilot takes, in whole rubles: the monetary core's own
+ * input bound. A request above the product cap is not refused; the payable
+ * amount is clamped to the cap (request 800 against a 650 order pays 500).
+ */
+export const PILOT_MAX_CLAIMED_RUBLES = MAX_CLAIMED_RUBLES
 
 /** The smallest claim the pilot accepts, and so the cheapest one a budget must cover. */
 export const PILOT_MIN_CLAIMED_RUBLES = 1

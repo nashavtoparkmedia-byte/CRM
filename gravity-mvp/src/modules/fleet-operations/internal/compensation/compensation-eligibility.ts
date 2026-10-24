@@ -16,6 +16,13 @@
  * on the same Asia/Yekaterinburg calendar the monetary core already uses, so a
  * pilot decision and a budget period never disagree about which month it is.
  *
+ * One exception replaces the park-SMZ gate, and only that gate: an Owner
+ * pilot admission names an exact park, driver profile and month, and admits
+ * that profile whatever its SMZ status, but only when the named month is the
+ * driver's first calendar month. The hire date, the month window and every
+ * monetary rule still apply. The admission travels with the facts and is never
+ * written back, so the stated `is_selfemployed` stays exactly what Yandex said.
+ *
  * This module decides eligibility only. It never touches money, and the C1
  * monetary rules remain the sole authority on amounts, idempotency and payouts.
  */
@@ -27,6 +34,7 @@ import {
     compensationPeriodKeyV1,
     type CompensationCalendarMonthV1,
 } from './compensation-calendar'
+import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
 
 /** Values observed live across all six parks. */
 export const YANDEX_EMPLOYMENT_TYPES_V1 = [
@@ -55,6 +63,101 @@ export interface CompensationEligibilityFactsV1 {
     employmentType: string | null
     /** `driver_profile.hire_date`; null when the park never stated it. */
     parkHireDate: Date | null
+    /**
+     * The Owner pilot admission for this exact park and profile, if one is
+     * configured. Absent means none: the park-SMZ gate applies unchanged.
+     */
+    ownerPilotAdmission?: OwnerPilotAdmissionV1 | null
+}
+
+/** The months an Owner pilot admission covers for one park and profile. */
+export interface OwnerPilotAdmissionV1 {
+    monthKeys: readonly string[]
+}
+
+/** Which rule admitted a driver past the park-SMZ gate. */
+export type CompensationPilotAdmissionBasisV1 = 'park_smz' | 'owner_pilot_admission'
+
+/** One configured admission: `<externalParkId>:<externalDriverProfileId>:<YYYY-MM>`. */
+export interface OwnerPilotAdmissionEntryV1 {
+    externalParkId: string
+    externalDriverProfileId: string
+    monthKey: string
+}
+
+export const OWNER_PILOT_ADMISSION_ERRORS_V1 = [
+    'admission_entry_malformed',
+    'admission_park_not_enabled',
+    'admission_duplicate',
+    'admission_limit_exceeded',
+] as const
+
+export type OwnerPilotAdmissionErrorV1 = typeof OWNER_PILOT_ADMISSION_ERRORS_V1[number]
+
+/** A pilot exception, not a second eligibility class: the list stays short. */
+export const OWNER_PILOT_ADMISSION_MAX_ENTRIES_V1 = 10
+
+export interface OwnerPilotAdmissionsV1 {
+    admissions: readonly OwnerPilotAdmissionEntryV1[]
+    error: OwnerPilotAdmissionErrorV1 | null
+}
+
+const OWNER_PILOT_ADMISSION_ENTRY = /^([0-9a-f]{32}):([0-9a-f]{32}):(\d{4}-(?:0[1-9]|1[0-2]))$/
+
+/**
+ * Parses the comma-separated admission list. Any fault discards the whole list
+ * rather than the faulty entry alone: a typo must not leave an operator
+ * believing a different set is live. Only the admission is lost; the park-SMZ
+ * path does not depend on this value at all. An admitted park must already be
+ * an enabled pilot park, so this can never widen the pilot's park scope.
+ */
+export function parseOwnerPilotAdmissionsV1(
+    raw: string | null | undefined,
+    enabledParks: readonly string[],
+): OwnerPilotAdmissionsV1 {
+    const refuse = (error: OwnerPilotAdmissionErrorV1): OwnerPilotAdmissionsV1 => ({ admissions: [], error })
+    if (raw === null || raw === undefined || raw.trim() === '') return { admissions: [], error: null }
+
+    const admissions: OwnerPilotAdmissionEntryV1[] = []
+    const seen = new Set<string>()
+    for (const part of raw.split(',')) {
+        const entry = part.trim()
+        const match = OWNER_PILOT_ADMISSION_ENTRY.exec(entry)
+        if (match === null) return refuse('admission_entry_malformed')
+        if (!enabledParks.includes(match[1])) return refuse('admission_park_not_enabled')
+        if (seen.has(entry)) return refuse('admission_duplicate')
+        seen.add(entry)
+        admissions.push({ externalParkId: match[1], externalDriverProfileId: match[2], monthKey: match[3] })
+    }
+    if (admissions.length > OWNER_PILOT_ADMISSION_MAX_ENTRIES_V1) return refuse('admission_limit_exceeded')
+    return { admissions, error: null }
+}
+
+/** The admission for one exact park and profile, or null. */
+export function ownerPilotAdmissionForV1(
+    admissions: readonly OwnerPilotAdmissionEntryV1[],
+    externalParkId: string | null,
+    externalDriverProfileId: string | null,
+): OwnerPilotAdmissionV1 | null {
+    if (externalParkId === null || externalDriverProfileId === null) return null
+    const monthKeys = admissions
+        .filter((entry) => entry.externalParkId === externalParkId && entry.externalDriverProfileId === externalDriverProfileId)
+        .map((entry) => entry.monthKey)
+    return monthKeys.length === 0 ? null : { monthKeys }
+}
+
+/**
+ * Attaches the configured admission to a driver's facts read. The stated facts
+ * are copied unchanged; only the admission field is set, and only on an exact
+ * park and profile match.
+ */
+export function withOwnerPilotAdmissionV1<T extends {
+    externalParkId: string | null
+    externalDriverProfileId: string | null
+    facts: CompensationEligibilityFactsV1
+}>(row: T, admissions: readonly OwnerPilotAdmissionEntryV1[]): T {
+    const admission = ownerPilotAdmissionForV1(admissions, row.externalParkId, row.externalDriverProfileId)
+    return admission === null ? row : { ...row, facts: { ...row.facts, ownerPilotAdmission: admission } }
 }
 
 export type CompensationEligibilityDecisionV1 =
@@ -106,24 +209,36 @@ export type CompensationPilotFirstMonthV1 =
  * Stated on its own because two callers need the month without the "now is
  * inside it" test: the clocked decision below, and the order catalogue, which
  * judges each first-month order by that order's own submission window so that
- * a last-day order keeps its 72-hour grace after the month has rolled over.
+ * the month's orders stay claimable through the 72 hours after it ends.
  * Both read this one gate, in this one order, so they can never disagree
  * about which month is the first or why a driver is refused on the facts.
+ *
+ * An Owner pilot admission stands in for park-SMZ and for nothing else. The
+ * refusal order is unchanged without one; with one, the SMZ refusal is
+ * reported only when the admission does not name the driver's first month.
  */
 export function compensationPilotFirstMonthV1(
     facts: CompensationEligibilityFactsV1,
 ): CompensationPilotFirstMonthV1 {
-    if (facts.isSelfEmployed === null || facts.isSelfEmployed === undefined) {
-        return { ok: false, reason: 'self_employment_unknown' }
-    }
-    if (!isParkSelfEmployedV1(facts)) return { ok: false, reason: 'not_self_employed' }
+    const smzRefusal = facts.isSelfEmployed === null || facts.isSelfEmployed === undefined
+        ? 'self_employment_unknown' as const
+        : isParkSelfEmployedV1(facts) ? null : 'not_self_employed' as const
+    const admission = facts.ownerPilotAdmission ?? null
+    if (smzRefusal !== null && admission === null) return { ok: false, reason: smzRefusal }
     if (!facts.parkHireDate) return { ok: false, reason: 'hire_date_unknown' }
 
     const firstMonth = parkFirstCalendarMonthV1(facts.parkHireDate)
+    const firstMonthKey = compensationPeriodKeyV1(firstMonth)
+    // An admission covers the months it names and never stretches to another:
+    // a profile admitted for October whose first month is September is refused
+    // exactly as it would be without the admission.
+    if (smzRefusal !== null && admission !== null && !admission.monthKeys.includes(firstMonthKey)) {
+        return { ok: false, reason: smzRefusal }
+    }
     return {
         ok: true,
         firstMonth,
-        firstMonthKey: compensationPeriodKeyV1(firstMonth),
+        firstMonthKey,
         windowStartsAt: compensationMonthStartInstantV1(firstMonth),
         windowEndsAt: compensationMonthEndInstantV1(firstMonth),
     }
@@ -135,11 +250,13 @@ export function compensationPilotFirstMonthV1(
  * rule, not an accident, and widening it is a product decision rather than a
  * rounding choice.
  *
- * This is the driver-level statement at one instant, and it says nothing
- * about individual orders: an order completed on the month's last calendar
- * day keeps the monetary core's 72-hour submission grace past this window,
- * and the order catalogue (cashOrderCatalogueV1) is where that grace applies,
- * order by order, never as a widening of this decision.
+ * This is the driver-level statement at one instant: can this driver still be
+ * served for first-month orders? Orders count only inside the first month, but
+ * the monetary core keeps every order of a month claimable for 72 hours after
+ * the month ends, so the driver stays eligible until that same instant
+ * (compensationPeriodSubmissionClosesAtV1) and not a moment longer. Which
+ * orders are actually still open is decided order by order in the catalogue
+ * (cashOrderCatalogueV1).
  */
 export function compensationPilotEligibilityV1(
     facts: CompensationEligibilityFactsV1,
@@ -148,7 +265,8 @@ export function compensationPilotEligibilityV1(
     const first = compensationPilotFirstMonthV1(facts)
     if (!first.ok) return { eligible: false, reason: first.reason, firstMonthKey: null }
 
-    if (now.getTime() < first.windowStartsAt.getTime() || now.getTime() >= first.windowEndsAt.getTime()) {
+    const submissionClosesAt = compensationPeriodSubmissionClosesAtV1(first.firstMonth)
+    if (now.getTime() < first.windowStartsAt.getTime() || now.getTime() >= submissionClosesAt.getTime()) {
         return { eligible: false, reason: 'outside_first_calendar_month', firstMonthKey: first.firstMonthKey }
     }
 
@@ -158,6 +276,18 @@ export function compensationPilotEligibilityV1(
         firstMonthKey: first.firstMonthKey,
         windowEndsAt: first.windowEndsAt,
     }
+}
+
+/**
+ * Which rule passes the facts gate, for reports and logs; null when the facts
+ * gate refuses. Park-SMZ wins when both apply, so an admission is only ever
+ * reported for a driver who needed it.
+ */
+export function compensationPilotAdmissionBasisV1(
+    facts: CompensationEligibilityFactsV1,
+): CompensationPilotAdmissionBasisV1 | null {
+    if (!compensationPilotFirstMonthV1(facts).ok) return null
+    return isParkSelfEmployedV1(facts) ? 'park_smz' : 'owner_pilot_admission'
 }
 
 /**

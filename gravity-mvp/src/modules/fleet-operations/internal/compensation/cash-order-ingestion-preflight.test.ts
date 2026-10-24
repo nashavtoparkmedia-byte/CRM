@@ -129,6 +129,13 @@ describe('refusals before any provider contact', () => {
         expect(requests).toEqual([])
     })
 
+    it('refuses in on-demand mode, which never probes a park', async () => {
+        const { ports, requests } = world()
+        const report = await new CashOrderIngestionPreflightV1(config({ mode: 'on_demand' }), ports).run()
+        expect(report).toMatchObject({ ok: false, refusal: 'ingestion_mode_on_demand', sufficientToAuthorizeWriteMode: false })
+        expect(requests).toEqual([])
+    })
+
     it('refuses when no park is enabled', async () => {
         const { ports } = world()
         expect(await new CashOrderIngestionPreflightV1(config({ enabledParks: [] }), ports).run())

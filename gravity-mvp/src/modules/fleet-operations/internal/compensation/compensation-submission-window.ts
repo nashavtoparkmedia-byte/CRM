@@ -5,10 +5,10 @@
  *
  *  - the budget period an application consumes is the business month of the
  *    order's completion, not the month the driver happened to submit in;
- *  - the submission deadline is the end of the order's business month, except
- *    for an order completed on the last calendar day of its month, which gets
- *    72 hours from completion so that a late-evening last-day order is still
- *    claimable.
+ *  - the submission deadline is the same for every order of a month: the end
+ *    of the order's business month plus 72 hours. Once a month ends, the
+ *    driver keeps three days to claim any eligible order of it, wherever in
+ *    the month that order completed.
  *
  * Together these mean two budget periods legitimately accept work at the same
  * time during the first three days of a month, which is why a period is
@@ -21,12 +21,11 @@ import {
     compensationCalendarDayV1,
     compensationMonthEndInstantV1,
     compensationPeriodKeyV1,
-    isLastBusinessDayOfMonthV1,
     type CompensationCalendarMonthV1,
 } from './compensation-calendar'
 
-/** Grace granted to an order completed on the last calendar day of its month. */
-export const LAST_DAY_SUBMISSION_GRACE_MS = 72 * 60 * 60 * 1000
+/** Grace after a month ends during which any order of that month can still be claimed. */
+export const MONTH_END_SUBMISSION_GRACE_MS = 72 * 60 * 60 * 1000
 
 export interface CompensationSubmissionWindowV1 {
     /** Business month whose budget period this order consumes. */
@@ -35,8 +34,12 @@ export interface CompensationSubmissionWindowV1 {
     periodKey: string
     /** Exclusive instant at which submission for this order closes. */
     submissionDeadline: Date
-    /** Which limb of the product rule produced the deadline. */
-    deadlineBasis: 'order_month_end' | 'last_day_grace'
+    /**
+     * Which product rule produced the deadline. One rule remains: the order's
+     * month end plus the grace. The stored column's CHECK still admits the
+     * retired `last_day_grace` value, which nothing writes any more.
+     */
+    deadlineBasis: 'order_month_end'
 }
 
 /**
@@ -48,30 +51,26 @@ export function compensationBudgetPeriodMonthV1(orderEndedAt: Date): Compensatio
 }
 
 /**
- * Product rule. An order completed before the last calendar day of its month is
- * claimable until that month ends; an order completed on the last calendar day
- * is claimable for 72 hours from completion.
+ * Product rule. Every order of a business month is claimable until that month
+ * ends plus 72 hours: an October order, completed on the 1st or on the 31st,
+ * can be submitted until 4 November 00:00 Yekaterinburg. The grace runs from
+ * the month's end, never from the order's completion.
  *
  * The deadline is an exclusive bound: submission is open while
  * `now < submissionDeadline`.
  */
 export function compensationSubmissionDeadlineV1(orderEndedAt: Date): Date {
-    const month = compensationCalendarMonthV1(orderEndedAt)
-    if (isLastBusinessDayOfMonthV1(orderEndedAt)) {
-        return new Date(orderEndedAt.getTime() + LAST_DAY_SUBMISSION_GRACE_MS)
-    }
-    return compensationMonthEndInstantV1(month)
+    return compensationPeriodSubmissionClosesAtV1(compensationCalendarMonthV1(orderEndedAt))
 }
 
 /** Both order-derived facts a Submit needs, resolved once and stored on the claim. */
 export function compensationSubmissionWindowV1(orderEndedAt: Date): CompensationSubmissionWindowV1 {
     const periodMonth = compensationBudgetPeriodMonthV1(orderEndedAt)
-    const lastDay = isLastBusinessDayOfMonthV1(orderEndedAt)
     return {
         periodMonth,
         periodKey: compensationPeriodKeyV1(periodMonth),
         submissionDeadline: compensationSubmissionDeadlineV1(orderEndedAt),
-        deadlineBasis: lastDay ? 'last_day_grace' : 'order_month_end',
+        deadlineBasis: 'order_month_end',
     }
 }
 
@@ -81,18 +80,18 @@ export function isSubmissionWindowOpenV1(now: Date, submissionDeadline: Date): b
 }
 
 /**
- * The latest instant at which any order of a month can still be submitted: the
- * month's end plus the last-day grace. A budget period must stay open until
- * then, otherwise a valid last-day submission would find its own period closed.
+ * The instant at which a month stops accepting new submissions: the month's end
+ * plus the grace. Every order of the month shares it as its own deadline, and a
+ * budget period stays open until then.
  */
 export function compensationPeriodSubmissionClosesAtV1(month: CompensationCalendarMonthV1): Date {
-    return new Date(compensationMonthEndInstantV1(month).getTime() + LAST_DAY_SUBMISSION_GRACE_MS)
+    return new Date(compensationMonthEndInstantV1(month).getTime() + MONTH_END_SUBMISSION_GRACE_MS)
 }
 
 /**
  * Second attempt reuses the original order's deadline verbatim. Exposed as a
  * named function so the rule is stated once and cannot drift into a fresh
- * 72-hour window at resubmission time.
+ * window at resubmission time.
  */
 export function compensationResubmitDeadlineV1(originalSubmissionDeadline: Date): Date {
     return new Date(originalSubmissionDeadline.getTime())
