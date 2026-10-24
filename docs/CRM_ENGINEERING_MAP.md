@@ -3,6 +3,8 @@ Tree: `8e80f60b549271d588df3539e2145b6ad022e3aa`
 Generated/verified: 2026-10-03
 Partial update 2026-10-22: §2.7, F-22, F-23 and I-31a describe the on-demand cash-order mode, verified against its
 own change on top of main `5dc489cd`; the rest of the map is as verified above.
+Partial update 2026-10-24: F-09, I-54..I-57 and R-28..R-32 describe the Telegram MTProto outbound send (TG2R: exact
+person, proven reply target, typed pre-dispatch outcome), verified against its own change on top of main `bbc350a1`.
 
 # YOKO CRM — Engineering Map
 
@@ -787,6 +789,12 @@ checks → `assertPrivateWhatsAppConversationConnectionV1` →
 MAX leg: `sendMaxTransportTextV1`
 (`G/modules/max-channel/application/messaging-transport.ts`) → scraper
 `POST /send-message` → result validated by `validateMaxTextDeliveryResultV1`.
+Telegram leg: `sendTelegramMessage` (`G/app/tg-actions.ts`) re-runs the outbound
+preparer and the live account proof on the sending socket, resolves the exact
+`Api.User` (one bounded 200-dialog sweep on a cache miss, I-54, I-57), proves a
+requested quote (I-55; `retrySend` carries it on redelivery, DEP-Q) and types every
+failure before `client.sendMessage` with one S1 token (I-56); after dispatch its
+error is untyped, as before.
 
 **F-10 Routing / "send to contact"**
 There is no channel router: the channel is `Chat.channel`, and a channel override
@@ -1315,6 +1323,37 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `detailsJson` (database totals are context only). Ingress logs carry a bounded
   code, never error text. — `catchUpMissedMessages`, `importTelegramHistory`,
   `telegramIngressErrorCode` — `tg-actions.identity.test.ts` (B3-a and log blocks).
+- **I-54 A Telegram outbound send addresses only the exact person.** Text, media
+  and reactions resolve the numeric id the outbound preparer proved for the Chat,
+  and nothing else: the result must be an `Api.User` with that id (GramJS falls back
+  to a basic group or channel with the same number, which is never addressed). No
+  phone, username or contact import. On a cache miss the client sweeps its recent
+  dialogs once and looks the id up exactly once more; only the call that started
+  that sweep after its own miss may refuse (`TELEGRAM_PEER_UNRESOLVED`). The proofs
+  bind to the client that sends: a client replaced while they ran proves nothing. —
+  `resolveExactTelegramUserEntity`, `lookupExactTelegramUser`,
+  `assertTelegramSendClientCurrent` — `tg-actions.identity.test.ts` (TG2R block).
+- **I-55 A requested Telegram quote is proven or the send is refused.** The quote is
+  parsed with the channel's own forms (the live account and this peer, or a legacy
+  bare id), bounded to MTProto int32, proven with `getMessages` to be a live
+  `Api.Message` of this dialog, and a bare id must be the row this Chat stored with
+  the provider's own second. A requested quote is never sent unquoted. —
+  `telegramReplyTarget`, `proveTelegramReplyTarget` — `tg-actions.identity.test.ts`
+  (TG2R block).
+- **I-56 A Telegram text failure before dispatch states its outcome.** Every exit
+  before `client.sendMessage` carries exactly one S1 token: `TELEGRAM_MTPROTO_REFUSED`
+  for the conversation gate, the account proof, an unresolved person, an
+  unaddressable or unproven quote, or a dead session (RPC 401);
+  `TELEGRAM_MTPROTO_NOT_DISPATCHED` for everything else. An outcome another owner
+  already stated passes through; after dispatch starts the error is untyped (I-10).
+  A failed credential read stays untyped. — `telegramSendFailure` —
+  `tg-actions.identity.test.ts` (TG2R block).
+- **I-57 The outbound peer sweep is bounded and silent.** `getDialogs({limit: 200})`,
+  single-flight per client object, waited at most 15 s, released after 60 s if it
+  never answers, started at most once per 60 s per connection, with FLOOD_WAIT
+  honoured per connection. It fetches no history, admits nothing, writes nothing
+  and logs only a bounded code. — `telegramPeerSweep`, `waitForTelegramPeerSweep` —
+  `tg-actions.identity.test.ts` (TG2R block).
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.
@@ -1503,6 +1542,11 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-25 | CRM send reconciliation in the MTProto mirror/import is not compare-and-set; concurrent identical sends can cross-assign provider ids until a later fetch | `findStoredTelegramMessage` (outbound branch); no conditional claim in the messaging port | LOW |
 | R-26 | MTProto recovery is bounded (catch-up 30 dialogs × 20–50 messages, import 100 × 200): a held or missed event is recovered only if fetched again; no durable per-event hold record exists | `G/app/tg-actions.ts` `catchUpMissedMessages`, `importTelegramHistory` | HIGH until a replay design exists |
 | R-27 | A `key_conflict` event is refused, not stored: an exact key already on another Chat, direction or channel needs investigation, and a second distinct id-less event in the same second shares the synthetic `local-<ms>` key, so it is counted and logged but never persisted | `G/app/tg-actions.ts` `findStoredTelegramMessage`, `createTelegramMessageOrFindWinner` | MEDIUM |
+| R-28 | Telegram outbound person resolution is bounded (I-54, I-57): a person outside the 200 most recent dialogs (archived included) whose access hash this process has not learned is refused `TELEGRAM_PEER_UNRESOLVED`, and a miss inside the 60 s sweep window is `NOT_DISPATCHED` | `G/app/tg-actions.ts` `resolveExactTelegramUserEntity`, `telegramPeerSweep` | HIGH |
+| R-29 | The reply UI quotes `replyContext.externalId` without checking the channel, and sends no quote at all when the replied row has no `externalId`; the adapter refuses a foreign-channel id (I-55) but cannot see the dropped quote (DEP-Q2, Messaging/UI) | `G/app/messages/components/ChatWorkspace.tsx` `handleSendMessage` | HIGH |
+| R-30 | Telegram's reconnect path re-attests a fresh client and does not compare provider-account provenance with the conversation (deferred on main), so after the account behind a connection changes, sends leave from the new account; only a connected cached client fails closed (I-16) | `G/app/tg-actions.ts` `getTelegramClient` reconnect branch | MEDIUM |
+| R-31 | An operator retry skips the retry back-off; a retry inside the 60 s sweep window spends one of the three attempts on `NOT_DISPATCHED` | `G/lib/MessageService.ts` `retrySend`; `telegramPeerSweep` | MEDIUM |
+| R-32 | GramJS's `getDialogs` logs a whole message object when one fails to initialise; catch-up (30 dialogs) and the outbound sweep (200) share this exposure (R-24 class) | `telegram/client/dialogs.js`; `catchUpMissedMessages`, `telegramPeerSweep` | MEDIUM |
 
 ## 10. Cleanup candidates
 
