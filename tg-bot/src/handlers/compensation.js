@@ -157,6 +157,20 @@ const ACCESS_RESTRICTIONS = {
     outside_first_calendar_month: NOT_ELIGIBLE,
     catalogue_disabled: NOT_ELIGIBLE,
 };
+// Refusals the CRM gives only after it proved the person, so the applications
+// it sends with them are this driver's own. Any other answer may come for a
+// chat that is not, or not provably, the driver's: its applications are
+// never shown, whatever the answer carries.
+const PROVEN_PERSON_REFUSALS = new Set([
+    'park_not_selected',
+    'selected_park_profile_unproven',
+    'driver_not_in_park',
+    'self_employment_unknown',
+    'hire_date_unknown',
+    'not_self_employed',
+    'outside_first_calendar_month',
+    'catalogue_disabled',
+]);
 // A refused chat authority on entry (409): see AUTHORITY_REFUSED_TEXT below.
 const AUTHORITY_RESTRICTION = {
     reason: VERIFY_REASON,
@@ -273,10 +287,10 @@ async function loadSection(ctx, search) {
 
     if (!view || view.available !== true) {
         const reason = view && view.reason;
-        const summary = applicationsSummary(view && view.applications);
+        const summary = PROVEN_PERSON_REFUSALS.has(reason) ? applicationsSummary(view.applications) : '';
         const restriction = ACCESS_RESTRICTIONS[reason];
         if (!restriction) {
-            await ctx.reply(`${reason === 'identity_busy' ? REFUSAL_TEXT.identity_busy : crmFailureText(null)}${summary}`);
+            await ctx.reply(reason === 'identity_busy' ? REFUSAL_TEXT.identity_busy : crmFailureText(null));
             await ctx.scene.leave();
             return null;
         }
@@ -307,14 +321,11 @@ async function showEntry(ctx) {
     ]));
 }
 
+// The month's budget is the park's internal figure and is never shown to a
+// driver. A claim it cannot cover gets the CRM's own refusal at submission.
 function header(view) {
     const hint = CATALOGUE_HINT[view.catalogueStatus];
-    // Nothing left, or no budget opened for the month yet: the driver is not
-    // shown a zero. The CRM's own refusal says so if they submit.
-    const budget = view.remainingBudgetKopecks > 0
-        ? `\nОстаток бюджета на ${view.monthKey}: ${rubles(view.remainingBudgetKopecks)} ₽.`
-        : '';
-    return `💰 Компенсация наличных${budget}${hint ? `\n${hint}` : ''}`;
+    return `💰 Компенсация наличных${hint ? `\n${hint}` : ''}`;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

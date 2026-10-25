@@ -257,7 +257,7 @@ test('opens on today from the local list, newest first, asking the CRM nothing e
     assert.equal('parkId' in payload || 'selectedExternalParkId' in payload, false);
 
     const message = harness.last();
-    assert.match(message.text, /Остаток бюджета на 2026-09: 5000 ₽/);
+    assert.doesNotMatch(message.text, /Остаток|бюджет|5000/);
     assert.match(message.text, /Сегодня:/);
     const labels = harness.buttons().map((button) => button.text);
     assert.deepEqual(labels.slice(0, 3), ['15:42 — 680 ₽', '12:18 — 430 ₽', '09:51 — 790 ₽']);
@@ -798,9 +798,47 @@ test('a month with no budget open shows no zero, and the claim gets the CRM\'s o
     assert.equal(harness.last().text, 'Приём заявок за этот месяц закрыт. Напишите менеджеру.');
 });
 
-test('the remaining budget is still shown when there is some', async () => {
-    crm.catalogueStatus = 'on_demand';
-    const harness = createBot();
-    await open(harness);
-    assert.match(harness.last().text, /Остаток бюджета на 2026-09: 5000 ₽\./);
+test('the internal budget is never shown, whatever is left', async () => {
+    for (const status of ['on_demand', 'ready']) {
+        crm.reset();
+        crm.catalogueStatus = status;
+        crm.remainingBudgetKopecks = 437_500;
+        const harness = createBot();
+        await open(harness);
+        await harness.tap(status === 'on_demand' ? `comp_day:${TODAY}` : 'comp_earlier:0');
+        for (const message of harness.messages()) {
+            assert.doesNotMatch(message.text, /Остаток|бюджет|4375/);
+        }
+    }
+});
+
+const OWN_APPLICATION = { shortOrderId: '4821', amountKopecks: 30_000, status: 'submitted', rejectionReason: null };
+
+test('applications sent with an unproven or unreliable identity never reach the chat', async () => {
+    for (const setup of [
+        () => { crm.reason = 'identity_not_proven'; },
+        () => { crm.reason = 'identity_needs_review'; },
+        () => { crm.reason = 'identity_busy'; },
+        () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
+    ]) {
+        crm.reset();
+        setup();
+        crm.applications = [OWN_APPLICATION];
+        const harness = createBot();
+        await press(harness);
+        const text = harness.last().text;
+        assert.equal(crm.of('compensation_section')[0].payload.search, undefined);
+        assert.doesNotMatch(text, /Ваши заявки|4821|300 ₽|на рассмотрении/, `${crm.reason}: ${text}`);
+    }
+});
+
+test('a confirmed driver the section refuses still sees their own applications', async () => {
+    for (const reason of ['not_self_employed', 'outside_first_calendar_month', 'park_not_selected']) {
+        crm.reset();
+        crm.reason = reason;
+        crm.applications = [OWN_APPLICATION];
+        const harness = createBot();
+        await press(harness);
+        assert.match(harness.last().text, /\n\nВаши заявки:\n• Заказ №4821: 300 ₽ — на рассмотрении$/, reason);
+    }
 });
