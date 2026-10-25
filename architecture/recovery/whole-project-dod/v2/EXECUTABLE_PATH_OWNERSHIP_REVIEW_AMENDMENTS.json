@@ -2533,6 +2533,103 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "contact-communication-restrictions-b1-main-4f3b6c0a-20261025",
+      "reviewed_at": "2026-10-25T00:00:00Z",
+      "reviewed_by": "CONTACT_COMMUNICATION_RESTRICTIONS_B1_EXECUTOR_REVIEW_4F3B6C0A",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_PRODUCT_WORK_AUTHORIZED_B1_FINAL_CURRENT_MAIN_RECONCILE_4F3B6C0A_20261025",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 4f3b6c0a, whose tail is bot-driver-action-profile-park-guard-main-5dc489cd-20261022, and reviews only the ten surfaces the forward-ported Contacts communication restrictions foundation adds on that tail. The epic/contact-identity ownership records of PR #164 are not carried; everything here is derived again against the chain main publishes now."
+      },
+      "reason": "Records the bounded forward-port of the Contact Identity communication restrictions foundation (epic PR #164) on top of main 4f3b6c0a. Ten tracked executable surfaces are added: eight contacts-owned (the contacts.ContactCommunicationPermissionQuery.v1 / SetContactCommunicationPolicyCommand.v1 contracts and their test under gravity-mvp/src/contracts/contacts; the policy domain, the Prisma policy store, the transaction-bound lineage port and their three proofs under gravity-mvp/src/modules/contacts), the expand-only migration under gravity-mvp/prisma (gravity_schema governed exclusion) and the boundary control under tools/architecture (architecture_controls governed exclusion). 2,696 + 10 = 2,706 surfaces, context-owned 1,461 -> 1,469 and governed exclusions 1,235 -> 1,237. The current triple is this repository's own derivation over this tree (preview on the clean commit 3efc0f95, which reported no required source-hash rebind and no exact-inventory path without a reviewed assignment). Every new surface sits under a path its context manifest or a prefix governed exclusion already owns, so no explicit exact-inventory assignment applies. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2696,
+        "tracked_inventory_sha256": "ca05aafb27fe0f7febdbba6475d4c6e9e2bb33b9b3940d9d4fc0eda3aa66ef38",
+        "coverage_sha256": "d381fb55eae25ba776cab72aef5eb7d8f8d9e54ab09307ff983039d9703828b6"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2706,
+        "tracked_inventory_sha256": "088e475870c213c8d6b6eb826f521048865ab001edaca050dc7aefbf5034b14f",
+        "coverage_sha256": "a911197a3176df56eace4fecfedb4571c2520285e6245f591d62aaa475c53ddc"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle comes from the reviewed lifecycle surface registry entry and the reviewed noncanonical migration decisions. It is the expand-only source migration that creates the two Contacts-owned communication policy tables, their checks, guard functions and row triggers inside one transaction."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-communication-policy-contracts.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The contract test of contacts.ContactCommunicationPermissionQuery.v1 and SetContactCommunicationPolicyCommand.v1 (envelopes, exact fields, classes, versions and identifier validation); it opens no database connection and holds no credential, under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-communication-policy-contracts.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral contacts.ContactCommunicationPermissionQuery.v1 and SetContactCommunicationPolicyCommand.v1 contracts: the three standing restriction flags of one canonical Contact, the fail-closed permission answer with canonicalContactId and policy version, and the Contacts-owned mutation envelope. Under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-communication-policy.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The env-gated PostgreSQL proof of the communication policy foundation (real merge and automated recovery, manual reconciliation routing, serialized concurrency, guard refusals and cascade removal); it runs only against an isolated database the caller provides, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the Contacts communication policy store and its read and mutation ports against an in-memory transaction double; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one Prisma store of ContactCommunicationPolicy and its append-only events, with the permission read in one repeatable-read snapshot and the locked compare-and-set mutation under the Contacts ownership transaction. It writes only Contacts-owned policy state, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/prisma-contact-lineage-port.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The transaction-bound Prisma lineage persistence port that lets the existing Contacts lineage handler resolve inside the permission read snapshot; it reads Contact lineage only and writes nothing, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-communication-policy.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The domain proof of the communication policy: fail-closed permission answers, deterministic request replay, idempotency and version conflicts, deny-wins merge composition and the event-chain recovery rule; it opens no database connection, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-communication-policy.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Contacts communication policy domain: the permission query handler, the Contacts-owned mutation handler that the public surface does not export, deny-wins merge composition and the recovery proof over the event chain. It has no provider, transport or channel dependency, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "tools/architecture/check-contact-communication-policy-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the communication policy stays a fail-closed, Contacts-owned, deny-wins capability whose mutation no file outside Contacts can reach, and runs its proofs; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
