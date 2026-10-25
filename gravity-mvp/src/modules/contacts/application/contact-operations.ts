@@ -49,6 +49,14 @@ import {
 } from '../public/v1/driver-person-confirmation'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
+import {
+    createContactCommunicationPermissionQueryHandlerV1,
+    createSetContactCommunicationPolicyHandlerV1,
+} from '../public/v1/contact-communication-policy'
+import {
+    legacyPrismaContactCommunicationPolicyMutationPortV1,
+    legacyPrismaContactCommunicationPolicyReadPortV1,
+} from '../internal/legacy-prisma-contact-communication-policy-adapter'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -64,6 +72,8 @@ const prepareContactConversationIdentity = createPrepareContactConversationIdent
 const getPreferredActiveContactPhone = createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
 const resolveInboundConversationPeerIdentity = createResolveInboundConversationPeerIdentityHandlerV1(legacyPrismaContactConversationPortV1)
 const resolveContactLineage = createResolveContactLineageHandlerV1(legacyPrismaContactLineagePortV1)
+const getContactCommunicationPermission = createContactCommunicationPermissionQueryHandlerV1(legacyPrismaContactCommunicationPolicyReadPortV1)
+const setContactCommunicationPolicy = createSetContactCommunicationPolicyHandlerV1(legacyPrismaContactCommunicationPolicyMutationPortV1)
 
 export const resolveContactV1 = (...args: Parameters<typeof resolveContact>) => resolveContact(...args)
 export const attachContactIdentityV1 = (...args: Parameters<typeof attachContactIdentity>) => attachContactIdentity(...args)
@@ -101,3 +111,5 @@ export function runDriverClusterContactOwnershipV1<T>(
     return runDriverClusterContactOwnership<T>(work)
 }
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)
+export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
+export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)
