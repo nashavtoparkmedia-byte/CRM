@@ -156,17 +156,34 @@ export function yandexFleetProfileObservationV1(
   }
 }
 
+/** A non-2xx Fleet answer; the message stays the one the nightly run has always logged. */
+export class YandexFleetHttpErrorV1 extends Error {
+  constructor(readonly status: number, readonly retryAfterMs: number | null) {
+    super(`Yandex Fleet HTTP ${status}`)
+    this.name = 'YandexFleetHttpErrorV1'
+  }
+}
+
+function retryAfterMs(header: string | null): number | null {
+  const seconds = Number(header)
+  return header !== null && Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null
+}
+
+/** One exact profile of the connection's park: a single page of at most one row. */
+type ProfileTargetV1 = { profileId: string; timeoutMs: number }
+
 async function fetchParkProfiles(
   connection: YandexConnectionCredentialsV1,
   query: string | null,
+  target: ProfileTargetV1 | null = null,
 ): Promise<YandexFleetProfileObservationV1[]> {
   const observations: YandexFleetProfileObservationV1[] = []
   let offset = 0
-  const limit = query ? 100 : 1000
+  const limit = target ? 1 : query ? 100 : 1000
   let total = Number.POSITIVE_INFINITY
   do {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 20_000)
+    const timeout = setTimeout(() => controller.abort(), target?.timeoutMs ?? 20_000)
     try {
       const response = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
         method: 'POST',
@@ -180,7 +197,10 @@ async function fetchParkProfiles(
         },
         body: JSON.stringify({
           query: {
-            park: { id: connection.parkId },
+            park: {
+              id: connection.parkId,
+              ...(target ? { driver_profile: { id: [target.profileId] } } : {}),
+            },
             ...(query ? { text: query } : {}),
           },
           fields: {
@@ -209,7 +229,7 @@ async function fetchParkProfiles(
           offset,
         }),
       })
-      if (!response.ok) throw new Error(`Yandex Fleet HTTP ${response.status}`)
+      if (!response.ok) throw new YandexFleetHttpErrorV1(response.status, retryAfterMs(response.headers?.get('retry-after') ?? null))
       const body = await response.json() as { driver_profiles?: unknown[]; total?: number }
       const rows = Array.isArray(body.driver_profiles) ? body.driver_profiles : []
       total = Number.isFinite(Number(body.total)) ? Number(body.total) : offset + rows.length
@@ -225,7 +245,7 @@ async function fetchParkProfiles(
         if (observation) observations.push(observation)
       }
       offset += rows.length
-      if (query || rows.length === 0) break
+      if (target || query || rows.length === 0) break
     } finally {
       clearTimeout(timeout)
     }
@@ -763,4 +783,65 @@ async function reconcileYandexFleetV1(
 
 export const legacyPrismaYandexFleetReconcilerPortV1 = {
   reconcile: reconcileYandexFleetV1,
+}
+
+/** The one profile a targeted refresh may read, taken from a proven Driver row, never from a caller. */
+export type YandexFleetDriverProfileTargetV1 = {
+  externalParkId: string
+  externalDriverProfileId: string
+}
+
+export type YandexFleetDriverProfileRefreshV1 =
+  | { status: 'refreshed' }
+  /** Fleet answered without exactly this profile of this park: nothing is written. */
+  | { status: 'not_returned' }
+  | { status: 'rate_limited'; retryAfterMs: number | null }
+  | { status: 'failed'; code: 'no_connection' | 'provider_error' | 'persist_failed' }
+
+/** A driver waits on this request, so it gets far less time than a nightly page. */
+export const YANDEX_FLEET_PROFILE_REFRESH_TIMEOUT_MS = 6_000
+
+/**
+ * Re-observes one driver profile and stores it exactly as the nightly run stores
+ * every profile: one page of at most one row from that park's own connection,
+ * filtered by the profile id, then the same upsert under the same mutation
+ * lease. It reads no other profile and no other park, and it does not run the
+ * cluster or contact pass: a refresh asked for by a driver never moves identity.
+ */
+export async function refreshYandexFleetDriverProfileV1(
+  target: YandexFleetDriverProfileTargetV1,
+): Promise<YandexFleetDriverProfileRefreshV1> {
+  const connections = await listYandexConnectionCredentialsV1()
+  const connection = connections.find(row => row.parkId === target.externalParkId)
+  if (!connection) return { status: 'failed', code: 'no_connection' }
+  const startedAt = Date.now()
+  let observations: YandexFleetProfileObservationV1[]
+  try {
+    observations = await fetchParkProfiles(connection, null, {
+      profileId: target.externalDriverProfileId,
+      timeoutMs: YANDEX_FLEET_PROFILE_REFRESH_TIMEOUT_MS,
+    })
+    await recordParkReconciliationOutcome(connection, startedAt, null)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Yandex Fleet request failed'
+    await recordParkReconciliationOutcome(connection, startedAt, message)
+    if (error instanceof YandexFleetHttpErrorV1 && error.status === 429) {
+      return { status: 'rate_limited', retryAfterMs: error.retryAfterMs }
+    }
+    return { status: 'failed', code: 'provider_error' }
+  }
+  const [observation] = observations
+  if (
+    observations.length !== 1
+    || observation.externalParkId !== target.externalParkId
+    || observation.externalDriverProfileId !== target.externalDriverProfileId
+  ) {
+    return { status: 'not_returned' }
+  }
+  try {
+    await withFleetReconciliationMutationLease(() => upsertObservation(observation, connections.length))
+  } catch {
+    return { status: 'failed', code: 'persist_failed' }
+  }
+  return { status: 'refreshed' }
 }

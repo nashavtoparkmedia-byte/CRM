@@ -291,6 +291,26 @@ describe('ingestion mode and enabled parks', () => {
         expect(parseCashOrderIngestionConfigV1({ mode: 'write', parks: 'a,b,c,d' }))
             .toMatchObject({ configError: 'enabled_park_limit_exceeded' })
     })
+
+    it('lets on demand enable the six YOKO parks and fails the seventh', () => {
+        expect(parseCashOrderIngestionConfigV1({ mode: 'on_demand', parks: 'a,b,c,d,e,f' }))
+            .toEqual({ mode: 'on_demand', enabledParks: ['a', 'b', 'c', 'd', 'e', 'f'], configError: null })
+        expect(parseCashOrderIngestionConfigV1({ mode: 'on_demand', parks: 'a,b,c,d,e,f,g' }))
+            .toMatchObject({ mode: 'on_demand', configError: 'enabled_park_limit_exceeded' })
+    })
+
+    it('keeps three parks for the scheduled modes, whatever on demand allows', () => {
+        expect(parseCashOrderIngestionConfigV1({ mode: 'write', parks: 'a,b,c' }).configError).toBeNull()
+        for (const mode of ['write', 'off', undefined, 'dry_run']) {
+            expect(parseCashOrderIngestionConfigV1({ mode, parks: 'a,b,c,d,e,f' }).configError)
+                .toBe('enabled_park_limit_exceeded')
+        }
+    })
+
+    it('fits every scheduled park start into one write tick after setup', () => {
+        expect(T.MAX_ENABLED_PARKS * T.PARK_START_FLOOR_MS).toBeLessThanOrEqual(T.RUN_DEADLINE_MS - T.SETUP_MS)
+        expect((T.MAX_ENABLED_PARKS + 1) * T.PARK_START_FLOOR_MS).toBeGreaterThan(T.RUN_DEADLINE_MS - T.SETUP_MS)
+    })
 })
 
 describe('park tenure queue', () => {

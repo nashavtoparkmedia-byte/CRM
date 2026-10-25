@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
   persistClusterConflict: vi.fn(),
   persistStandaloneConflict: vi.fn(),
+  apiLogCreate: vi.fn(),
+  connections: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -29,7 +31,12 @@ vi.mock('@/lib/prisma', () => ({
       },
       contact: { findUnique: mocks.contactFindUnique },
     })),
+    apiLog: { create: mocks.apiLogCreate },
   },
+}))
+
+vi.mock('./yandex-connection-capability', () => ({
+  listYandexConnectionCredentialsV1: mocks.connections,
 }))
 
 vi.mock('@/modules/contacts/public/v1', () => ({
@@ -45,6 +52,7 @@ vi.mock('@/modules/contacts/public/v1', () => ({
 
 import {
   reconcileClusters,
+  refreshYandexFleetDriverProfileV1,
   upsertObservation,
   type YandexFleetProfileObservationV1,
 } from '../../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
@@ -228,5 +236,117 @@ describe('durable multi-park reconciliation context', () => {
     expect(mocks.driverUpdate).not.toHaveBeenCalled()
     expect(mocks.driverCreate).not.toHaveBeenCalled()
     expect(mocks.reconcile).not.toHaveBeenCalled()
+  })
+})
+
+describe('targeted refresh of one driver profile', () => {
+  const PARK_A = 'a'.repeat(32)
+  const PARK_B = 'b'.repeat(32)
+  const PROFILE = 'c'.repeat(32)
+  const fetchMock = vi.fn()
+  const connection = (park: string, clid: string) => ({
+    id: `conn-${clid}`, connectionId: `conn-${clid}`, clid, apiKey: `key-${clid}`, parkId: park, localParkId: `local-${clid}`, name: clid,
+  })
+  const profileRow = (id: string) => ({
+    driver_profile: {
+      id,
+      first_name: 'Иван', last_name: 'Петров', phones: ['+79990000001'],
+      work_status: 'working', created_date: '2026-10-19T05:00:00.000+0000',
+      hire_date: '2026-10-19T05:00:00.000+0000', is_selfemployed: true, employment_type: 'selfemployed',
+    },
+    current_status: { status: 'free' },
+  })
+  const answer = (status: number, body: unknown, headers: Record<string, string> = {}) => ({
+    ok: status >= 200 && status < 300, status, headers: new Headers(headers), json: async () => body,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', fetchMock)
+    mocks.connections.mockResolvedValue([connection(PARK_A, 'yoko'), connection(PARK_B, 'yoko2')])
+    mocks.queryRaw.mockResolvedValue([{ admitted: true }])
+    mocks.driverFindUnique.mockResolvedValue({ id: 'driver-1', contactId: 'contact-1', yandexDriverId: 'legacy', licenseNumber: null, customFields: {} })
+    mocks.driverFindFirst.mockResolvedValue(null)
+    mocks.driverUpdate.mockResolvedValue({ id: 'driver-1' })
+    mocks.apiLogCreate.mockResolvedValue({})
+  })
+
+  test('asks exactly one profile of its own park, with that park\'s own credentials', async () => {
+    fetchMock.mockResolvedValue(answer(200, { driver_profiles: [profileRow(PROFILE)], total: 1 }))
+    await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list')
+    expect(init.headers).toMatchObject({ 'X-Client-ID': 'yoko2', 'X-Api-Key': 'key-yoko2' })
+    const body = JSON.parse(init.body)
+    expect(body.query).toEqual({ park: { id: PARK_B, driver_profile: { id: [PROFILE] } } })
+    expect(body.limit).toBe(1)
+    expect(body.offset).toBe(0)
+    expect(body.fields.driver_profile).toEqual(expect.arrayContaining(['id', 'hire_date', 'is_selfemployed', 'employment_type']))
+  })
+
+  test('stores the profile through the reconciler upsert and leaves identity alone', async () => {
+    fetchMock.mockResolvedValue(answer(200, { driver_profiles: [profileRow(PROFILE)], total: 1 }))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'refreshed' })
+    expect(mocks.driverFindUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { externalParkId_externalDriverProfileId: { externalParkId: PARK_B, externalDriverProfileId: PROFILE } },
+    }))
+    expect(mocks.driverUpdate).toHaveBeenCalledTimes(1)
+    const { data } = mocks.driverUpdate.mock.calls[0][0]
+    expect(data).toMatchObject({ isSelfEmployed: true, employmentType: 'selfemployed', externalParkId: PARK_B, externalDriverProfileId: PROFILE })
+    expect(data.yandexHireDate).toEqual(new Date('2026-10-19T05:00:00.000Z'))
+    // No cluster or contact pass, and no contact link written.
+    expect(mocks.ownershipAdmission).not.toHaveBeenCalled()
+    expect(mocks.reconcile).not.toHaveBeenCalled()
+    expect(data).not.toHaveProperty('contactId')
+    expect(mocks.apiLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ connectionId: 'conn-yoko2', statusCode: 200, error: null }) })
+  })
+
+  test('writes nothing when Yandex answers with another profile, or with more than one', async () => {
+    for (const rows of [[profileRow('d'.repeat(32))], [profileRow(PROFILE), profileRow('d'.repeat(32))], []]) {
+      mocks.driverUpdate.mockClear()
+      mocks.driverCreate.mockClear()
+      fetchMock.mockResolvedValue(answer(200, { driver_profiles: rows, total: rows.length }))
+      expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE }))
+        .toEqual({ status: 'not_returned' })
+      expect(mocks.driverUpdate).not.toHaveBeenCalled()
+      expect(mocks.driverCreate).not.toHaveBeenCalled()
+    }
+  })
+
+  test('reports HTTP 429 with Retry-After and logs it like the nightly run', async () => {
+    fetchMock.mockResolvedValue(answer(429, {}, { 'Retry-After': '30' }))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_A, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'rate_limited', retryAfterMs: 30_000 })
+    expect(mocks.apiLogCreate).toHaveBeenCalledWith({ data: expect.objectContaining({ statusCode: 0, error: 'Yandex Fleet HTTP 429' }) })
+    expect(mocks.driverUpdate).not.toHaveBeenCalled()
+    fetchMock.mockResolvedValue(answer(429, {}))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_A, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'rate_limited', retryAfterMs: null })
+  })
+
+  test('fails closed on any other provider fault, without retrying inside the request', async () => {
+    fetchMock.mockResolvedValue(answer(500, {}))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_A, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'failed', code: 'provider_error' })
+    fetchMock.mockRejectedValue(new Error('network down'))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_A, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'failed', code: 'provider_error' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(mocks.driverUpdate).not.toHaveBeenCalled()
+  })
+
+  test('asks nothing for a park without its own connection', async () => {
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: 'e'.repeat(32), externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'failed', code: 'no_connection' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  test('fails closed when the store refuses the write', async () => {
+    fetchMock.mockResolvedValue(answer(200, { driver_profiles: [profileRow(PROFILE)], total: 1 }))
+    mocks.driverUpdate.mockRejectedValue(new Error('lock timeout'))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'failed', code: 'persist_failed' })
   })
 })

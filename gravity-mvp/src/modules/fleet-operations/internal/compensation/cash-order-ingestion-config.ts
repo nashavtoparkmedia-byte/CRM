@@ -29,7 +29,9 @@
  *
  * YOKO_CASH_COMPENSATION_PARKS lists the compensation-enabled external park
  * ids, comma separated. It is both the ingestion scope and product
- * enablement, and it is capped at three parks.
+ * enablement. It is capped at three parks in the scheduled modes, where a
+ * write tick shares one run deadline between them, and at six in on_demand,
+ * which never reads a park and so adds no load per enabled park.
  */
 
 import { CASH_ORDER_INGESTION_TIMING_V1 as T } from './cash-order-ingestion-budget'
@@ -73,8 +75,10 @@ export function parseCashOrderIngestionConfigV1(env: {
         .map((park) => park.trim())
         .filter((park) => park !== ''))]
     // Too many parks is a configuration failure for every park, not a silent
-    // truncation to the first three.
-    if (enabledParks.length > T.MAX_ENABLED_PARKS) {
+    // truncation to the first few. A retired mode resolves to off and so keeps
+    // the scheduled limit.
+    const limit = mode === 'on_demand' ? T.MAX_ON_DEMAND_ENABLED_PARKS : T.MAX_ENABLED_PARKS
+    if (enabledParks.length > limit) {
         return { mode, enabledParks, configError: 'enabled_park_limit_exceeded' }
     }
     // Reported after the park limit so a deployment with both faults still sees

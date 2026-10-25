@@ -28,8 +28,8 @@ android {
         applicationId = "ru.yokoone.crm.shell"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0-stage1"
+        versionCode = 2
+        versionName = "1.0.0"
         // UI Automator drives the WebView through its accessibility tree, which
         // is the only way to assert on what the operator actually sees.
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

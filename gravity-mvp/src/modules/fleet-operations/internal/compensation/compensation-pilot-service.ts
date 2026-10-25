@@ -115,6 +115,18 @@ export interface CompensationPilotPortV1 {
     resolveContactLineage(contactId: string): Promise<PilotContactLineageReadV1>
     /** The facts eligibility needs, read from the proven Driver row only. */
     findDriverFacts(driverId: string): Promise<PilotDriverFactsV1 | null>
+    /**
+     * Brings the proven Driver row's facts up to the provider's current state
+     * unless they were confirmed recently, by a request for that row's own park
+     * and profile (see DriverFactsRefresherV1). Absent: the stored facts decide.
+     */
+    ensureDriverFactsFresh?(driver: {
+        driverId: string
+        externalParkId: string
+        externalDriverProfileId: string
+        /** The row holds both the SMZ flag and the hire date. */
+        factsStated: boolean
+    }): Promise<'fresh' | 'refreshed' | 'unavailable'>
     findCashOrders(input: { externalParkId: string; externalDriverProfileId: string }): Promise<PilotCatalogueOrderV1[]>
     findBudgetPeriod(periodKey: string): Promise<{
         limitKopecks: number; reservedKopecks: number; settledKopecks: number
@@ -308,8 +320,25 @@ export async function resolvePilotIdentityV1(
         return { proven: false, refusal: PILOT_IDENTITY_LINEAGE_REFUSALS_V1[admission.refusal] }
     }
 
-    const driver = await port.findDriverFacts(proof.driverId)
+    let driver = await port.findDriverFacts(proof.driverId)
     if (!driver) return { proven: false, refusal: 'identity_not_proven' }
+
+    // Only after the person is proven, and only for the proven row's own park
+    // and profile: nothing in the proof names what the provider is asked about.
+    if (port.ensureDriverFactsFresh && driver.externalParkId && driver.externalDriverProfileId) {
+        const freshness = await port.ensureDriverFactsFresh({
+            driverId: proof.driverId,
+            externalParkId: driver.externalParkId,
+            externalDriverProfileId: driver.externalDriverProfileId,
+            factsStated: driver.facts.isSelfEmployed !== null && driver.facts.parkHireDate !== null,
+        })
+        // Facts the provider could not confirm decide nothing; the driver retries.
+        if (freshness === 'unavailable') return { proven: false, refusal: 'identity_busy' }
+        if (freshness === 'refreshed') {
+            driver = await port.findDriverFacts(proof.driverId)
+            if (!driver) return { proven: false, refusal: 'identity_not_proven' }
+        }
+    }
 
     return {
         proven: true,
@@ -673,3 +702,129 @@ export async function submitPilotApplicationV1(
 }
 
 export { pilotDriverStatusV1 }
+
+// ── Freshness of the proven driver's eligibility facts ───────────────────────
+
+/**
+ * Cash must not depend on the nightly sync of whole parks, which a large park
+ * can fail for days. The facts a decision reads (the park-SMZ flag and the
+ * park hire date) decide on their own only when this process confirmed them
+ * with the provider within the TTL. A fact the provider did not state decides
+ * only within UNSTATED_RECHECK_MS of that answer. The row's own observation
+ * stamp is never enough. Otherwise one targeted request for exactly the proven
+ * park and profile runs first. A refresh that cannot complete leaves the
+ * driver with a retry, never with a decision on facts the provider did not
+ * confirm.
+ *
+ * Load on the provider is bounded here, per process (Gravity runs one):
+ *   - a driver waits at most WAIT_MS; the request itself finishes in the
+ *     background and the next tap reads its result;
+ *   - concurrent taps for one profile join the request already in flight;
+ *   - a failed profile is not asked again for RETRY_AFTER_FAILURE_MS;
+ *   - HTTP 429 pauses the whole park for Retry-After, or for a cooldown that
+ *     doubles on every repeat, capped;
+ *   - at most MAX_IN_FLIGHT refreshes run at once across all drivers.
+ */
+export const DRIVER_FACTS_FRESHNESS_V1 = Object.freeze({
+    /**
+     * Twelve hours keeps a decision within the provider's state of the same day
+     * (the SMZ flag and the hire date rarely change) at no more than two
+     * requests per driver per day.
+     */
+    TTL_MS: 12 * 60 * 60 * 1000,
+    /** After the provider answered without a fact, it is not asked again for that profile for this long. */
+    UNSTATED_RECHECK_MS: 10 * 60 * 1000,
+    /** Under the bot's 15 s timeout with room for the rest of the request. */
+    WAIT_MS: 7_000,
+    RETRY_AFTER_FAILURE_MS: 60_000,
+    RATE_LIMIT_COOLDOWN_MS: 60_000,
+    RATE_LIMIT_COOLDOWN_MAX_MS: 15 * 60 * 1000,
+    MAX_IN_FLIGHT: 3,
+    /** Per-profile memory is pruned past this size; entries older than their window carry no state. */
+    MAX_REMEMBERED_PROFILES: 1_000,
+})
+
+const FRESHNESS = DRIVER_FACTS_FRESHNESS_V1
+
+export type DriverFactsFreshnessV1 = 'fresh' | 'refreshed' | 'unavailable'
+
+export interface DriverFactsRefreshTargetV1 {
+    externalParkId: string
+    externalDriverProfileId: string
+}
+
+export type DriverFactsRefreshResultV1 =
+    | { status: 'refreshed' }
+    | { status: 'not_returned' }
+    | { status: 'rate_limited'; retryAfterMs: number | null }
+    | { status: 'failed'; code: string }
+
+export interface DriverFactsRefreshPortsV1 {
+    refresh(target: DriverFactsRefreshTargetV1): Promise<DriverFactsRefreshResultV1>
+    nowMs(): number
+    sleep(ms: number): Promise<void>
+}
+
+export class DriverFactsRefresherV1 {
+    private readonly inFlight = new Map<string, Promise<boolean>>()
+    private readonly lastConfirmedAt = new Map<string, number>()
+    private readonly lastFailureAt = new Map<string, number>()
+    private readonly parkCooldownUntil = new Map<string, number>()
+    private readonly parkRateLimitStrikes = new Map<string, number>()
+
+    constructor(private readonly ports: DriverFactsRefreshPortsV1) {}
+
+    /** `factsStated`: the row holds both the SMZ flag and the hire date. */
+    async ensureFresh(target: DriverFactsRefreshTargetV1, factsStated: boolean): Promise<DriverFactsFreshnessV1> {
+        const now = this.ports.nowMs()
+        const key = `${target.externalParkId}:${target.externalDriverProfileId}`
+        const confirmedAt = this.lastConfirmedAt.get(key)
+        const trustMs = factsStated ? FRESHNESS.TTL_MS : FRESHNESS.UNSTATED_RECHECK_MS
+        if (confirmedAt !== undefined && now - confirmedAt < trustMs) return 'fresh'
+        let pending = this.inFlight.get(key)
+        if (pending === undefined) {
+            if ((this.parkCooldownUntil.get(target.externalParkId) ?? 0) > now) return 'unavailable'
+            const failedAt = this.lastFailureAt.get(key)
+            if (failedAt !== undefined && now - failedAt < FRESHNESS.RETRY_AFTER_FAILURE_MS) return 'unavailable'
+            if (this.inFlight.size >= FRESHNESS.MAX_IN_FLIGHT) return 'unavailable'
+            pending = this.run(key, target)
+            this.inFlight.set(key, pending)
+        }
+        const settled = await Promise.race([pending, this.ports.sleep(FRESHNESS.WAIT_MS).then(() => null)])
+        return settled === true ? 'refreshed' : 'unavailable'
+    }
+
+    private async run(key: string, target: DriverFactsRefreshTargetV1): Promise<boolean> {
+        try {
+            const result: DriverFactsRefreshResultV1 = await this.ports.refresh(target)
+                .catch(() => ({ status: 'failed' as const, code: 'refresh_threw' }))
+            const now = this.ports.nowMs()
+            if (result.status === 'refreshed') {
+                this.lastFailureAt.delete(key)
+                this.parkRateLimitStrikes.delete(target.externalParkId)
+                this.remember(this.lastConfirmedAt, key, now, FRESHNESS.TTL_MS)
+                return true
+            }
+            this.remember(this.lastFailureAt, key, now, FRESHNESS.RETRY_AFTER_FAILURE_MS)
+            if (result.status === 'rate_limited') {
+                const strikes = (this.parkRateLimitStrikes.get(target.externalParkId) ?? 0) + 1
+                this.parkRateLimitStrikes.set(target.externalParkId, strikes)
+                const backoff = FRESHNESS.RATE_LIMIT_COOLDOWN_MS * 2 ** Math.min(strikes - 1, 8)
+                const pause = Math.min(FRESHNESS.RATE_LIMIT_COOLDOWN_MAX_MS, Math.max(result.retryAfterMs ?? 0, backoff))
+                this.parkCooldownUntil.set(target.externalParkId, now + pause)
+            }
+            return false
+        } finally {
+            this.inFlight.delete(key)
+        }
+    }
+
+    private remember(map: Map<string, number>, key: string, now: number, windowMs: number): void {
+        if (map.size >= FRESHNESS.MAX_REMEMBERED_PROFILES) {
+            for (const [entry, at] of map) {
+                if (now - at >= windowMs) map.delete(entry)
+            }
+        }
+        map.set(key, now)
+    }
+}

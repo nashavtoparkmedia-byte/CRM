@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { PilotCatalogueFactsV1, PilotCatalogueOrderV1 } from './compensation-pilot-selection'
 import {
+    DRIVER_FACTS_FRESHNESS_V1,
+    DriverFactsRefresherV1,
     checkPilotOrderV1,
     compensationSectionViewV1,
     requestPilotRefreshV1,
@@ -10,6 +12,8 @@ import {
     withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
     type CompensationPilotPortV1,
+    type DriverFactsRefreshResultV1,
+    type DriverFactsRefreshTargetV1,
     type PilotDriverFactsV1,
     type PilotTelegramPersonProofV1,
 } from './compensation-pilot-service'
@@ -871,5 +875,314 @@ describe('on demand: the driver picks a day and only that driver\'s day is asked
         const result = await submitPilotApplicationV1(SUBMIT, p, onDemand(), NOW)
         expect(result).toEqual({ submitted: false, refusal: 'order_confirmation_pending' })
         expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+})
+
+describe('driver facts refreshed on demand, without the nightly park sync', () => {
+    type Facts = PilotDriverFactsV1['facts']
+    const SMZ_HIRED_IN_SEPTEMBER: Facts = {
+        isSelfEmployed: true, employmentType: 'selfemployed', parkHireDate: new Date('2026-09-02T06:00:00.000Z'),
+    }
+    const NEVER_STATED: Facts = { isSelfEmployed: null, employmentType: null, parkHireDate: null }
+
+    /**
+     * The Driver row and the provider behind it. A refresh copies the provider's
+     * current facts into the row, as the Fleet reconciler's upsert does; an
+     * unavailable provider leaves the row untouched.
+     */
+    function world(input: {
+        stored: Facts
+        provider: Facts | 'unavailable' | 'fresh'
+        row?: { externalParkId: string; externalDriverProfileId: string }
+    }) {
+        let stored = input.stored
+        const row = input.row ?? { externalParkId: PARK, externalDriverProfileId: PROFILE }
+        const ensureDriverFactsFresh = vi.fn(async () => {
+            if (input.provider === 'fresh') return 'fresh' as const
+            if (input.provider === 'unavailable') return 'unavailable' as const
+            stored = input.provider
+            return 'refreshed' as const
+        })
+        const p = port({
+            findDriverFacts: vi.fn(async () => ({ ...row, facts: stored })),
+            ensureDriverFactsFresh,
+        })
+        return { p, ensureDriverFactsFresh }
+    }
+
+    it('admits a new SMZ driver whose hire date the CRM never had but Yandex states', async () => {
+        const { p, ensureDriverFactsFresh } = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        expect(ensureDriverFactsFresh).toHaveBeenCalledWith({
+            driverId: DRIVER, externalParkId: PARK, externalDriverProfileId: PROFILE, factsStated: false,
+        })
+        expect(p.findDriverFacts).toHaveBeenCalledTimes(2)
+    })
+
+    it('marks a row without the SMZ flag or the hire date as unstated, whatever its stamp', async () => {
+        for (const [facts, stated] of [
+            [NEVER_STATED, false],
+            [{ ...SMZ_HIRED_IN_SEPTEMBER, isSelfEmployed: null }, false],
+            [{ ...SMZ_HIRED_IN_SEPTEMBER, parkHireDate: null }, false],
+            [{ ...SMZ_HIRED_IN_SEPTEMBER, isSelfEmployed: false }, true],
+            [SMZ_HIRED_IN_SEPTEMBER, true],
+        ] as const) {
+            const { p, ensureDriverFactsFresh } = world({ stored: facts, provider: 'fresh' })
+            await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+            expect(ensureDriverFactsFresh).toHaveBeenCalledWith(expect.objectContaining({ factsStated: stated }))
+        }
+    })
+
+    it('decides on what Yandex states now when the stored facts were stale and changed', async () => {
+        const rehired = world({
+            stored: { ...SMZ_HIRED_IN_SEPTEMBER, parkHireDate: new Date('2026-06-02T06:00:00.000Z') },
+            provider: SMZ_HIRED_IN_SEPTEMBER,
+        })
+        expect(await compensationSectionViewV1(PROOF, rehired.p, ingestion(), NOW)).toMatchObject({ available: true })
+
+        const leftSmz = world({ stored: SMZ_HIRED_IN_SEPTEMBER, provider: { ...SMZ_HIRED_IN_SEPTEMBER, isSelfEmployed: false } })
+        expect(await compensationSectionViewV1(PROOF, leftSmz.p, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        expect(await submitPilotApplicationV1(SUBMIT, leftSmz.p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'not_self_employed' })
+        expect(leftSmz.p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('refuses a driver Yandex states is not SMZ', async () => {
+        const { p } = world({ stored: NEVER_STATED, provider: { ...SMZ_HIRED_IN_SEPTEMBER, isSelfEmployed: false, employmentType: 'park_employee' } })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+    })
+
+    it('refuses a driver whose first calendar month is over', async () => {
+        const { p } = world({ stored: NEVER_STATED, provider: { ...SMZ_HIRED_IN_SEPTEMBER, parkHireDate: new Date('2026-07-15T06:00:00.000Z') } })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'outside_first_calendar_month' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('asks to retry, and files nothing, when Yandex cannot confirm stale facts', async () => {
+        // The stale row would pass; it must not decide while unconfirmed.
+        const { p } = world({ stored: SMZ_HIRED_IN_SEPTEMBER, provider: 'unavailable' })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW))
+            .toEqual({ available: false, reason: 'identity_busy', applications: [] })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'identity_busy' })
+        expect(await checkPilotOrderV1({ ...PROOF, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, ingestion(), NOW))
+            .toMatchObject({ refusal: 'identity_busy' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+        expect(p.findDriverApplications).not.toHaveBeenCalled()
+    })
+
+    it('reads the row once and asks nothing more when the facts are fresh', async () => {
+        const { p, ensureDriverFactsFresh } = world({ stored: SMZ_HIRED_IN_SEPTEMBER, provider: 'fresh' })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toMatchObject({ available: true })
+        expect(ensureDriverFactsFresh).toHaveBeenCalledTimes(1)
+        expect(p.findDriverFacts).toHaveBeenCalledTimes(1)
+    })
+
+    it('refreshes the proven row of a multi-park driver, never the park the bot names', async () => {
+        const PARK_2 = 'park-2'
+        const PROFILE_2 = 'q'.repeat(32)
+        const own = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER, row: { externalParkId: PARK_2, externalDriverProfileId: PROFILE_2 } })
+        const view = await compensationSectionViewV1({ ...PROOF, selectedExternalParkId: PARK_2 }, own.p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        expect(own.ensureDriverFactsFresh).toHaveBeenCalledWith({
+            driverId: DRIVER, externalParkId: PARK_2, externalDriverProfileId: PROFILE_2, factsStated: false,
+        })
+
+        // The bot still holds park 1: the proven row in park 2 is refreshed, and the scope refuses.
+        const other = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER, row: { externalParkId: PARK_2, externalDriverProfileId: PROFILE_2 } })
+        expect(await compensationSectionViewV1(PROOF, other.p, ingestion(), NOW)).toMatchObject({ available: false })
+        expect(other.ensureDriverFactsFresh).toHaveBeenCalledWith(expect.objectContaining({ externalParkId: PARK_2 }))
+        expect(other.ensureDriverFactsFresh).not.toHaveBeenCalledWith(expect.objectContaining({ externalParkId: PARK }))
+    })
+
+    it('never asks the provider for a person who is not proven', async () => {
+        for (const overrides of [
+            { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) },
+            { confirmMainDriver: vi.fn(async () => 'busy' as const) },
+            { resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-2'] })) },
+        ]) {
+            const { p, ensureDriverFactsFresh } = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+            const unproven = { ...p, ...overrides }
+            expect(await compensationSectionViewV1(PROOF, unproven, ingestion(), NOW)).toMatchObject({ available: false })
+            expect(ensureDriverFactsFresh).not.toHaveBeenCalled()
+        }
+        const noProfile = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER, row: { externalParkId: PARK, externalDriverProfileId: '' } })
+        await compensationSectionViewV1(PROOF, noProfile.p, ingestion(), NOW)
+        expect(noProfile.ensureDriverFactsFresh).not.toHaveBeenCalled()
+    })
+
+    it('keeps every money rule after a refresh', async () => {
+        const capped = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+        expect(await submitPilotApplicationV1({ ...SUBMIT, claimedRubles: 100_001 }, capped.p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'claim_above_pilot_cap' })
+
+        const pending = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+        pending.p.submitApplication = vi.fn(async () => ({ refusal: 'active_pending_exists' as const }))
+        expect(await submitPilotApplicationV1(SUBMIT, pending.p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'active_pending_exists' })
+
+        const empty = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+        empty.p.findBudgetPeriod = vi.fn(async () => ({ limitKopecks: 500_000, reservedKopecks: 500_000, settledKopecks: 0 }))
+        expect(await compensationSectionViewV1(PROOF, empty.p, ingestion(), NOW)).toMatchObject({ remainingBudgetKopecks: 0 })
+
+        const ok = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
+        expect(await submitPilotApplicationV1(SUBMIT, ok.p, ingestion(), NOW))
+            .toMatchObject({ submitted: true, applicationId: 'app-1' })
+        expect(ok.p.submitApplication).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('what reaches the provider when a driver taps', () => {
+    const F = DRIVER_FACTS_FRESHNESS_V1
+    const HOUR = 60 * 60 * 1000
+    const OTHER_PARK = 'park-2'
+    const target = (profile = 'a'.repeat(32), park = PARK): DriverFactsRefreshTargetV1 => ({
+        externalParkId: park, externalDriverProfileId: profile,
+    })
+
+    /** A clock the test moves, a provider the test answers, and waits that end only when told to. */
+    function provider(answer: (target: DriverFactsRefreshTargetV1) => Promise<DriverFactsRefreshResultV1>) {
+        let now = Date.parse('2026-10-24T12:00:00.000Z')
+        let releaseWaits: Array<() => void> = []
+        const refresh = vi.fn(answer)
+        const refresher = new DriverFactsRefresherV1({
+            refresh,
+            nowMs: () => now,
+            sleep: () => new Promise<void>((resolve) => { releaseWaits.push(resolve) }),
+        })
+        return {
+            refresher,
+            refresh,
+            advance: (ms: number) => { now += ms },
+            /** Ends every driver's wait, as WAIT_MS elapsing would. */
+            timeOut: () => { releaseWaits.forEach((release) => release()); releaseWaits = [] },
+        }
+    }
+    const refreshed = async (): Promise<DriverFactsRefreshResultV1> => ({ status: 'refreshed' })
+
+    it('asks once, then decides on the stated facts for 12 hours however often the driver taps', async () => {
+        const w = provider(refreshed)
+        expect(await w.refresher.ensureFresh(target(), true)).toBe('refreshed')
+        for (let tap = 0; tap < 20; tap += 1) {
+            w.advance(HOUR / 2)
+            expect(await w.refresher.ensureFresh(target(), true)).toBe('fresh')
+        }
+        expect(w.refresh).toHaveBeenCalledTimes(1)
+        w.advance(2 * HOUR)
+        expect(await w.refresher.ensureFresh(target(), true)).toBe('refreshed')
+        expect(w.refresh).toHaveBeenCalledTimes(2)
+        expect(w.refresh).toHaveBeenCalledWith(target())
+    })
+
+    it('never trusts a stored row on its own: the first tap of a process asks the provider', async () => {
+        const w = provider(refreshed)
+        expect(await w.refresher.ensureFresh(target('b'.repeat(32)), true)).toBe('refreshed')
+        expect(await w.refresher.ensureFresh(target('c'.repeat(32)), false)).toBe('refreshed')
+        expect(w.refresh).toHaveBeenCalledTimes(2)
+    })
+
+    it('trusts an unstated SMZ flag or hire date only right after the provider answered, then asks again', async () => {
+        const w = provider(refreshed)
+        expect(await w.refresher.ensureFresh(target(), false)).toBe('refreshed')
+        for (let tap = 0; tap < 10; tap += 1) {
+            w.advance(30_000)
+            expect(await w.refresher.ensureFresh(target(), false)).toBe('fresh')
+        }
+        expect(w.refresh).toHaveBeenCalledTimes(1)
+        w.advance(F.UNSTATED_RECHECK_MS)
+        expect(await w.refresher.ensureFresh(target(), false)).toBe('refreshed')
+        expect(w.refresh).toHaveBeenCalledTimes(2)
+    })
+
+    it('joins concurrent taps for one profile into one request', async () => {
+        let answer!: (result: DriverFactsRefreshResultV1) => void
+        const w = provider(() => new Promise((resolve) => { answer = resolve }))
+        const taps = Array.from({ length: 10 }, () => w.refresher.ensureFresh(target(), true))
+        answer({ status: 'refreshed' })
+        expect(await Promise.all(taps)).toEqual(Array(10).fill('refreshed'))
+        expect(w.refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not ask again for a profile that just failed, until the retry window passes', async () => {
+        const w = provider(async () => ({ status: 'failed', code: 'provider_error' }))
+        expect(await w.refresher.ensureFresh(target(), true)).toBe('unavailable')
+        for (let tap = 0; tap < 10; tap += 1) {
+            w.advance(5_000)
+            expect(await w.refresher.ensureFresh(target(), true)).toBe('unavailable')
+        }
+        expect(w.refresh).toHaveBeenCalledTimes(1)
+        w.advance(F.RETRY_AFTER_FAILURE_MS)
+        await w.refresher.ensureFresh(target(), true)
+        expect(w.refresh).toHaveBeenCalledTimes(2)
+    })
+
+    it('pauses the whole park on HTTP 429 for Retry-After, other parks unaffected', async () => {
+        const w = provider(async (t) => (t.externalParkId === PARK
+            ? { status: 'rate_limited', retryAfterMs: 5 * 60_000 }
+            : { status: 'refreshed' }))
+        expect(await w.refresher.ensureFresh(target('a'.repeat(32)), true)).toBe('unavailable')
+        w.advance(4 * 60_000)
+        expect(await w.refresher.ensureFresh(target('b'.repeat(32)), true)).toBe('unavailable')
+        expect(await w.refresher.ensureFresh(target('c'.repeat(32), OTHER_PARK), true)).toBe('refreshed')
+        expect(w.refresh).toHaveBeenCalledTimes(2)
+        w.advance(60_001)
+        await w.refresher.ensureFresh(target('b'.repeat(32)), true)
+        expect(w.refresh).toHaveBeenCalledTimes(3)
+    })
+
+    it('doubles the park pause on repeated 429 without Retry-After, up to the cap', async () => {
+        const w = provider(async () => ({ status: 'rate_limited', retryAfterMs: null }))
+        let profile = 0
+        const next = () => target(`${profile++}`.repeat(32).slice(0, 32))
+        await w.refresher.ensureFresh(next(), true)
+        let expected: number = F.RATE_LIMIT_COOLDOWN_MS
+        for (let strike = 1; strike <= 6; strike += 1) {
+            const calls = w.refresh.mock.calls.length
+            w.advance(expected - 1)
+            expect(await w.refresher.ensureFresh(next(), true)).toBe('unavailable')
+            expect(w.refresh.mock.calls.length).toBe(calls)
+            w.advance(1)
+            await w.refresher.ensureFresh(next(), true)
+            expect(w.refresh.mock.calls.length).toBe(calls + 1)
+            expected = Math.min(F.RATE_LIMIT_COOLDOWN_MAX_MS, expected * 2)
+        }
+        expect(expected).toBe(F.RATE_LIMIT_COOLDOWN_MAX_MS)
+    })
+
+    it('starts at most MAX_IN_FLIGHT refreshes at once across all drivers', async () => {
+        const w = provider(() => new Promise(() => undefined))
+        const taps = Array.from({ length: F.MAX_IN_FLIGHT + 2 }, (_, index) => w.refresher.ensureFresh(target(`${index}`.repeat(32)), true))
+        w.timeOut()
+        expect(await Promise.all(taps)).toEqual(Array(F.MAX_IN_FLIGHT + 2).fill('unavailable'))
+        expect(w.refresh).toHaveBeenCalledTimes(F.MAX_IN_FLIGHT)
+    })
+
+    it('lets a slow refresh finish in the background while the driver is asked to retry', async () => {
+        let answer!: (result: DriverFactsRefreshResultV1) => void
+        const w = provider(() => new Promise((resolve) => { answer = resolve }))
+        const first = w.refresher.ensureFresh(target(), true)
+        w.timeOut()
+        expect(await first).toBe('unavailable')
+        // The retry joins the same request instead of starting another.
+        const retry = w.refresher.ensureFresh(target(), true)
+        answer({ status: 'refreshed' })
+        expect(await retry).toBe('refreshed')
+        expect(w.refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('treats a refresh that throws, or a profile Yandex did not return, as a failure', async () => {
+        const thrown = provider(async () => { throw new Error('boom') })
+        expect(await thrown.refresher.ensureFresh(target(), true)).toBe('unavailable')
+        const missing = provider(async () => ({ status: 'not_returned' }))
+        expect(await missing.refresher.ensureFresh(target(), true)).toBe('unavailable')
+        missing.advance(10_000)
+        expect(await missing.refresher.ensureFresh(target(), true)).toBe('unavailable')
+        expect(missing.refresh).toHaveBeenCalledTimes(1)
     })
 })

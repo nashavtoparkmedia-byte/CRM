@@ -11,6 +11,7 @@
  */
 
 import { legacyPrismaCompensationPilotPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-adapter'
+import { refreshYandexFleetDriverProfileV1 } from '../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
 import { legacyPrismaCompensationPilotReadinessPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-readiness-adapter'
 import {
     compensationPilotReadinessReportV1,
@@ -21,12 +22,14 @@ import {
 import { parseOwnerPilotAdmissionsV1 } from '../internal/compensation/compensation-eligibility'
 import { requireCompensationPilotTelegramLinkReaderV1 } from '../public/v1/compensation-pilot-telegram-link-reader'
 import {
+    DriverFactsRefresherV1,
     checkPilotOrderV1,
     compensationSectionViewV1,
     requestPilotRefreshV1,
     submitPilotApplicationV1,
     withOwnerPilotAdmissionPortV1,
     type CompensationPilotIngestionPortV1,
+    type CompensationPilotPortV1,
     type CompensationSectionViewV1,
     type PilotOrderCheckV1,
     type PilotRefreshOutcomeV1,
@@ -64,6 +67,34 @@ const pilotPortV1 = withOwnerPilotAdmissionPortV1(
     legacyPrismaCompensationPilotPortV1,
     ownerPilotAdmissionsV1.admissions,
 )
+
+// One refresher per process, so its joins, failure pauses and park cooldowns
+// hold across every Telegram request.
+const driverFactsRefresherV1 = new DriverFactsRefresherV1({
+    refresh: (target) => refreshYandexFleetDriverProfileV1(target),
+    nowMs: () => Date.now(),
+    sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms).unref?.() }),
+})
+
+/**
+ * The Telegram surfaces' port: stale facts of the proven driver are refreshed
+ * before they decide. Only in a park Cash is live in, so Cash off, a broken
+ * configuration or a park outside Cash never reaches the provider. Readiness
+ * keeps the plain port and never asks the provider.
+ */
+const telegramPilotPortV1: CompensationPilotPortV1 = {
+    ...pilotPortV1,
+    async ensureDriverFactsFresh(driver) {
+        const scope = cashOrderPilotParkScopeV1()
+        if (scope.mode === 'off' || scope.configError !== null || !scope.enabledParks.includes(driver.externalParkId)) {
+            return 'fresh'
+        }
+        return driverFactsRefresherV1.ensureFresh(
+            { externalParkId: driver.externalParkId, externalDriverProfileId: driver.externalDriverProfileId },
+            driver.factsStated,
+        )
+    },
+}
 
 /** On demand confirms an order through its driver's day, never through the park's. */
 function onDemandV1(): boolean {
@@ -113,14 +144,14 @@ export async function compensationPilotSectionV1(
     options: { search?: string | null } = {},
     now: Date = new Date(),
 ): Promise<CompensationSectionViewV1> {
-    return compensationSectionViewV1(proof, pilotPortV1, pilotIngestionPortV1, now, options)
+    return compensationSectionViewV1(proof, telegramPilotPortV1, pilotIngestionPortV1, now, options)
 }
 
 export async function compensationPilotSubmitV1(
     input: Parameters<typeof submitPilotApplicationV1>[0],
     now: Date = new Date(),
 ): Promise<PilotSubmitOutcomeV1> {
-    return submitPilotApplicationV1(input, pilotPortV1, pilotIngestionPortV1, now)
+    return submitPilotApplicationV1(input, telegramPilotPortV1, pilotIngestionPortV1, now)
 }
 
 /** The driver chose an order: whether it may proceed, and whether Yandex is being asked. */
@@ -128,7 +159,7 @@ export async function compensationPilotOrderCheckV1(
     input: Parameters<typeof checkPilotOrderV1>[0],
     now: Date = new Date(),
 ): Promise<PilotOrderCheckV1> {
-    return checkPilotOrderV1(input, pilotPortV1, pilotIngestionPortV1, now)
+    return checkPilotOrderV1(input, telegramPilotPortV1, pilotIngestionPortV1, now)
 }
 
 /** Schedules a hot pass of the driver's selected park; never waits for it. */
@@ -136,7 +167,7 @@ export async function compensationPilotRefreshV1(
     proof: PilotTelegramPersonProofV1,
     now: Date = new Date(),
 ): Promise<PilotRefreshOutcomeV1> {
-    return requestPilotRefreshV1(proof, pilotPortV1, pilotIngestionPortV1, now)
+    return requestPilotRefreshV1(proof, telegramPilotPortV1, pilotIngestionPortV1, now)
 }
 
 /**
