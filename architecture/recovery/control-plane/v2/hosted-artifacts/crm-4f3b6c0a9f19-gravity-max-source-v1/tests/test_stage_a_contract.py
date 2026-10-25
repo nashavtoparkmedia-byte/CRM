@@ -15,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "4f3b6c0a9f19ded2d7867c8a11da396f6dc61543"
-BUILDER_COMMIT = "STAGE_A_BUILDER_COMMIT_PLACEHOLDER"
+BUILDER_COMMIT = "28de38d49a7ecffa98ca001224726e0fedd66bdf"
 BUILDER_BASE_COMMIT = "4f3b6c0a9f19ded2d7867c8a11da396f6dc61543"
 PROFILE = "crm-4f3b6c0a9f19-gravity-max-source-v1"
 WORKFLOW = ".github/workflows/coordinated-gravity-max-4f3b6c0a.yml"
