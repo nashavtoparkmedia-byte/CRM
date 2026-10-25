@@ -82,6 +82,10 @@ function createFakeCrm() {
             fake.delays = {};
             // On demand: how the CRM answers each picked day (default: the provider answered).
             fake.dayKinds = {};
+            // A refusal the section answers with before anything else (identity, eligibility).
+            fake.reason = null;
+            fake.applications = [];
+            fake.remainingBudgetKopecks = 500_000;
         },
         scopeKey() {
             return fake.selectedPark === 'park-b' ? SCOPE_B : SCOPE_A;
@@ -100,6 +104,7 @@ function createFakeCrm() {
                     : null;
             switch (action) {
                 case 'compensation_section': {
+                    if (fake.reason) return { available: false, reason: fake.reason, applications: fake.applications };
                     if (refusal) return { available: false, reason: refusal, applications: [] };
                     if (fake.catalogueStatus === 'disabled') return { available: false, reason: 'catalogue_disabled', applications: [] };
                     const query = payload.search || null;
@@ -110,12 +115,12 @@ function createFakeCrm() {
                             available: true,
                             scopeKey: fake.scopeKey(),
                             monthKey: '2026-09',
-                            remainingBudgetKopecks: 500_000,
+                            remainingBudgetKopecks: fake.remainingBudgetKopecks,
                             catalogueStatus: 'on_demand',
                             todayKey: TODAY,
                             orders: fake.orders,
                             search: { query, kind, truncated: false, externalOrderIds: dayOrders.map((m) => m.externalOrderId) },
-                            applications: [],
+                            applications: fake.applications,
                         };
                     }
                     const matches = query
@@ -127,12 +132,12 @@ function createFakeCrm() {
                         available: true,
                         scopeKey: fake.scopeKey(),
                         monthKey: '2026-09',
-                        remainingBudgetKopecks: 500_000,
+                        remainingBudgetKopecks: fake.remainingBudgetKopecks,
                         catalogueStatus: fake.catalogueStatus,
                         todayKey: TODAY,
                         orders: fake.orders,
                         search: query ? { query, kind: 'number', truncated: false, externalOrderIds: matches.map((m) => m.externalOrderId) } : null,
-                        applications: [],
+                        applications: fake.applications,
                     };
                 }
                 case 'compensation_order_check': {
@@ -221,7 +226,12 @@ function createBot() {
     };
 }
 
-const open = (harness) => harness.text('💰 Компенсация наличных');
+// Pressing the menu entry shows the banner; «💰 Подать заявку» opens the claim.
+const press = (harness) => harness.text('💰 Компенсация наличных');
+async function open(harness) {
+    await press(harness);
+    await harness.tap('comp_apply');
+}
 const orderData = (candidate, scopeKey = SCOPE_A) => `comp_o:${scopeKey}:${candidate.externalOrderId}`;
 
 async function reachAttach(harness) {
@@ -237,7 +247,9 @@ test('opens on today from the local list, newest first, asking the CRM nothing e
     const harness = createBot();
     await open(harness);
 
-    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+    // Once for the banner, once more when the driver applies; neither searches.
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section', 'compensation_section']);
+    assert.deepEqual(crm.calls.map((call) => call.payload.search), [undefined, undefined]);
     const payload = crm.calls[0].payload;
     assert.equal(payload.telegramId, '777001');
     assert.equal(payload.providerAccountId, '424242');
@@ -256,8 +268,8 @@ test('opens on today from the local list, newest first, asking the CRM nothing e
 test('asks for a park first and opens park selection', async () => {
     crm.selectedPark = null;
     const harness = createBot();
-    await open(harness);
-    assert.match(harness.last().text, /Сначала выберите парк/);
+    await press(harness);
+    assert.match(harness.last().text, /Сейчас подать заявку нельзя\.\nПричина: в боте не выбран парк\.\nЧто делать: выберите парк кнопкой ниже\./);
     assert.ok(harness.buttons().some((button) => button.callback_data === 'comp_park'));
 
     await harness.tap('comp_park');
@@ -267,8 +279,8 @@ test('asks for a park first and opens park selection', async () => {
 test('refuses a selected park the proven profile is not in, offering to switch', async () => {
     crm.selectedPark = 'park-b';
     const harness = createBot();
-    await open(harness);
-    assert.match(harness.last().text, /пока недоступна для вашего подтверждённого профиля/);
+    await press(harness);
+    assert.match(harness.last().text, /Причина: в выбранном парке не найден ваш подтверждённый профиль водителя\./);
     assert.ok(harness.buttons().some((button) => button.callback_data === 'comp_park'));
     assert.equal(crm.of('compensation_order_check').length, 0);
 });
@@ -276,8 +288,8 @@ test('refuses a selected park the proven profile is not in, offering to switch',
 test('tells a park without a catalogue apart from an empty list, and shows partial and stale hints', async () => {
     crm.catalogueStatus = 'disabled';
     let harness = createBot();
-    await open(harness);
-    assert.match(harness.last().text, /компенсация наличных пока не подключена/);
+    await press(harness);
+    assert.match(harness.last().text, /Причина: ваш профиль не соответствует действующим условиям программы\./);
 
     crm.reset();
     crm.orders = [];
@@ -308,7 +320,7 @@ test('pages earlier orders, reading the list afresh for every page', async () =>
     labels = harness.buttons().map((button) => button.text);
     assert.equal(labels.filter((label) => label.endsWith('500 ₽')).length, 2);
     assert.ok(labels.includes('‹ Новее'));
-    assert.equal(crm.of('compensation_section').length, 3);
+    assert.equal(crm.of('compensation_section').length, 4);
 });
 
 test('offers every search candidate and never chooses one', async () => {
@@ -538,7 +550,19 @@ test('stops at a definitive not-confirmed answer', async () => {
 test('answers refused chat authority as a binding problem', async () => {
     crm.failures.compensation_section = [409];
     const harness = createBot();
+    await press(harness);
+    const text = harness.last().text;
+    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\./);
+    assert.match(text, /Номер телефона повторно отправлять не нужно/);
+    assert.doesNotMatch(text, /поделитесь номером/);
+    assert.doesNotMatch(text, /не соответствует действующим условиям/);
+});
+
+test('answers refused chat authority later in the claim with the short sentence', async () => {
+    const harness = createBot();
     await open(harness);
+    crm.failures.compensation_order_check = [409];
+    await harness.tap(orderData(O1));
     assert.match(harness.last().text, /Не удалось подтвердить привязку этого чата/);
 });
 
@@ -554,8 +578,8 @@ test('on demand opens on a date picker of the first month, asking the CRM nothin
     assert.deepEqual(data.slice(0, 7), ['2026-09-18', '2026-09-17', '2026-09-16', '2026-09-15', '2026-09-14', '2026-09-13', '2026-09-12'].map((day) => `comp_day:${day}`));
     assert.ok(data.includes('comp_day_other'));
     assert.ok(!data.includes('comp_refresh'));
-    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
-    assert.equal(crm.calls[0].payload.search, undefined);
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section', 'compensation_section']);
+    assert.deepEqual(crm.calls.map((call) => call.payload.search), [undefined, undefined]);
 });
 
 test('a picked day lists only that day, and an order from it goes through the usual claim', async () => {
@@ -586,7 +610,7 @@ test('tells no orders, still checking, Yandex unavailable and a day out of reach
     await open(harness);
 
     await harness.tap('comp_day:2026-09-17');
-    assert.match(harness.last().text, /За 17\.09 завершённых заказов за наличные не найдено/);
+    assert.equal(harness.last().text, 'За выбранную дату подходящие заказы не найдены. Проверьте дату поездки или выберите другой день.');
 
     await harness.tap('comp_day:2026-09-16');
     assert.match(harness.last().text, /Проверяем заказы за 16\.09/);
@@ -594,10 +618,10 @@ test('tells no orders, still checking, Yandex unavailable and a day out of reach
 
     await harness.tap('comp_day:2026-09-15');
     assert.match(harness.last().text, /Яндекс сейчас не отвечает/);
-    assert.doesNotMatch(harness.last().text, /не найдено/);
+    assert.doesNotMatch(harness.last().text, /не найден/);
 
     await harness.tap('comp_day:2026-09-01');
-    assert.match(harness.last().text, /Эту дату выбрать нельзя/);
+    assert.equal(harness.last().text, 'За выбранную дату компенсация недоступна. Выберите другую дату, если у вас есть неоплаченные наличные заказы за подходящий период.');
 });
 
 test('another date is typed as DD.MM and checked before the CRM is asked', async () => {
@@ -625,3 +649,158 @@ test('the usual park list stays as it was outside on-demand mode', async () => {
     assert.ok(!harness.buttons().some((button) => String(button.callback_data).startsWith('comp_day')));
 });
 
+
+// ── Entry: the banner, and who may apply ───────────────────────────────────
+
+const ELIGIBLE_LINES = [
+    '💰 Компенсация наличных',
+    'Пассажир не оплатил поездку наличными?',
+    'Если Яндекс отказал в компенсации, YOKO может компенсировать вам до 500 ₽ за заказ.',
+    '1. Обратитесь в поддержку Яндекса по неоплаченному заказу и попросите компенсировать его стоимость.',
+    '5. Дождитесь решения менеджера. После одобрения мы перечислим компенсацию.',
+    '• До 500 ₽ за один заказ.',
+    '• Не более одного компенсированного заказа в день.',
+    '• Для подачи заявки необходим отказ Яндекса.',
+    '• Выплата производится вручную после одобрения заявки.',
+];
+const RESTRICTED_LINES = [
+    'В YOKO действует программа компенсации неоплаченных наличных заказов до 500 ₽.',
+    'Сейчас программа доступна новым водителям, подключившимся к YOKO в качестве парковых самозанятых, за заказы первого месяца работы.',
+    '4. Отправьте заявку и дождитесь решения менеджера.',
+    'Сейчас подать заявку нельзя.',
+];
+const NOT_ELIGIBLE_TEXT = /Причина: ваш профиль не соответствует действующим условиям программы\.\nЧто делать: сейчас компенсация доступна новым водителям, подключённым как парковые самозанятые, за заказы первого месяца работы\.$/;
+
+function assertLines(text, lines) {
+    for (const line of lines) assert.ok(text.split('\n').includes(line), `missing line: ${line}`);
+}
+
+test('an admitted driver sees the programme banner, and the date picker only after «Подать заявку»', async () => {
+    crm.catalogueStatus = 'on_demand';
+    const harness = createBot();
+    await press(harness);
+
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+    assert.equal(crm.calls[0].payload.search, undefined);
+    assertLines(harness.last().text, ELIGIBLE_LINES);
+    assert.doesNotMatch(harness.last().text, /Сейчас подать заявку нельзя|Остаток бюджета/);
+    assert.deepEqual(harness.buttons().map((button) => [button.text, button.callback_data]), [['💰 Подать заявку', 'comp_apply']]);
+
+    await harness.tap('comp_apply');
+    assert.match(harness.last().text, /Выберите дату, когда завершился заказ/);
+    assert.deepEqual(crm.calls.map((call) => call.payload.search), [undefined, undefined]);
+
+    await harness.tap(`comp_day:${TODAY}`);
+    assert.deepEqual(crm.calls.map((call) => call.payload.search), [undefined, undefined, TODAY]);
+});
+
+test('the banner lists the driver\'s applications with their status', async () => {
+    crm.applications = [{ shortOrderId: '4821', amountKopecks: 30_000, status: 'awaiting_payment', rejectionReason: null }];
+    const harness = createBot();
+    await press(harness);
+    assert.match(harness.last().text, /Ваши заявки:\n• Заказ №4821: 300 ₽ — одобрена, ждёт выплаты$/);
+    assert.equal(harness.buttons()[0].callback_data, 'comp_apply');
+});
+
+test('a confirmed driver outside the programme conditions sees the restricted banner and cannot apply', async () => {
+    for (const reason of ['not_self_employed', 'outside_first_calendar_month']) {
+        crm.reset();
+        crm.reason = reason;
+        const harness = createBot();
+        await press(harness);
+        const text = harness.last().text;
+        assertLines(text, RESTRICTED_LINES);
+        assert.match(text, NOT_ELIGIBLE_TEXT);
+        assert.doesNotMatch(text, /Если Яндекс отказал в компенсации/);
+        assert.deepEqual(harness.buttons(), []);
+
+        // The scene is closed: an apply tap is answered as stale and asks the CRM nothing.
+        await harness.tap('comp_apply');
+        assert.match(harness.last().text, /Этот список устарел/);
+        assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+    }
+});
+
+test('an unknown Telegram user is asked to link and never reaches a claim', async () => {
+    crm.reason = 'identity_not_proven';
+    const harness = createBot();
+    await press(harness);
+    const text = harness.last().text;
+    assertLines(text, RESTRICTED_LINES);
+    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: откройте «🚘 Мой автомобиль», поделитесь номером телефона и обратитесь к менеджеру для подтверждения привязки\.$/);
+    assert.doesNotMatch(text, /не соответствует действующим условиям/);
+
+    await harness.tap('comp_apply');
+    await harness.tap(orderData(O1));
+    await harness.tap('comp_support_yes');
+    await harness.photo('support-reply');
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+});
+
+test('a conflicting identity is sent to a manager, and the bot links nothing', async () => {
+    crm.reason = 'identity_needs_review';
+    const harness = createBot();
+    await press(harness);
+    const text = harness.last().text;
+    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: напишите менеджеру: ваш профиль нужно проверить\.$/);
+    assert.doesNotMatch(text, /поделитесь номером|не соответствует действующим условиям/);
+    // The fake CRM throws on any action it does not know, so this is every call.
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+});
+
+test('a fact the CRM could not read asks for verification, never says the driver is not eligible', async () => {
+    for (const [reason, why] of [
+        ['self_employment_unknown', 'не удалось проверить ваш налоговый статус.'],
+        ['hire_date_unknown', 'не удалось проверить дату вашего подключения.'],
+    ]) {
+        crm.reset();
+        crm.reason = reason;
+        const harness = createBot();
+        await press(harness);
+        const text = harness.last().text;
+        assert.ok(text.endsWith(`Причина: ${why}\nЧто делать: напишите менеджеру — он проверит данные вашего профиля.`), text);
+        assert.doesNotMatch(text, /не соответствует действующим условиям/);
+    }
+});
+
+test('a CRM that cannot answer is not a verdict on the driver', async () => {
+    for (const setup of [
+        () => { crm.failures.compensation_section = [503]; },
+        () => { crm.failures.compensation_section = [504]; },
+        () => { crm.reason = 'identity_busy'; },
+        () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
+    ]) {
+        crm.reset();
+        setup();
+        const harness = createBot();
+        await press(harness);
+        const text = harness.last().text;
+        assert.match(text, /^(Система недоступна, попробуйте позже\.|Профиль сейчас обновляется\. Попробуйте через минуту\.)$/);
+        assert.doesNotMatch(text, /Сейчас подать заявку нельзя|не соответствует|поделитесь номером/);
+        assert.deepEqual(harness.buttons(), []);
+    }
+});
+
+test('a month with no budget open shows no zero, and the claim gets the CRM\'s own refusal', async () => {
+    crm.catalogueStatus = 'on_demand';
+    crm.remainingBudgetKopecks = 0;
+    crm.submitAnswers = [{ submitted: false, refusal: 'period_missing' }];
+    const harness = createBot();
+    await open(harness);
+    assert.match(harness.last().text, /^💰 Компенсация наличных\n\nВыберите дату, когда завершился заказ:$/);
+    assert.doesNotMatch(harness.last().text, /Остаток бюджета|0 ₽/);
+    await harness.tap(`comp_day:${TODAY}`);
+    await harness.tap(orderData(O1));
+    await harness.tap('comp_support_yes');
+    await harness.text('300');
+    await harness.photo('support-reply');
+    assert.equal(crm.of('compensation_submit').length, 1);
+    assert.equal(harness.last().text, 'Приём заявок за этот месяц закрыт. Напишите менеджеру.');
+});
+
+test('the remaining budget is still shown when there is some', async () => {
+    crm.catalogueStatus = 'on_demand';
+    const harness = createBot();
+    await open(harness);
+    assert.match(harness.last().text, /Остаток бюджета на 2026-09: 5000 ₽\./);
+});
