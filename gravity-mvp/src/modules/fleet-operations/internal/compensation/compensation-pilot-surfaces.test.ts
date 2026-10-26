@@ -144,8 +144,11 @@ describe('the telegram scene calls the backend for every decision', () => {
         }
     })
 
-    it('shows the remaining monthly budget and the driver statuses', () => {
-        expect(SCENE).toContain('remainingBudgetKopecks')
+    it('shows the driver statuses but never the internal monthly budget', () => {
+        // The budget is the park's internal figure; the CRM still enforces it
+        // at submission, the driver is only ever told the refusal.
+        expect(SCENE).not.toContain('remainingBudgetKopecks')
+        expect(SCENE).not.toContain('Остаток бюджета')
         for (const status of ['submitted', 'awaiting_payment', 'paid', 'rejected']) {
             expect(SCENE).toContain(status)
         }

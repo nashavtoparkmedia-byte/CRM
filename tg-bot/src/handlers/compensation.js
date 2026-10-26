@@ -23,8 +23,15 @@
  * park is answered as stale. No handler waits for Yandex: a check or a refresh
  * is scheduled and the driver carries on.
  *
- * Steps: pick an order → confirm support was contacted → enter the amount →
- * attach the support reply → submit.
+ * Steps: the entry banner → «💰 Подать заявку» → pick an order → confirm
+ * support was contacted → enter the amount → attach the support reply → submit.
+ *
+ * Entering the section asks the CRM for the section once, without a search, so
+ * no order is fetched before a day is picked. Its answer is shown as one of
+ * three screens: the programme banner for a driver the CRM admitted, the
+ * restricted banner with the reason and what to do, or a neutral sentence when
+ * the CRM could not answer. Only a condition the CRM decided is ever called a
+ * programme condition.
  */
 const { Scenes, Markup } = require('telegraf');
 const crypto = require('crypto');
@@ -78,8 +85,100 @@ const REFUSAL_TEXT = {
     idempotency_conflict: 'Заявка по этому заказу уже отправлена. Статус — в разделе «💰 Компенсация наличных».',
 };
 
-// A park the driver must choose, or choose again, before anything is shown.
-const PARK_REFUSALS = new Set(['park_not_selected', 'selected_park_profile_unproven']);
+// The section's front page for a driver the CRM admitted. Owner-approved text.
+const ELIGIBLE_BANNER = [
+    '💰 Компенсация наличных',
+    '',
+    'Пассажир не оплатил поездку наличными?',
+    'Если Яндекс отказал в компенсации, YOKO может компенсировать вам до 500 ₽ за заказ.',
+    '',
+    'Как получить компенсацию:',
+    '1. Обратитесь в поддержку Яндекса по неоплаченному заказу и попросите компенсировать его стоимость.',
+    '2. Получите отказ от Яндекса и сохраните скриншот ответа.',
+    '3. Вернитесь в этот раздел и выберите нужный заказ.',
+    '4. Прикрепите скриншот отказа Яндекса и отправьте заявку на компенсацию от YOKO.',
+    '5. Дождитесь решения менеджера. После одобрения мы перечислим компенсацию.',
+    '',
+    'Важные условия:',
+    '• До 500 ₽ за один заказ.',
+    '• Не более одного компенсированного заказа в день.',
+    '• Для подачи заявки необходим отказ Яндекса.',
+    '• Выплата производится вручную после одобрения заявки.',
+].join('\n');
+const APPLY_BUTTON = '💰 Подать заявку';
+
+// The front page for everyone else, followed by the reason and what to do.
+// Owner-approved text.
+const RESTRICTED_BANNER = [
+    '💰 Компенсация наличных',
+    '',
+    'Пассажир не оплатил поездку наличными?',
+    'В YOKO действует программа компенсации неоплаченных наличных заказов до 500 ₽.',
+    'Сейчас программа доступна новым водителям, подключившимся к YOKO в качестве парковых самозанятых, за заказы первого месяца работы.',
+    '',
+    'Как это работает:',
+    '1. Обратитесь в поддержку Яндекса по неоплаченному заказу.',
+    '2. Получите отказ в компенсации и сохраните скриншот.',
+    '3. Выберите заказ в нашем боте и прикрепите скриншот отказа.',
+    '4. Отправьте заявку и дождитесь решения менеджера.',
+].join('\n');
+
+const VERIFY_REASON = 'бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO.';
+const NOT_ELIGIBLE = {
+    reason: 'ваш профиль не соответствует действующим условиям программы.',
+    action: 'сейчас компенсация доступна новым водителям, подключённым как парковые самозанятые, за заказы первого месяца работы.',
+};
+const FACTS_UNVERIFIED_ACTION = 'напишите менеджеру — он проверит данные вашего профиля.';
+
+// Why the section is closed to this driver, per refusal the CRM returned. A
+// link to confirm, a park to choose and a fact the CRM could not read all ask
+// for verification; only a rule the CRM decided is a programme condition. A
+// refusal missing here (identity_busy among them) is not a verdict on the
+// driver and gets the neutral sentence instead.
+const ACCESS_RESTRICTIONS = {
+    identity_not_proven: {
+        reason: VERIFY_REASON,
+        action: 'откройте «🚘 Мой автомобиль», поделитесь номером телефона и обратитесь к менеджеру для подтверждения привязки.',
+    },
+    // Linked, but the CRM cannot bind the chat to one person: only a manager can
+    // resolve that, and sharing the number again would change nothing.
+    identity_needs_review: { reason: VERIFY_REASON, action: 'напишите менеджеру: ваш профиль нужно проверить.' },
+    park_not_selected: { reason: 'в боте не выбран парк.', action: 'выберите парк кнопкой ниже.', choosePark: true },
+    selected_park_profile_unproven: {
+        reason: 'в выбранном парке не найден ваш подтверждённый профиль водителя.',
+        action: 'переключите парк кнопкой ниже или напишите менеджеру.',
+        choosePark: true,
+    },
+    driver_not_in_park: { reason: 'бот не нашёл ваш профиль в парке.', action: 'напишите менеджеру.' },
+    // The CRM could not read the fact, which says nothing about the driver.
+    self_employment_unknown: { reason: 'не удалось проверить ваш налоговый статус.', action: FACTS_UNVERIFIED_ACTION },
+    hire_date_unknown: { reason: 'не удалось проверить дату вашего подключения.', action: FACTS_UNVERIFIED_ACTION },
+    not_self_employed: NOT_ELIGIBLE,
+    outside_first_calendar_month: NOT_ELIGIBLE,
+    catalogue_disabled: NOT_ELIGIBLE,
+};
+// Refusals the CRM gives only after it proved the person, so the applications
+// it sends with them are this driver's own. Any other answer may come for a
+// chat that is not, or not provably, the driver's: its applications are
+// never shown, whatever the answer carries.
+const PROVEN_PERSON_REFUSALS = new Set([
+    'park_not_selected',
+    'selected_park_profile_unproven',
+    'driver_not_in_park',
+    'self_employment_unknown',
+    'hire_date_unknown',
+    'not_self_employed',
+    'outside_first_calendar_month',
+    'catalogue_disabled',
+]);
+// A refused chat authority on entry (409): see AUTHORITY_REFUSED_TEXT below.
+const AUTHORITY_RESTRICTION = {
+    reason: VERIFY_REASON,
+    action: 'попробуйте позже или напишите менеджеру, чтобы он подтвердил привязку. Номер телефона повторно отправлять не нужно.',
+};
+
+const NO_ORDERS_TEXT = 'За выбранную дату подходящие заказы не найдены. Проверьте дату поездки или выберите другой день.';
+const DATE_NOT_ALLOWED_TEXT = 'За выбранную дату компенсация недоступна. Выберите другую дату, если у вас есть неоплаченные наличные заказы за подходящий период.';
 
 // An order check that ends the claim, as the refusal it amounts to.
 const CHECK_STATE_REFUSAL = {
@@ -119,6 +218,10 @@ function crmFailureText(error) {
 
 function refusalText(code) {
     return REFUSAL_TEXT[code] || 'Не получилось отправить заявку. Напишите менеджеру.';
+}
+
+function restrictedText(restriction) {
+    return `${RESTRICTED_BANNER}\n\nСейчас подать заявку нельзя.\nПричина: ${restriction.reason}\nЧто делать: ${restriction.action}`;
 }
 
 function applicationsSummary(applications) {
@@ -177,23 +280,29 @@ async function loadSection(ctx, search) {
         view = await callCRM('compensation_section', crmPayload(ctx, search ? { search } : {}));
     } catch (error) {
         logger.error('[compensation] section failed', error);
-        await ctx.reply(crmFailureText(error));
+        await ctx.reply(error && error.status === 409 ? restrictedText(AUTHORITY_RESTRICTION) : crmFailureText(error));
         await ctx.scene.leave();
         return null;
     }
 
     if (!view || view.available !== true) {
         const reason = view && view.reason;
-        const summary = applicationsSummary(view && view.applications);
-        if (PARK_REFUSALS.has(reason)) {
+        const summary = PROVEN_PERSON_REFUSALS.has(reason) ? applicationsSummary(view.applications) : '';
+        const restriction = ACCESS_RESTRICTIONS[reason];
+        if (!restriction) {
+            await ctx.reply(reason === 'identity_busy' ? REFUSAL_TEXT.identity_busy : crmFailureText(null));
+            await ctx.scene.leave();
+            return null;
+        }
+        if (restriction.choosePark) {
             // The scene stays open so the button below works.
-            await ctx.reply(`${refusalText(reason)}${summary}`, Markup.inlineKeyboard([
+            await ctx.reply(`${restrictedText(restriction)}${summary}`, Markup.inlineKeyboard([
                 [Markup.button.callback('🏢 Выбрать парк', 'comp_park')],
                 [Markup.button.callback('Отмена', 'comp_cancel')],
             ]));
             return null;
         }
-        await ctx.reply(`${refusalText(reason)}${summary}`);
+        await ctx.reply(`${restrictedText(restriction)}${summary}`);
         await ctx.scene.leave();
         return null;
     }
@@ -202,11 +311,21 @@ async function loadSection(ctx, search) {
     return view;
 }
 
+/** The section's front page. Orders are not asked for until the driver applies. */
+async function showEntry(ctx) {
+    const view = await loadSection(ctx, null);
+    if (!view) return;
+    ctx.scene.state.step = 'entry';
+    await ctx.reply(`${ELIGIBLE_BANNER}${applicationsSummary(view.applications)}`, Markup.inlineKeyboard([
+        [Markup.button.callback(APPLY_BUTTON, 'comp_apply')],
+    ]));
+}
+
+// The month's budget is the park's internal figure and is never shown to a
+// driver. A claim it cannot cover gets the CRM's own refusal at submission.
 function header(view) {
     const hint = CATALOGUE_HINT[view.catalogueStatus];
-    return `💰 Компенсация наличных\n`
-        + `Остаток бюджета на ${view.monthKey}: ${rubles(view.remainingBudgetKopecks)} ₽.`
-        + (hint ? `\n${hint}` : '');
+    return `💰 Компенсация наличных${hint ? `\n${hint}` : ''}`;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -283,7 +402,7 @@ async function showDay(ctx, dayKey) {
         return ctx.reply(`Заказы за ${date} — выберите нужный:`, Markup.inlineKeyboard(buttons));
     }
     if (search.kind === 'date') {
-        return ctx.reply(`За ${date} завершённых заказов за наличные не найдено.`, Markup.inlineKeyboard([other, cancel]));
+        return ctx.reply(NO_ORDERS_TEXT, Markup.inlineKeyboard([other, cancel]));
     }
     if (search.kind === 'date_checking') {
         return ctx.reply(
@@ -298,10 +417,7 @@ async function showDay(ctx, dayKey) {
         );
     }
     if (search.kind === 'date_not_allowed') {
-        return ctx.reply(
-            'Эту дату выбрать нельзя: компенсация — за заказы первого месяца работы, не позже сегодняшнего дня.',
-            Markup.inlineKeyboard([other, cancel]),
-        );
+        return ctx.reply(DATE_NOT_ALLOWED_TEXT, Markup.inlineKeyboard([other, cancel]));
     }
     return ctx.reply('Не получилось показать заказы за эту дату.', Markup.inlineKeyboard([other, cancel]));
 }
@@ -526,11 +642,16 @@ async function submitClaim(ctx) {
 const compensationScene = new Scenes.BaseScene('compensation');
 
 compensationScene.enter(async (ctx) => {
-    ctx.scene.state.step = 'list';
+    ctx.scene.state.step = 'entry';
     ctx.scene.state.supportConfirmed = false;
     ctx.scene.state.attachment = null;
     // One key per visit until an order is chosen; choosing one issues its own.
     ctx.scene.state.idempotencyKey = crypto.randomUUID();
+    return showEntry(ctx);
+});
+
+compensationScene.action('comp_apply', async (ctx) => {
+    await ctx.answerCbQuery();
     return showToday(ctx);
 });
 
