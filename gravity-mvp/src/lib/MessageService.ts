@@ -5,7 +5,7 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1, type TextDeliveryResultV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
-import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
+import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, physicalRetryAnchorMsV1, physicalRetryBackoffMsV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 function serialize(obj: any): any {
@@ -991,9 +991,9 @@ export class MessageService {
         const attempt = (meta.retryAttempt || 0) + 1
         if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
 
-        // Backoff check: skip if too soon. Delay = min(2^attempt * 30s, 10min)
-        const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
-        const lastFailed = meta.lastFailedAt ? new Date(meta.lastFailedAt).getTime() : 0
+        // Backoff check: skip if too soon. One rule with the retry job's selector (delivery-state-policy).
+        const backoffMs = physicalRetryBackoffMsV1(attempt)
+        const lastFailed = physicalRetryAnchorMsV1(meta.lastFailedAt)
         if (!options.operatorInitiated && Date.now() - lastFailed < backoffMs) {
             return { success: false, error: 'Backoff not elapsed' }
         }

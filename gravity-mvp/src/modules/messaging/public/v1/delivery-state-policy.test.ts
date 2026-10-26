@@ -5,8 +5,11 @@ import {
     deliveryStateLabelV1,
     deriveDeliveryStateV1,
     isDeliveryStateV1,
+    isPhysicalRetryDueV1,
     isProviderAcceptedEvidenceV1,
     newDeliveryEvidenceRecordV1,
+    physicalRetryAnchorMsV1,
+    physicalRetryBackoffMsV1,
     provenDeliveryRankV1,
     readChannelDeliveryErrorV1,
     readDeliveryEvidenceV1,
@@ -146,5 +149,57 @@ describe('typed adapter results and failures', () => {
         expect(readChannelDeliveryErrorV1(new Error('timeout'))).toBeNull()
         expect(readChannelDeliveryErrorV1(Object.assign(new Error('x'), { name: 'ChannelDeliveryErrorV1', deliveryOutcome: 'unknown' }))).toBeNull()
         expect(readChannelDeliveryErrorV1({ name: 'ChannelDeliveryErrorV1', deliveryOutcome: 'terminal' })).toBeNull()
+    })
+})
+
+describe('when a physical redelivery is due', () => {
+    const T0 = Date.parse('2026-10-26T12:00:00.000Z')
+    const at = (ms: number) => new Date(ms).toISOString()
+
+    it('backs off min(2^attempt x 30 s, 10 min) before physical attempt `attempt`', () => {
+        expect([1, 2, 3, 4, 5, 6, 40].map(physicalRetryBackoffMsV1)).toEqual([60000, 120000, 240000, 480000, 600000, 600000, 600000])
+    })
+
+    it('anchors on lastFailedAt; absent is 0 and unreadable is NaN', () => {
+        expect(physicalRetryAnchorMsV1(at(T0))).toBe(T0)
+        for (const absent of [undefined, null, '', 0, false]) expect(physicalRetryAnchorMsV1(absent)).toBe(0)
+        for (const unreadable of ['not a date', '2026-13-01T00:00:00.000Z', {}]) expect(physicalRetryAnchorMsV1(unreadable)).toBeNaN()
+    })
+
+    it('is due exactly from anchor + backoff of the next attempt', () => {
+        for (const retryAttempt of [undefined, 0, 1, 2, 3]) {
+            const backoff = physicalRetryBackoffMsV1((retryAttempt ?? 0) + 1)
+            const metadata = { retryAttempt, lastFailedAt: at(T0) }
+            expect(isPhysicalRetryDueV1(metadata, T0 + backoff - 1)).toBe(false)
+            expect(isPhysicalRetryDueV1(metadata, T0 + backoff)).toBe(true)
+            expect(isPhysicalRetryDueV1(metadata, T0 + backoff + 1)).toBe(true)
+        }
+    })
+
+    it('treats a missing or unreadable anchor as due, as retrySend always has', () => {
+        for (const lastFailedAt of [undefined, null, '', 'garbage', '2026-02-30Tbad']) {
+            expect(isPhysicalRetryDueV1({ retryAttempt: 2, lastFailedAt }, T0)).toBe(true)
+        }
+        for (const metadata of [undefined, null, 'x', [], {}]) expect(isPhysicalRetryDueV1(metadata, T0)).toBe(true)
+    })
+
+    it('is not due while the anchor lies in the future', () => {
+        expect(isPhysicalRetryDueV1({ retryAttempt: 0, lastFailedAt: at(T0 + 1) }, T0)).toBe(false)
+    })
+
+    it('equals the rule retrySend applied before it was shared', () => {
+        const legacyDue = (meta: any, now: number) => {
+            const attempt = (meta.retryAttempt || 0) + 1
+            const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
+            const lastFailed = meta.lastFailedAt ? new Date(meta.lastFailedAt).getTime() : 0
+            return !(now - lastFailed < backoffMs)
+        }
+        const anchors = [undefined, null, '', 'garbage', at(T0), at(T0 - 59999), at(T0 - 60000), at(T0 - 600000), at(T0 + 5000), T0 - 120000]
+        for (const retryAttempt of [undefined, null, 0, 1, 2, 3, 4, 9]) {
+            for (const lastFailedAt of anchors) {
+                const meta = { retryAttempt, lastFailedAt }
+                expect(isPhysicalRetryDueV1(meta, T0)).toBe(legacyDue(meta, T0))
+            }
+        }
     })
 })

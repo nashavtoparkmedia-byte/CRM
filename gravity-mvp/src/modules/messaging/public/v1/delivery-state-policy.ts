@@ -203,3 +203,34 @@ export function readTextDeliveryResultV1(result: unknown): TextDeliveryResultV1 
         ...(typeof resolvedChatId === 'string' && resolvedChatId.trim() !== '' ? { resolvedChatId } : {}),
     }
 }
+
+// ── When a physical redelivery is due ───────────────────────────────────
+//
+// The one "due now" rule for an unattended redelivery. `MessageService.retrySend`
+// takes its backoff and anchor from these two functions, and the retry job's
+// candidate selector (`retryEligibleMessagingDeliveriesV1`) carries the declared
+// SQL mirror of `isPhysicalRetryDueV1`, so the job never spends a slot on a row
+// retrySend would turn away as "Backoff not elapsed". The mirror is proven
+// against PostgreSQL over the anchors Messaging writes (`toISOString()`); an
+// anchor it cannot read the same way is due in SQL, so the selector is never
+// stricter than retrySend.
+
+/** Delay before physical attempt `nextAttempt` (1-based): min(2^nextAttempt × 30 s, 10 min). */
+export function physicalRetryBackoffMsV1(nextAttempt: number): number {
+    return Math.min(Math.pow(2, nextAttempt) * 30000, 10 * 60 * 1000)
+}
+
+/**
+ * The backoff anchor, `metadata.lastFailedAt`: the last physical attempt or
+ * deferral. Absent is 0 and unreadable is NaN; both make the row due.
+ */
+export function physicalRetryAnchorMsV1(lastFailedAt: unknown): number {
+    return lastFailedAt ? new Date(lastFailedAt as string | number | Date).getTime() : 0
+}
+
+/** Whether the unattended job may physically retry this row at `nowMs`, by backoff alone. */
+export function isPhysicalRetryDueV1(metadata: unknown, nowMs: number): boolean {
+    const meta = record(metadata)
+    const nextAttempt = ((meta.retryAttempt as number | undefined) || 0) + 1
+    return !(nowMs - physicalRetryAnchorMsV1(meta.lastFailedAt) < physicalRetryBackoffMsV1(nextAttempt))
+}
