@@ -180,3 +180,107 @@ describe('merge policy snapshot inputs', () => {
     })
   })
 })
+
+describe('merge composes the communication policy deny-wins', () => {
+  type Row = { denyAll: boolean; denyMessage: boolean; denyVoice: boolean; version: number }
+  function policyHarness(rows: Record<string, Row | null>, updateCount = 1) {
+    const created: Array<Record<string, unknown>> = []
+    const updated: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = []
+    const events: Array<Record<string, unknown>> = []
+    const transaction = {
+      contactCommunicationPolicy: {
+        findUnique: vi.fn(async ({ where }: { where: { contactId: string } }) => rows[where.contactId] ?? null),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { created.push(data); return data }),
+        updateMany: vi.fn(async (input: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+          updated.push(input)
+          return { count: updateCount }
+        }),
+      },
+      contactCommunicationPolicyEvent: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { events.push(data); return data }),
+      },
+      contactMerge: {
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: data.id })),
+      },
+    }
+    return {
+      contacts: makeLegacyPrismaContactMergeRepositoriesV1(transaction as never).contacts,
+      transaction,
+      created,
+      updated,
+      events,
+    }
+  }
+  const merge = { mergeId: 'merge-1', actor: 'manager-1' }
+
+  test('writes nothing when neither side has a policy', async () => {
+    const harness = policyHarness({ source: null, survivor: null })
+    await expect(harness.contacts.composeCommunicationPolicy('source', 'survivor', merge)).resolves.toEqual({
+      sourceBefore: null, survivorBefore: null, composed: null,
+    })
+    expect(harness.created).toEqual([])
+    expect(harness.updated).toEqual([])
+    expect(harness.events).toEqual([])
+  })
+
+  test('false+true, true+false and true+true all compose to true at the survivor next version with one merge event', async () => {
+    const harness = policyHarness({
+      source: { denyAll: false, denyMessage: true, denyVoice: true, version: 2 },
+      survivor: { denyAll: false, denyMessage: false, denyVoice: true, version: 4 },
+    })
+    await expect(harness.contacts.composeCommunicationPolicy('source', 'survivor', merge)).resolves.toEqual({
+      sourceBefore: { denyAll: false, denyMessage: true, denyVoice: true, version: 2 },
+      survivorBefore: { denyAll: false, denyMessage: false, denyVoice: true, version: 4 },
+      composed: { denyAll: false, denyMessage: true, denyVoice: true, version: 5 },
+    })
+    expect(harness.created).toEqual([])
+    expect(harness.updated).toEqual([{
+      where: { contactId: 'survivor', version: 4 },
+      data: { denyAll: false, denyMessage: true, denyVoice: true, version: 5, updatedBy: 'manager-1' },
+    }])
+    expect(harness.events).toEqual([expect.objectContaining({
+      contactId: 'survivor', cause: 'merge', version: 5, previousVersion: 4,
+      beforeDenyAll: false, beforeDenyMessage: false, beforeDenyVoice: true,
+      afterDenyAll: false, afterDenyMessage: true, afterDenyVoice: true,
+      actor: 'manager-1', reason: 'contact_merge:merge-1', mergeId: 'merge-1', sourceContactId: 'source',
+      mutationRequestId: null, requestDigest: null,
+    })])
+    // The merged-away Contact's own policy row is never written.
+    expect(harness.transaction.contactCommunicationPolicy.updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ contactId: 'source' }) }),
+    )
+  })
+
+  test('creates the survivor row at version 1 when only the source carried a restriction', async () => {
+    const harness = policyHarness({ source: { denyAll: true, denyMessage: false, denyVoice: false, version: 1 }, survivor: null })
+    await expect(harness.contacts.composeCommunicationPolicy('source', 'survivor', merge)).resolves.toMatchObject({
+      composed: { denyAll: true, denyMessage: false, denyVoice: false, version: 1 },
+    })
+    expect(harness.created).toEqual([{ contactId: 'survivor', denyAll: true, denyMessage: false, denyVoice: false, version: 1, updatedBy: 'manager-1' }])
+    expect(harness.events[0]).toMatchObject({ version: 1, previousVersion: null, beforeDenyAll: null, afterDenyAll: true })
+  })
+
+  test('fails closed when the survivor row moved under the merge', async () => {
+    const harness = policyHarness({ source: null, survivor: { denyAll: false, denyMessage: false, denyVoice: true, version: 4 } }, 0)
+    await expect(harness.contacts.composeCommunicationPolicy('source', 'survivor', merge)).rejects.toThrow(/no longer current/u)
+    expect(harness.events).toEqual([])
+  })
+
+  test('recordMerge stores the policy evidence next to the merge recovery metadata', async () => {
+    const harness = policyHarness({})
+    const communicationPolicy = {
+      sourceBefore: { denyAll: true, denyMessage: false, denyVoice: false, version: 1 },
+      survivorBefore: null,
+      composed: { denyAll: true, denyMessage: false, denyVoice: false, version: 1 },
+    }
+    await harness.contacts.recordMerge({
+      id: 'merge-1', survivorId: 'survivor', mergedId: 'source', mergedBy: 'manager-1', reason: 'manual', driverYandexId: null,
+      snapshotBefore: { contact: { id: 'source' } } as never, survivorEvaluation: {}, automated: false, evidenceRoots: [],
+      communicationPolicy,
+    })
+    const stored = harness.transaction.contactMerge.create.mock.calls[0][0] as { data: { snapshotBefore: { _merge: Record<string, unknown> } } }
+    expect(stored.data.snapshotBefore._merge).toEqual({
+      automated: false, evidenceRoots: [], survivorEvaluation: {}, recoveryState: 'clear', communicationPolicy,
+    })
+  })
+})

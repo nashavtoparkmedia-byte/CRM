@@ -15,6 +15,13 @@ import {
   jsonRecord,
 } from '../public/v1/contact-evidence-state'
 import { composeContactCustomFieldsV1 } from './contact-merge-state-composer'
+import type { ContactCommunicationRestrictionStateV1 } from '@/contracts/contacts/v1'
+import {
+  CONTACT_COMMUNICATION_MERGE_RECOVERY_ACTOR_V1,
+  decideContactCommunicationPolicyRecoveryV1,
+  parseContactMergeCommunicationPolicyEvidenceV1,
+} from '../public/v1/contact-communication-policy'
+import { makePrismaContactCommunicationPolicyStoreV1 } from './legacy-prisma-contact-communication-policy-adapter'
 
 type PhoneSnapshot = { id: string; isActive: boolean; isPrimary: boolean }
 type ContactSnapshot = {
@@ -51,6 +58,14 @@ type MergeRecoveryMetadata = {
   recoveredAt?: string
   recoveredBy?: string
   recoveryBasis?: string
+  /** The communication policy evidence the merge recorded; absent on merges older than the foundation. */
+  communicationPolicy?: unknown
+}
+
+type PolicyRestore = {
+  currentVersion: number
+  before: ContactCommunicationRestrictionStateV1
+  restoreTo: ContactCommunicationRestrictionStateV1
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,6 +167,8 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
 ): AutomatedMergeRecoveryContactsRepositoryV1 {
   let lockedScope: ContactOwnershipLockedScope | null = null
   let recoveryPlan: AutomatedMergeRecoveryPlanV1 | null = null
+  // Decided by inspect, consumed by restore, inside the same admitted transaction.
+  let policyRestore: PolicyRestore | null = null
   return {
     admitOwnershipMutation: () => admitContactOwnershipTransaction(transaction),
 
@@ -265,6 +282,29 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
         return { status: 'blocked', reason: 'primary_phone_state_changed', eligibleAttempt: true }
       }
 
+      // The policy composition is reversed only when the survivor's standing
+      // restriction is still what this merge produced, proven from the
+      // append-only event chain; anything newer routes to manual reconciliation.
+      const policyStore = makePrismaContactCommunicationPolicyStoreV1(transaction)
+      const policyEvidence = parseContactMergeCommunicationPolicyEvidenceV1(metadata.communicationPolicy)
+      const survivorPolicy = await policyStore.readPolicy(merge.survivorId)
+      const sourcePolicy = await policyStore.readPolicy(merge.mergedId)
+      const laterSurvivorEvents = policyEvidence.kind === 'present' && policyEvidence.evidence.composed !== null
+        ? await policyStore.listEventsAfter(merge.survivorId, policyEvidence.evidence.composed.version)
+        : []
+      const policyDecision = decideContactCommunicationPolicyRecoveryV1({
+        evidence: policyEvidence,
+        survivorCurrent: survivorPolicy,
+        sourceCurrent: sourcePolicy,
+        laterSurvivorEvents,
+      })
+      if (policyDecision.kind === 'blocked') {
+        return { status: 'blocked', reason: policyDecision.reason, eligibleAttempt: true }
+      }
+      policyRestore = policyDecision.kind === 'restore'
+        ? { currentVersion: policyDecision.currentVersion, before: policyDecision.before, restoreTo: policyDecision.restoreTo }
+        : null
+
       recoveryPlan = {
         mergeId,
         mergedId: merge.mergedId,
@@ -326,6 +366,33 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
       }
       await restoreContact(snapshot.survivorBefore, false)
       await restoreContact(snapshot, false)
+      if (policyRestore !== null) {
+        // Reverse the deny-wins composition at a NEW version with its own
+        // event; the merged-away Contact's own policy row is left untouched.
+        const policyStore = makePrismaContactCommunicationPolicyStoreV1(transaction)
+        const version = policyRestore.currentVersion + 1
+        await policyStore.writePolicy({
+          contactId: plan.survivorId,
+          expectedVersion: policyRestore.currentVersion,
+          version,
+          restriction: policyRestore.restoreTo,
+          actor: CONTACT_COMMUNICATION_MERGE_RECOVERY_ACTOR_V1,
+        })
+        await policyStore.appendEvent({
+          contactId: plan.survivorId,
+          cause: 'merge_recovery',
+          version,
+          previousVersion: policyRestore.currentVersion,
+          before: policyRestore.before,
+          after: policyRestore.restoreTo,
+          actor: CONTACT_COMMUNICATION_MERGE_RECOVERY_ACTOR_V1,
+          reason: `merge_recovery:${plan.mergeId}`,
+          mutationRequestId: null,
+          requestDigest: null,
+          mergeId: plan.mergeId,
+          sourceContactId: plan.mergedId,
+        })
+      }
       if (lockedScope) {
         lockedScope = {
           ...lockedScope,

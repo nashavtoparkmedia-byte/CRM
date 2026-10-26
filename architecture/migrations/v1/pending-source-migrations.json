@@ -9,12 +9,13 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "dd8fd2cdbfec8d1b7682b99589d9f43309dbb2a1bdbfce049bd3f129d376b4c1",
-    "size": 166713,
+    "sha256": "e3f56bc8059d432c14d91ddda4c15f1eb8aec08c45ab6120767358c14a4a38ae",
+    "size": 168415,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
+    "contacts",
     "fleet_operations",
     "identity_access"
   ],
@@ -159,6 +160,24 @@
       "creates": {
         "tables": [
           "MobileDeviceRegistration"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261007180000_add_contact_communication_policy_foundation",
+      "path": "gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql",
+      "sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
+      "size": 9784,
+      "owner_context": "contacts",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/contacts/internal/contact-communication-policy.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "ContactCommunicationPolicy",
+          "ContactCommunicationPolicyEvent"
         ],
         "columns": [],
         "forbidden_indexes": []
