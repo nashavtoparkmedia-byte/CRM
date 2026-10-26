@@ -56,6 +56,33 @@ server {
 
     client_max_body_size 64m;
 
+    # ── Security P0 (2026-10-25): personal Basic-auth gate for the whole CRM ───
+    # The application has no server-side authentication yet (Identity Access,
+    # Staff Session v1, is a separate track). Until it lands, every request on
+    # a CRM vhost needs a personal login; one htpasswd line per person, logged
+    # as $remote_user. The gate sits at server level so a new location is
+    # gated unless it opts out. /compensation keeps its own Cash gate below
+    # (a location-level realm with its own user file); /wss-sip (FreeSWITCH,
+    # SIP authentication of its own) opts out; `return` locations such as
+    # /api/debug-db and /robots.txt answer before the access phase.
+    #
+    # The password file is host-managed and never committed (.gitignore):
+    #   deploy/nginx/templates/auth/yoko-crm-staff.htpasswd, 0640 root:101,
+    #   inside the auth/ directory (0710 root:101) so host-side traversal, not
+    #   file ownership, keeps unrelated host accounts away from the hash.
+    # Every Cash login must also be a staff login, or the /compensation page
+    # assets are refused by this gate. The marker header lets an operator
+    # prove which configuration the live workers serve.
+    auth_basic "YOKO CRM";
+    auth_basic_user_file /etc/nginx/templates/auth/yoko-crm-staff.htpasswd;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    add_header X-Yoko-Edge-Gate "crm-staff-p0-20261025" always;
+
+    location = /robots.txt {
+        default_type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+
     # Debug/database diagnostics are not a production HTTP capability.
     # Application proxy.ts repeats this denial for direct-container traffic.
     location ^~ /api/debug-db {
@@ -76,6 +103,7 @@ server {
         auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -93,6 +121,7 @@ server {
         auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -109,6 +138,7 @@ server {
     # nginx proxies WSS → plain WS → FreeSWITCH on host (host.docker.internal:7080)
     # FS runs in host network mode so ICE candidates carry the public VPS IP directly.
     location /wss-sip {
+        auth_basic off;
         proxy_pass http://host.docker.internal:7080;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -120,6 +150,7 @@ server {
 
     location / {
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -173,6 +204,33 @@ server {
 
     client_max_body_size 64m;
 
+    # ── Security P0 (2026-10-25): personal Basic-auth gate for the whole CRM ───
+    # The application has no server-side authentication yet (Identity Access,
+    # Staff Session v1, is a separate track). Until it lands, every request on
+    # a CRM vhost needs a personal login; one htpasswd line per person, logged
+    # as $remote_user. The gate sits at server level so a new location is
+    # gated unless it opts out. /compensation keeps its own Cash gate below
+    # (a location-level realm with its own user file); /wss-sip (FreeSWITCH,
+    # SIP authentication of its own) opts out; `return` locations such as
+    # /api/debug-db and /robots.txt answer before the access phase.
+    #
+    # The password file is host-managed and never committed (.gitignore):
+    #   deploy/nginx/templates/auth/yoko-crm-staff.htpasswd, 0640 root:101,
+    #   inside the auth/ directory (0710 root:101) so host-side traversal, not
+    #   file ownership, keeps unrelated host accounts away from the hash.
+    # Every Cash login must also be a staff login, or the /compensation page
+    # assets are refused by this gate. The marker header lets an operator
+    # prove which configuration the live workers serve.
+    auth_basic "YOKO CRM";
+    auth_basic_user_file /etc/nginx/templates/auth/yoko-crm-staff.htpasswd;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+    add_header X-Yoko-Edge-Gate "crm-staff-p0-20261025" always;
+
+    location = /robots.txt {
+        default_type text/plain;
+        return 200 "User-agent: *\nDisallow: /\n";
+    }
+
     location ^~ /api/debug-db {
         access_log off;
         return 404;
@@ -187,6 +245,7 @@ server {
         auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -204,6 +263,7 @@ server {
         auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -218,6 +278,7 @@ server {
 
     location / {
         set $gravity_backend "http://gravity-mvp:3002";
+        proxy_set_header Authorization "";
         proxy_pass $gravity_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

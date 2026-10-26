@@ -32,6 +32,13 @@
 # only *.template. Only the credential itself is ignored, not the directory,
 # so any future non-secret file there stays visible to Git.
 deploy/nginx/templates/auth/compensation.htpasswd
+# Security P0 (2026-10-25): the staff gate's password file follows the same rules
+# in the same directory. Production's interim layout of that day kept both files in
+# the templates root; those exact paths are listed so they can never be committed
+# from a production checkout either.
+deploy/nginx/templates/auth/yoko-crm-staff.htpasswd
+deploy/nginx/templates/yoko-crm-staff.htpasswd
+deploy/nginx/templates/yoko-cash.htpasswd
 
 # IDE / Logs
 **/.vscode/
