@@ -5,6 +5,9 @@ Partial update 2026-10-22: §2.7, F-22, F-23 and I-31a describe the on-demand ca
 own change on top of main `5dc489cd`; the rest of the map is as verified above.
 Partial update 2026-10-24: F-09, I-54..I-57 and R-28..R-32 describe the Telegram MTProto outbound send (TG2R: exact
 person, proven reply target, typed pre-dispatch outcome), verified against its own change on top of main `bbc350a1`.
+Partial update 2026-10-26: F-04, F-09, F-12, F-33, I-52, I-56, I-59..I-61, R-25 and R-33..R-36 describe Telegram
+delivery evidence (TG3R: typed send result, own-message evidence, read markers), verified against its own change on
+top of main `7e14fbbf`.
 
 # YOKO CRM — Engineering Map
 
@@ -723,7 +726,8 @@ exact service-peer guard (I-50) → `processInboundTelegramMessage` →
 An admission that cannot prove attribution is classified by the caller and the
 event is held (I-51). Mirror, catch-up and history import follow the same
 admission and dedupe; catch-up and import isolate each message and dialog
-(I-53).
+(I-53). An own outbound message is then delivery evidence, and read markers
+arrive as `UpdateReadHistoryOutbox` (F-33).
 
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
@@ -806,8 +810,11 @@ Telegram leg: `sendTelegramMessage` (`G/app/tg-actions.ts`) re-runs the outbound
 preparer and the live account proof on the sending socket, resolves the exact
 `Api.User` (one bounded 200-dialog sweep on a cache miss, I-54, I-57), proves a
 requested quote (I-55; `retrySend` carries it on redelivery, DEP-Q) and types every
-failure before `client.sendMessage` with one S1 token (I-56); after dispatch its
-error is untyped, as before.
+failure before `client.sendMessage` with one S1 token (I-56). It answers a typed
+result: `provider_ack` with this account's exact id, else `client_action`, never
+`delivered` (I-59). After dispatch only Telegram's own refusal is typed
+(`TELEGRAM_MTPROTO_REFUSED`); anything that may mean the message exists stays
+`unknown` (I-56).
 
 **F-10 Routing / "send to contact"**
 There is no channel router: the channel is `Chat.channel`, and a channel override
@@ -835,6 +842,19 @@ capability first and persist afterwards, with direct Prisma writes.
   oldest unsettled same-text send in the chat from 10 min before `providerSentAt`
   (+60 s tolerance); it only strengthens a row, settles it by compare-and-set, and
   revokes an in-flight `retryLeaseId` so that attempt's answer never overwrites it.
+  Telegram feeds it the echo of an own message, catch-up and history-import
+  read-back, and read markers (F-33).
+
+**F-33 Telegram delivery evidence**
+Own outbound `NewMessage` → `processOutboundMirrorMessage` (admission, exact-key-first
+dedupe, I-52) → `observeTelegramOutboundEvidence` → `applyMessageDeliveryEvidenceV1`
+(`provider_echo`; catch-up and history import `history_readback`): the row holding the
+exact id, or for text the oldest unsettled CRM send of the same text, claimed
+compare-and-set; a send made outside the CRM is written `sent` and given the same
+evidence (I-60). `Raw(UpdateReadHistoryOutbox)` → `processReadHistoryOutbox`, and
+catch-up's dialog `readOutboxMaxId` → `applyTelegramReadReceipts` → `read_receipt` on
+this account's own rows to that person up to `max_id` (I-61). Telegram never yields
+`delivered` (I-59).
 
 **F-13 Realtime**
 `G/lib/messageStreamBus.ts` (in-process map) →
@@ -1335,11 +1355,11 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `key_conflict` and the insert wrote nothing. A pre-2026-09-02 row keyed by the bare id records
   no provider account, so it is never this event's duplicate; with the same chat,
   direction and content the event is held as `held_legacy` instead of written twice.
-  Outbound only, a CRM send row without a provider id is reconciled by content and
-  the existing window and stamped with the exact id; that claim is not
-  compare-and-set. An event without a provider id keeps the content window against
-  this account's local keys only and is not exact. Not exactly-once: concurrent
-  reconciliation of identical sends and held events are open. —
+  Outbound, an event that matches no exact row is handed to Messaging's
+  delivery-evidence command (I-60), which settles the oldest unsettled CRM send of
+  the same text compare-and-set; nothing here stamps a row directly. An event
+  without a provider id keeps the content window against this account's local keys
+  only and is not exact. Not exactly-once: held events are open. —
   `findStoredTelegramMessage`, `isOwnTelegramMessageRow`,
   `createTelegramMessageOrFindWinner` — `tg-actions.identity.test.ts` (dedupe and
   F1/F2 blocks).
@@ -1373,15 +1393,43 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   for the conversation gate, the account proof, an unresolved person, an
   unaddressable or unproven quote, or a dead session (RPC 401);
   `TELEGRAM_MTPROTO_NOT_DISPATCHED` for everything else. An outcome another owner
-  already stated passes through; after dispatch starts the error is untyped (I-10).
-  A failed credential read stays untyped. — `telegramSendFailure` —
-  `tg-actions.identity.test.ts` (TG2R block).
+  already stated passes through. After dispatch starts, only Telegram's own refusal
+  (RPC 400/401/403/406 with its error name) is `TELEGRAM_MTPROTO_REFUSED`;
+  `RANDOM_ID_DUPLICATE` (an earlier copy of the request may have been sent),
+  FLOOD_WAIT, 5xx, timeouts, dropped sockets and an unusable id stay untyped
+  (`unknown`, I-10). A failed credential read stays untyped. — `telegramSendFailure`,
+  `telegramProviderRefusedSend` — `tg-actions.identity.test.ts` (TG2R and TG3R blocks).
 - **I-57 The outbound peer sweep is bounded and silent.** `getDialogs({limit: 200})`,
   single-flight per client object, waited at most 15 s, released after 60 s if it
   never answers, started at most once per 60 s per connection, with FLOOD_WAIT
   honoured per connection. It fetches no history, admits nothing, writes nothing
   and logs only a bounded code. — `telegramPeerSweep`, `waitForTelegramPeerSweep` —
   `tg-actions.identity.test.ts` (TG2R block).
+- **I-59 Telegram never yields `delivered`.** A user account receives no
+  device-delivery signal: a text send answers `provider_ack` (this account's exact
+  id) or `client_action`; an own message seen at the provider is `provider_echo` or
+  `history_readback`; only Telegram's read marker makes a row `read`. `device_receipt`
+  is never claimed (S2 also refuses it for Telegram). — `sendTelegramMessage`,
+  `observeTelegramOutboundEvidence`, `applyTelegramReadReceipts` —
+  `tg-actions.identity.test.ts` (TG3R blocks).
+- **I-60 An own Telegram message is delivery evidence, never a direct stamp.** The
+  live echo, catch-up read-back and the history import's outbound direction go
+  through `applyMessageDeliveryEvidenceV1` after admission and exact-key-first dedupe:
+  the exact id first; for text, the oldest unsettled CRM send of the same text,
+  claimed compare-and-set; media by its exact id only; an id held by another
+  conversation's row is a `key_conflict`. A send made outside the CRM is written
+  `sent` and given the evidence, healed on the next observation if that step fails.
+  Inbound rows stay `delivered`. — `processOutboundMirrorMessage`,
+  `observeTelegramOutboundEvidence`, `recordNewTelegramOutboundEvidence`,
+  `importTelegramHistory` — `tg-actions.identity.test.ts` (TG3R block).
+- **I-61 A Telegram read marker reads only this account's own messages to that
+  person.** `UpdateReadHistoryOutbox` and catch-up's dialog `readOutboxMaxId` apply
+  `read_receipt` to rows keyed `telegram:<account>:<peer>:<id>` with an id up to
+  `max_id`, the 200 newest unread first. Legacy bare-id and synthetic local keys, the
+  account itself, `777000` and non-user peers are never addressed; a failure is
+  logged with a bounded code and never escapes. — `telegramReadMarker`,
+  `applyTelegramReadReceipts`, `processReadHistoryOutbox`,
+  `applyTelegramDialogReadMarker` — `tg-actions.identity.test.ts` (TG3R block).
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.
@@ -1567,7 +1615,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
-| R-25 | CRM send reconciliation in the MTProto mirror/import is not compare-and-set; concurrent identical sends can cross-assign provider ids until a later fetch | `findStoredTelegramMessage` (outbound branch); no conditional claim in the messaging port | LOW |
+| R-25 | Telegram mirror and import reconciliation goes through S2's compare-and-set matcher (I-60): two identical-text CRM sends are each claimed exactly once, but which provider id lands on which of them is arbitrary; an outbound event without a provider id still uses the content window | `observeTelegramOutboundEvidence`; `findStoredTelegramMessage` (no-id branch) | LOW |
 | R-26 | MTProto recovery is bounded (catch-up 30 dialogs × 20–50 messages, import 100 × 200): a held or missed event is recovered only if fetched again; no durable per-event hold record exists | `G/app/tg-actions.ts` `catchUpMissedMessages`, `importTelegramHistory` | HIGH until a replay design exists |
 | R-27 | A `key_conflict` event is refused, not stored: an exact key already on another Chat, direction or channel needs investigation, and a second distinct id-less event in the same second shares the synthetic `local-<ms>` key, so it is counted and logged but never persisted | `G/app/tg-actions.ts` `findStoredTelegramMessage`, `createTelegramMessageOrFindWinner` | MEDIUM |
 | R-28 | Telegram outbound person resolution is bounded (I-54, I-57): a person outside the 200 most recent dialogs (archived included) whose access hash this process has not learned is refused `TELEGRAM_PEER_UNRESOLVED`, and a miss inside the 60 s sweep window is `NOT_DISPATCHED` | `G/app/tg-actions.ts` `resolveExactTelegramUserEntity`, `telegramPeerSweep` | HIGH |
@@ -1575,6 +1623,10 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-30 | Telegram's reconnect path re-attests a fresh client and does not compare provider-account provenance with the conversation (deferred on main), so after the account behind a connection changes, sends leave from the new account; only a connected cached client fails closed (I-16) | `G/app/tg-actions.ts` `getTelegramClient` reconnect branch | MEDIUM |
 | R-31 | An operator retry skips the retry back-off; a retry inside the 60 s sweep window spends one of the three attempts on `NOT_DISPATCHED` | `G/lib/MessageService.ts` `retrySend`; `telegramPeerSweep` | MEDIUM |
 | R-32 | GramJS's `getDialogs` logs a whole message object when one fails to initialise; catch-up (30 dialogs) and the outbound sweep (200) share this exposure (R-24 class) | `telegram/client/dialogs.js`; `catchUpMissedMessages`, `telegramPeerSweep` | MEDIUM |
+| R-33 | A Telegram read marker scans the 200 newest unread own rows of the conversation: older unread rows stay unread until a later marker, and legacy bare-id rows never become `read` (I-61) | `G/app/tg-actions.ts` `applyTelegramReadReceipts` | HIGH |
+| R-34 | Catch-up, started on every client fetch (R-12), now also runs a read-marker lookup per dialog and one evidence-command lookup per own outbound message it re-reads; database load grows with send frequency | `catchUpMissedMessages`, `applyTelegramDialogReadMarker`, `observeTelegramOutboundEvidence` | MEDIUM |
+| R-35 | After dispatch, FLOOD_WAIT, 5xx, a timeout, a dropped socket or `RANDOM_ID_DUPLICATE` leave a Telegram send `unknown`: it is never resent automatically, because an earlier copy of the request may exist; the operator decides | `telegramSendFailure`, `telegramProviderRefusedSend` | HIGH |
+| R-36 | An own Telegram message seen without a provider id is written `sent` with no evidence and shows `send_requested` | `processOutboundMirrorMessage` (synthetic local key) | MEDIUM |
 
 ## 10. Cleanup candidates
 
