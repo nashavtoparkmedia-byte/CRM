@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CONTACT-IDENTITY-CONTACT-COMMUNICATION-RESTRICTIONS-FOUNDATION",
+  "amendments": [
+    {
+      "context": "contacts",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:ContactCommunicationPolicy",
+        "gravity-mvp/prisma/schema.prisma:ContactCommunicationPolicyEvent"
+      ],
+      "reason": "Contacts owns the standing communication restriction of a canonical Contact — whether the company may communicate with this person at all, by message or by voice — and the append-only evidence of every change to it. The policy is one relational row per Contact carrying exactly the three V1 flags and a monotonic version; its absence means allowed, and Contact.customFields is never policy authority. The event table records each mutation, merge composition and merge recovery with the before and after flags, the version chain, the actor, the reason and either the deterministic request identity or the merge identity, so a merge's deny-wins composition can be proven and reversed by the existing automated merge recovery. Both models are keyed by Contact id only: they relate to no ContactIdentity, phone, conversation, provider account, transport or channel, and they are written by exactly one Contacts store under the Contacts ownership transaction. They are pending source state created by an expand-only migration and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}

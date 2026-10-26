@@ -244,12 +244,23 @@ Each entry lists what the code actually does.
     (`resolveChannelContactOperationV1`), `phone-identity.ts`
     (`normalizePhoneE164`), `contact-merge-handler.ts`,
     `contact-automation-policy.ts`, `contact-reachability.ts`.
+  - `G/modules/contacts/public/v1/contact-communication-policy.ts` —
+    `ContactCommunicationPermissionQuery.v1` (the fail-closed standing
+    communication restriction read) and the Contacts-owned
+    `SetContactCommunicationPolicyCommand.v1` handler; the Prisma store and
+    ports live in
+    `G/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.ts`
+    and the mutation is deliberately not exported from `public/v1/index.ts`.
   - `G/infrastructure/contact-merge-composition.ts`,
     `G/infrastructure/automatic-contact-merge.ts`; facade `G/lib/ContactMergeService.ts`.
   - `G/lib/ReachabilityService.ts`.
   - HTTP: `G/app/api/contacts/**`, `G/app/api/contact-merges/[id]/recover`.
   - UI: `G/app/messages/components/ContactProfileDrawer.tsx`.
-- **Owns**: `Contact`, `ContactPhone`, `ContactIdentity`, `ContactMerge`.
+- **Owns**: `Contact`, `ContactPhone`, `ContactIdentity`, `ContactMerge`,
+  `ContactCommunicationPolicy`, `ContactCommunicationPolicyEvent` (the last two
+  are pending source state: migration
+  `20261007180000_add_contact_communication_policy_foundation`, not yet applied
+  in production).
 - **Consumers**: every inbound channel path, ESL call journal, lead intake, fleet
   reconciler, platform-shell orchestrators.
 - **Extension points**: new identity channel (`ChatChannel` enum,
@@ -555,6 +566,8 @@ id ASC`, `take 51`. No `ContactPhone`, `ContactIdentity`, `Driver` or provider r
 | `ContactPhone` | executor, `ContactService`, merge adapter | contacts, `G/instrumentation.ts` (temp-phone expiry) | `addPhoneToContactV1`, `markTemporaryContactPhoneV1`, `deactivateContactPhoneV1` | — |
 | `ContactIdentity` | executor, `ContactService.attachPhoneToIdentity`, merge adapter, `G/lib/ReachabilityService.ts` | contacts, messaging, telegram | `attachContactIdentityV1`, `contactReachabilityV1` | — |
 | `ContactMerge` | merge adapter (`recordMerge`) | contacts | `mergeContactsV1` | — |
+| `ContactCommunicationPolicy` (**pending source**) | the one policy store (`G/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.ts`) through the locked mutation, the merge composition and merge recovery | contacts (`getContactCommunicationPermissionV1`) | `ContactCommunicationPermissionQuery.v1`; the mutation stays Contacts-internal | Absence of a row = allowed; DB guards: version advances by exactly one, direct DELETE refused, cascade with `Contact` only |
+| `ContactCommunicationPolicyEvent` (**pending source**) | the same store, append-only (UPDATE and direct DELETE refused by trigger) | recovery inspection (event chain), audit | — | One event per policy write: cause `mutation`/`merge`/`merge_recovery`, before/after flags, version chain, request digest or merge id |
 | `ContactDriverProfileAudit` (**L**) | none found | none found | — | Table created by archived migration `20260712000000_multi_park_driver_profiles`; see C-28 |
 
 Duplicated sources of truth: four driver links (`Contact.yandexDriverId`,
@@ -1181,6 +1194,21 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `contact-merge-handler.ts` — `contact-merge-handler.test.ts`.
 - **I-07 Reachability never downgrades `confirmed`.** — `G/lib/ReachabilityService.ts`
   — `G/lib/ReachabilityService.test.ts`.
+- **I-58 A standing communication restriction is Contacts-owned, fail-closed,
+  version-monotonic and deny-wins across merges.** `ContactCommunicationPolicy`
+  is the only authority (never `Contact.customFields`); the read resolves lineage
+  with the existing handler inside one repeatable-read snapshot and denies on an
+  unknown Contact, an unsupported class, an unavailable store or an unsafe
+  lineage; every write — operator mutation, merge composition, merge recovery —
+  advances the version by exactly one and leaves one append-only event; a merge
+  ORs both sides into the survivor and leaves the merged-away row intact;
+  automated recovery reverses the composition only when the survivor's event
+  chain proves nothing newer was decided, at a new version, and otherwise routes
+  to manual reconciliation; the mutation is reachable only inside Contacts. —
+  `contact-communication-policy.ts`, the policy store, the migration guards —
+  `contact-communication-policy.test.ts`,
+  `contact-communication-policy.postgres.test.ts`,
+  `check-contact-communication-policy-boundary.mjs`.
 
 ### Messaging
 
