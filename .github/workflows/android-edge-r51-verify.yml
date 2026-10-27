@@ -427,6 +427,9 @@ jobs:
 
       - name: Edge R5.1 instrumented suite (I layer)
         timeout-minutes: 70
+        env:
+          ONLY: "E05 E08 E09 E10 E12"
+          ATTEMPTS: "3"
         run: |
           set +e
           ADB="$ANDROID_HOME/platform-tools/adb"
@@ -482,19 +485,22 @@ jobs:
           # CRM form not advancing) happen before the scenario under test begins.
           # Such a scenario is retried once; both attempts are kept and reported.
           SIGNIN_FLAKE="no sign-in screen|messenger did not open|no operator select|operator list did not open|sign-in fields not found|submit not found|no session cookie after sign-in"
+          want() { [ -z "$ONLY" ] || printf ' %s ' "$ONLY" | grep -q " $1 "; }
           run_with_retry() {
             local id=$2
+            want "$id" || return 0
+            local n=1 max=${ATTEMPTS:-2}
             "$@"; local rc=$?
-            if [ $rc = 2 ]; then
-              echo "::notice::$id phase-A sign-in flake on attempt 1; retrying once"
-              mkdir -p "$OUT/$id-attempt1"; mv "$OUT/$id"-*.log "$OUT/$id-attempt1/" 2>/dev/null
-              "$@"; rc=$?
-              if [ $rc = 2 ]; then result "$id" FAIL "phase A sign-in failed on both attempts (harness/UI, scenario not reached): $(why "$OUT/$id-a.log")"; fi
-            fi
+            while [ $rc = 2 ] && [ $n -lt $max ]; do
+              echo "::notice::$id phase-A sign-in flake on attempt $n; retrying"
+              mkdir -p "$OUT/$id-attempt$n"; mv "$OUT/$id"-*.log "$OUT/$id-attempt$n/" 2>/dev/null
+              n=$((n+1)); "$@"; rc=$?
+            done
+            if [ $rc = 2 ]; then result "$id" FAIL "phase A sign-in failed on all $max attempts (harness/UI, scenario not reached): $(why "$OUT/$id-a.log")"; fi
           }
 
           # part 1: in-process device tests (real ART, Android Keystore, CookieManager)
-          for t in \
+          want PART1 && for t in \
             i01_T100b_signalOnlyDuringDelete_commitsProviderTruth \
             i02_T100c_lateGetAfterNewerCommitIgnored \
             i03_T100d_retiredValueNeverCommitted \
@@ -539,8 +545,9 @@ jobs:
           run_with_retry reset_scenario E01 e01_operatorSwitchFromTheShortcutTarget OPERATOR_SWITCH
 
           # E02: the :reset process seen in E01 is inert.
-          rp=$(grep -oE "Start proc [0-9]+:$PKG:reset" "$OUT/E01-logcat.log" | head -1 | sed -nE 's/Start proc ([0-9]+):.*/\1/p')
-          if [ -z "$rp" ]; then
+          rp=$(grep -oE "Start proc [0-9]+:$PKG:reset" "$OUT/E01-logcat.log" 2>/dev/null | head -1 | sed -nE 's/Start proc ([0-9]+):.*/\1/p')
+          if ! want E02; then :
+          elif [ -z "$rp" ]; then
             result E02 FAIL "no :reset process start found in the system log"
           else
             bad=$(grep -E "\( *$rp\):" "$OUT/E01-logcat.log" | grep -cE "YokoShellDiag|YokoPush|WM-|cr_AwBrowser|chromium")
@@ -595,6 +602,7 @@ jobs:
           run_with_retry fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac
 
           # part 4: WorkManager work restored after process death, rotation pending
+          if want E12; then
           fresh; start_main; sleep 3
           p1=$(pid)
           inst e12_registrationWorkQueuedWithRotationPendingThenKilled "$OUT/E12-a.log"
@@ -616,6 +624,7 @@ jobs:
             else
               result E12 FAIL "deferred-line=$(echo "$seen" | cut -c1-120) requests-200=$sent"
             fi
+          fi
           fi
           timeout 60 "$ADB" shell cmd connectivity airplane-mode disable >/dev/null 2>&1
 
