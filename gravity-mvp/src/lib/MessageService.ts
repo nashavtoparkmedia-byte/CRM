@@ -1002,6 +1002,7 @@ export class MessageService {
         try {
             outboundBinding = await prepareOutboundConversationV1(message.chat)
         } catch (error: unknown) {
+            await settleContactPermissionRefusalBeforeLease(message, meta, error)
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Conversation identity binding is invalid',
@@ -1401,6 +1402,48 @@ function assertSameSendIntent(existing: SendStateRow, intent: SendIntentV1, clie
     if (!sameIntent) {
         opsLog('warn', 'client_message_id_intent_mismatch', { operation: 'send', chatId: intent.chatId, clientMessageId, messageId: existing.id })
         throw new Error('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+    }
+}
+
+/**
+ * A Contacts permission refusal met by a redelivery before its lease: no
+ * attempt is consumed and nothing is dispatched. A temporary refusal
+ * re-anchors the backoff (`lastFailedAt` = now), so the retry job's selector
+ * leaves the row alone until it is due again instead of spending a slot on it
+ * every tick; a standing refusal finalizes the row as terminal, so it leaves
+ * selection for good. Both are one compare-and-set on the exact failed row
+ * version; a row that moved meanwhile is left to whoever moved it.
+ */
+async function settleContactPermissionRefusalBeforeLease(
+    message: { id: string; updatedAt: unknown },
+    meta: Record<string, unknown>,
+    error: unknown,
+): Promise<void> {
+    const refusal = readChannelDeliveryErrorV1(error)
+    if (!(message.updatedAt instanceof Date) || !(error instanceof Error)) return
+    let metadata: Record<string, unknown>
+    if (refusal?.code === 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED') {
+        metadata = { ...meta, lastFailedAt: new Date().toISOString() }
+    } else if (refusal?.code === 'MESSAGING_CONTACT_PERMISSION_REFUSED') {
+        metadata = {
+            ...meta,
+            error: error.message,
+            errorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED',
+            retryable: false,
+            deliveryOutcome: 'terminal',
+        }
+    } else return
+    try {
+        await (prisma.message as any).updateMany({
+            where: { id: message.id, status: 'failed', updatedAt: message.updatedAt },
+            data: { metadata },
+        })
+    } catch (settleError: unknown) {
+        opsLog('warn', 'message_retry_permission_settle_failed', {
+            messageId: message.id,
+            errorCode: refusal?.code ?? null,
+            error: settleError instanceof Error ? settleError.message : String(settleError),
+        })
     }
 }
 

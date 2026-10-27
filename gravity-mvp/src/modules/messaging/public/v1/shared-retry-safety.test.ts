@@ -19,6 +19,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Row = Record<string, any>
 
 const mocks = vi.hoisted(() => ({
+    // The Contacts message permission the outbound gate reads: allowed unless a test says otherwise.
+    contactPermission: vi.fn(async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }) as Record<string, unknown>),
     chatFindUnique: vi.fn(),
     chatUpdate: vi.fn(),
     waSendText: vi.fn(),
@@ -155,8 +166,10 @@ vi.mock('@/modules/contacts/public/v1/contact-display-policy', () => ({ buildCan
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
     contactReachabilityV1: { recordExactProviderReachability: mocks.recordReachability },
 }))
+vi.mock('@/modules/contacts/public/v1', () => ({ getContactCommunicationPermissionV1: mocks.contactPermission }))
 vi.mock('@/lib/messageStreamBus', () => ({ broadcastChatMessage: mocks.broadcast }))
-vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
+vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async importOriginal => ({
+    ...await importOriginal<Record<string, unknown>>(),
     getWhatsAppChannelDeliveryV1: () => ({ sendText: mocks.waSendText }),
     getTelegramChannelDeliveryV1: () => ({ sendText: mocks.tgSendText }),
     getMaxChannelDeliveryV1: () => ({ assertTransportBinding: vi.fn(), sendText: mocks.maxSendText }),
@@ -170,6 +183,7 @@ import {
 } from './outbound-conversation-identity-runtime'
 import { recoverStuckMessagingDeliveriesV1, retryEligibleMessagingDeliveriesV1 } from './delivery-recovery-operations'
 import { retryFailedOutboundMessageV1 } from './operator-delivery-retry'
+import { deriveDeliveryStateV1 } from './delivery-state-policy'
 
 type Channel = OutboundConversationChannelV1
 
@@ -642,6 +656,126 @@ describe('S1 — shared retry safety', () => {
 
             expect(persisted(withId.id).externalId).toBe(`${channel}-provider-id`)
             expect(persisted(withoutId.id).externalId).toBeNull()
+        })
+    })
+
+    describe('D4 — the Contacts permission at redelivery (P3), before the lease', () => {
+        const allowed = mocks.contactPermission.getMockImplementation()!
+        afterEach(() => { mocks.contactPermission.mockImplementation(allowed) })
+        const deny = (reason: string, retryable: boolean) => async (query: { contactId: string }) => ({
+            contract: 'contacts.ContactCommunicationPermissionResult.v1',
+            decision: 'deny',
+            retryable,
+            reason,
+            requestedContactId: query.contactId,
+            communicationClass: 'message',
+            canonicalContactId: null,
+            policyVersion: null,
+        })
+
+        it('a temporary refusal sends nothing, consumes no attempt and only re-anchors the backoff', async () => {
+            failedRow('m1', { ...SAFE_V2, retryAttempt: 1, errorCode: 'TIMEOUT', quotedMsgId: 'q-1' })
+            const before = clone(persisted('m1'))
+            mocks.contactPermission.mockImplementationOnce(deny('policy_unavailable', true))
+            const startedAt = Date.now()
+
+            const result = await MessageService.retrySend('m1')
+
+            expect(result).toEqual({ success: false, error: 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable' })
+            expect(physicalSends()).toBe(0)
+            const after = persisted('m1')
+            expect(after.status).toBe('failed')
+            expect(deriveDeliveryStateV1(after)).toBe('failed_safe_to_retry')
+            const { lastFailedAt, ...rest } = after.metadata
+            const { lastFailedAt: previousAnchor, ...previousRest } = before.metadata
+            expect(rest).toEqual(previousRest)
+            expect(previousAnchor).toBe('2020-01-01T00:00:00.000Z')
+            expect(Date.parse(lastFailedAt)).toBeGreaterThanOrEqual(startedAt)
+            expect(after.sentAt).toEqual(before.sentAt)
+        })
+
+        it('the re-anchored row waits out its backoff: the job does not read the permission again, nor send', async () => {
+            failedRow('m1', { ...SAFE_V2 })
+            mocks.contactPermission.mockImplementationOnce(deny('lineage_unsafe', true))
+            await MessageService.retrySend('m1')
+            mocks.contactPermission.mockClear()
+
+            expect(await MessageService.retrySend('m1')).toEqual({ success: false, error: 'Backoff not elapsed' })
+            expect(mocks.contactPermission).not.toHaveBeenCalled()
+            expect(physicalSends()).toBe(0)
+        })
+
+        it('when Contacts recovers, exactly one lease and one provider call follow, and the attempt counts once', async () => {
+            failedRow('m1', { ...SAFE_V2, retryAttempt: 1 })
+            SEND_MOCKS.max.mockResolvedValue(accepted('max', null))
+            mocks.contactPermission.mockImplementationOnce(deny('policy_unavailable', true))
+            await MessageService.retrySend('m1')
+            expect(persisted('m1').metadata.retryAttempt).toBe(1)
+
+            // An operator retry skips only the pacing backoff; the gate is read again and now allows.
+            await MessageService.retrySend('m1', { operatorInitiated: true })
+
+            expect(SEND_MOCKS.max).toHaveBeenCalledTimes(1)
+            expect(persisted('m1').metadata.retryAttempt).toBe(2)
+        })
+
+        it('an operator retry during the outage meets the same refusal and re-anchor', async () => {
+            failedRow('m1', { ...SAFE_V2 })
+            mocks.contactPermission.mockImplementation(deny('policy_unavailable', true))
+            for (let attempt = 0; attempt < 3; attempt++) {
+                expect((await MessageService.retrySend('m1', { operatorInitiated: true })).error)
+                    .toBe('MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable')
+            }
+            expect(physicalSends()).toBe(0)
+            expect(persisted('m1').metadata.retryAttempt).toBe(0)
+            expect(deriveDeliveryStateV1(persisted('m1'))).toBe('failed_safe_to_retry')
+        })
+
+        it('a standing refusal finalizes the row as terminal: it is never selected or sent again', async () => {
+            failedRow('m1', { ...SAFE_V2, retryAttempt: 1, errorCode: 'TIMEOUT' })
+            mocks.contactPermission.mockImplementation(deny('restricted_message', false))
+
+            expect(await MessageService.retrySend('m1')).toEqual({ success: false, error: 'MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message' })
+
+            const after = persisted('m1')
+            expect(after.status).toBe('failed')
+            expect(after.metadata).toMatchObject({
+                retryable: false,
+                deliveryOutcome: 'terminal',
+                errorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED',
+                error: 'MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message',
+                retryAttempt: 1,
+            })
+            expect(deriveDeliveryStateV1(after)).toBe('failed_not_safe_to_retry')
+            mocks.contactPermission.mockClear()
+            await everyRetryPath(['m1'])
+            expect(physicalSends()).toBe(0)
+            expect(mocks.contactPermission).not.toHaveBeenCalled()
+        })
+
+        it('leaves a row that moved meanwhile to whoever moved it', async () => {
+            failedRow('m1', { ...SAFE_V2 })
+            mocks.contactPermission.mockImplementationOnce(async (query: { contactId: string }) => {
+                // Another writer changes this exact row between the read and the settle.
+                const row = persisted('m1')
+                row.metadata = { ...row.metadata, deliveryOutcome: 'unknown', retryable: false }
+                touch(row)
+                return deny('restricted_all', false)(query)
+            })
+
+            await MessageService.retrySend('m1')
+
+            expect(persisted('m1').metadata).toMatchObject({ deliveryOutcome: 'unknown', retryable: false })
+            expect(persisted('m1').metadata.errorCode).toBeUndefined()
+            expect(physicalSends()).toBe(0)
+        })
+
+        it('a first send the gate refuses creates no Message and calls no provider', async () => {
+            mocks.contactPermission.mockImplementationOnce(deny('restricted_all', false))
+            await expect(MessageService.send(CHATS.telegram.id, 'hello', undefined, undefined, 'cmid-refused'))
+                .rejects.toThrow('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_all')
+            expect(mocks.creates).toHaveLength(0)
+            expect(physicalSends()).toBe(0)
         })
     })
 

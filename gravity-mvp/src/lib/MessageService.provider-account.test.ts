@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+    // The Contacts message permission the outbound gate reads: allowed unless a test says otherwise.
+    contactPermission: vi.fn(async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }) as Record<string, unknown>),
     chatFindUnique: vi.fn(),
     chatFindFirst: vi.fn(),
     chatCreate: vi.fn(),
@@ -58,6 +69,7 @@ vi.mock('@/lib/ConversationWorkflowService', () => ({
 
 vi.mock('@/modules/contacts/public/v1', () => ({
     prepareContactConversationIdentityV1: mocks.prepareIdentity,
+    getContactCommunicationPermissionV1: mocks.contactPermission,
 }))
 
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
