@@ -57,6 +57,12 @@ import {
     legacyPrismaContactCommunicationPolicyMutationPortV1,
     legacyPrismaContactCommunicationPolicyReadPortV1,
 } from '../internal/legacy-prisma-contact-communication-policy-adapter'
+import {
+    createContactCardForConversationHandlerV1,
+    type ContactCardConversationResolverV1,
+} from '../internal/contact-card-for-conversation'
+import { legacyPrismaContactCardSourcePortV1 } from '../internal/legacy-prisma-contact-card-source-adapter'
+import { identityAccessContactCardAuthorityV1 } from '../internal/identity-access-contact-card-authority'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
 const attachContactIdentity = createAttachContactIdentityHandlerV1(legacyPrismaAttachContactIdentityPortV1)
@@ -113,3 +119,17 @@ export function runDriverClusterContactOwnershipV1<T>(
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)
 export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
 export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)
+
+export type { ContactCardConversationResolverV1 }
+/**
+ * The ContactCardForConversationQuery.v1 reader. The composition supplies only
+ * the conversation resolver (Messaging's RCQ1); the principal and every access
+ * decision are bound here to Identity Access, so no composition can weaken them.
+ */
+export function createContactCardForConversationReaderV1(resolveConversation: ContactCardConversationResolverV1) {
+    return createContactCardForConversationHandlerV1({
+        authority: identityAccessContactCardAuthorityV1,
+        resolveConversation,
+        cardSource: legacyPrismaContactCardSourcePortV1,
+    })
+}
