@@ -79,8 +79,17 @@ export async function getMobileSessionPrincipalV1(): Promise<MobileSessionPrinci
     return verifyMobileSession(cookieStore.get(MOBILE_SESSION_COOKIE)?.value)
 }
 
+/**
+ * Whether the request holds a session the request boundary accepts.
+ *
+ * This is the boundary's own predicate (BR-4), not the signature check alone. A
+ * signature-valid session that was logged out, or whose logout barrier cannot be
+ * read, is refused by the boundary and sent to the login screen; if the login
+ * screen counted it as a session it would send the shell straight back, and the
+ * two would redirect into each other until the token expired.
+ */
 export async function hasMobileSessionV1(): Promise<boolean> {
-    return (await getMobileSessionPrincipalV1()) !== null
+    return (await resolveRequestOperatorV1()).kind === 'mobile_session'
 }
 
 function sessionCookieOptions(maxAge: number) {

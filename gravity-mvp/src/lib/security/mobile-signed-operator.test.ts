@@ -18,7 +18,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
  *     rebuilds the downstream request from; the real-Next propagation proof
  *     lives in the BR-4 evidence package;
  *   - the logout barrier store (read and write) is an in-memory set;
- *   - the chat assignment write is a spy.
+ *   - the chat assignment write is a spy;
+ *   - next/navigation `redirect` throws a marker carrying its destination.
  */
 
 const state = vi.hoisted(() => ({
@@ -62,6 +63,9 @@ vi.mock('next/headers', () => ({
     }),
     headers: async () => new Headers(),
 }))
+vi.mock('next/navigation', () => ({
+    redirect: (url: string) => { throw Object.assign(new Error('NEXT_REDIRECT'), { redirectTo: url }) },
+}))
 
 const { NextRequest } = await import('next/server')
 const { proxy, MOBILE_SHELL_UA_TOKEN } = await import('@/proxy')
@@ -70,7 +74,8 @@ const { issueMobileSession, MOBILE_SESSION_COOKIE, mobileSessionBarrierEntryV1, 
 const userService = await import('@/lib/users/user-service')
 const { authenticateUserV1, endUserSessionV1 } = await import('@/modules/identity-access/public/v1/identity-actions')
 const { getCurrentUserIdentityV1 } = await import('@/modules/identity-access/public/v1/user-directory')
-const { establishMobileSessionV1 } = await import('@/modules/identity-access/public/v1/mobile-session-auth')
+const { establishMobileSessionV1, hasMobileSessionV1 } = await import('@/modules/identity-access/public/v1/mobile-session-auth')
+const { default: MobileLoginPage } = await import('@/app/login/mobile/page')
 const { resolveRequestOperatorV1 } = await import('@/modules/identity-access/public/v1/mobile-session-operator')
 const assignRoute = await import('@/app/api/chats/[id]/assign/route')
 const { AUTHENTICATE_USER_COMMAND_V1, END_USER_SESSION_COMMAND_V1 } = await import('@/contracts/identity-access/v1')
@@ -326,6 +331,36 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
         state.requestCookies = new Map()
         expect(await establishMobileSessionV1(ENV.MOBILE_ACCESS_USER, ENV.MOBILE_ACCESS_PASS, A, 'ephemeral-device'))
             .toEqual({ ok: false, reason: 'invalid_device' })
+    })
+
+    test('the login screen agrees with the boundary: a refused session gets the form, not a redirect back (no loop)', async () => {
+        const loggedOut = session()
+        const principal = verifyMobileSession(loggedOut)!
+        state.barred.add(`${principal.deviceId}|${mobileSessionBarrierEntryV1(principal)}`)
+        const refusals: Array<[string, () => void]> = [
+            [loggedOut, () => {}],
+            [session(), () => { state.barrierUnreadable = true }],
+            [issueMobileSession(A, 'ephemeral-device', ENV) as string, () => { state.barrierUnreadable = false }],
+        ]
+        for (const [cookie, arrange] of refusals) {
+            arrange()
+            const cookies = { [MOBILE_SESSION_COOKIE]: cookie, crm_user_id: A }
+            const refused = await proxy(request('/messages', { cookies }))
+            expect(refused.status).toBe(303)
+            // Follow the 303 once, as the WebView does, with the same cookie jar.
+            const login = new URL(refused.headers.get('location')!)
+            expect((await through(request(`${login.pathname}${login.search}`, { cookies }))).passed).toBe(true)
+            expect(await hasMobileSessionV1()).toBe(false)
+            await expect(MobileLoginPage({ searchParams: Promise.resolve(Object.fromEntries(login.searchParams)) })).resolves.toBeTruthy()
+        }
+
+        // The form then works over the dead cookie: a logged-out token is not a live session.
+        await through(request('/login/mobile', { method: 'POST', cookies: { [MOBILE_SESSION_COOKIE]: loggedOut } }))
+        expect(await establishMobileSessionV1(ENV.MOBILE_ACCESS_USER, ENV.MOBILE_ACCESS_PASS, A, DEVICE)).toMatchObject({ ok: true })
+
+        // A live session is still sent on to its destination.
+        await through(request('/login/mobile?next=%2Fmessages', { cookies: { [MOBILE_SESSION_COOKIE]: session() } }))
+        await expect(MobileLoginPage({ searchParams: Promise.resolve({ next: '/messages' }) })).rejects.toMatchObject({ redirectTo: '/messages' })
     })
 })
 
