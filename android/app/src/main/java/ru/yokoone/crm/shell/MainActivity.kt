@@ -929,6 +929,9 @@ class MainActivity : AppCompatActivity() {
         probe = Probe()
         currentLoadFailed = false
         ShellDiagnostics.write("continuity probe start")
+        // From the network only: a cached favicon would answer without nginx
+        // ever seeing the credential, and an unverified answer is a mismatch.
+        webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         webView.loadUrl(EdgeAuthPolicy.probeUrl())
     }
 
@@ -982,6 +985,7 @@ class MainActivity : AppCompatActivity() {
         ContinuityGuard.state = ContinuityGuard.State.CONFIRMED
         recordHandled = true
         recordFp = null
+        webView.settings.cacheMode = WebSettings.LOAD_DEFAULT
         CookieManager.getInstance().setAcceptCookie(true)
         ShellDiagnostics.write("continuity confirmed")
         startFirstLoad(allowRestore = false)
