@@ -140,6 +140,15 @@ class MainActivity : AppCompatActivity() {
     /** What the panel's primary button does right now. */
     private var panelAction: (() -> Unit)? = null
 
+    /**
+     * An edge panel is on screen and owns it until the operator acts (rule F,
+     * guard, unavailable). After a decline or EXHAUSTED, Chromium still finishes
+     * the cancelled navigation, and that onPageFinished can arrive before the
+     * 401 that marks it failed; without this hold it would hide the panel and
+     * leave a blank WebView (found on the B-layer stand, B01/B03).
+     */
+    private var panelHeld = false
+
     private class Probe {
         var proceeded = false
         var decided = false
@@ -529,6 +538,7 @@ class MainActivity : AppCompatActivity() {
             // error page back on screen in place of ours.
             if (currentLoadFailed) return
             if (resetInProgress) return
+            if (panelHeld) return
             if (CrmOrigin.isInAppUrl(url)) {
                 acceptIfAuthenticating()
                 applyRuleH()
@@ -935,6 +945,7 @@ class MainActivity : AppCompatActivity() {
         if (ContinuityGuard.state != ContinuityGuard.State.PENDING || resetInProgress) return
         probe = Probe()
         currentLoadFailed = false
+        panelHeld = false
         ShellDiagnostics.write("continuity probe start")
         // From the network only: a cached favicon would answer without nginx
         // ever seeing the credential, and an unverified answer is a mismatch.
@@ -1000,6 +1011,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startFirstLoad(allowRestore: Boolean) {
+        panelHeld = false
         val target = heldTarget ?: CrmOrigin.startUrl()
         val saved = pendingSavedState
         pendingSavedState = null
@@ -1311,6 +1323,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentLoadFailed = false
+        panelHeld = false
         showContent()
         webView.loadUrl(url)
     }
@@ -1437,6 +1450,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEdgePanel(kind: EdgePanel) {
+        panelHeld = true
         when (kind) {
             EdgePanel.REQUIRED -> showPanel(
                 getString(R.string.edge_required_title),
