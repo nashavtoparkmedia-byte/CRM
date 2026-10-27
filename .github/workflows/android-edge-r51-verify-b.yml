@@ -585,7 +585,7 @@ jobs:
           for v in "B09a:p200" "B09b:p403" "B09c:p404" "B09d:p502"; do
             id=${v%%:*}; pm=${v##*:}
             [ -z "$(pid)" ] && { signed_in_as_a "$id" || { result "$id" FAIL "could not sign in"; continue; }; }
-            mode good "$pm"; T=$(now); kill_main; start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+            mode good "$pm"; kill_main; T=$(now); start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
             inst b09_bootstrapBarrier "$OUT/$id.log" -e scenario "$id" -e expect resume
             evidence "$id"
             diag > "$OUT/$id-diag.log"
@@ -602,7 +602,7 @@ jobs:
 
           # B09f: a 403 that nginx returns BEFORE authenticating (no proceed) is UNVERIFIED -> reset.
           signed_in_as_a B09f-pre
-          mode good p403pre; T=$(now); p1=$(pid); kill_main
+          mode good p403pre; p1=$(pid); kill_main; T=$(now)
           start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
           inst b09_bootstrapBarrier "$OUT/B09f.log" -e scenario B09f -e expect reset
           mode good p200
@@ -614,7 +614,7 @@ jobs:
 
           # B09e: a probe answered without any credential is unverified -> mismatch reset.
           signed_in_as_a B09e-pre
-          mode good pnoauth; T=$(now); p1=$(pid); kill_main
+          mode good pnoauth; p1=$(pid); kill_main; T=$(now)
           start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
           inst b09_bootstrapBarrier "$OUT/B09e.log" -e scenario B09e -e expect reset
           mode good p200
@@ -626,7 +626,7 @@ jobs:
 
           # B14: a different edge principal after process death never reuses A's CRM session.
           if signed_in_as_a B14; then
-            T=$(now); p1=$(pid); kill_main
+            p1=$(pid); kill_main; T=$(now)
             start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
             inst b09_bootstrapBarrier "$OUT/B14.log" -e scenario B14 -e user staff.b -e pass b-layer-pass-b -e expect reset
             if verify_reset B14 "$p1" CONTINUITY_MISMATCH && [ "$(after "$T" 'cookie=1')" = "0" ] && [ "$(after "$T" '"staff.a"')" = "0" ]; then
@@ -638,7 +638,7 @@ jobs:
 
           # B15: A's login with a wrong password pins A; switching needs a reset.
           if signed_in_as_a B15; then
-            T=$(now); p1=$(pid); kill_main
+            p1=$(pid); kill_main; T=$(now)
             start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
             inst b09_bootstrapBarrier "$OUT/B15.log" -e scenario B15 -e wrongFirst true -e expect reset
             if verify_reset B15 "$p1" OPERATOR_SWITCH && [ "$(after "$T" 'cookie=1')" = "0" ]; then
@@ -696,6 +696,16 @@ jobs:
           fresh; start_main; sleep 2
           inst b03_wrongPasswordThreeTimesExhausts "$OUT/B03.log"; evidence B03
           if ok "$OUT/B03.log"; then result B03 PASS "pinned username on re-prompts; EXHAUSTED panel after 3"; else result B03 FAIL "$(why "$OUT/B03.log")"; fi
+
+          # B04: the panel hold survives late page events; «Войти» re-entry releases it.
+          sudo truncate -s 0 "$ACC"; fresh; start_main; sleep 2
+          inst b04_panelHoldSurvivesLateEventsAndReentryReleasesIt "$OUT/B04.log"; evidence B04
+          cookies=$(grep -c 'cookie=1' "$ACC"); stafflines=$(grep -c '"staff.a"' "$ACC")
+          if ok "$OUT/B04.log" && [ "$cookies" = "0" ]; then
+            result B04 PASS "decline and EXHAUSTED panels held through late page events; «Войти» re-entry with pinned username released the hold; CRM login shown; zero cookie requests, $stafflines request(s) carried the accepted staff.a credential"
+          else
+            result B04 FAIL "cookie-requests=$cookies; $(why "$OUT/B04.log")"
+          fi
 
           cp "$ACC" "$OUT/nginx-access.log"; cp "$B/logs/error.log" "$OUT/nginx-error.log" 2>/dev/null; cp "$B/logs/proxy-trap.log" "$OUT/" 2>/dev/null
           timeout 30 "$ADB" logcat -d -b crash -v time >> "$OUT/crash-buffer.log" 2>/dev/null

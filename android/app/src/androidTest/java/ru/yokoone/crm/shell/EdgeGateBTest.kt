@@ -120,6 +120,45 @@ class EdgeGateBTest {
         mark("B03 PASS")
     }
 
+    // ── B04: the panel survives late page events; «Войти» releases it ────
+    @Test
+    fun b04_panelHoldSurvivesLateEventsAndReentryReleasesIt() {
+        launch()
+        awaitDialog("B04")
+        device.findObject(By.res("android", "button2")).click()
+        assertTrue("B04: no panel after decline; on screen: ${visible()}", device.wait(Until.hasObject(By.textContains("Нужен вход в CRM")), 20_000))
+        SystemClock.sleep(5_000)
+        assertTrue("B04: the decline panel was hidden by a late page event", device.hasObject(By.textContains("Нужен вход в CRM")))
+        panelLogin()
+        awaitDialog("B04 re-entry after decline")
+        assertEquals("B04: no proceed happened yet, so login and password are asked", 2, dialogEdits().size)
+        fill(staffA, "wrong-1")
+        repeat(2) { attempt ->
+            awaitDialog("B04 re-prompt ${attempt + 1}")
+            fill(null, "wrong-${attempt + 2}")
+        }
+        assertTrue("B04: no EXHAUSTED panel; on screen: ${visible()}", device.wait(Until.hasObject(By.textContains("Не удалось подтвердить доступ")), 30_000))
+        SystemClock.sleep(5_000)
+        assertTrue("B04: the EXHAUSTED panel was hidden by a late page event", device.hasObject(By.textContains("Не удалось подтвердить доступ")))
+        panelLogin()
+        awaitDialog("B04 re-entry after EXHAUSTED")
+        assertTrue("B04: the username is not pinned after wrong passwords", device.hasObject(By.textContains("Сотрудник: $staffA")))
+        fill(null, passA)
+        assertTrue(
+            "B04: the panel hold was not released by a successful sign-in; on screen: ${visible()}",
+            device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), 60_000),
+        )
+        assertFalse("B04: an edge panel stayed over the CRM", device.hasObject(By.textContains("Нужен вход в CRM")))
+        mark("B04 PASS")
+    }
+
+    /** «Войти» on the edge panel (a native button; the WebView is hidden while the panel shows). */
+    private fun panelLogin() {
+        val button = device.wait(Until.findObject(By.clazz("android.widget.Button").text("Войти").pkg(targetPackage)), 10_000)
+        assertNotNull("no «Войти» on the edge panel; on screen: ${visible()}", button)
+        button!!.click()
+    }
+
     // ── B06: TLS failure ⇒ panel, no dialog ───────────────────────────────
     @Test
     fun b06_tlsFailureShowsThePanelAndNoDialog() {
