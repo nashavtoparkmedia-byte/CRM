@@ -11,6 +11,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import ru.yokoone.crm.shell.CrmOrigin
+import ru.yokoone.crm.shell.EdgeTestSupport
+import java.util.Collections
 
 /**
  * When a page settling on screen is news, and when it is just navigation.
@@ -20,13 +22,18 @@ import ru.yokoone.crm.shell.CrmOrigin
  * the server has revoked the device in between. Keying registration on the
  * token alone leaves that operator silently unregistered for as long as the
  * token lives, which can be for ever.
+ *
+ * Since edge design R5.1 a provider callback is only a signal: [deliver] puts
+ * the token in a fake provider and signals, and the token actor reads and
+ * commits it, exactly as onNewToken does in production.
  */
 @RunWith(RobolectricTestRunner::class)
 class PushRegistrationTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    private val scheduled = mutableListOf<Pair<Long, String>>()
+    private val scheduled: MutableList<Pair<Long, String>> = Collections.synchronizedList(mutableListOf())
+    private val provider = EdgeTestSupport.FakeProvider()
     private val realScheduler = PushRegistration.scheduler
 
     private val sessionCookie = "${PushRegistrar.SESSION_COOKIE_NAME}=s3ss10nvalue; yoko_ui_identity=op_1"
@@ -34,10 +41,17 @@ class PushRegistrationTest {
     private val conversationUrl = "${CrmOrigin.ORIGIN}/messages?id=chat_1&channel=tg"
     private val loginUrl = "${CrmOrigin.ORIGIN}${CrmOrigin.LOGIN_PATH}?next=%2Fmessages"
 
+    /** The provider now holds [token], and says so (R5.1 §5.7.2: a signal, the actor reads). */
+    private fun deliver(token: String) {
+        provider.current = token
+        PushRegistration.onNewToken(context, token)
+        EdgeTestSupport.idle()
+    }
+
     @Before
     fun isolate() {
-        context.getSharedPreferences(PushTokenState.PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().clear().commit()
+        EdgeTestSupport.reset(context)
+        EdgeTestSupport.useProvider(provider)
         scheduled.clear()
         PushRegistration.forgetProcessObservation()
         PushRegistration.scheduler = PushRegistration.Scheduler { _, generation, token ->
@@ -47,6 +61,8 @@ class PushRegistrationTest {
 
     @After
     fun restore() {
+        EdgeTestSupport.idle()
+        EdgeTestSupport.useProvider(null)
         PushRegistration.scheduler = realScheduler
         PushRegistration.forgetProcessObservation()
     }
@@ -63,7 +79,7 @@ class PushRegistrationTest {
 
     @Test
     fun `the first authenticated page of a process registers exactly once`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         assertTrue("no session yet, nothing to ask", scheduled.isEmpty())
 
         assertTrue(PushRegistration.onPageSettled(context, messengerUrl, sessionCookie))
@@ -73,7 +89,7 @@ class PushRegistrationTest {
 
     @Test
     fun `navigating between authenticated pages asks for nothing`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         scheduled.clear()
 
@@ -85,7 +101,7 @@ class PushRegistrationTest {
 
     @Test
     fun `a login is a new generation even when the token has not changed`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         val firstGeneration = PushTokenState.snapshot(context).sessionGeneration
         PushTokenState.applyRegisteredIfCurrent(context, firstGeneration, "T1")
@@ -102,7 +118,7 @@ class PushRegistrationTest {
 
     @Test
     fun `a session that expires mid-use is noticed through the login screen`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         PushTokenState.applyRegisteredIfCurrent(context, PushTokenState.snapshot(context).sessionGeneration, "T1")
         scheduled.clear()
@@ -120,45 +136,45 @@ class PushRegistrationTest {
         assertTrue(PushRegistration.onPageSettled(context, messengerUrl, sessionCookie))
         assertTrue("no token yet", scheduled.isEmpty())
 
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
 
         assertEquals(listOf(1L to "T1"), scheduled)
     }
 
     @Test
     fun `a rotated token is registered under the session already in place`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         PushTokenState.applyRegisteredIfCurrent(context, 1L, "T1")
         scheduled.clear()
 
-        PushRegistration.onNewToken(context, "T2")
+        deliver("T2")
 
         assertEquals(listOf(1L to "T2"), scheduled)
     }
 
     @Test
     fun `the same token again asks for nothing`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         PushTokenState.applyRegisteredIfCurrent(context, 1L, "T1")
         scheduled.clear()
 
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
 
         assertTrue(scheduled.isEmpty())
     }
 
     @Test
     fun `a refused device id is not retried until a new session`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         PushTokenState.applyBlockIfCurrent(context, 1L, "T1", "PUSH_DEVICE_ID_NOT_STABLE")
         scheduled.clear()
 
         // Every page view in this session, and a rotated token too.
         PushRegistration.onPageSettled(context, conversationUrl, sessionCookie)
-        PushRegistration.onNewToken(context, "T2")
+        deliver("T2")
         assertTrue("a block must not turn into a request per page", scheduled.isEmpty())
 
         PushRegistration.onPageSettled(context, loginUrl, null)
@@ -169,13 +185,22 @@ class PushRegistrationTest {
 
     @Test
     fun `a token conflict is retried by a different token without waiting for a login`() {
-        PushRegistration.onNewToken(context, "T1")
+        deliver("T1")
         PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
         PushTokenState.applyBlockIfCurrent(context, 1L, "T1", PushTokenState.TOKEN_SCOPED_REASON)
         scheduled.clear()
 
-        PushRegistration.onNewToken(context, "T2")
+        deliver("T2")
 
         assertEquals(listOf(1L to "T2"), scheduled)
+    }
+
+    @Test
+    fun `a provider callback carries no value - the actor commits what the provider holds`() {
+        provider.current = "T-provider"
+        PushRegistration.onNewToken(context, "T-callback")
+        EdgeTestSupport.idle()
+
+        assertEquals("T-provider", PushTokenState.snapshot(context).newestToken)
     }
 }

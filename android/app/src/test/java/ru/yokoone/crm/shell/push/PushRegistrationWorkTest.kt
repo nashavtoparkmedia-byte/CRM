@@ -10,6 +10,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import ru.yokoone.crm.shell.EdgeTestSupport
 
 /**
  * The races a queue policy cannot win on its own.
@@ -28,8 +29,9 @@ class PushRegistrationWorkTest {
 
     @Before
     fun clearState() {
-        context.getSharedPreferences(PushTokenState.PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().clear().commit()
+        // Keys in memory, continuity decided, actor idle: the gates pass, and
+        // each test below is about the race it names.
+        EdgeTestSupport.reset(context)
     }
 
     private fun state() = PushTokenState.snapshot(context)

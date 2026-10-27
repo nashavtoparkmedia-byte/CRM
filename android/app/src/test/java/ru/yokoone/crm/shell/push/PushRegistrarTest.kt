@@ -1,5 +1,7 @@
 package ru.yokoone.crm.shell.push
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -32,6 +34,7 @@ class PushRegistrarTest {
         val target: String,
         val contentType: String?,
         val cookie: String?,
+        val authorization: String?,
         val body: String,
     )
 
@@ -145,8 +148,105 @@ class PushRegistrarTest {
 
     @Test
     fun `a token that could not be a P1 token is never sent`() {
-        assertEquals(PushRegistrar.Outcome.Refused("INVALID_TOKEN_SHAPE"), PushRegistrar.register("short"))
+        val context: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(PushRegistrar.Outcome.Refused("INVALID_TOKEN_SHAPE"), PushRegistrar.register(context, "short"))
         assertTrue(server.requests().isEmpty())
+    }
+
+    // ── edge Basic auth, Variant A (R5.1 §4.1; T5–T7, T50) ───────────────
+
+    private val basic = "Basic dXNlcjpwYXNz"
+
+    @Test
+    fun `T5 a present edge header is sent exactly once, on the one POST, with the cookie`() {
+        server.status = 200
+
+        assertEquals(
+            PushRegistrar.Outcome.Registered,
+            PushRegistrar.post(endpoint, token, cookiePair, basic) { true },
+        )
+
+        val request = server.requests().single()
+        assertEquals(basic, request.authorization)
+        assertEquals(cookiePair, request.cookie)
+    }
+
+    @Test
+    fun `T5 without a header none is sent`() {
+        server.status = 200
+
+        PushRegistrar.post(endpoint, token, cookiePair, null) { true }
+
+        assertNull(server.requests().single().authorization)
+    }
+
+    @Test
+    fun `T6 an nginx 401 without a header defers as EDGE_AUTH_REQUIRED`() {
+        server.status = 401
+        server.wwwAuthenticate = "Basic realm=\"YOKO CRM\""
+
+        assertEquals(
+            PushRegistrar.Outcome.Deferred(PushRegistrar.EDGE_AUTH_REQUIRED),
+            PushRegistrar.post(endpoint, token, cookiePair, null) { true },
+        )
+        assertEquals(1, server.requests().size)
+    }
+
+    @Test
+    fun `T6 an nginx 401 after a header defers as EDGE_AUTH_REFUSED`() {
+        server.status = 401
+        server.wwwAuthenticate = "Basic realm=\"YOKO CRM\""
+
+        assertEquals(
+            PushRegistrar.Outcome.Deferred(PushRegistrar.EDGE_AUTH_REFUSED),
+            PushRegistrar.post(endpoint, token, cookiePair, basic) { true },
+        )
+        assertEquals(1, server.requests().size)
+    }
+
+    @Test
+    fun `T6 a CRM 401 without WWW-Authenticate is still the named refusal`() {
+        server.status = 401
+        server.body = """{"error":"MOBILE_SESSION_REQUIRED"}"""
+
+        assertEquals(
+            PushRegistrar.Outcome.Refused("MOBILE_SESSION_REQUIRED"),
+            PushRegistrar.post(endpoint, token, cookiePair, basic) { true },
+        )
+    }
+
+    @Test
+    fun `T7 the header is never attached to an endpoint that is not the pinned https origin`() {
+        server.status = 200
+
+        // Default rule: https on exactly the pinned host. The loopback stub is neither.
+        PushRegistrar.post(endpoint, token, cookiePair, basic)
+
+        assertNull(server.requests().single().authorization)
+    }
+
+    @Test
+    fun `T50 the registrar never goes through a configured JVM proxy`() {
+        val proxy = StubCrm().apply { start() }
+        val saved = listOf("http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort", "http.nonProxyHosts")
+            .associateWith { System.getProperty(it) }
+        try {
+            System.setProperty("http.proxyHost", "127.0.0.1")
+            System.setProperty("http.proxyPort", proxy.port.toString())
+            System.setProperty("https.proxyHost", "127.0.0.1")
+            System.setProperty("https.proxyPort", proxy.port.toString())
+            // Loopback is exempt by default; make the proxy apply to it too.
+            System.setProperty("http.nonProxyHosts", "")
+            server.status = 200
+
+            PushRegistrar.post(endpoint, token, cookiePair, basic) { true }
+
+            assertEquals("the proxy must receive zero connections", 0, proxy.requests().size)
+            assertEquals("the header reaches the origin only", basic, server.requests().single().authorization)
+        } finally {
+            for ((key, value) in saved) if (value == null) System.clearProperty(key) else System.setProperty(key, value)
+            proxy.stop()
+        }
     }
 
     /**
@@ -165,6 +265,7 @@ class PushRegistrarTest {
         @Volatile var status: Int = 200
         @Volatile var body: String = ""
         @Volatile var location: String? = null
+        @Volatile var wwwAuthenticate: String? = null
 
         val port: Int get() = socket.localPort
 
@@ -217,6 +318,7 @@ class PushRegistrarTest {
                     target = requestLine.getOrElse(1) { "" },
                     contentType = headers["content-type"],
                     cookie = headers["cookie"],
+                    authorization = headers["authorization"],
                     body = String(payload, Charsets.UTF_8),
                 )
             }

@@ -274,7 +274,8 @@ object ContinuityGuard {
                 }
                 alias = next
             }
-            val mac = contextMac(alias!!)
+            val key: String = alias ?: return WriteResult.KEY_UNAVAILABLE
+            val mac = contextMac(key)
             val encoded = runCatching {
                 val fp = if (username == null) ContinuityRecord.noEdgeFingerprint(mac) else ContinuityRecord.fingerprint(mac, username)
                 ContinuityRecord.encode(
@@ -282,7 +283,7 @@ object ContinuityGuard {
                     ContinuityRecord.Fields(fp, stored.generation, stored.resetEpoch, wallMs.coerceAtLeast(0)),
                 )
             }.getOrNull() ?: return WriteResult.KEY_UNAVAILABLE
-            PushTokenState.storeContinuityRecordLocked(context, alias!!, encoded.first, encoded.second)
+            PushTokenState.storeContinuityRecordLocked(context, key, encoded.first, encoded.second)
             WriteResult.WRITTEN
         }
     }
