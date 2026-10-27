@@ -201,7 +201,7 @@ describe('sendToContactV1 refusals', () => {
         const result = await w.send(command)
         expect(result.outcome).toBe('refused')
         expect(w.messages.size).toBe(0)
-        const { contract: _contract, outcome: _outcome, requestId: _requestId, ...rest } = result as Record<string, unknown>
+        const { contract: _contract, outcome: _outcome, requestId: _requestId, ...rest } = result as unknown as Record<string, unknown>
         return rest
     }
 
@@ -289,7 +289,7 @@ describe('the admitted Message, described', () => {
             [failed({ deliveryOutcome: 'unknown' }), { deliveryState: 'indeterminate', failureClass: 'outcome_unknown' }],
         ]
         for (const [row, expected] of table) {
-            const result = await describeRow(row) as Record<string, unknown>
+            const result = await describeRow(row) as unknown as Record<string, unknown>
             expect(result).toMatchObject({ outcome: 'admitted', ...expected })
             if (!('failureClass' in expected)) expect('failureClass' in result).toBe(false)
         }
