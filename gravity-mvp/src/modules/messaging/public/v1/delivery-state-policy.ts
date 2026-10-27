@@ -188,6 +188,37 @@ export function readChannelDeliveryErrorV1(error: unknown): { outcome: ChannelDe
 }
 
 /**
+ * A Contacts permission refusal raised by the shared outbound gate, as an
+ * operator surface answers it; null for any other error. Nothing was sent.
+ * A standing refusal will be refused again; a temporary one may be retried.
+ */
+export function contactPermissionRefusalV1(error: unknown): {
+    code: 'CONTACT_COMMUNICATION_RESTRICTED' | 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE'
+    retryable: boolean
+    label: string
+} | null {
+    const typed = readChannelDeliveryErrorV1(error)
+    if (typed?.code === 'MESSAGING_CONTACT_PERMISSION_REFUSED') {
+        const reason = (error as Error).message.split(':')[1] ?? ''
+        return {
+            code: 'CONTACT_COMMUNICATION_RESTRICTED',
+            retryable: false,
+            label: reason.startsWith('restricted_')
+                ? 'Связь с этим контактом ограничена: сообщение не отправлено'
+                : 'Контакт недоступен для связи: сообщение не отправлено',
+        }
+    }
+    if (typed?.code === 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED') {
+        return {
+            code: 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE',
+            retryable: true,
+            label: 'Не удалось проверить разрешение на связь с контактом: сообщение не отправлено, повторите позже',
+        }
+    }
+    return null
+}
+
+/**
  * The typed reading of an adapter's send result, or null for a legacy result.
  * A provider_ack or provider_echo that names no provider id proves nothing
  * about this message and is read as a client_action.

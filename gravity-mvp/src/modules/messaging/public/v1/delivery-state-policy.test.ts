@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { channelDeliveryErrorV1 } from './channel-delivery-runtime'
 import {
+    contactPermissionRefusalV1,
     deliveryEvidenceRankV1,
     deliveryStateLabelV1,
     deriveDeliveryStateV1,
@@ -201,5 +202,22 @@ describe('when a physical redelivery is due', () => {
                 expect(isPhysicalRetryDueV1(meta, T0)).toBe(legacyDue(meta, T0))
             }
         }
+    })
+})
+
+describe('contactPermissionRefusalV1', () => {
+    it('names the gate\'s two refusals and nothing else', () => {
+        expect(contactPermissionRefusalV1(channelDeliveryErrorV1('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message', 'terminal', 'MESSAGING_CONTACT_PERMISSION_REFUSED')))
+            .toEqual({ code: 'CONTACT_COMMUNICATION_RESTRICTED', retryable: false, label: 'Связь с этим контактом ограничена: сообщение не отправлено' })
+        expect(contactPermissionRefusalV1(channelDeliveryErrorV1('MESSAGING_CONTACT_PERMISSION_REFUSED:contact_unknown', 'terminal', 'MESSAGING_CONTACT_PERMISSION_REFUSED')))
+            .toMatchObject({ code: 'CONTACT_COMMUNICATION_RESTRICTED', label: 'Контакт недоступен для связи: сообщение не отправлено' })
+        expect(contactPermissionRefusalV1(channelDeliveryErrorV1('MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable', 'safe_to_redeliver', 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED')))
+            .toMatchObject({ code: 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE', retryable: true })
+        for (const other of [
+            new Error('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_all'),
+            channelDeliveryErrorV1('TELEGRAM_PEER_BLOCKED', 'terminal', 'TELEGRAM_PEER_BLOCKED'),
+            null,
+            'MESSAGING_CONTACT_PERMISSION_REFUSED',
+        ]) expect(contactPermissionRefusalV1(other)).toBeNull()
     })
 })

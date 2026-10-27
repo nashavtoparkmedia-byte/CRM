@@ -285,6 +285,7 @@ describe('the admitted Message, described', () => {
             [failed({ retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2 }), { deliveryState: 'failed_safe_to_retry', failureClass: 'not_dispatched' }],
             [failed({ retryable: false, deliveryOutcome: 'terminal', errorSchemaVersion: 2, errorCode: 'TELEGRAM_PEER_BLOCKED' }), { deliveryState: 'failed_not_safe_to_retry', failureClass: 'provider_refused' }],
             [failed({ retryable: false, deliveryOutcome: 'terminal', errorSchemaVersion: 2, errorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED' }), { deliveryState: 'failed_not_safe_to_retry', failureClass: 'permission_refused' }],
+            [failed({ retryable: false, deliveryOutcome: 'terminal', errorSchemaVersion: 2, errorCode: 'UNKNOWN', error: 'Telegram delivery failed: MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_all' }), { deliveryState: 'failed_not_safe_to_retry', failureClass: 'permission_refused' }],
             [failed({ deliveryOutcome: 'unknown' }), { deliveryState: 'indeterminate', failureClass: 'outcome_unknown' }],
         ]
         for (const [row, expected] of table) {

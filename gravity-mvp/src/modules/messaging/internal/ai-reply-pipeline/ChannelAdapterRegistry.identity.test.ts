@@ -76,6 +76,21 @@ describe('AI ChannelAdapterRegistry outbound identity preflight', () => {
     expect(mocks.maxSendText).not.toHaveBeenCalled()
   })
 
+  test('an automated reply to a restricted Contact is not sent, on any channel', async () => {
+    // The gate's typed refusal reaches the pipeline as a thrown error: it records it and
+    // never re-queues the message, so a refusal is "do not send", not a retry.
+    for (const channel of ['telegram', 'whatsapp', 'max'] as const) {
+      mocks.prepareOutbound.mockRejectedValueOnce(Object.assign(new Error('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message'), {
+        name: 'ChannelDeliveryErrorV1', deliveryOutcome: 'terminal', deliveryErrorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED',
+      }))
+      mocks.chatFindUnique.mockResolvedValueOnce({ ...chat, channel })
+      await expect(channelRegistry.send(channel, params(channel))).rejects.toThrow('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message')
+    }
+    expect(mocks.telegramSendText).not.toHaveBeenCalled()
+    expect(mocks.whatsAppSendText).not.toHaveBeenCalled()
+    expect(mocks.maxSendText).not.toHaveBeenCalled()
+  })
+
   test('uses only the prepared Telegram target and transport', async () => {
     mocks.prepareOutbound.mockResolvedValue(binding('telegram'))
 

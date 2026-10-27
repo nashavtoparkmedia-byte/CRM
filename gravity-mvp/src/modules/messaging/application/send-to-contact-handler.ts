@@ -103,7 +103,11 @@ function failureClass(row: SendToContactMessageRowV1, state: string): SendToCont
     if (state === 'indeterminate') return 'outcome_unknown'
     if (state !== 'failed_not_safe_to_retry') return undefined
     const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata as Record<string, unknown> : {}
-    return metadata.errorCode === 'MESSAGING_CONTACT_PERMISSION_REFUSED' ? 'permission_refused' : 'provider_refused'
+    // The gate's refusal keeps its code when Messaging finalizes the row (redelivery); raised
+    // inside a channel adapter after the row exists, the adapter's text carries it.
+    const refusedByPermission = metadata.errorCode === 'MESSAGING_CONTACT_PERMISSION_REFUSED'
+        || (typeof metadata.error === 'string' && /\bMESSAGING_CONTACT_PERMISSION_REFUSED\b/.test(metadata.error))
+    return refusedByPermission ? 'permission_refused' : 'provider_refused'
 }
 
 /** The Message's state now; null when the row is not a SendToContact send Messaging can describe. */
