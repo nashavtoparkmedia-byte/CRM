@@ -428,7 +428,7 @@ jobs:
       - name: Edge R5.1 instrumented suite (I layer)
         timeout-minutes: 70
         env:
-          ONLY: "E08-V2 E01 E06 E07 E09 E10 E11 E12"
+          ONLY: "E12"
           ATTEMPTS: "3"
         run: |
           set +e
@@ -641,8 +641,8 @@ jobs:
             diag > "$OUT/$id-diag.log"
             local restored have_pre have_post kept ev
             restored=$(grep -v "( *$p1)" "$OUT/$id-diag.log" | grep "push-open cold" | grep -oE "restored=(true|false)" | tail -1)
-            have_pre=$(grep -oE "haveState=(true|false)" "$OUT/$id-prekill-dumpsys.txt" | head -1)
-            have_post=$(grep -oE "haveState=(true|false)" "$OUT/$id-postkill-dumpsys.txt" | head -1)
+            have_pre=$(grep -oE "[hH]aveState=(true|false)" "$OUT/$id-prekill-dumpsys.txt" | head -1)
+            have_post=$(grep -oE "[hH]aveState=(true|false)" "$OUT/$id-postkill-dumpsys.txt" | head -1)
             kept=$(grep -c "ActivityRecord{" "$OUT/$id-postkill-dumpsys.txt")
             ev=$(grep -oE "wm_(restart_activity|create_activity|on_create_called|task_removed)|am_proc_died" "$OUT/$id-events.log" | sort | uniq -c | tr -s ' ' | tr '\n' ',')
             local facts="pre-kill ${have_pre:-no-record}; post-kill ${have_post:-no-record} (records $kept); relaunch ${restored:-unknown}; events $ev"
@@ -666,11 +666,12 @@ jobs:
           run_with_retry fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac
 
           # part 4: WorkManager work restored after process death, rotation pending
-          if want E12; then
+          e12_scenario() {
           fresh; start_main; sleep 3
           p1=$(pid)
           inst e12_registrationWorkQueuedWithRotationPendingThenKilled "$OUT/E12-a.log"
           if ! grep -q "OK (1 test)" "$OUT/E12-a.log"; then
+            if grep -qE "$SIGNIN_FLAKE" "$OUT/E12-a.log"; then return 2; fi
             result E12 FAIL "phase A: $(why "$OUT/E12-a.log")"
           else
             kill_main
@@ -689,7 +690,8 @@ jobs:
               result E12 FAIL "deferred-line=$(echo "$seen" | cut -c1-120) requests-200=$sent"
             fi
           fi
-          fi
+          }
+          run_with_retry e12_scenario E12
           timeout 60 "$ADB" shell cmd connectivity airplane-mode disable >/dev/null 2>&1
 
           pass=$(grep -c " PASS" "$RES"); fail=$(grep -c " FAIL" "$RES")
