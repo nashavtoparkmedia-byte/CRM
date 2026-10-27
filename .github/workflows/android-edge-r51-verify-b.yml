@@ -662,10 +662,17 @@ jobs:
           if signed_in_as_a B11; then
             p1=$(pid); T=$(now)
             inst b11_operatorSwitch "$OUT/B11.log"
-            if verify_reset B11 "$p1" OPERATOR_SWITCH -e thenStaffB true && [ "$(after "$T" '"staff.a"')" = "0" ] && [ "$(after "$T" 'cookie=1')" = "0" ]; then
-              result B11 PASS "reset -> empty dialog -> staff.b -> CRM login (no A session); zero staff.a and zero cookie requests started after the switch"
+            verify_reset B11 "$p1" OPERATOR_SWITCH -e thenStaffB true; vr=$?
+            cp "$ACC" "$OUT/B11-access.log"
+            # N4: the reference time is the reset's own start on the device (epoch clock),
+            # not the moment the instrumentation command was issued.
+            TR=$(timeout 30 "$ADB" logcat -d -v epoch -s YokoShellDiag:E | grep "edge-reset start reason=OPERATOR_SWITCH" | tail -1 | awk '{print $1}')
+            [ -n "$TR" ] || TR=$T
+            a_after=$(after "$TR" '"staff.a"'); c_after=$(after "$TR" 'cookie=1')
+            if [ $vr = 0 ] && [ "$a_after" = "0" ] && [ "$c_after" = "0" ]; then
+              result B11 PASS "reset -> empty dialog -> staff.b -> CRM login (no A session); zero staff.a and zero cookie requests started after the reset start ($TR); $(after "$T" '"staff.a"') staff.a request(s) between the command and the reset start"
             else
-              result B11 FAIL "staffA-after=$(after "$T" '"staff.a"') cookies-after=$(after "$T" 'cookie=1'); $(why "$OUT/B11-verify.log")"
+              result B11 FAIL "verify=$vr staffA-after-reset=$a_after cookies-after-reset=$c_after (reset start $TR, command $T); $(why "$OUT/B11-verify.log")"
             fi
           else result B11 FAIL "could not sign in as staff.a"; fi
 
