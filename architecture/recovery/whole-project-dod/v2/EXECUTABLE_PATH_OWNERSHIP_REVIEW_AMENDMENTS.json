@@ -2630,6 +2630,91 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-release-safety-r1-r5-main-f77279db-20261026",
+      "reviewed_at": "2026-10-26T00:00:00Z",
+      "reviewed_by": "CASH_RELEASE_SAFETY_R1_R5_EXECUTOR_REVIEW_F77279DB",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_CASH_RELEASE_SAFETY_SOURCE_IMPLEMENTATION_20261026",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f77279db, whose tail is contact-communication-restrictions-b1-main-4f3b6c0a-20261025, and leaves that amendment untouched."
+      },
+      "reason": "Records the tracked executable surfaces the Cash nginx release-safety tooling adds on top of main f77279db: 2,706 + 8 = 2,714 surfaces, context-owned 1,469 -> 1,477 and governed exclusions 1,237 unchanged. Eight paths become tracked and none retires, all under deploy/nginx, which the edge_delivery context manifest owns, so the coverage derivation gives each of them a context owner and none reaches a governed exclusion or an exact inventory: the six Cash gate operator scripts with their shared helper, the offline harness, and the versioned copy of Security's shared P0 checker. The seven operational paths carry a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations), which is why this amendment's tracked inventory digest also carries those registered classifications; the harness stays an inferred TEST surface. No reviewed exact-inventory assignment changes its bytes, so there is no source-fingerprint rebind, and the repository's own derivation over this tree reports the historical exact-inventory transitions exactly as reviewed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree (preview-reviewed-current-denominator).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2706,
+        "tracked_inventory_sha256": "088e475870c213c8d6b6eb826f521048865ab001edaca050dc7aefbf5034b14f",
+        "coverage_sha256": "a911197a3176df56eace4fecfedb4571c2520285e6245f591d62aaa475c53ddc"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "deploy/nginx/ops/cash-gate/apply-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script that installs a Cash action-map kit in an admitted slot only after the Security P0 shared checker passes the live state, the candidate template, its render and a map-only difference, and verifies P0 and the Cash routes after the reload; on failure it may put back only its own run's P0-keeping backup."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/lib.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Sourced helper of the Cash gate scripts: pins and verifies both digests of the Security checker package, runs a verified private copy under env -i, maps any non-zero answer to a stop, and probes the edge inside the nginx container. It writes nothing."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/manager-credentials.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script for Cash manager logins: the same hash line goes to the Cash and the staff user file named by the live template, in either credential layout; revoke removes the Cash line only; each change is checked with the Security checker. It never prints, passes or logs a secret."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/regen-gate-map.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Read-only for production: builds a Cash action-map kit for a new Gravity build only when the live template holds Security P0, the candidate passes the checker and differs only in map entries, and an offline nginx test with throwaway logins passes."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/rollback-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script that restores one apply-gate backup in an admitted slot only if the Security checker passes that backup; a pre-P0 or quarantined backup is refused before any file is touched, and no second backup is ever tried."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/verify-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Read-only checks of the Cash gate under Security P0: anonymous edge answers, the Cash map and N1 denials, handler behaviour on the internal path, and an optional separate staff-login check from a 0600 file."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/tests/run-harness.sh",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory. Offline harness for the Cash gate scripts on the production nginx image with --network none, copies of the configuration and throwaway logins; production is only read."
+        },
+        {
+          "path": "deploy/nginx/ops/security-p0-shared/v1/p0-invariant.py",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Security's shared read-only P0 checker p0-invariant/v1, byte-identical to the Security release (SHA256SUMS) and versioned together with its approved-template list; Cash scripts pin both digests. Owner of its content is Security; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

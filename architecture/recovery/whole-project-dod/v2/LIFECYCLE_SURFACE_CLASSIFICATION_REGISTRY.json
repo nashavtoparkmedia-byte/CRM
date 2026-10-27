@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 729,
+    "total_entries": 736,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 86,
-    "active_operational": 507,
+    "active_operational": 514,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6658,6 +6658,69 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "contacts",
       "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/apply-gate.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator script for the Cash nginx perimeter, run by root on the production host only inside an admitted slot (CASH_SLOT=granted): installs a Cash action-map kit made by regen-gate-map.sh into the live crm.conf.template and conf.d render and reloads nginx, after the Security P0 shared checker passes the live state, the candidate template (approved identity), a map-only difference and the render; it re-checks P0 and the Cash routes after the reload and may put back only its own run's P0-keeping backup. It reads no database and no environment secret; it checks that the Cash htpasswd named by the template is root:101 0640 and well-formed without printing it. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/lib.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Sourced helper of the Cash nginx perimeter scripts, executed only as part of them on the production host: pins and verifies the SHA-256 of both files of the Security P0 checker package, runs a verified private copy under env -i, treats every non-zero answer as a stop, and probes the edge from inside the nginx container. It writes nothing itself and handles no secret; probe credentials, when a caller supplies them, go to curl as stdin configuration, never argv. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/manager-credentials.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator script for individual Cash /compensation logins, run by root on the production host inside an admitted slot: issue generates a password, writes only its SHA-512-crypt hash line to both the Cash and the staff htpasswd files the live nginx template names (host-managed, git-ignored, root:101 0640; Cash logins are a subset of staff logins), and puts the plaintext in one root-only 0600 file for personal hand-over; revoke removes the Cash line only; paths and list report layout, ownership, modes and logins without reading credential contents. Each change is checked with the Security P0 checker on disk and live. It reads no database and no environment secret and never prints, passes in argv or logs a password or hash. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/regen-gate-map.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator script run on the production host that is read-only for production: it requires the live template to hold Security P0, reads the live template and the Cash Server Action ids from the running and the new Gravity image manifests (a --rm container with no network), renders the candidate with the live nginx container's envsubst, checks it with the shared checker (approved identity, map-only difference) and tests it in a throwaway offline nginx with throwaway logins, then writes a kit only to an operator-chosen directory. It reads no database and no environment secret. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/rollback-gate.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator script run by root on the production host only inside an admitted slot: restores crm.conf.template and the conf.d render from one apply-gate.sh backup and reloads nginx, only if the Security P0 shared checker passes that backup; a pre-P0 or quarantined backup is refused before any file is touched, a failed nginx test puts back exactly the replaced files, and no second backup is ever tried. It reads no database and no secret. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/cash-gate/verify-gate.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Read-only operator check of the Cash nginx perimeter under Security P0, run on the production host: the shared checker in live mode, anonymous edge requests through the nginx container, and handler checks on the internal path executed inside the tg-bot container, where the bot's own process environment signs one internal health ping that the CRM answers as an unknown action (the value is never read into this script, printed or transported). An optional staff-login check reads login:password from an operator-chosen 0600 file and passes it to curl as stdin configuration. It writes nothing. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
+    },
+    {
+      "path": "deploy/nginx/ops/security-p0-shared/v1/p0-invariant.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Security's shared read-only P0 invariant checker p0-invariant/v1 (content owner Security, contract in CONTRACT.md beside it), byte-identical to the Security release and versioned with its approved-template list; the Cash perimeter scripts verify both SHA-256 values and run it under env -i on the production host. It parses nginx templates and renders, inspects file ownership and modes, runs nginx -T and anonymous probes inside the nginx container; it never writes, never prints credential material and reads no database or environment secret. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "platform_operations"
     }
   ]
 }
