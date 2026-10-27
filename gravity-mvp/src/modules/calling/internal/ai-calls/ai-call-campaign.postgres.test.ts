@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
 import {
     createAiCallCampaignWorkerRuntime,
@@ -166,6 +166,13 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
     })
 
     beforeEach(async () => {
+        await cleanup()
+    })
+
+    // The Calling PostgreSQL proofs share one database. The last proof here deliberately ends with a live
+    // effect still occupying capacity, so the suite must not leave its campaigns, attempts, leases or Calls
+    // behind for the next suite; afterAll runs whether the proofs passed or failed.
+    afterAll(async () => {
         await cleanup()
     })
 
