@@ -1163,6 +1163,9 @@ class MainActivity : AppCompatActivity() {
                 )
             } else {
                 clearWebStores()
+                // The saved instance state is the old context's page state and
+                // back history; it is never restored into the fresh one.
+                pendingSavedState = null
                 clearAppState()
                 PushTokenState.completeReset(this)
                 resetInProgress = false
