@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static launcher shortcut «Выйти и сменить сотрудника» (edge design R5.1 §5.4).
+    The target package is the application id; the acceptance variant overrides
+    this file with its own suffixed id.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="operator_switch"
+        android:shortcutLongLabel="@string/edge_switch_operator"
+        android:shortcutShortLabel="@string/edge_switch_operator_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="ru.yokoone.crm.shell.OperatorResetActivity"
+            android:targetPackage="ru.yokoone.crm.shell" />
+    </shortcut>
+</shortcuts>

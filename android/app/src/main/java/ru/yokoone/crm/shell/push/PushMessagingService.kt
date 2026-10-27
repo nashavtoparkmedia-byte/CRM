@@ -25,6 +25,10 @@ class PushMessagingService : FirebaseMessagingService() {
         RemotePushHandler.handle(applicationContext, message.data)
     }
 
+    /**
+     * A signal, not a value (R5.1 §5.7.2 item 2): the token actor re-reads the
+     * provider and commits under the reset epoch and the retired set.
+     */
     override fun onNewToken(token: String) {
         PushRegistration.onNewToken(applicationContext, token)
     }
