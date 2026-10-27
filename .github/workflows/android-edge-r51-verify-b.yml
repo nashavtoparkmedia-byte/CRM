@@ -499,6 +499,7 @@ jobs:
             sleep 2
           }
           fresh() {
+            timeout 30 "$ADB" logcat -d -b crash -v time >> "$OUT/crash-buffer.log" 2>/dev/null
             timeout 60 "$ADB" shell pm clear "$PKG" >/dev/null
             timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
             timeout 30 "$ADB" reverse tcp:8443 tcp:8443 >/dev/null
@@ -544,6 +545,8 @@ jobs:
 
           timeout 30 "$ADB" shell settings put secure accessibility_enabled 1
           evidence() {
+            timeout 30 "$ADB" logcat -d -b crash -v time > "$OUT/$1-crash.log" 2>/dev/null
+            timeout 30 "$ADB" logcat -d -b main,system -v time > "$OUT/$1-logcat.log" 2>/dev/null
             diag > "$OUT/$1-diag-all.log"
             timeout 30 "$ADB" exec-out screencap -p > "$OUT/$1-screen.png" 2>/dev/null
             timeout 30 "$ADB" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && timeout 30 "$ADB" exec-out cat /sdcard/ui.xml > "$OUT/$1-ui.xml" 2>/dev/null
@@ -560,6 +563,7 @@ jobs:
           sudo truncate -s 0 "$ACC"
           if signed_in_as_a B02; then
             result B02 PASS "staff.a through nginx: $(grep -c '"staff.a"' "$ACC") authenticated requests; CRM login done; continuity record written"
+            sudo truncate -s 0 "$ACC"; fresh; start_main; sleep 2
             inst b05_foreignRealmAndCrm401OpenNoDialog "$OUT/B05.log"; evidence B05
             cash=$(grep -c 'cash-gate' "$ACC"); cashauth=$(grep 'cash-gate' "$ACC" | grep -c 'auth=1')
             if ok "$OUT/B05.log"; then
@@ -597,7 +601,7 @@ jobs:
           mode good p200
 
           # B09f: a 403 that nginx returns BEFORE authenticating (no proceed) is UNVERIFIED -> reset.
-          if [ -z "$(pid)" ]; then signed_in_as_a B09f-pre; fi
+          signed_in_as_a B09f-pre
           mode good p403pre; T=$(now); p1=$(pid); kill_main
           start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
           inst b09_bootstrapBarrier "$OUT/B09f.log" -e scenario B09f -e expect reset
@@ -609,7 +613,7 @@ jobs:
           fi
 
           # B09e: a probe answered without any credential is unverified -> mismatch reset.
-          if [ -z "$(pid)" ]; then signed_in_as_a B09e-pre; fi
+          signed_in_as_a B09e-pre
           mode good pnoauth; T=$(now); p1=$(pid); kill_main
           start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
           inst b09_bootstrapBarrier "$OUT/B09e.log" -e scenario B09e -e expect reset
@@ -694,6 +698,10 @@ jobs:
           if ok "$OUT/B03.log"; then result B03 PASS "pinned username on re-prompts; EXHAUSTED panel after 3"; else result B03 FAIL "$(why "$OUT/B03.log")"; fi
 
           cp "$ACC" "$OUT/nginx-access.log"; cp "$B/logs/error.log" "$OUT/nginx-error.log" 2>/dev/null; cp "$B/logs/proxy-trap.log" "$OUT/" 2>/dev/null
+          timeout 30 "$ADB" logcat -d -b crash -v time >> "$OUT/crash-buffer.log" 2>/dev/null
+          crashes=$(grep -c "Process: $PKG" "$OUT/crash-buffer.log" 2>/dev/null)
+          echo "::notice::B shell crashes in the crash buffer: ${crashes:-0}"
+          grep -A12 "Process: $PKG" "$OUT/crash-buffer.log" 2>/dev/null | head -40
           pass=$(grep -c " PASS" "$RES"); fail=$(grep -c " FAIL" "$RES"); nr=$(grep -c " NOT-RUN" "$RES")
           echo "::notice::B-SUMMARY pass=$pass fail=$fail not-run=$nr"
           cat "$RES"

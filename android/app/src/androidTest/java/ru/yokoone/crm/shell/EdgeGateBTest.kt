@@ -83,7 +83,11 @@ class EdgeGateBTest {
     // ── B05 + B08 (after B02, same process): foreign realm, CRM 401 ─────
     @Test
     fun b05_foreignRealmAndCrm401OpenNoDialog() {
-        assertTrue("B05: not signed in", device.wait(Until.hasObject(By.textContains("Тест · MAX")), 30_000))
+        // Self-contained: the JavaScript below needs an activity this instrumentation saw start.
+        launch()
+        awaitDialog("B05")
+        fill(staffA, passA)
+        crmSignIn("B05")
         // B08: the CRM's own 401s (no WWW-Authenticate) never open the edge dialog.
         SystemClock.sleep(3_000)
         assertFalse("B08: a CRM 401 opened the staff dialog", device.hasObject(By.textContains(dialogTarget)))
