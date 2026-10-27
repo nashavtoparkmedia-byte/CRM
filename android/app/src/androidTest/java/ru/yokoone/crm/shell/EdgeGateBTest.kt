@@ -269,7 +269,7 @@ class EdgeGateBTest {
     private fun expectProcessEnd(id: String): Nothing {
         mark("$id reset-expected")
         SystemClock.sleep(30_000)
-        fail("$id: the process did not end; ${tail()}")
+        throw AssertionError("$id: the process did not end; ${tail()}")
     }
 
     private fun javascript(source: String) {
