@@ -9,8 +9,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 // Runs only against a disposable database named by
 // MESSAGING_RETRY_BACKOFF_TEST_DATABASE_URL (the Prisma client must point at
 // the same database through DATABASE_URL, with `?schema=` naming an EMPTY
-// schema: the test creates its own minimal "Message" table there and refuses
-// to run where one already exists); skipped otherwise.
+// schema: the test creates its own minimal "Message" table there, and its CREATE
+// statements fail where one already exists); skipped otherwise.
 
 const TEST_DATABASE_URL = process.env.MESSAGING_RETRY_BACKOFF_TEST_DATABASE_URL
 const describeWithDatabase = TEST_DATABASE_URL ? describe : describe.skip
@@ -56,16 +56,19 @@ async function selectedIds(): Promise<string[]> {
 }
 
 describeWithDatabase('retry selector backoff against PostgreSQL', () => {
+    // Only what this suite created is ever dropped: a failed CREATE leaves any existing object alone.
+    const created = { direction: false, status: false, table: false }
+
     beforeAll(async () => {
         if (process.env.DATABASE_URL !== TEST_DATABASE_URL) {
             throw new Error('DATABASE_URL must equal MESSAGING_RETRY_BACKOFF_TEST_DATABASE_URL for this suite')
         }
-        const [{ existing }] = await prisma.$queryRawUnsafe<Array<{ existing: string | null }>>(
-            `SELECT to_regclass('"Message"')::text AS existing`,
-        )
-        if (existing !== null) throw new Error('refusing to run: the target schema already has a "Message" table')
+        // CREATE (never IF NOT EXISTS) is the refusal: against a schema that already has these
+        // types or a "Message" table the suite stops here, before touching any row.
         await prisma.$executeRawUnsafe(`CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound', 'system')`)
+        created.direction = true
         await prisma.$executeRawUnsafe(`CREATE TYPE "MessageStatus" AS ENUM ('queued', 'sent', 'delivered', 'read', 'failed')`)
+        created.status = true
         await prisma.$executeRawUnsafe(`CREATE TABLE "Message" (
             id TEXT PRIMARY KEY,
             direction "MessageDirection" NOT NULL,
@@ -73,9 +76,11 @@ describeWithDatabase('retry selector backoff against PostgreSQL', () => {
             metadata JSONB DEFAULT '{}',
             "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`)
+        created.table = true
     })
 
     beforeEach(async () => {
+        if (!created.table) throw new Error('refusing to run: this suite did not create the "Message" table it would empty')
         await prisma.$executeRawUnsafe(`DELETE FROM "Message"`)
         mocks.retrySend.mockReset()
         mocks.retrySend.mockResolvedValue({ success: true })
@@ -88,9 +93,9 @@ describeWithDatabase('retry selector backoff against PostgreSQL', () => {
     })
 
     afterAll(async () => {
-        await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "Message"`)
-        await prisma.$executeRawUnsafe(`DROP TYPE IF EXISTS "MessageStatus"`)
-        await prisma.$executeRawUnsafe(`DROP TYPE IF EXISTS "MessageDirection"`)
+        if (created.table) await prisma.$executeRawUnsafe(`DROP TABLE "Message"`)
+        if (created.status) await prisma.$executeRawUnsafe(`DROP TYPE "MessageStatus"`)
+        if (created.direction) await prisma.$executeRawUnsafe(`DROP TYPE "MessageDirection"`)
         await prisma.$disconnect()
     })
 
