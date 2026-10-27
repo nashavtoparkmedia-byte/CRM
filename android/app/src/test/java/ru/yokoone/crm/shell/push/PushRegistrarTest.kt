@@ -226,6 +226,23 @@ class PushRegistrarTest {
     }
 
     @Test
+    fun `T10 T52 with the gate known and no usable credential, nothing is sent and nothing is blocked`() {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        android.webkit.CookieManager.getInstance().setCookie(ru.yokoone.crm.shell.CrmOrigin.ORIGIN, cookiePair)
+        PushTokenState.setEdgeGate(context, ru.yokoone.crm.shell.ContinuityGuard.EdgeGate.PRESENT)
+        ru.yokoone.crm.shell.EdgeCredentialHolder.resetForTest()
+        ru.yokoone.crm.shell.ShellForeground.started = false
+        try {
+            assertEquals(PushRegistrar.Outcome.Deferred("EDGE_CREDENTIAL_ABSENT"), PushRegistrar.register(context, token))
+            assertTrue("no request at all", server.requests().isEmpty())
+            assertNull(PushTokenState.snapshot(context).blockedReason)
+        } finally {
+            PushTokenState.setEdgeGate(context, ru.yokoone.crm.shell.ContinuityGuard.EdgeGate.UNKNOWN)
+            android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        }
+    }
+
+    @Test
     fun `T50 the registrar never goes through a configured JVM proxy`() {
         val proxy = StubCrm().apply { start() }
         val saved = listOf("http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort", "http.nonProxyHosts")
@@ -326,6 +343,7 @@ class PushRegistrarTest {
             val answer = body.toByteArray(Charsets.UTF_8)
             val response = StringBuilder("HTTP/1.1 $status STUB\r\n")
             location?.let { response.append("Location: $it\r\n") }
+            wwwAuthenticate?.let { response.append("WWW-Authenticate: $it\r\n") }
             response.append("Content-Type: application/json\r\n")
             response.append("Content-Length: ${answer.size}\r\n")
             response.append("Connection: close\r\n\r\n")

@@ -121,8 +121,6 @@ class MainActivity : AppCompatActivity() {
     /** The continuity record was written, confirmed or deliberately skipped in this process. */
     private var recordHandled = false
 
-    /** Rule H decided (or a staff challenge was seen) in this process. */
-    private var gateDecidedThisProcess = false
 
     /** From reset step 0 on, nothing in-app may load or be requested. */
     @Volatile
@@ -381,7 +379,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureWebView() {
         CookieManager.getInstance().apply {
-            setAcceptCookie(true)
+            // A recreated activity never re-enables cookies the continuity
+            // barrier of this process has disabled (§5.8.3).
+            val held = ContinuityGuard.state == ContinuityGuard.State.PENDING ||
+                ContinuityGuard.state == ContinuityGuard.State.MISMATCH
+            setAcceptCookie(!held)
             // The shell renders one origin; it has no use for third-party
             // cookies and refusing them removes a whole class of surprises.
             setAcceptThirdPartyCookies(webView, false)
@@ -735,7 +737,7 @@ class MainActivity : AppCompatActivity() {
         override fun preconditionsMet(): Boolean = EdgeAuthPolicy.preconditions(EdgeProxyGuard.confirmed)
 
         override fun onStaffGateSeen() {
-            gateDecidedThisProcess = true
+            gateDecidedInProcess = true
             PushTokenState.setEdgeGate(this@MainActivity, ContinuityGuard.EdgeGate.PRESENT)
             logProxyCollision()
         }
@@ -820,8 +822,8 @@ class MainActivity : AppCompatActivity() {
 
     /** Rule H: the first in-app page of this process finished without any staff challenge. */
     private fun applyRuleH() {
-        if (gateDecidedThisProcess || coordinator.staffChallengeSeen) return
-        gateDecidedThisProcess = true
+        if (gateDecidedInProcess || coordinator.staffChallengeSeen) return
+        gateDecidedInProcess = true
         PushTokenState.setEdgeGate(this, ContinuityGuard.EdgeGate.ABSENT)
     }
 
@@ -861,6 +863,13 @@ class MainActivity : AppCompatActivity() {
     private fun runBarrier() {
         if (resetInProgress) return
         val manager = CookieManager.getInstance()
+        val decided = ContinuityGuard.state
+        if (decided == ContinuityGuard.State.NONE || decided == ContinuityGuard.State.CONFIRMED) {
+            // Once per process start: a recreated activity in a process that
+            // already decided continuity does not ask again.
+            startFirstLoad(allowRestore = true)
+            return
+        }
         val sessionPresent = PushRegistrar.sessionCookiePair(manager.getCookie(CrmOrigin.ORIGIN)) != null ||
             PushRegistrar.sessionCookiePair(manager.getCookie(EdgeContextReset.wwwAliasUrl())) != null
         val (stored, verification) = ContinuityGuard.verifyStored(this)
@@ -1018,6 +1027,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestReset(reason: String, automatic: Boolean, fromShortcut: Boolean = false) {
         if (resetInProgress) return
+        if (reason == EdgeContextReset.Reason.CONTINUITY_MISMATCH) {
+            // Whatever happens next (reset or guard), the old session's
+            // cookies leave the device in no further request.
+            ContinuityGuard.state = ContinuityGuard.State.MISMATCH
+            CookieManager.getInstance().setAcceptCookie(false)
+        }
         if (fromShortcut && !PushTokenState.admitShortcutReset(this, System.currentTimeMillis())) {
             ShellDiagnostics.write("edge-reset shortcut-limited")
             Toast.makeText(this, R.string.shortcut_reset_limited, Toast.LENGTH_LONG).show()
@@ -1535,5 +1550,9 @@ class MainActivity : AppCompatActivity() {
         private const val TIMER_SLACK_MS = 50L
         private const val MOBILE_401_BURST_MS = 3_000L
         private const val MOBILE_401_WINDOW_MS = 30_000L
+
+        /** Rule H decided (or a staff challenge was seen) in this process. */
+        @Volatile
+        private var gateDecidedInProcess = false
     }
 }

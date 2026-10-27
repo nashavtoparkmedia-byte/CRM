@@ -131,6 +131,7 @@ object EdgeTestSupport {
         ContinuityGuard.resetForTest()
         ContinuityGuard.state = ContinuityGuard.State.NONE
         EdgeCredentialHolder.resetForTest()
+        EdgeChallengeCoordinator.ProcessFacts.resetForTest()
         ShellForeground.started = false
         return keys
     }

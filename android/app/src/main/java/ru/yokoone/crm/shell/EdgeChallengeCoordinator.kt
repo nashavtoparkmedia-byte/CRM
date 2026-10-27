@@ -66,13 +66,31 @@ class EdgeChallengeCoordinator(
     var state: EdgeState = EdgeState.UNKNOWN
         private set
 
-    /** Whether the edge ever reached AUTHENTICATED in this process (rule E refusal ⇒ reset). */
-    var everAuthenticated: Boolean = false
-        private set
+    /**
+     * Whether the edge ever reached AUTHENTICATED in this process (rule E
+     * refusal ⇒ reset). Process-scoped: a recreated activity in the same
+     * process still holds the accepted credential in Chromium's cache.
+     */
+    val everAuthenticated: Boolean get() = ProcessFacts.everAuthenticated
 
     /** Whether any staff challenge arrived in this process (rule H, IMPL-1). */
-    var staffChallengeSeen: Boolean = false
-        private set
+    val staffChallengeSeen: Boolean get() = ProcessFacts.staffChallengeSeen
+
+    /** Facts about this process, not about one activity instance. */
+    object ProcessFacts {
+        @Volatile
+        var everAuthenticated: Boolean = false
+            internal set
+
+        @Volatile
+        var staffChallengeSeen: Boolean = false
+            internal set
+
+        fun resetForTest() {
+            everAuthenticated = false
+            staffChallengeSeen = false
+        }
+    }
 
     var prompts: Int = 0
         private set
@@ -89,7 +107,7 @@ class EdgeChallengeCoordinator(
         val realm = challenge.realm
         val staff = EdgeAuthPolicy.isStaffGate(host, realm)
         if (staff) {
-            staffChallengeSeen = true
+            ProcessFacts.staffChallengeSeen = true
             ui.onStaffGateSeen()
         }
 
@@ -222,7 +240,7 @@ class EdgeChallengeCoordinator(
         if (!holder.isPresent) return false
         state = EdgeState.AUTHENTICATED
         holder.markAccepted()
-        everAuthenticated = true
+        ProcessFacts.everAuthenticated = true
         return true
     }
 

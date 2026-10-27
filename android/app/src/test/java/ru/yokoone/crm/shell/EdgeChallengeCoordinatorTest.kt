@@ -65,6 +65,7 @@ class EdgeChallengeCoordinatorTest {
     @Before
     fun setUp() {
         EdgeCredentialHolder.resetForTest()
+        EdgeChallengeCoordinator.ProcessFacts.resetForTest()
         EdgeCredentialHolder.clock = { now }
         ui = FakeUi()
         coordinator = EdgeChallengeCoordinator(ui)

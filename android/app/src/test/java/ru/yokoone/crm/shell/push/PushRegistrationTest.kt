@@ -203,4 +203,21 @@ class PushRegistrationTest {
 
         assertEquals("T-provider", PushTokenState.snapshot(context).newestToken)
     }
+
+    @Test
+    fun `T9 an edge acceptance asks for registration only when one is needed`() {
+        deliver("T1")
+        PushRegistration.onPageSettled(context, messengerUrl, sessionCookie)
+        scheduled.clear()
+
+        PushRegistration.onEdgeReady(context)
+        PushRegistration.onEdgeReady(context)
+        // Two asks for the same pair; unique work REPLACE keeps one attempt.
+        assertEquals(listOf(1L to "T1", 1L to "T1"), scheduled)
+
+        PushTokenState.applyRegisteredIfCurrent(context, 1L, "T1")
+        scheduled.clear()
+        PushRegistration.onEdgeReady(context)
+        assertTrue("registered: nothing to ask", scheduled.isEmpty())
+    }
 }
