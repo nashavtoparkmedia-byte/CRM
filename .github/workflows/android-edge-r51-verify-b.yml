@@ -1,0 +1,677 @@
+name: Android edge R5.1 verification (evidence, B layer)
+
+# EVIDENCE-ONLY workflow on a verification branch; never merged.
+# Disposable HTTPS nginx 1.27 front with HTTP Basic realm "YOKO CRM" (generated
+# test CA trusted only by this runner's acceptance build, generated test
+# logins) in front of the disposable CRM, and the acceptance build pinned to
+# https://localhost:8443. No production host, credential or configuration is used.
+on:
+  push:
+    branches:
+      - 'verify/android-edge-r51-b/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-edge-r51-verify-b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator-acceptance:
+    # Pinned, never ubuntu-latest. The floating label is exactly how this job
+    # became a lottery: run #1 found a writable /dev/kvm and run #2 did not.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: acceptance
+          POSTGRES_PASSWORD: acceptance
+          POSTGRES_DB: acceptance
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U acceptance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # Loopback on the runner, and loopback ON THE DEVICE too, via adb reverse.
+      #
+      # 10.0.2.2 — the host alias in Android's user-mode network stack — is the
+      # obvious choice and it does not work here. The mobile session cookie is
+      # issued with Secure whenever NODE_ENV is production, and a browser stores
+      # a Secure cookie only over HTTPS or on a trustworthy origin. 127.0.0.1 is
+      # trustworthy; 10.0.2.2 over plain HTTP is not. Against the host alias the
+      # cookie is silently dropped, no session is established, and a correct
+      # password lands back on the sign-in form with no error — which is exactly
+      # what runs #21 to #24 showed.
+      #
+      # The physical handset reaches the stand over `adb reverse` at 127.0.0.1,
+      # so this makes the emulator lane match the lane that already works
+      # instead of weakening the cookie.
+      DATABASE_URL: postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public
+      MOBILE_ACCESS_USER: acceptance
+      MOBILE_ACCESS_PASS: yoko acceptance passphrase
+      EMULATOR_ORIGIN: http://127.0.0.1:3002
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      # /dev/kvm on a GitHub-hosted runner is root:kvm 0660 and the `runner`
+      # user is not in the kvm group (actions/runner-images#8542), so this rule
+      # is not optional — without it the emulator silently drops to software
+      # emulation and then times out with no stated cause.
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+
+      # A silent fallback to software emulation is what makes a run
+      # unreproducible: it looks like a slow boot and reports as a timeout. This
+      # step refuses to continue without hardware acceleration, so the outcome
+      # is either a real acceptance result or a legible infrastructure failure,
+      # never a guess.
+      - name: Assert hardware acceleration is actually available
+        run: |
+          {
+            echo "### Runner"
+            echo '```'
+            echo "image: ${ImageOS:-?} ${ImageVersion:-?}"
+            nproc; free -m | head -2; df -h / | tail -1
+            ls -l /dev/kvm 2>&1
+            echo "cpu virtualization flags: $(grep -Ec '(vmx|svm)' /proc/cpuinfo)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -l /dev/kvm
+          test -c /dev/kvm || { echo "::error::/dev/kvm is missing on this runner"; exit 1; }
+          test -w /dev/kvm || { echo "::error::/dev/kvm is not writable by $(id -un)"; exit 1; }
+          echo "KVM present and writable"
+
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.20.2
+
+      - name: Install CRM dependencies
+        run: npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
+
+      - name: Generate the Prisma client
+        run: npm run --prefix gravity-mvp gen
+
+      # The disposable database needs the schema production has, and part of
+      # that history is not in gravity-mvp/prisma/migrations: eighteen migrations
+      # production applied live in the governed predecessor archive. The
+      # authority (architecture/migrations/v1/production-migration-authority.json)
+      # orders the whole history by name, which is also the order migrate deploy
+      # applies a directory in. Without them the database lacks, among others,
+      # the Contact columns the Contacts identity check reads before every
+      # outbound send. The copy exists only in this runner's checkout.
+      - name: Stage the governed predecessor migrations
+        run: cp -r architecture/migrations/v1/archive/pre-outbox/. gravity-mvp/prisma/migrations/
+
+      - name: Apply committed migrations to the disposable database
+        run: npx --prefix gravity-mvp prisma migrate deploy --schema gravity-mvp/prisma/schema.prisma
+
+      - name: Seed synthetic conversations
+        run: |
+          PGPASSWORD=acceptance psql -h 127.0.0.1 -p 55432 -U acceptance -d acceptance \
+            -v ON_ERROR_STOP=1 -f android/tools/acceptance-seed.sql
+
+      - name: Build the CRM
+        env:
+          NODE_ENV: production
+        run: npm run --prefix gravity-mvp build
+
+      # The only MAX transport this stand has: a loopback stand-in that accepts
+      # the one synthetic send test06 makes and answers the way the MAX transport
+      # answers a confirmed send, with a delivery proof bound to the exact
+      # clientMessageId. It holds each answer for four seconds so the device can
+      # observe the sending state. See android/tools/acceptance-max-transport.mjs.
+      - name: Start the acceptance MAX transport
+        run: |
+          nohup node android/tools/acceptance-max-transport.mjs serve \
+            --port 3905 --target 000000000005 \
+            --provider acceptance-max-provider-0005 \
+            --content "YOKO acceptance reply 06" --delay-ms 4000 \
+            --log "$RUNNER_TEMP/acceptance-max-transport.jsonl" \
+            > "$RUNNER_TEMP/acceptance-max-transport.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:3905/__acceptance/health && exit 0
+            sleep 1
+          done
+          echo "acceptance MAX transport did not start"; cat "$RUNNER_TEMP/acceptance-max-transport.log"; exit 1
+
+      - name: Start the CRM with no provider credentials
+        run: |
+          # env -i so nothing from the runner environment can reach the app.
+          # No Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN value exists
+          # here, so every outbound transport is inert by construction. The one
+          # address given is MAX_SCRAPER_URL, and it names the loopback
+          # stand-in above: no credential, and nothing beyond this runner.
+          cd gravity-mvp
+          nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production \
+            DATABASE_URL="$DATABASE_URL" \
+            MAX_SCRAPER_URL="http://127.0.0.1:3905" \
+            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
+            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
+          # Recorded so the push phase can stop exactly this process rather
+          # than pattern-matching its way to something else on the runner.
+          echo $! > "$RUNNER_TEMP/crm-phase1.pid"
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3002/login/mobile && exit 0
+            sleep 2
+          done
+          echo "CRM did not become reachable"; cat "$RUNNER_TEMP/crm.log"; exit 1
+
+      - name: Confirm the shell lane fails closed before any test runs
+        run: |
+          set -e
+          UA='Mozilla/5.0 (Linux; Android 14) YokoShell/1'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" http://127.0.0.1:3002/api/messages)
+          [ "$code" = "401" ] || { echo "shell API expected 401, got $code"; exit 1; }
+          echo "shell lane closed as expected"
+
+      # An unsigned APK cannot be installed — the emulator answers
+      # INSTALL_PARSE_FAILED_NO_CERTIFICATES — and a runner has no release
+      # keystore. The build already reads one from a properties file named by
+      # YOKO_SHELL_KEYSTORE_PROPERTIES, so a throwaway keystore generated here
+      # satisfies it without changing a single Android source file. That keeps
+      # this branch's android/ tree byte-identical to the PR candidate's, which
+      # is the point: the suite must test the candidate, not a variant of it.
+      #
+      # The key lives for the length of the job, is never committed, and signs
+      # nothing that leaves the runner.
+      - name: Generate an ephemeral signing key for this run
+        run: |
+          set -e
+          KS="$RUNNER_TEMP/acceptance.jks"
+          keytool -genkeypair -v -keystore "$KS" -storetype JKS \
+            -alias acceptance -keyalg RSA -keysize 2048 -validity 1 \
+            -storepass acceptance -keypass acceptance \
+            -dname "CN=YOKO acceptance, OU=CI, O=YOKO, L=-, S=-, C=RU" > /dev/null
+          printf 'storeFile=%s\nstorePassword=acceptance\nkeyAlias=acceptance\nkeyPassword=acceptance\n' \
+            "$KS" > "$RUNNER_TEMP/keystore.properties"
+          echo "YOKO_SHELL_KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore.properties" >> "$GITHUB_ENV"
+          echo "ephemeral keystore ready"
+
+      # Unit tests, which this job never ran before Mobile Push v1 P2. A Kotlin
+      # regression could previously only be caught by an emulator scenario, or
+      # not at all; these cost about a minute and cover the payload contract,
+      # the deduplication store, the registration state machine and every
+      # registrar outcome.
+      #
+      # Two tasks on purpose. The shared src/test suite pins the PRODUCTION
+      # origin, so it must run against a variant that carries it; the seed's own
+      # test moved into src/testAcceptance with the class it covers, which only
+      # the acceptance variant compiles.
+
+      # ── B layer: disposable HTTPS nginx Basic-auth stand (no production) ──
+      - name: Prepare the B stand (test CA, certificates, test logins, nginx template)
+        run: |
+          set -e
+          B="$RUNNER_TEMP/bstand"; mkdir -p "$B/logs"; chmod 777 "$B/logs"
+          cd "$B"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -days 7 \
+            -subj "/CN=YOKO B-layer disposable test CA" \
+            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign"
+          openssl req -newkey rsa:2048 -nodes -keyout good.key -out good.csr -subj "/CN=localhost"
+          printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\nbasicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' > ext.cnf
+          openssl x509 -req -in good.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out good.pem -days 7 -extfile ext.cnf
+          # Untrusted (self-signed) certificate for the TLS-failure scenario.
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout bad.key -out bad.pem -days 7 \
+            -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+          chmod 644 *.pem *.key
+          # Generated test-only staff logins; nothing from production.
+          printf 'staff.a:%s\nstaff.b:%s\n' "$(openssl passwd -apr1 'b-layer-pass-a')" "$(openssl passwd -apr1 'b-layer-pass-b')" > htpasswd.base
+          cp htpasswd.base htpasswd; chmod 644 htpasswd htpasswd.base
+          cat > nginx.tmpl <<'NGX'
+          worker_processes 1;
+          error_log /bstand/logs/error.log info;
+          pid /tmp/nginx.pid;
+          events { worker_connections 256; }
+          http {
+            map $http_cookie $cp { default 0; "~yoko_mobile_session=" 1; }
+            map $http_authorization $ap { default 1; "" 0; }
+            map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+            log_format edge '$msec $request_time "$remote_user" auth=$ap $status "$request" cookie=$cp';
+            access_log /bstand/logs/access.log edge;
+            server {
+              listen 8443 ssl;
+              server_name localhost;
+              ssl_certificate /bstand/__CERT__.pem;
+              ssl_certificate_key /bstand/__CERT__.key;
+              auth_basic "YOKO CRM";
+              auth_basic_user_file /bstand/htpasswd;
+              location /cash-gate/ { auth_basic "YOKO Cash"; return 200 "cash"; }
+              __PROBE__
+              location / {
+                proxy_pass http://127.0.0.1:3002;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Forwarded-Host $http_host;
+                proxy_set_header X-Forwarded-Proto https;
+                proxy_set_header Authorization "";
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection $connection_upgrade;
+                proxy_buffering off;
+                proxy_read_timeout 300s;
+                proxy_redirect http://localhost:8443/ https://localhost:8443/;
+              }
+            }
+          }
+          NGX
+          sed -e 's#__CERT__#good#' -e 's#__PROBE__##' nginx.tmpl > nginx.conf
+          cat > trap.py <<'PY'
+          import socket, sys, time
+          log = open(sys.argv[1], 'a', buffering=1)
+          s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+          s.bind(('127.0.0.1', 3128)); s.listen(16)
+          while True:
+              c, a = s.accept()
+              log.write('%f connection from %s\n' % (time.time(), a))
+              try:
+                  c.settimeout(3); c.recv(4096)
+                  c.sendall(b'HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="YOKO CRM"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+              except Exception:
+                  pass
+              c.close()
+          PY
+          : > logs/proxy-trap.log
+          # The acceptance build trusts this CA. Runner workspace only; never committed.
+          mkdir -p "$GITHUB_WORKSPACE/android/app/src/acceptance/res/raw"
+          cp ca.pem "$GITHUB_WORKSPACE/android/app/src/acceptance/res/raw/yoko_b_test_ca.pem"
+          NSC="$GITHUB_WORKSPACE/android/app/src/acceptance/res/xml/network_security_config.xml"
+          sed -i 's#<certificates src="user" />#<certificates src="user" />\n            <certificates src="@raw/yoko_b_test_ca" />#' "$NSC"
+          grep -q yoko_b_test_ca "$NSC" || { echo "::error::CA not wired into the acceptance config"; exit 1; }
+          echo "::notice::B stand prepared: CA $(openssl x509 -in ca.pem -noout -fingerprint -sha256 | cut -c1-60)…"
+
+      - name: Start the B stand (nginx 1.27 TLS + Basic, proxy trap)
+        run: |
+          set -e
+          B="$RUNNER_TEMP/bstand"
+          docker run -d --name bnginx --network host -v "$B":/bstand nginx:1.27-alpine nginx -c /bstand/nginx.conf -g 'daemon off;'
+          nohup python3 "$B/trap.py" "$B/logs/proxy-trap.log" > "$B/logs/trap.out" 2>&1 &
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$B/ca.pem" https://localhost:8443/login/mobile || true)
+            [ "$code" = "401" ] && break; sleep 1
+          done
+          [ "$code" = "401" ] || { docker logs bnginx | tail -20; echo "::error::nginx not answering 401 (got $code)"; exit 1; }
+          hdr=$(curl -s -D - -o /dev/null --cacert "$B/ca.pem" https://localhost:8443/ | tr -d '\r' | grep -i '^www-authenticate:')
+          echo "::notice::B stand challenge: $hdr"
+          ok=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$B/ca.pem" -u 'staff.a:b-layer-pass-a' https://localhost:8443/login/mobile)
+          echo "::notice::B stand with staff.a: /login/mobile -> $ok"
+          [ "$ok" = "200" ] || { echo "::error::the CRM is not reachable through the stand ($ok)"; exit 1; }
+          : > "$B/logs/access.log"
+
+      - name: Build the B acceptance APK (origin https://localhost:8443) and the test APK
+        run: |
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:assembleAcceptance :app:assembleAcceptanceAndroidTest \
+            -PyokoTestOrigin="https://localhost:8443" \
+            -PyokoGitCommit="${GITHUB_SHA::8}"
+      - name: Reclaim disk before the system image lands
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk/ndk || true
+          df -h / | tail -1
+
+      # Run #5 died here without saying so. `avdmanager create avd` prints
+      # "Error: Package path is not valid" on stdout and still EXITS 0, so
+      # `set -e` did not catch it, the step reported success, and the emulator
+      # then failed with "Unknown AVD name [ci]". Every stage is now verified by
+      # its observable result rather than by an exit code, and each failure
+      # explains itself through an annotation.
+      - name: Install the emulator and the system image, and verify each step
+        run: |
+          set -e
+          SDK="$ANDROID_HOME/cmdline-tools/latest/bin"
+          IMAGE="system-images;android-34;google_apis;x86_64"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+
+          announce() { echo "::error::$1"; }
+          dump() { while IFS= read -r l; do echo "::error::$2: ${l}"; done; }
+
+          yes | "$SDK/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$SDK/sdkmanager" "platform-tools" "platforms;android-34" "emulator" "$IMAGE" \
+            > "$RUNNER_TEMP/sdkmanager.log" 2>&1 \
+            || { announce "sdkmanager failed"; tail -20 "$RUNNER_TEMP/sdkmanager.log" | dump x sdkmanager; exit 1; }
+
+          # The package has to be on disk where avdmanager will look for it.
+          IMAGE_DIR="$ANDROID_HOME/system-images/android-34/google_apis/x86_64"
+          if [ ! -d "$IMAGE_DIR" ]; then
+            announce "the system image is not at $IMAGE_DIR after sdkmanager reported success"
+            ls -la "$ANDROID_HOME/system-images" 2>&1 | dump x system-images
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            exit 1
+          fi
+          echo "system image present: $(ls "$IMAGE_DIR" | tr '\n' ' ')"
+
+          # Exit 0 is "KVM installed and usable"; exit 3 would mean the CPU
+          # exposes no vmx/svm at all, which no udev rule can repair.
+          "$ANDROID_HOME/emulator/emulator" -accel-check
+
+          echo no | "$SDK/avdmanager" create avd -n ci -k "$IMAGE" --force \
+            > "$RUNNER_TEMP/avdmanager.log" 2>&1 || true
+          cat "$RUNNER_TEMP/avdmanager.log"
+
+          # avdmanager's exit code is not evidence. The AVD file is.
+          if [ ! -f "$ANDROID_AVD_HOME/ci.ini" ]; then
+            announce "avdmanager did not create ci.ini, and its exit code did not say so"
+            tail -20 "$RUNNER_TEMP/avdmanager.log" | dump x avdmanager
+            "$SDK/sdkmanager" --list_installed 2>&1 | head -30 | dump x installed
+            ls -la "$ANDROID_AVD_HOME" 2>&1 | dump x avd-home
+            exit 1
+          fi
+
+          # And the emulator has to agree that it can see it.
+          "$ANDROID_HOME/emulator/emulator" -list-avds > "$RUNNER_TEMP/avds.txt" 2>&1
+          cat "$RUNNER_TEMP/avds.txt"
+          grep -qx "ci" "$RUNNER_TEMP/avds.txt" || {
+            announce "the emulator does not list the AVD that avdmanager just created"
+            cat "$RUNNER_TEMP/avds.txt" | dump x list-avds
+            exit 1
+          }
+          echo "AVD ci created and visible to the emulator"
+
+      # Driven directly rather than through a third-party action, for one
+      # reason: the action's diagnostics live in the step log, and a step log
+      # needs an authenticated download. Here the emulator writes a file this
+      # job owns, and the failure path republishes it as annotations, which are
+      # public. Acceleration is asserted above, so -accel on is unconditional:
+      # a silent fall back to software emulation reads as a slow boot and
+      # reports as a timeout, which is precisely the ambiguity to avoid.
+      - name: Start an emulator
+        timeout-minutes: 20
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect -accel on -camera-back none -camera-front none \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          emulator_pid=$!
+
+          give_up() {
+            echo "::error::emulator: $1"
+            # Annotations are the only channel a plain API read can see, so the
+            # decisive log lines go there, not only into the artifact.
+            grep -iE "error|panic|cannot|unable|refus|denied|not supported|unsupported|no such|failed|invalid" \
+              "$RUNNER_TEMP/emulator.log" 2>/dev/null | head -6 | while read -r l; do
+                echo "::error::emulator.log: ${l}"
+              done
+            tail -8 "$RUNNER_TEMP/emulator.log" 2>/dev/null | while read -r l; do
+              echo "::error::emulator.log tail: ${l}"
+            done
+            echo "::error::adb devices: $(timeout 30 "$ADB" devices -l 2>&1 | tr '\n' '~')"
+            exit 1
+          }
+
+          timeout 300 "$ADB" wait-for-device || give_up "no device appeared within 5 minutes"
+
+          # Booted means the package manager is up, not just the kernel.
+          state=""
+          for _ in $(seq 1 300); do
+            kill -0 "$emulator_pid" 2>/dev/null || give_up "the emulator process exited during boot"
+            state=$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$state" = "1" ] && break
+            sleep 3
+          done
+          [ "$state" = "1" ] || give_up "the emulator did not report boot_completed within 15 minutes"
+
+          # The input service registers after boot_completed, so unlocking
+          # immediately races it (ReactiveCircus/android-emulator-runner#489).
+          "$ADB" wait-for-device shell 'while [ -z "$(service list | grep -w input)" ]; do sleep 1; done' || true
+          # Give the device a loopback route to the stand, the same way the
+          # physical handset gets one. Without this the origin above is
+          # unreachable from inside the emulator.
+          "$ADB" reverse tcp:3002 tcp:3002
+          echo "reverse: $("$ADB" reverse --list)"
+
+          "$ADB" shell input keyevent 82 || true
+          "$ADB" shell settings put global window_animation_scale 0 || true
+          "$ADB" shell settings put global transition_animation_scale 0 || true
+          "$ADB" shell settings put global animator_duration_scale 0 || true
+          echo "emulator booted"
+
+      # A targeted experiment, ahead of the suite. Run #11 showed the shell
+      # loading its login page (GET /login/mobile 200) while the accessibility
+      # tree held 31 nodes, zero of them a WebView — but that dump was taken
+      # after the run, with the launcher in front, so it could not say whether
+      # the WebView ever publishes its content at all. This launches the app,
+      # leaves it in the foreground, and dumps the tree while it is there.
+      # A WebView exposes its content to the accessibility tree only while an
+      # accessibility client is attached, which is the thing being measured.
+
+      - name: Install the B app and the instrumentation
+        timeout-minutes: 15
+        run: |
+          cd android
+          bash tools/bootstrap-gradle.sh --no-daemon \
+            :app:installAcceptance :app:installAcceptanceAndroidTest \
+            -PyokoTestOrigin="https://localhost:8443" -PyokoGitCommit="${GITHUB_SHA::8}"
+
+      - name: Edge R5.1 HTTPS nginx Basic-auth suite (B layer)
+        timeout-minutes: 80
+        run: |
+          set +e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          BT=ru.yokoone.crm.shell.EdgeGateBTest
+          B="$RUNNER_TEMP/bstand"; ACC="$B/logs/access.log"
+          OUT="$RUNNER_TEMP/artifacts/b-layer"; mkdir -p "$OUT"
+          RES="$OUT/B-RESULTS.txt"; : > "$RES"
+
+          result() { echo "B-RESULT $1 $2 ${3:-}" | tee -a "$RES"; echo "::notice::B-RESULT $1 $2 $(printf '%s' "${3:-}" | head -c 300)"; }
+          mode() {
+            local probe=""
+            case "$2" in
+              p403) probe='location = /favicon.ico { return 403; }' ;;
+              p404) probe='location = /favicon.ico { return 404; }' ;;
+              p502) probe='location = /favicon.ico { proxy_pass http://127.0.0.1:1; }' ;;
+              pnoauth) probe='location = /favicon.ico { auth_basic off; default_type image/x-icon; return 200 "x"; }' ;;
+            esac
+            sed -e "s#__CERT__#$1#" -e "s#__PROBE__#$probe#" "$B/nginx.tmpl" > "$B/nginx.conf"
+            docker exec bnginx nginx -t -c /bstand/nginx.conf >/dev/null 2>&1 && docker exec bnginx nginx -s reload -c /bstand/nginx.conf
+            sleep 2
+          }
+          fresh() {
+            timeout 60 "$ADB" shell pm clear "$PKG" >/dev/null
+            timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+            timeout 30 "$ADB" reverse tcp:8443 tcp:8443 >/dev/null
+            timeout 30 "$ADB" logcat -c
+          }
+          pid() { timeout 20 "$ADB" shell pidof "$PKG" | tr -d '\r' | awk '{print $1}'; }
+          start_main() {
+            timeout 30 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" "$@" >/dev/null
+            for i in $(seq 1 30); do [ -n "$(pid)" ] && break; sleep 1; done
+          }
+          diag() { timeout 30 "$ADB" logcat -d -v brief -s YokoShellDiag:E; }
+          inst() { local m=$1 f=$2; shift 2; timeout 480 "$ADB" shell am instrument --no-restart -w -r "$@" -e class "$BT#$m" "$RUNNER" > "$f" 2>&1; }
+          ok() { grep -q "OK (1 test)" "$1"; }
+          why() { grep -aE "AssertionError|shortMsg|Exception" "$1" | head -2 | tr '\n' ' ' | cut -c1-300; }
+          kill_main() {
+            local p; p=$(pid); [ -z "$p" ] && return 0
+            timeout 30 "$ADB" shell input keyevent KEYCODE_HOME; sleep 2
+            timeout 30 "$ADB" shell am kill "$PKG"; sleep 2
+            q=$(pid); [ -n "$q" ] && [ "$q" = "$p" ] && timeout 30 "$ADB" shell run-as "$PKG" kill -9 "$p"
+            for i in $(seq 1 20); do q=$(pid); if [ -z "$q" ] || [ "$q" != "$p" ]; then break; fi; sleep 1; done
+          }
+          completed_in_new_pid() {
+            for i in $(seq 1 120); do
+              p=$(diag | grep "edge-reset completed" | sed -nE 's/^E\/YokoShellDiag\( *([0-9]+)\).*/\1/p' | tail -1)
+              if [ -n "$p" ] && ! printf ' %s ' "$1" | grep -q " $p "; then echo "$p"; return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          now() { date +%s.%N; }
+          # Requests that STARTED after time $1 ($msec - $request_time), matching an awk condition.
+          after() { awk -v t="$1" "{ if (\$1 - \$2 > t) print }" "$ACC" | grep -E "$2" | wc -l; }
+          signed_in_as_a() { fresh; start_main; sleep 2; inst b02_staffLoginThenCrmLoginForeignRealmAndCrm401 "$OUT/$1-signin.log"; ok "$OUT/$1-signin.log"; }
+          verify_reset() {
+            local id=$1 p1=$2 reason=$3; shift 3
+            local p2; p2=$(completed_in_new_pid "$p1")
+            diag > "$OUT/$id-diag.log"
+            [ -z "$p2" ] && return 1
+            sleep 3
+            inst b00_verifyFreshAfterReset "$OUT/$id-verify.log" -e scenario "$id" -e expectReason "$reason" "$@"
+            ok "$OUT/$id-verify.log"
+          }
+
+          mode good p200
+
+          # B01: challenge with realm "YOKO CRM", hardened dialog, decline stops (rule F).
+          fresh; start_main; sleep 2
+          inst b01_challengeOpensTheStaffDialogAndDeclineStops "$OUT/B01.log"
+          realm=$(curl -s -D - -o /dev/null --cacert "$B/ca.pem" https://localhost:8443/ | tr -d '\r' | grep -i '^www-authenticate:' | head -1)
+          if ok "$OUT/B01.log"; then result B01 PASS "dialog for $realm; decline -> panel, no second dialog in 10 s"; else result B01 FAIL "$(why "$OUT/B01.log")"; fi
+
+          # B02 staff login + CRM login; B05 foreign realm refused; B08 CRM 401 is not the edge; B16 no credential to the foreign realm.
+          : > "$ACC"
+          if signed_in_as_a B02; then
+            result B02 PASS "staff.a through nginx: $(grep -c '"staff.a"' "$ACC") authenticated requests; CRM login done; continuity record written"
+            result B05 PASS "realm 'YOKO Cash' on the pinned host refused, no dialog"
+            result B08 PASS "CRM 401s (no WWW-Authenticate) did not open the staff dialog"
+            cash=$(grep -c 'cash-gate' "$ACC"); cashauth=$(grep 'cash-gate' "$ACC" | grep -c 'auth=1')
+            if [ "$cash" -gt 0 ] && [ "$cashauth" = "0" ]; then result B16 PASS "$cash request(s) to the foreign realm, none carried Authorization"; else result B16 FAIL "cash-gate requests=$cash with-auth=$cashauth"; fi
+          else
+            msg=$(why "$OUT/B02-signin.log"); result B02 FAIL "$msg"
+            case "$msg" in *B05:*) result B05 FAIL "$msg";; *) result B05 "NOT-RUN" "B02 did not reach it";; esac
+            case "$msg" in *B08:*) result B08 FAIL "$msg";; *) result B08 "NOT-RUN" "B02 did not reach it";; esac
+            result B16 "NOT-RUN" "needs B02"
+          fi
+
+          # B13 + probe outcomes after process death with residual context (same operator).
+          for v in "B09a:p200" "B09b:p403" "B09c:p404" "B09d:p502"; do
+            id=${v%%:*}; pm=${v##*:}
+            [ -z "$(pid)" ] && { signed_in_as_a "$id" || { result "$id" FAIL "could not sign in"; continue; }; }
+            mode good "$pm"; T=$(now); kill_main; start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+            inst b09_bootstrapBarrier "$OUT/$id.log" -e scenario "$id" -e expect resume
+            diag > "$OUT/$id-diag.log"
+            probe=$(grep -o "continuity probe status=[0-9]* outcome=[a-z]*" "$OUT/$id-diag.log" | tail -1)
+            firstcookie=$(awk -v t="$T" '{ if ($1 - $2 > t) print NR": "$0 }' "$ACC" | grep 'cookie=1' | head -1 | cut -d: -f1)
+            firstprobe=$(awk -v t="$T" '{ if ($1 - $2 > t) print NR": "$0 }' "$ACC" | grep '"staff.a"' | grep 'favicon.ico' | head -1 | cut -d: -f1)
+            if ok "$OUT/$id.log" && [ -n "$firstprobe" ] && { [ -z "$firstcookie" ] || [ "$firstcookie" -gt "$firstprobe" ]; }; then
+              result "$id" PASS "$pm: $probe; resumed without CRM login; first cookie request (line ${firstcookie:-none}) after the probe (line $firstprobe)"
+            else
+              result "$id" FAIL "$pm: $probe; firstprobe=$firstprobe firstcookie=$firstcookie; $(why "$OUT/$id.log")"
+            fi
+          done
+          mode good p200
+
+          # B09e: a probe answered without any credential is unverified -> mismatch reset.
+          if [ -z "$(pid)" ]; then signed_in_as_a B09e-pre; fi
+          mode good pnoauth; T=$(now); p1=$(pid); kill_main
+          start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+          inst b09_bootstrapBarrier "$OUT/B09e.log" -e scenario B09e -e expect reset
+          mode good p200
+          if verify_reset B09e "$p1" CONTINUITY_MISMATCH && grep -q "outcome=unverified" "$OUT/B09e-diag.log" && [ "$(after "$T" 'cookie=1')" = "0" ]; then
+            result B09e PASS "probe 200 without proceed -> UNVERIFIED -> CONTINUITY_MISMATCH reset; zero cookie requests after the kill"
+          else
+            result B09e FAIL "unverified=$(grep -c 'outcome=unverified' "$OUT/B09e-diag.log") cookies-after=$(after "$T" 'cookie=1'); $(why "$OUT/B09e-verify.log")"
+          fi
+
+          # B14: a different edge principal after process death never reuses A's CRM session.
+          if signed_in_as_a B14; then
+            T=$(now); p1=$(pid); kill_main
+            start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+            inst b09_bootstrapBarrier "$OUT/B14.log" -e scenario B14 -e user staff.b -e pass b-layer-pass-b -e expect reset
+            if verify_reset B14 "$p1" CONTINUITY_MISMATCH && [ "$(after "$T" 'cookie=1')" = "0" ] && [ "$(after "$T" '"staff.a"')" = "0" ]; then
+              result B14 PASS "staff.b accepted by nginx -> fingerprint mismatch -> reset; zero cookie and zero staff.a requests after the kill"
+            else
+              result B14 FAIL "cookies-after=$(after "$T" 'cookie=1') staffA-after=$(after "$T" '"staff.a"'); $(why "$OUT/B14-verify.log")"
+            fi
+          else result B14 FAIL "could not sign in as staff.a"; fi
+
+          # B15: A's login with a wrong password pins A; switching needs a reset.
+          if signed_in_as_a B15; then
+            T=$(now); p1=$(pid); kill_main
+            start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+            inst b09_bootstrapBarrier "$OUT/B15.log" -e scenario B15 -e wrongFirst true -e expect reset
+            if verify_reset B15 "$p1" OPERATOR_SWITCH && [ "$(after "$T" 'cookie=1')" = "0" ]; then
+              result B15 PASS "wrong password -> username pinned read-only -> «Выйти и сменить сотрудника» -> reset; zero cookie requests"
+            else
+              result B15 FAIL "cookies-after=$(after "$T" 'cookie=1'); $(why "$OUT/B15.log") $(why "$OUT/B15-verify.log")"
+            fi
+          else result B15 FAIL "could not sign in as staff.a"; fi
+
+          # B10: the accepted credential is refused mid-session (password rotated) -> reset.
+          if signed_in_as_a B10; then
+            p1=$(pid)
+            printf 'staff.a:%s\nstaff.b:%s\n' "$(openssl passwd -apr1 'rotated-pass-a')" "$(openssl passwd -apr1 'b-layer-pass-b')" > "$B/htpasswd"
+            mode good p200
+            inst b10_rotatedPasswordResets "$OUT/B10.log"
+            if verify_reset B10 "$p1" EDGE_CREDENTIAL_REFUSED; then result B10 PASS "rotated password -> refusal of an accepted credential -> reset; fresh empty dialog"; else result B10 FAIL "$(grep -o 'edge-reset start reason=[A-Z_]*' "$OUT/B10-diag.log" | tail -1); $(why "$OUT/B10-verify.log")"; fi
+            cp "$B/htpasswd.base" "$B/htpasswd"; mode good p200
+          else result B10 FAIL "could not sign in as staff.a"; fi
+
+          # B11: operator switch A -> B; B lands on the CRM login; nothing as A after the reset.
+          if signed_in_as_a B11; then
+            p1=$(pid); T=$(now)
+            inst b11_operatorSwitch "$OUT/B11.log"
+            if verify_reset B11 "$p1" OPERATOR_SWITCH -e thenStaffB true && [ "$(after "$T" '"staff.a"')" = "0" ] && [ "$(after "$T" 'cookie=1')" = "0" ]; then
+              result B11 PASS "reset -> empty dialog -> staff.b -> CRM login (no A session); zero staff.a and zero cookie requests started after the switch"
+            else
+              result B11 FAIL "staffA-after=$(after "$T" '"staff.a"') cookies-after=$(after "$T" 'cookie=1'); $(why "$OUT/B11-verify.log")"
+            fi
+          else result B11 FAIL "could not sign in as staff.a"; fi
+
+          # B06: TLS failure -> panel, no dialog, no request reaches nginx.
+          mode bad p200; fresh; start_main; sleep 2; T=$(now)
+          inst b06_tlsFailureShowsThePanelAndNoDialog "$OUT/B06.log"
+          reqs=$(after "$T" '.')
+          if ok "$OUT/B06.log" && [ "$reqs" = "0" ]; then result B06 PASS "untrusted certificate -> TLS panel, no dialog, zero HTTP requests"; else result B06 FAIL "requests-after=$reqs; $(why "$OUT/B06.log")"; fi
+          mode good p200
+
+          # B07: a configured system proxy (answering 407 realm "YOKO CRM") is never used.
+          timeout 30 "$ADB" reverse tcp:3128 tcp:3128 >/dev/null
+          timeout 30 "$ADB" shell settings put global http_proxy 127.0.0.1:3128
+          : > "$B/logs/proxy-trap.log"
+          fresh; timeout 30 "$ADB" reverse tcp:3128 tcp:3128 >/dev/null; start_main; sleep 2
+          inst b07_systemProxyIsNeverUsed "$OUT/B07.log"
+          trap_hits=$(wc -l < "$B/logs/proxy-trap.log")
+          timeout 30 "$ADB" shell settings put global http_proxy :0
+          if ok "$OUT/B07.log" && [ "$trap_hits" = "0" ]; then result B07 PASS "system proxy 127.0.0.1:3128 configured; zero connections to it; CRM reached directly"; else result B07 FAIL "trap-connections=$trap_hits; $(why "$OUT/B07.log")"; fi
+
+          # B03: three wrong passwords -> EXHAUSTED, username pinned on every re-prompt.
+          fresh; start_main; sleep 2
+          inst b03_wrongPasswordThreeTimesExhausts "$OUT/B03.log"
+          if ok "$OUT/B03.log"; then result B03 PASS "pinned username on re-prompts; EXHAUSTED panel after 3"; else result B03 FAIL "$(why "$OUT/B03.log")"; fi
+
+          cp "$ACC" "$OUT/nginx-access.log"; cp "$B/logs/error.log" "$OUT/nginx-error.log" 2>/dev/null; cp "$B/logs/proxy-trap.log" "$OUT/" 2>/dev/null
+          pass=$(grep -c " PASS" "$RES"); fail=$(grep -c " FAIL" "$RES"); nr=$(grep -c " NOT-RUN" "$RES")
+          echo "::notice::B-SUMMARY pass=$pass fail=$fail not-run=$nr"
+          cat "$RES"
+          [ "$fail" = "0" ]
+
+      - name: Collect the B-layer evidence
+        if: always()
+        run: |
+          set +e
+          OUT="$RUNNER_TEMP/artifacts"; mkdir -p "$OUT"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          cp "$RUNNER_TEMP/crm.log" "$OUT/crm-server.log" 2>/dev/null
+          cp -r "$RUNNER_TEMP/bstand/logs" "$OUT/bstand-logs" 2>/dev/null
+          docker logs bnginx > "$OUT/nginx-container.log" 2>&1
+          timeout 60 "$ADB" logcat -d -v time > "$OUT/logcat-full.log" 2>/dev/null
+          ls -la "$OUT" "$OUT/b-layer" 2>/dev/null | tail -60
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: android-edge-r51-b-layer
+          path: ${{ runner.temp }}/artifacts
+          if-no-files-found: warn
+          retention-days: 14
