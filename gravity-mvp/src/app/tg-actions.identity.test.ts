@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
     emitMessage: vi.fn(),
     recordReachability: vi.fn(),
     patchMessageDelivery: vi.fn(),
+    applyEvidence: vi.fn(),
+    messageFindMany: vi.fn(),
     attachMessageMedia: vi.fn(),
     attachBinaryMedia: vi.fn(),
     downloadMedia: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock('telegram', () => ({
     TelegramClient: class MockTelegramClient {
         connected = true
         handlers: Array<(event: unknown) => Promise<void>> = []
+        builders: unknown[] = []
         session = { save: () => 'session' }
 
         constructor() {
@@ -64,7 +67,10 @@ vi.mock('telegram', () => ({
         async sendFile(target: unknown, input: unknown) { return mocks.sendFile(target, input) }
         async invoke(input: unknown) { return mocks.invoke(input) }
         async downloadMedia(message: unknown, input: unknown) { return mocks.downloadMedia(message, input) }
-        addEventHandler(handler: (event: unknown) => Promise<void>) { this.handlers.push(handler) }
+        addEventHandler(handler: (event: unknown) => Promise<void>, builder?: unknown) {
+            this.handlers.push(handler)
+            this.builders.push(builder)
+        }
     },
     Api: {
         User: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
@@ -74,6 +80,7 @@ vi.mock('telegram', () => ({
         MessageService: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
         PeerUser: class { constructor(input: Record<string, unknown>) { Object.assign(this, input) } },
         UpdateMessageReactions: class {},
+        UpdateReadHistoryOutbox: class {},
         ReactionEmoji: class { constructor(public input: unknown) {} },
         messages: { SendReaction: class { constructor(public input: unknown) {} } },
         contacts: { ImportContacts: class {} },
@@ -90,7 +97,7 @@ vi.mock('telegram/sessions', () => ({
 vi.mock('telegram/client/uploads', () => ({ CustomFile: class {} }))
 vi.mock('telegram/events', () => ({
     NewMessage: class {},
-    Raw: class {},
+    Raw: class { constructor(public input: unknown) {} },
 }))
 vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn() } }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -104,6 +111,7 @@ vi.mock('@/lib/prisma', () => ({
         message: {
             findFirst: mocks.messageFindFirst,
             findUnique: mocks.messageFindUnique,
+            findMany: mocks.messageFindMany,
         },
         messageAttachment: {
             count: mocks.attachmentCount,
@@ -140,6 +148,7 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     patchChannelConversationV1: mocks.patchConversation,
     patchHistoryImportJobV1: mocks.patchImportJob,
     patchMessageDeliveryV1: mocks.patchMessageDelivery,
+    applyMessageDeliveryEvidenceV1: mocks.applyEvidence,
     patchMessageMetadataV1: mocks.patchMessageMetadata,
     prepareOutboundConversationV1: mocks.prepareOutbound,
     upsertChannelConversationV1: mocks.upsertConversation,
@@ -172,6 +181,8 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
 }))
 
 import { Api } from 'telegram'
+import { createApplyMessageDeliveryEvidenceHandlerV1 } from '@/modules/messaging/public/v1/message-delivery-evidence-handler'
+import { deriveDeliveryStateV1, readDeliveryEvidenceV1, readTextDeliveryResultV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 // The mocked GramJS classes take plain values; the real constructors' typings do not.
 const tl = Api as unknown as Record<
     'User' | 'Chat' | 'Channel' | 'Message' | 'MessageService' | 'PeerUser',
@@ -289,6 +300,8 @@ describe('GramJS private conversation identity admission', () => {
         }])
         mocks.patchImportJob.mockResolvedValue({})
         mocks.getMeFailure = null
+        mocks.applyEvidence.mockResolvedValue({ contract: 'messaging.PatchMessageDeliveryResult.v2', outcome: 'no_match', messageId: null, matchedBy: null, reason: null })
+        mocks.messageFindMany.mockResolvedValue([])
         mocks.getEntity.mockImplementation(async target => new tl.User({ id: target }))
         mocks.sendMessage.mockResolvedValue({ id: 9001 })
         mocks.sendFile.mockResolvedValue({ id: 9002 })
@@ -554,7 +567,7 @@ describe('GramJS private conversation identity admission', () => {
         mocks.admittedChat = chat
 
         await expect(sendTelegramMessage(peerId, 'exact peer', connectionId, { chatId: chat.id }))
-            .resolves.toMatchObject({ success: true, externalId: `telegram:${providerAccountId}:${peerId}:9001` })
+            .resolves.toMatchObject({ evidence: 'provider_ack', providerMessageId: `telegram:${providerAccountId}:${peerId}:9001` })
 
         expect(mocks.prepareOutbound).toHaveBeenCalledWith(chat, connectionId)
         expect(mocks.getEntity).toHaveBeenCalledWith(BigInt(peerId), expect.anything())
@@ -966,6 +979,7 @@ describe('GramJS private conversation identity admission', () => {
         function expectNothingPersistedOrPublished() {
             expect(mocks.createMessage).not.toHaveBeenCalled()
             expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
+            expect(mocks.applyEvidence).not.toHaveBeenCalled()
             expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
             expect(mocks.emitMessage).not.toHaveBeenCalled()
         }
@@ -1284,34 +1298,41 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.createMessage).not.toHaveBeenCalled()
             })
 
-            test('mirror reconciles one CRM send row without a provider id, then mirrors a second identical phone message', async () => {
+            test('mirror settles one CRM send row through the S2 evidence command, then mirrors a second identical phone message as sent', async () => {
                 const handler = await initializeListener(`telegram-dedupe-mirror-${connectionSequence}`, '7209')
-                mocks.messageFindFirst.mockResolvedValueOnce({ id: 'crm-send-row' }).mockResolvedValueOnce(null)
+                const settled = { contract: 'messaging.PatchMessageDeliveryResult.v2', outcome: 'applied', reason: null }
+                mocks.applyEvidence
+                    .mockResolvedValueOnce({ ...settled, messageId: 'crm-send-row', matchedBy: 'unresolved_content' })
+                    .mockResolvedValueOnce({ ...settled, outcome: 'no_match', messageId: null, matchedBy: null })
+                    .mockResolvedValueOnce({ ...settled, messageId: 'message:telegram:7209:84:8002', matchedBy: 'provider_id' })
 
                 await handler({ message: privateMessage({ peer: '84', id: 8001, text: 'ok', out: true }) })
                 await handler({ message: privateMessage({ peer: '84', id: 8002, text: 'ok', out: true }) })
 
-                expect(mocks.messageFindFirst).toHaveBeenCalledWith(expect.objectContaining({
-                    where: expect.objectContaining({ direction: 'outbound', content: 'ok', externalId: null }),
-                }))
-                expect(mocks.patchMessageDelivery).toHaveBeenCalledWith(expect.objectContaining({
-                    messageId: 'crm-send-row',
-                    externalId: 'telegram:7209:84:8001',
-                    status: 'delivered',
-                }))
+                expect(mocks.applyEvidence.mock.calls.map(call => call[0])).toEqual([
+                    expect.objectContaining({ channel: 'telegram', providerMessageId: 'telegram:7209:84:8001', evidence: 'provider_echo', content: 'ok' }),
+                    expect.objectContaining({ providerMessageId: 'telegram:7209:84:8002', evidence: 'provider_echo', content: 'ok' }),
+                    expect.not.objectContaining({ content: expect.anything() }),
+                ])
+                expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
                 expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual(['telegram:7209:84:8002'])
+                expect(mocks.createMessage.mock.calls[0][0]).not.toHaveProperty('status')
             })
 
-            test('import stamps a CRM send row instead of duplicating it', async () => {
-                mocks.messageFindFirst.mockResolvedValueOnce({ id: 'crm-send-row' })
+            test('import settles a CRM send row with read-back evidence instead of duplicating it', async () => {
+                mocks.applyEvidence.mockResolvedValueOnce({
+                    contract: 'messaging.PatchMessageDeliveryResult.v2', outcome: 'applied', messageId: 'crm-send-row', matchedBy: 'unresolved_content', reason: null,
+                })
                 messagesByPeer({ '126': [privateMessage({ peer: '126', id: 9101, text: 'ok', out: true })] })
 
                 const patch = await runImport([userDialog('126')], '7210')
 
-                expect(mocks.patchMessageDelivery).toHaveBeenCalledWith(expect.objectContaining({
-                    messageId: 'crm-send-row',
-                    externalId: 'telegram:7210:126:9101',
+                expect(mocks.applyEvidence).toHaveBeenCalledWith(expect.objectContaining({
+                    providerMessageId: 'telegram:7210:126:9101',
+                    evidence: 'history_readback',
+                    content: 'ok',
                 }))
+                expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
                 expect(mocks.createMessage).not.toHaveBeenCalled()
                 expect(patch.detailsJson.completeness.reconciledSendMessages).toBe(1)
             })
@@ -1639,6 +1660,415 @@ describe('GramJS private conversation identity admission', () => {
                 expect(checked).toBeGreaterThan(30)
             })
         })
+
+        // TG3R: own outbound messages and read markers are delivery evidence,
+        // applied by the real S2 command over an in-memory message store.
+        describe('TG3R delivery evidence', () => {
+            type StoredRow = {
+                id: string
+                chatId: string
+                direction: string
+                channel: string
+                type: string
+                content: string
+                status: string
+                externalId: string | null
+                metadata: Record<string, unknown>
+                sentAt: Date
+                updatedAt: Date
+            }
+            const ACCOUNT = '7800'
+            const PEER = '42'
+            const CHAT = `chat:telegram:${PEER}`
+            const key = (id: number | string, account = ACCOUNT, peer = PEER) => `telegram:${account}:${peer}:${id}`
+            const settled = (outcome: string, extra: Record<string, unknown> = {}) => ({
+                contract: 'messaging.PatchMessageDeliveryResult.v2', outcome, messageId: null, matchedBy: null, reason: null, ...extra,
+            })
+            let rowSequence = 0
+
+            /** A message store with a unique externalId, wired to the persistence mocks and the real S2 handler. */
+            function useEvidenceStore() {
+                const rows = new Map<string, StoredRow>()
+                const byExternalId = (externalId: string) => [...rows.values()].find(row => row.externalId === externalId) ?? null
+                const put = (input: Partial<StoredRow> & { id?: string }) => {
+                    const row: StoredRow = {
+                        id: input.id ?? `row-${++rowSequence}`,
+                        chatId: CHAT,
+                        direction: 'outbound',
+                        channel: 'telegram',
+                        type: 'text',
+                        content: 'ok',
+                        status: 'sent',
+                        externalId: null,
+                        metadata: {},
+                        sentAt: new Date(),
+                        updatedAt: new Date(0),
+                        ...input,
+                    }
+                    rows.set(row.id, row)
+                    return row
+                }
+                mocks.createMessage.mockImplementation(async (command: Record<string, any>) => {
+                    if (byExternalId(command.externalId)) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+                    const row = put({
+                        id: `message:${command.externalId}`,
+                        chatId: command.chatId,
+                        direction: command.direction,
+                        type: command.type,
+                        content: command.content,
+                        status: command.status ?? 'sent',
+                        externalId: command.externalId,
+                        metadata: command.metadata ?? {},
+                        sentAt: command.sentAt,
+                    })
+                    return { message: row }
+                })
+                mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId?: string } }) =>
+                    query.where.externalId ? byExternalId(query.where.externalId) : null)
+                mocks.messageFindMany.mockImplementation(async (query: {
+                    where: { chatId: string, direction: string, channel: string, status: { not: string }, externalId: { startsWith: string } }
+                    take: number
+                }) => [...rows.values()]
+                    .filter(row => row.chatId === query.where.chatId
+                        && row.direction === query.where.direction
+                        && row.channel === query.where.channel
+                        && row.status !== query.where.status.not
+                        && (row.externalId ?? '').startsWith(query.where.externalId.startsWith))
+                    .sort((a, b) => b.sentAt.getTime() - a.sentAt.getTime())
+                    .slice(0, query.take)
+                    .map(row => ({ externalId: row.externalId })))
+                // Every private peer has a conversation, as in production: the
+                // account's own chat and historical 777000 rows exist too.
+                mocks.chatFindUnique.mockImplementation(async (query: { where: { externalChatId?: string } }) =>
+                    query.where.externalChatId?.startsWith('telegram:')
+                        ? { id: `chat:${query.where.externalChatId}`, channel: 'telegram' }
+                        : null)
+                mocks.applyEvidence.mockImplementation(createApplyMessageDeliveryEvidenceHandlerV1({
+                    async findByProviderId(providerMessageId) {
+                        return byExternalId(providerMessageId)
+                    },
+                    async findUnsettledByContent(input) {
+                        return [...rows.values()]
+                            .filter(row => row.chatId === input.chatId && row.channel === input.channel
+                                && row.direction === 'outbound' && row.type === 'text' && row.content === input.content
+                                && row.externalId === null && row.sentAt >= input.sentFrom && row.sentAt <= input.sentTo)
+                            .sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime())
+                    },
+                    async apply(row, write) {
+                        const current = rows.get(row.id)
+                        if (!current || current.updatedAt.getTime() !== row.updatedAt.getTime()) return 'stale'
+                        if (write.externalId && byExternalId(write.externalId)) return 'provider_id_taken'
+                        rows.set(row.id, {
+                            ...current,
+                            status: write.status,
+                            ...(write.externalId ? { externalId: write.externalId } : {}),
+                            metadata: write.metadata,
+                            updatedAt: new Date(current.updatedAt.getTime() + 1),
+                        })
+                        return 'applied'
+                    },
+                    async afterApplied() {},
+                    now: () => new Date(),
+                }))
+                return { rows, put, byExternalId }
+            }
+
+            const state = (row: StoredRow | null | undefined) => row ? deriveDeliveryStateV1(row as any) : null
+            const evidenceOf = (row: StoredRow | null | undefined) => readDeliveryEvidenceV1(row?.metadata)?.evidence ?? null
+
+            describe('own outbound messages', () => {
+                test('the echo of a CRM send still waiting for its answer settles that row as provider_echo, writing no second row', async () => {
+                    const { rows, put, byExternalId } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-echo-${connectionSequence}`, ACCOUNT)
+                    const crm = put({ content: 'ok', sentAt: new Date(Date.now() - 2_000) })
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8101, text: 'ok', out: true }) })
+
+                    expect(byExternalId(key(8101))?.id).toBe(crm.id)
+                    expect(evidenceOf(rows.get(crm.id))).toBe('provider_echo')
+                    expect(state(rows.get(crm.id))).toBe('provider_accepted')
+                    expect(rows.size).toBe(1)
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                    expect(mocks.patchMessageDelivery).not.toHaveBeenCalled()
+                })
+
+                test.each([
+                    ['acked by the send answer', { status: 'sent', metadata: { delivery: { v: 1, evidence: 'provider_ack', evidenceAt: '2026-10-26T00:00:00.000Z', source: 'send' } } }, 'provider_accepted'],
+                    ['written as delivered before S2', { status: 'delivered', metadata: {} }, 'delivered'],
+                    ['already read', { status: 'read', metadata: {} }, 'read'],
+                ])('the echo of a row %s changes nothing', async (_label, stored, expected) => {
+                    const { rows, put } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-unchanged-${connectionSequence}`, ACCOUNT)
+                    const row = put({ externalId: key(8102), ...stored })
+                    const before = { ...row }
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8102, text: 'ok', out: true }) })
+
+                    expect(rows.get(row.id)).toEqual(before)
+                    expect(state(rows.get(row.id))).toBe(expected)
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                })
+
+                test('a message sent from the phone is written once, as sent with provider_echo, never as delivered', async () => {
+                    const { rows, byExternalId } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-phone-${connectionSequence}`, ACCOUNT)
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8103, text: 'from the phone', out: true }) })
+                    await handler({ message: privateMessage({ peer: PEER, id: 8103, text: 'from the phone', out: true }) })
+
+                    const row = byExternalId(key(8103))
+                    expect(rows.size).toBe(1)
+                    expect(mocks.createMessage).toHaveBeenCalledOnce()
+                    expect(mocks.createMessage.mock.calls[0][0]).not.toHaveProperty('status')
+                    expect(row?.status).toBe('sent')
+                    expect(evidenceOf(row)).toBe('provider_echo')
+                    expect(state(row)).toBe('provider_accepted')
+                })
+
+                test('the same text sent twice from the phone is two rows: a mirrored row is never a content match', async () => {
+                    const { rows } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-repeat-${connectionSequence}`, ACCOUNT)
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8104, text: 'да', out: true }) })
+                    await handler({ message: privateMessage({ peer: PEER, id: 8105, text: 'да', out: true }) })
+
+                    expect([...rows.values()].map(row => row.externalId).sort()).toEqual([key(8104), key(8105)])
+                    expect([...rows.values()].every(row => state(row) === 'provider_accepted')).toBe(true)
+                })
+
+                test('two identical CRM sends are each settled by exactly one echo', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-two-sends-${connectionSequence}`, ACCOUNT)
+                    const first = put({ content: 'ok', sentAt: new Date(Date.now() - 3_000) })
+                    const second = put({ content: 'ok', sentAt: new Date(Date.now() - 2_000) })
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8106, text: 'ok', out: true }) })
+                    await handler({ message: privateMessage({ peer: PEER, id: 8107, text: 'ok', out: true }) })
+
+                    expect(rows.get(first.id)?.externalId).toBe(key(8106))
+                    expect(rows.get(second.id)?.externalId).toBe(key(8107))
+                    expect(rows.size).toBe(2)
+                })
+
+                test('a CRM send proven safe to resend, or refused, is never settled by an echo', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-settled-failure-${connectionSequence}`, ACCOUNT)
+                    put({ content: 'ok', status: 'failed', metadata: { deliveryOutcome: 'safe_to_redeliver' }, sentAt: new Date(Date.now() - 2_000) })
+                    put({ content: 'ok', status: 'failed', metadata: { deliveryOutcome: 'terminal' }, sentAt: new Date(Date.now() - 2_000) })
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8108, text: 'ok', out: true }) })
+
+                    expect(rows.size).toBe(3)
+                    expect(state([...rows.values()].find(row => row.externalId === key(8108)))).toBe('provider_accepted')
+                })
+
+                test('an unknown-outcome CRM send is promoted out of indeterminate by its echo', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-unknown-${connectionSequence}`, ACCOUNT)
+                    const row = put({ content: 'ok', status: 'failed', metadata: { deliveryOutcome: 'unknown', error: 'timeout' }, sentAt: new Date(Date.now() - 2_000) })
+                    expect(state(row)).toBe('indeterminate')
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8109, text: 'ok', out: true }) })
+
+                    expect(rows.get(row.id)?.externalId).toBe(key(8109))
+                    expect(state(rows.get(row.id))).toBe('provider_accepted')
+                    expect(rows.get(row.id)?.metadata).not.toHaveProperty('error')
+                })
+
+                test('an echo whose provider id another conversation\'s row holds is a key conflict and writes nothing', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-collision-${connectionSequence}`, ACCOUNT)
+                    put({ chatId: 'chat:telegram:99', externalId: key(8110) })
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8110, text: 'ok', out: true }) })
+
+                    expect(rows.size).toBe(1)
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                    expect(logs()).toContain('KEY-CONFLICT')
+                })
+
+                test('the evidence command refusing the id as taken is a key conflict, and contention is a bounded failure', async () => {
+                    const handler = await initializeListener(`tg3r-refused-${connectionSequence}`, ACCOUNT)
+                    mocks.applyEvidence.mockResolvedValueOnce(settled('refused', { reason: 'provider_id_collision' }))
+                    await handler({ message: privateMessage({ peer: PEER, id: 8111, text: 'ok', out: true }) })
+                    expect(logs()).toContain('KEY-CONFLICT')
+
+                    mocks.applyEvidence.mockResolvedValueOnce(settled('refused', { reason: 'contention' }))
+                    await handler({ message: privateMessage({ peer: PEER, id: 8112, text: 'ok', out: true }) })
+                    expect(logs()).toContain('code=TELEGRAM_DELIVERY_EVIDENCE_REFUSED:contention')
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                })
+
+                test('a media echo is matched by its exact id only, never by content', async () => {
+                    const handler = await initializeListener(`tg3r-media-${connectionSequence}`, ACCOUNT)
+                    mocks.downloadMedia.mockResolvedValue(Buffer.from('media'))
+
+                    await handler({ message: privateMessage({
+                        peer: PEER, id: 8113, text: '', out: true,
+                        extra: { photo: {}, media: { className: 'MessageMediaPhoto' }, downloadMedia: vi.fn(async () => Buffer.from('jpg')) },
+                    }) })
+
+                    for (const [command] of mocks.applyEvidence.mock.calls) expect(command).not.toHaveProperty('content')
+                })
+
+                test('catch-up records its own read-back as history_readback, the live listener as provider_echo', async () => {
+                    const { byExternalId } = useEvidenceStore()
+                    messagesByPeer({ [PEER]: [privateMessage({ peer: PEER, id: 8114, text: 'read back', out: true })] })
+
+                    const summary = await runCatchUp([userDialog(PEER)], ACCOUNT)
+
+                    expect(summary).toContain('saved=1')
+                    expect(evidenceOf(byExternalId(key(8114)))).toBe('history_readback')
+                    expect(state(byExternalId(key(8114)))).toBe('provider_accepted')
+                })
+
+                test('history import settles a CRM send and writes an outside send as sent with history_readback', async () => {
+                    const { rows, put, byExternalId } = useEvidenceStore()
+                    const crm = put({ content: 'crm text', sentAt: new Date(Date.now() - 2_000) })
+                    messagesByPeer({ [PEER]: [
+                        privateMessage({ peer: PEER, id: 8115, text: 'crm text', out: true }),
+                        privateMessage({ peer: PEER, id: 8116, text: 'outside text', out: true }),
+                    ] })
+
+                    const patch = await runImport([userDialog(PEER)], ACCOUNT)
+
+                    expect(rows.get(crm.id)?.externalId).toBe(key(8115))
+                    expect(evidenceOf(rows.get(crm.id))).toBe('history_readback')
+                    expect(evidenceOf(byExternalId(key(8116)))).toBe('history_readback')
+                    expect(byExternalId(key(8116))?.status).toBe('sent')
+                    expect(patch.detailsJson.completeness.reconciledSendMessages).toBe(1)
+                })
+
+                test('a row whose evidence could not be recorded yet gets it on the next observation', async () => {
+                    const { byExternalId } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-heal-${connectionSequence}`, ACCOUNT)
+                    const real = mocks.applyEvidence.getMockImplementation()!
+                    mocks.applyEvidence
+                        .mockImplementationOnce(real)
+                        .mockRejectedValueOnce(Object.assign(new Error('connection lost'), { code: 'P1017' }))
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8117, text: 'heal me', out: true }) })
+                    expect(state(byExternalId(key(8117)))).toBe('send_requested')
+                    expect(logs()).toContain('evidence not recorded')
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8117, text: 'heal me', out: true }) })
+                    expect(state(byExternalId(key(8117)))).toBe('provider_accepted')
+                    expect(mocks.createMessage).toHaveBeenCalledOnce()
+                })
+
+                test('inbound messages stay delivered and never consult the evidence command', async () => {
+                    const { byExternalId } = useEvidenceStore()
+                    const handler = await initializeListener(`tg3r-inbound-${connectionSequence}`, ACCOUNT)
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8118, text: 'hello' }) })
+
+                    expect(byExternalId(key(8118))?.status).toBe('delivered')
+                    expect(mocks.applyEvidence).not.toHaveBeenCalled()
+                })
+            })
+
+            describe('read markers', () => {
+                function readHandler() {
+                    const client = mocks.clients.at(-1) as unknown as { handlers: Array<(event: unknown) => Promise<void>>, builders: Array<{ input?: { types?: unknown[] } }> }
+                    const index = client.builders.findIndex(builder => builder?.input?.types?.[0] === Api.UpdateReadHistoryOutbox)
+                    expect(index).toBeGreaterThanOrEqual(0)
+                    return client.handlers[index]
+                }
+
+                test('the read-history handler is registered for UpdateReadHistoryOutbox', async () => {
+                    await initializeListener(`tg3r-read-wiring-${connectionSequence}`, ACCOUNT)
+                    expect(readHandler()).toBeTypeOf('function')
+                })
+
+                test('a read marker reads this account\'s messages to that person up to max_id, and only those', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    await initializeListener(`tg3r-read-${connectionSequence}`, ACCOUNT)
+                    const at = (seconds: number) => new Date(Date.now() - seconds * 1000)
+                    const below = put({ externalId: key(9501), sentAt: at(30) })
+                    const legacyDelivered = put({ externalId: key(9502), status: 'delivered', sentAt: at(20) })
+                    const above = put({ externalId: key(9504), sentAt: at(10) })
+                    const otherAccount = put({ externalId: key(9500, '7801'), sentAt: at(40) })
+                    const bare = put({ externalId: '9499', status: 'delivered', sentAt: at(50) })
+                    const local = put({ externalId: key('local-1760000000000'), sentAt: at(60) })
+
+                    await readHandler()({ peer: { userId: BigInt(PEER) }, maxId: 9503 })
+
+                    expect(state(rows.get(below.id))).toBe('read')
+                    expect(state(rows.get(legacyDelivered.id))).toBe('read')
+                    expect(state(rows.get(above.id))).toBe('send_requested')
+                    expect(rows.get(otherAccount.id)?.status).toBe('sent')
+                    expect(rows.get(bare.id)?.status).toBe('delivered')
+                    expect(rows.get(local.id)?.status).toBe('sent')
+                    for (const [command] of mocks.applyEvidence.mock.calls) expect(command.evidence).toBe('read_receipt')
+                })
+
+                test.each([
+                    ['the account itself', { peer: { userId: BigInt(ACCOUNT) }, maxId: 9502 }],
+                    ['Telegram service notifications', { peer: { userId: 777000n }, maxId: 9502 }],
+                    ['a group peer', { peer: { chatId: 55n }, maxId: 9502 }],
+                    ['a malformed max_id', { peer: { userId: BigInt(PEER) }, maxId: 'x' }],
+                    ['a zero max_id', { peer: { userId: BigInt(PEER) }, maxId: 0 }],
+                ])('a read marker for %s changes nothing', async (_label, update) => {
+                    const { put } = useEvidenceStore()
+                    await initializeListener(`tg3r-read-skip-${connectionSequence}`, ACCOUNT)
+                    put({ chatId: `chat:telegram:${ACCOUNT}`, externalId: key(9501, ACCOUNT, ACCOUNT) })
+                    put({ chatId: 'chat:telegram:777000', externalId: key(9501, ACCOUNT, '777000') })
+                    put({ externalId: key(9501) })
+                    mocks.chatFindUnique.mockClear()
+
+                    await readHandler()(update)
+
+                    expect(mocks.chatFindUnique).not.toHaveBeenCalled()
+                    expect(mocks.messageFindMany).not.toHaveBeenCalled()
+                    expect(mocks.applyEvidence).not.toHaveBeenCalled()
+                })
+
+                test('the read scan reads only the 200 newest unread own rows of that conversation', async () => {
+                    useEvidenceStore()
+                    await initializeListener(`tg3r-read-scan-${connectionSequence}`, ACCOUNT)
+
+                    await readHandler()({ peer: { userId: BigInt(PEER) }, maxId: 9600 })
+
+                    expect(mocks.messageFindMany).toHaveBeenCalledWith(expect.objectContaining({
+                        where: expect.objectContaining({
+                            chatId: CHAT,
+                            direction: 'outbound',
+                            channel: 'telegram',
+                            status: { not: 'read' },
+                            externalId: { startsWith: `telegram:${ACCOUNT}:${PEER}:` },
+                        }),
+                        orderBy: { sentAt: 'desc' },
+                        take: 200,
+                    }))
+                })
+
+                test('a failing read scan is logged with a bounded code and never throws', async () => {
+                    useEvidenceStore()
+                    await initializeListener(`tg3r-read-fail-${connectionSequence}`, ACCOUNT)
+                    mocks.messageFindMany.mockRejectedValueOnce(Object.assign(new Error('Invalid `prisma.message.findMany()` invocation'), { name: 'PrismaClientValidationError' }))
+
+                    await expect(readHandler()({ peer: { userId: BigInt(PEER) }, maxId: 9600 })).resolves.toBeUndefined()
+
+                    expect(logs()).toContain('[TG-READ] read marker failed')
+                    expect(logs()).not.toContain('Invalid `prisma')
+                })
+
+                test('catch-up recovers a read marker missed while disconnected from the dialog itself', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    const row = put({ externalId: key(9601), sentAt: new Date(Date.now() - 5_000) })
+
+                    const summary = await runCatchUp([userDialog(PEER, { dialog: { readOutboxMaxId: 9601 } })], ACCOUNT)
+
+                    expect(state(rows.get(row.id))).toBe('read')
+                    expect(summary).toContain('readReceipts=1')
+                })
+
+                test('the adapter never claims that a recipient\'s device received a message', () => {
+                    const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
+                    expect(source).not.toContain('device_receipt')
+                })
+            })
+        })
     })
 })
 
@@ -1756,6 +2186,8 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
         mocks.sendFile.mockResolvedValue({ id: 9102 })
         mocks.invoke.mockResolvedValue({})
         mocks.messageFindUnique.mockResolvedValue(null)
+        mocks.applyEvidence.mockResolvedValue({ contract: 'messaging.PatchMessageDeliveryResult.v2', outcome: 'no_match', messageId: null, matchedBy: null, reason: null })
+        mocks.messageFindMany.mockResolvedValue([])
         mocks.createMessage.mockResolvedValue({ message: { id: 'never' } })
         vi.spyOn(console, 'log').mockImplementation(() => {})
         vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -1772,7 +2204,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
         test('a cold cache sweeps 200 dialogs once, looks the exact id up once more and sends once to that user', async () => {
             const { send } = setup()
 
-            await expect(send()).resolves.toEqual({ success: true, externalId: quote(9101) })
+            await expect(send()).resolves.toEqual({ evidence: 'provider_ack', providerMessageId: quote(9101) })
 
             expect(sweeps()).toHaveLength(1)
             expect(sweeps()[0][0]).toEqual({ limit: 200 })
@@ -1821,8 +2253,8 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             expect(sweeps()).toHaveLength(1)
             release()
 
-            await expect(first).resolves.toMatchObject({ success: true })
-            await expect(second).resolves.toMatchObject({ success: true })
+            await expect(first).resolves.toMatchObject({ evidence: 'provider_ack' })
+            await expect(second).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(sweeps()).toHaveLength(1)
             expect(mocks.sendMessage.mock.calls.map(call => (call[1] as { message: string }).message).sort())
                 .toEqual(['first', 'second'])
@@ -1863,7 +2295,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                 cacheOf(client).add(PEER)
                 return []
             }
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(sweeps()).toHaveLength(2)
         })
 
@@ -1885,7 +2317,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                 cacheOf(client).add(PEER)
                 return []
             }
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(sweeps()).toHaveLength(2)
         })
 
@@ -1912,7 +2344,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             }
             const released = send()
             await vi.advanceTimersByTimeAsync(0)
-            await expect(released).resolves.toMatchObject({ success: true })
+            await expect(released).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(sweeps()).toHaveLength(2)
             expect(mocks.sendMessage).toHaveBeenCalledOnce()
         })
@@ -1980,7 +2412,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             expect(sweeps()).toHaveLength(1)
 
             vi.setSystemTime(start + 61_000)
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(sweeps()).toHaveLength(2)
             const replacement = mocks.sendMessage.mock.calls[0][2]
             expect(replacement).not.toBe(old)
@@ -1990,7 +2422,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
         test('the legacy carrier route resolves through the same exact sweep', async () => {
             const { send } = setup({ legacy: true })
 
-            await expect(send()).resolves.toMatchObject({ success: true, externalId: quote(9101) })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack', providerMessageId: quote(9101) })
             expect(sweeps()).toHaveLength(1)
             expect(mocks.sendMessage).toHaveBeenCalledOnce()
         })
@@ -2005,7 +2437,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                     ? new tl.User({ id: BigInt(String(target)) })
                     : collide(BigInt(String(target))))
 
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
             expect(mocks.sendMessage.mock.calls[0][0]).toBeInstanceOf(Api.User)
 
             sequence++
@@ -2147,14 +2579,14 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             const old = await warm(connectionId)
             vi.useFakeTimers({ toFake: ['Date'] })
             const start = Date.now()
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
 
             old.connected = false
             old.connect = async () => { throw new Error('socket down') }
             expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_NOT_DISPATCHED', 'TELEGRAM_PEER_RESOLUTION_UNAVAILABLE')
 
             vi.setSystemTime(start + 61_000)
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
             const [firstClient, lastClient] = [mocks.sendMessage.mock.calls[0][2], mocks.sendMessage.mock.calls[1][2]]
             expect(firstClient).toBe(old)
             expect(lastClient).not.toBe(old)
@@ -2168,7 +2600,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             knowPeerEverywhere()
             mocks.getMessages.mockResolvedValue([liveMessage(4242)])
 
-            await expect(send(quote(4242))).resolves.toMatchObject({ success: true })
+            await expect(send(quote(4242))).resolves.toMatchObject({ evidence: 'provider_ack' })
 
             expect(mocks.getMessages).toHaveBeenCalledWith(expect.any(Api.User), { ids: [4242] }, expect.anything())
             expect(mocks.sendMessage).toHaveBeenCalledWith(
@@ -2217,7 +2649,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             mocks.getMessages.mockResolvedValue([liveMessage(4242)])
             mocks.messageFindUnique.mockResolvedValue({ chatId: chat.id, sentAt: new Date(DATE * 1000 + 999) })
 
-            await expect(send('4242')).resolves.toMatchObject({ success: true })
+            await expect(send('4242')).resolves.toMatchObject({ evidence: 'provider_ack' })
 
             expect(mocks.messageFindUnique).toHaveBeenCalledWith({
                 where: { externalId: '4242' },
@@ -2274,7 +2706,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                 .mockResolvedValue([liveMessage(4242)])
 
             expectOutcome(await failure(send(quote(4242))), 'TELEGRAM_MTPROTO_NOT_DISPATCHED')
-            await expect(send(quote(4242))).resolves.toMatchObject({ success: true })
+            await expect(send(quote(4242))).resolves.toMatchObject({ evidence: 'provider_ack' })
 
             expect(mocks.sendMessage).toHaveBeenCalledOnce()
             expect(mocks.sendMessage.mock.calls[0][1]).toEqual({ message: 'tg2r text', replyTo: 4242 })
@@ -2339,11 +2771,11 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
         })
 
         test.each([
-            ['a provider refusal', rpcError(400, 'PEER_ID_INVALID')],
-            ['a dead session', rpcError(401, 'AUTH_KEY_UNREGISTERED')],
             ['FLOOD_WAIT', rpcError(420, 'FLOOD_WAIT_30')],
             ['a dropped socket', new Error('Not connected')],
-        ])('after dispatch, %s keeps main\'s untyped outcome', async (_label, error) => {
+            ['an internal provider error', rpcError(500, 'RPC_CALL_FAIL')],
+            ['a duplicate random id (an earlier copy may exist)', rpcError(400, 'RANDOM_ID_DUPLICATE')],
+        ])('after dispatch, %s keeps an untyped (unknown) outcome', async (_label, error) => {
             const { send } = setup()
             knowPeerEverywhere()
             mocks.sendMessage.mockRejectedValue(error)
@@ -2377,7 +2809,7 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                 ]
             }
 
-            await expect(send()).resolves.toMatchObject({ success: true })
+            await expect(send()).resolves.toMatchObject({ evidence: 'provider_ack' })
 
             expect(mocks.getMessages).not.toHaveBeenCalled()
             for (const writer of [
@@ -2390,6 +2822,60 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
                 .join('\n')
             expect(logged).not.toContain('private dialog text')
             expect(logged).not.toContain('51734')
+        })
+    })
+
+    describe('TG3R typed send result and post-dispatch refusal', () => {
+        test('a send Telegram answered with this message\'s id is provider_ack for that id, and never delivered', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+
+            const result = await send()
+
+            expect(result).toEqual({ evidence: 'provider_ack', providerMessageId: quote(9101) })
+            expect(readTextDeliveryResultV1(result)).toEqual({ evidence: 'provider_ack', providerMessageId: quote(9101) })
+            expect(result).not.toHaveProperty('success')
+        })
+
+        test('a send whose RPC answer carries no id is only a client action', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.sendMessage.mockResolvedValue({})
+
+            await expect(send()).resolves.toEqual({ evidence: 'client_action', providerMessageId: null })
+        })
+
+        test('an unusable id in the answer is an untyped (unknown) failure: the message may exist', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.sendMessage.mockResolvedValue({ id: 'x' })
+
+            const error = await failure(send())
+            expect(tokens(error.message)).toEqual([])
+        })
+
+        test.each([
+            ['400', rpcError(400, 'USER_IS_BLOCKED')],
+            ['401', rpcError(401, 'AUTH_KEY_UNREGISTERED')],
+            ['403', rpcError(403, 'CHAT_WRITE_FORBIDDEN')],
+            ['406', rpcError(406, 'USER_RESTRICTED')],
+        ])('after dispatch, Telegram\'s own %s refusal is terminal', async (_code, error) => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.sendMessage.mockRejectedValue(error)
+
+            const thrown = await failure(send())
+            expect(thrown.message).toBe(`Telegram delivery failed: ${error.message} (TELEGRAM_MTPROTO_REFUSED)`)
+            expect(s1Codes(thrown.message)).toEqual(['REFUSED'])
+            expect(mocks.sendMessage).toHaveBeenCalledOnce()
+        })
+
+        test('a refusal-shaped error without Telegram\'s error name is not trusted as a refusal', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+            mocks.sendMessage.mockRejectedValue(Object.assign(new Error('400'), { code: 400 }))
+
+            expect(tokens((await failure(send())).message)).toEqual([])
         })
     })
 })
