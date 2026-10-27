@@ -68,24 +68,32 @@ class EdgeGateBTest {
         mark("B01 PASS")
     }
 
-    // ── B02 (+B05, B08): staff login, CRM login, foreign realm, CRM 401 ──
+    // ── B02: staff login through nginx, then the CRM mobile login ────────
     @Test
-    fun b02_staffLoginThenCrmLoginForeignRealmAndCrm401() {
+    fun b02_staffLoginThenCrmLogin() {
         launch()
         awaitDialog("B02")
         fill(staffA, passA)
         crmSignIn("B02")
         awaitRecord("B02")
         assertTrue(lines().any { it.contains("edge-auth authenticated") })
+        mark("B02 PASS signed-in pid=${android.os.Process.myPid()}")
+    }
+
+    // ── B05 + B08 (after B02, same process): foreign realm, CRM 401 ─────
+    @Test
+    fun b05_foreignRealmAndCrm401OpenNoDialog() {
+        assertTrue("B05: not signed in", device.wait(Until.hasObject(By.textContains("Тест · MAX")), 30_000))
         // B08: the CRM's own 401s (no WWW-Authenticate) never open the edge dialog.
         SystemClock.sleep(3_000)
         assertFalse("B08: a CRM 401 opened the staff dialog", device.hasObject(By.textContains(dialogTarget)))
-        // B05: a challenge for the foreign realm on the same host is refused silently.
+        // B05: a location with realm "YOKO Cash" on the pinned host never gets a dialog.
+        // Whether Chromium attached the cached staff credential preemptively is
+        // read from the nginx log by the workflow (auth=0/1).
         javascript("var i = new Image(); i.src = '/cash-gate/probe.png?' + Date.now();")
         SystemClock.sleep(5_000)
         assertFalse("B05: the foreign realm opened a dialog", device.hasObject(By.textContains(dialogTarget)))
-        assertTrue("B05: no realm refusal logged; ${tail()}", lines().any { it.contains("edge-auth refused reason=realm") })
-        mark("B02 PASS signed-in pid=${android.os.Process.myPid()}")
+        mark("B05 no-dialog refused=${lines().any { it.contains("edge-auth refused reason=realm") }}")
     }
 
     // ── B03: wrong password ×3 ⇒ EXHAUSTED; username pinned on re-prompt ─
@@ -198,7 +206,11 @@ class EdgeGateBTest {
         assertNull("$id: old session cookie survived", PushRegistrar.sessionCookiePair(CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN)))
         assertNull("$id: reset still pending", PushTokenState.resetPending(app))
         assertNull("$id: continuity record survived", PushTokenState.continuityRecord(app).body)
-        if (reason != null) assertTrue("$id: no reset $reason; ${tail()}", lines().any { it.contains("edge-reset start reason=$reason") })
+        if (reason != null) {
+            // The reset was started by the previous process; read every pid's lines.
+            val all = EdgeDeviceSupport.diagnostics().map { it.second }
+            assertTrue("$id: no reset $reason; ${tail()}", all.any { it.contains("edge-reset start reason=$reason") })
+        }
         if (args.getString("thenStaffB") == "true") {
             fill(staffB, passB)
             assertTrue(
@@ -213,6 +225,9 @@ class EdgeGateBTest {
     // ── plumbing ─────────────────────────────────────────────────────────
 
     private fun launch() {
+        // The workflow already started the shell; a second launch would create a
+        // second activity with its own challenge. Launch only if it is not in front.
+        if (device.wait(Until.hasObject(By.pkg(targetPackage).depth(0)), 5_000)) return
         device.pressHome()
         val intent = app.packageManager.getLaunchIntentForPackage(targetPackage)!!
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)

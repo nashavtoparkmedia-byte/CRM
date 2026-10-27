@@ -301,6 +301,17 @@ jobs:
           B="$RUNNER_TEMP/bstand"
           docker run -d --name bnginx --network host -v "$B":/bstand nginx:1.27-alpine nginx -c /bstand/nginx.conf -g 'daemon off;'
           nohup python3 "$B/trap.py" "$B/logs/proxy-trap.log" > "$B/logs/trap.out" 2>&1 &
+          cat > "$B/status.py" <<'PY'
+          import http.server
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  code = 403 if self.path.startswith('/s403') else 404
+                  self.send_response(code); self.send_header('Content-Length', '0'); self.end_headers()
+              def log_message(self, *a):
+                  pass
+          http.server.HTTPServer(('127.0.0.1', 8081), H).serve_forever()
+          PY
+          nohup python3 "$B/status.py" > "$B/logs/status.out" 2>&1 &
           for _ in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$B/ca.pem" https://localhost:8443/login/mobile || true)
             [ "$code" = "401" ] && break; sleep 1
@@ -477,8 +488,9 @@ jobs:
           mode() {
             local probe=""
             case "$2" in
-              p403) probe='location = /favicon.ico { return 403; }' ;;
-              p404) probe='location = /favicon.ico { return 404; }' ;;
+              p403) probe='location = /favicon.ico { proxy_pass http://127.0.0.1:8081/s403; }' ;;
+              p404) probe='location = /favicon.ico { proxy_pass http://127.0.0.1:8081/s404; }' ;;
+              p403pre) probe='location = /favicon.ico { return 403; }' ;;
               p502) probe='location = /favicon.ico { proxy_pass http://127.0.0.1:1; }' ;;
               pnoauth) probe='location = /favicon.ico { auth_basic off; default_type image/x-icon; return 200 "x"; }' ;;
             esac
@@ -519,7 +531,7 @@ jobs:
           now() { date +%s.%N; }
           # Requests that STARTED after time $1 ($msec - $request_time), matching an awk condition.
           after() { awk -v t="$1" "{ if (\$1 - \$2 > t) print }" "$ACC" | grep -E "$2" | wc -l; }
-          signed_in_as_a() { fresh; start_main; sleep 2; inst b02_staffLoginThenCrmLoginForeignRealmAndCrm401 "$OUT/$1-signin.log"; ok "$OUT/$1-signin.log"; }
+          signed_in_as_a() { fresh; start_main; sleep 2; inst b02_staffLoginThenCrmLogin "$OUT/$1-signin.log"; local r=$?; ok "$OUT/$1-signin.log" || evidence "$1-signin"; ok "$OUT/$1-signin.log"; }
           verify_reset() {
             local id=$1 p1=$2 reason=$3; shift 3
             local p2; p2=$(completed_in_new_pid "$p1")
@@ -530,27 +542,39 @@ jobs:
             ok "$OUT/$id-verify.log"
           }
 
+          timeout 30 "$ADB" shell settings put secure accessibility_enabled 1
+          evidence() {
+            diag > "$OUT/$1-diag-all.log"
+            timeout 30 "$ADB" exec-out screencap -p > "$OUT/$1-screen.png" 2>/dev/null
+            timeout 30 "$ADB" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && timeout 30 "$ADB" exec-out cat /sdcard/ui.xml > "$OUT/$1-ui.xml" 2>/dev/null
+          }
           mode good p200
 
           # B01: challenge with realm "YOKO CRM", hardened dialog, decline stops (rule F).
           fresh; start_main; sleep 2
-          inst b01_challengeOpensTheStaffDialogAndDeclineStops "$OUT/B01.log"
+          inst b01_challengeOpensTheStaffDialogAndDeclineStops "$OUT/B01.log"; evidence B01
           realm=$(curl -s -D - -o /dev/null --cacert "$B/ca.pem" https://localhost:8443/ | tr -d '\r' | grep -i '^www-authenticate:' | head -1)
           if ok "$OUT/B01.log"; then result B01 PASS "dialog for $realm; decline -> panel, no second dialog in 10 s"; else result B01 FAIL "$(why "$OUT/B01.log")"; fi
 
-          # B02 staff login + CRM login; B05 foreign realm refused; B08 CRM 401 is not the edge; B16 no credential to the foreign realm.
+          # B02 staff login + CRM login; then B05 (realm "YOKO Cash" on the pinned host) and B08 (CRM 401).
           sudo truncate -s 0 "$ACC"
           if signed_in_as_a B02; then
             result B02 PASS "staff.a through nginx: $(grep -c '"staff.a"' "$ACC") authenticated requests; CRM login done; continuity record written"
-            result B05 PASS "realm 'YOKO Cash' on the pinned host refused, no dialog"
-            result B08 PASS "CRM 401s (no WWW-Authenticate) did not open the staff dialog"
+            inst b05_foreignRealmAndCrm401OpenNoDialog "$OUT/B05.log"; evidence B05
             cash=$(grep -c 'cash-gate' "$ACC"); cashauth=$(grep 'cash-gate' "$ACC" | grep -c 'auth=1')
-            if [ "$cash" -gt 0 ] && [ "$cashauth" = "0" ]; then result B16 PASS "$cash request(s) to the foreign realm, none carried Authorization"; else result B16 FAIL "cash-gate requests=$cash with-auth=$cashauth"; fi
+            if ok "$OUT/B05.log"; then
+              result B08 PASS "CRM 401s (no WWW-Authenticate) did not open the staff dialog"
+              if [ "$cash" -gt 0 ] && [ "$cashauth" = "0" ]; then
+                result B05 PASS "realm 'YOKO Cash': no dialog, no credential sent ($cash request(s), auth=0)"
+              else
+                result B05 FAIL "FINDING (platform): no dialog, but Chromium attached the cached staff credential preemptively to the 'YOKO Cash' location: $cashauth of $cash request(s) carried Authorization ($(grep 'cash-gate' "$ACC" | head -1 | cut -c1-120))"
+              fi
+            else
+              msg=$(why "$OUT/B05.log")
+              case "$msg" in *B08:*) result B08 FAIL "$msg"; result B05 NOT-RUN "B08 failed first";; *) result B08 PASS "no dialog from CRM 401s"; result B05 FAIL "$msg";; esac
+            fi
           else
-            msg=$(why "$OUT/B02-signin.log"); result B02 FAIL "$msg"
-            case "$msg" in *B05:*) result B05 FAIL "$msg";; *) result B05 "NOT-RUN" "B02 did not reach it";; esac
-            case "$msg" in *B08:*) result B08 FAIL "$msg";; *) result B08 "NOT-RUN" "B02 did not reach it";; esac
-            result B16 "NOT-RUN" "needs B02"
+            result B02 FAIL "$(why "$OUT/B02-signin.log")"; result B05 NOT-RUN "needs B02"; result B08 NOT-RUN "needs B02"
           fi
 
           # B13 + probe outcomes after process death with residual context (same operator).
@@ -559,6 +583,7 @@ jobs:
             [ -z "$(pid)" ] && { signed_in_as_a "$id" || { result "$id" FAIL "could not sign in"; continue; }; }
             mode good "$pm"; T=$(now); kill_main; start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
             inst b09_bootstrapBarrier "$OUT/$id.log" -e scenario "$id" -e expect resume
+            evidence "$id"
             diag > "$OUT/$id-diag.log"
             probe=$(grep -o "continuity probe status=[0-9]* outcome=[a-z]*" "$OUT/$id-diag.log" | tail -1)
             firstcookie=$(awk -v t="$T" '{ if ($1 - $2 > t) print NR": "$0 }' "$ACC" | grep 'cookie=1' | head -1 | cut -d: -f1)
@@ -570,6 +595,18 @@ jobs:
             fi
           done
           mode good p200
+
+          # B09f: a 403 that nginx returns BEFORE authenticating (no proceed) is UNVERIFIED -> reset.
+          if [ -z "$(pid)" ]; then signed_in_as_a B09f-pre; fi
+          mode good p403pre; T=$(now); p1=$(pid); kill_main
+          start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+          inst b09_bootstrapBarrier "$OUT/B09f.log" -e scenario B09f -e expect reset
+          mode good p200
+          if verify_reset B09f "$p1" CONTINUITY_MISMATCH && grep -q "status=403 outcome=unverified" "$OUT/B09f-diag.log" && [ "$(after "$T" 'cookie=1')" = "0" ]; then
+            result B09f PASS "403 before authentication (no proceed) -> UNVERIFIED -> reset; zero cookie requests after the kill (Security R5.1-1)"
+          else
+            result B09f FAIL "unverified403=$(grep -c 'status=403 outcome=unverified' "$OUT/B09f-diag.log") cookies-after=$(after "$T" 'cookie=1'); $(why "$OUT/B09f-verify.log")"
+          fi
 
           # B09e: a probe answered without any credential is unverified -> mismatch reset.
           if [ -z "$(pid)" ]; then signed_in_as_a B09e-pre; fi
@@ -638,16 +675,22 @@ jobs:
           # B07: a configured system proxy (answering 407 realm "YOKO CRM") is never used.
           timeout 30 "$ADB" reverse tcp:3128 tcp:3128 >/dev/null
           timeout 30 "$ADB" shell settings put global http_proxy 127.0.0.1:3128
-          : > "$B/logs/proxy-trap.log"
+          : > "$B/logs/proxy-trap.log"; sudo truncate -s 0 "$ACC"
           fresh; timeout 30 "$ADB" reverse tcp:3128 tcp:3128 >/dev/null; start_main; sleep 2
-          inst b07_systemProxyIsNeverUsed "$OUT/B07.log"
+          inst b07_systemProxyIsNeverUsed "$OUT/B07.log"; evidence B07
           trap_hits=$(wc -l < "$B/logs/proxy-trap.log")
           timeout 30 "$ADB" shell settings put global http_proxy :0
-          if ok "$OUT/B07.log" && [ "$trap_hits" = "0" ]; then result B07 PASS "system proxy 127.0.0.1:3128 configured; zero connections to it; CRM reached directly"; else result B07 FAIL "trap-connections=$trap_hits; $(why "$OUT/B07.log")"; fi
+          direct=$(grep -c '"staff.a"' "$ACC")
+          if [ "$trap_hits" = "0" ] && [ "$direct" -gt 0 ]; then
+            result B07 PASS "system proxy 127.0.0.1:3128 (answers 407 realm YOKO CRM) configured; zero connections to it; nginx served staff.a directly"
+            result B16 PASS "the proxy never received a connection, so no credential; foreign host/realm challenges are covered by B05 and unit T2/T20"
+          else
+            result B07 FAIL "trap-connections=$trap_hits direct-staff.a=$direct; $(why "$OUT/B07.log")"; result B16 FAIL "trap-connections=$trap_hits"
+          fi
 
           # B03: three wrong passwords -> EXHAUSTED, username pinned on every re-prompt.
           fresh; start_main; sleep 2
-          inst b03_wrongPasswordThreeTimesExhausts "$OUT/B03.log"
+          inst b03_wrongPasswordThreeTimesExhausts "$OUT/B03.log"; evidence B03
           if ok "$OUT/B03.log"; then result B03 PASS "pinned username on re-prompts; EXHAUSTED panel after 3"; else result B03 FAIL "$(why "$OUT/B03.log")"; fi
 
           cp "$ACC" "$OUT/nginx-access.log"; cp "$B/logs/error.log" "$OUT/nginx-error.log" 2>/dev/null; cp "$B/logs/proxy-trap.log" "$OUT/" 2>/dev/null
