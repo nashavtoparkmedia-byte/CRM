@@ -289,6 +289,7 @@ const moduleTests = {
     command('check-messaging-transport-registry-boundary.mjs'),
     command('check-messaging-persisted-message-ingress-boundary.mjs'),
     command('check-messaging-ai-reply-pipeline-boundary.mjs'),
+    command('check-messaging-send-to-contact-boundary.mjs'),
   ],
   operations_observability: [
     command('check-operations-operational-job-registry-boundary.mjs'),

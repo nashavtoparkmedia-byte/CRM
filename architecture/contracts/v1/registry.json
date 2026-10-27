@@ -387,7 +387,8 @@
         "AttachMessageMediaCommand.v1",
         "ImportMessageHistoryCommand.v1",
         "ReceiveMessageCommand.v1",
-        "SendMessageCommand.v1"
+        "SendMessageCommand.v1",
+        "SendToContactCommand.v1"
       ],
       "consumer_contexts": [
         "analytics_reporting",
