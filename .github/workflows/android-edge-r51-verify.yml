@@ -454,7 +454,10 @@ jobs:
           inst() { local m=$1 f=$2; shift 2; timeout 420 "$ADB" shell am instrument --no-restart -w -r "$@" -e class "$E2E#$m" "$RUNNER" > "$f" 2>&1; }
           kill_main() {
             local p; p=$(pid); [ -z "$p" ] && return 0
-            timeout 30 "$ADB" shell run-as "$PKG" kill -9 "$p"
+            # A background process is killed the way the system would (state stays
+            # restorable, as in the canonical test10/test11); kill -9 only as fallback.
+            timeout 30 "$ADB" shell am kill "$PKG"; sleep 2
+            q=$(pid); [ -n "$q" ] && [ "$q" = "$p" ] && timeout 30 "$ADB" shell run-as "$PKG" kill -9 "$p"
             for i in $(seq 1 20); do q=$(pid); if [ -z "$q" ] || [ "$q" != "$p" ]; then break; fi; sleep 1; done
           }
           # Waits for "edge-reset completed" written by a pid outside the exclusion list.
@@ -538,16 +541,25 @@ jobs:
             fresh; start_main; sleep 3
             local p1; p1=$(pid)
             inst "$m" "$OUT/$id-a.log"
-            if ! grep -q "OK (1 test)" "$OUT/$id-a.log"; then result "$id" FAIL "phase A: $(why "$OUT/$id-a.log")"; return; fi
+            if ! grep -q "OK (1 test)" "$OUT/$id-a.log"; then
+              diag > "$OUT/$id-a-diag.log"
+              timeout 30 "$ADB" exec-out screencap -p > "$OUT/$id-a-screen.png"
+              last=$(grep -v 'console |' "$OUT/$id-a-diag.log" | tail -3 | sed -E 's/^E\/YokoShellDiag\( *[0-9]+\): //' | paste -sd' ' | cut -c1-200)
+              result "$id" FAIL "phase A: $(why "$OUT/$id-a.log") | last diag: $last"
+              return
+            fi
+            [ "$relaunch" = "restore" ] || timeout 30 "$ADB" shell input keyevent KEYCODE_HOME
+            sleep 2
             kill_main
             case "$relaunch" in
               deeplink) start_main --es ru.yokoone.crm.shell.CHAT_ID acc_chat_max_0005 --es ru.yokoone.crm.shell.MESSAGE_ID msg_i07 ;;
               *) start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 ;;
             esac
             local p2; p2=$(pid)
-            local excl="$p1"
-            [ -n "$mism" ] && excl="$p1 $p2"
-            local p3; p3=$(completed_in_new_pid "$excl")
+            # Only the killed process is excluded: with a mismatch the second process
+            # lives for well under a second, so pidof may already report the third.
+            # Which process reset and which completed is asserted from the log lines.
+            local p3; p3=$(completed_in_new_pid "$p1")
             diag > "$OUT/$id-diag.log"
             if [ -z "$p3" ]; then result "$id" FAIL "no process completed the reset (p1=$p1 p2=$p2)"; return; fi
             if [ "$relaunch" = "deeplink" ] && ! grep -qE "push-open cold .*tgt=[^ ]*messages/open" "$OUT/$id-diag.log"; then result "$id" FAIL "the cold start carried no deep-link target"; return; fi
@@ -555,9 +567,11 @@ jobs:
             sleep 3
             if verify "$id" "$reason" "$mism"; then result "$id" PASS "p1=$p1 killed; completed in $p3"; else result "$id" FAIL "$(why "$OUT/$id-verify.log")"; fi
           }
-          fault_scenario E06 e06_durableIntentWrittenThenKilled launcher OPERATOR_SWITCH ""
-          fault_scenario E07 e06_durableIntentWrittenThenKilled deeplink OPERATOR_SWITCH ""
-          fault_scenario E08 e08_backgroundedWithStateThenDurableIntentThenKilled restore OPERATOR_SWITCH ""
+          # E06-E08 inject step 0 directly (as if killed right after it), so no
+          # "edge-reset start" line exists; completion and ordering are asserted.
+          fault_scenario E06 e06_durableIntentWrittenThenKilled launcher "" ""
+          fault_scenario E07 e06_durableIntentWrittenThenKilled deeplink "" ""
+          fault_scenario E08 e08_backgroundedWithStateThenDurableIntentThenKilled restore "" ""
           fault_scenario E09 e09_contextKeyLostThenKilled launcher CONTINUITY_MISMATCH record-key
           fault_scenario E10 e10_edgeGateAppearsThenKilled launcher CONTINUITY_MISMATCH gate-appeared
           fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac

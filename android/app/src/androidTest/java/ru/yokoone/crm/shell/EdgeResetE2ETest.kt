@@ -207,10 +207,14 @@ class EdgeResetE2ETest {
         val launch = app.packageManager.getLaunchIntentForPackage(targetPackage)!!
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
         InstrumentationRegistry.getInstrumentation().context.startActivity(launch)
-        assertTrue(
-            "$id: no sign-in screen; on screen: ${visibleText()}",
-            device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), 60_000),
-        )
+        var shown = device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), 90_000)
+        if (!shown) {
+            // One relaunch: a first WebView start after `pm clear` can stall the page.
+            EdgeDeviceSupport.mark("$id sign-in not shown after 90 s; relaunching once; ${tail(EdgeDeviceSupport.diagnostics())}")
+            InstrumentationRegistry.getInstrumentation().context.startActivity(launch)
+            shown = device.wait(Until.hasObject(By.textContains("Вход в мобильное приложение")), 90_000)
+        }
+        assertTrue("$id: no sign-in screen; on screen: ${visibleText()}; ${tail(EdgeDeviceSupport.diagnostics())}", shown)
         device.wait(Until.hasObject(By.textContains("Сотрудник")), 20_000)
         val candidates = (device.findObjects(By.textContains("Выберите")) + device.findObjects(By.textContains("Сотрудник"))).distinct()
         val picker = candidates.firstOrNull { it.isClickable } ?: candidates.firstOrNull { it.className != "android.widget.TextView" }
