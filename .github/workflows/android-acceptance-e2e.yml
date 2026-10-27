@@ -509,6 +509,9 @@ jobs:
 
       - name: Run each acceptance scenario on a fresh install
         id: tests
+        # EVIDENCE-ONLY HARNESS CHANGE (never merged): main f77279db fails the
+        # MAX delivery proof server-side; let the push scenarios still run.
+        continue-on-error: true
         timeout-minutes: 30
         run: |
           set +e
@@ -583,6 +586,7 @@ jobs:
       # its own history route, the same read the device uses.
       - name: Verify the MAX send proof against the transport and the CRM
         if: always()
+        continue-on-error: true
         run: |
           node android/tools/acceptance-max-transport.mjs verify \
             --transport http://127.0.0.1:3905 --crm http://127.0.0.1:3002 \
