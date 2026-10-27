@@ -428,7 +428,7 @@ jobs:
       - name: Edge R5.1 instrumented suite (I layer)
         timeout-minutes: 70
         env:
-          ONLY: "E08-V1 E08-V2"
+          ONLY: "E08-V2 E01 E06 E07 E09 E10 E11 E12"
           ATTEMPTS: "3"
         run: |
           set +e
