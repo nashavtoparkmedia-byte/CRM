@@ -2715,6 +2715,48 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027",
+      "reviewed_at": "2026-10-27T00:00:00Z",
+      "reviewed_by": "ANDROID_ACCEPTANCE_TEST06_S2_REPAIR_EXECUTOR_REVIEW_20261027",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TEST06_BASELINE_REGRESSION_REPAIR_FINISH_TO_PR_20261027",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 5178f3e8, whose tail is cash-release-safety-r1-r5-main-f77279db-20261026, and reviews only the one surface the Android acceptance test06 repair adds."
+      },
+      "reason": "Records the one tracked executable surface the Android acceptance test06 repair adds on top of main 5178f3e8: android/tools/acceptance-max-transport.test.mjs, the node:test regression suite of the loopback MAX transport stand-in that the Android acceptance workflow uses. It pins the stand to the S2 delivery contract: the stand answers like the MAX scraper's accepted outcome (a provider_ack naming a real-shaped synthetic id) and its read-back check accepts only provider acceptance (status sent, provider_ack evidence) and refuses a false delivered, a client action, a second physical send and a second persisted row. 2,714 + 1 = 2,715 surfaces, context-owned 1,477 -> 1,478 and governed exclusions unchanged at 1,237. The surface is classified TEST by the tracked-surface inventory's own naming rule, as every other test surface is; it needs no lifecycle registry entry. The current triple is this repository's own derivation over this tree (preview on the clean commit 583b07df, which reported no required rebind and no exact-inventory path without a reviewed assignment). It sits under android, which the platform_shell manifest owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. The other three repair files (the stand, the instrumentation test and its documentation) change bytes only; none carries a reviewed exact-inventory assignment or a registered source fingerprint, so no rebind is required and none is claimed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "android/tools/acceptance-max-transport.test.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The node:test suite of the Android acceptance MAX transport stand-in. It imports only Node built-ins and the stand module, serves the stand on a loopback port chosen by the OS, opens no database connection, reaches no external host and holds no credential. Under android, a path the platform_shell context owns, so context ownership comes from the manifest."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
