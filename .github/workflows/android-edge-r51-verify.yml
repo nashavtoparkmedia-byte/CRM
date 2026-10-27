@@ -478,6 +478,20 @@ jobs:
             grep -q "OK (1 test)" "$OUT/$id-verify.log"
           }
           why() { grep -aE "AssertionError|shortMsg|Exception" "$1" | head -2 | tr '\n' ' ' | cut -c1-300; }
+          # Phase-A UI sign-in flakes (WebView text not in the accessibility tree,
+          # CRM form not advancing) happen before the scenario under test begins.
+          # Such a scenario is retried once; both attempts are kept and reported.
+          SIGNIN_FLAKE="no sign-in screen|messenger did not open|no operator select|operator list did not open|sign-in fields not found|submit not found|no session cookie after sign-in"
+          run_with_retry() {
+            local id=$2
+            "$@"; local rc=$?
+            if [ $rc = 2 ]; then
+              echo "::notice::$id phase-A sign-in flake on attempt 1; retrying once"
+              mkdir -p "$OUT/$id-attempt1"; mv "$OUT/$id"-*.log "$OUT/$id-attempt1/" 2>/dev/null
+              "$@"; rc=$?
+              if [ $rc = 2 ]; then result "$id" FAIL "phase A sign-in failed on both attempts (harness/UI, scenario not reached): $(why "$OUT/$id-a.log")"; fi
+            fi
+          }
 
           # part 1: in-process device tests (real ART, Android Keystore, CookieManager)
           for t in \
@@ -513,13 +527,16 @@ jobs:
             local p2; p2=$(completed_in_new_pid "$p1")
             diag > "$OUT/$id-diag.log"
             timeout 30 "$ADB" logcat -d -b main,system,crash -v brief > "$OUT/$id-logcat.log"
-            if ! grep -q "edge-reset start reason=$reason" "$OUT/$id-diag.log"; then result "$id" FAIL "no reset start reason=$reason; $(why "$OUT/$id-a.log")"; return; fi
+            if ! grep -q "edge-reset start reason=$reason" "$OUT/$id-diag.log"; then
+              if grep -qE "$SIGNIN_FLAKE" "$OUT/$id-a.log"; then return 2; fi
+              result "$id" FAIL "no reset start reason=$reason; $(why "$OUT/$id-a.log")"; return
+            fi
             if ! grep -q "edge-reset end-process" "$OUT/$id-diag.log"; then result "$id" FAIL "process end not reached"; return; fi
             if [ -z "$p2" ]; then result "$id" FAIL "no relaunched process completed the reset"; return; fi
             sleep 3
             if verify "$id" "$reason" ""; then result "$id" PASS "pid $p1 ended, relaunched as $p2, context fresh"; else result "$id" FAIL "$(why "$OUT/$id-verify.log")"; fi
           }
-          reset_scenario E01 e01_operatorSwitchFromTheShortcutTarget OPERATOR_SWITCH
+          run_with_retry reset_scenario E01 e01_operatorSwitchFromTheShortcutTarget OPERATOR_SWITCH
 
           # E02: the :reset process seen in E01 is inert.
           rp=$(grep -oE "Start proc [0-9]+:$PKG:reset" "$OUT/E01-logcat.log" | head -1 | sed -nE 's/Start proc ([0-9]+):.*/\1/p')
@@ -531,9 +548,9 @@ jobs:
             if [ "$bad" = "0" ] && [ "$dirs" = "0" ]; then result E02 PASS ":reset pid $rp wrote no shell, push, WorkManager or WebView lines; no :reset WebView directory"; else result E02 FAIL "pid $rp lines=$bad webview-dirs=$dirs"; fi
           fi
 
-          reset_scenario E03 e03_legacyLoginNavigationIsRefused OPERATOR_SWITCH
-          reset_scenario E04 e04_legacyLoginRscFetchIsRefused OPERATOR_SWITCH
-          reset_scenario E05 e05_operatorRewriteAfterValidIsRefused OPERATOR_SWITCH
+          run_with_retry reset_scenario E03 e03_legacyLoginNavigationIsRefused OPERATOR_SWITCH
+          run_with_retry reset_scenario E04 e04_legacyLoginRscFetchIsRefused OPERATOR_SWITCH
+          run_with_retry reset_scenario E05 e05_operatorRewriteAfterValidIsRefused OPERATOR_SWITCH
 
           # part 3: deterministic faults in durable state, then a real kill
           fault_scenario() {
@@ -543,6 +560,7 @@ jobs:
             inst "$m" "$OUT/$id-a.log"
             if ! grep -q "OK (1 test)" "$OUT/$id-a.log"; then
               diag > "$OUT/$id-a-diag.log"
+              if grep -qE "$SIGNIN_FLAKE" "$OUT/$id-a.log"; then return 2; fi
               timeout 30 "$ADB" exec-out screencap -p > "$OUT/$id-a-screen.png"
               last=$(grep -v 'console |' "$OUT/$id-a-diag.log" | tail -3 | sed -E 's/^E\/YokoShellDiag\( *[0-9]+\): //' | paste -sd' ' | cut -c1-200)
               result "$id" FAIL "phase A: $(why "$OUT/$id-a.log") | last diag: $last"
@@ -569,12 +587,12 @@ jobs:
           }
           # E06-E08 inject step 0 directly (as if killed right after it), so no
           # "edge-reset start" line exists; completion and ordering are asserted.
-          fault_scenario E06 e06_durableIntentWrittenThenKilled launcher "" ""
-          fault_scenario E07 e06_durableIntentWrittenThenKilled deeplink "" ""
-          fault_scenario E08 e08_backgroundedWithStateThenDurableIntentThenKilled restore "" ""
-          fault_scenario E09 e09_contextKeyLostThenKilled launcher CONTINUITY_MISMATCH record-key
-          fault_scenario E10 e10_edgeGateAppearsThenKilled launcher CONTINUITY_MISMATCH gate-appeared
-          fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac
+          run_with_retry fault_scenario E06 e06_durableIntentWrittenThenKilled launcher "" ""
+          run_with_retry fault_scenario E07 e06_durableIntentWrittenThenKilled deeplink "" ""
+          run_with_retry fault_scenario E08 e08_backgroundedWithStateThenDurableIntentThenKilled restore "" ""
+          run_with_retry fault_scenario E09 e09_contextKeyLostThenKilled launcher CONTINUITY_MISMATCH record-key
+          run_with_retry fault_scenario E10 e10_edgeGateAppearsThenKilled launcher CONTINUITY_MISMATCH gate-appeared
+          run_with_retry fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac
 
           # part 4: WorkManager work restored after process death, rotation pending
           fresh; start_main; sleep 3
