@@ -428,7 +428,7 @@ jobs:
       - name: Edge R5.1 instrumented suite (I layer)
         timeout-minutes: 70
         env:
-          ONLY: "E05 E08 E09 E10 E12"
+          ONLY: "E08-V1 E08-V2"
           ATTEMPTS: "3"
         run: |
           set +e
@@ -596,7 +596,71 @@ jobs:
           # "edge-reset start" line exists; completion and ordering are asserted.
           run_with_retry fault_scenario E06 e06_durableIntentWrittenThenKilled launcher "" ""
           run_with_retry fault_scenario E07 e06_durableIntentWrittenThenKilled deeplink "" ""
-          run_with_retry fault_scenario E08 e08_backgroundedWithStateThenDurableIntentThenKilled restore "" ""
+          # E08: reset_pending while the system restores saved activity/WebView state.
+          # Lifecycle evidence per variant: ActivityRecord haveState before and after
+          # the kill (dumpsys activity -p), the events buffer (wm_* / am_*), and the
+          # cold start's own restored= flag. PASS needs restored=true for real.
+          snap() { timeout 30 "$ADB" shell dumpsys activity -p "$PKG" activities > "$OUT/$1-dumpsys.txt" 2>/dev/null; }
+          e08_variant() {
+            local id=$1 v=${1#E08-}
+            want "$id" || return 0
+            fresh; start_main; sleep 3
+            local p1; p1=$(pid)
+            local okA=0
+            if [ "$v" = V1 ]; then
+              inst e08_backgroundedWithStateThenDurableIntentThenKilled "$OUT/$id-a.log"
+              grep -q "OK (1 test)" "$OUT/$id-a.log" && okA=1
+            else
+              inst e08a_signInOnly "$OUT/$id-a.log"
+              if grep -q "OK (1 test)" "$OUT/$id-a.log"; then
+                # Started outside instrumentation, then sent home by the system key,
+                # exactly as the canonical test10 does before its kill.
+                timeout 60 "$ADB" shell am start -n "$PKG/ru.yokoone.crm.shell.MainActivity" > /dev/null
+                sleep 8
+                timeout 30 "$ADB" shell input keyevent KEYCODE_HOME
+                sleep 4
+                inst e08b_injectDurableIntentOnly "$OUT/$id-b.log"
+                grep -q "OK (1 test)" "$OUT/$id-b.log" && okA=1
+              fi
+            fi
+            if [ "$okA" != 1 ]; then
+              if grep -qE "$SIGNIN_FLAKE" "$OUT/$id-a.log"; then return 2; fi
+              result "$id" FAIL "phase A: $(why "$OUT/$id-a.log") $(why "$OUT/$id-b.log" 2>/dev/null)"
+              return 0
+            fi
+            sleep 2
+            snap "$id-prekill"
+            timeout 30 "$ADB" logcat -b events -c
+            kill_main
+            sleep 2
+            snap "$id-postkill"
+            start_main -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000
+            local p3; p3=$(completed_in_new_pid "$p1")
+            timeout 30 "$ADB" logcat -d -b events -v time > "$OUT/$id-events.log"
+            timeout 30 "$ADB" logcat -d -b main,system -v time > "$OUT/$id-logcat.log"
+            diag > "$OUT/$id-diag.log"
+            local restored have_pre have_post kept ev
+            restored=$(grep -v "( *$p1)" "$OUT/$id-diag.log" | grep "push-open cold" | grep -oE "restored=(true|false)" | tail -1)
+            have_pre=$(grep -oE "haveState=(true|false)" "$OUT/$id-prekill-dumpsys.txt" | head -1)
+            have_post=$(grep -oE "haveState=(true|false)" "$OUT/$id-postkill-dumpsys.txt" | head -1)
+            kept=$(grep -c "ActivityRecord{" "$OUT/$id-postkill-dumpsys.txt")
+            ev=$(grep -oE "wm_(restart_activity|create_activity|on_create_called|task_removed)|am_proc_died" "$OUT/$id-events.log" | sort | uniq -c | tr -s ' ' | tr '\n' ',')
+            local facts="pre-kill ${have_pre:-no-record}; post-kill ${have_post:-no-record} (records $kept); relaunch ${restored:-unknown}; events $ev"
+            echo "::notice::$id lifecycle: $facts"
+            if [ -z "$p3" ]; then result "$id" FAIL "no process completed the reset; $facts"; return 0; fi
+            if [ "$restored" != "restored=true" ]; then
+              result "$id" PRECONDITION-NOT-MET "saved state not delivered; $facts; reset completed in $p3"
+              return 0
+            fi
+            sleep 3
+            if verify "$id" "" ""; then
+              result "$id" PASS "$facts; reset completed in $p3 before any page load or restoreState; old session gone"
+            else
+              result "$id" FAIL "$facts; $(why "$OUT/$id-verify.log")"
+            fi
+          }
+          run_with_retry e08_variant E08-V1
+          run_with_retry e08_variant E08-V2
           run_with_retry fault_scenario E09 e09_contextKeyLostThenKilled launcher CONTINUITY_MISMATCH record-key
           run_with_retry fault_scenario E10 e10_edgeGateAppearsThenKilled launcher CONTINUITY_MISMATCH gate-appeared
           run_with_retry fault_scenario E11 e11_recordTamperedThenKilled launcher CONTINUITY_MISMATCH record-mac

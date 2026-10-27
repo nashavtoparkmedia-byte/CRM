@@ -114,6 +114,28 @@ class EdgeResetE2ETest {
         EdgeDeviceSupport.mark("E08 backgrounded step0-only")
     }
 
+    /** E08 V2, step 1: sign in only; the workflow then starts the activity outside instrumentation. */
+    @Test
+    fun e08a_signInOnly() {
+        signedIn("E08")
+        awaitRecord()
+        CookieManager.getInstance().flush()
+        EdgeDeviceSupport.mark("E08 V2 signed-in pid=${android.os.Process.myPid()}")
+    }
+
+    /**
+     * E08 V2, step 2: attached with --no-restart to the backgrounded process, no
+     * UI at all; writes the durable reset intent (step 0) exactly as if the
+     * process were killed right after it, leaving the old session cookie in the jar.
+     */
+    @Test
+    fun e08b_injectDurableIntentOnly() {
+        assertTrue("E08: precondition — the old session cookie is in the jar", sessionCookiePresent())
+        PushTokenState.beginReset(app, EdgeContextReset.Reason.OPERATOR_SWITCH, System.currentTimeMillis(), SystemClock.elapsedRealtime())
+        CookieManager.getInstance().flush()
+        EdgeDeviceSupport.mark("E08 V2 step0-only reset_pending=${PushTokenState.resetPending(app)} pid=${android.os.Process.myPid()}")
+    }
+
     @Test
     fun e09_contextKeyLostThenKilled() {
         signedIn("E09")
