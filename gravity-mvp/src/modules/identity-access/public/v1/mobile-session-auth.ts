@@ -13,6 +13,8 @@ import {
     verifyMobileSession,
     type MobileSessionPrincipalV1,
 } from './mobile-session-credentials'
+import { UNSTABLE_DEVICE_ID_V1 } from './mobile-push-registration-handler'
+import { resolveRequestOperatorV1 } from './mobile-session-operator'
 import { listUserIdentitiesV1 } from './user-directory'
 
 /**
@@ -46,6 +48,7 @@ export type MobileLoginFailure =
     | 'inactive_operator'
     | 'invalid_device'
     | 'issue_failed'
+    | 'session_active'
 
 export function isMobileLaneConfigured(): boolean {
     return getMobileAccessCredentialConfig() !== null
@@ -108,8 +111,14 @@ export async function establishMobileSessionV1(
     deviceId: unknown,
 ): Promise<{ ok: true, principal: MobileSessionPrincipalV1 } | { ok: false, reason: MobileLoginFailure }> {
     if (!isMobileLaneConfigured()) return { ok: false, reason: 'not_configured' }
-    if (!isSafeDeviceId(deviceId)) return { ok: false, reason: 'invalid_device' }
+    // The shared fallback id cannot carry a logout barrier, so a session on it
+    // could never be ended server-side (BR-4).
+    if (!isSafeDeviceId(deviceId) || deviceId === UNSTABLE_DEVICE_ID_V1) return { ok: false, reason: 'invalid_device' }
     if (!isSafeRuntimeOperatorId(runtimeOperatorId)) return { ok: false, reason: 'unknown_operator' }
+
+    // Changing the operator means ending this session first (BR-4): a second
+    // login on top of a live one would be an operator switch without a logout.
+    if ((await resolveRequestOperatorV1()).kind === 'mobile_session') return { ok: false, reason: 'session_active' }
 
     if (!verifyMobileAccessCredentials(suppliedUsername, suppliedPassword)) {
         console.warn('[mobile-auth] denied mobile session: credential not proven')
