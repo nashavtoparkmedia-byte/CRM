@@ -779,6 +779,53 @@ describe('S1 — shared retry safety', () => {
         })
     })
 
+    describe('SendToContact admission at the shared engine', () => {
+        const allowed = mocks.contactPermission.getMockImplementation()!
+        afterEach(() => { mocks.contactPermission.mockImplementation(allowed) })
+        const admission = (expectedCanonicalContactId: string) => ({ sendToContact: { expectedCanonicalContactId } })
+
+        it('reserves the stc: namespace to SendToContact, and SendToContact to it', async () => {
+            await expect(MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, 'stc:forged'))
+                .rejects.toThrow('MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED')
+            await expect(MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, 'cmid-1', undefined, admission('contact-tg')))
+                .rejects.toThrow('MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED')
+            await expect(MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, undefined, undefined, admission('contact-tg')))
+                .rejects.toThrow('MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED')
+            expect(mocks.creates).toHaveLength(0)
+            expect(physicalSends()).toBe(0)
+        })
+
+        it('admits one Message under the intent id and answers every later admission with it, whatever the route', async () => {
+            SEND_MOCKS.telegram.mockResolvedValue(accepted('telegram', 'tg-1'))
+            const first = await MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, 'stc:r-1', undefined, admission('contact-tg'))
+            expect(first).toMatchObject({ success: true })
+            // The same intent, routed to another conversation by a later evaluation, replays; it never conflicts.
+            const again = await MessageService.send(CHATS.whatsapp.id, 'hi', undefined, undefined, 'stc:r-1', undefined, admission('contact-wa'))
+            expect(again).toMatchObject({ duplicate: true, clientMessageId: 'stc:r-1' })
+            expect(mocks.creates).toHaveLength(1)
+            expect(mocks.creates[0]).toMatchObject({ clientMessageId: 'stc:r-1', chatId: CHATS.telegram.id })
+            expect(physicalSends()).toBe(1)
+        })
+
+        it('refuses before any row when the gate names another canonical Contact than SendToContact evaluated', async () => {
+            await expect(MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, 'stc:r-2', undefined, admission('canonical-old')))
+                .rejects.toThrow('MESSAGING_SEND_TO_CONTACT_LINEAGE_MOVED')
+            expect(mocks.creates).toHaveLength(0)
+            expect(physicalSends()).toBe(0)
+        })
+
+        it('applies the authoritative gate to a SendToContact admission like any send', async () => {
+            mocks.contactPermission.mockImplementationOnce(async (query: { contactId: string }) => ({
+                contract: 'contacts.ContactCommunicationPermissionResult.v1', decision: 'deny', retryable: false,
+                reason: 'restricted_message', requestedContactId: query.contactId, communicationClass: 'message',
+                canonicalContactId: null, policyVersion: null,
+            }))
+            await expect(MessageService.send(CHATS.telegram.id, 'hi', undefined, undefined, 'stc:r-3', undefined, admission('contact-tg')))
+                .rejects.toThrow('MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message')
+            expect(mocks.creates).toHaveLength(0)
+        })
+    })
+
     describe('one intent, one row', () => {
         it('two different sends in the same millisecond are two rows, each dispatched once', async () => {
             vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-02T19:26:01.000Z'))

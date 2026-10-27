@@ -474,9 +474,9 @@ export class MessageService {
     /**
      * Sends a message through the appropriate channel.
      */
-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, quotedMsgId?: string) {
+    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, quotedMsgId?: string, admission?: SendAdmissionV1) {
         console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
-
+        assertSendToContactNamespaceV1(clientMessageId, admission)
         const chat = await (prisma.chat as any).findUnique({
             where: { id: chatId },
             select: { 
@@ -522,7 +522,7 @@ export class MessageService {
                 select: SEND_STATE_SELECT,
             })
             if (existing) {
-                assertSameSendIntent(existing, intent, clientMessageId)
+                if (!admission?.sendToContact) assertSameSendIntent(existing, intent, clientMessageId)
                 console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
                 return duplicateSendResult(existing, clientMessageId)
             }
@@ -539,7 +539,7 @@ export class MessageService {
 
         const channel = targetChat.channel
         const currentChatId = targetChatId
-        const outboundBinding = await prepareOutboundConversationV1(targetChat, profileId)
+        const outboundBinding = assertSendToContactLineageV1(await prepareOutboundConversationV1(targetChat, profileId), admission)
         // A bound conversation routes through its own transport. A legacy Telegram
         // row carries none, and the Telegram transport owner resolves the single
         // active carrier for it, or fails closed.
@@ -623,7 +623,7 @@ export class MessageService {
         })
         if (race.winner && clientMessageId) {
             // The row that won is only this request's answer if it is this intent.
-            assertSameSendIntent(race.winner, intent, clientMessageId)
+            if (!admission?.sendToContact) assertSameSendIntent(race.winner, intent, clientMessageId)
             console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} was created concurrently as ${race.winner.id}`)
             return duplicateSendResult(race.winner, clientMessageId)
         }
@@ -1375,6 +1375,41 @@ function canonicalSendState(row: SendStateRow) {
  * second dispatch. Carries the row's current state so a client whose first
  * answer was lost can settle without waiting for a poll.
  */
+/**
+ * How a send was admitted. Only SendToContact passes `sendToContact`: its
+ * requestId was already bound to one semantic payload, so a Message carrying
+ * its "stc:" id can only be that intent's, and is answered as such whichever
+ * conversation it was routed to.
+ */
+type SendAdmissionV1 = {
+    sendToContact?: {
+        /** The canonical Contact SendToContact read its permission for (P1); the gate (P2) must name the same. */
+        expectedCanonicalContactId: string
+    }
+}
+
+/** The "stc:" clientMessageId namespace is SendToContact's alone, and SendToContact sends only in it. */
+function assertSendToContactNamespaceV1(clientMessageId: string | undefined, admission: SendAdmissionV1 | undefined): void {
+    const reserved = typeof clientMessageId === 'string' && clientMessageId.startsWith('stc:')
+    if (reserved !== Boolean(admission?.sendToContact)) throw new Error('MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED')
+}
+
+/**
+ * The permission the gate just read must be for the canonical Contact
+ * SendToContact evaluated. A merge in between means the evidence is stale: the
+ * send is refused before any row exists, and the caller may simply ask again.
+ */
+function assertSendToContactLineageV1<T extends { contactPermission: { canonicalContactId: string } }>(
+    binding: T,
+    admission: SendAdmissionV1 | undefined,
+): T {
+    const expected = admission?.sendToContact?.expectedCanonicalContactId
+    if (expected !== undefined && binding.contactPermission.canonicalContactId !== expected) {
+        throw new Error('MESSAGING_SEND_TO_CONTACT_LINEAGE_MOVED')
+    }
+    return binding
+}
+
 function duplicateSendResult(existing: SendStateRow, clientMessageId: string) {
     return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, clientMessageId, duplicate: true, ...canonicalSendState(existing) }
 }
