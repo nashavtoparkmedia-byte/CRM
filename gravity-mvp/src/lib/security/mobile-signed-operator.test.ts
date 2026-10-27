@@ -28,7 +28,20 @@ const state = vi.hoisted(() => ({
     requestCookies: new Map<string, string>(),
     responseCookies: [] as Array<{ name: string, value: string, maxAge?: number }>,
     assignments: [] as Array<{ chatId: string, userId: string }>,
+    fleetAuthors: [] as Array<string | null>,
 }))
+
+const fleetDb = vi.hoisted(() => {
+    const author = (data: { createdBy?: string | null }) => { state.fleetAuthors.push(data.createdBy ?? null) }
+    const db = {
+        driver: { findUnique: async () => ({ id: 'driver-1' }), update: async () => ({}) },
+        driverEvent: { create: async (args: { data: { createdBy?: string | null } }) => { author(args.data); return { id: 'event-1', eventType: 'x', createdAt: new Date(0) } } },
+        driverAttention: { create: async (args: { data: { createdBy?: string | null } }) => { author(args.data); return { id: 'attention-1', status: 'open', createdAt: new Date(0) } } },
+        $queryRaw: async () => [{ id: 'driver-1', licenseNumber: 'AB123', lastFleetCheckStatus: null, lastFleetCheckId: null }],
+        $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(db),
+    }
+    return db
+})
 
 vi.mock('@/modules/identity-access/internal/mobile-session-barrier', () => ({
     prismaMobileSessionBarrierV1: {
@@ -63,6 +76,13 @@ vi.mock('next/headers', () => ({
     }),
     headers: async () => new Headers(),
 }))
+vi.mock('@/lib/prisma', () => ({ prisma: fleetDb }))
+vi.mock('@/modules/fleet-operations/public/v1', () => ({
+    updateDriverStateV1: vi.fn(async (command: { attentionId: string, resolvedBy: string | null }) => {
+        state.fleetAuthors.push(command.resolvedBy)
+        return { status: 'resolved', attention: { id: command.attentionId, status: 'resolved', resolvedAt: new Date(0).toISOString() } }
+    }),
+}))
 vi.mock('next/navigation', () => ({
     redirect: (url: string) => { throw Object.assign(new Error('NEXT_REDIRECT'), { redirectTo: url }) },
 }))
@@ -78,6 +98,10 @@ const { establishMobileSessionV1, hasMobileSessionV1 } = await import('@/modules
 const { default: MobileLoginPage } = await import('@/app/login/mobile/page')
 const { resolveRequestOperatorV1 } = await import('@/modules/identity-access/public/v1/mobile-session-operator')
 const assignRoute = await import('@/app/api/chats/[id]/assign/route')
+const fleetEventRoute = await import('@/app/api/monitoring/drivers/[id]/event/route')
+const fleetAttentionRoute = await import('@/app/api/monitoring/drivers/[id]/attention/route')
+const fleetCheckRoute = await import('@/app/api/monitoring/drivers/[id]/fleet-check/route')
+const fleetResolveRoute = await import('@/app/api/monitoring/attention/[id]/route')
 const { AUTHENTICATE_USER_COMMAND_V1, END_USER_SESSION_COMMAND_V1 } = await import('@/contracts/identity-access/v1')
 
 const ENV = { MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: 'correct horse battery staple' }
@@ -137,6 +161,7 @@ beforeEach(() => {
     state.requestCookies = new Map()
     state.responseCookies = []
     state.assignments = []
+    state.fleetAuthors = []
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -267,6 +292,54 @@ describe('5, 11: client-supplied actor cannot impersonate', () => {
         expect(state.assignments).toEqual([])
         // every server-side actor read (proposed replies, tasks, my-day …) gets A from the forwarded cookie
         expect(state.requestCookies.get('crm_user_id')).toBe(A)
+    })
+})
+
+describe('5 (Fleet monitoring): a client-supplied author cannot impersonate', () => {
+    function json(pathname: string, method: string, body: unknown) {
+        return new NextRequest(new URL(`https://yokoone.ru${pathname}`), {
+            method, body: JSON.stringify(body), headers: { 'content-type': 'application/json' },
+        })
+    }
+    const driver = { params: Promise.resolve({ id: 'driver-1' }) }
+
+    /** Every Fleet monitoring write that records an author, each naming B in the body. */
+    async function writeAllNaming(author: string) {
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(String(url).endsWith('/admin/stats')
+            ? { checksUsedToday: 0, checksLimitToday: 10 }
+            : { checkId: 'check-1' })))
+        try {
+            return [
+                await fleetEventRoute.POST(json('/api/monitoring/drivers/driver-1/event', 'POST', { eventType: 'call_attempt', createdBy: author }), driver),
+                await fleetAttentionRoute.POST(json('/api/monitoring/drivers/driver-1/attention', 'POST', { reason: 'r', createdBy: author }), driver),
+                await fleetCheckRoute.POST(json('/api/monitoring/drivers/driver-1/fleet-check', 'POST', { licenseNumber: 'AB123', createdBy: author }), driver),
+                await fleetResolveRoute.PATCH(json('/api/monitoring/attention/attention-1', 'PATCH', { status: 'resolved', resolvedBy: author }), { params: Promise.resolve({ id: 'attention-1' }) }),
+            ].map(response => response.status)
+        } finally {
+            vi.unstubAllGlobals()
+        }
+    }
+
+    test('under session A, createdBy/resolvedBy=B in the body is ignored: every record is authored by A', async () => {
+        await through(request('/api/monitoring/drivers/driver-1/event', { method: 'POST', cookies: { [MOBILE_SESSION_COOKIE]: session(), crm_user_id: A } }))
+        expect(await writeAllNaming(B)).toEqual([200, 200, 201, 200])
+        // event, attention + its attention_marked event, fleet_check_requested event, resolution
+        expect(state.fleetAuthors).toEqual([A, A, A, A, A])
+    })
+
+    test('a session cookie that grants nothing is refused with 401 and nothing is written', async () => {
+        const token = session()
+        const principal = verifyMobileSession(token)!
+        state.barred.add(`${principal.deviceId}|${mobileSessionBarrierEntryV1(principal)}`)
+        await through(request('/api/monitoring/drivers/driver-1/event', { method: 'POST', ua: DESKTOP_UA, cookies: { [MOBILE_SESSION_COOKIE]: token, crm_user_id: B } }))
+        expect(await writeAllNaming(B)).toEqual([401, 401, 401, 401])
+        expect(state.fleetAuthors).toEqual([])
+    })
+
+    test('the browser lane without a mobile session keeps its body author (unchanged)', async () => {
+        await through(request('/api/monitoring/drivers/driver-1/event', { method: 'POST', ua: DESKTOP_UA, cookies: { crm_user_id: A } }))
+        expect(await writeAllNaming(B)).toEqual([200, 200, 201, 200])
+        expect(state.fleetAuthors).toEqual([B, B, B, B, B])
     })
 })
 

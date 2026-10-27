@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { EVENT_TYPE_WHITELIST } from '@/modules/fleet-operations/public/v1/monitoring-policy';
+import { resolveRequestOperatorV1 } from '@/modules/identity-access/public/v1/mobile-session-operator';
 
 export async function POST(
     req: NextRequest,
@@ -8,6 +9,13 @@ export async function POST(
 ) {
     const { id } = await params;
     const body = await req.json();
+
+    // Under a mobile session the author is the signed operator, never the body (BR-4).
+    const operator = await resolveRequestOperatorV1();
+    if (operator.kind === 'mobile_session_refused') {
+        return NextResponse.json({ error: 'mobile_session_required' }, { status: 401 });
+    }
+    const createdBy = operator.kind === 'mobile_session' ? operator.operatorId : body.createdBy || null;
 
     const { eventType, payload } = body;
 
@@ -30,7 +38,7 @@ export async function POST(
             driverId: id,
             eventType,
             payload: payload || undefined,
-            createdBy: body.createdBy || null,
+            createdBy,
         },
         select: {
             id: true,
