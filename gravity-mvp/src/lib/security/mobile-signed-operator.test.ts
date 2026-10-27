@@ -317,12 +317,30 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
         vi.useRealTimers()
     })
 
-    test('an unreadable logout barrier refuses the session (fail closed)', async () => {
+    test('an unreadable logout barrier refuses the session (fail closed) but answers the shell 503, not the login screen', async () => {
+        const token = session()
+        const cookies = { [MOBILE_SESSION_COOKIE]: token, crm_user_id: A }
         state.barrierUnreadable = true
-        expect((await proxy(request('/api/messages', { cookies: { [MOBILE_SESSION_COOKIE]: session(), crm_user_id: A } }))).status).toBe(401)
-        expect((await resolveRequestOperatorV1())).toEqual({ kind: 'legacy', operatorId: null })
-        state.requestCookies.set(MOBILE_SESSION_COOKIE, session())
-        expect(await resolveRequestOperatorV1()).toEqual({ kind: 'mobile_session_refused' })
+
+        const api = await proxy(request('/api/messages', { cookies }))
+        expect(api.status).toBe(503)
+        expect(await api.json()).toEqual({ error: 'mobile_session_unverifiable' })
+        const page = await proxy(request('/messages', { cookies }))
+        expect(page.status).toBe(503)
+        expect(page.headers.get('location')).toBeNull()
+        expect(page.headers.get('set-cookie')).toBeNull()
+
+        // No operator reaches anything: not the desktop lane, not Identity Access.
+        const desktop = await through(request('/messages', { ua: DESKTOP_UA, cookies }))
+        expect(legacyCookies(desktop.header)).toEqual([])
+        expect(await userService.getCurrentUser()).toBeNull()
+        expect(await resolveRequestOperatorV1()).toEqual({ kind: 'mobile_session_refused', unverifiable: true })
+        expect(await assign(A)).toHaveProperty('status', 401)
+
+        // The outage ends and the very same session works again: nothing was ended.
+        state.barrierUnreadable = false
+        expect((await through(request('/messages', { cookies }))).passed).toBe(true)
+        expect(await resolveRequestOperatorV1()).toEqual({ kind: 'mobile_session', operatorId: A })
     })
 
     test('a session on the shared unstable device id can never be barred, so it is refused and cannot be issued', async () => {
@@ -337,13 +355,9 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
         const loggedOut = session()
         const principal = verifyMobileSession(loggedOut)!
         state.barred.add(`${principal.deviceId}|${mobileSessionBarrierEntryV1(principal)}`)
-        const refusals: Array<[string, () => void]> = [
-            [loggedOut, () => {}],
-            [session(), () => { state.barrierUnreadable = true }],
-            [issueMobileSession(A, 'ephemeral-device', ENV) as string, () => { state.barrierUnreadable = false }],
-        ]
-        for (const [cookie, arrange] of refusals) {
-            arrange()
+        // An unreadable barrier is answered 503 with no redirect at all (test above).
+        const refusals = [loggedOut, issueMobileSession(A, 'ephemeral-device', ENV) as string]
+        for (const cookie of refusals) {
             const cookies = { [MOBILE_SESSION_COOKIE]: cookie, crm_user_id: A }
             const refused = await proxy(request('/messages', { cookies }))
             expect(refused.status).toBe(303)

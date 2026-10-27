@@ -55,6 +55,11 @@ import { resolveCookieOperatorV1 } from '@/modules/identity-access/public/v1/mob
  * revoked, logged out) sends the request downstream with no `crm_user_id` at
  * all. Without a session cookie, a browser request is passed through as before.
  *
+ * When the logout barrier cannot be read (database unavailable) the session is
+ * refused all the same, but the shell lane is answered 503 rather than 401/303:
+ * the shell treats the login screen as the end of its session and resets the
+ * device, and an outage is not a logout.
+ *
  * ## Why keying on a client-supplied marker is sound
  *
  * The marker selects a STRICTER path, never a weaker one. An attacker who
@@ -90,6 +95,11 @@ const SHELL_PUBLIC_PREFIXES = [
     '/_next/',
     '/favicon.ico',
 ]
+
+const SERVICE_UNAVAILABLE_PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1"><title>YOKO CRM</title></head>'
+    + '<body style="font-family:system-ui,sans-serif;color:#0F172A;padding:24px">'
+    + '<p style="font-size:15px">CRM временно недоступна. Повторите через несколько секунд.</p></body></html>'
 
 function isShellRequest(request: NextRequest): boolean {
     return (request.headers.get('user-agent') ?? '').includes(MOBILE_SHELL_UA_TOKEN)
@@ -148,6 +158,19 @@ export async function proxy(request: NextRequest) {
     // never reaches anything with an identity it could choose itself.
     if (!shell || SHELL_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
         return forwardWithOperator(request, null)
+    }
+
+    // The session could not be checked, not found dead: say the service is
+    // unavailable, so the shell keeps its session and retries.
+    if (operator.kind === 'mobile_session_refused' && operator.unverifiable) {
+        const headers = { 'retry-after': '5', 'cache-control': 'no-store' }
+        if (pathname.startsWith('/api/')) {
+            return NextResponse.json({ error: 'mobile_session_unverifiable' }, { status: 503, headers })
+        }
+        return new NextResponse(SERVICE_UNAVAILABLE_PAGE, {
+            status: 503,
+            headers: { ...headers, 'content-type': 'text/html; charset=utf-8' },
+        })
     }
 
     // An API caller gets a status it can act on; anything that renders gets the
