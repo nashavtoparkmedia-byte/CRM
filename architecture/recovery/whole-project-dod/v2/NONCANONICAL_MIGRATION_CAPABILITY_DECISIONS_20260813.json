@@ -386,6 +386,16 @@
         "da98c526c21824419c96784caaeb8e6d0fe38a7416c03d3a32081f397d072fd5",
         "ffbed1964eb1ea1007d782e2a53edc7244be8a029caea66262898c9799c00918"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned SendToContact intent table (MessagingSendIntent) with its primary key and two shape checks inside one explicit transaction through controlled migration tooling; it names no existing object, changes no existing row and carries no data statement or backfill; it stores no message, conversation, Contact, credential, provider identifier or transport; this review grants no application-runtime or production-application authority. Its one site is the exact CREATE TABLE statement; there is no trigger, index or foreign key and therefore no other site.",
+      "expected_site_signatures": [
+        "ada6230542b45f1ecd788ec22ba718bd71c5b2fca8c29644d27e84a5f52d69aa"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -3350,6 +3360,24 @@
         }
       ],
       "review_rationale": "Expand-only statement of the Contacts communication policy foundation migration: CREATE_INDEX on ContactCommunicationPolicyEvent. It creates or constrains only Contacts-owned foundation objects, references only Contact(id) as a cascading foreign key target, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "ada6230542b45f1ecd788ec22ba718bd71c5b2fca8c29644d27e84a5f52d69aa",
+      "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+      "source_sha256": "6905a1112c50ae698877ee694003d046493b62d90e7d7fc91e377eaa0d01ffba",
+      "line": 15,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "MessagingSendIntent",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Messaging SendToContact intent migration: CREATE_TABLE on MessagingSendIntent. It creates only the Messaging-owned intent table with its primary key and shape checks, references no existing object, touches no existing row and stores no credential."
     }
   ]
 }

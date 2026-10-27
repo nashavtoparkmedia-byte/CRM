@@ -1306,6 +1306,16 @@ model Message {
   @@index([aiStatus])
 }
 
+/// Messaging-owned identity of one SendToContact intent. Binds a caller requestId to the
+/// sha256 of its semantic payload, permanently: insert-if-absent and read only, never
+/// updated or deleted. No message, outcome or route is stored here; the one Message the
+/// intent may admit carries clientMessageId "stc:" + requestId.
+model MessagingSendIntent {
+  requestId             String   @id @db.VarChar(128)
+  semanticPayloadSha256 String   @db.Char(64)
+  createdAt             DateTime @default(now())
+}
+
 model MessageAttachment {
   id        String   @id @default(cuid())
   messageId String

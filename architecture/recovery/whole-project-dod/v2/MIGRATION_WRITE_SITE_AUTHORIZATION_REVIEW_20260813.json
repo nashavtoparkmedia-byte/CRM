@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "13b557430d4636b4712c4a4c551ee249a8bd993c8f36c4d265e56481bdc08465",
-    "reviewed_path_count": 24,
+    "source_sha256": "aa140a10a958e2c907665a71e3c0d7869ebcd0b78db533c6b3b12d9a40a052ca",
+    "reviewed_path_count": 25,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 924,
-    "sorted_site_signatures_sha256": "8e9f5d27e6a1db73392a1cffaf7b9843cd1645a1509fdf9832de9e623abab8de"
+    "non_test_migration_only_sites": 925,
+    "sorted_site_signatures_sha256": "3738eda2529a7b298cdb51e53498dcf2fb705fd7a98ceb3170641fda55df9fdd"
   },
   "authorizations": [
     {
@@ -23455,6 +23455,45 @@
           "source_sha256:524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
           "site_signature:ad05bb761375aa2d26f6573c512167bf9e9d476ccd1e7dfc33323970ae57245f",
           "source_coordinate:gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql:224:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.messaging.ada6230542b45f1e",
+      "site_signature": "ada6230542b45f1ecd788ec22ba718bd71c5b2fca8c29644d27e84a5f52d69aa",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+        "source_sha256": "6905a1112c50ae698877ee694003d046493b62d90e7d7fc91e377eaa0d01ffba",
+        "line": 15,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "MessagingSendIntent",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging SendToContact intent migration: CREATE_TABLE on MessagingSendIntent. It creates only the Messaging-owned intent table with its primary key and shape checks, references no existing object, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:6905a1112c50ae698877ee694003d046493b62d90e7d7fc91e377eaa0d01ffba",
+          "site_signature:ada6230542b45f1ecd788ec22ba718bd71c5b2fca8c29644d27e84a5f52d69aa",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql:15:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]

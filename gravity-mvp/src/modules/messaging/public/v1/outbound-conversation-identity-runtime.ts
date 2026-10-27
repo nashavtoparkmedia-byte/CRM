@@ -1,3 +1,7 @@
+import { CONTACT_COMMUNICATION_PERMISSION_QUERY_V1 } from '@/contracts/contacts/v1'
+import { getContactCommunicationPermissionV1 } from '@/modules/contacts/public/v1'
+import { channelDeliveryErrorV1 } from './channel-delivery-runtime'
+
 export type OutboundConversationChannelV1 = 'telegram' | 'whatsapp' | 'max'
 
 export interface OutboundConversationSnapshotV1 {
@@ -22,6 +26,17 @@ export interface PreparedOutboundConversationV1 {
     identityTarget: string
     target: string
     isMaxPersonal: boolean
+}
+
+/** The Contacts `message` permission a send was admitted under, read fresh for that one call. */
+export interface OutboundContactPermissionV1 {
+    canonicalContactId: string
+    policyVersion: number
+}
+
+/** A proven route that Contacts also allows a message on: the only binding an effect may use. */
+export interface GatedOutboundConversationV1 extends PreparedOutboundConversationV1 {
+    contactPermission: OutboundContactPermissionV1
 }
 
 export type OutboundConversationPreparerV1 = (
@@ -56,7 +71,13 @@ export function registerOutboundConversationPreparerV1(
     }
 }
 
-export async function prepareOutboundConversationV1(
+/**
+ * The route proof alone: which person, identity, transport and target this
+ * conversation is bound to. It authorizes NO effect. Only retraction of the
+ * CRM's own message and SendToContact route discovery may call it; every send
+ * goes through prepareOutboundConversationV1.
+ */
+export async function proveOutboundConversationRouteV1(
     chat: OutboundConversationSnapshotV1,
     requestedConnectionId?: string,
 ): Promise<PreparedOutboundConversationV1> {
@@ -65,4 +86,67 @@ export async function prepareOutboundConversationV1(
         throw new Error('OUTBOUND_CONVERSATION_IDENTITY_CAPABILITY_NOT_REGISTERED')
     }
     return preparer(chat, requestedConnectionId)
+}
+
+/**
+ * The one boundary every outbound effect crosses to obtain a target: the
+ * route proof, then a fresh Contacts `message` permission read for the
+ * Contact the proof names (Contacts resolves its lineage). Nothing is cached
+ * and no caller's planning check is trusted.
+ *
+ * A refusal is a typed delivery error, so it is classified exactly wherever it
+ * is thrown, including inside an adapter after a row exists:
+ *   - a standing refusal (restricted, unknown, archived, unsupported class) →
+ *     terminal, MESSAGING_CONTACT_PERMISSION_REFUSED;
+ *   - the store or the lineage could not be established, or the answer is not
+ *     one Messaging can read → safe_to_redeliver,
+ *     MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED.
+ * Which reasons are standing is Contacts' ruling (its `retryable`), never
+ * re-derived here.
+ */
+export async function prepareOutboundConversationV1(
+    chat: OutboundConversationSnapshotV1,
+    requestedConnectionId?: string,
+): Promise<GatedOutboundConversationV1> {
+    const binding = await proveOutboundConversationRouteV1(chat, requestedConnectionId)
+    return { ...binding, contactPermission: await readContactMessagePermissionV1(binding.contactId) }
+}
+
+function permissionNotDispatched(reason: string): Error {
+    return channelDeliveryErrorV1(
+        `MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:${reason}`,
+        'safe_to_redeliver',
+        'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED',
+    )
+}
+
+async function readContactMessagePermissionV1(contactId: string): Promise<OutboundContactPermissionV1> {
+    let result: Record<string, unknown>
+    try {
+        const answer: unknown = await getContactCommunicationPermissionV1({
+            contract: CONTACT_COMMUNICATION_PERMISSION_QUERY_V1,
+            contactId,
+            communicationClass: 'message',
+        })
+        result = answer && typeof answer === 'object' ? answer as Record<string, unknown> : {}
+    } catch {
+        throw permissionNotDispatched('policy_unavailable')
+    }
+    const reason = typeof result.reason === 'string' && /^[a-z_]+$/.test(result.reason) ? result.reason : 'unreadable'
+    if (result.requestedContactId !== contactId) throw permissionNotDispatched('unreadable')
+    if (result.decision === 'allow') {
+        const { canonicalContactId, policyVersion } = result
+        if (typeof canonicalContactId !== 'string' || canonicalContactId === '' || !Number.isInteger(policyVersion)) {
+            throw permissionNotDispatched('unreadable')
+        }
+        return { canonicalContactId, policyVersion: policyVersion as number }
+    }
+    if (result.decision === 'deny' && result.retryable === false) {
+        throw channelDeliveryErrorV1(
+            `MESSAGING_CONTACT_PERMISSION_REFUSED:${reason}`,
+            'terminal',
+            'MESSAGING_CONTACT_PERMISSION_REFUSED',
+        )
+    }
+    throw permissionNotDispatched(reason)
 }

@@ -98,6 +98,24 @@ describe('POST /api/messages/send-media outbound identity preflight', () => {
         expect(mocks.chatUpdate).not.toHaveBeenCalled()
     })
 
+    test('answers a Contacts permission refusal with a stable code, before any provider or database mutation', async () => {
+        const refusal = (code: string, outcome: string, message: string) =>
+            Object.assign(new Error(message), { name: 'ChannelDeliveryErrorV1', deliveryOutcome: outcome, deliveryErrorCode: code })
+        mocks.prepareOutbound.mockRejectedValueOnce(refusal('MESSAGING_CONTACT_PERMISSION_REFUSED', 'terminal', 'MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message'))
+        const restricted = await POST(request())
+        expect(restricted.status).toBe(403)
+        expect(await restricted.json()).toMatchObject({ code: 'CONTACT_COMMUNICATION_RESTRICTED', error: 'Связь с этим контактом ограничена: сообщение не отправлено' })
+
+        mocks.prepareOutbound.mockRejectedValueOnce(refusal('MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED', 'safe_to_redeliver', 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable'))
+        const unavailable = await POST(request())
+        expect(unavailable.status).toBe(503)
+        expect(await unavailable.json()).toMatchObject({ code: 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE' })
+        expect(mocks.maxSendMedia).not.toHaveBeenCalled()
+        expect(mocks.telegramSendMedia).not.toHaveBeenCalled()
+        expect(mocks.whatsAppSendMedia).not.toHaveBeenCalled()
+        expect(mocks.messageCreate).not.toHaveBeenCalled()
+    })
+
     test('routes Telegram media only through the prepared peer and transport', async () => {
         mocks.prepareOutbound.mockResolvedValue(prepared('telegram'))
 

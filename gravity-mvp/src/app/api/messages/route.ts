@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MessageService } from '@/lib/MessageService'
+import { contactPermissionRefusalV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 
 export async function GET(req: NextRequest) {
     try {
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(result)
     } catch (error: any) {
         console.error('[API-MESSAGES] POST Error:', error)
+        const refusal = contactPermissionRefusalV1(error)
+        if (refusal) return NextResponse.json({ error: refusal.label, code: refusal.code }, { status: refusal.retryable ? 503 : 403 })
+        if (error?.message === 'MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED') {
+            return NextResponse.json({ error: 'Недопустимый идентификатор сообщения', code: 'CLIENT_MESSAGE_ID_RESERVED' }, { status: 400 })
+        }
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
     }
 }

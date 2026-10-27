@@ -191,7 +191,7 @@ Each entry lists what the code actually does.
   - `G/contracts/messaging/v1` (and `v2` for attach-media).
   - UI: `G/app/messages/`; HTTP: `G/app/api/messages/**`, `G/app/api/chats/**`.
 - **Owns**: `Chat`, `Message`, `MessageAttachment`, `MessageEventLog`,
-  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`.
+  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`, `MessagingSendIntent`.
 - **Reads without owning**: `Contact*`, `Driver`, provider connection tables.
 - **Upstream**: contacts, identity_access, work_management, ai_knowledge, calling,
   fleet_operations. **Downstream**: the three channel contexts, platform_shell,
@@ -206,6 +206,33 @@ Each entry lists what the code actually does.
   partial, never proof of absence — `contactChannelConversationsV1` answers
   `unknown`). Replaces the legacy `/api/contacts/search` `hasChat` signal for
   NewChatPopover / ChatList (M3A6D); see I-45.
+- **Public command — send to a Contact**: `SendToContactCommand.v1` →
+  `SendToContactResult.v1` (`sendToContactV1` from `G/modules/messaging/public/v1`;
+  in-process only, no `app/api` route). The caller names a Contact, a text and an
+  optional `allowedChannels` narrowing, never a route. Order: parse → fingerprint →
+  claim the `requestId` in `MessagingSendIntent` (another payload ⇒
+  `idempotency_conflict`, forever) → its Message `stc:<requestId>` exists ⇒ replay →
+  Contacts permission (P1) → route discovery over Messaging's own
+  `ContactConversationsQuery.v1` with the proof-only seam (exactly one provable
+  existing conversation, else `route_unavailable` / `route_ambiguous` /
+  `route_evidence_incomplete`; no first contact, no ranking, no fallback) →
+  `MessageService.send` with the `sendToContact` admission (the shared gate is P2).
+  Result `admitted` (delivery state + failure class from the row), `refused`
+  (no Message, no effect) or `idempotency_conflict`. Files:
+  `G/contracts/messaging/v1/send-to-contact-command.ts`,
+  `G/modules/messaging/application/send-to-contact-{request,routing,handler}.ts`,
+  `public/v1/legacy-prisma-send-to-contact-adapter.ts`; see I-59, I-60.
+- **Contacts permission gate (D4)**: `prepareOutboundConversationV1` is the route
+  proof followed by a fresh `contacts.ContactCommunicationPermissionQuery.v1`
+  `message` read for the proof's Contact — every outbound effect (text, redelivery,
+  media, image, reaction, AI auto-reply, CRM bot sends, inside the Telegram
+  adapter) crosses it. `proveOutboundConversationRouteV1` (the proof alone) serves
+  only retraction (`delete/route.ts`) and SendToContact discovery. Refusals are
+  typed: `MESSAGING_CONTACT_PERMISSION_REFUSED` (terminal) /
+  `MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED` (safe to redeliver); operator routes
+  answer `CONTACT_COMMUNICATION_RESTRICTED` (403) /
+  `CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE` (503) via
+  `contactPermissionRefusalV1`; see I-59.
 - **Extension points**: delivery port interfaces in `channel-delivery-runtime.ts`;
   new persisted command = contract + handler + adapter + wiring in
   `messaging-operations.ts`; new outbox event = contract +
@@ -544,6 +571,7 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
 | `CommunicationTrigger` | communication-trigger adapter | `G/app/settings/triggers/actions.ts` | — | No evaluator found (C-34) |
 | `GroupVisibility` | `G/app/api/groups/visibility/route.ts` | same route, `ChatList.tsx` | none | Writer is outside the module |
+| `MessagingSendIntent` | `legacy-prisma-send-to-contact-adapter.ts` only (`createMany` skipDuplicates, i.e. insert-if-absent) | the same adapter | `sendToContactV1` (`SendToContactCommand.v1`) | — (pending source migration `20261027090000_add_messaging_send_intent`; never updated or deleted) |
 
 Duplicated sources of truth: `Chat.channel` vs `Message.channel`; three parallel
 person links on Chat (`driverId`, `contactId`, `contactIdentityId`); delivery
@@ -826,9 +854,16 @@ capability first and persist afterwards, with direct Prisma writes.
   `externalId` after 5 min become `failed`, outcome `unknown`.
 - every 2 min: `retryEligibleMessagingDeliveriesV1` → `MessageService.retrySend`.
   The selector admits only `failed` outbound rows recorded `safe_to_redeliver`
-  with `errorSchemaVersion` ≥ 2 (I-10); `retrySend` re-checks that gate, leases the
-  row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
-  lease holder may finalise it (I-11).
+  with `errorSchemaVersion` ≥ 2 (I-10) whose backoff has elapsed — the SQL mirror of
+  `isPhysicalRetryDueV1` (`delivery-state-policy.ts`), the same rule `retrySend`
+  takes its backoff and anchor from, so backoff-pending rows no longer hold the
+  oldest-first `LIMIT 10` window; `retrySend` re-checks that gate, reads the
+  Contacts permission through the port (a temporary refusal re-anchors
+  `lastFailedAt`, a standing one finalises the row as terminal, both before the
+  lease and without consuming an attempt), leases the row (compare-and-set on
+  `failed` + `updatedAt`, `retryLeaseId`), and only the lease holder may finalise
+  it (I-11). Rows whose route proof or binding fails before the lease still
+  occupy the window for up to 24 h (known, not addressed).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
 - late evidence: `applyMessageDeliveryEvidenceV1` matches the exact provider id
   (another chat's, direction's or channel's row holding it is refused), else the
@@ -1212,6 +1247,25 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 
 ### Messaging
 
+- **I-59 Every outbound effect reads the Contacts `message` permission fresh,
+  inside the shared port, after the route proof.** `prepareOutboundConversationV1`
+  denies with a typed error; Contacts' `retryable` alone decides standing
+  (`terminal`) vs temporary (`safe_to_redeliver`); an unreadable answer fails
+  closed; nothing is cached. Only retraction and SendToContact discovery use the
+  ungated `proveOutboundConversationRouteV1`. A redelivery's refusal settles before
+  the lease and consumes no attempt. — `outbound-conversation-identity-runtime.ts`,
+  `MessageService.retrySend` — `outbound-conversation-identity-runtime.test.ts`,
+  `shared-retry-safety{,.postgres}.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
+- **I-60 One SendToContact `requestId` names one semantic payload forever and
+  admits at most one Message.** `MessagingSendIntent` binds it to
+  sha256(contract, contactId, content, sorted `allowedChannels` | null) on first
+  arrival, refused or not, and is never updated or deleted; the Message is
+  `clientMessageId = "stc:" + requestId`, a namespace only SendToContact admits and
+  mints; a SendToContact row replays unconditionally on lookup and on the unique
+  race; P1 and P2 must name the same canonical Contact. — `send-to-contact-*`,
+  `MessageService.send` — `send-to-contact-handler.test.ts`,
+  `send-to-contact.postgres.test.ts`, `check-messaging-send-to-contact-boundary.mjs`.
 - **I-08 One `clientMessageId` = one row and one dispatch; a different intent
   under the same key is rejected.** `MessageService.send` + unique
   `Message.clientMessageId` — `operator-delivery-retry.test.ts`.

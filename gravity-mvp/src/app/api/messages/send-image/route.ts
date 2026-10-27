@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { contactPermissionRefusalV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prisma } from '@/lib/prisma'
 import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
@@ -79,6 +80,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, messageId: message.id })
     } catch (err: any) {
         console.error('[send-image] Error:', err)
+        const refusal = contactPermissionRefusalV1(err)
+        if (refusal) return NextResponse.json({ error: refusal.label, code: refusal.code }, { status: refusal.retryable ? 503 : 403 })
         return NextResponse.json({ error: err.message }, { status: 500 })
     }
 }

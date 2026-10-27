@@ -188,6 +188,37 @@ export function readChannelDeliveryErrorV1(error: unknown): { outcome: ChannelDe
 }
 
 /**
+ * A Contacts permission refusal raised by the shared outbound gate, as an
+ * operator surface answers it; null for any other error. Nothing was sent.
+ * A standing refusal will be refused again; a temporary one may be retried.
+ */
+export function contactPermissionRefusalV1(error: unknown): {
+    code: 'CONTACT_COMMUNICATION_RESTRICTED' | 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE'
+    retryable: boolean
+    label: string
+} | null {
+    const typed = readChannelDeliveryErrorV1(error)
+    if (typed?.code === 'MESSAGING_CONTACT_PERMISSION_REFUSED') {
+        const reason = (error as Error).message.split(':')[1] ?? ''
+        return {
+            code: 'CONTACT_COMMUNICATION_RESTRICTED',
+            retryable: false,
+            label: reason.startsWith('restricted_')
+                ? 'Связь с этим контактом ограничена: сообщение не отправлено'
+                : 'Контакт недоступен для связи: сообщение не отправлено',
+        }
+    }
+    if (typed?.code === 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED') {
+        return {
+            code: 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE',
+            retryable: true,
+            label: 'Не удалось проверить разрешение на связь с контактом: сообщение не отправлено, повторите позже',
+        }
+    }
+    return null
+}
+
+/**
  * The typed reading of an adapter's send result, or null for a legacy result.
  * A provider_ack or provider_echo that names no provider id proves nothing
  * about this message and is read as a client_action.
@@ -202,4 +233,35 @@ export function readTextDeliveryResultV1(result: unknown): TextDeliveryResultV1 
         providerMessageId: id,
         ...(typeof resolvedChatId === 'string' && resolvedChatId.trim() !== '' ? { resolvedChatId } : {}),
     }
+}
+
+// ── When a physical redelivery is due ───────────────────────────────────
+//
+// The one "due now" rule for an unattended redelivery. `MessageService.retrySend`
+// takes its backoff and anchor from these two functions, and the retry job's
+// candidate selector (`retryEligibleMessagingDeliveriesV1`) carries the declared
+// SQL mirror of `isPhysicalRetryDueV1`, so the job never spends a slot on a row
+// retrySend would turn away as "Backoff not elapsed". The mirror is proven
+// against PostgreSQL over the anchors Messaging writes (`toISOString()`); an
+// anchor it cannot read the same way is due in SQL, so the selector is never
+// stricter than retrySend.
+
+/** Delay before physical attempt `nextAttempt` (1-based): min(2^nextAttempt × 30 s, 10 min). */
+export function physicalRetryBackoffMsV1(nextAttempt: number): number {
+    return Math.min(Math.pow(2, nextAttempt) * 30000, 10 * 60 * 1000)
+}
+
+/**
+ * The backoff anchor, `metadata.lastFailedAt`: the last physical attempt or
+ * deferral. Absent is 0 and unreadable is NaN; both make the row due.
+ */
+export function physicalRetryAnchorMsV1(lastFailedAt: unknown): number {
+    return lastFailedAt ? new Date(lastFailedAt as string | number | Date).getTime() : 0
+}
+
+/** Whether the unattended job may physically retry this row at `nowMs`, by backoff alone. */
+export function isPhysicalRetryDueV1(metadata: unknown, nowMs: number): boolean {
+    const meta = record(metadata)
+    const nextAttempt = ((meta.retryAttempt as number | undefined) || 0) + 1
+    return !(nowMs - physicalRetryAnchorMsV1(meta.lastFailedAt) < physicalRetryBackoffMsV1(nextAttempt))
 }
