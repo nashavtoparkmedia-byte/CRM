@@ -311,7 +311,7 @@ jobs:
           ok=$(curl -s -o /dev/null -w '%{http_code}' --cacert "$B/ca.pem" -u 'staff.a:b-layer-pass-a' https://localhost:8443/login/mobile)
           echo "::notice::B stand with staff.a: /login/mobile -> $ok"
           [ "$ok" = "200" ] || { echo "::error::the CRM is not reachable through the stand ($ok)"; exit 1; }
-          : > "$B/logs/access.log"
+          sudo truncate -s 0 "$B/logs/access.log"
 
       - name: Build the B acceptance APK (origin https://localhost:8443) and the test APK
         run: |
@@ -539,7 +539,7 @@ jobs:
           if ok "$OUT/B01.log"; then result B01 PASS "dialog for $realm; decline -> panel, no second dialog in 10 s"; else result B01 FAIL "$(why "$OUT/B01.log")"; fi
 
           # B02 staff login + CRM login; B05 foreign realm refused; B08 CRM 401 is not the edge; B16 no credential to the foreign realm.
-          : > "$ACC"
+          sudo truncate -s 0 "$ACC"
           if signed_in_as_a B02; then
             result B02 PASS "staff.a through nginx: $(grep -c '"staff.a"' "$ACC") authenticated requests; CRM login done; continuity record written"
             result B05 PASS "realm 'YOKO Cash' on the pinned host refused, no dialog"
