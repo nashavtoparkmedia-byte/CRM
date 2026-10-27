@@ -44,5 +44,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="@string/error_retry" />
+
+        <!-- Edge context reset (design R5.1 §5.4): on every edge and error
+             panel, so a hand-over never depends on the page being usable. -->
+        <Button
+            android:id="@+id/error_switch"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/edge_switch_operator" />
     </LinearLayout>
 </FrameLayout>

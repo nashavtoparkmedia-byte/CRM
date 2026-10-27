@@ -65,7 +65,13 @@ object ShellDiagnostics {
         )
     }
 
-    /** Record a diagnostic line to logcat and to the pullable file. */
+    /**
+     * Record a diagnostic line to logcat and to the pullable file.
+     *
+     * Synchronized: the token actor and the WebView's request thread write too,
+     * and the timestamp formatter is not thread-safe.
+     */
+    @Synchronized
     fun write(line: String) {
         if (!BuildConfig.CAPTURE_CONSOLE) return
         val trimmed = line.take(MAX_LINE_CHARS)

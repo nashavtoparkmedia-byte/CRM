@@ -8,12 +8,15 @@ import ru.yokoone.crm.shell.ShellDiagnostics
 /**
  * When the device asks the CRM to remember it, and when it does not.
  *
- * Two events can start a registration and nothing else may:
+ * Three events can start a registration and nothing else may:
  *
- *  1. the provider hands over a token, either the one it already had at process
- *     start or a rotated one;
+ *  1. the token actor commits a token the provider holds (R5.1 §5.7.2: the
+ *     provider's callbacks only signal the actor, which re-reads the provider);
  *  2. the shell observes the WebView settle on an authenticated CRM page having
- *     not been on one before, in this process or since the last logout.
+ *     not been on one before, in this process or since the last logout;
+ *  3. the edge gate accepted the staff credential in the foreground, or the
+ *     activity returned to the foreground with an accepted credential
+ *     ([onEdgeReady], R5.1 §4.1 item 6).
  *
  * The second is the subtle one. Ordinary navigation between authenticated pages
  * must not enqueue anything — the operator moving between conversations is not
@@ -73,10 +76,18 @@ object PushRegistration {
         observations = 0
     }
 
-    /** The provider has a token for this installation. Idempotent. */
+    /**
+     * The provider says it has a token. A signal only: the value is not stored
+     * or passed on; the token actor reads the provider and commits (§5.7.2).
+     */
     fun onNewToken(context: Context, token: String) {
         if (token.isEmpty()) return
-        requestIfNeeded(context, PushTokenState.rememberToken(context, token))
+        TokenActor.signalRefresh(context.applicationContext)
+    }
+
+    /** Edge accepted in the foreground, or onStart with an accepted credential. Idempotent. */
+    fun onEdgeReady(context: Context) {
+        requestIfNeeded(context, PushTokenState.snapshot(context))
     }
 
     /**
@@ -109,7 +120,7 @@ object PushRegistration {
         return PushRegistrar.sessionCookiePair(cookieHeader) != null
     }
 
-    private fun requestIfNeeded(context: Context, state: PushTokenState.Snapshot) {
+    fun requestIfNeeded(context: Context, state: PushTokenState.Snapshot) {
         val token = state.newestToken
         if (!state.needsRegistration || token == null) {
             // Silence here used to be ambiguous: a device that never asked and a
