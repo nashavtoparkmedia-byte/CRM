@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 729,
+    "total_entries": 731,
     "test": 39,
     "dead_historical": 92,
-    "migration_only": 86,
-    "active_operational": 507,
+    "migration_only": 87,
+    "active_operational": 508,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6658,6 +6658,25 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "contacts",
       "source_sha256": "71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e"
+    },
+    {
+      "path": "tools/architecture/check-messaging-send-to-contact-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the Messaging SendToContact capability; approved path is a bounded read-only boundary control that pins the shared Contacts permission gate inside prepareOutboundConversationV1, the proof-only route seam's two callers, the insert-only SendToContact intent table, the stc: clientMessageId namespace and the shared retry backoff rule, and compiles the pure SendToContact closed set to execute its behaviour. It writes no repository evidence, business data or provider state.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned SendToContact intent table (MessagingSendIntent: requestId primary key, payload sha256 and creation time, with shape checks) inside one explicit transaction through controlled migration tooling; it names no existing object, changes no existing row and carries no data statement or backfill; it stores no message, conversation, Contact, credential, provider identifier or transport; this review grants no application-runtime or production-application authority. Its one site is the exact CREATE TABLE statement.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "messaging",
+      "source_sha256": "6905a1112c50ae698877ee694003d046493b62d90e7d7fc91e377eaa0d01ffba"
     }
   ]
 }

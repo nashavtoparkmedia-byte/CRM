@@ -225,7 +225,8 @@ function assertIntentTableWriter(files) {
         assert.doesNotMatch(source, /\b(?:UPDATE|DELETE\s+FROM|TRUNCATE)\s+"?MessagingSendIntent\b|messagingSendIntent\.(?:update|upsert|delete)/u, `${file}: the intent table is never updated or deleted`)
     }
     const adapter = files.get(intentAdapterPath)
-    assert.match(adapter, /INSERT INTO "MessagingSendIntent" \("requestId", "semanticPayloadSha256"\)[\s\S]*ON CONFLICT \("requestId"\) DO NOTHING/u, `${intentAdapterPath}: insert-if-absent only`)
+    assert.match(adapter, /prisma\.messagingSendIntent\.createMany\(\{ data: \[\{ requestId, semanticPayloadSha256 \}\], skipDuplicates: true \}\)/u, `${intentAdapterPath}: insert-if-absent only`)
+    assert.deepEqual([...adapter.matchAll(/prisma\.messagingSendIntent\.(\w+)/gu)].map((match) => match[1]).sort(), ['createMany', 'findUnique'], `${intentAdapterPath}: the intent table is only inserted into if absent and read`)
 }
 
 /** `files` maps path → source for every runtime file. */
@@ -420,6 +421,7 @@ rejectProbe(portSource, portSource.replace('return { ...binding, contactPermissi
 rejectProbe(portSource, portSource.replace("if (result.decision === 'deny' && result.retryable === false) {", "if (result.decision === 'deny' && result.reason !== 'policy_unavailable') {"), assertGateInPort)
 rejectProbe('', "import { proveOutboundConversationRouteV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'\n", (changed) => assertProofOnlyCallers(new Map([...runtimeFiles, ['gravity-mvp/src/app/api/messages/send-media/route.ts', changed]])))
 rejectProbe('', 'await prisma.$executeRaw`UPDATE "MessagingSendIntent" SET "semanticPayloadSha256" = ${sha}`\n', (changed) => assertIntentTableWriter(new Map([...runtimeFiles, [intentAdapterPath, `${runtimeFiles.get(intentAdapterPath)}${changed}`]])))
+rejectProbe('', 'await prisma.messagingSendIntent.upsert({ where: { requestId }, create: row, update: row })\n', (changed) => assertIntentTableWriter(new Map([...runtimeFiles, [intentAdapterPath, `${runtimeFiles.get(intentAdapterPath)}${changed}`]])))
 rejectProbe('', 'await prisma.$executeRaw`DELETE FROM "MessagingSendIntent"`\n', (changed) => assertIntentTableWriter(new Map([...runtimeFiles, ['gravity-mvp/src/lib/cleanup.ts', changed]])))
 rejectProbe('', "await MessageService.send(chatId, text, undefined, undefined, 'stc:x', undefined, { sendToContact: { expectedCanonicalContactId: id } })\n", (changed) => assertSendToContactAdmission(new Map([...runtimeFiles, ['gravity-mvp/src/app/api/messages/route.ts', changed]])))
 const engineSource = read(messageServicePath)

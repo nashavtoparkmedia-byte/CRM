@@ -5,16 +5,14 @@ import { prisma } from '@/lib/prisma'
 // requestId names its first payload forever.
 export const legacyPrismaSendToContactPortV1 = {
     async claimIntent(requestId: string, semanticPayloadSha256: string): Promise<string> {
-        await prisma.$executeRaw`
-            INSERT INTO "MessagingSendIntent" ("requestId", "semanticPayloadSha256")
-            VALUES (${requestId}, ${semanticPayloadSha256})
-            ON CONFLICT ("requestId") DO NOTHING
-        `
-        const rows = await prisma.$queryRaw<Array<{ semanticPayloadSha256: string }>>`
-            SELECT "semanticPayloadSha256" FROM "MessagingSendIntent" WHERE "requestId" = ${requestId}
-        `
-        if (rows.length !== 1) throw new Error('MESSAGING_SEND_INTENT_UNAVAILABLE')
-        return rows[0].semanticPayloadSha256
+        // Insert if absent (ON CONFLICT DO NOTHING), then read whichever row holds the id.
+        await prisma.messagingSendIntent.createMany({ data: [{ requestId, semanticPayloadSha256 }], skipDuplicates: true })
+        const bound = await prisma.messagingSendIntent.findUnique({
+            where: { requestId },
+            select: { semanticPayloadSha256: true },
+        })
+        if (!bound) throw new Error('MESSAGING_SEND_INTENT_UNAVAILABLE')
+        return bound.semanticPayloadSha256
     },
     async findAdmittedMessage(clientMessageId: string) {
         return prisma.message.findUnique({
