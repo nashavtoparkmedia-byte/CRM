@@ -8,6 +8,8 @@ person, proven reply target, typed pre-dispatch outcome), verified against its o
 Partial update 2026-10-26: F-04, F-09, F-12, F-33, I-52, I-56, I-59..I-61, R-25 and R-33..R-36 describe Telegram
 delivery evidence (TG3R: typed send result, own-message evidence, read markers), verified against its own change on
 top of main `7e14fbbf`.
+Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-CC1 (provisional id; its number is
+assigned at landing) describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
 
 # YOKO CRM — Engineering Map
 
@@ -254,6 +256,16 @@ Each entry lists what the code actually does.
     ports live in
     `G/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.ts`
     and the mutation is deliberately not exported from `public/v1/index.ts`.
+  - `G/contracts/contacts/v1/contact-card-for-conversation-contracts.ts` —
+    `ContactCardForConversationQuery.v1` (CC-1): the read-only card for one exact
+    Chat.id (`confirmed` | `unresolved` | `conflict` | `refused` | `missing` |
+    `forbidden`; only `confirmed` carries data). The handler, its single
+    repeatable-read reader and the Identity Access authority binding live in
+    `G/modules/contacts/internal/` (`contact-card-for-conversation.ts`,
+    `legacy-prisma-contact-card-source-adapter.ts`,
+    `identity-access-contact-card-authority.ts`); only the bound reader
+    `createContactCardForConversationReaderV1(resolver)` is public, and it has no
+    consumer yet.
   - `G/infrastructure/contact-merge-composition.ts`,
     `G/infrastructure/automatic-contact-merge.ts`; facade `G/lib/ContactMergeService.ts`.
   - `G/lib/ReachabilityService.ts`.
@@ -1059,6 +1071,7 @@ report row; it repairs nothing.
 | Phone normalisation | contacts | `G/modules/contacts/public/v1/phone-identity.ts` | `normalizePhoneE164` | `phone-identity.test.ts` | The ad-hoc normalisers listed in C-19 (do not add another) |
 | Contact merge | contacts | `G/modules/contacts/public/v1/contact-merge-handler.ts`, `G/infrastructure/contact-merge-composition.ts` | `mergeContactsV1`; per-owner `legacy-prisma-contact-merge-adapter.ts` | `contact-merge-handler.test.ts`, `contact-automation-policy.test.ts` | Other contexts' tables except through their merge adapters |
 | Contact card UI | contacts / messaging UI | `G/app/messages/components/ContactProfileDrawer.tsx`, `G/app/api/contacts/[id]/route.ts` | — | route tests; manual UI check | — |
+| Contact card read model | contacts (resolution: messaging RCQ1) | `G/modules/contacts/internal/contact-card-for-conversation.ts` | `createContactCardForConversationReaderV1` bound exactly to `resolveConversationContactV1` on the exact Chat.id, from an allowlisted composition only (none yet) | `check-contact-card-read-model-boundary.mjs`, `G/modules/contacts/internal/contact-card-for-conversation*.test.ts` | A second resolver; a phone, name, username or provider-id lookup; `crm_user_id` as authority |
 | Outbound text send | messaging | `G/lib/MessageService.ts` (`send`, `retrySend`) | `SendIntentV1` + delivery port in `channel-delivery-runtime.ts` | `G/lib/MessageService.provider-account.test.ts`, `operator-delivery-retry.test.ts` | Provider SDKs; a new send option must also enter `assertSameSendIntent` |
 | Media / reaction / delete send | messaging | `G/app/api/messages/{send-media,reaction,delete}/route.ts` | channel delivery capability methods | route tests | — |
 | Inbound persistence | messaging | `G/modules/messaging/application/messaging-operations.ts` | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1` | `tools/architecture/test-messaging-*.mjs`, module tests | `prisma.message.*` from channel code |
@@ -1229,6 +1242,21 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `contact-communication-policy.test.ts`,
   `contact-communication-policy.postgres.test.ts`,
   `check-contact-communication-policy-boundary.mjs`.
+- **I-CC1 (provisional id; number assigned at landing) A Contact card is shown
+  only for the exact Chat.id that RCQ1 resolves, stable across the whole read,
+  and only to a verified principal.** The reader asks Identity Access for the
+  principal first (today only the signed integration-admin session;
+  `crm_user_id`, a cookie or the mobile session are never authority), checks
+  conversation access before RCQ1 and Contact access before any Contact read,
+  reads exactly the Contact RCQ1 named in one repeatable-read snapshot and asks
+  RCQ1 again; a changed association, an ambiguous resolution or an inexact
+  answer returns no data, and no Contact is chosen by phone, name, username or
+  provider id. A consumer outside Contacts must be allowlisted and must bind the
+  reader exactly to `resolveConversationContactV1` on the exact Chat.id; none is
+  allowlisted yet. — `createContactCardForConversationHandlerV1`,
+  `identityAccessContactCardAuthorityV1`, the allowlisted composition binding —
+  `contact-card-for-conversation.test.ts`, `contact-card-for-conversation.rcq1.test.ts`,
+  `check-contact-card-read-model-boundary.mjs`. Known exception: none.
 
 ### Messaging
 
