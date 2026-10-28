@@ -2715,6 +2715,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "bot-driver-actions-multipark-person-row-main-e256d14b-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "BOT_DRIVER_ACTIONS_MULTIPARK_PERSON_ROW_EXECUTOR_REVIEW_E256D14B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_REGRESSION_01_MULTIPARK_DRIVER_ACTIONS_IMPLEMENTATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at e256d14b, whose tail is cash-release-safety-r1-r5-main-f77279db-20261026, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint bot-driver-action-profile-park-guard-main-5dc489cd-20261022 approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,714 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint: a driver action in a park other than the link row's own acts on the same person's own Driver row of that park, proven by the bot authority, the Contacts cluster confirmation and exactly one operator-confirmed row, and otherwise keeps the park guard. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "f540e346f0d9b5446427e5d9fc0633df5500219e446ec9d35e2c2cbec2440f87",
+          "current_source_sha256": "227d4227cdce7526d3cbceed88ce59da3ae76b5283ee2192f726d81b8f2cf98a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook keeps its single current-authority implementation, every authority check and the park guard in place. A private helper fixes, when an action starts, the Driver row it acts on: the link row in its own park, or in another selected park the same person's own row, only when the bot authority proves the Contact, the link row belongs to it, the Contacts public getConfirmedContactForDriverClusterV1 names that Contact alone for the link row's licence cluster, and exactly one non-dismissed operator-confirmed row of that cluster with a real Yandex profile id is in the park. The proof is re-proven, with the link row read again, before every provider change and scraper dispatch, and expires after 12 s. A car is bound only after the selected park's own car listing finds it. It reads more columns of the same Driver model and one Contacts public read, and adds no write, no credential and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
