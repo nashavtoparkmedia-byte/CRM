@@ -2717,27 +2717,69 @@
       }
     },
     {
-      "amendment_id": "identity-access-br4-signed-mobile-operator-main-e256d14b-20261027",
+      "amendment_id": "android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027",
       "reviewed_at": "2026-10-27T00:00:00Z",
-      "reviewed_by": "IDENTITY_ACCESS_BR4_SIGNED_MOBILE_OPERATOR_EXECUTOR_REVIEW_E256D14B",
+      "reviewed_by": "ANDROID_ACCEPTANCE_TEST06_S2_REPAIR_EXECUTOR_REVIEW_20261027",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "ORCHESTRATOR_V7_BR4_FINAL_GOVERNANCE_RECUT_PR_PREPARATION_20261027",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TEST06_BASELINE_REGRESSION_REPAIR_FINISH_TO_PR_20261027",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at e256d14b, whose tail is cash-release-safety-r1-r5-main-f77279db-20261026, and leaves that amendment untouched. It reviews only the 4 surfaces the BR-4 signed mobile operator change adds and the 6 exact-inventory paths whose bytes it changes."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 5178f3e8, whose tail is cash-release-safety-r1-r5-main-f77279db-20261026, and reviews only the one surface the Android acceptance test06 repair adds."
       },
-      "reason": "Records the tracked executable surfaces the BR-4 signed mobile operator change adds on top of main e256d14b: 2,714 + 4 = 2,718 surfaces, context-owned 1,477 -> 1,480 and governed exclusions 1,237 -> 1,238. Three new paths are Identity Access runtime modules owned by identity_access through its manifest owned_paths: the read side of the existing Mobile Push v1 logout barrier (internal/), the request-operator composition (application/) and its public re-export (public/v1). The fourth is a test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix (no exact inventory). Six existing paths in the reviewed gravity_runtime_remainder exact runtime inventory change bytes only, so this amendment carries their mechanical source-fingerprint rebinds: gravity-mvp/src/proxy.ts, gravity-mvp/src/app/api/chats/[id]/assign/route.ts and the four Fleet monitoring writes that record an author (gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts and gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts); their exclusion, lifecycle and functional owner are unchanged. The other changed paths are context-owned and in no reviewed exact inventory; the frozen legacy authority gravity-mvp/src/lib/users/user-service.ts is unchanged. Its predecessor is the published tail's current triple, and its current triple differs from the predecessor by exactly these 4 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 34. It re-records, unchanged in surfaces, rebinds and rationales, the BR-4 candidate amendment identity-access-br4-signed-mobile-operator-main-f77279db-20261027 reviewed on 36e30f6c over main f77279db, which was never published: main moved to e256d14b, and its published amendment 33 (cash-release-safety-r1-r5-main-f77279db-20261026, landed with main 5178f3e8) took that number, so this one follows it and takes its predecessor triple.",
+      "reason": "Records the one tracked executable surface the Android acceptance test06 repair adds on top of main 5178f3e8: android/tools/acceptance-max-transport.test.mjs, the node:test regression suite of the loopback MAX transport stand-in that the Android acceptance workflow uses. It pins the stand to the S2 delivery contract: the stand answers like the MAX scraper's accepted outcome (a provider_ack naming a real-shaped synthetic id) and its read-back check accepts only provider acceptance (status sent, provider_ack evidence) and refuses a false delivered, a client action, a second physical send and a second persisted row. 2,714 + 1 = 2,715 surfaces, context-owned 1,477 -> 1,478 and governed exclusions unchanged at 1,237. The surface is classified TEST by the tracked-surface inventory's own naming rule, as every other test surface is; it needs no lifecycle registry entry. The current triple is this repository's own derivation over this tree (preview on the clean commit 583b07df, which reported no required rebind and no exact-inventory path without a reviewed assignment). It sits under android, which the platform_shell manifest owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. The other three repair files (the stand, the instrumentation test and its documentation) change bytes only; none carries a reviewed exact-inventory assignment or a registered source fingerprint, so no rebind is required and none is claimed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes.",
       "predecessor": {
         "tracked_executable_surfaces": 2714,
         "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
         "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
       },
       "current": {
-        "tracked_executable_surfaces": 2718,
-        "tracked_inventory_sha256": "89e54dd50ed401e9bed82789845911629a5e06b892275dac8a8940eb87b26d75",
-        "coverage_sha256": "dd4a79219b2432b5371aa42331964dc09f2255e7745e2609e9731131d778318f"
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "android/tools/acceptance-max-transport.test.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The node:test suite of the Android acceptance MAX transport stand-in. It imports only Node built-ins and the stand module, serves the stand on a loopback port chosen by the OS, opens no database connection, reaches no external host and holds no credential. Under android, a path the platform_shell context owns, so context ownership comes from the manifest."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "identity-access-br4-signed-mobile-operator-main-aff9acac-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_BR4_SIGNED_MOBILE_OPERATOR_EXECUTOR_REVIEW_AFF9ACAC",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_BR4_CC1_MAIN_INTEGRATION_EXECUTION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at aff9acac, whose tail is android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027, and leaves that amendment untouched. It reviews only the 4 surfaces the BR-4 signed mobile operator change adds and the 6 exact-inventory paths whose bytes it changes."
+      },
+      "reason": "Records the tracked executable surfaces the BR-4 signed mobile operator change adds on top of main aff9acac: 2,715 + 4 = 2,719 surfaces, context-owned 1,478 -> 1,481 and governed exclusions 1,237 -> 1,238. Three new paths are Identity Access runtime modules owned by identity_access through its manifest owned_paths: the read side of the existing Mobile Push v1 logout barrier (internal/), the request-operator composition (application/) and its public re-export (public/v1). The fourth is a test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix (no exact inventory). Six existing paths in the reviewed gravity_runtime_remainder exact runtime inventory change bytes only, so this amendment carries their mechanical source-fingerprint rebinds: gravity-mvp/src/proxy.ts, gravity-mvp/src/app/api/chats/[id]/assign/route.ts and the four Fleet monitoring writes that record an author (gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts and gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts); their exclusion, lifecycle and functional owner are unchanged. The other changed paths are context-owned and in no reviewed exact inventory; the frozen legacy authority gravity-mvp/src/lib/users/user-service.ts is unchanged. Its predecessor is the published tail's current triple, and its current triple differs from the predecessor by exactly these 4 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 35. It re-records, unchanged in surfaces, rebinds and rationales, the BR-4 candidate amendment identity-access-br4-signed-mobile-operator-main-f77279db-20261027 reviewed on 36e30f6c over main f77279db, published on PR #185 as amendment 34 over main e256d14b (identity-access-br4-signed-mobile-operator-main-e256d14b-20261027) but never landed: main moved to aff9acac, and its published amendment 34 (android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027, landed with main aff9acac) took that number, so this one follows it and takes its predecessor triple.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2719,
+        "tracked_inventory_sha256": "8fcbee7a6564e5e575419b78733080d94d93d7cff336d575e7ca7e8e579198f3",
+        "coverage_sha256": "efc82c2be79b395841a7a04ac2d8f9940d18192ac9fe0001412980163f3b95e5"
       },
       "source_hash_rebinds": [
         {
