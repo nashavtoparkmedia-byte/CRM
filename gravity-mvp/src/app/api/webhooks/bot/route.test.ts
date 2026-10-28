@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     getYandexConnectionCredentials: vi.fn(),
     listYandexConnectionMetadata: vi.fn(),
     patchDriverTelegramLink: vi.fn(),
+    upsertDriverTelegramLink: vi.fn(),
     recordBotUserProfile: vi.fn(),
     recordPendingBotLinkRequest: vi.fn(),
     sendMessage: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@/modules/fleet-operations/public/v1/yandex-connection-capability', () 
 
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
     patchDriverTelegramLinkV1: mocks.patchDriverTelegramLink,
+    upsertDriverTelegramLinkV1: mocks.upsertDriverTelegramLink,
     prepareDriverTelegramConversationAuthorityV1: mocks.authorizeDriverTelegram,
     canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
     recordBotUserProfileV1: mocks.recordBotUserProfile,
@@ -115,13 +117,15 @@ describe('driver-bot generic phone ingress', () => {
         vi.clearAllMocks()
         process.env.BOT_CRM_SECRET = 'test-bot-secret'
         mocks.findDriverTelegram.mockResolvedValue(null)
+        mocks.findDrivers.mockResolvedValue([])
+        mocks.upsertDriverTelegramLink.mockResolvedValue({ upserted: true })
         mocks.findChat.mockResolvedValue(null)
         mocks.recordBotUserProfile.mockResolvedValue({ recorded: true })
         mocks.recordPendingBotLinkRequest.mockResolvedValue({ recorded: true })
         vi.stubGlobal('fetch', mocks.providerFetch)
     })
 
-    test('records verified self-contact evidence locally and pends without a provider request', async () => {
+    test('records verified self-contact evidence locally and pends a number that names no Driver, without a provider request', async () => {
         const response = await POST(syncUserRequest({
             telegramId: '123456',
             contactUserId: 123456,
@@ -146,9 +150,142 @@ describe('driver-bot generic phone ingress', () => {
             telegramId: '123456',
             text: expect.stringContaining('+79990001122'),
         }))
+        expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
         expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
         expect(mocks.listYandexConnectionMetadata).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    describe('automatic link from the driver\'s own verified number', () => {
+        const working = (overrides: Record<string, unknown> = {}) => ({
+            id: 'driver-yoko',
+            fullName: 'Иванов Иван',
+            phone: '+79990001122',
+            externalParkId: 'park-yoko',
+            yandexDriverId: 'park-profile:abc',
+            externalDriverProfileId: 'a'.repeat(32),
+            personResolutionStatus: 'vu_clustered',
+            ...overrides,
+        })
+        const verified = { telegramId: '123456', contactUserId: 123456, username: 'driver', phone: '8 (999) 000-11-22' }
+
+        test('a new driver whose number names exactly one working profile is linked at once, in that profile\'s park', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+
+            const response = await POST(syncUserRequest(verified))
+
+            expect(response.status).toBe(200)
+            await expect(response.json()).resolves.toEqual({
+                success: true,
+                autoLinked: true,
+                driverId: 'driver-yoko',
+                driverName: 'Иванов Иван',
+            })
+            expect(mocks.findDrivers).toHaveBeenCalledWith(expect.objectContaining({
+                where: { dismissedAt: null, phone: { endsWith: '9990001122' } },
+            }))
+            expect(mocks.findDriverTelegram).toHaveBeenCalledWith({ where: { driverId: 'driver-yoko' }, select: { driverId: true } })
+            expect(mocks.upsertDriverTelegramLink).toHaveBeenCalledOnce()
+            expect(mocks.upsertDriverTelegramLink).toHaveBeenCalledWith({
+                contract: 'telegram_channel.UpsertDriverTelegramLinkCommand.v1',
+                driverId: 'driver-yoko',
+                telegramId: 123456n,
+                username: 'driver',
+                activeParkId: 'park-yoko',
+            })
+            expect(mocks.recordPendingBotLinkRequest).not.toHaveBeenCalled()
+            expect(mocks.providerFetch).not.toHaveBeenCalled()
+        })
+
+        test('one person\'s profiles in two parks are not chosen between: the manager links', async () => {
+            mocks.findDrivers.mockResolvedValue([
+                working(),
+                working({ id: 'driver-nash', externalParkId: 'park-nash', externalDriverProfileId: 'b'.repeat(32) }),
+            ])
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({
+                autoLinked: false,
+                status: 'PENDING_MANAGER_LINK',
+            })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+            expect(mocks.recordPendingBotLinkRequest).toHaveBeenCalledOnce()
+        })
+
+        test('two people sharing a number never link to either of them', async () => {
+            mocks.findDrivers.mockResolvedValue([
+                working(),
+                working({ id: 'driver-other-person', fullName: 'Петров Пётр', phone: '8 999 000 11 22' }),
+            ])
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('a longer number that merely ends with the same digits is not the same number', async () => {
+            mocks.findDrivers.mockResolvedValue([working({ phone: '+3809990001122' })])
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('a second profile with the same number is found however many rows end with those digits', async () => {
+            const rows = [
+                working(),
+                ...Array.from({ length: 9 }, (_, i) => working({ id: `driver-foreign-${i}`, phone: `+38${i}9990001122` })),
+                working({ id: 'driver-second', externalParkId: 'park-nash', externalDriverProfileId: 'b'.repeat(32) }),
+            ]
+            // The database honours any row limit the route asks for.
+            mocks.findDrivers.mockImplementation(async ({ take }: { take?: number }) => rows.slice(0, take ?? rows.length))
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('a foreign number never links to a Russian profile with the same last digits', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+
+            await expect((await POST(syncUserRequest({ ...verified, phone: '+380 999 000 11 22' }))).json())
+                .resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.findDrivers).not.toHaveBeenCalled()
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('a profile another Telegram already holds is never moved', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+            mocks.findDriverTelegram.mockImplementation(async ({ where }: { where: Record<string, unknown> }) =>
+                where.driverId === 'driver-yoko' ? { driverId: 'driver-yoko' } : null)
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['no recorded park', { externalParkId: null }],
+            ['no Yandex profile id', { yandexDriverId: 'park-profile:abc', externalDriverProfileId: null }],
+            ['a person conflict', { personResolutionStatus: 'conflict' }],
+        ])('a single profile with %s goes to the manager', async (_, overrides) => {
+            mocks.findDrivers.mockResolvedValue([working(overrides)])
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('an unverified number never links, even when it names one profile', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+
+            await expect((await POST(syncUserRequest({ telegramId: '123456', phone: '+7 999 000-11-22' }))).json())
+                .resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.findDrivers).not.toHaveBeenCalled()
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test('a link that cannot be saved still reaches the manager', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+            mocks.upsertDriverTelegramLink.mockRejectedValue(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }))
+
+            await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.recordPendingBotLinkRequest).toHaveBeenCalledOnce()
+        })
     })
 
     test('keeps an existing stable Telegram owner and never rebinds it from the new phone', async () => {
@@ -209,18 +346,30 @@ describe('generic messaging ingress provider boundary', () => {
     const sourceRoot = resolve(__dirname, '../../../../')
     const source = (relativePath: string) => readFileSync(resolve(sourceRoot, relativePath), 'utf8')
 
-    test('sync_user cannot enumerate parks, call Yandex, or create a first-result link', () => {
+    test('sync_user cannot enumerate parks or call Yandex, and links only a unique verified local match', () => {
         const route = source('app/api/webhooks/bot/route.ts')
         const start = route.indexOf('async function handleSyncUser')
         const end = route.indexOf('// Inject a system message', start)
         const syncUser = route.slice(start, end)
+        const matchStart = route.indexOf('async function uniqueUnlinkedDriverForPhone')
+        const match = route.slice(matchStart, route.indexOf('async function handleChangeLimit', matchStart))
 
         expect(start).toBeGreaterThanOrEqual(0)
         expect(end).toBeGreaterThan(start)
-        expect(syncUser).not.toContain('listYandexConnectionCredentialsV1')
-        expect(syncUser).not.toContain('fleet-api.taxi.yandex.net')
-        expect(syncUser).not.toMatch(/\bfetch\s*\(/)
-        expect(syncUser).not.toContain('upsertDriverTelegramLinkV1')
+        expect(matchStart).toBeGreaterThanOrEqual(0)
+        for (const source of [syncUser, match]) {
+            expect(source).not.toContain('listYandexConnectionCredentialsV1')
+            expect(source).not.toContain('fleet-api.taxi.yandex.net')
+            expect(source).not.toMatch(/\bfetch\s*\(/)
+        }
+        // The one link sync_user may write: after an existing link was kept, only
+        // for verified self-contact evidence, and only for the single match.
+        expect(syncUser.match(/upsertDriverTelegramLinkV1\(/g)).toHaveLength(1)
+        expect(syncUser.indexOf('existingLink?.driverId')).toBeLessThan(syncUser.indexOf('if (hasContactOwnershipEvidence)'))
+        expect(syncUser.indexOf('if (hasContactOwnershipEvidence)')).toBeLessThan(syncUser.indexOf('uniqueUnlinkedDriverForPhone('))
+        expect(syncUser.indexOf('uniqueUnlinkedDriverForPhone(')).toBeLessThan(syncUser.indexOf('upsertDriverTelegramLinkV1('))
+        expect(match).toContain('if (matches.length !== 1) return null')
+        expect(match).toContain('where: { driverId: row.id }')
         expect(syncUser).toContain("status: 'PENDING_MANAGER_LINK'")
     })
 
@@ -267,7 +416,9 @@ describe('driver-bot current Telegram authority', () => {
             telegramId: 123456n,
             activeParkId: 'park-1',
         })
-        // Person/conversation proof: it names no transport.
+        // The link proof: the exact Telegram → Driver link, read again.
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
+        // Cash's own person proof: it names no transport.
         mocks.authorizeDriverTelegram.mockResolvedValue({
             chatId: 'chat-1',
             contactId: 'contact-1',
@@ -288,6 +439,7 @@ describe('driver-bot current Telegram authority', () => {
             await expect(response.json()).resolves.toEqual({
                 error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
             })
+            expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
             expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
             expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
             expect(mocks.findDriver).not.toHaveBeenCalled()
@@ -300,12 +452,13 @@ describe('driver-bot current Telegram authority', () => {
         },
     )
 
-    test.each(mutationCases)(
-        '%s performs zero Driver mutation when the canonical mapping is stale or conflicted',
-        async (action, payload) => {
-            mocks.authorizeDriverTelegram.mockRejectedValue(
-                new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'),
-            )
+    test.each(mutationCases.flatMap(([action, payload]) => [
+        [action, payload, 'relinked to another Driver', { driverId: 'driver-2' }],
+        [action, payload, 'unlinked', null],
+    ] as const))(
+        '%s performs zero Driver mutation when the link was meanwhile %s',
+        async (action, payload, _, link) => {
+            mocks.findDriverTelegram.mockResolvedValue(link)
             const response = await POST(actionRequest(action, {
                 ...payload,
                 providerAccountId: '8447212640',
@@ -313,10 +466,11 @@ describe('driver-bot current Telegram authority', () => {
             }))
 
             expect(response.status).toBe(409)
-            expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({
-                driverId: 'driver-1',
-                telegramId: 123456n,
+            expect(mocks.findDriverTelegram).toHaveBeenCalledWith({
+                where: { telegramId: 123456n },
+                select: { driverId: true },
             })
+            expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
             expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
             expect(mocks.findDriver).not.toHaveBeenCalled()
             expect(mocks.findDriverByYandex).not.toHaveBeenCalled()
@@ -330,9 +484,11 @@ describe('driver-bot current Telegram authority', () => {
 
     // The complete non-production change_limit contract: the bot's action binding
     // (providerAccountId + connectionId) meets the Bot runtime authority, the
-    // person/Driver authority is proven separately, and the Yandex side effect is
-    // stubbed. No Chat.metadata transport ownership anywhere in the chain.
-    test('admits change_limit for a confirmed Driver on the canonical Bot transport', async () => {
+    // Telegram → Driver link is proven separately, and the Yandex side effect is
+    // stubbed. No Chat.metadata transport ownership and no Contact anywhere in
+    // the chain: a linked driver whose Contact is not confirmed is admitted.
+    test('admits change_limit for a linked Driver with no confirmed Contact, on the canonical Bot transport', async () => {
+        mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'))
         mocks.getYandexConnectionCredentials.mockResolvedValue({
             clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1',
         })
@@ -353,13 +509,14 @@ describe('driver-bot current Telegram authority', () => {
 
         expect(response.status).toBe(200)
         await expect(response.json()).resolves.toEqual({ success: true, newLimit: 5_000 })
-        // Person authority is proven twice: once before the read, once immediately
-        // before the provider mutation.
-        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledWith({
-            driverId: 'driver-1',
-            telegramId: 123456n,
+        // The link is proven twice: once before the read, once immediately before
+        // the provider mutation. Contacts is never asked.
+        expect(mocks.findDriverTelegram).toHaveBeenCalledWith({
+            where: { telegramId: 123456n },
+            select: { driverId: true },
         })
-        expect(mocks.authorizeDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+        expect(mocks.findDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         const put = mocks.providerFetch.mock.calls.at(-1)
         expect(put?.[1]).toMatchObject({ method: 'PUT' })
     })
@@ -378,6 +535,7 @@ describe('driver-bot current Telegram authority', () => {
         await expect(response.json()).resolves.toEqual({
             error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
         })
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.getYandexConnectionCredentials).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
@@ -392,6 +550,7 @@ describe('driver-bot current Telegram authority', () => {
         }))
 
         expect(response.status).toBe(409)
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
     })
@@ -409,11 +568,12 @@ describe('driver-bot current Telegram authority', () => {
         }))
 
         expect(response.status).toBe(409)
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.providerFetch).not.toHaveBeenCalled()
     })
 
-    test('never compares the runtime transport against stored Chat metadata', () => {
+    test('never compares the runtime transport against stored Chat metadata, and proves only the link', () => {
         const route = readFileSync(
             resolve(process.cwd(), 'src/app/api/webhooks/bot/route.ts'),
             'utf8',
@@ -430,12 +590,17 @@ describe('driver-bot current Telegram authority', () => {
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .replace(/\/\/.*$/gm, '')
         expect(authority).toContain('canonicalTelegramBotConnectionIdV1()')
-        expect(authority).toContain('prepareDriverTelegramConversationAuthorityV1(input)')
+        // The link proof reads exactly the link row of this Telegram id, and
+        // nothing of Contacts or of the shared Chat.
+        expect(authority).toContain('prisma.driverTelegram.findUnique({\n            where: { telegramId: input.telegramId },')
+        expect(authority.match(/prisma\./g)).toHaveLength(1)
+        expect(authority).not.toContain('prepareDriverTelegramConversationAuthorityV1')
         expect(authority).not.toContain('metadata')
         expect(authority).not.toMatch(/\bchat\./)
-        expect(authority).not.toContain('prisma')
         // One implementation: the wrapper delegates and proves nothing itself.
+        // Contacts' person proof is asked once, by Cash alone.
         expect(route.match(/prepareDriverTelegramConversationAuthorityV1\(/g)).toHaveLength(1)
+        expect(route.indexOf('prepareDriverTelegramConversationAuthorityV1(')).toBeGreaterThan(route.indexOf('async function proveCompensationTelegramPerson'))
         expect(route.match(/canonicalTelegramBotConnectionIdV1\(\)/g)).toHaveLength(1)
     })
 })
@@ -466,7 +631,9 @@ describe('driver-bot cash compensation pilot', () => {
         vi.clearAllMocks()
         process.env.BOT_CRM_SECRET = 'test-bot-secret'
         mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: 'park-a' })
-        // The person/conversation proof of a real chat: it names no transport,
+        // The link proof every bot Driver action shares.
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
+        // Cash's own person/conversation proof of a real chat: it names no transport,
         // because no production Chat carries chatKind or a provider account.
         mocks.authorizeDriverTelegram.mockResolvedValue({
             chatId: 'chat-1',
@@ -480,8 +647,8 @@ describe('driver-bot cash compensation pilot', () => {
     })
 
     function expectNoIdentityWrites() {
-        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
+        expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
         expect(mocks.recordBotUserProfile).not.toHaveBeenCalled()
         expect(mocks.recordPendingBotLinkRequest).not.toHaveBeenCalled()
         expect(mocks.findDriver).not.toHaveBeenCalled()
@@ -687,28 +854,53 @@ describe('driver-bot cash compensation pilot', () => {
         expectNoIdentityWrites()
     })
 
-    test('answers refused chat authority with 409 on every compensation action, reaching no service', async () => {
-        mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'))
-        const requests = [
-            actionRequest('compensation_section', { telegramId: '123456', ...binding }),
-            actionRequest('compensation_order_check', { telegramId: '123456', externalOrderId: 'order-1', scopeKey: 'scope-a', ...binding }),
-            actionRequest('compensation_refresh', { telegramId: '123456', ...binding }),
-            actionRequest('compensation_submit', submitPayload),
-        ]
-        for (const request of requests) {
-            expect((await POST(request)).status).toBe(409)
-        }
-        // The refusal came from the person proof, not from an earlier guard.
-        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledTimes(requests.length)
+    const everyCompensationAction = () => [
+        actionRequest('compensation_section', { telegramId: '123456', ...binding }),
+        actionRequest('compensation_order_check', { telegramId: '123456', externalOrderId: 'order-1', scopeKey: 'scope-a', ...binding }),
+        actionRequest('compensation_refresh', { telegramId: '123456', ...binding }),
+        actionRequest('compensation_submit', submitPayload),
+    ]
+
+    function expectNoCompensationService() {
         expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
         expect(mocks.compensationPilotOrderCheck).not.toHaveBeenCalled()
         expect(mocks.compensationPilotRefresh).not.toHaveBeenCalled()
         expect(mocks.compensationPilotSubmit).not.toHaveBeenCalled()
+    }
+
+    test('answers a link that no longer names the Driver with 409 on every compensation action, reaching no service', async () => {
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-2' })
+        for (const request of everyCompensationAction()) {
+            expect((await POST(request)).status).toBe(409)
+        }
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expectNoCompensationService()
+    })
+
+    // A linked driver is never told the profile is not linked. Cash pays a
+    // Contacts-proven person, so without one the driver is sent to a manager.
+    test('tells a linked driver with no Contacts person to ask a manager, on every compensation action, reaching no service', async () => {
+        mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'))
+        const answers = []
+        for (const request of everyCompensationAction()) {
+            const response = await POST(request)
+            expect(response.status).toBe(200)
+            answers.push(await response.json())
+        }
+        expect(answers).toEqual([
+            { available: false, reason: 'identity_needs_review', applications: [] },
+            { state: 'refused', refusal: 'identity_needs_review', order: null },
+            { status: 'refused', refusal: 'identity_needs_review' },
+            { submitted: false, refusal: 'identity_needs_review' },
+        ])
+        // The refusal came from Cash's person proof, after the link was proven.
+        expect(mocks.authorizeDriverTelegram).toHaveBeenCalledTimes(4)
+        expectNoCompensationService()
     })
 
     // The compensation entry shares the one Bot runtime authority of every Driver
     // action. These fail if either side of that composition is lost.
-    test('serves a real chat on the person proof alone: no stored chatKind or transport is required', async () => {
+    test('serves a real chat on the link and person proofs alone: no stored chatKind or transport is required', async () => {
         mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'not_self_employed', applications: [] })
         const proof = await mocks.authorizeDriverTelegram()
         expect(proof).not.toHaveProperty('providerAccountId')
@@ -722,7 +914,7 @@ describe('driver-bot cash compensation pilot', () => {
         expect(mocks.compensationPilotSection).toHaveBeenCalledWith(proven, { search: null })
     })
 
-    test('refuses a proof that names a different Driver than the manager link', async () => {
+    test('never pays a Contacts person proven for a different Driver than the link', async () => {
         mocks.authorizeDriverTelegram.mockResolvedValue({
             chatId: 'chat-1',
             contactId: 'contact-1',
@@ -733,7 +925,7 @@ describe('driver-bot cash compensation pilot', () => {
 
         const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
 
-        expect(response.status).toBe(409)
+        await expect(response.json()).resolves.toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
         expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
     })
 
@@ -753,6 +945,7 @@ describe('driver-bot cash compensation pilot', () => {
             expect(response.status).toBe(409)
             await expect(response.json()).resolves.toEqual({ error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED' })
         }
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
         expect(mocks.compensationPilotOrderCheck).not.toHaveBeenCalled()
@@ -788,13 +981,7 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
             activeParkId: 'park-1',
             carLabel: null,
         })
-        mocks.authorizeDriverTelegram.mockResolvedValue({
-            chatId: 'chat-1',
-            contactId: 'contact-1',
-            contactIdentityId: 'identity-1',
-            driverId: 'driver-1',
-            target: '123456',
-        })
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
         // No provider connection: the fired-profile guard is skipped and the only
@@ -924,8 +1111,8 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
                 expect(String(url)).not.toContain('park-profile')
             }
             expect(JSON.parse(calls[2][1].body)).toMatchObject({ car_id: 'car-9', account: { balance_limit: '0' } })
-            // Person authority is proven again immediately before the provider mutation.
-            expect(mocks.authorizeDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
+            // The link is proven again immediately before the provider mutation.
+            expect(mocks.findDriverTelegram.mock.calls.length).toBeGreaterThanOrEqual(2)
             expect(mocks.getYandexConnectionCredentials).toHaveBeenCalledWith(undefined, 'park-1')
         })
 
@@ -1071,9 +1258,7 @@ describe('driver-bot acts only on the driver\'s own profile in its own park', ()
     beforeEach(() => {
         vi.clearAllMocks()
         process.env.BOT_CRM_SECRET = 'test-bot-secret'
-        mocks.authorizeDriverTelegram.mockResolvedValue({
-            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
-        })
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
         mocks.findDriverByYandex.mockResolvedValue(null)
@@ -1405,13 +1590,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             activeParkId: selectedPark,
             carLabel,
         }))
-        mocks.authorizeDriverTelegram.mockImplementation(async () => ({
-            chatId: 'chat-1',
-            contactId: CONTACT,
-            contactIdentityId: 'identity-1',
-            driverId: 'driver-1',
-            target: '123456',
-        }))
+        mocks.findDriverTelegram.mockImplementation(async () => ({ driverId: 'driver-1' }))
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         // Reads return copies, as the database would: a later change is never seen through an earlier read.
         mocks.findDriver.mockImplementation(async ({ where }: any) => {
@@ -1566,7 +1745,9 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             for (const [command] of mocks.patchDriverTelegramLink.mock.calls) {
                 expect(Object.keys(command.patch)).toEqual(['carLabel'])
             }
-            expect(mocks.authorizeDriverTelegram.mock.calls.every(([input]) => input.driverId === 'driver-1')).toBe(true)
+            // Every authority check read this account's own link row, and nothing of Contacts' chat proof.
+            expect(mocks.findDriverTelegram.mock.calls.every(([input]) => input.where.telegramId === 123456n)).toBe(true)
+            expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
         })
     })
 
@@ -1632,9 +1813,9 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
 
         test('a switch during dispatch leaves the task on the profile and park it was proven for', async () => {
             selectedPark = YOKO2
-            mocks.authorizeDriverTelegram.mockImplementation(async () => {
+            mocks.findDriverTelegram.mockImplementation(async () => {
                 selectedPark = YOKO
-                return { chatId: 'chat-1', contactId: CONTACT, contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456' }
+                return { driverId: 'driver-1' }
             })
 
             const response = await act('get_order_price')
@@ -1678,9 +1859,6 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             ['the row moves to another Contact', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.contactId = 'contact-2' }],
             ['the row is replaced by another row of the same profile', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.id = 'driver-park-nash-new' }],
             ['the row now names another Yandex profile', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.externalDriverProfileId = 'e'.repeat(32) }],
-            ['the bot authority now proves another Contact', () => {
-                mocks.authorizeDriverTelegram.mockResolvedValue({ chatId: 'chat-1', contactId: 'contact-2', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456' })
-            }],
             ['the link row\'s licence cluster changes', () => { anchor.externalPersonKey = 'vu:9999999999' }],
             ['the link row moves to another Contact', () => { anchor.contactId = 'contact-2' }],
         ])('no PUT when, between the GET and the PUT, %s', async (_name, change) => {
@@ -1689,9 +1867,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
                 mocks.confirmedDriverCluster.mockImplementation(async (key: string) => (
                     key === KEY ? { contactId: CONTACT, confirmationId: 'confirmation-1', evidenceRoot: 'root-1' } : null
                 ))
-                mocks.authorizeDriverTelegram.mockImplementation(async () => ({
-                    chatId: 'chat-1', contactId: CONTACT, contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
-                }))
+                mocks.findDriverTelegram.mockImplementation(async () => ({ driverId: 'driver-1' }))
                 calls = []
                 selectedPark = NASH
                 hooks.onProfileGet = change
@@ -1703,6 +1879,53 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
                 expect(puts()).toHaveLength(0)
                 // The action did start in Наш Автопарк: its profile was read there.
                 expect(calls.some((call) => call.method === 'GET' && call.url.includes(PROFILE[NASH]))).toBe(true)
+            }
+        })
+
+        test.each([
+            ['relinked to another Driver', { driverId: 'driver-other' }],
+            ['removed', null],
+        ])('no PUT when, between the GET and the PUT, the Telegram link is %s', async (_name, link) => {
+            for (const action of [['change_limit', { limitValue: 5 }], ['update_driver_car', { carId: `car-${NASH}` }]] as const) {
+                drivers = [anchor = row(YOKO, { id: 'driver-1' }), row(NASH), row(YOKO2)]
+                mocks.confirmedDriverCluster.mockImplementation(async (key: string) => (
+                    key === KEY ? { contactId: CONTACT, confirmationId: 'confirmation-1', evidenceRoot: 'root-1' } : null
+                ))
+                mocks.findDriverTelegram.mockImplementation(async () => ({ driverId: 'driver-1' }))
+                calls = []
+                selectedPark = NASH
+                hooks.onProfileGet = () => { mocks.findDriverTelegram.mockResolvedValue(link) }
+
+                const response = await act(action[0], action[1])
+
+                expect(response.status).toBe(409)
+                await expect(response.json()).resolves.toEqual({ error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED' })
+                expect(puts()).toHaveLength(0)
+                expect(calls.some((call) => call.method === 'GET' && call.url.includes(PROFILE[NASH]))).toBe(true)
+            }
+        })
+
+        test('no PUT when the link changes after the last authority check, while the cross-park proof is re-read', async () => {
+            for (const action of [['change_limit', { limitValue: 5 }], ['update_driver_car', { carId: `car-${NASH}` }]] as const) {
+                drivers = [anchor = row(YOKO, { id: 'driver-1' }), row(NASH), row(YOKO2)]
+                mocks.confirmedDriverCluster.mockImplementation(async (key: string) => (
+                    key === KEY ? { contactId: CONTACT, confirmationId: 'confirmation-1', evidenceRoot: 'root-1' } : null
+                ))
+                mocks.findDriverTelegram.mockImplementation(async () => ({ driverId: 'driver-1' }))
+                calls = []
+                selectedPark = NASH
+                // After the profile GET the action's own authority check still sees
+                // the link; the read the cross-park proof makes next does not.
+                hooks.onProfileGet = () => {
+                    let reads = 0
+                    mocks.findDriverTelegram.mockImplementation(async () => (++reads >= 2 ? { driverId: 'driver-other' } : { driverId: 'driver-1' }))
+                }
+
+                const response = await act(action[0], action[1])
+
+                expect(response.status).toBe(409)
+                await expect(response.json()).resolves.toEqual({ error: 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.' })
+                expect(puts()).toHaveLength(0)
             }
         })
 
@@ -1879,13 +2102,13 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             expect(mocks.confirmedDriverCluster).not.toHaveBeenCalled()
         })
 
-        test('a link row whose own Contact projection is not the proven Contact', async () => {
+        test('a link row whose own Contact projection is not the Contact confirming its cluster', async () => {
             anchor.contactId = 'contact-2'
             await expectRefused()
         })
 
-        test('an ambiguous or conflicted Contact: the bot authority refuses before anything', async () => {
-            mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'))
+        test('a Telegram account whose link was removed: the bot authority refuses before anything', async () => {
+            mocks.findDriverTelegram.mockResolvedValue(null)
 
             const response = await act('change_limit', { limitValue: 5 })
 
@@ -1896,7 +2119,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
         })
 
         test('a stale link whose proof names another Driver is refused before anything', async () => {
-            mocks.authorizeDriverTelegram.mockResolvedValue({ chatId: 'chat-1', contactId: CONTACT, contactIdentityId: 'identity-1', driverId: 'driver-old', target: '123456' })
+            mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-old' })
 
             const response = await act('get_order_price')
 
@@ -1968,9 +2191,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
         telegramId = String(700_000 + accounts)
         mapping = { id: 'mapping-1', driverId: 'driver-1', telegramId: BigInt(telegramId), activeParkId: 'park-1', carLabel: null }
         mocks.findDriverTelegramFirst.mockImplementation(async () => mapping)
-        mocks.authorizeDriverTelegram.mockImplementation(async () => ({
-            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: String(mapping.driverId), target: telegramId,
-        }))
+        mocks.findDriverTelegram.mockImplementation(async () => ({ driverId: String(mapping.driverId) }))
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.findDriver.mockResolvedValue({
             id: 'driver-1', fullName: 'Test Driver', phone: '+70000000000', yandexDriverId: `park-profile:${'9'.repeat(32)}`,
@@ -2248,9 +2469,9 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
         })
 
         test('a dispatch with too little time left (slow authority checks) is not sent', async () => {
-            mocks.authorizeDriverTelegram.mockImplementation(async () => {
+            mocks.findDriverTelegram.mockImplementation(async () => {
                 await new Promise((resolve) => setTimeout(resolve, 4_000))
-                return { chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: telegramId }
+                return { driverId: 'driver-1' }
             })
             mocks.providerFetch.mockResolvedValueOnce(reply({ driver_profiles: [] }))
 
@@ -2447,5 +2668,80 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
                 expect(switched()).toBe(0)
             })
         })
+    })
+})
+
+describe('Owner scenarios: the simple Telegram → Driver link is the authority', () => {
+    const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
+    const link = { id: 'mapping-1', driverId: 'driver-1', telegramId: 123456n, activeParkId: 'park-1', carLabel: 'Kia Rio A001AA' }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mocks.findDriverTelegramFirst.mockResolvedValue(link)
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
+        // No Contact confirms this driver: the state of 43 of 47 production links.
+        mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'))
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.findDriverByYandex.mockResolvedValue({ fullName: 'Иванов Иван', externalParkId: 'park-1' })
+        mocks.findDriver.mockResolvedValue({ phone: '+79990001122', externalParkId: 'park-1', dismissedAt: null, yandexDriverId: 'a'.repeat(32), externalDriverProfileId: 'a'.repeat(32) })
+        mocks.getYandexConnectionCredentials.mockResolvedValue({ clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1', name: 'Yoko' })
+        mocks.patchDriverTelegramLink.mockResolvedValue({ updated: true })
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    test('a linked driver with no confirmed Contact is recognised by get_park_info, check_link and the park switch alike', async () => {
+        const park = await POST(actionRequest('get_park_info', { telegramId: '123456' }))
+        await expect(park.json()).resolves.toEqual({ linked: true, activeParkId: 'park-1', parkName: 'Yoko' })
+
+        const linked = await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))
+        expect(linked.status).toBe(200)
+        await expect(linked.json()).resolves.toEqual({ linked: true, driverId: 'driver-1', driverName: 'Иванов Иван', carInfo: 'Kia Rio A001AA' })
+
+        const switched = await POST(actionRequest('set_active_park', { telegramId: '123456', parkId: 'park-1', ...binding }))
+        expect(switched.status).toBe(200)
+        await expect(switched.json()).resolves.toEqual({ success: true, parkName: 'Yoko' })
+
+        expect(mocks.authorizeDriverTelegram).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('Cash tells the same linked driver to ask a manager, never that the profile is not linked', async () => {
+        const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
+
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
+        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+    })
+
+    test('an unknown visitor stays a guest on every surface', async () => {
+        mocks.findDriverTelegramFirst.mockResolvedValue(null)
+        mocks.findDriverTelegram.mockResolvedValue(null)
+
+        await expect((await POST(actionRequest('get_park_info', { telegramId: '123456' }))).json()).resolves.toEqual({ linked: false })
+        await expect((await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))).json()).resolves.toEqual({ linked: false })
+        await expect((await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))).json())
+            .resolves.toEqual({ available: false, reason: 'identity_not_proven', applications: [] })
+        const switched = await POST(actionRequest('set_active_park', { telegramId: '123456', parkId: 'park-1', ...binding }))
+        expect(switched.status).toBe(404)
+        expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
+        expect(mocks.providerFetch).not.toHaveBeenCalled()
+    })
+
+    test('a driver linked automatically a moment ago is recognised at once', async () => {
+        mocks.findDriverTelegram.mockResolvedValueOnce(null) // sync_user: no link yet
+        mocks.findDriverTelegram.mockResolvedValueOnce(null) // the profile is held by no Telegram
+        mocks.findDrivers.mockResolvedValue([{
+            id: 'driver-1', fullName: 'Иванов Иван', phone: '+79990001122', externalParkId: 'park-1',
+            yandexDriverId: 'a'.repeat(32), externalDriverProfileId: 'a'.repeat(32), personResolutionStatus: 'vu_clustered',
+        }])
+        mocks.upsertDriverTelegramLink.mockResolvedValue({ upserted: true })
+        mocks.recordBotUserProfile.mockResolvedValue({ recorded: true })
+
+        const synced = await POST(syncUserRequest({ telegramId: '123456', contactUserId: 123456, phone: '+79990001122' }))
+        await expect(synced.json()).resolves.toMatchObject({ autoLinked: true, driverId: 'driver-1' })
+
+        const linked = await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))
+        await expect(linked.json()).resolves.toMatchObject({ linked: true, driverId: 'driver-1' })
     })
 })

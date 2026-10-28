@@ -1,12 +1,12 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 import {
     canonicalTelegramBotConnectionIdV1,
-    saveManualDriverTelegramLinkV1,
+    replaceDriverTelegramLinkV1,
 } from '@/modules/telegram-channel/public/v1'
 import {
     sendExactTelegramBotMessageV1,
@@ -145,15 +145,18 @@ export async function getUnlinkedTelegramUsers() {
 }
 
 /**
- * Manually link a Telegram User ID to a Yandex Driver ID.
+ * Manually link a Telegram User ID to a Yandex Driver ID. The manager's choice
+ * is the link: it replaces any link this Driver or this Telegram had.
  */
 export async function linkTelegramUserToDriver(telegramId: string, driverId: string) {
     try {
         await requireIntegrationAdminAccess()
         const tgBigInt = BigInt(telegramId)
+        const driver = await prisma.driver.findUnique({ where: { id: driverId }, select: { id: true } })
+        if (!driver) throw new Error('DRIVER_NOT_FOUND')
 
-        await saveManualDriverTelegramLinkV1({
-            contract: SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+        await replaceDriverTelegramLinkV1({
+            contract: REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1,
             driverId,
             telegramId: tgBigInt,
         })

@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
-import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import {
     canonicalTelegramBotConnectionIdV1,
     patchDriverTelegramLinkV1,
     prepareDriverTelegramConversationAuthorityV1,
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
-    type PreparedDriverTelegramConversationAuthorityV1,
+    upsertDriverTelegramLinkV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { getConfirmedContactForDriverClusterV1 } from '@/modules/contacts/public/v1/driver-person-confirmation'
@@ -81,15 +81,18 @@ export async function POST(request: Request) {
     }
 }
 
+/** What a bot Driver action is authorized with: the exact Telegram → Driver link. */
+type BotDriverLinkAuthority = { driverId: string; target: string }
+
 /**
  * The one implementation of current Telegram Driver authority for bot actions.
- * Returns the person proof, or null when the Bot runtime transport, the exact
- * private chat or the confirmed Driver person cannot be proven right now.
+ * Returns the link proof, or null when the Bot runtime transport or the exact
+ * Telegram → Driver link cannot be proven right now.
  */
 async function resolveCurrentBotDriverAuthority(
     payload: unknown,
     input: { driverId: string; telegramId: bigint },
-): Promise<PreparedDriverTelegramConversationAuthorityV1 | null> {
+): Promise<BotDriverLinkAuthority | null> {
     const record = payload && typeof payload === 'object' && !Array.isArray(payload)
         ? payload as Record<string, unknown>
         : {}
@@ -114,17 +117,19 @@ async function resolveCurrentBotDriverAuthority(
         if (connectionId !== canonicalTelegramBotConnectionIdV1()) {
             throw new Error('TELEGRAM_BOT_CONNECTION_MISMATCH')
         }
-        // Independent PERSON/CONVERSATION proof: exact private Chat for this
-        // peer, exact Contact, active conflict-free ContactIdentity, and a
-        // confirmed main Driver. It names no transport.
-        const person = await prepareDriverTelegramConversationAuthorityV1(input)
-        if (
-            person.target !== input.telegramId.toString()
-            || person.driverId !== input.driverId
-        ) {
-            throw new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH')
+        // LINK proof: the Telegram → Driver link a manager made, or the bot made
+        // from the driver's own verified number, is the authority, as it was
+        // before Contacts existed. It is read again on every call, so an unlink
+        // or a relink stops each later step of a running action. A Contact is
+        // not required: a linked driver needs no confirmed Contact to use the bot.
+        const link = await prisma.driverTelegram.findUnique({
+            where: { telegramId: input.telegramId },
+            select: { driverId: true },
+        })
+        if (!link || link.driverId !== input.driverId) {
+            throw new Error('DRIVER_TELEGRAM_LINK_CHANGED')
         }
-        return person
+        return { driverId: input.driverId, target: input.telegramId.toString() }
     } catch (error: unknown) {
         console.warn(
             '[driver-bot] Current Telegram Driver authority rejected:',
@@ -460,12 +465,13 @@ async function botActingDriver(
 /**
  * The same person's own Driver row in another park, with the proof it rests on.
  *
- * Every part must hold now: the bot authority proves the Contact behind the
- * link; the link row belongs to that Contact; Contacts confirms the link row's
- * licence cluster to that Contact alone; and exactly one non-dismissed row of
- * that cluster is in the park, linked to that Contact, operator-confirmed by
- * the fleet reconciler, with a real Yandex profile id of its own. Only a
- * licence cluster joins parks. No phone, name or first match is involved.
+ * Every part must hold now: the bot authority proves the Telegram link still
+ * names the link row; Contacts confirms the link row's licence cluster to one
+ * Contact alone, and the link row belongs to that Contact; and exactly one
+ * non-dismissed row of that cluster is in the park, linked to that Contact,
+ * operator-confirmed by the fleet reconciler, with a real Yandex profile id of
+ * its own. Only a licence cluster joins parks. No phone, name or first match
+ * is involved.
  */
 async function proveCrossParkDriver(
     payload: unknown,
@@ -478,14 +484,14 @@ async function proveCrossParkDriver(
     if (!clusterKey.startsWith('vu:')) return null
     try {
         const authority = await resolveCurrentBotDriverAuthority(payload, { driverId: anchorDriverId, telegramId })
-        if (!authority || anchor.contactId !== authority.contactId) return null
+        if (!authority) return null
         const confirmed = await getConfirmedContactForDriverClusterV1(clusterKey)
-        if (!confirmed || confirmed.contactId !== authority.contactId) return null
+        if (!confirmed || !anchor.contactId || anchor.contactId !== confirmed.contactId) return null
         const rows = await prisma.driver.findMany({
             where: {
                 externalPersonKey: clusterKey,
                 externalParkId: parkId,
-                contactId: authority.contactId,
+                contactId: confirmed.contactId,
                 personResolutionStatus: 'operator_confirmed',
                 dismissedAt: null,
                 id: { not: anchor.id },
@@ -504,7 +510,7 @@ async function proveCrossParkDriver(
                 actingDriverId: row.id,
                 profileId,
                 parkId,
-                contactId: authority.contactId,
+                contactId: confirmed.contactId,
                 clusterKey,
                 provenAt: Date.now(),
             },
@@ -701,9 +707,10 @@ async function lookupParkCar(connection: any, carId: string, deadline: ProviderD
 // ── Cash compensation pilot ────────────────────────────────────────────────
 // The bot renders; every rule lives behind compensationPilotSectionV1,
 // compensationPilotOrderCheckV1, compensationPilotRefreshV1 and
-// compensationPilotSubmitV1, so the surfaces cannot drift apart. The person is
+// compensationPilotSubmitV1, so the surfaces cannot drift apart. The link is
 // proven here through current Telegram Driver authority, the same gate as every
-// other bot Driver action; this block never creates or changes a link. The
+// other bot Driver action; Cash then names the Contacts person it pays, which
+// its own rules check again. This block never creates or changes a link. The
 // selected park is read from that same link in the same request and never
 // taken from the bot, so a list shown for one park cannot be acted on in another.
 
@@ -755,7 +762,11 @@ type CompensationPersonProof =
         contactId: string
         selectedExternalParkId: string | null
     }
-    | { proven: false; response: NextResponse | null }
+    | {
+        proven: false
+        response: NextResponse | null
+        refusal: 'identity_not_proven' | 'identity_needs_review'
+    }
 
 async function proveCompensationTelegramPerson(payload: any): Promise<CompensationPersonProof> {
     const telegramUserId = typeof payload?.telegramId === 'string' || typeof payload?.telegramId === 'number'
@@ -765,6 +776,7 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
         return {
             proven: false,
             response: NextResponse.json({ error: 'Missing telegramId' }, { status: 400 }),
+            refusal: 'identity_not_proven',
         }
     }
     const telegramId = BigInt(telegramUserId)
@@ -772,8 +784,8 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
         where: { telegramId },
         select: { driverId: true, activeParkId: true },
     })
-    // No manager link yet: the in-band refusal, not an authority failure.
-    if (!mapping || !mapping.driverId) return { proven: false, response: null }
+    // No link yet: the in-band refusal, not an authority failure.
+    if (!mapping || !mapping.driverId) return { proven: false, response: null, refusal: 'identity_not_proven' }
 
     const authority = await resolveCurrentBotDriverAuthority(payload, {
         driverId: mapping.driverId,
@@ -785,14 +797,28 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
             response: NextResponse.json({
                 error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED',
             }, { status: 409 }),
+            refusal: 'identity_not_proven',
         }
+    }
+    // Cash pays a person, and binds its budget to that person's Contact: the
+    // exact private chat of this peer, its confirmed identity and a Contact that
+    // confirms the linked Driver. A linked driver without one is told to ask a
+    // manager, never that the profile is not linked.
+    let person: Awaited<ReturnType<typeof prepareDriverTelegramConversationAuthorityV1>> | null = null
+    try {
+        person = await prepareDriverTelegramConversationAuthorityV1({ driverId: mapping.driverId, telegramId })
+    } catch (error: unknown) {
+        console.warn('[driver-bot] Cash person not proven:', error instanceof Error ? error.message : String(error))
+    }
+    if (!person || person.target !== telegramId.toString() || person.driverId !== mapping.driverId) {
+        return { proven: false, response: null, refusal: 'identity_needs_review' }
     }
     return {
         proven: true,
         // The canonical decimal form authority proved, never the raw payload.
         telegramUserId: telegramId.toString(),
         driverId: mapping.driverId,
-        contactId: authority.contactId,
+        contactId: person.contactId,
         // The link's own selection, read with the proof. The payload has none.
         selectedExternalParkId: mapping.activeParkId ?? null,
     }
@@ -812,7 +838,7 @@ async function handleCompensationSection(payload: any) {
     if (!proof.proven) {
         return proof.response ?? NextResponse.json({
             available: false,
-            reason: 'identity_not_proven',
+            reason: proof.refusal,
             applications: [],
         })
     }
@@ -852,7 +878,7 @@ async function handleCompensationOrderCheck(payload: any) {
 
     const proof = await proveCompensationTelegramPerson(payload)
     if (!proof.proven) {
-        return proof.response ?? NextResponse.json({ state: 'refused', refusal: 'identity_not_proven', order: null })
+        return proof.response ?? NextResponse.json({ state: 'refused', refusal: proof.refusal, order: null })
     }
 
     const check = await compensationPilotOrderCheckV1({
@@ -873,7 +899,7 @@ async function handleCompensationOrderCheck(payload: any) {
 async function handleCompensationRefresh(payload: any) {
     const proof = await proveCompensationTelegramPerson(payload)
     if (!proof.proven) {
-        return proof.response ?? NextResponse.json({ status: 'refused', refusal: 'identity_not_proven' })
+        return proof.response ?? NextResponse.json({ status: 'refused', refusal: proof.refusal })
     }
 
     const outcome = await compensationPilotRefreshV1(compensationProofFields(proof))
@@ -892,7 +918,7 @@ async function handleCompensationSubmit(payload: any) {
 
     const proof = await proveCompensationTelegramPerson(payload)
     if (!proof.proven) {
-        return proof.response ?? NextResponse.json({ submitted: false, refusal: 'identity_not_proven' })
+        return proof.response ?? NextResponse.json({ submitted: false, refusal: proof.refusal })
     }
 
     const outcome = await compensationPilotSubmitV1({
@@ -974,8 +1000,7 @@ async function handleSyncUser(payload: unknown) {
 
     // An existing Telegram→Driver mapping is durable local authority. Never
     // move it because of a newly submitted phone; simply report the existing
-    // link. Creating a new physical-driver link requires the explicit manager
-    // or canonical reconciliation workflow.
+    // link. Only the manager relinks.
     const existingLink = await prisma.driverTelegram.findUnique({
         where: { telegramId: BigInt(telegramIdText) },
         select: { driverId: true, username: true },
@@ -990,7 +1015,37 @@ async function handleSyncUser(payload: unknown) {
         })
     }
 
-    // A phone alone cannot select one of several park-qualified Driver rows or
+    // The driver's own number, proven by Telegram, links the bot by itself when
+    // it names exactly one working Driver profile that no Telegram holds yet.
+    // A phone never chooses between several profiles (one person in several
+    // parks, or several people sharing a number) and never moves a link: the
+    // manager decides those. Unverified retries only reach the manager queue.
+    if (hasContactOwnershipEvidence) {
+        const match = await uniqueUnlinkedDriverForPhone(phone)
+        if (match) {
+            try {
+                await upsertDriverTelegramLinkV1({
+                    contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+                    driverId: match.id,
+                    telegramId: BigInt(telegramIdText),
+                    username,
+                    activeParkId: match.parkId,
+                })
+                return NextResponse.json({
+                    success: true,
+                    autoLinked: true,
+                    driverId: match.id,
+                    driverName: match.fullName || null,
+                })
+            } catch (error: unknown) {
+                // A link written meanwhile for this Telegram wins; the request
+                // still reaches the manager.
+                console.warn('[sync_user] automatic link not saved:', error instanceof Error ? error.message : String(error))
+            }
+        }
+    }
+
+    // A phone that names no profile, or several, cannot select one of them or
     // override a stable channel owner. Persist the evidence and fail closed to
     // the manager-link queue; scheduled/manual Fleet reconciliation can refresh
     // provider data independently.
@@ -1046,6 +1101,55 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
     } catch (err: any) {
         console.error('[notifyManagerPendingLink] Error:', err.message)
     }
+}
+
+/**
+ * The 11-digit Russian form of a phone, or null for any other length or
+ * country: a longer number that merely ends with the same ten digits is a
+ * different number.
+ */
+function exactRussianPhone(value: unknown): string | null {
+    const digits = typeof value === 'string' ? value.replace(/\D/g, '') : ''
+    if (digits.length === 11 && (digits[0] === '7' || digits[0] === '8')) return `7${digits.slice(1)}`
+    return digits.length === 10 ? `7${digits}` : null
+}
+
+/**
+ * The one Driver profile a verified phone may link by itself, or null.
+ *
+ * Among the CRM's non-dismissed Driver rows, those whose phone is exactly this
+ * one: there must be exactly one, in a recorded park, with a Yandex profile id
+ * of its own, not in a person conflict, and not linked to any Telegram. Rows
+ * come from the fleet reconciler, so a profile not reconciled yet is not found
+ * and the manager links it.
+ */
+async function uniqueUnlinkedDriverForPhone(phone: string): Promise<{ id: string; fullName: string | null; parkId: string } | null> {
+    const exact = exactRussianPhone(phone)
+    if (!exact) return null
+    const rows = await prisma.driver.findMany({
+        where: { dismissedAt: null, phone: { endsWith: exact.slice(1) } },
+        select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            externalParkId: true,
+            yandexDriverId: true,
+            externalDriverProfileId: true,
+            personResolutionStatus: true,
+        },
+    })
+    // Every row that ends with these digits is read: a sample could miss a
+    // second profile with the same number and make an ambiguous one look unique.
+    const matches = rows.filter(row => exactRussianPhone(row.phone) === exact)
+    if (matches.length !== 1) return null
+    const [row] = matches
+    const parkId = row.externalParkId?.trim() || ''
+    if (!parkId || !yandexContractorProfileId(row) || row.personResolutionStatus === 'conflict') return null
+    const taken = await prisma.driverTelegram.findUnique({
+        where: { driverId: row.id },
+        select: { driverId: true },
+    })
+    return taken ? null : { id: row.id, fullName: row.fullName, parkId }
 }
 
 async function handleChangeLimit(payload: any) {
