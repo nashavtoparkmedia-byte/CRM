@@ -20,8 +20,10 @@ to the `android-acceptance/**` namespace, for every pull request targeting
    Telegram, WhatsApp, MAX, Avito, bot, SIP or TURN credential exists in the
    process. The one transport address given, `MAX_SCRAPER_URL`, points at
    `android/tools/acceptance-max-transport.mjs` on the runner's loopback: a
-   stand-in that accepts only the synthetic send and answers with a confirmed
-   delivery proof. Every other outbound transport is inert by construction.
+   stand-in that accepts only the synthetic send and answers the way the MAX
+   scraper answers a send MAX accepted, a provider_ack naming a real-shaped
+   synthetic provider message id. Every other outbound transport is inert by
+   construction.
 4. Asserts the shell lane already fails closed before a single test runs.
 5. Builds the acceptance APK pointed at `http://10.0.2.2:3002`, the host alias
    inside Android's user-mode network stack, plus the instrumentation APK.
@@ -29,7 +31,11 @@ to the `android-acceptance/**` namespace, for every pull request targeting
    tests against it.
 7. After the scenarios, checks the send behind `test06`: exactly one physical
    send reached the stand-in, and the CRM persisted exactly one outbound
-   Message for it with the same clientMessageId and status `delivered`.
+   Message for it with the same clientMessageId, the provider id the stand
+   answered, and the S2 state of a provider acceptance: status `sent` with
+   `provider_ack` evidence (`provider_accepted`, shown as «Отправлено»). A send
+   is never `delivered` at send time; that needs a device receipt, which MAX
+   does not produce.
 8. Collects logcat, the shell's own diagnostics file, screenshots, the JUnit
    report and the APK digest as artifacts.
 
