@@ -1521,6 +1521,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
     let hooks: { onProfileGet?: () => void | Promise<void>; onDispatch?: () => void | Promise<void> }
     let taskCounter: number
     let missingProfiles: Set<string>
+    let membershipDown: boolean
 
     const reply = (status: number, body?: unknown) => {
         const text = body === undefined ? '' : JSON.stringify(body)
@@ -1552,7 +1553,17 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             if (listed !== park) return reply(403, { message: 'park mismatch' })
             return reply(200, { cars: [{ id: `car-${listed}`, brand: 'Brand', model: listed, number: `N-${listed}` }], total: 1 })
         }
-        if (url.endsWith('/v1/parks/driver-profiles/list')) return reply(200, { driver_profiles: [] })
+        if (url.endsWith('/v1/parks/driver-profiles/list')) {
+            const listed = body?.query?.park?.id
+            if (listed !== park) return reply(403, { message: 'park mismatch' })
+            if (membershipDown) return reply(503, { message: 'unavailable' })
+            return reply(200, {
+                driver_profiles: drivers
+                    .filter((candidate) => candidate.externalParkId === listed && candidate.dismissedAt === null
+                        && candidate.externalDriverProfileId && !missingProfiles.has(candidate.externalDriverProfileId))
+                    .map((candidate) => ({ driver_profile: { id: candidate.externalDriverProfileId, phones: [candidate.phone] } })),
+            })
+        }
         if (url.endsWith('/api/driver-actions') && method === 'POST') {
             await hooks.onDispatch?.()
             taskCounter += 1
@@ -1564,11 +1575,14 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
 
     /** prisma.driver.findMany over the fixture rows, honouring every condition the route asks for. */
     async function findDriverRows({ where, take }: { where: Record<string, any>; take?: number }) {
-        const rows = drivers.filter((candidate) => Object.entries(where).every(([field, condition]) => {
+        const matches = (candidate: Row, conditions: Record<string, any>): boolean => Object.entries(conditions).every(([field, condition]) => {
+            if (field === 'OR') return (condition as Record<string, any>[]).some((alternative) => matches(candidate, alternative))
             if (field === 'id') return condition?.not === undefined ? candidate.id === condition : candidate.id !== condition.not
             if (field === 'dismissedAt') return condition === null ? candidate.dismissedAt === null : candidate.dismissedAt !== null
+            if (condition && typeof condition === 'object' && 'endsWith' in condition) return String((candidate as any)[field] ?? '').endsWith(condition.endsWith)
             return (candidate as any)[field] === condition
-        }))
+        })
+        const rows = drivers.filter((candidate) => matches(candidate, where))
         return rows.slice(0, take ?? rows.length).map((found) => ({ ...found }))
     }
 
@@ -1583,6 +1597,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
         hooks = {}
         taskCounter = 0
         missingProfiles = new Set()
+        membershipDown = false
         mocks.findDriverTelegramFirst.mockImplementation(async () => ({
             id: 'mapping-1',
             driverId: 'driver-1',
@@ -1661,9 +1676,14 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             // Every provider call used that park's credentials, and Yoko's profile was never touched.
             for (const call of calls.filter((entry) => entry.park !== null)) expect(call.park).toBe(park)
             expect(touches(PROFILE[YOKO])).toBe(false)
-            // A car found outside the link row's park is never cached, and no phone search ran.
+            // A car found outside the link row's park is never cached. The only
+            // listing is the membership check of that park for the driver's own number.
             expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
-            expect(calls.some((call) => call.url.endsWith('/v1/parks/driver-profiles/list'))).toBe(false)
+            const listings = calls.filter((call) => call.url.endsWith('/v1/parks/driver-profiles/list'))
+            expect(listings.length).toBeGreaterThan(0)
+            expect(listings.every((call) => call.park === park && call.body.query.park.id === park && call.body.query.text === '+79030000001')).toBe(true)
+            // D2 writes nothing: no Telegram link is created or moved.
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
         })
 
         test.each([
@@ -1690,36 +1710,54 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             ])
         })
 
-        test('the proof asks for exactly the proven person\'s confirmed row in the selected park', async () => {
+        test('the proof reads every row of the selected park that shares the licence or the number', async () => {
             selectedPark = NASH
 
             await act('change_limit', { limitValue: 5 })
 
-            expect(mocks.confirmedDriverCluster).toHaveBeenCalledWith(KEY)
             expect(mocks.findDrivers).toHaveBeenCalledWith({
                 where: {
-                    externalPersonKey: KEY,
                     externalParkId: NASH,
-                    contactId: CONTACT,
-                    personResolutionStatus: 'operator_confirmed',
                     dismissedAt: null,
                     id: { not: 'driver-1' },
+                    OR: [{ externalPersonKey: KEY }, { phone: { endsWith: '9030000001' } }],
                 },
-                select: expect.objectContaining({ externalDriverProfileId: true, externalParkId: true }),
-                take: 2,
+                select: expect.objectContaining({ externalDriverProfileId: true, externalParkId: true, personResolutionStatus: true, phone: true }),
             })
+            // Contacts is asked only whether it contradicts the two rows.
+            expect(mocks.confirmedDriverCluster).toHaveBeenCalledWith(KEY)
         })
 
-        test('a proven row Yandex no longer knows is never replaced by a phone or name search', async () => {
+        test.each([
+            ['no Contact at all', () => { anchor.contactId = null; drivers.forEach((candidate) => { candidate.contactId = null }); mocks.confirmedDriverCluster.mockResolvedValue(null) }],
+            ['no Contacts confirmation of the cluster', () => { mocks.confirmedDriverCluster.mockResolvedValue(null) }],
+            ['rows the reconciler only clustered by licence', () => { drivers.forEach((candidate) => { candidate.personResolutionStatus = 'vu_clustered' }) }],
+            ['rows not yet linked to any person', () => { drivers.forEach((candidate) => { candidate.personResolutionStatus = 'unlinked'; candidate.contactId = null }) }],
+        ])('D2: with %s, the second park still acts on its own profile', async (_name, prepare) => {
+            prepare()
+            selectedPark = NASH
+
+            const cash = await act('change_limit', { limitValue: 5 })
+            await expect(cash.json()).resolves.toEqual({ success: true, newLimit: 5 })
+            expect(puts()).toEqual([expect.objectContaining({ park: NASH, url: expect.stringContaining(PROFILE[NASH]) })])
+            const order = await act('get_order_price')
+            await expect(order.json()).resolves.toMatchObject({ ok: true, status: 'PENDING' })
+            expect(scraperBodies()).toEqual([expect.objectContaining({ driverYandexId: PROFILE[NASH], parkId: NASH })])
+            expect(touches(PROFILE[YOKO])).toBe(false)
+        })
+
+        test('a row Yandex no longer lists in that park is refused and never replaced by a phone or name search', async () => {
             selectedPark = NASH
             missingProfiles.add(PROFILE[NASH])
 
             const cash = await act('change_limit', { limitValue: 5 })
-            expect(cash.status).toBe(502)
+            expect(cash.status).toBe(409)
             const car = await act('check_link')
             await expect(car.json()).resolves.toMatchObject({ linked: true, carInfo: null })
 
-            expect(calls.some((call) => call.url.endsWith('/v1/parks/driver-profiles/list'))).toBe(false)
+            // Only the membership check of that park asked Yandex; nothing changed.
+            expect(calls.filter((call) => call.url.endsWith('/v1/parks/driver-profiles/list')).every((call) => call.park === NASH)).toBe(true)
+            expect(calls.some((call) => call.url.includes('/v2/parks/contractors/driver-profile'))).toBe(false)
             expect(puts()).toHaveLength(0)
             expect(touches(PROFILE[YOKO])).toBe(false)
         })
@@ -1854,7 +1892,14 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             ['Contacts confirms the cluster to someone else', () => {
                 mocks.confirmedDriverCluster.mockResolvedValue({ contactId: 'contact-2', confirmationId: 'c', evidenceRoot: 'r' })
             }],
-            ['the confirmation is revoked', () => { mocks.confirmedDriverCluster.mockResolvedValue(null) }],
+            ['the row now has another phone', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.phone = '+79030000002' }],
+            ['the row is marked as a person conflict', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.personResolutionStatus = 'conflict' }],
+            ['the link row\'s phone changes', () => { anchor.phone = '+79030000009' }],
+            ['the link row and its second-park row both change to another number', () => {
+                anchor.phone = '+79030000009'
+                drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.phone = '+79030000009'
+            }],
+            ['a second row with the same licence appears in that park', () => { drivers.push(row(NASH, { id: 'driver-park-nash-2', externalDriverProfileId: 'd'.repeat(32) })) }],
             ['the row is dismissed', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.dismissedAt = new Date() }],
             ['the row moves to another Contact', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.contactId = 'contact-2' }],
             ['the row is replaced by another row of the same profile', () => { drivers.find((candidate) => candidate.id === `driver-${NASH}`)!.id = 'driver-park-nash-new' }],
@@ -1990,7 +2035,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             selectedPark = NASH
             let proofs = 0
             mocks.confirmedDriverCluster.mockImplementation(async () => (
-                ++proofs === 1 ? { contactId: CONTACT, confirmationId: 'c', evidenceRoot: 'r' } : null
+                ++proofs === 1 ? { contactId: CONTACT, confirmationId: 'c', evidenceRoot: 'r' } : { contactId: 'contact-2', confirmationId: 'c', evidenceRoot: 'r' }
             ))
 
             const response = await act('get_order_price')
@@ -2061,8 +2106,27 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             await expectRefused()
         })
 
-        test('no confirmed Contact for the cluster (none, or more than one)', async () => {
-            mocks.confirmedDriverCluster.mockResolvedValue(null)
+        test('the same licence but another number in that park', async () => {
+            drivers = [anchor, row(NASH, { phone: '+79030000002' })]
+            await expectRefused()
+        })
+
+        test('the person\'s row and another person with the same number in that park', async () => {
+            drivers = [anchor, row(NASH), row(NASH, { id: 'driver-other-person', externalPersonKey: 'vu:9999999999', externalDriverProfileId: 'd'.repeat(32) })]
+            await expectRefused()
+        })
+
+        test.each([
+            ['no phone', null],
+            ['a foreign phone that ends with the same ten digits', '+380 903 000 0001'],
+            ['a short phone', '12345'],
+        ])('a link row with %s', async (_name, phone) => {
+            anchor.phone = phone
+            await expectRefused()
+        })
+
+        test('a link row in a person conflict', async () => {
+            anchor.personResolutionStatus = 'conflict'
             await expectRefused()
         })
 
@@ -2090,9 +2154,26 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             await expectRefused()
         })
 
-        test.each([['vu_clustered'], ['phone_linked'], ['conflict'], ['unlinked']])('a row the reconciler marked %s', async (status) => {
-            drivers = [anchor, row(NASH, { personResolutionStatus: status })]
+        test('a row the reconciler marked as a person conflict', async () => {
+            drivers = [anchor, row(NASH, { personResolutionStatus: 'conflict' })]
             await expectRefused()
+        })
+
+        test.each([
+            ['does not list the profile with that number', () => { missingProfiles.add(PROFILE[NASH]) }],
+            ['does not answer', () => { membershipDown = true }],
+        ])('Yandex %s: nothing is chosen and nothing changes', async (_name, prepare) => {
+            prepare()
+
+            const cash = await act('change_limit', { limitValue: 5 })
+            expect(cash.status).toBe(409)
+            await expect(cash.json()).resolves.toEqual({ error: refusal })
+            const order = await act('get_order_price')
+            await expect(order.json()).resolves.toMatchObject({ ok: false, error: 'YANDEX_PROFILE_PARK_UNPROVEN' })
+            // The membership check of that park was the only call: no profile was read or changed.
+            expect(calls.length).toBeGreaterThan(0)
+            expect(calls.every((call) => call.url.endsWith('/v1/parks/driver-profiles/list') && call.park === NASH)).toBe(true)
+            expect(scraperBodies()).toHaveLength(0)
         })
 
         test('a link row whose cluster is one park only (no licence key)', async () => {
@@ -2129,15 +2210,26 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
         })
     })
 
-    test('the cross-park proof selects by person proof alone: no phone, name or first match', () => {
+    test('the cross-park proof (D2) selects by licence and exact number alone: no name, first match or write', () => {
         const route = readFileSync(resolve(process.cwd(), 'src/app/api/webhooks/bot/route.ts'), 'utf8')
-        const proof = route.slice(route.indexOf('async function botActingDriver('), route.indexOf('// Helper: find car by ID'))
+        const proof = route.slice(route.indexOf('async function botActingDriver('), route.indexOf('const BOT_REQUEST_BUDGET_MS'))
             .replace(/\/\*[\s\S]*?\*\//g, '')
             .replace(/\/\/.*$/gm, '')
-        expect(proof).toContain('getConfirmedContactForDriverClusterV1(clusterKey)')
-        expect(proof).toContain("personResolutionStatus: 'operator_confirmed'")
-        expect(proof).toContain('rows.length !== 1')
-        expect(proof).not.toMatch(/phone|fullName|\.find\(|\[0\]|findFirst/)
+        expect(proof).toContain('async function crossParkProofStillHolds(')
+        expect(proof).toContain('if (sharing.length !== 1) return null')
+        expect(proof).toContain('row.externalPersonKey !== clusterKey')
+        expect(proof).toContain('exactRussianPhone(row.phone) !== phone')
+        expect(proof).toContain("row.personResolutionStatus === 'conflict'")
+        expect(proof).toContain('if (contacts.size > 1) return null')
+        expect(proof).toContain("yandexParkMembership(park, parkId, row.phone, profileId) !== 'member'")
+        expect(proof).not.toMatch(/fullName|\.find\(|\[0\]|findFirst|uniqueProfileByPhone|phoneKey\(/)
+        // It reads and never writes: no link, Driver or Contact is created or changed.
+        expect(proof).not.toMatch(/\.(create|update|upsert|delete)(Many)?\(|Telegram(Link)?V1\(|patchDriverTelegramLinkV1/)
+        // The only Contacts read is the cluster confirmation; nothing of Contacts is written by the route.
+        expect(route.match(/from '@\/modules\/contacts[^']*'/g)).toEqual([
+            "from '@/modules/contacts/public/v1/phone-identity'",
+            "from '@/modules/contacts/public/v1/driver-person-confirmation'",
+        ])
     })
 })
 

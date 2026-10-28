@@ -404,6 +404,7 @@ const BOT_DRIVER_SELECT = {
     externalParkId: true,
     externalPersonKey: true,
     contactId: true,
+    personResolutionStatus: true,
 } as const
 
 type BotDriverRow = {
@@ -415,6 +416,7 @@ type BotDriverRow = {
     externalParkId: string | null
     externalPersonKey: string | null
     contactId: string | null
+    personResolutionStatus: string | null
 }
 
 /**
@@ -433,7 +435,7 @@ type CrossParkProof = {
     actingDriverId: string
     profileId: string
     parkId: string
-    contactId: string
+    phone: string
     clusterKey: string
     provenAt: number
 }
@@ -458,20 +460,27 @@ async function botActingDriver(
     const selected = mapping.activeParkId?.trim() || null
     const anchorPark = anchor?.externalParkId?.trim() || null
     if (!anchor || !selected || !anchorPark || selected === anchorPark) return { driver: anchor, crossPark: null }
-    return await proveCrossParkDriver(payload, mapping.driverId, telegramId, anchor, selected)
+    return await proveCrossParkDriver(payload, mapping.driverId, telegramId, anchor, selected, true)
         ?? { driver: anchor, crossPark: null }
 }
 
 /**
  * The same person's own Driver row in another park, with the proof it rests on.
  *
- * Every part must hold now: the bot authority proves the Telegram link still
- * names the link row; Contacts confirms the link row's licence cluster to one
- * Contact alone, and the link row belongs to that Contact; and exactly one
- * non-dismissed row of that cluster is in the park, linked to that Contact,
- * operator-confirmed by the fleet reconciler, with a real Yandex profile id of
- * its own. Only a licence cluster joins parks. No phone, name or first match
- * is involved.
+ * Every part must hold now:
+ * - the bot authority proves the Telegram link still names the link row;
+ * - the link row has a licence key and an exact Russian phone, and the fleet
+ *   reconciler marks no person conflict on it;
+ * - in the selected park exactly one non-dismissed row shares the licence or
+ *   the number, and that row shares both, has no person conflict and has a
+ *   real Yandex profile id of its own;
+ * - no Contact contradicts the two rows being one person. A Contact that is
+ *   simply missing never blocks;
+ * - when asked, Yandex lists that very profile with that number in that park.
+ *
+ * Any ambiguity, contradiction, empty field or unanswered Yandex call proves
+ * nothing, and the park guard then refuses as before. No name or first match
+ * is involved, and nothing is written.
  */
 async function proveCrossParkDriver(
     payload: unknown,
@@ -479,30 +488,42 @@ async function proveCrossParkDriver(
     telegramId: bigint,
     anchor: BotDriverRow,
     parkId: string,
+    askYandex: boolean,
 ): Promise<{ driver: BotDriverRow; crossPark: CrossParkProof } | null> {
     const clusterKey = anchor.externalPersonKey?.trim() || ''
-    if (!clusterKey.startsWith('vu:')) return null
+    const phone = exactRussianPhone(anchor.phone)
+    if (!clusterKey.startsWith('vu:') || !phone || anchor.personResolutionStatus === 'conflict') return null
     try {
         const authority = await resolveCurrentBotDriverAuthority(payload, { driverId: anchorDriverId, telegramId })
         if (!authority) return null
-        const confirmed = await getConfirmedContactForDriverClusterV1(clusterKey)
-        if (!confirmed || !anchor.contactId || anchor.contactId !== confirmed.contactId) return null
         const rows = await prisma.driver.findMany({
             where: {
-                externalPersonKey: clusterKey,
                 externalParkId: parkId,
-                contactId: confirmed.contactId,
-                personResolutionStatus: 'operator_confirmed',
                 dismissedAt: null,
                 id: { not: anchor.id },
+                OR: [{ externalPersonKey: clusterKey }, { phone: { endsWith: phone.slice(1) } }],
             },
             select: BOT_DRIVER_SELECT,
-            take: 2,
         })
-        if (rows.length !== 1) return null
-        const [row] = rows
+        // Every row of that park that shares the licence or the exact number.
+        const sharing = rows.filter(row => row.externalPersonKey === clusterKey || exactRussianPhone(row.phone) === phone)
+        if (sharing.length !== 1) return null
+        const [row] = sharing
         const profileId = row.externalDriverProfileId?.trim() || ''
-        if (row.externalParkId !== parkId || !YANDEX_PROFILE_ID.test(profileId)) return null
+        if (
+            row.externalPersonKey !== clusterKey
+            || exactRussianPhone(row.phone) !== phone
+            || row.externalParkId !== parkId
+            || row.personResolutionStatus === 'conflict'
+            || !YANDEX_PROFILE_ID.test(profileId)
+        ) return null
+        const confirmed = await getConfirmedContactForDriverClusterV1(clusterKey)
+        const contacts = new Set([anchor.contactId, row.contactId, confirmed?.contactId].filter(Boolean))
+        if (contacts.size > 1) return null
+        if (askYandex) {
+            const park = await getYandexConnectionCredentialsV1(undefined, parkId)
+            if (!park || await yandexParkMembership(park, parkId, row.phone, profileId) !== 'member') return null
+        }
         return {
             driver: row,
             crossPark: {
@@ -510,7 +531,7 @@ async function proveCrossParkDriver(
                 actingDriverId: row.id,
                 profileId,
                 parkId,
-                contactId: confirmed.contactId,
+                phone,
                 clusterKey,
                 provenAt: Date.now(),
             },
@@ -526,9 +547,11 @@ async function proveCrossParkDriver(
  * something at the provider. It keeps the park and Driver row fixed at the
  * action's start and never reads the selected park again; it refuses a proof
  * older than CROSS_PARK_PROOF_TTL_MS, or one that no longer names the same row,
- * profile, Contact and cluster. The link row is read again as well: its cluster,
- * Contact and park must still be the ones the action started with. An action in
- * the link row's own park has no proof to keep.
+ * profile, number and cluster. The link row is read again as well: its cluster,
+ * number and park must still be the ones the action started with. Yandex was
+ * asked when the action started; the provider call that follows reads the
+ * profile in that park again. An action in the link row's own park has no
+ * proof to keep.
  */
 async function crossParkProofStillHolds(
     payload: unknown,
@@ -548,14 +571,14 @@ async function crossParkProofStillHolds(
     if (
         !current
         || current.externalPersonKey !== anchor.externalPersonKey
-        || current.contactId !== anchor.contactId
+        || exactRussianPhone(current.phone) !== proof.phone
         || current.externalParkId !== anchor.externalParkId
     ) return false
-    const again = (await proveCrossParkDriver(payload, proof.anchorDriverId, telegramId, current, proof.parkId))?.crossPark
+    const again = (await proveCrossParkDriver(payload, proof.anchorDriverId, telegramId, current, proof.parkId, false))?.crossPark
     return !!again
         && again.actingDriverId === proof.actingDriverId
         && again.profileId === proof.profileId
-        && again.contactId === proof.contactId
+        && again.phone === proof.phone
         && again.clusterKey === proof.clusterKey
         && Date.now() - proof.provenAt <= CROSS_PARK_PROOF_TTL_MS
 }
