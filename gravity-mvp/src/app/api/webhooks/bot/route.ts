@@ -208,6 +208,7 @@ function uniqueProfileByPhone(profiles: any[], phone: string | null | undefined,
 
 // Check if a Telegram user is linked to a driver
 async function handleCheckLink(payload: any) {
+    const deadline = providerDeadline()
     const { telegramId } = payload
     if (!telegramId) {
         return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
@@ -229,7 +230,6 @@ async function handleCheckLink(payload: any) {
 
     let driverName = mapping.username || null
     let carInfo: string | null = null
-    const deadline = providerDeadline()
 
     // Return cached car label immediately — avoids 9 sequential Yandex API calls
     // which (a) trigger 429 rate-limiting and (b) cost ~5 seconds per check_link.
@@ -565,6 +565,8 @@ const PROVIDER_CHANGE_MIN_BUDGET_MS = 4_500
 
 const PROVIDER_UNAVAILABLE_TEXT = 'Яндекс сейчас не отвечает. Попробуйте позже.'
 const PROVIDER_RATE_LIMITED_TEXT = 'Яндекс временно ограничил запросы. Изменение не применено, попробуйте позже.'
+// Answered with status 502 and no yandexError, which every bot flow prints as
+// its text; 504 would read as "CRM unavailable" and invite a retry.
 const PROVIDER_CHANGE_UNKNOWN_TEXT = 'Яндекс не подтвердил изменение. Проверьте результат позже и не повторяйте сразу.'
 
 type ProviderDeadline = { readonly at: number }
@@ -1205,14 +1207,14 @@ async function handleChangeLimit(payload: any) {
         } catch (error: any) {
             // The request may have reached Yandex: the outcome is unknown, never a success.
             console.warn('[changeLimit] PUT outcome unknown:', error?.message)
-            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 502 })
         }
         const { ok: putOk, status: putStatus, data: putData } = put
         console.log(`[changeLimit] PUT Response ${putStatus}:`, JSON.stringify(putData).substring(0, 300))
 
         if (!putOk) {
             if (putStatus === 429) return NextResponse.json({ error: PROVIDER_RATE_LIMITED_TEXT }, { status: 503 })
-            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 502 })
             return NextResponse.json({ error: `Yandex PUT Error ${putStatus}`, yandexError: { code: putStatus, ...putData } }, { status: 502 })
         }
 
@@ -1247,6 +1249,7 @@ async function handleSearchCarByPlate(payload: any) {
     const prefix = platePrefix.toUpperCase().replace(/\s/g, '')
     const matches: any[] = []
     const PAGE = 500
+    let pagesRead = 0
 
     try {
         for (let page = 0; page < 10; page++) {
@@ -1271,6 +1274,7 @@ async function handleSearchCarByPlate(payload: any) {
                 })
                 if (!res.ok) break
                 data = await res.json()
+                pagesRead += 1
             } catch (error: any) {
                 // Out of time or unreachable: answer with what the earlier pages found.
                 console.warn('[search_car_by_plate] page', page, 'not read:', error?.message)
@@ -1289,6 +1293,8 @@ async function handleSearchCarByPlate(payload: any) {
             if (matches.length >= 5 || page * PAGE + cars.length >= (data?.total || 0)) break
         }
 
+        // Not one page read: Yandex did not answer, which is not "no such car".
+        if (pagesRead === 0) return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
         // Binding one of these cars right after needs no second listing of this park.
         if (searchLink && matches.length > 0) {
             rememberCarSearch(searchLink.telegramId, searchLink.driverId, connection.parkId, matches.map((car) => String(car.id)))
@@ -1407,14 +1413,14 @@ async function handleUpdateDriverCar(payload: any) {
         } catch (error: any) {
             // The request may have reached Yandex: the outcome is unknown, never a success.
             console.warn('[update_driver_car] PUT outcome unknown:', error?.message)
-            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 502 })
         }
         const { ok: putOk, status: putStatus, data: putData } = put
         console.log(`[update_driver_car] PUT ${putStatus}:`, JSON.stringify(putData).substring(0, 200))
 
         if (!putOk) {
             if (putStatus === 429) return NextResponse.json({ error: PROVIDER_RATE_LIMITED_TEXT }, { status: 503 })
-            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 502 })
             return NextResponse.json({ error: `Yandex error ${putStatus}`, details: putData }, { status: 502 })
         }
         return NextResponse.json({ success: true, newCarId: carId })

@@ -1899,6 +1899,8 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
     const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
     const connection = { clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' }
     let mapping: Record<string, unknown>
+    let telegramId: string
+    let accounts = 0
 
     const reply = (body: unknown, status = 200) => ({
         ok: status >= 200 && status < 300,
@@ -1921,7 +1923,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
     const calls = () => mocks.providerFetch.mock.calls.map(([url, init]: any[]) => `${init?.method ?? 'GET'} ${String(url)}`)
     const puts = () => calls().filter((call) => call.startsWith('PUT'))
     const act = (action: string, extra: Record<string, unknown> = {}) =>
-        POST(actionRequest(action, { telegramId: '123456', ...binding, ...extra }))
+        POST(actionRequest(action, { telegramId, ...binding, ...extra }))
     /** Runs a request on fake timers to completion and returns it with the time it took. */
     async function timed(request: Promise<Response>) {
         const started = Date.now()
@@ -1938,11 +1940,13 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
         mocks.providerFetch.mockReset()
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
         process.env.BOT_CRM_SECRET = 'test-bot-secret'
-        mapping = { id: 'mapping-1', driverId: 'driver-1', telegramId: 123456n, activeParkId: 'park-1', carLabel: null }
+        accounts += 1
+        telegramId = String(700_000 + accounts)
+        mapping = { id: 'mapping-1', driverId: 'driver-1', telegramId: BigInt(telegramId), activeParkId: 'park-1', carLabel: null }
         mocks.findDriverTelegramFirst.mockImplementation(async () => mapping)
-        mocks.authorizeDriverTelegram.mockResolvedValue({
-            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
-        })
+        mocks.authorizeDriverTelegram.mockImplementation(async () => ({
+            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: String(mapping.driverId), target: telegramId,
+        }))
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.findDriver.mockResolvedValue({
             id: 'driver-1', fullName: 'Test Driver', phone: '+70000000000', yandexDriverId: `park-profile:${'9'.repeat(32)}`,
@@ -1999,7 +2003,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
 
             const { response, elapsed } = await timed(act('change_limit', { limitValue: 5 }))
 
-            expect(response.status).toBe(504)
+            expect(response.status).toBe(502)
             await expect(response.json()).resolves.toEqual({
                 error: 'Яндекс не подтвердил изменение. Проверьте результат позже и не повторяйте сразу.',
                 outcome: 'UNKNOWN',
@@ -2021,7 +2025,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
                 .mockResolvedValueOnce(reply({ account: {} }))
                 .mockResolvedValueOnce(reply({}, 502))
             const failing = (await timed(act('change_limit', { limitValue: 5 }))).response
-            expect(failing.status).toBe(504)
+            expect(failing.status).toBe(502)
             await expect(failing.json()).resolves.toMatchObject({ outcome: 'UNKNOWN' })
         })
 
@@ -2069,9 +2073,6 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
                 id: String(mapping.driverId), fullName: 'Test Driver', phone: null, yandexDriverId: PROFILE,
                 externalDriverProfileId: PROFILE, externalParkId: String(mapping.activeParkId), externalPersonKey: null, contactId: 'contact-1',
             })
-            mocks.authorizeDriverTelegram.mockResolvedValue({
-                chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: String(mapping.driverId), target: '123456',
-            })
             mocks.getYandexConnectionCredentials.mockResolvedValue({ ...connection, parkId: String(mapping.activeParkId) })
             mocks.providerFetch
                 .mockResolvedValueOnce(parkCars(['car-9']))
@@ -2101,7 +2102,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
 
             const { response } = await timed(act('update_driver_car', { carId: 'car-9' }))
 
-            expect(response.status).toBe(504)
+            expect(response.status).toBe(502)
             await expect(response.json()).resolves.toMatchObject({ outcome: 'UNKNOWN' })
         })
 
@@ -2130,6 +2131,38 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
             expect(puts()).toHaveLength(0)
         })
 
+        test('a search whose first page Yandex does not answer is "unavailable", not "no such car"', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(reply({ message: 'busy' }, 429))
+
+            const { response } = await timed(act('search_car_by_plate', { platePrefix: 'ACAR' }))
+
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'Яндекс сейчас не отвечает. Попробуйте позже.' })
+        })
+
+        test('when the listing and profile read leave too little time, the car PUT is not started', async () => {
+            mocks.providerFetch
+                .mockImplementationOnce(slow(3_900, { cars: [{ id: 'car-9' }], total: 1 }))
+                .mockImplementationOnce(slow(3_900, { car_id: 'car-1' }))
+
+            const { response } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(503)
+            expect(puts()).toHaveLength(0)
+        })
+
+        test('a car PUT answered 5xx is an unknown outcome, never success', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(parkCars(['car-9']))
+                .mockResolvedValueOnce(reply({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(reply({ message: 'oops' }, 500))
+
+            const { response } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(502)
+            await expect(response.json()).resolves.toMatchObject({ outcome: 'UNKNOWN' })
+        })
+
         test('a search that runs out of time answers with what it found so far', async () => {
             mocks.providerFetch
                 .mockResolvedValueOnce(reply({ cars: [{ id: 'car-9', number: 'ACAR9' }], total: 5_000 }))
@@ -2144,6 +2177,17 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
     describe('car display (check_link)', () => {
         test('a profile read that never answers shows the link without a car, inside the budget', async () => {
             mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('check_link'))
+
+            await expect(response.json()).resolves.toMatchObject({ linked: true, carInfo: null })
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+        })
+
+        test('the phone fallback of the link row\'s park is bounded too', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ message: 'not found' }, 404))
+                .mockImplementationOnce(hanging())
 
             const { response, elapsed } = await timed(act('check_link'))
 
@@ -2179,6 +2223,19 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
             }))
         })
 
+        test('a dispatch with too little time left (slow authority checks) is not sent', async () => {
+            mocks.authorizeDriverTelegram.mockImplementation(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 4_000))
+                return { chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: telegramId }
+            })
+            mocks.providerFetch.mockResolvedValueOnce(reply({ driver_profiles: [] }))
+
+            const { response } = await timed(act('get_order_price'))
+
+            await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'PROVIDER_SLOW' })
+            expect(calls().some((call) => call.endsWith('/api/driver-actions'))).toBe(false)
+        })
+
         test('a poll the scraper never answers ends after 4 s without a mirror', async () => {
             mocks.providerFetch.mockImplementationOnce(() => new Promise(() => {}))
 
@@ -2187,6 +2244,18 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
             await expect(response.json()).resolves.toMatchObject({ ok: false })
             expect(elapsed).toBeLessThanOrEqual(4_100)
             expect(mocks.mirrorDriverActionResult).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('park switch (set_active_park)', () => {
+        test('the phone check is cut off after 4 s and, as before, does not block the switch', async () => {
+            mocks.findDriver.mockResolvedValue({ phone: '+70000000000', yandexDriverId: PROFILE })
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('set_active_park', { parkId: 'park-1' }))
+
+            await expect(response.json()).resolves.toMatchObject({ success: true })
+            expect(elapsed).toBeLessThanOrEqual(4_100)
         })
     })
 })
