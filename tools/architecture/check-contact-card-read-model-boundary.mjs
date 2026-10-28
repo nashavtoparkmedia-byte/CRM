@@ -38,6 +38,14 @@ const MANIFEST = 'architecture/contexts/v1/manifests/contacts.json'
 const REGISTRY = 'architecture/contracts/v1/registry.json'
 const INTERNAL_IMPORTERS = '<git grep: importers of the card internals outside Contacts>'
 const CONSUMERS = '<git grep: consumers of the card reader outside Contacts>'
+const ALLOWLIST = '<the allowlisted consumers of the card reader>'
+const consumerKey = (relative) => `<consumer source: ${relative}>`
+
+// The runtime files outside Contacts that may use the card reader. EMPTY in CC-1:
+// any file that references the reader is a failure until it is added here AND
+// its content satisfies the exact binding contract below (assertConsumerBinding).
+// A composition is admitted by its own reviewed change (CC-2), never by a count.
+const ALLOWED_CONSUMERS = []
 
 const CAPABILITY = 'ContactCardForConversationQuery.v1'
 const CONTROL = 'node tools/architecture/check-contact-card-read-model-boundary.mjs'
@@ -176,6 +184,70 @@ function assertGovernanceDeclared(sources) {
   assert(surface?.capabilities.includes(CAPABILITY), 'the registry does not list the read capability')
 }
 
+// The one binding a consumer may write: the reader is built over Messaging's RCQ1
+// with RCQ1's own query contract, forwarding the exact Chat.id the reader hands it
+// (which is the query's exact, untrimmed chatId), and nothing else.
+const EXACT_BINDING = /createContactCardForConversationReaderV1\(\s*\(?\s*chatId\s*\)?\s*=>\s*resolveConversationContactV1\(\s*\{\s*contract:\s*RESOLVE_CONVERSATION_CONTACT_QUERY_V1\s*,\s*chatId\s*,?\s*\}\s*\)\s*,?\s*\)/u
+// A reader call: the card query contract and a Chat.id that is an identifier or a
+// property path, never computed (no call, no trim, no fallback operator, no literal).
+const READER_CALL = /^\(\s*\{\s*contract:\s*CONTACT_CARD_FOR_CONVERSATION_QUERY_V1\s*,\s*chatId(?:\s*:\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)?\s*,?\s*\}\s*\)/u
+const REQUIRED_IMPORTS = [
+  [/^import \{[^}]*\bcreateContactCardForConversationReaderV1\b[^}]*\} from '@\/modules\/contacts\/public\/v1'$/mu, 'the reader is not imported from the Contacts public surface'],
+  [/^import \{[^}]*\bresolveConversationContactV1\b[^}]*\} from '@\/modules\/messaging\/public\/v1'$/mu, 'RCQ1 is not imported from the Messaging public surface'],
+  [/^import \{[^}]*\bRESOLVE_CONVERSATION_CONTACT_QUERY_V1\b[^}]*\} from '@\/contracts\/messaging\/v1'$/mu, "RCQ1's query contract is not imported from the Messaging contracts"],
+  [/^import \{[^}]*\bCONTACT_CARD_FOR_CONVERSATION_QUERY_V1\b[^}]*\} from '@\/contracts\/contacts\/v1'$/mu, "the card query contract is not imported from the Contacts contracts"],
+]
+// Identity fallbacks and side channels a consumer may never touch: a phone or
+// name lookup, another Contact resolver, a client-supplied or derived Contact id,
+// a provider id, a direct database read, a client-held operator identity.
+const CONSUMER_FORBIDDEN = [
+  [/\b(resolveContactByPhoneV1|resolveContactV1|resolveChannelContact\w*|findContactByPhone\w*|lookupContact\w*|contactLookup\w*|ContactLookup\w*|searchContacts?\w*|useContactSearch)\b/u, 'a Contact lookup or resolver other than RCQ1'],
+  [/\b\w*[Pp]hone\w*\s*\(/u, 'a phone lookup'],
+  [/\b(externalId|providerAccount\w*|providerUserId|telegramId|telegramUserId|whatsappId|maxUserId|username)\b/u, 'a provider id or username'],
+  [/\bcontactId\b/u, 'a Contact id that does not come from the confirmed card'],
+  [/\bprisma\b|\$queryRaw|\$executeRaw|\bfetch\s*\(/u, 'a direct database read or a network call'],
+  [/crm_user_id|getCurrentUser|user-service|cookies\s*\(|headers\s*\(/u, 'a client-held identity'],
+]
+
+/** One consumer's content against the binding contract. Throws with the reason. */
+function assertConsumerBinding(relative, source) {
+  const code = withoutComments(source)
+  for (const [pattern, reason] of REQUIRED_IMPORTS) assert(pattern.test(code), `${relative}: ${reason}`)
+  const imports = code.match(/^import\b[\s\S]*?\bfrom\s+'[^']+'/gmu) ?? []
+  assert(!imports.some((statement) => /\bas\s+[A-Za-z_$]/u.test(statement)), `${relative}: an import is aliased`)
+  for (const name of ['resolveConversationContactV1', 'RESOLVE_CONVERSATION_CONTACT_QUERY_V1', 'createContactCardForConversationReaderV1', 'CONTACT_CARD_FOR_CONVERSATION_QUERY_V1']) {
+    assert(!new RegExp(`\\b(const|let|var|function|class)\\s+${name}\\b`, 'u').test(code), `${relative}: ${name} is redefined locally`)
+  }
+  assert.equal((code.match(/createContactCardForConversationReaderV1\s*\(/gu) ?? []).length, 1, `${relative}: the reader must be built exactly once`)
+  assert(EXACT_BINDING.test(code), `${relative}: the reader is not bound to RCQ1 on the exact Chat.id`)
+  const declared = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*createContactCardForConversationReaderV1\s*\(/u.exec(code)
+  assert(declared !== null, `${relative}: the bound reader is not held in a const`)
+  const reader = declared[1]
+  const uses = [...code.matchAll(new RegExp(`\\b${reader.replace(/\$/gu, '\\$')}\\b`, 'gu'))]
+  assert(uses.length >= 2, `${relative}: the bound reader is never called`)
+  for (const use of uses.slice(1)) {
+    const rest = code.slice(use.index + reader.length)
+    assert(READER_CALL.test(rest), `${relative}: the reader is passed on or called without an exact card query (Chat.id provenance)`)
+  }
+  const scrubbed = code.replace(/\.card\.contactId\b/gu, '.card.<id>')
+  for (const [pattern, reason] of CONSUMER_FORBIDDEN) assert(!pattern.test(scrubbed), `${relative}: ${reason}`)
+}
+
+/** 7. The reader's consumers fail closed: none unless allowlisted, and every one bound exactly. */
+function assertConsumersFailClosed(sources) {
+  const allowlist = JSON.parse(sources[ALLOWLIST])
+  const consumers = sources[CONSUMERS].trim().split('\n').filter(Boolean).sort()
+  for (const consumer of consumers) {
+    assert(allowlist.includes(consumer), `${consumer} uses the card reader but is not an allowlisted consumer`)
+  }
+  for (const allowed of allowlist) {
+    assert(consumers.includes(allowed), `the allowlisted consumer ${allowed} does not use the card reader (stale allowlist)`)
+    const source = sources[consumerKey(allowed)]
+    assert(typeof source === 'string', `the allowlisted consumer ${allowed} could not be read`)
+    assertConsumerBinding(allowed, source)
+  }
+}
+
 const CHECKS = [
   ['contract_shape', assertContractShape],
   ['handler_protocol', assertHandlerProtocol],
@@ -183,7 +255,61 @@ const CHECKS = [
   ['authority_binding', assertAuthorityBinding],
   ['internal_exposure', assertInternalExposure],
   ['governance_declared', assertGovernanceDeclared],
+  ['consumers_fail_closed', assertConsumersFailClosed],
 ]
+
+// Isolated consumer fixtures for the binding contract. No real consumer exists in
+// CC-1, so these prove now that a future composition is held to it.
+const FIXTURE_PATH = 'gravity-mvp/src/infrastructure/ui/contact-card/contact-card-actions.ts'
+const VALID_CONSUMER = [
+  "'use server'",
+  "import { CONTACT_CARD_FOR_CONVERSATION_QUERY_V1 } from '@/contracts/contacts/v1'",
+  "import { RESOLVE_CONVERSATION_CONTACT_QUERY_V1 } from '@/contracts/messaging/v1'",
+  "import { createContactCardForConversationReaderV1 } from '@/modules/contacts/public/v1'",
+  "import { resolveConversationContactV1 } from '@/modules/messaging/public/v1'",
+  '',
+  'const readContactCard = createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: RESOLVE_CONVERSATION_CONTACT_QUERY_V1, chatId }))',
+  '',
+  'export async function loadContactCardV1(chatId: string) {',
+  '  const result = await readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId })',
+  '  return result.status === \'confirmed\' ? { open: result.card.contactId } : { open: null }',
+  '}',
+  '',
+].join('\n')
+const BINDING = 'createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: RESOLVE_CONVERSATION_CONTACT_QUERY_V1, chatId }))'
+const READ = 'readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId })'
+const swap = (from, to) => {
+  assert(VALID_CONSUMER.includes(from), `fixture anchor missing: ${from}`)
+  return VALID_CONSUMER.replace(from, to)
+}
+const BINDING_FIXTURES = [
+  ['phone_lookup_resolver', swap(BINDING, "createContactCardForConversationReaderV1(async chatId => ({ status: 'resolved', contactId: (await resolveContactByPhoneV1(chatId)).id }))"), 'not bound to RCQ1'],
+  ['client_contact_id_resolver', swap(BINDING, "createContactCardForConversationReaderV1(async () => ({ status: 'resolved', contactId: body.contactId }))"), 'not bound to RCQ1'],
+  ['provider_id_resolver', swap(BINDING, "createContactCardForConversationReaderV1(async chatId => ({ status: 'resolved', contactId: await byExternalId(externalId) }))"), 'not bound to RCQ1'],
+  ['rcq1_on_another_chat', swap(BINDING, 'createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: RESOLVE_CONVERSATION_CONTACT_QUERY_V1, chatId: otherChatId }))'), 'not bound to RCQ1'],
+  ['rcq1_on_trimmed_chat', swap(BINDING, 'createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: RESOLVE_CONVERSATION_CONTACT_QUERY_V1, chatId: chatId.trim() }))'), 'not bound to RCQ1'],
+  ['rcq1_with_fallback', swap(BINDING, "createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: RESOLVE_CONVERSATION_CONTACT_QUERY_V1, chatId }).then(r => r.status === 'resolved' ? r : lookupContactByName(chatId)))"), 'not bound to RCQ1'],
+  ['named_resolver', swap(BINDING, 'createContactCardForConversationReaderV1(anyResolver)'), 'not bound to RCQ1'],
+  ['literal_contract', swap(BINDING, "createContactCardForConversationReaderV1(chatId => resolveConversationContactV1({ contract: 'messaging.ResolveConversationContactQuery.v1', chatId }))"), 'not bound to RCQ1'],
+  ['rcq1_redefined', `${VALID_CONSUMER}\nconst resolveConversationContactV1 = async () => ({ status: 'resolved', contactId: 'someone' })\n`, 'redefined locally'],
+  ['rcq1_from_elsewhere', swap("from '@/modules/messaging/public/v1'", "from './fake-rcq1'"), 'RCQ1 is not imported'],
+  ['aliased_reader', swap('import { createContactCardForConversationReaderV1 }', 'import { createContactCardForConversationReaderV1 as make }'), 'aliased'],
+  ['second_reader', `${VALID_CONSUMER}\nconst rogue = createContactCardForConversationReaderV1(byPhone)\n`, 'built exactly once'],
+  ['chat_id_from_lookup', swap(READ, 'readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId: await chatOfPhone(phone) })'), 'Chat.id provenance'],
+  ['chat_id_trimmed', swap(READ, 'readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId: chatId.trim() })'), 'Chat.id provenance'],
+  ['chat_id_fallback', swap(READ, 'readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId: chatId || lastChatId })'), 'Chat.id provenance'],
+  ['reader_passed_on', swap(READ, 'readContactCard({ contract: CONTACT_CARD_FOR_CONVERSATION_QUERY_V1, chatId })\n  export const leak = readContactCard'), 'Chat.id provenance'],
+  ['client_contact_id_used', swap("{ open: result.card.contactId }", '{ open: request.contactId }'), 'Contact id that does not come from the confirmed card'],
+  ['provider_id_used', swap("{ open: null }", '{ open: identity.externalId }'), 'provider id'],
+  ['phone_lookup_beside', swap("{ open: null }", '{ open: await findByPhone(result) }'), 'phone lookup'],
+  ['database_read', swap("{ open: null }", '{ open: await prisma.chat.findFirst({}) }'), 'direct database read'],
+  ['client_identity', swap("{ open: null }", "{ open: (await cookies()).get('crm_user_id') }"), 'client-held identity'],
+]
+const fixture = (name) => {
+  const found = BINDING_FIXTURES.find(([fixtureName]) => fixtureName === name)
+  assert(found !== undefined, `unknown fixture ${name}`)
+  return found[1]
+}
 
 const PROBES = [
   ['query_accepts_contact_id', 'contract_shape', (s) => ({ ...s, [CONTRACTS]: s[CONTRACTS].replace("  chatId: string\n}", '  chatId: string\n  contactId?: string\n}') })],
@@ -210,6 +336,14 @@ const PROBES = [
   ['foreign_internal_import', 'internal_exposure', (s) => ({ ...s, [INTERNAL_IMPORTERS]: 'gravity-mvp/src/infrastructure/ui/contact-card/actions.ts\n' })],
   ['capability_undeclared', 'governance_declared', (s) => ({ ...s, [MANIFEST]: s[MANIFEST].replace(`"${CAPABILITY}"`, '"ContactSomethingElse.v1"') })],
   ['control_undeclared', 'governance_declared', (s) => ({ ...s, [MANIFEST]: s[MANIFEST].replace(CONTROL, 'node tools/architecture/check-something-else.mjs') })],
+  // A correctly bound consumer is still refused while it is not allowlisted: counting is not admission.
+  ['unknown_valid_consumer', 'consumers_fail_closed', (s) => ({ ...s, [CONSUMERS]: `${FIXTURE_PATH}\n`, [consumerKey(FIXTURE_PATH)]: VALID_CONSUMER })],
+  ['unknown_rogue_consumer', 'consumers_fail_closed', (s) => ({ ...s, [CONSUMERS]: 'gravity-mvp/src/app/api/contact-card/route.ts\n' })],
+  ['stale_allowlist', 'consumers_fail_closed', (s) => ({ ...s, [ALLOWLIST]: JSON.stringify([FIXTURE_PATH]) })],
+  ['allowlisted_phone_resolver', 'consumers_fail_closed', (s) => ({ ...s, [ALLOWLIST]: JSON.stringify([FIXTURE_PATH]), [CONSUMERS]: `${FIXTURE_PATH}\n`, [consumerKey(FIXTURE_PATH)]: fixture('phone_lookup_resolver') })],
+  ['allowlisted_client_contact_id', 'consumers_fail_closed', (s) => ({ ...s, [ALLOWLIST]: JSON.stringify([FIXTURE_PATH]), [CONSUMERS]: `${FIXTURE_PATH}\n`, [consumerKey(FIXTURE_PATH)]: fixture('client_contact_id_resolver') })],
+  ['allowlisted_chat_id_rewritten', 'consumers_fail_closed', (s) => ({ ...s, [ALLOWLIST]: JSON.stringify([FIXTURE_PATH]), [CONSUMERS]: `${FIXTURE_PATH}\n`, [consumerKey(FIXTURE_PATH)]: fixture('chat_id_fallback') })],
+  ['allowlisted_provider_id', 'consumers_fail_closed', (s) => ({ ...s, [ALLOWLIST]: JSON.stringify([FIXTURE_PATH]), [CONSUMERS]: `${FIXTURE_PATH}\n`, [consumerKey(FIXTURE_PATH)]: fixture('provider_id_used') })],
 ]
 
 function gitGrep(args) {
@@ -226,8 +360,14 @@ function main() {
   sources[INTERNAL_IMPORTERS] = gitGrep(['-E',
     'contacts/internal/(contact-card-for-conversation|legacy-prisma-contact-card-source-adapter|identity-access-contact-card-authority)',
     '--', 'gravity-mvp/src', ':(exclude)gravity-mvp/src/modules/contacts'])
-  sources[CONSUMERS] = gitGrep(['-E', 'createContactCardForConversationReaderV1|ContactCardForConversationQuery', '--', 'gravity-mvp/src',
-    ':(exclude)gravity-mvp/src/modules/contacts', ':(exclude)gravity-mvp/src/contracts/contacts', ':(exclude)*.test.ts', ':(exclude)*.test.tsx'])
+  // Every runtime file outside Contacts that names the reader, its resolver type,
+  // the card query or the Contacts application module is a consumer.
+  sources[CONSUMERS] = gitGrep(['-E',
+    'createContactCardForConversationReaderV1|ContactCardConversationResolverV1|ContactCardForConversationQuery|CONTACT_CARD_FOR_CONVERSATION_QUERY_V1|contacts/application/contact-operations',
+    '--', 'gravity-mvp/src', ':(exclude)gravity-mvp/src/modules/contacts', ':(exclude)gravity-mvp/src/contracts/contacts',
+    ':(exclude)*.test.ts', ':(exclude)*.test.tsx'])
+  sources[ALLOWLIST] = JSON.stringify(ALLOWED_CONSUMERS)
+  for (const allowed of ALLOWED_CONSUMERS) sources[consumerKey(allowed)] = read(allowed)
   const checks = new Map(CHECKS)
   for (const [, check] of CHECKS) check(sources)
 
@@ -239,6 +379,16 @@ function main() {
     let caught = false
     try { check(mutated) } catch { caught = true }
     assert(caught, `probe ${name} was not caught by ${checkName}`)
+  }
+
+  // The binding contract against isolated consumer fixtures: the correct binding
+  // passes, and every bypass fails for its own reason.
+  assertConsumerBinding(FIXTURE_PATH, VALID_CONSUMER)
+  for (const [name, source, reason] of BINDING_FIXTURES) {
+    let message = null
+    try { assertConsumerBinding(FIXTURE_PATH, source) } catch (error) { message = String(error?.message ?? error) }
+    assert(message !== null, `binding fixture ${name} was accepted`)
+    assert(message.includes(reason), `binding fixture ${name} failed for the wrong reason: ${message}`)
   }
 
   assert.equal(passingProofCount('\n      Tests  28 passed (28)\n'), 28, 'the plain Vitest summary is no longer parsed')
@@ -260,7 +410,6 @@ function main() {
   const passed = passingProofCount(vitest.stdout)
   assert(passed !== null && passed > 0, `the proofs reported no passing tests:\n${vitest.stdout}`)
 
-  const consumers = sources[CONSUMERS].trim().split('\n').filter(Boolean)
   process.stdout.write(`${JSON.stringify({
     status: 'PASS',
     control: 'contact-card-read-model-boundary',
@@ -272,7 +421,9 @@ function main() {
     card_fields: CARD_FIELDS.length,
     unrestricted_principal_kinds: ['integration_admin_session'],
     internal_names_exported: 0,
-    consumers_outside_contacts: consumers.length,
+    consumers_allowlist: ALLOWED_CONSUMERS,
+    consumers_outside_contacts: sources[CONSUMERS].trim().split('\n').filter(Boolean).length,
+    consumer_binding_fixtures: { valid: 1, rejected: BINDING_FIXTURES.length },
   }, null, 2)}\n`)
 }
 
