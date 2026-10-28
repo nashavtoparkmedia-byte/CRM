@@ -2889,6 +2889,64 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "telegram-simple-link-authority-d0be23e8-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "TELEGRAM_SIMPLE_LINK_AUTHORITY_EXECUTOR_REVIEW_D0BE23E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_SIMPLE_TELEGRAM_AUTHORIZATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain of the driver-actions quick restore at d0be23e8, whose tail is bot-order-actions-own-park-main-e256d14b-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move."
+      },
+      "reason": "Records the source fingerprints the simple Telegram authorization moves without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. 3 reviewed exact-inventory assignments move their bytes and are rebound from their approved fingerprints. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "a28b7cc4397c3c28693d43f89c9097a1dc29932a4aafcf6294ba571ff6de7920",
+          "current_source_sha256": "264bf9eb1db9afd336fb871ba13cdbb1fb9cf3abd96820736b04f32f1df53bca",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28 (simple Telegram authorization): every driver-bot action is authorized by the exact Telegram-to-Driver link, read again at each check, on the canonical Bot transport; a confirmed Contact is no longer required. sync_user links by itself only the single non-dismissed Driver profile that the driver's own verified number names exactly and that no Telegram holds, otherwise it pends the manager as before. In another selected park (D2, Owner GO of the same day) the action acts only on the single non-dismissed row of that park sharing the link row's licence key and exact number, with no person conflict, its own Yandex profile id, no contradicting Contact and Yandex listing that profile with that number in that park; a missing Contact never blocks, and the proof writes nothing. Cash keeps its own Contacts person rule. The park guard, the bounded provider budget, the fail-closed park switch and complete/cancel are unchanged. It adds no credential, no new import module and no new model."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "previous_source_sha256": "a495ab236e266ca26a72d69d0fccd4c3640a40ed2882d6738d5b9ecf7bc91bc2",
+          "current_source_sha256": "b115d4c3bc01d9f1c773e191e14e2a7ece8b431ed439ad3ead5b965908213514",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28: the manager's manual link is one action through the Telegram owner's existing atomic replace command, so a relink ends the previous link of that Driver or Telegram in the same transaction. The integration-admin, same-origin and exact-profile checks are unchanged. It adds no credential and no new model."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "3420851428ea5e7c04112dc74c18f10f2ef0b2f1d3f6e5e76d9bc44f456b80d6",
+          "current_source_sha256": "96942cf023b2f3351896be870960197b107d4f3f384e222cc75b8c0a8d2391e6",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28: the settings-page manual link is one action through the Telegram owner's existing atomic replace command, and links only an existing Driver. Integration-admin access and outbound delivery are unchanged. It adds no credential and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
