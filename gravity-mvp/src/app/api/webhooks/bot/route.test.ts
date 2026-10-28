@@ -992,6 +992,18 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
             expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
         })
 
+        test('a car listing that fails outright binds nothing and asks to try later', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.providerFetch.mockRejectedValueOnce(new Error('socket hang up'))
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'Не удалось проверить автомобиль в Яндексе. Попробуйте позже.' })
+            expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
+        })
+
         test('a car on a later page of the park\'s listing is found and bound', async () => {
             mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
             mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
@@ -1701,6 +1713,30 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             } finally {
                 clock.mockRestore()
             }
+        })
+
+        test('a failed re-read of the link row refuses the change and the dispatch, never as a provider failure', async () => {
+            selectedPark = NASH
+            let reads = 0
+            mocks.findDriver.mockImplementation(async ({ where }: any) => {
+                reads += 1
+                if (reads > 1) throw new Error('connection reset')
+                const found = drivers.find((candidate) => candidate.id === where.id)
+                return found ? { ...found } : null
+            })
+
+            const cash = await act('change_limit', { limitValue: 5 })
+            expect(cash.status).toBe(409)
+            await expect(cash.json()).resolves.toEqual({ error: 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.' })
+            expect(puts()).toHaveLength(0)
+
+            reads = 0
+            const order = await act('get_order_price')
+            await expect(order.json()).resolves.toMatchObject({ ok: false, error: 'YANDEX_PROFILE_PARK_UNPROVEN', status: 'ESCALATED_TO_MANAGER' })
+            expect(scraperBodies()).toHaveLength(0)
+            expect(mocks.recordDriverAction).not.toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ status: 'FAILED' }),
+            }))
         })
 
         test('no task is dispatched when the proof stops holding before dispatch', async () => {

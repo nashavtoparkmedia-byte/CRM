@@ -530,7 +530,13 @@ async function crossParkProofStillHolds(
 ): Promise<boolean> {
     if (!proof) return true
     if (!anchor || Date.now() - proof.provenAt > CROSS_PARK_PROOF_TTL_MS) return false
-    const current: BotDriverRow | null = await prisma.driver.findUnique({ where: { id: anchor.id }, select: BOT_DRIVER_SELECT })
+    let current: BotDriverRow | null
+    try {
+        current = await prisma.driver.findUnique({ where: { id: anchor.id }, select: BOT_DRIVER_SELECT })
+    } catch (error: unknown) {
+        console.warn('[driver-bot] link row not re-read for the cross-park proof:', error instanceof Error ? error.message : String(error))
+        return false
+    }
     if (
         !current
         || current.externalPersonKey !== anchor.externalPersonKey
@@ -572,30 +578,36 @@ async function lookupParkCar(connection: any, carId: string): Promise<
     }
 
     for (let page = 0; page < MAX_PAGES; page++) {
-        const res = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/cars/list', {
-            method: 'POST',
-            cache: 'no-store',
-            headers,
-            body: JSON.stringify({
-                query: { park: { id: connection.parkId } },
-                fields: { car: ['id', 'brand', 'model', 'color', 'year', 'number', 'status'] },
-                limit: PAGE,
-                offset: page * PAGE
+        let data: any
+        try {
+            const res = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/cars/list', {
+                method: 'POST',
+                cache: 'no-store',
+                headers,
+                body: JSON.stringify({
+                    query: { park: { id: connection.parkId } },
+                    fields: { car: ['id', 'brand', 'model', 'color', 'year', 'number', 'status'] },
+                    limit: PAGE,
+                    offset: page * PAGE
+                })
             })
-        })
-        // 429 = rate-limited; other errors abort
-        if (!res.ok) {
-            console.warn('[findCarById] Yandex status', res.status, 'on page', page)
+            // 429 = rate-limited; other errors abort
+            if (!res.ok) {
+                console.warn('[findCarById] Yandex status', res.status, 'on page', page)
+                return { state: 'unavailable' }
+            }
+            data = await res.json()
+        } catch (error: unknown) {
+            console.warn('[findCarById] Yandex car listing failed on page', page, error instanceof Error ? error.message : String(error))
             return { state: 'unavailable' }
         }
-        const data = await res.json()
-        const cars: any[] = data.cars || []
+        const cars: any[] = data?.cars || []
         const found = cars.find((c: any) => c.id === carId)
         if (found) {
             return { state: 'found', car: { brand: found.brand, model: found.model, plate: found.number, color: found.color, year: found.year } }
         }
         // Use ?? null to distinguish "total=0" from "total missing"
-        const total: number | null = data.total ?? null
+        const total: number | null = data?.total ?? null
         if (total !== null && page * PAGE + cars.length >= total) return { state: 'absent' }
         if (total === null && cars.length < PAGE) return { state: 'absent' } // last page (no total field)
     }
