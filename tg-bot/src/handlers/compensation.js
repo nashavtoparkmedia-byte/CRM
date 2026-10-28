@@ -46,11 +46,18 @@ const STATUS_TEXT = {
     rejected: 'отклонена',
 };
 
+// identity_needs_review comes only after the CRM confirmed this chat's person
+// as the linked driver's main driver: what it refuses is a contact joined to
+// others by a merge, or a merge chain it cannot walk. So the link is named as
+// confirmed, and nothing promises that a manager's usual confirmation lifts it.
+// Orchestrator-approved text, the same at every step.
+const MERGE_HISTORY_TEXT = 'Связь Telegram с вашим профилем водителя подтверждена. Однако для участия в программе компенсации требуется дополнительная проверка истории объединения учётных записей. Пока подать заявку нельзя. Обратитесь к менеджеру';
+
 // Refusals arrive as codes. A driver needs a sentence, and a sentence that
 // tells them what to do next rather than what the system checked.
 const REFUSAL_TEXT = {
     identity_not_proven: 'Профиль не привязан. Откройте «Мой автомобиль» и поделитесь номером.',
-    identity_needs_review: 'Ваш профиль нужно проверить. Напишите менеджеру.',
+    identity_needs_review: MERGE_HISTORY_TEXT,
     identity_busy: 'Профиль сейчас обновляется. Попробуйте через минуту.',
     park_not_selected: 'Сначала выберите парк.',
     selected_park_profile_unproven: 'В выбранном парке компенсация пока недоступна для вашего подтверждённого профиля. Переключите парк или напишите менеджеру.',
@@ -140,9 +147,9 @@ const ACCESS_RESTRICTIONS = {
         reason: VERIFY_REASON,
         action: 'откройте «🚘 Мой автомобиль», поделитесь номером телефона и обратитесь к менеджеру для подтверждения привязки.',
     },
-    // Linked, but the CRM cannot bind the chat to one person: only a manager can
-    // resolve that, and sharing the number again would change nothing.
-    identity_needs_review: { reason: VERIFY_REASON, action: 'напишите менеджеру: ваш профиль нужно проверить.' },
+    // Linked and confirmed, but the person's contact carries a merge history the
+    // CRM will not bind money to: its own sentence, not the unlinked one.
+    identity_needs_review: { text: MERGE_HISTORY_TEXT },
     park_not_selected: { reason: 'в боте не выбран парк.', action: 'выберите парк кнопкой ниже.', choosePark: true },
     selected_park_profile_unproven: {
         reason: 'в выбранном парке не найден ваш подтверждённый профиль водителя.',
@@ -221,6 +228,7 @@ function refusalText(code) {
 }
 
 function restrictedText(restriction) {
+    if (restriction.text) return `${RESTRICTED_BANNER}\n\n${restriction.text}`;
     return `${RESTRICTED_BANNER}\n\nСейчас подать заявку нельзя.\nПричина: ${restriction.reason}\nЧто делать: ${restriction.action}`;
 }
 
