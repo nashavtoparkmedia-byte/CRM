@@ -2248,14 +2248,171 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
     })
 
     describe('park switch (set_active_park)', () => {
-        test('the phone check is cut off after 4 s and, as before, does not block the switch', async () => {
-            mocks.findDriver.mockResolvedValue({ phone: '+70000000000', yandexDriverId: PROFILE })
+        const OTHER = 'park-2'
+        const listed = (...phones: string[]) => reply({ driver_profiles: phones.map((phone) => ({ driver_profile: { id: 'p', phones: [phone] } })) })
+        const switched = () => mocks.patchDriverTelegramLink.mock.calls.length
+
+        beforeEach(() => {
+            mocks.findDriver.mockResolvedValue({ phone: '+70000000000', externalParkId: 'park-1', dismissedAt: null })
+            mocks.getYandexConnectionCredentials.mockResolvedValue({ ...connection, parkId: OTHER, name: 'Other park' })
+        })
+
+        test('a phone check that never answers ends after 4 s and does not switch the park', async () => {
             mocks.providerFetch.mockImplementationOnce(hanging())
 
-            const { response, elapsed } = await timed(act('set_active_park', { parkId: 'park-1' }))
+            const { response, elapsed } = await timed(act('set_active_park', { parkId: OTHER }))
 
-            await expect(response.json()).resolves.toMatchObject({ success: true })
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'PARK_MEMBERSHIP_UNKNOWN' })
+            expect(switched()).toBe(0)
             expect(elapsed).toBeLessThanOrEqual(4_100)
+        })
+
+        test.each([429, 500, 502, 401, 403])('a phone check answered %i does not switch the park', async (status) => {
+            mocks.providerFetch.mockResolvedValueOnce(reply({ message: 'no' }, status))
+
+            const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+            expect(response.status).toBe(503)
+            expect(switched()).toBe(0)
+        })
+
+        test('a refused connection, a malformed body or a body that cannot be read does not switch the park', async () => {
+            mocks.providerFetch.mockRejectedValueOnce(new Error('ECONNRESET'))
+            expect((await timed(act('set_active_park', { parkId: OTHER }))).response.status).toBe(503)
+
+            mocks.providerFetch.mockResolvedValueOnce(reply({ profiles: [] }))
+            expect((await timed(act('set_active_park', { parkId: OTHER }))).response.status).toBe(503)
+
+            mocks.providerFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => { throw new Error('bad json') } })
+            expect((await timed(act('set_active_park', { parkId: OTHER }))).response.status).toBe(503)
+
+            mocks.providerFetch.mockResolvedValueOnce(reply({ driver_profiles: [{ driver_profile: null }] }))
+            expect((await timed(act('set_active_park', { parkId: OTHER }))).response.status).toBe(403)
+            expect(switched()).toBe(0)
+        })
+
+        test('a driver with no phone cannot enter another park unproven', async () => {
+            mocks.findDriver.mockResolvedValue({ phone: null, externalParkId: 'park-1', dismissedAt: null })
+
+            const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+            expect(response.status).toBe(503)
+            expect(calls()).toHaveLength(0)
+            expect(switched()).toBe(0)
+        })
+
+        test('a definite "not in this park" still answers NOT_IN_PARK', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(listed('+79999999999'))
+
+            const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+            expect(response.status).toBe(403)
+            await expect(response.json()).resolves.toEqual({ error: 'NOT_IN_PARK', parkName: 'Other park' })
+            expect(switched()).toBe(0)
+        })
+
+        test.each(['   ', '0000', '+1 (555) 01'])('a stored phone that is no phone number (%j) proves nothing, whatever Yandex lists', async (phone) => {
+            mocks.findDriver.mockResolvedValue({ phone, externalParkId: 'park-1', dismissedAt: null })
+            mocks.providerFetch.mockResolvedValue(listed('+70000000000', '+79990000000'))
+
+            const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+            expect(response.status).toBe(503)
+            expect(calls()).toHaveLength(0)
+            expect(switched()).toBe(0)
+        })
+
+        test('the same number in another format is a match; a number that only contains it is not', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(listed('8 (000) 000-00-00'))
+            await expect((await timed(act('set_active_park', { parkId: OTHER }))).response.json()).resolves.toMatchObject({ success: true })
+
+            mocks.providerFetch.mockResolvedValueOnce(listed('+7 (000) 000-00-001'))
+            expect((await timed(act('set_active_park', { parkId: OTHER }))).response.status).toBe(403)
+            expect(switched()).toBe(1)
+        })
+
+        test('a definite match switches the park', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(listed('+7 (000) 000-00-00'))
+
+            const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+            await expect(response.json()).resolves.toEqual({ success: true, parkName: 'Other park' })
+            expect(mocks.patchDriverTelegramLink).toHaveBeenCalledWith(expect.objectContaining({
+                mappingId: 'mapping-1', patch: { activeParkId: OTHER, carLabel: null, carId: null },
+            }))
+        })
+
+        test('the link row\'s own park switches without a provider call, even while Yandex is down', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue({ ...connection, name: 'Own park' })
+
+            const { response } = await timed(act('set_active_park', { parkId: 'park-1' }))
+
+            await expect(response.json()).resolves.toEqual({ success: true, parkName: 'Own park' })
+            expect(calls()).toHaveLength(0)
+            expect(switched()).toBe(1)
+        })
+
+        test('a dismissed link row is not a member of its own park without a match', async () => {
+            mocks.findDriver.mockResolvedValue({ phone: '+70000000000', externalParkId: 'park-1', dismissedAt: new Date() })
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response } = await timed(act('set_active_park', { parkId: 'park-1' }))
+
+            expect(response.status).toBe(503)
+            expect(switched()).toBe(0)
+        })
+
+        describe('a link row with no recorded park', () => {
+            const OWN = 'fedcba9876543210fedcba9876543210'
+            const listedAs = (id: string, phone: string) => reply({ driver_profiles: [{ driver_profile: { id, phones: [phone] } }] })
+
+            beforeEach(() => {
+                mocks.findDriver.mockResolvedValue({ phone: '+70000000000', externalParkId: null, dismissedAt: null, yandexDriverId: OWN, externalDriverProfileId: null })
+            })
+
+            test('enters a park only where Yandex lists its own profile with its phone', async () => {
+                mocks.providerFetch.mockResolvedValueOnce(listedAs(OWN, '+7 (000) 000-00-00'))
+
+                const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+                await expect(response.json()).resolves.toEqual({ success: true, parkName: 'Other park' })
+                expect(switched()).toBe(1)
+            })
+
+            test('its phone under another profile does not make the park its own', async () => {
+                mocks.providerFetch.mockResolvedValueOnce(listedAs(PROFILE, '+70000000000'))
+
+                const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+                expect(response.status).toBe(403)
+                await expect(response.json()).resolves.toEqual({ error: 'NOT_IN_PARK', parkName: 'Other park' })
+                expect(switched()).toBe(0)
+            })
+
+            test.each([
+                ['no Yandex profile id of its own', { yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalParkId: '  ' }],
+                ['no Driver row at all', null],
+            ])('with %s it cannot select any park', async (_case, override) => {
+                mocks.findDriver.mockResolvedValue(override && { phone: '+70000000000', dismissedAt: null, externalDriverProfileId: null, ...override })
+                mocks.providerFetch.mockResolvedValue(listedAs(OWN, '+70000000000'))
+
+                const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+                expect(response.status).toBe(503)
+                await expect(response.json()).resolves.toEqual({ error: 'PARK_MEMBERSHIP_UNKNOWN' })
+                expect(calls()).toHaveLength(0)
+                expect(switched()).toBe(0)
+            })
+
+            test('a check that never answers does not switch it', async () => {
+                mocks.providerFetch.mockImplementationOnce(hanging())
+
+                const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+                expect(response.status).toBe(503)
+                expect(switched()).toBe(0)
+            })
         })
     })
 })

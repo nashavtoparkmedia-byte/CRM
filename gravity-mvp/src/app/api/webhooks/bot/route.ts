@@ -169,7 +169,7 @@ const PROFILE_PARK_UNPROVEN_TEXT = 'Ваш профиль в выбранном 
  * something only in the park of the Driver row it came from, so a selected
  * park that differs from that park is refused rather than guessed, and no
  * default park is ever chosen. A legacy row with no recorded park acts in the
- * park the driver selected, where set_active_park checked the driver's phone.
+ * park the driver selected, where set_active_park found the row's own profile.
  */
 function driverYandexTarget(driver: {
     yandexDriverId: string | null
@@ -1688,46 +1688,29 @@ async function handleSetActivePark(payload: any) {
     const park = await getYandexConnectionCredentialsV1(undefined, parkId)
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
-    // Verify driver exists in this park via Yandex Fleet
-    try {
-        const driver = await prisma.driver.findUnique({
-            where: { id: mapping.driverId },
-            select: { phone: true, yandexDriverId: true }
-        })
-        const phone = driver?.phone
-        if (phone) {
-            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: {
-                    'X-Client-ID': park.clid,
-                    'X-Api-Key': park.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: { park: { id: parkId }, text: phone },
-                    fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
-                    limit: 5, offset: 0
-                }),
-                signal: providerSignal(providerDeadline()),
-            })
-            if (searchRes.ok) {
-                const searchData = await searchRes.json()
-                const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
-                const found = (searchData.driver_profiles || []).some((p: any) =>
-                    (p.driver_profile.phones || []).some((ph: string) =>
-                        ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone)
-                    )
-                )
-                if (!found) {
-                    console.log(`[setActivePark] driver phone ${phone} not found in park ${parkId}`)
-                    return NextResponse.json({ error: 'NOT_IN_PARK', parkName: park.name || parkId }, { status: 403 })
-                }
-            }
+    // The link row's own park needs no provider call. Any other park is entered
+    // only when Yandex names the driver's phone there: an answer that proves
+    // nothing (no phone, timeout, error, malformed body) never switches the park.
+    // A row with no recorded park acts in the park it selects (driverYandexTarget),
+    // so for it Yandex must list the row's own profile there, not just its phone.
+    const driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { phone: true, externalParkId: true, dismissedAt: true, yandexDriverId: true, externalDriverProfileId: true }
+    })
+    const recordedPark = driver?.externalParkId?.trim() || null
+    const ownPark = !!driver && recordedPark === parkId && driver.dismissedAt === null
+    if (!ownPark) {
+        const ownProfileId = recordedPark ? null : yandexContractorProfileId(driver)
+        if (!recordedPark && !ownProfileId) {
+            return NextResponse.json({ error: 'PARK_MEMBERSHIP_UNKNOWN' }, { status: 503 })
         }
-    } catch (err: any) {
-        console.error('[setActivePark] park validation error:', err.message)
-        // Don't block if Yandex check fails — allow the switch
+        const membership = await yandexParkMembership(park, parkId, driver?.phone ?? null, ownProfileId)
+        if (membership === 'absent') {
+            return NextResponse.json({ error: 'NOT_IN_PARK', parkName: park.name || parkId }, { status: 403 })
+        }
+        if (membership !== 'member') {
+            return NextResponse.json({ error: 'PARK_MEMBERSHIP_UNKNOWN' }, { status: 503 })
+        }
     }
 
     const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
@@ -1737,6 +1720,54 @@ async function handleSetActivePark(payload: any) {
     if (mutationAuthorityFailure) return mutationAuthorityFailure
     await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
+}
+
+/**
+ * Whether Yandex lists a profile with the driver's phone in the park, and,
+ * when profileId is given, whether that profile is this one. Only a 2xx
+ * answer with a profile list is an answer; everything else is 'unknown'.
+ */
+async function yandexParkMembership(
+    park: { clid: string; apiKey: string },
+    parkId: string,
+    phone: string | null,
+    profileId: string | null,
+): Promise<'member' | 'absent' | 'unknown'> {
+    const phoneKey = normalizePhoneE164(phone)
+    if (!phoneKey) return 'unknown'
+    try {
+        const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+            method: 'POST',
+            headers: {
+                'X-Client-ID': park.clid,
+                'X-Api-Key': park.apiKey,
+                'Accept-Language': 'ru',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: { park: { id: parkId }, text: phone },
+                fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
+                limit: 5, offset: 0
+            }),
+            signal: providerSignal(providerDeadline()),
+        })
+        if (!searchRes.ok) {
+            console.warn(`[setActivePark] membership check answered ${searchRes.status}`)
+            return 'unknown'
+        }
+        const profiles = (await searchRes.json())?.driver_profiles
+        if (!Array.isArray(profiles)) return 'unknown'
+        const found = profiles.some((p: any) =>
+            (!profileId || p?.driver_profile?.id === profileId)
+            && (p?.driver_profile?.phones || []).some((ph: unknown) =>
+                typeof ph === 'string' && normalizePhoneE164(ph) === phoneKey
+            )
+        )
+        return found ? 'member' : 'absent'
+    } catch (err: any) {
+        console.error('[setActivePark] park validation error:', err?.message)
+        return 'unknown'
+    }
 }
 
 async function handleGetParkInfo(payload: any) {
