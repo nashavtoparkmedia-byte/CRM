@@ -2759,6 +2759,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "bot-park-switch-membership-fail-closed-main-e256d14b-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "BOT_PARK_SWITCH_MEMBERSHIP_FAIL_CLOSED_EXECUTOR_REVIEW_E256D14B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_REGRESSION_01_MEMBERSHIP_FAIL_CLOSED_IMPLEMENTATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at e256d14b, whose tail is bot-driver-actions-multipark-person-row-main-e256d14b-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint bot-driver-actions-multipark-person-row-main-e256d14b-20261028 approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,714 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint: the driver bot's park switch enters a park other than the link row's own only on a definite Yandex membership answer and otherwise refuses with no write. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "227d4227cdce7526d3cbceed88ce59da3ae76b5283ee2192f726d81b8f2cf98a",
+          "current_source_sha256": "0e6e35047bb75482e5a0422d1e73ac11c1f12ea1bed14636da543b0a30ceb927",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook keeps its single current-authority implementation, every authority check, the park guard and the cross-park proof unchanged, and the pinned park-switch write is byte-identical. set_active_park enters the link row's own park, when the row is not dismissed, with no provider call. Any other park needs a 2xx Yandex profile list naming the driver's phone as an exact E.164 key, and, for a row with no recorded park, the row's own Yandex profile id. A definite absence answers NOT_IN_PARK; a timeout, an error, a non-2xx, a malformed body or a missing phone or profile answers PARK_MEMBERSHIP_UNKNOWN with no write, where before each of these switched the park. It reads two more columns of the same Driver model and adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
