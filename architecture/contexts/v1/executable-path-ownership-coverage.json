@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2714,
-    "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4"
+    "tracked_executable_surfaces": 2724,
+    "tracked_inventory_sha256": "3defee9a6591935ae78b71647b1de384ccd6c326ec0ffa8197c8d68ac5d0bf0f"
   },
   "governed_exclusions": [
     {
@@ -281,22 +281,22 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f",
+  "coverage_sha256": "5f83e356994d0c294af44ce6947b68c612ef6ed0eba3cb2e30acfc1f5be785a0",
   "summary": {
-    "tracked_executable_surfaces": 2714,
-    "context_owned_paths": 1477,
-    "governed_exclusion_paths": 1237
+    "tracked_executable_surfaces": 2724,
+    "context_owned_paths": 1486,
+    "governed_exclusion_paths": 1238
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
     "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
-    "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+    "tracked_inventory_sha256": "3defee9a6591935ae78b71647b1de384ccd6c326ec0ffa8197c8d68ac5d0bf0f",
     "exact_inventory_change_count": 4,
     "reviewed_assignment_count": 304,
     "amendments_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
-    "amendments_sha256": "d222204fd835cc9d380c43928b0e222b314c2d6095ca240c17a210ec69486e12",
-    "amendment_count": 33
+    "amendments_sha256": "d6f1288087356d78bed1d9f70f23d1befca78c1b49774ec32b99a71a825e9c48",
+    "amendment_count": 34
   }
 }

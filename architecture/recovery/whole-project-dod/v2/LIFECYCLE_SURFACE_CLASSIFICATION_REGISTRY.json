@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 736,
+    "total_entries": 737,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 86,
-    "active_operational": 514,
+    "active_operational": 515,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6721,6 +6721,15 @@
       "rationale": "Security's shared read-only P0 invariant checker p0-invariant/v1 (content owner Security, contract in CONTRACT.md beside it), byte-identical to the Security release and versioned with its approved-template list; the Cash perimeter scripts verify both SHA-256 values and run it under env -i on the production host. It parses nginx templates and renders, inspects file ownership and modes, runs nginx -T and anonymous probes inside the nginx container; it never writes, never prints credential material and reads no database or environment secret. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "platform_operations"
+    },
+    {
+      "path": "tools/architecture/check-contact-card-read-model-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the CC-1 Contact Card read model; approved path is a bounded read-only boundary control that pins the exact ContactCardForConversationQuery.v1 query (an exact Chat.id only), its six answer states and the minimal card and channel field sets, the absence of provider, transport, conversation and driver vocabulary from the contract, the handler protocol order (verified principal first, conversation access before RCQ1, Contact access before any Contact read, exactly one read of the Contact RCQ1 named, and a second RCQ1 resolution that must name the same Contact), the single Contacts-owned reader that reads Contact and ContactMerge by exact id in one REPEATABLE READ snapshot without any provider external id and without any write or raw SQL, the production authority bound only to the Identity Access signed integration-admin principal and never to crm_user_id, a cookie, a header or a mobile session, the internal placement of the handler, its ports and bindings with only the bound reader public, and the declaration of the capability and this control. It also executes the contract, handler, RCQ1 composition, adapter, authority, evidence-state and RCQ1 proofs. It writes no repository evidence, grants no application-runtime write and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
     }
   ]
 }
