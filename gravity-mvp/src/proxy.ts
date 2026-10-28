@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import {
+    LEGACY_UI_IDENTITY_COOKIE_V1,
     MOBILE_SESSION_COOKIE,
-    verifyMobileSession,
+    withLegacyUiIdentityCookieV1,
 } from '@/modules/identity-access/public/v1/mobile-session-credentials'
+import { resolveCookieOperatorV1 } from '@/modules/identity-access/public/v1/mobile-session-operator'
 
 /**
  * Request boundary for the application.
@@ -34,10 +36,29 @@ import {
  *
  * ## What this does NOT do
  *
- * It does not authenticate the browser lane. A desktop request is untouched and
- * still reaches everything unauthenticated, exactly as before. This narrows the
+ * It does not authenticate the browser lane. A desktop request without a mobile
+ * session cookie is untouched and still reaches everything unauthenticated,
+ * exactly as before. This narrows the
  * surface the shell adds; it does not close the CRM's own hole, which needs a
  * CRM-wide identity project.
+ *
+ * ## BR-4: the signed operator is the request's operator
+ *
+ * A request that carries a valid, not logged-out mobile session acts as that
+ * session's signed operator, whatever its User-Agent says. Most of the CRM
+ * reads the actor from the unsigned `crm_user_id` cookie, so a
+ * Set-Cookie on the response would correct only the NEXT request. Instead, the
+ * incoming request is rewritten: its Cookie header goes downstream with exactly
+ * one `crm_user_id`, the signed operator. Route handlers, server components
+ * and Server Actions of this same request read that value through `cookies()`.
+ * A session cookie that is present but grants nothing (tampered, expired,
+ * revoked, logged out) sends the request downstream with no `crm_user_id` at
+ * all. Without a session cookie, a browser request is passed through as before.
+ *
+ * When the logout barrier cannot be read (database unavailable) the session is
+ * refused all the same, but the shell lane is answered 503 rather than 401/303:
+ * the shell treats the login screen as the end of its session and resets the
+ * device, and an outage is not a logout.
  *
  * ## Why keying on a client-supplied marker is sound
  *
@@ -75,29 +96,82 @@ const SHELL_PUBLIC_PREFIXES = [
     '/favicon.ico',
 ]
 
+const SERVICE_UNAVAILABLE_PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1"><title>YOKO CRM</title></head>'
+    + '<body style="font-family:system-ui,sans-serif;color:#0F172A;padding:24px">'
+    + '<p style="font-size:15px">CRM временно недоступна. Повторите через несколько секунд.</p></body></html>'
+
 function isShellRequest(request: NextRequest): boolean {
     return (request.headers.get('user-agent') ?? '').includes(MOBILE_SHELL_UA_TOKEN)
 }
 
-function hasValidMobileSession(request: NextRequest): boolean {
-    return verifyMobileSession(request.cookies.get(MOBILE_SESSION_COOKIE)?.value) !== null
+/**
+ * Pass the request downstream with its Cookie header carrying exactly
+ * `operatorId` as `crm_user_id`, or no `crm_user_id` when null.
+ */
+function forwardWithOperator(request: NextRequest, operatorId: string | null): NextResponse {
+    const headers = new Headers(request.headers)
+    const cookie = withLegacyUiIdentityCookieV1(request.headers.get('cookie'), operatorId)
+    if (cookie) headers.set('cookie', cookie)
+    else headers.delete('cookie')
+    const response = NextResponse.next({ request: { headers } })
+    // Keep the browser's copy, which the Messenger reads from document.cookie,
+    // in step with the session. Only on reads: a POST may be the Server Action
+    // that logs in or out, and its own Set-Cookie must not be contradicted.
+    const method = request.method.toUpperCase()
+    if (
+        operatorId !== null
+        && (method === 'GET' || method === 'HEAD')
+        && request.cookies.get(LEGACY_UI_IDENTITY_COOKIE_V1)?.value !== operatorId
+    ) {
+        response.cookies.set(LEGACY_UI_IDENTITY_COOKIE_V1, operatorId, {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+        })
+    }
+    return response
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     if (pathname.startsWith('/api/debug-db')) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    // The browser lane is deliberately unchanged.
-    if (!isShellRequest(request)) return NextResponse.next()
+    const shell = isShellRequest(request)
+    const sessionCookie = request.cookies.get(MOBILE_SESSION_COOKIE)?.value
 
-    if (SHELL_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-        return NextResponse.next()
+    // The browser lane without a mobile session is deliberately unchanged.
+    if (!shell && sessionCookie === undefined) return NextResponse.next()
+
+    const operator = await resolveCookieOperatorV1(
+        sessionCookie,
+        request.cookies.get(LEGACY_UI_IDENTITY_COOKIE_V1)?.value,
+    )
+    if (operator.kind === 'mobile_session') return forwardWithOperator(request, operator.operatorId)
+
+    // From here the request has no signed operator: no session at all in the
+    // shell lane, or a session cookie that grants nothing in either lane. It
+    // never reaches anything with an identity it could choose itself.
+    if (!shell || SHELL_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+        return forwardWithOperator(request, null)
     }
 
-    if (hasValidMobileSession(request)) return NextResponse.next()
+    // The session could not be checked, not found dead: say the service is
+    // unavailable, so the shell keeps its session and retries.
+    if (operator.kind === 'mobile_session_refused' && operator.unverifiable) {
+        const headers = { 'retry-after': '5', 'cache-control': 'no-store' }
+        if (pathname.startsWith('/api/')) {
+            return NextResponse.json({ error: 'mobile_session_unverifiable' }, { status: 503, headers })
+        }
+        return new NextResponse(SERVICE_UNAVAILABLE_PAGE, {
+            status: 503,
+            headers: { ...headers, 'content-type': 'text/html; charset=utf-8' },
+        })
+    }
 
     // An API caller gets a status it can act on; anything that renders gets the
     // login screen, carrying where it was going so login can finish the journey.

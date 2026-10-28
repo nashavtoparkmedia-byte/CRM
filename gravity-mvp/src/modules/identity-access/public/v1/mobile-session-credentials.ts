@@ -389,3 +389,60 @@ export function currentMobilePushCredentialFactsV1(
     if (!config) return null
     return { credentialSubject: config.username }
 }
+
+// ── BR-4: the effective operator of a request ───────────────────────────────
+
+/** The unsigned UI identity selector the legacy CRM reads. Never an authority on its own. */
+export const LEGACY_UI_IDENTITY_COOKIE_V1 = 'crm_user_id'
+
+/**
+ * Who a request acts as, from its cookies alone.
+ *
+ * - `mobile_session`: a signed mobile session verified; its `op` is the operator,
+ *   whatever `crm_user_id` says and whatever the request's User-Agent claims.
+ * - `mobile_session_refused`: a session cookie is present but does not verify
+ *   (tampered, expired, epoch bumped, credential rotated, cleared). The request
+ *   has no operator: falling back to `crm_user_id` would turn a dead mobile
+ *   session into a free choice of identity.
+ * - `legacy`: no session cookie at all. This is the browser lane, unchanged.
+ *
+ * Revocation by logout is not visible here (it is server state); callers that
+ * act on a `mobile_session` must also consult the logout barrier.
+ */
+export type EffectiveOperatorResolutionV1 =
+    | { kind: 'mobile_session', operatorId: string, principal: MobileSessionPrincipalV1 }
+    | { kind: 'mobile_session_refused' }
+    | { kind: 'legacy', operatorId: string | null }
+
+export function resolveEffectiveOperatorV1(
+    input: { sessionCookie: string | undefined, legacyCookie: string | undefined },
+    env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
+    nowMs = Date.now(),
+): EffectiveOperatorResolutionV1 {
+    if (input.sessionCookie === undefined) {
+        return { kind: 'legacy', operatorId: input.legacyCookie || null }
+    }
+    const principal = verifyMobileSession(input.sessionCookie, env, nowMs)
+    if (!principal) return { kind: 'mobile_session_refused' }
+    return { kind: 'mobile_session', operatorId: principal.runtimeOperatorId, principal }
+}
+
+/**
+ * Rebuild a Cookie request header so that it carries exactly one
+ * `crm_user_id`, equal to `operatorId`, or none when `operatorId` is null.
+ *
+ * Every other pair is kept byte for byte and in order. All `crm_user_id` pairs
+ * are removed first, because a browser may send several (one per path or
+ * domain) and readers take whichever comes first.
+ */
+export function withLegacyUiIdentityCookieV1(cookieHeader: string | null, operatorId: string | null): string {
+    if (operatorId !== null && !isSafeRuntimeOperatorId(operatorId)) {
+        throw new TypeError('operatorId is not a safe runtime operator id')
+    }
+    const kept = (cookieHeader ?? '')
+        .split(';')
+        .map((pair) => pair.trim())
+        .filter((pair) => pair !== '' && pair.split('=', 1)[0].trim() !== LEGACY_UI_IDENTITY_COOKIE_V1)
+    if (operatorId !== null) kept.push(`${LEGACY_UI_IDENTITY_COOKIE_V1}=${operatorId}`)
+    return kept.join('; ')
+}
