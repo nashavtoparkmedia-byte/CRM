@@ -1475,10 +1475,14 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             select: BOT_DRIVER_SELECT,
         })
     }
-    // In another park of the same person the action runs, and is audited, on
-    // that park's own Driver row; the task is fixed to it when dispatched.
+    // In another park of the same person the order card runs, and is audited,
+    // on that park's own Driver row; the task is fixed to it when dispatched.
+    // Completing or cancelling an order stays in the link row's own park until
+    // those actions are guarded against acting twice or on another order.
     const anchor = driver
-    const acting = await botActingDriver(payload, mapping, telegramIdBigInt, anchor)
+    const acting = kind === 'GET_PRICE'
+        ? await botActingDriver(payload, mapping, telegramIdBigInt, anchor)
+        : { driver: anchor, crossPark: null }
     driver = acting.driver
     const target = driverYandexTarget(driver, mapping.activeParkId)
     if (driver && !target.ok && target.reason === 'PARK_UNPROVEN') {

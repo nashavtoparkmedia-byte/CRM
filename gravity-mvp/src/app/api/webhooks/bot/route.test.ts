@@ -1487,6 +1487,30 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             expect(calls.some((call) => call.url.endsWith('/v1/parks/driver-profiles/list'))).toBe(false)
         })
 
+        test.each([
+            ['complete_order', NASH], ['cancel_order', NASH], ['complete_order', YOKO2], ['cancel_order', YOKO2],
+        ])('%s in %s stays in the link row\'s own park: nothing is sent to the scraper', async (action, park) => {
+            selectedPark = park
+
+            const response = await act(action)
+
+            await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'YANDEX_PROFILE_PARK_UNPROVEN' })
+            expect(scraperBodies()).toEqual([])
+            expect(mocks.findDrivers).not.toHaveBeenCalled()
+            expect(touches(PROFILE[park]) || touches(PROFILE[YOKO])).toBe(false)
+        })
+
+        test('complete and cancel in the link row\'s own park work exactly as before', async () => {
+            const done = await act('complete_order')
+            await expect(done.json()).resolves.toMatchObject({ ok: true, status: 'PENDING' })
+            const cancelled = await act('cancel_order')
+            await expect(cancelled.json()).resolves.toMatchObject({ ok: true, status: 'PENDING' })
+            expect(scraperBodies()).toEqual([
+                expect.objectContaining({ kind: 'COMPLETE_ORDER', driverYandexId: PROFILE[YOKO], parkId: YOKO }),
+                expect.objectContaining({ kind: 'CANCEL_ORDER', driverYandexId: PROFILE[YOKO], parkId: YOKO }),
+            ])
+        })
+
         test('the proof asks for exactly the proven person\'s confirmed row in the selected park', async () => {
             selectedPark = NASH
 
