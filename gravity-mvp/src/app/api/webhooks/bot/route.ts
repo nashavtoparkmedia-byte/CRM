@@ -229,6 +229,7 @@ async function handleCheckLink(payload: any) {
 
     let driverName = mapping.username || null
     let carInfo: string | null = null
+    const deadline = providerDeadline()
 
     // Return cached car label immediately — avoids 9 sequential Yandex API calls
     // which (a) trigger 429 rate-limiting and (b) cost ~5 seconds per check_link.
@@ -295,7 +296,7 @@ async function handleCheckLink(payload: any) {
 
             // Use v2 API (same as CRM UI) — reliably returns car_id
             const v2Url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${yandexContractorId}`
-            const v2Res = await fetch(v2Url, { method: 'GET', headers })
+            const v2Res = await fetch(v2Url, { method: 'GET', headers, signal: providerSignal(deadline) })
 
             if (v2Res.ok) {
                 const p = await v2Res.json()
@@ -310,7 +311,7 @@ async function handleCheckLink(payload: any) {
                 const carId = p.car_id
                 if (carId) {
                     console.log('[check_link] car_id from v2:', carId)
-                    const car = await findCarById(connection, carId)
+                    const car = await findCarById(connection, carId, deadline)
                     if (car) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
@@ -349,7 +350,8 @@ async function handleCheckLink(payload: any) {
                                     query: { park: { id: connection.parkId }, text: phone },
                                     fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                                     limit: 5, offset: 0
-                                })
+                                }),
+                                signal: providerSignal(deadline),
                             })
                             if (searchRes.ok) {
                                 const searchData = await searchRes.json()
@@ -357,7 +359,7 @@ async function handleCheckLink(payload: any) {
                                 if (matched) {
                                     const carId = matched.car?.id
                                     if (carId) {
-                                        const car = await findCarById(connection, carId)
+                                        const car = await findCarById(connection, carId, deadline)
                                         if (car) {
                                             carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                                             console.log('[check_link] phone-search fallback car:', carInfo)
@@ -552,9 +554,88 @@ async function crossParkProofStillHolds(
         && Date.now() - proof.provenAt <= CROSS_PARK_PROOF_TTL_MS
 }
 
+/**
+ * The bot waits 15 s for each answer. Every provider call of one request fits a
+ * 12 s budget, each call is cut off after 4 s, and a provider change starts only
+ * with time left to finish, so nothing changes after the bot has given up.
+ */
+const BOT_REQUEST_BUDGET_MS = 12_000
+const PROVIDER_CALL_TIMEOUT_MS = 4_000
+const PROVIDER_CHANGE_MIN_BUDGET_MS = 4_500
+
+const PROVIDER_UNAVAILABLE_TEXT = 'Яндекс сейчас не отвечает. Попробуйте позже.'
+const PROVIDER_RATE_LIMITED_TEXT = 'Яндекс временно ограничил запросы. Изменение не применено, попробуйте позже.'
+const PROVIDER_CHANGE_UNKNOWN_TEXT = 'Яндекс не подтвердил изменение. Проверьте результат позже и не повторяйте сразу.'
+
+type ProviderDeadline = { readonly at: number }
+
+function providerDeadline(): ProviderDeadline {
+    return { at: Date.now() + BOT_REQUEST_BUDGET_MS }
+}
+
+/** An abort signal for one provider call: its own timeout, never past the request budget. */
+function providerSignal(deadline: ProviderDeadline): AbortSignal {
+    const remaining = deadline.at - Date.now()
+    if (remaining <= 0) throw new Error('provider budget exhausted')
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), Math.min(PROVIDER_CALL_TIMEOUT_MS, remaining))
+    ;(timer as { unref?: () => void }).unref?.()
+    return controller.signal
+}
+
+/** Waits for a call whose request cannot carry a signal, no longer than one provider call. */
+async function providerBound<T>(pending: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+        return await Promise.race([
+            pending,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error('provider call timed out')), PROVIDER_CALL_TIMEOUT_MS)
+            }),
+        ])
+    } finally {
+        if (timer !== undefined) clearTimeout(timer)
+    }
+}
+
+/** Whether a provider change still has time to finish inside the request budget. */
+function providerChangeFits(deadline: ProviderDeadline): boolean {
+    return deadline.at - Date.now() >= PROVIDER_CHANGE_MIN_BUDGET_MS
+}
+
+/** A provider answer that says nothing was done yet and a later attempt may succeed. */
+function providerUnavailable(status: number): boolean {
+    return status === 429 || status >= 500
+}
+
+/** Cars one link's own search just returned in one park: binding one of them needs no second listing. */
+const CAR_SEARCH_MEMO_TTL_MS = 10 * 60_000
+const CAR_SEARCH_MEMO_MAX = 500
+const carSearchMemo = new Map<string, { linkDriverId: string; parkId: string; carIds: ReadonlySet<string>; at: number }>()
+
+function rememberCarSearch(telegramId: string, linkDriverId: string, parkId: string, carIds: string[]): void {
+    carSearchMemo.delete(telegramId)
+    if (carSearchMemo.size >= CAR_SEARCH_MEMO_MAX) {
+        const oldest = carSearchMemo.keys().next().value
+        if (oldest !== undefined) carSearchMemo.delete(oldest)
+    }
+    carSearchMemo.set(telegramId, { linkDriverId, parkId, carIds: new Set(carIds), at: Date.now() })
+}
+
+/** Whether this link's own recent search in exactly this park returned the car, for the same link row. */
+function carFromOwnSearch(telegramId: string, linkDriverId: string, parkId: string, carId: string): boolean {
+    const memo = carSearchMemo.get(telegramId)
+    if (!memo) return false
+    if (Date.now() - memo.at > CAR_SEARCH_MEMO_TTL_MS) {
+        carSearchMemo.delete(telegramId)
+        return false
+    }
+    return memo.linkDriverId === linkDriverId && memo.parkId === parkId && memo.carIds.has(carId)
+}
+
 // Helper: find car by ID using paginated cars/list (same logic as getCarById in actions.ts)
-async function findCarById(connection: any, carId: string) {
-    const lookup = await lookupParkCar(connection, carId)
+async function findCarById(connection: any, carId: string, deadline: ProviderDeadline = providerDeadline()) {
+    const lookup = await lookupParkCar(connection, carId, deadline)
     return lookup.state === 'found' ? lookup.car : null
 }
 
@@ -563,7 +644,7 @@ async function findCarById(connection: any, carId: string) {
  * listing was read; a failed page (429 included) or a listing longer than the
  * page budget is `unavailable`, never taken for a missing car.
  */
-async function lookupParkCar(connection: any, carId: string): Promise<
+async function lookupParkCar(connection: any, carId: string, deadline: ProviderDeadline): Promise<
     | { state: 'found'; car: { brand: any; model: any; plate: any; color: any; year: any } }
     | { state: 'absent' }
     | { state: 'unavailable' }
@@ -589,7 +670,8 @@ async function lookupParkCar(connection: any, carId: string): Promise<
                     fields: { car: ['id', 'brand', 'model', 'color', 'year', 'number', 'status'] },
                     limit: PAGE,
                     offset: page * PAGE
-                })
+                }),
+                signal: providerSignal(deadline),
             })
             // 429 = rate-limited; other errors abort
             if (!res.ok) {
@@ -972,6 +1054,7 @@ async function handleChangeLimit(payload: any) {
     }
 
     // 1. Find the driver mapping
+    const deadline = providerDeadline()
     const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
         where: { telegramId: telegramIdBigInt }
@@ -1030,28 +1113,36 @@ async function handleChangeLimit(payload: any) {
     // Quick probe — if 404, resolve contractor id via phone search in active park.
     // A proven Driver row of another park is never replaced by a phone match.
     if (contractorId && acting.crossPark === null) {
-        const probe = await fetch(`https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`, {
-            method: 'GET', headers: yandexAuthHeaders
-        })
-        if (probe.status === 404 && driver?.phone) {
-            console.log(`[changeLimit] yandexDriverId 404 in park ${connection.parkId}, searching by phone`)
-            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: yandexAuthHeaders,
-                body: JSON.stringify({
-                    query: { park: { id: connection.parkId }, text: driver.phone },
-                    fields: { driver_profile: ['id', 'phones'], car: [], account: [], current_status: [] },
-                    limit: 5, offset: 0
-                })
+        try {
+            const probe = await fetch(`https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`, {
+                method: 'GET', headers: yandexAuthHeaders, signal: providerSignal(deadline)
             })
-            if (searchRes.ok) {
-                const searchData = await searchRes.json()
-                const matched = uniqueProfileByPhone(searchData.driver_profiles || [], driver.phone)
-                if (matched?.driver_profile?.id) {
-                    contractorId = matched.driver_profile.id
-                    console.log(`[changeLimit] resolved contractor id via phone: ${contractorId}`)
+            if (probe.status === 404 && driver?.phone) {
+                console.log(`[changeLimit] yandexDriverId 404 in park ${connection.parkId}, searching by phone`)
+                const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                    method: 'POST',
+                    headers: yandexAuthHeaders,
+                    body: JSON.stringify({
+                        query: { park: { id: connection.parkId }, text: driver.phone },
+                        fields: { driver_profile: ['id', 'phones'], car: [], account: [], current_status: [] },
+                        limit: 5, offset: 0
+                    }),
+                    signal: providerSignal(deadline),
+                })
+                if (searchRes.ok) {
+                    const searchData = await searchRes.json()
+                    const matched = uniqueProfileByPhone(searchData.driver_profiles || [], driver.phone)
+                    if (matched?.driver_profile?.id) {
+                        contractorId = matched.driver_profile.id
+                        console.log(`[changeLimit] resolved contractor id via phone: ${contractorId}`)
+                    }
                 }
+            } else if (providerUnavailable(probe.status)) {
+                return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
             }
+        } catch (error: any) {
+            console.warn('[changeLimit] profile probe failed:', error?.message)
+            return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
         }
     }
 
@@ -1063,13 +1154,22 @@ async function handleChangeLimit(payload: any) {
         // Step 3a: GET current contractor profile (returns exact structure needed for PUT)
         const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
         console.log(`[changeLimit] GET contractor profile: ${contractorUrl}`)
-        const { ok: getOk, status: getStatus, data: currentProfile } = await safeJson(await fetch(contractorUrl, {
-            method: 'GET',
-            headers: yandexAuthHeaders
-        }))
+        let current: { ok: boolean; status: number; data: any }
+        try {
+            current = await safeJson(await fetch(contractorUrl, {
+                method: 'GET',
+                headers: yandexAuthHeaders,
+                signal: providerSignal(deadline),
+            }))
+        } catch (error: any) {
+            console.warn('[changeLimit] GET failed:', error?.message)
+            return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
+        }
+        const { ok: getOk, status: getStatus, data: currentProfile } = current
         console.log(`[changeLimit] GET Response ${getStatus}:`, JSON.stringify(currentProfile).substring(0, 500))
 
         if (!getOk) {
+            if (providerUnavailable(getStatus)) return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
             return NextResponse.json({ error: `Yandex GET Error ${getStatus}`, yandexError: currentProfile }, { status: 502 })
         }
 
@@ -1091,14 +1191,28 @@ async function handleChangeLimit(payload: any) {
         if (!(await crossParkProofStillHolds(payload, telegramIdBigInt, anchor, acting.crossPark))) {
             return NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
         }
-        const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
-            method: 'PUT',
-            headers: yandexAuthHeaders,
-            body: JSON.stringify(putBody)
-        }))
+        if (!providerChangeFits(deadline)) {
+            return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
+        }
+        let put: { ok: boolean; status: number; data: any }
+        try {
+            put = await safeJson(await fetch(contractorUrl, {
+                method: 'PUT',
+                headers: yandexAuthHeaders,
+                body: JSON.stringify(putBody),
+                signal: providerSignal(deadline),
+            }))
+        } catch (error: any) {
+            // The request may have reached Yandex: the outcome is unknown, never a success.
+            console.warn('[changeLimit] PUT outcome unknown:', error?.message)
+            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+        }
+        const { ok: putOk, status: putStatus, data: putData } = put
         console.log(`[changeLimit] PUT Response ${putStatus}:`, JSON.stringify(putData).substring(0, 300))
 
         if (!putOk) {
+            if (putStatus === 429) return NextResponse.json({ error: PROVIDER_RATE_LIMITED_TEXT }, { status: 503 })
+            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
             return NextResponse.json({ error: `Yandex PUT Error ${putStatus}`, yandexError: { code: putStatus, ...putData } }, { status: 502 })
         }
 
@@ -1117,9 +1231,12 @@ async function handleSearchCarByPlate(payload: any) {
     }
 
     // Use driver's activeParkId if telegramId provided
+    const deadline = providerDeadline()
     let connection = null
+    let searchLink: { telegramId: string; driverId: string } | null = null
     if (telegramId) {
         const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+        if (mapping?.driverId) searchLink = { telegramId: BigInt(telegramId).toString(), driverId: mapping.driverId }
         if (mapping?.activeParkId) {
             connection = await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         }
@@ -1133,25 +1250,33 @@ async function handleSearchCarByPlate(payload: any) {
 
     try {
         for (let page = 0; page < 10; page++) {
-            const res = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/cars/list', {
-                method: 'POST',
-                cache: 'no-store',
-                headers: {
-                    'X-Client-ID': connection.clid,
-                    'X-Api-Key': connection.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: { park: { id: connection.parkId } },
-                    fields: { car: ['id', 'brand', 'model', 'color', 'year', 'number', 'status'] },
-                    limit: PAGE,
-                    offset: page * PAGE
+            let data: any
+            try {
+                const res = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/cars/list', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    headers: {
+                        'X-Client-ID': connection.clid,
+                        'X-Api-Key': connection.apiKey,
+                        'Accept-Language': 'ru',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: { park: { id: connection.parkId } },
+                        fields: { car: ['id', 'brand', 'model', 'color', 'year', 'number', 'status'] },
+                        limit: PAGE,
+                        offset: page * PAGE
+                    }),
+                    signal: providerSignal(deadline),
                 })
-            })
-            if (!res.ok) break
-            const data = await res.json()
-            const cars: any[] = data.cars || []
+                if (!res.ok) break
+                data = await res.json()
+            } catch (error: any) {
+                // Out of time or unreachable: answer with what the earlier pages found.
+                console.warn('[search_car_by_plate] page', page, 'not read:', error?.message)
+                break
+            }
+            const cars: any[] = data?.cars || []
 
             for (const c of cars) {
                 const plate = (c.number || '').toUpperCase().replace(/\s/g, '')
@@ -1161,9 +1286,13 @@ async function handleSearchCarByPlate(payload: any) {
                 }
             }
 
-            if (matches.length >= 5 || page * PAGE + cars.length >= (data.total || 0)) break
+            if (matches.length >= 5 || page * PAGE + cars.length >= (data?.total || 0)) break
         }
 
+        // Binding one of these cars right after needs no second listing of this park.
+        if (searchLink && matches.length > 0) {
+            rememberCarSearch(searchLink.telegramId, searchLink.driverId, connection.parkId, matches.map((car) => String(car.id)))
+        }
         return NextResponse.json({ found: matches.length > 0, cars: matches })
     } catch (err: any) {
         console.error('[search_car_by_plate] Error:', err.message)
@@ -1178,6 +1307,7 @@ async function handleUpdateDriverCar(payload: any) {
         return NextResponse.json({ error: 'Missing telegramId or carId' }, { status: 400 })
     }
 
+    const deadline = providerDeadline()
     const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: telegramIdBigInt } })
     if (!mapping?.driverId) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
@@ -1231,8 +1361,11 @@ async function handleUpdateDriverCar(payload: any) {
         // The bot sends only the car id it found while some park was selected.
         // A car is bound only if it is one of this park's own cars, so a car
         // found before a park switch is never bound to another park's profile.
-        // A listing Yandex did not finish proves nothing and binds nothing.
-        const parkCar = await lookupParkCar(connection, String(carId))
+        // A listing Yandex did not finish proves nothing and binds nothing. A car
+        // this link's own search just found in this very park needs no listing.
+        const parkCar = carFromOwnSearch(telegramIdBigInt.toString(), mapping.driverId, target.parkId, String(carId))
+            ? { state: 'found' as const }
+            : await lookupParkCar(connection, String(carId), deadline)
         if (parkCar.state === 'unavailable') {
             return NextResponse.json({ error: 'Не удалось проверить автомобиль в Яндексе. Попробуйте позже.' }, { status: 503 })
         }
@@ -1241,8 +1374,18 @@ async function handleUpdateDriverCar(payload: any) {
         }
 
         const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
-        const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
-        if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
+        let current: { ok: boolean; status: number; data: any }
+        try {
+            current = await safeJson(await fetch(contractorUrl, { method: 'GET', headers, signal: providerSignal(deadline) }))
+        } catch (error: any) {
+            console.warn('[update_driver_car] GET failed:', error?.message)
+            return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
+        }
+        const { ok: getOk, status: getStatus, data: profile } = current
+        if (!getOk) {
+            if (providerUnavailable(getStatus)) return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
+            return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
+        }
 
         const putBody = { ...profile, car_id: carId }
         const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
@@ -1253,12 +1396,27 @@ async function handleUpdateDriverCar(payload: any) {
         if (!(await crossParkProofStillHolds(payload, telegramIdBigInt, anchor, acting.crossPark))) {
             return NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
         }
-        const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
-            method: 'PUT', headers, body: JSON.stringify(putBody)
-        }))
+        if (!providerChangeFits(deadline)) {
+            return NextResponse.json({ error: PROVIDER_UNAVAILABLE_TEXT }, { status: 503 })
+        }
+        let put: { ok: boolean; status: number; data: any }
+        try {
+            put = await safeJson(await fetch(contractorUrl, {
+                method: 'PUT', headers, body: JSON.stringify(putBody), signal: providerSignal(deadline)
+            }))
+        } catch (error: any) {
+            // The request may have reached Yandex: the outcome is unknown, never a success.
+            console.warn('[update_driver_car] PUT outcome unknown:', error?.message)
+            return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+        }
+        const { ok: putOk, status: putStatus, data: putData } = put
         console.log(`[update_driver_car] PUT ${putStatus}:`, JSON.stringify(putData).substring(0, 200))
 
-        if (!putOk) return NextResponse.json({ error: `Yandex error ${putStatus}`, details: putData }, { status: 502 })
+        if (!putOk) {
+            if (putStatus === 429) return NextResponse.json({ error: PROVIDER_RATE_LIMITED_TEXT }, { status: 503 })
+            if (putStatus >= 500) return NextResponse.json({ error: PROVIDER_CHANGE_UNKNOWN_TEXT, outcome: 'UNKNOWN' }, { status: 504 })
+            return NextResponse.json({ error: `Yandex error ${putStatus}`, details: putData }, { status: 502 })
+        }
         return NextResponse.json({ success: true, newCarId: carId })
     } catch (err: any) {
         console.error('[update_driver_car] Error:', err.message)
@@ -1284,6 +1442,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 1. Resolve telegram → driver → Yandex profile id
+    const deadline = providerDeadline()
     const telegramIdBigInt = BigInt(telegramId)
     const mapping = await prisma.driverTelegram.findFirst({
         where: { telegramId: telegramIdBigInt }
@@ -1376,7 +1535,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                     query: { park: { id: conn.parkId }, text: driver.fullName },
                     fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                     limit: 10, offset: 0
-                })
+                }),
+                signal: providerSignal(deadline),
             })
             if (checkRes.ok) {
                 const checkData = await checkRes.json()
@@ -1424,6 +1584,13 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 message: PROFILE_PARK_UNPROVEN_TEXT,
             })
         }
+        if (!providerChangeFits(deadline)) {
+            return NextResponse.json({
+                ok: false,
+                error: 'PROVIDER_SLOW',
+                message: 'Система отвечает медленно. Попробуйте ещё раз.',
+            })
+        }
         const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1433,13 +1600,17 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 parkId: target.parkId,
                 reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
             }),
+            signal: providerSignal(deadline),
         })
         const json = await res.json()
         if (!res.ok || !json.taskId) {
             throw new Error(json.error || `scraper ${res.status}`)
         }
         scraperTaskId = json.taskId
-    } catch (e: any) {
+    } catch (caught: any) {
+        // A dispatch that timed out may still have been queued: it is recorded as
+        // failed with an unknown outcome and is never retried here.
+        const e = caught?.name === 'AbortError' ? new Error('dispatch timed out, outcome unknown') : caught
         const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
             driverId: mapping.driverId,
             telegramId: telegramIdBigInt,
@@ -1531,7 +1702,8 @@ async function handleSetActivePark(payload: any) {
                     query: { park: { id: parkId }, text: phone },
                     fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                     limit: 5, offset: 0
-                })
+                }),
+                signal: providerSignal(providerDeadline()),
             })
             if (searchRes.ok) {
                 const searchData = await searchRes.json()
@@ -1594,8 +1766,8 @@ async function handlePollDriverAction(payload: any) {
 
     let scraperState: any
     try {
-        const res = await fetch(`${SCRAPER_URL}/api/driver-actions/${taskId}`)
-        scraperState = await res.json()
+        const res = await providerBound(fetch(`${SCRAPER_URL}/api/driver-actions/${taskId}`))
+        scraperState = await providerBound(res.json())
         if (!res.ok) {
             return NextResponse.json({ ok: false, error: scraperState?.error || `scraper ${res.status}` })
         }

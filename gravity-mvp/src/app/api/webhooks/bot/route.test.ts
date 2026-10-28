@@ -1700,11 +1700,11 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             }
         })
 
-        test('a proof still inside its 12 seconds lets the PUT through', async () => {
+        test('a proof still inside its window, with time left for the change, lets the PUT through', async () => {
             selectedPark = NASH
             let now = 1_700_000_000_000
             const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-            hooks.onProfileGet = () => { now += 11_000 }
+            hooks.onProfileGet = () => { now += 5_000 }
             try {
                 const response = await act('change_limit', { limitValue: 5 })
 
@@ -1891,5 +1891,302 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
         expect(proof).toContain("personResolutionStatus: 'operator_confirmed'")
         expect(proof).toContain('rows.length !== 1')
         expect(proof).not.toMatch(/phone|fullName|\.find\(|\[0\]|findFirst/)
+    })
+})
+
+describe('B4: every provider call is bounded and nothing changes after the bot gave up', () => {
+    const PROFILE = '0123456789abcdef0123456789abcdef'
+    const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
+    const connection = { clid: 'clid-1', apiKey: 'api-key-1', parkId: 'park-1' }
+    let mapping: Record<string, unknown>
+
+    const reply = (body: unknown, status = 200) => ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+    })
+    /** A provider call that never answers until its abort signal fires. */
+    const hanging = () => (_url: unknown, init: any = {}) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    })
+    /** A provider call that answers after `ms` (unless aborted first). */
+    const slow = (ms: number, body: unknown, status = 200) => (_url: unknown, init: any = {}) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(reply(body, status)), ms)
+        init?.signal?.addEventListener('abort', () => {
+            clearTimeout(timer)
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+        })
+    })
+    const calls = () => mocks.providerFetch.mock.calls.map(([url, init]: any[]) => `${init?.method ?? 'GET'} ${String(url)}`)
+    const puts = () => calls().filter((call) => call.startsWith('PUT'))
+    const act = (action: string, extra: Record<string, unknown> = {}) =>
+        POST(actionRequest(action, { telegramId: '123456', ...binding, ...extra }))
+    /** Runs a request on fake timers to completion and returns it with the time it took. */
+    async function timed(request: Promise<Response>) {
+        const started = Date.now()
+        let settled: Response | undefined
+        request.then((response) => { settled = response })
+        for (let step = 0; step < 200 && !settled; step += 1) await vi.advanceTimersByTimeAsync(100)
+        expect(settled).toBeDefined()
+        return { response: settled as Response, elapsed: Date.now() - started }
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        // Queued one-off provider answers must not leak from one case into the next.
+        mocks.providerFetch.mockReset()
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mapping = { id: 'mapping-1', driverId: 'driver-1', telegramId: 123456n, activeParkId: 'park-1', carLabel: null }
+        mocks.findDriverTelegramFirst.mockImplementation(async () => mapping)
+        mocks.authorizeDriverTelegram.mockResolvedValue({
+            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
+        })
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.findDriver.mockResolvedValue({
+            id: 'driver-1', fullName: 'Test Driver', phone: '+70000000000', yandexDriverId: `park-profile:${'9'.repeat(32)}`,
+            externalDriverProfileId: PROFILE, externalParkId: 'park-1', externalPersonKey: null, contactId: 'contact-1',
+        })
+        mocks.findDriverByYandex.mockResolvedValue(null)
+        mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+        mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
+        mocks.patchDriverTelegramLink.mockResolvedValue({ updated: true })
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+    afterEach(() => vi.useRealTimers())
+
+    describe('cash switch (change_limit)', () => {
+        test('the link row\'s own park keeps its three calls: probe, GET, PUT', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({}, 204))
+
+            const { response } = await timed(act('change_limit', { limitValue: 5 }))
+
+            await expect(response.json()).resolves.toEqual({ success: true, newLimit: 5 })
+            expect(calls().map((call) => call.split(' ')[0])).toEqual(['GET', 'GET', 'PUT'])
+        })
+
+        test('a profile read that never answers ends after 4 s with "unavailable" and no PUT', async () => {
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('change_limit', { limitValue: 5 }))
+
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'Яндекс сейчас не отвечает. Попробуйте позже.' })
+            expect(puts()).toHaveLength(0)
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+        })
+
+        test.each([[429], [500], [503]])('a profile read answered %s is "unavailable" with no PUT', async (status) => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({ message: 'busy' }, status))
+
+            const { response } = await timed(act('change_limit', { limitValue: 5 }))
+
+            expect(response.status).toBe(503)
+            expect(puts()).toHaveLength(0)
+        })
+
+        test('a PUT that never answers is reported as an unknown outcome, never as success', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('change_limit', { limitValue: 5 }))
+
+            expect(response.status).toBe(504)
+            await expect(response.json()).resolves.toEqual({
+                error: 'Яндекс не подтвердил изменение. Проверьте результат позже и не повторяйте сразу.',
+                outcome: 'UNKNOWN',
+            })
+            expect(elapsed).toBeLessThan(12_000)
+        })
+
+        test('a rate-limited PUT is "not applied", a failing PUT is "unknown"; neither is success', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({}, 429))
+            const limited = (await timed(act('change_limit', { limitValue: 5 }))).response
+            expect(limited.status).toBe(503)
+            await expect(limited.json()).resolves.toEqual({ error: 'Яндекс временно ограничил запросы. Изменение не применено, попробуйте позже.' })
+
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({ account: {} }))
+                .mockResolvedValueOnce(reply({}, 502))
+            const failing = (await timed(act('change_limit', { limitValue: 5 }))).response
+            expect(failing.status).toBe(504)
+            await expect(failing.json()).resolves.toMatchObject({ outcome: 'UNKNOWN' })
+        })
+
+        test('when slow answers leave too little time, the PUT is not started', async () => {
+            mocks.providerFetch
+                .mockImplementationOnce(slow(3_900, { account: {} }))
+                .mockImplementationOnce(slow(3_900, { account: {} }))
+
+            const { response, elapsed } = await timed(act('change_limit', { limitValue: 5 }))
+
+            expect(response.status).toBe(503)
+            expect(puts()).toHaveLength(0)
+            expect(elapsed).toBeLessThan(12_000)
+        })
+    })
+
+    describe('car change (update_driver_car) and its search', () => {
+        const parkCars = (ids: string[], total = ids.length) => reply({ cars: ids.map((id) => ({ id, number: `A${id}`, brand: 'B', model: 'M' })), total })
+
+        test('binding a car the same link just found in the same park needs no second listing', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(parkCars(['car-9']))
+            const search = (await timed(act('search_car_by_plate', { platePrefix: 'ACAR' }))).response
+            await expect(search.json()).resolves.toMatchObject({ found: true })
+
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(reply({}, 204))
+            const bound = (await timed(act('update_driver_car', { carId: 'car-9' }))).response
+
+            await expect(bound.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            // One listing page for the search; the bind itself is GET + PUT, as before the car check.
+            expect(calls().map((call) => call.split(' ')[0])).toEqual(['POST', 'GET', 'PUT'])
+        })
+
+        test.each([
+            ['another park', () => { mapping = { ...mapping, activeParkId: 'park-2' } }],
+            ['another link row', () => { mapping = { ...mapping, driverId: 'driver-2' } }],
+            ['more than 10 minutes', () => { vi.advanceTimersByTime(10 * 60_000 + 1) }],
+        ])('a search remembered for %s is not reused: the car is listed again', async (_name, change) => {
+            mocks.providerFetch.mockResolvedValueOnce(parkCars(['car-9']))
+            await timed(act('search_car_by_plate', { platePrefix: 'ACAR' }))
+            change()
+            // The bind's own row and park: a row of park-2 when park-2 is selected.
+            mocks.findDriver.mockResolvedValue({
+                id: String(mapping.driverId), fullName: 'Test Driver', phone: null, yandexDriverId: PROFILE,
+                externalDriverProfileId: PROFILE, externalParkId: String(mapping.activeParkId), externalPersonKey: null, contactId: 'contact-1',
+            })
+            mocks.authorizeDriverTelegram.mockResolvedValue({
+                chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: String(mapping.driverId), target: '123456',
+            })
+            mocks.getYandexConnectionCredentials.mockResolvedValue({ ...connection, parkId: String(mapping.activeParkId) })
+            mocks.providerFetch
+                .mockResolvedValueOnce(parkCars(['car-9']))
+                .mockResolvedValueOnce(reply({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(reply({}, 204))
+
+            await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(calls().filter((call) => call.endsWith('/v1/parks/cars/list'))).toHaveLength(2)
+        })
+
+        test('a car listing that never answers ends with "try later", no GET and no PUT', async () => {
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(503)
+            expect(calls()).toHaveLength(1)
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+        })
+
+        test('a PUT that never answers is an unknown outcome, never success', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(parkCars(['car-9']))
+                .mockResolvedValueOnce(reply({ car_id: 'car-1' }))
+                .mockImplementationOnce(hanging())
+
+            const { response } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(504)
+            await expect(response.json()).resolves.toMatchObject({ outcome: 'UNKNOWN' })
+        })
+
+        test('worst case: a slow multi-page listing still answers inside the budget, without a PUT', async () => {
+            for (let page = 0; page < 10; page += 1) {
+                mocks.providerFetch.mockImplementationOnce(slow(3_900, { cars: [{ id: `other-${page}` }], total: 5_000 }))
+            }
+
+            const { response, elapsed } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(503)
+            expect(puts()).toHaveLength(0)
+            expect(elapsed).toBeLessThanOrEqual(12_100)
+            expect(calls().length).toBeLessThanOrEqual(4)
+        })
+
+        test('a listing longer than the page budget proves nothing: "try later", never "not found"', async () => {
+            for (let page = 0; page < 10; page += 1) {
+                mocks.providerFetch.mockResolvedValueOnce(parkCars([`other-${page}`], 6_000))
+            }
+
+            const { response } = await timed(act('update_driver_car', { carId: 'car-9' }))
+
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'Не удалось проверить автомобиль в Яндексе. Попробуйте позже.' })
+            expect(puts()).toHaveLength(0)
+        })
+
+        test('a search that runs out of time answers with what it found so far', async () => {
+            mocks.providerFetch
+                .mockResolvedValueOnce(reply({ cars: [{ id: 'car-9', number: 'ACAR9' }], total: 5_000 }))
+                .mockImplementationOnce(hanging())
+
+            const { response } = await timed(act('search_car_by_plate', { platePrefix: 'ACAR' }))
+
+            await expect(response.json()).resolves.toMatchObject({ found: true, cars: [{ id: 'car-9' }] })
+        })
+    })
+
+    describe('car display (check_link)', () => {
+        test('a profile read that never answers shows the link without a car, inside the budget', async () => {
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('check_link'))
+
+            await expect(response.json()).resolves.toMatchObject({ linked: true, carInfo: null })
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+        })
+
+        test('worst case: a slow car listing stops at the budget and shows no car', async () => {
+            mocks.providerFetch.mockResolvedValueOnce(reply({ car_id: 'car-9' }))
+            for (let page = 0; page < 10; page += 1) {
+                mocks.providerFetch.mockImplementationOnce(slow(3_900, { cars: [{ id: `other-${page}` }], total: 5_000 }))
+            }
+
+            const { response, elapsed } = await timed(act('check_link'))
+
+            await expect(response.json()).resolves.toMatchObject({ linked: true, carInfo: null })
+            expect(elapsed).toBeLessThanOrEqual(12_100)
+            expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('current order (dispatch and poll)', () => {
+        test('a dispatch that never answers is recorded as failed with an unknown outcome', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(null)
+            mocks.providerFetch.mockImplementationOnce(hanging())
+
+            const { response, elapsed } = await timed(act('get_order_price'))
+
+            await expect(response.json()).resolves.toMatchObject({ ok: false, error: 'SCRAPER_DOWN' })
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+            expect(mocks.recordDriverAction).toHaveBeenCalledWith(expect.objectContaining({
+                data: expect.objectContaining({ status: 'FAILED', errorMessage: 'scraper unreachable: dispatch timed out, outcome unknown' }),
+            }))
+        })
+
+        test('a poll the scraper never answers ends after 4 s without a mirror', async () => {
+            mocks.providerFetch.mockImplementationOnce(() => new Promise(() => {}))
+
+            const { response, elapsed } = await timed(act('poll_driver_action', { taskId: 'task-1' }))
+
+            await expect(response.json()).resolves.toMatchObject({ ok: false })
+            expect(elapsed).toBeLessThanOrEqual(4_100)
+            expect(mocks.mirrorDriverActionResult).not.toHaveBeenCalled()
+        })
     })
 })
