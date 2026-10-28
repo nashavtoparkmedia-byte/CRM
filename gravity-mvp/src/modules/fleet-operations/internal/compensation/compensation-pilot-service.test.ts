@@ -715,8 +715,33 @@ describe('the first month\'s orders after the month has ended: the month-end gra
             ...LAST_DAY_ORDER, id: 'row-october', externalOrderId: 'e'.repeat(32), endedAt: new Date('2026-10-01T05:00:00.000Z'),
         }
         const p = port({ findCashOrders: vi.fn(async () => [october]) })
+        // The first month still takes claims, so the section is open; the
+        // October order is simply not in it.
         expect(await compensationSectionViewV1(PROOF, p, ingestion(), GRACE_NOW))
-            .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+            .toMatchObject({ available: true, firstMonthKey: '2026-09', orders: [] })
+    })
+
+    it('on demand, opens the date picker through the grace with nothing stored, and closes it by the clock', async () => {
+        // Nothing stored is the normal on-demand state: orders are stored only
+        // for days a driver has already asked for.
+        const fetchDriverDay = vi.fn(async () => ({ state: 'complete' as const, code: null }))
+        const onDemandAt = (dbNow: Date) => ingestion({
+            readCatalogueFacts: vi.fn(async () => ({ ...READY_FACTS, mode: 'on_demand', dbNow })),
+            fetchDriverDay,
+        })
+        const p = port({ findCashOrders: vi.fn(async () => []) })
+        for (const now of [GRACE_NOW, new Date(GRACE_DEADLINE.getTime() - 1)]) {
+            expect(await compensationSectionViewV1(PROOF, p, onDemandAt(now), now))
+                .toMatchObject({ available: true, catalogueStatus: 'on_demand', firstMonthKey: '2026-09', orders: [] })
+        }
+        // A first-month day picked inside the grace is asked of the provider.
+        const day = await compensationSectionViewV1(PROOF, p, onDemandAt(GRACE_NOW), GRACE_NOW, { search: '2026-09-30' })
+        expect(day.available && day.search).toMatchObject({ query: '2026-09-30', kind: 'date' })
+        expect(fetchDriverDay).toHaveBeenCalledWith({ externalParkId: PARK, externalDriverProfileId: PROFILE, dayKey: '2026-09-30' })
+        for (const now of [GRACE_DEADLINE, new Date(GRACE_DEADLINE.getTime() + 1)]) {
+            expect(await compensationSectionViewV1(PROOF, p, onDemandAt(now), now))
+                .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        }
     })
 
     it('still demands a fresh provider observation before a last-day claim reaches C1', async () => {

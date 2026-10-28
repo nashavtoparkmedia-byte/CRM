@@ -24,7 +24,11 @@ import {
 } from './compensation-cash-order-projection'
 import { compensationDerivedIdV1 } from './compensation-identity'
 import { compensationPilotFirstMonthV1, type CompensationEligibilityFactsV1 } from './compensation-eligibility'
-import { compensationSubmissionDeadlineV1, isSubmissionWindowOpenV1 } from './compensation-submission-window'
+import {
+    compensationPeriodSubmissionClosesAtV1,
+    compensationSubmissionDeadlineV1,
+    isSubmissionWindowOpenV1,
+} from './compensation-submission-window'
 
 /**
  * Stable row identity. Derived from the provider triple only, so the same trip
@@ -113,7 +117,9 @@ export function cashOrderSubmissionOpenV1(order: { endedAt: Date }, now: Date): 
  * Inside the first month that last test changes nothing: every first-month
  * order's deadline is 72 hours after the month's end. Once the month has ended
  * it is what keeps the whole month claimable through those 72 hours, and the
- * month itself is reported as over once no order is left in its grace. The
+ * month itself is reported as over only when those 72 hours have passed, by
+ * the clock and never by an empty list: on demand, the stored orders are only
+ * the days a driver has already asked for, so none stored proves nothing. The
  * driver's window is never widened; the orders' window is simply not thrown
  * away at the calendar rollover.
  */
@@ -139,7 +145,7 @@ export function cashOrderCatalogueV1<T extends StoredCashOrderV1>(
         .slice()
         .sort((left, right) => right.endedAt.getTime() - left.endedAt.getTime())
 
-    if (now.getTime() >= monthEnd && orders.length === 0) {
+    if (now.getTime() >= compensationPeriodSubmissionClosesAtV1(first.firstMonth).getTime()) {
         return { eligible: false, reason: 'outside_first_calendar_month', orders: [] }
     }
 
