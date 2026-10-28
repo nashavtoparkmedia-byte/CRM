@@ -11,6 +11,7 @@ import {
     type PreparedDriverTelegramConversationAuthorityV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { getConfirmedContactForDriverClusterV1 } from '@/modules/contacts/public/v1/driver-person-confirmation'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -232,30 +233,43 @@ async function handleCheckLink(payload: any) {
     // Return cached car label immediately — avoids 9 sequential Yandex API calls
     // which (a) trigger 429 rate-limiting and (b) cost ~5 seconds per check_link.
     // Cache is populated below on first successful lookup.
+    // The cache holds only the car of the link row in that row's own park, and
+    // is shown only while that park is selected: a lookup that finished after
+    // a park switch can then never show one park's car in another.
     if (mapping.carLabel) {
+        let cachedDriver: { fullName: string; externalParkId: string | null } | null | undefined
         try {
-            const cachedDriver = await prisma.driver.findFirst({
+            cachedDriver = await prisma.driver.findFirst({
                 where: { OR: [{ id: mapping.driverId }, { yandexDriverId: mapping.driverId }] },
-                select: { fullName: true }
+                select: { fullName: true, externalParkId: true }
             })
+        } catch { /* park unknown: look the car up instead */ }
+        const cachePark = cachedDriver?.externalParkId?.trim() || null
+        const selectedPark = mapping.activeParkId?.trim() || null
+        if (cachedDriver !== undefined && (!cachePark || !selectedPark || cachePark === selectedPark)) {
             if (cachedDriver?.fullName) driverName = cachedDriver.fullName
-        } catch { /* use username fallback */ }
-        return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo: mapping.carLabel })
+            return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo: mapping.carLabel })
+        }
     }
 
     try {
         // Try CRM id first (manually-linked records), then Yandex contractor id
         // (records created by sync_user which stores the Yandex driver_profile.id).
-        let driver = await prisma.driver.findUnique({
+        let driver: BotDriverRow | null = await prisma.driver.findUnique({
             where: { id: mapping.driverId },
-            select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, fullName: true }
+            select: BOT_DRIVER_SELECT,
         })
         if (!driver) {
             driver = await prisma.driver.findFirst({
                 where: { yandexDriverId: mapping.driverId },
-                select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, fullName: true }
+                select: BOT_DRIVER_SELECT,
             })
         }
+        // In another park of the same person the car is looked up there and
+        // shown, but never cached and never searched for by phone.
+        const acting = await botActingDriver(payload, mapping, telegramIdBigInt, driver)
+        const ownPark = acting.crossPark === null
+        driver = acting.driver
 
         const target = driverYandexTarget(driver, mapping.activeParkId)
         if (driver?.fullName) driverName = driver.fullName
@@ -297,19 +311,21 @@ async function handleCheckLink(payload: any) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
                         // Cache to DriverTelegram so future check_link calls skip Yandex pagination
-                        const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
-                            driverId: mapping.driverId,
-                            telegramId: telegramIdBigInt,
-                        })
-                        if (mutationAuthorityFailure) return mutationAuthorityFailure
-                        await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
+                        if (ownPark) {
+                            const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+                                driverId: mapping.driverId,
+                                telegramId: telegramIdBigInt,
+                            })
+                            if (mutationAuthorityFailure) return mutationAuthorityFailure
+                            await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
+                        }
                     }
                 }
             } else {
                 console.error('[check_link] v2 error:', v2Res.status, await v2Res.text())
                 // Fallback: search driver by phone in the active park (driver may have
                 // a different contractor_profile_id in this park vs the one stored in CRM).
-                if (v2Res.status === 404) {
+                if (v2Res.status === 404 && ownPark) {
                     try {
                         const fullDriver = await prisma.driver.findUnique({
                             where: { id: mapping.driverId },
@@ -363,6 +379,152 @@ async function handleCheckLink(payload: any) {
     }
 
     return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo })
+}
+
+/** The Driver columns a bot action reads, with the licence cluster one person's parks share. */
+const BOT_DRIVER_SELECT = {
+    id: true,
+    fullName: true,
+    phone: true,
+    yandexDriverId: true,
+    externalDriverProfileId: true,
+    externalParkId: true,
+    externalPersonKey: true,
+    contactId: true,
+} as const
+
+type BotDriverRow = {
+    id: string
+    fullName: string | null
+    phone: string | null
+    yandexDriverId: string | null
+    externalDriverProfileId: string | null
+    externalParkId: string | null
+    externalPersonKey: string | null
+    contactId: string | null
+}
+
+/** How long the person proof an action started with may authorize its provider change. */
+const CROSS_PARK_PROOF_TTL_MS = 30_000
+
+/** A real Yandex contractor profile id, the only form the Fleet API and the scraper act on. */
+const YANDEX_PROFILE_ID = /^[a-f0-9]{24,}$/
+
+/** What an action acting in another park of the same person was authorized with. */
+type CrossParkProof = {
+    anchorDriverId: string
+    actingDriverId: string
+    profileId: string
+    parkId: string
+    contactId: string
+    clusterKey: string
+    provenAt: number
+}
+
+/**
+ * The Driver row a bot action acts on, fixed once when the action starts.
+ *
+ * The Telegram link names one Driver row for good, and a park switch never
+ * rewrites it. In that row's own park, with no park selected, or for a legacy
+ * row with no recorded park, the row acts itself. In another selected park the
+ * action may act only on the same person's own Driver row of that park (see
+ * proveCrossParkDriver); anything else keeps the link row, which the park guard
+ * then refuses exactly as before. The selected park is the one the action read
+ * at its start: a later switch never moves a running action.
+ */
+async function botActingDriver(
+    payload: unknown,
+    mapping: { driverId: string; activeParkId: string | null },
+    telegramId: bigint,
+    anchor: BotDriverRow | null,
+): Promise<{ driver: BotDriverRow | null; crossPark: CrossParkProof | null }> {
+    const selected = mapping.activeParkId?.trim() || null
+    const anchorPark = anchor?.externalParkId?.trim() || null
+    if (!anchor || !selected || !anchorPark || selected === anchorPark) return { driver: anchor, crossPark: null }
+    return await proveCrossParkDriver(payload, mapping.driverId, telegramId, anchor, selected)
+        ?? { driver: anchor, crossPark: null }
+}
+
+/**
+ * The same person's own Driver row in another park, with the proof it rests on.
+ *
+ * Every part must hold now: the bot authority proves the Contact behind the
+ * link; the link row belongs to that Contact; Contacts confirms the link row's
+ * licence cluster to that Contact alone; and exactly one non-dismissed row of
+ * that cluster is in the park, linked to that Contact, operator-confirmed by
+ * the fleet reconciler, with a real Yandex profile id of its own. Only a
+ * licence cluster joins parks. No phone, name or first match is involved.
+ */
+async function proveCrossParkDriver(
+    payload: unknown,
+    anchorDriverId: string,
+    telegramId: bigint,
+    anchor: BotDriverRow,
+    parkId: string,
+): Promise<{ driver: BotDriverRow; crossPark: CrossParkProof } | null> {
+    const clusterKey = anchor.externalPersonKey?.trim() || ''
+    if (!clusterKey.startsWith('vu:')) return null
+    try {
+        const authority = await resolveCurrentBotDriverAuthority(payload, { driverId: anchorDriverId, telegramId })
+        if (!authority || anchor.contactId !== authority.contactId) return null
+        const confirmed = await getConfirmedContactForDriverClusterV1(clusterKey)
+        if (!confirmed || confirmed.contactId !== authority.contactId) return null
+        const rows = await prisma.driver.findMany({
+            where: {
+                externalPersonKey: clusterKey,
+                externalParkId: parkId,
+                contactId: authority.contactId,
+                personResolutionStatus: 'operator_confirmed',
+                dismissedAt: null,
+                id: { not: anchor.id },
+            },
+            select: BOT_DRIVER_SELECT,
+            take: 2,
+        })
+        if (rows.length !== 1) return null
+        const [row] = rows
+        const profileId = row.externalDriverProfileId?.trim() || ''
+        if (row.externalParkId !== parkId || !YANDEX_PROFILE_ID.test(profileId)) return null
+        return {
+            driver: row,
+            crossPark: {
+                anchorDriverId,
+                actingDriverId: row.id,
+                profileId,
+                parkId,
+                contactId: authority.contactId,
+                clusterKey,
+                provenAt: Date.now(),
+            },
+        }
+    } catch (error: unknown) {
+        console.warn('[driver-bot] cross-park Driver not proven:', error instanceof Error ? error.message : String(error))
+        return null
+    }
+}
+
+/**
+ * Whether the proof an action started with still holds right before it changes
+ * something at the provider. It keeps the park and Driver row fixed at the
+ * action's start and never reads the selected park again; it refuses a proof
+ * older than CROSS_PARK_PROOF_TTL_MS, or one that no longer names the same row,
+ * profile, Contact and cluster. An action in the link row's own park has none.
+ */
+async function crossParkProofStillHolds(
+    payload: unknown,
+    telegramId: bigint,
+    anchor: BotDriverRow | null,
+    proof: CrossParkProof | null,
+): Promise<boolean> {
+    if (!proof) return true
+    if (!anchor || Date.now() - proof.provenAt > CROSS_PARK_PROOF_TTL_MS) return false
+    const again = (await proveCrossParkDriver(payload, proof.anchorDriverId, telegramId, anchor, proof.parkId))?.crossPark
+    return !!again
+        && again.actingDriverId === proof.actingDriverId
+        && again.profileId === proof.profileId
+        && again.contactId === proof.contactId
+        && again.clusterKey === proof.clusterKey
+        && Date.now() - proof.provenAt <= CROSS_PARK_PROOF_TTL_MS
 }
 
 // Helper: find car by ID using paginated cars/list (same logic as getCarById in actions.ts)
@@ -780,11 +942,14 @@ async function handleChangeLimit(payload: any) {
     if (authorityFailure) return authorityFailure
 
     // 2. Resolve the Yandex profile and the park it belongs to.
-    //    mapping.driverId is a CRM id — need the Yandex contractor id.
-    const driver = await prisma.driver.findUnique({
+    //    mapping.driverId is a CRM id — need the Yandex contractor id. In
+    //    another park of the same person it is that park's own Driver row.
+    const anchor: BotDriverRow | null = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true, phone: true }
+        select: BOT_DRIVER_SELECT,
     })
+    const acting = await botActingDriver(payload, mapping, telegramIdBigInt, anchor)
+    const driver = acting.driver
     const target = driverYandexTarget(driver, mapping.activeParkId)
     if (!target.ok) {
         return target.reason === 'PARK_UNPROVEN'
@@ -817,8 +982,9 @@ async function handleChangeLimit(payload: any) {
         } catch { return { ok: res.ok, status: res.status, data: { raw: text.substring(0, 300) } } }
     }
 
-    // Quick probe — if 404, resolve contractor id via phone search in active park
-    if (contractorId) {
+    // Quick probe — if 404, resolve contractor id via phone search in active park.
+    // A proven Driver row of another park is never replaced by a phone match.
+    if (contractorId && acting.crossPark === null) {
         const probe = await fetch(`https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`, {
             method: 'GET', headers: yandexAuthHeaders
         })
@@ -877,6 +1043,9 @@ async function handleChangeLimit(payload: any) {
             telegramId: telegramIdBigInt,
         })
         if (mutationAuthorityFailure) return mutationAuthorityFailure
+        if (!(await crossParkProofStillHolds(payload, telegramIdBigInt, anchor, acting.crossPark))) {
+            return NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
+        }
         const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
             method: 'PUT',
             headers: yandexAuthHeaders,
@@ -974,16 +1143,19 @@ async function handleUpdateDriverCar(payload: any) {
     if (authorityFailure) return authorityFailure
 
     // The link names a CRM Driver row; Yandex needs that Driver's profile id.
-    let driver = await prisma.driver.findUnique({
+    // In another park of the same person it is that park's own Driver row.
+    let anchor: BotDriverRow | null = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
+        select: BOT_DRIVER_SELECT,
     })
-    if (!driver) {
-        driver = await prisma.driver.findFirst({
+    if (!anchor) {
+        anchor = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
+            select: BOT_DRIVER_SELECT,
         })
     }
+    const acting = await botActingDriver(payload, mapping, telegramIdBigInt, anchor)
+    const driver = acting.driver
     const target = driverYandexTarget(driver, mapping.activeParkId)
     if (!target.ok) {
         return target.reason === 'PARK_UNPROVEN'
@@ -1015,12 +1187,22 @@ async function handleUpdateDriverCar(payload: any) {
         const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
         if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
 
+        // The bot sends only the car id it found while some park was selected.
+        // A car is bound only if it is one of this park's own cars, so a car
+        // found before a park switch is never bound to another park's profile.
+        if (!(await findCarById(connection, String(carId)))) {
+            return NextResponse.json({ error: 'Этот автомобиль не найден в выбранном парке. Найдите автомобиль заново.' }, { status: 409 })
+        }
+
         const putBody = { ...profile, car_id: carId }
         const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
             driverId: mapping.driverId,
             telegramId: telegramIdBigInt,
         })
         if (mutationAuthorityFailure) return mutationAuthorityFailure
+        if (!(await crossParkProofStillHolds(payload, telegramIdBigInt, anchor, acting.crossPark))) {
+            return NextResponse.json({ error: PROFILE_PARK_UNPROVEN_TEXT }, { status: 409 })
+        }
         const { ok: putOk, status: putStatus, data: putData } = await safeJson(await fetch(contractorUrl, {
             method: 'PUT', headers, body: JSON.stringify(putBody)
         }))
@@ -1068,16 +1250,21 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         telegramId: telegramIdBigInt,
     })
     if (authorityFailure) return authorityFailure
-    let driver = await prisma.driver.findUnique({
+    let driver: BotDriverRow | null = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { id: true, fullName: true, phone: true, yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
+        select: BOT_DRIVER_SELECT,
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { id: true, fullName: true, phone: true, yandexDriverId: true, externalDriverProfileId: true, externalParkId: true },
+            select: BOT_DRIVER_SELECT,
         })
     }
+    // In another park of the same person the action runs, and is audited, on
+    // that park's own Driver row; the task is fixed to it when dispatched.
+    const anchor = driver
+    const acting = await botActingDriver(payload, mapping, telegramIdBigInt, anchor)
+    driver = acting.driver
     const target = driverYandexTarget(driver, mapping.activeParkId)
     if (driver && !target.ok && target.reason === 'PARK_UNPROVEN') {
         const recordAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
@@ -1127,10 +1314,11 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
 
     // 2a. Profile-swap guard: if the linked profile is fired, use the driver's own
     //     working twin in the same park — only the single one with the driver's phone.
+    //     A proven Driver row of another park is never swapped by name or phone.
     let effectiveYandexId = target.profileId
     try {
         const conn = await getYandexConnectionCredentialsV1(undefined, target.parkId)
-        if (conn && driver.fullName) {
+        if (conn && driver.fullName && acting.crossPark === null) {
             const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
                 headers: { 'X-Client-ID': conn.clid, 'X-Api-Key': conn.apiKey, 'Accept-Language': 'ru', 'Content-Type': 'application/json' },
@@ -1168,6 +1356,24 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             telegramId: telegramIdBigInt,
         })
         if (mutationAuthorityFailure) return mutationAuthorityFailure
+        if (!(await crossParkProofStillHolds(payload, telegramIdBigInt, anchor, acting.crossPark))) {
+            await recordDriverActionV1({
+                contract: RECORD_DRIVER_ACTION_COMMAND_V1,
+                data: {
+                    driverId: driver.id,
+                    kind,
+                    requestedBy: String(telegramId),
+                    status: 'ESCALATED_TO_MANAGER',
+                    errorMessage: 'proof of the selected park no longer held at dispatch',
+                },
+            }).catch(() => {})
+            return NextResponse.json({
+                ok: false,
+                error: 'YANDEX_PROFILE_PARK_UNPROVEN',
+                status: 'ESCALATED_TO_MANAGER',
+                message: PROFILE_PARK_UNPROVEN_TEXT,
+            })
+        }
         const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
