@@ -2390,6 +2390,15 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
                 expect(switched()).toBe(0)
             })
 
+            test('its own profile listed with another phone does not make the park its own', async () => {
+                mocks.providerFetch.mockResolvedValueOnce(listedAs(OWN, '+79999999999'))
+
+                const { response } = await timed(act('set_active_park', { parkId: OTHER }))
+
+                expect(response.status).toBe(403)
+                expect(switched()).toBe(0)
+            })
+
             test.each([
                 ['no Yandex profile id of its own', { yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalParkId: '  ' }],
                 ['no Driver row at all', null],
