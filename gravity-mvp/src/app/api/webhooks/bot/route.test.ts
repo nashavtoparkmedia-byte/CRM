@@ -906,8 +906,8 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
                 yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
             })
             mocks.providerFetch
-                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1', account: { balance_limit: '0' } }))
                 .mockResolvedValueOnce(parkCars('car-9'))
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1', account: { balance_limit: '0' } }))
                 .mockResolvedValueOnce(yandexOk({}))
 
             const response = await POST(carRequest())
@@ -916,9 +916,9 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
             await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
             expect(mocks.findDriver).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'driver-1' } }))
             const calls = mocks.providerFetch.mock.calls
-            expect(calls.map(([, init]) => init.method)).toEqual(['GET', 'POST', 'PUT'])
-            expect(String(calls[1][0])).toContain('/v1/parks/cars/list')
-            for (const [url] of [calls[0], calls[2]]) {
+            expect(calls.map(([, init]) => init.method)).toEqual(['POST', 'GET', 'PUT'])
+            expect(String(calls[0][0])).toContain('/v1/parks/cars/list')
+            for (const [url] of [calls[1], calls[2]]) {
                 expect(String(url)).toContain(`contractor_profile_id=${PROFILE}`)
                 expect(String(url)).not.toContain('driver-1')
                 expect(String(url)).not.toContain('park-profile')
@@ -933,15 +933,15 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
             mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
             mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
             mocks.providerFetch
-                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1' }))
                 .mockResolvedValueOnce(parkCars('car-9'))
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1' }))
                 .mockResolvedValueOnce(yandexOk({}))
 
             const response = await POST(carRequest())
 
             await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
             const calls = mocks.providerFetch.mock.calls
-            for (const [url] of [calls[0], calls[2]]) {
+            for (const [url] of [calls[1], calls[2]]) {
                 expect(String(url)).toContain(`contractor_profile_id=${LEGACY_PROFILE}`)
             }
         })
@@ -968,14 +968,56 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
             mocks.findDriver.mockResolvedValue({
                 yandexDriverId: `park-profile:${'9'.repeat(32)}`, externalDriverProfileId: PROFILE,
             })
-            mocks.providerFetch.mockResolvedValueOnce({ ok: false, status: 404, text: async () => JSON.stringify({ message: 'not found' }) })
+            mocks.providerFetch
+                .mockResolvedValueOnce(parkCars('car-9'))
+                .mockResolvedValueOnce({ ok: false, status: 404, text: async () => JSON.stringify({ message: 'not found' }) })
 
             const response = await POST(carRequest())
 
             expect(response.status).toBe(502)
             await expect(response.json()).resolves.toMatchObject({ error: 'Failed to fetch driver profile' })
+            expect(mocks.providerFetch).toHaveBeenCalledTimes(2)
+            expect(mocks.providerFetch.mock.calls[1][1]).toMatchObject({ method: 'GET' })
+        })
+
+        test('a rate-limited car listing binds nothing and is not reported as a missing car', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.providerFetch.mockResolvedValueOnce({ ok: false, status: 429, json: async () => ({}) })
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(503)
+            await expect(response.json()).resolves.toEqual({ error: 'Не удалось проверить автомобиль в Яндексе. Попробуйте позже.' })
             expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
-            expect(mocks.providerFetch.mock.calls[0][1]).toMatchObject({ method: 'GET' })
+        })
+
+        test('a car on a later page of the park\'s listing is found and bound', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            const page = (ids: string[], total: number) => ({ ok: true, status: 200, json: async () => ({ cars: ids.map((id) => ({ id })), total }) })
+            mocks.providerFetch
+                .mockResolvedValueOnce(page(Array.from({ length: 500 }, (_, index) => `other-${index}`), 501))
+                .mockResolvedValueOnce(page(['car-9'], 501))
+                .mockResolvedValueOnce(yandexOk({ car_id: 'car-1' }))
+                .mockResolvedValueOnce(yandexOk({}))
+
+            const response = await POST(carRequest())
+
+            await expect(response.json()).resolves.toEqual({ success: true, newCarId: 'car-9' })
+            expect(mocks.providerFetch.mock.calls.map(([, init]) => init.method)).toEqual(['POST', 'POST', 'GET', 'PUT'])
+        })
+
+        test('a car missing from the park\'s whole listing is refused before any profile read', async () => {
+            mocks.getYandexConnectionCredentials.mockResolvedValue(connection)
+            mocks.findDriver.mockResolvedValue({ yandexDriverId: LEGACY_PROFILE, externalDriverProfileId: null })
+            mocks.providerFetch.mockResolvedValueOnce(parkCars('car-1'))
+
+            const response = await POST(carRequest())
+
+            expect(response.status).toBe(409)
+            await expect(response.json()).resolves.toEqual({ error: 'Этот автомобиль не найден в выбранном парке. Найдите автомобиль заново.' })
+            expect(mocks.providerFetch).toHaveBeenCalledTimes(1)
         })
     })
 })
@@ -1330,7 +1372,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             if (field === 'dismissedAt') return condition === null ? candidate.dismissedAt === null : candidate.dismissedAt !== null
             return (candidate as any)[field] === condition
         }))
-        return rows.slice(0, take ?? rows.length)
+        return rows.slice(0, take ?? rows.length).map((found) => ({ ...found }))
     }
 
     beforeEach(() => {
@@ -1359,8 +1401,12 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             target: '123456',
         }))
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
-        mocks.findDriver.mockImplementation(async ({ where }: any) => drivers.find((candidate) => candidate.id === where.id) ?? null)
-        mocks.findDriverByYandex.mockImplementation(async () => anchor)
+        // Reads return copies, as the database would: a later change is never seen through an earlier read.
+        mocks.findDriver.mockImplementation(async ({ where }: any) => {
+            const found = drivers.find((candidate) => candidate.id === where.id)
+            return found ? { ...found } : null
+        })
+        mocks.findDriverByYandex.mockImplementation(async () => ({ ...anchor }))
         mocks.findDrivers.mockImplementation(findDriverRows)
         mocks.confirmedDriverCluster.mockImplementation(async (key: string) => (
             key === KEY ? { contactId: CONTACT, confirmationId: 'confirmation-1', evidenceRoot: 'root-1' } : null
@@ -1507,6 +1553,17 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             expect(calls).toHaveLength(0)
         })
 
+        test('a link row with no recorded park neither caches its car nor shows a cached one', async () => {
+            drivers = [anchor = row(YOKO, { id: 'driver-1', externalParkId: null, externalPersonKey: null, yandexDriverId: PROFILE[YOKO], externalDriverProfileId: null })]
+            carLabel = 'Brand park-nash N-park-nash'
+
+            const response = await act('check_link')
+
+            // The selected park's own car is looked up; the stale label is ignored and nothing is cached.
+            await expect(response.json()).resolves.toMatchObject({ carInfo: `Brand ${YOKO} N-${YOKO}` })
+            expect(mocks.patchDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
         test('a Yoko lookup that finishes after a switch caches only Yoko\'s car, which the next park never shows', async () => {
             hooks.onProfileGet = () => { selectedPark = NASH }
 
@@ -1588,27 +1645,59 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
             ['the bot authority now proves another Contact', () => {
                 mocks.authorizeDriverTelegram.mockResolvedValue({ chatId: 'chat-1', contactId: 'contact-2', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456' })
             }],
+            ['the link row\'s licence cluster changes', () => { anchor.externalPersonKey = 'vu:9999999999' }],
+            ['the link row moves to another Contact', () => { anchor.contactId = 'contact-2' }],
         ])('no PUT when, between the GET and the PUT, %s', async (_name, change) => {
-            selectedPark = NASH
-            hooks.onProfileGet = change
+            for (const action of [['change_limit', { limitValue: 5 }], ['update_driver_car', { carId: `car-${NASH}` }]] as const) {
+                drivers = [anchor = row(YOKO, { id: 'driver-1' }), row(NASH), row(YOKO2)]
+                mocks.confirmedDriverCluster.mockImplementation(async (key: string) => (
+                    key === KEY ? { contactId: CONTACT, confirmationId: 'confirmation-1', evidenceRoot: 'root-1' } : null
+                ))
+                mocks.authorizeDriverTelegram.mockImplementation(async () => ({
+                    chatId: 'chat-1', contactId: CONTACT, contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
+                }))
+                calls = []
+                selectedPark = NASH
+                hooks.onProfileGet = change
 
-            const response = await act('change_limit', { limitValue: 5 })
+                const response = await act(action[0], action[1])
 
-            expect(response.status).toBe(409)
-            await expect(response.json()).resolves.toEqual({ error: 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.' })
-            expect(puts()).toHaveLength(0)
+                expect(response.status).toBe(409)
+                await expect(response.json()).resolves.toEqual({ error: 'Ваш профиль в выбранном парке не подтверждён. Выберите парк заново или обратитесь к менеджеру.' })
+                expect(puts()).toHaveLength(0)
+                // The action did start in Наш Автопарк: its profile was read there.
+                expect(calls.some((call) => call.method === 'GET' && call.url.includes(PROFILE[NASH]))).toBe(true)
+            }
         })
 
-        test('no PUT once the proof is older than its 30 seconds', async () => {
+        test.each([
+            ['change_limit', { limitValue: 5 }],
+            ['update_driver_car', { carId: 'car-park-nash' }],
+        ])('%s: no PUT once the proof is older than 12 seconds, shorter than the bot\'s 15 s wait', async (action, extra) => {
             selectedPark = NASH
             let now = 1_700_000_000_000
             const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
-            hooks.onProfileGet = () => { now += 30_001 }
+            hooks.onProfileGet = () => { now += 12_001 }
             try {
-                const response = await act('change_limit', { limitValue: 5 })
+                const response = await act(action, extra)
 
                 expect(response.status).toBe(409)
                 expect(puts()).toHaveLength(0)
+            } finally {
+                clock.mockRestore()
+            }
+        })
+
+        test('a proof still inside its 12 seconds lets the PUT through', async () => {
+            selectedPark = NASH
+            let now = 1_700_000_000_000
+            const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+            hooks.onProfileGet = () => { now += 11_000 }
+            try {
+                const response = await act('change_limit', { limitValue: 5 })
+
+                expect(response.status).toBe(200)
+                expect(puts()).toHaveLength(1)
             } finally {
                 clock.mockRestore()
             }

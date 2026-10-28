@@ -233,9 +233,10 @@ async function handleCheckLink(payload: any) {
     // Return cached car label immediately — avoids 9 sequential Yandex API calls
     // which (a) trigger 429 rate-limiting and (b) cost ~5 seconds per check_link.
     // Cache is populated below on first successful lookup.
-    // The cache holds only the car of the link row in that row's own park, and
-    // is shown only while that park is selected: a lookup that finished after
-    // a park switch can then never show one park's car in another.
+    // The cache holds only the car of the link row in that row's own recorded
+    // park, and is shown only while that park is selected: a lookup that
+    // finished after a park switch can then never show one park's car in
+    // another. A link row with no recorded park never uses the cache.
     if (mapping.carLabel) {
         let cachedDriver: { fullName: string; externalParkId: string | null } | null | undefined
         try {
@@ -246,7 +247,7 @@ async function handleCheckLink(payload: any) {
         } catch { /* park unknown: look the car up instead */ }
         const cachePark = cachedDriver?.externalParkId?.trim() || null
         const selectedPark = mapping.activeParkId?.trim() || null
-        if (cachedDriver !== undefined && (!cachePark || !selectedPark || cachePark === selectedPark)) {
+        if (cachePark && (!selectedPark || cachePark === selectedPark)) {
             if (cachedDriver?.fullName) driverName = cachedDriver.fullName
             return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo: mapping.carLabel })
         }
@@ -270,6 +271,9 @@ async function handleCheckLink(payload: any) {
         const acting = await botActingDriver(payload, mapping, telegramIdBigInt, driver)
         const ownPark = acting.crossPark === null
         driver = acting.driver
+        // Only a link row with a recorded park caches its car: the cache then
+        // always belongs to that one park.
+        const cacheable = ownPark && !!driver?.externalParkId?.trim()
 
         const target = driverYandexTarget(driver, mapping.activeParkId)
         if (driver?.fullName) driverName = driver.fullName
@@ -311,7 +315,7 @@ async function handleCheckLink(payload: any) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
                         // Cache to DriverTelegram so future check_link calls skip Yandex pagination
-                        if (ownPark) {
+                        if (cacheable) {
                             const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
                                 driverId: mapping.driverId,
                                 telegramId: telegramIdBigInt,
@@ -357,12 +361,14 @@ async function handleCheckLink(payload: any) {
                                         if (car) {
                                             carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                                             console.log('[check_link] phone-search fallback car:', carInfo)
-                                            const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
-                                                driverId: mapping.driverId,
-                                                telegramId: telegramIdBigInt,
-                                            })
-                                            if (mutationAuthorityFailure) return mutationAuthorityFailure
-                                            await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
+                                            if (cacheable) {
+                                                const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
+                                                    driverId: mapping.driverId,
+                                                    telegramId: telegramIdBigInt,
+                                                })
+                                                if (mutationAuthorityFailure) return mutationAuthorityFailure
+                                                await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
+                                            }
                                         }
                                     }
                                 }
@@ -404,8 +410,12 @@ type BotDriverRow = {
     contactId: string | null
 }
 
-/** How long the person proof an action started with may authorize its provider change. */
-const CROSS_PARK_PROOF_TTL_MS = 30_000
+/**
+ * How long the person proof an action started with may authorize its provider
+ * change: shorter than the bot's 15 s wait for an answer, so nothing changes at
+ * the provider after the driver has already been told the request failed.
+ */
+const CROSS_PARK_PROOF_TTL_MS = 12_000
 
 /** A real Yandex contractor profile id, the only form the Fleet API and the scraper act on. */
 const YANDEX_PROFILE_ID = /^[a-f0-9]{24,}$/
@@ -508,7 +518,9 @@ async function proveCrossParkDriver(
  * something at the provider. It keeps the park and Driver row fixed at the
  * action's start and never reads the selected park again; it refuses a proof
  * older than CROSS_PARK_PROOF_TTL_MS, or one that no longer names the same row,
- * profile, Contact and cluster. An action in the link row's own park has none.
+ * profile, Contact and cluster. The link row is read again as well: its cluster,
+ * Contact and park must still be the ones the action started with. An action in
+ * the link row's own park has no proof to keep.
  */
 async function crossParkProofStillHolds(
     payload: unknown,
@@ -518,7 +530,14 @@ async function crossParkProofStillHolds(
 ): Promise<boolean> {
     if (!proof) return true
     if (!anchor || Date.now() - proof.provenAt > CROSS_PARK_PROOF_TTL_MS) return false
-    const again = (await proveCrossParkDriver(payload, proof.anchorDriverId, telegramId, anchor, proof.parkId))?.crossPark
+    const current: BotDriverRow | null = await prisma.driver.findUnique({ where: { id: anchor.id }, select: BOT_DRIVER_SELECT })
+    if (
+        !current
+        || current.externalPersonKey !== anchor.externalPersonKey
+        || current.contactId !== anchor.contactId
+        || current.externalParkId !== anchor.externalParkId
+    ) return false
+    const again = (await proveCrossParkDriver(payload, proof.anchorDriverId, telegramId, current, proof.parkId))?.crossPark
     return !!again
         && again.actingDriverId === proof.actingDriverId
         && again.profileId === proof.profileId
@@ -529,6 +548,20 @@ async function crossParkProofStillHolds(
 
 // Helper: find car by ID using paginated cars/list (same logic as getCarById in actions.ts)
 async function findCarById(connection: any, carId: string) {
+    const lookup = await lookupParkCar(connection, carId)
+    return lookup.state === 'found' ? lookup.car : null
+}
+
+/**
+ * One of the connection park's own cars by id. `absent` only after the whole
+ * listing was read; a failed page (429 included) or a listing longer than the
+ * page budget is `unavailable`, never taken for a missing car.
+ */
+async function lookupParkCar(connection: any, carId: string): Promise<
+    | { state: 'found'; car: { brand: any; model: any; plate: any; color: any; year: any } }
+    | { state: 'absent' }
+    | { state: 'unavailable' }
+> {
     const PAGE = 500
     const MAX_PAGES = 10
     const headers: Record<string, string> = {
@@ -553,20 +586,20 @@ async function findCarById(connection: any, carId: string) {
         // 429 = rate-limited; other errors abort
         if (!res.ok) {
             console.warn('[findCarById] Yandex status', res.status, 'on page', page)
-            break
+            return { state: 'unavailable' }
         }
         const data = await res.json()
         const cars: any[] = data.cars || []
         const found = cars.find((c: any) => c.id === carId)
         if (found) {
-            return { brand: found.brand, model: found.model, plate: found.number, color: found.color, year: found.year }
+            return { state: 'found', car: { brand: found.brand, model: found.model, plate: found.number, color: found.color, year: found.year } }
         }
         // Use ?? null to distinguish "total=0" from "total missing"
         const total: number | null = data.total ?? null
-        if (total !== null && page * PAGE + cars.length >= total) break
-        if (total === null && cars.length < PAGE) break // last page (no total field)
+        if (total !== null && page * PAGE + cars.length >= total) return { state: 'absent' }
+        if (total === null && cars.length < PAGE) return { state: 'absent' } // last page (no total field)
     }
-    return null
+    return { state: 'unavailable' }
 }
 
 // ── Cash compensation pilot ────────────────────────────────────────────────
@@ -1183,16 +1216,21 @@ async function handleUpdateDriverCar(payload: any) {
     }
 
     try {
-        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
-        const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
-        if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
-
         // The bot sends only the car id it found while some park was selected.
         // A car is bound only if it is one of this park's own cars, so a car
         // found before a park switch is never bound to another park's profile.
-        if (!(await findCarById(connection, String(carId)))) {
+        // A listing Yandex did not finish proves nothing and binds nothing.
+        const parkCar = await lookupParkCar(connection, String(carId))
+        if (parkCar.state === 'unavailable') {
+            return NextResponse.json({ error: 'Не удалось проверить автомобиль в Яндексе. Попробуйте позже.' }, { status: 503 })
+        }
+        if (parkCar.state === 'absent') {
             return NextResponse.json({ error: 'Этот автомобиль не найден в выбранном парке. Найдите автомобиль заново.' }, { status: 409 })
         }
+
+        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
+        const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
+        if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
 
         const putBody = { ...profile, car_id: carId }
         const mutationAuthorityFailure = await requireCurrentBotDriverAuthority(payload, {
