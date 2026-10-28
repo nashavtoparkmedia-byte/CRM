@@ -206,7 +206,7 @@ export async function fetchParkProfiles(
   const limit = target ? 1 : query ? 100 : 1000
   let total = Number.POSITIVE_INFINITY
   const bulk = !target && !query
-  let pageGapMs = BULK_PROFILE_PAGING_V1.PAGE_GAP_MS
+  let pageGapMs: number = BULK_PROFILE_PAGING_V1.PAGE_GAP_MS
   let gapDue = false
   let throttledInARow = 0
   let waitedMs = 0
