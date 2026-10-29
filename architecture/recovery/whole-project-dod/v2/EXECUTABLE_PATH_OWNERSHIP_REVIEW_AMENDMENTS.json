@@ -2947,6 +2947,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "telegram-simple-link-authority-r1-strict-phone-5fbd9ed4-20261029",
+      "reviewed_at": "2026-10-29T00:00:00Z",
+      "reviewed_by": "TELEGRAM_SIMPLE_LINK_AUTHORITY_R1_EXECUTOR_REVIEW_5FBD9ED4",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_R1_STRICT_TELEGRAM_PHONE_20261029",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is telegram-simple-link-authority-d0be23e8-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint that amendment approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "264bf9eb1db9afd336fb871ba13cdbb1fb9cf3abd96820736b04f32f1df53bca",
+          "current_source_sha256": "1414e53f2ceea4231b5829d5ae1a1444ecff088fc6c6b17fdfb290d36de84407",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner GO of 2026-10-29 (R1, from the independent Telegram review): the sync_user auto-link reads the number a driver shared through Telegram only in its international Russian form, 11 digits beginning with 7, so a foreign number never links the Russian profile that shares its last ten digits. Stored CRM numbers, D2, the manual link and the rest of the authority are unchanged. It adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
