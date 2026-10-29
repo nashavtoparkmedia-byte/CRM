@@ -215,10 +215,11 @@ describe('the webhook routes those actions to the service', () => {
         expect(ROUTE).toContain("from '@/modules/fleet-operations/public/v1'")
     })
 
-    it('proves the person through current Telegram Driver authority and writes no link', () => {
+    it('proves the link through current Telegram Driver authority, the person through Contacts, and writes no link', () => {
         const block = ROUTE.slice(ROUTE.indexOf('// ── Cash compensation pilot'), ROUTE.indexOf('// Handle a phone submitted through the driver bot'))
         expect(block).toContain('resolveCurrentBotDriverAuthority(payload')
-        expect(block).toContain('contactId: authority.contactId')
+        expect(block).toContain('prepareDriverTelegramConversationAuthorityV1({ driverId: mapping.driverId, telegramId })')
+        expect(block).toContain('contactId: person.contactId')
         expect(block).not.toMatch(/driverTelegram\.(create|update|upsert|delete)/)
         expect(block).not.toMatch(/phone|BotUserRegistry|botUserRegistry|fetch\(/)
     })
