@@ -131,7 +131,7 @@ describe('the telegram scene calls the backend for every decision', () => {
 
     it('renders every refusal the backend can return', () => {
         for (const refusal of [
-            'identity_not_proven', 'identity_needs_review', 'identity_busy',
+            'identity_not_proven', 'identity_needs_review', 'identity_busy', 'cash_person_unconfirmed',
             'not_self_employed', 'self_employment_unknown',
             'outside_first_calendar_month', 'support_not_confirmed', 'attachment_missing',
             'claim_above_pilot_cap', 'order_not_in_catalogue', 'order_already_claimed',
