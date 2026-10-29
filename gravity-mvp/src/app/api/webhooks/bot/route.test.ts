@@ -131,7 +131,7 @@ describe('driver-bot generic phone ingress', () => {
             contactUserId: 123456,
             username: 'driver',
             firstName: 'Иван',
-            phone: '8 (999) 000-11-22',
+            phone: '79990001122',
         }))
         const body = await response.json()
 
@@ -167,7 +167,8 @@ describe('driver-bot generic phone ingress', () => {
             personResolutionStatus: 'vu_clustered',
             ...overrides,
         })
-        const verified = { telegramId: '123456', contactUserId: 123456, username: 'driver', phone: '8 (999) 000-11-22' }
+        // Telegram sends every contact number in full international form.
+        const verified = { telegramId: '123456', contactUserId: 123456, username: 'driver', phone: '79990001122' }
 
         test('a new driver whose number names exactly one working profile is linked at once, in that profile\'s park', async () => {
             mocks.findDrivers.mockResolvedValue([working()])
@@ -239,6 +240,30 @@ describe('driver-bot generic phone ingress', () => {
 
             await expect((await POST(syncUserRequest(verified))).json()).resolves.toMatchObject({ status: 'PENDING_MANAGER_LINK' })
             expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['the Maldives (+960 791 2345)', '9607912345', '+79607912345'],
+            ['Lebanon (+961 3 123456)', '9613123456', '+79613123456'],
+            ['Vietnam (+84 912 345 678)', '84912345678', '+74912345678'],
+            ['an 8… spelling, which Telegram never sends', '89990001122', '+79990001122'],
+            ['a bare 10-digit number', '9990001122', '+79990001122'],
+            ['Ukraine (+380…) ending with the same ten digits', '+3809990001122', '+79990001122'],
+        ])('a number from %s never links a Russian profile', async (_, telegramPhone, russianPhone) => {
+            mocks.findDrivers.mockResolvedValue([working({ phone: russianPhone })])
+
+            await expect((await POST(syncUserRequest({ ...verified, phone: telegramPhone }))).json())
+                .resolves.toMatchObject({ autoLinked: false, status: 'PENDING_MANAGER_LINK' })
+            expect(mocks.findDrivers).not.toHaveBeenCalled()
+            expect(mocks.upsertDriverTelegramLink).not.toHaveBeenCalled()
+            expect(mocks.recordPendingBotLinkRequest).toHaveBeenCalledOnce()
+        })
+
+        test('the international number with a plus and spaces is still the same Russian number', async () => {
+            mocks.findDrivers.mockResolvedValue([working()])
+
+            await expect((await POST(syncUserRequest({ ...verified, phone: '+7 999 000-11-22' }))).json())
+                .resolves.toMatchObject({ autoLinked: true, driverId: 'driver-yoko' })
         })
 
         test('a foreign number never links to a Russian profile with the same last digits', async () => {
@@ -453,11 +478,11 @@ describe('driver-bot current Telegram authority', () => {
     )
 
     test.each(mutationCases.flatMap(([action, payload]) => [
-        [action, payload, 'relinked to another Driver', { driverId: 'driver-2' }],
-        [action, payload, 'unlinked', null],
+        [action, 'relinked to another Driver', payload, { driverId: 'driver-2' }],
+        [action, 'unlinked', payload, null],
     ] as const))(
         '%s performs zero Driver mutation when the link was meanwhile %s',
-        async (action, payload, _, link) => {
+        async (action, _, payload, link) => {
             mocks.findDriverTelegram.mockResolvedValue(link)
             const response = await POST(actionRequest(action, {
                 ...payload,

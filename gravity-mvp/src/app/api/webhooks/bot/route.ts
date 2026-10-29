@@ -1127,9 +1127,10 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
 }
 
 /**
- * The 11-digit Russian form of a phone, or null for any other length or
- * country: a longer number that merely ends with the same ten digits is a
- * different number.
+ * The 11-digit Russian form of a phone stored in the CRM, or null for any
+ * other length or country: a longer number that merely ends with the same ten
+ * digits is a different number. Stored rows may keep the 8… or the 10-digit
+ * spelling; a number shared through Telegram is read by telegramRussianPhone.
  */
 function exactRussianPhone(value: unknown): string | null {
     const digits = typeof value === 'string' ? value.replace(/\D/g, '') : ''
@@ -1138,7 +1139,18 @@ function exactRussianPhone(value: unknown): string | null {
 }
 
 /**
- * The one Driver profile a verified phone may link by itself, or null.
+ * The Russian number a driver shared through Telegram, or null. Telegram sends
+ * every contact number in full international form, so only 11 digits beginning
+ * with 7 are Russian: a 10-digit or 8… number is another country's number and
+ * is never read as a Russian one by its last ten digits.
+ */
+function telegramRussianPhone(value: unknown): string | null {
+    const digits = typeof value === 'string' ? value.replace(/\D/g, '') : ''
+    return digits.length === 11 && digits[0] === '7' ? digits : null
+}
+
+/**
+ * The one Driver profile a Telegram-proven number may link by itself, or null.
  *
  * Among the CRM's non-dismissed Driver rows, those whose phone is exactly this
  * one: there must be exactly one, in a recorded park, with a Yandex profile id
@@ -1147,7 +1159,7 @@ function exactRussianPhone(value: unknown): string | null {
  * and the manager links it.
  */
 async function uniqueUnlinkedDriverForPhone(phone: string): Promise<{ id: string; fullName: string | null; parkId: string } | null> {
-    const exact = exactRussianPhone(phone)
+    const exact = telegramRussianPhone(phone)
     if (!exact) return null
     const rows = await prisma.driver.findMany({
         where: { dismissedAt: null, phone: { endsWith: exact.slice(1) } },
