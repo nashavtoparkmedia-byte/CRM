@@ -219,7 +219,9 @@ describe('the webhook routes those actions to the service', () => {
         const block = ROUTE.slice(ROUTE.indexOf('// ── Cash compensation pilot'), ROUTE.indexOf('// Handle a phone submitted through the driver bot'))
         expect(block).toContain('resolveCurrentBotDriverAuthority(payload')
         expect(block).toContain('prepareDriverTelegramConversationAuthorityV1({ driverId: mapping.driverId, telegramId })')
-        expect(block).toContain('contactId: person.contactId')
+        // The person is passed only when the Contacts proof confirms the link's own Driver; otherwise none.
+        expect(block).toMatch(/person\.driverId === mapping\.driverId\s*\?\s*person\.contactId\s*:\s*null/u)
+        expect(block).toContain('contactId: personContactId')
         expect(block).not.toMatch(/driverTelegram\.(create|update|upsert|delete)/)
         expect(block).not.toMatch(/phone|BotUserRegistry|botUserRegistry|fetch\(/)
     })

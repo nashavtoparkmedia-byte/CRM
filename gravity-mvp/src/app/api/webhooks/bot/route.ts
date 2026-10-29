@@ -782,7 +782,7 @@ type CompensationPersonProof =
         proven: true
         telegramUserId: string
         driverId: string
-        contactId: string
+        contactId: string | null
         selectedExternalParkId: string | null
     }
     | {
@@ -823,25 +823,25 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
             refusal: 'identity_not_proven',
         }
     }
-    // Cash pays a person, and binds its budget to that person's Contact: the
-    // exact private chat of this peer, its confirmed identity and a Contact that
-    // confirms the linked Driver. A linked driver without one is told to ask a
-    // manager, never that the profile is not linked.
+    // Cash opens on the link alone. It pays a person, and binds money only to
+    // that person's Contact: the exact private chat of this peer, its confirmed
+    // identity and a Contact that confirms the linked Driver. Without one the
+    // pilot still decides the programme and refuses any claim.
     let person: Awaited<ReturnType<typeof prepareDriverTelegramConversationAuthorityV1>> | null = null
     try {
         person = await prepareDriverTelegramConversationAuthorityV1({ driverId: mapping.driverId, telegramId })
     } catch (error: unknown) {
         console.warn('[driver-bot] Cash person not proven:', error instanceof Error ? error.message : String(error))
     }
-    if (!person || person.target !== telegramId.toString() || person.driverId !== mapping.driverId) {
-        return { proven: false, response: null, refusal: 'identity_needs_review' }
-    }
+    const personContactId = person && person.target === telegramId.toString() && person.driverId === mapping.driverId
+        ? person.contactId
+        : null
     return {
         proven: true,
         // The canonical decimal form authority proved, never the raw payload.
         telegramUserId: telegramId.toString(),
         driverId: mapping.driverId,
-        contactId: person.contactId,
+        contactId: personContactId,
         // The link's own selection, read with the proof. The payload has none.
         selectedExternalParkId: mapping.activeParkId ?? null,
     }
