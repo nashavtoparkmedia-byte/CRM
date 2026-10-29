@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
@@ -51,6 +51,7 @@ vi.mock('@/modules/contacts/public/v1', () => ({
 }))
 
 import {
+  fetchParkProfiles,
   reconcileClusters,
   refreshYandexFleetDriverProfileV1,
   upsertObservation,
@@ -348,5 +349,122 @@ describe('targeted refresh of one driver profile', () => {
     mocks.driverUpdate.mockRejectedValue(new Error('lock timeout'))
     expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE }))
       .toEqual({ status: 'failed', code: 'persist_failed' })
+  })
+
+  test('keeps the stored SMZ flag and hire date when Yandex states neither', async () => {
+    const row = profileRow(PROFILE)
+    const { hire_date: _hire, is_selfemployed: _smz, employment_type: _type, ...unstated } = row.driver_profile
+    fetchMock.mockResolvedValue(answer(200, { driver_profiles: [{ ...row, driver_profile: unstated }], total: 1 }))
+    expect(await refreshYandexFleetDriverProfileV1({ externalParkId: PARK_B, externalDriverProfileId: PROFILE }))
+      .toEqual({ status: 'refreshed' })
+    const { data } = mocks.driverUpdate.mock.calls[0][0]
+    expect(data).not.toHaveProperty('isSelfEmployed')
+    expect(data).not.toHaveProperty('employmentType')
+    expect(data).not.toHaveProperty('yandexHireDate')
+  })
+})
+
+// The two biggest parks lost every nightly read to one throttled page, so their
+// drivers never had the SMZ flag or the hire date stored.
+describe('a nightly read of a park paces itself and survives Yandex throttling', () => {
+  const PARK = 'a'.repeat(32)
+  const fetchMock = vi.fn()
+  const connection = { id: 'conn-yoko', connectionId: 'conn-yoko', clid: 'yoko', apiKey: 'key-yoko', parkId: PARK, localParkId: 'local-yoko', name: 'yoko' }
+  const rows = (from: number, count: number) => Array.from({ length: count }, (_, index) => ({
+    driver_profile: { id: String(from + index).padStart(32, '0'), first_name: 'Иван', last_name: 'Петров', phones: ['+79990000001'] },
+    current_status: { status: 'free' },
+  }))
+  const page = (from: number, count: number, total: number) => ({
+    ok: true, status: 200, headers: new Headers(), json: async () => ({ driver_profiles: rows(from, count), total }),
+  })
+  const throttled = (retryAfter: string | null = null) => ({
+    ok: false, status: 429, headers: new Headers(retryAfter === null ? {} : { 'Retry-After': retryAfter }), json: async () => ({}),
+  })
+  const offsets = () => fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).offset)
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test('leaves a gap before every page after the first', async () => {
+    fetchMock
+      .mockResolvedValueOnce(page(0, 1000, 2500))
+      .mockResolvedValueOnce(page(1000, 1000, 2500))
+      .mockResolvedValueOnce(page(2000, 500, 2500))
+    const read = fetchParkProfiles(connection, null)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(await read).toHaveLength(2500)
+    expect(offsets()).toEqual([0, 1000, 2000])
+  })
+
+  test('honours Retry-After, asks for the same page again and widens the gap for the rest of the park', async () => {
+    fetchMock
+      .mockResolvedValueOnce(page(0, 1000, 2500))
+      .mockResolvedValueOnce(throttled('7'))
+      .mockResolvedValueOnce(page(1000, 1000, 2500))
+      .mockResolvedValueOnce(page(2000, 500, 2500))
+    const read = fetchParkProfiles(connection, null)
+    await vi.advanceTimersByTimeAsync(1_000 + 6_999)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    // The gap after a 429 is twice the usual one.
+    await vi.advanceTimersByTimeAsync(1_999)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await read).toHaveLength(2500)
+    expect(offsets()).toEqual([0, 1000, 1000, 2000])
+  })
+
+  test('backs off exponentially when Yandex gives no Retry-After', async () => {
+    fetchMock
+      .mockResolvedValueOnce(throttled())
+      .mockResolvedValueOnce(throttled())
+      .mockResolvedValueOnce(page(0, 300, 300))
+    const read = fetchParkProfiles(connection, null)
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(9_999)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await read).toHaveLength(300)
+  })
+
+  test('gives the park up at its wait budget, and the error names the throttling', async () => {
+    fetchMock.mockResolvedValue(throttled())
+    const settled = fetchParkProfiles(connection, null).catch((error: unknown) => error)
+    await vi.runAllTimersAsync()
+    // 5 + 10 + 20 + 40 + 80 s waited; the next 160 s would pass 300 s.
+    expect(await settled).toMatchObject({
+      status: 429,
+      message: 'Yandex Fleet HTTP 429 (throttled 6 times in a row at offset 0; waited 155 s of the 300 s budget)',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(6)
+
+    fetchMock.mockClear()
+    fetchMock.mockResolvedValue(throttled('600'))
+    const tooLong = fetchParkProfiles(connection, null).catch((error: unknown) => error)
+    await vi.runAllTimersAsync()
+    expect(await tooLong).toMatchObject({ status: 429, retryAfterMs: 600_000 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('a searched read is interactive and still reports a 429 at once', async () => {
+    fetchMock.mockResolvedValue(throttled('30'))
+    await expect(fetchParkProfiles(connection, 'Петров')).rejects.toMatchObject({
+      status: 429, retryAfterMs: 30_000, message: 'Yandex Fleet HTTP 429',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
