@@ -61,12 +61,14 @@ import {
 /**
  * What the Telegram webhook proved before it called the pilot.
  *
- * Telegram channel authority established that the exact private chat belongs
- * to a Contact confirmed as this Driver's person. fleet_operations may not read
- * Telegram channel state, so the service re-checks the Contact-to-Driver
- * confirmation and resolves the person through Contacts' public reads. The
- * Telegram user id is carried as submission evidence; the webhook is the only
- * caller that can prove it.
+ * The Telegram link names the Driver, read again by the webhook for every
+ * request; that alone opens the section, decides eligibility and lists the
+ * driver's own orders. A claim also needs the person C1 binds money to: when
+ * the webhook proved a Contact for this Telegram account it passes it as
+ * `contactId`, and the service re-checks the Contact-to-Driver confirmation and
+ * resolves the person through Contacts' public reads. fleet_operations may not
+ * read Telegram channel state. The Telegram user id is carried as submission
+ * evidence; the webhook is the only caller that can prove it.
  *
  * The selected park is read by the webhook from the same Telegram link, in the
  * same request. The bot never supplies it.
@@ -74,7 +76,8 @@ import {
 export interface PilotTelegramPersonProofV1 {
     telegramUserId: string
     driverId: string
-    contactId: string
+    /** The Contact proven for this Telegram account, or null when the link stands alone. */
+    contactId: string | null
     selectedExternalParkId: string | null
 }
 
@@ -89,13 +92,20 @@ export interface PilotDriverFactsV1 {
     facts: CompensationEligibilityFactsV1
 }
 
-export interface PilotDriverIdentityV1 extends PilotDriverFactsV1 {
+/** The Driver the Telegram link names, with the facts eligibility reads. */
+export interface PilotLinkedDriverV1 extends PilotDriverFactsV1 {
     telegramUserId: string
+}
+
+/** The person C1 binds a claim to. Only the monetary steps need one. */
+export interface PilotMonetaryPersonV1 {
     /** Canonical contact proven for this Telegram account. */
     canonicalContactId: string
     /** The contacts C1 binds to the monetary person; the pilot admits one. */
     lineage: readonly string[]
 }
+
+export interface PilotDriverIdentityV1 extends PilotLinkedDriverV1, PilotMonetaryPersonV1 {}
 
 export interface PilotApplicationSummaryV1 {
     applicationId: string
@@ -231,6 +241,8 @@ export const PILOT_VIEW_REFUSALS_V1 = [
     'identity_not_proven',
     'identity_needs_review',
     'identity_busy',
+    // The programme admits the linked driver, but no person is proven to bind a claim to.
+    'cash_person_unconfirmed',
     'park_not_selected',
     'driver_not_in_park',
     'selected_park_profile_unproven',
@@ -271,6 +283,14 @@ export type CompensationSectionViewV1 =
 export type PilotIdentityResolutionV1 =
     | { proven: true; identity: PilotDriverIdentityV1 }
     | { proven: false; refusal: 'identity_not_proven' | 'identity_needs_review' | 'identity_busy' }
+
+export type PilotDriverResolutionV1 =
+    | { proven: true; driver: PilotLinkedDriverV1 }
+    | { proven: false; refusal: 'identity_not_proven' | 'identity_busy' }
+
+export type PilotPersonResolutionV1 =
+    | { proven: true; person: PilotMonetaryPersonV1 }
+    | { proven: false; refusal: 'cash_person_unconfirmed' | 'identity_busy' }
 
 function exactText(value: unknown): value is string {
     return typeof value === 'string' && value !== '' && value === value.trim()
@@ -320,25 +340,9 @@ export async function resolvePilotIdentityV1(
         return { proven: false, refusal: PILOT_IDENTITY_LINEAGE_REFUSALS_V1[admission.refusal] }
     }
 
-    let driver = await port.findDriverFacts(proof.driverId)
-    if (!driver) return { proven: false, refusal: 'identity_not_proven' }
-
-    // Only after the person is proven, and only for the proven row's own park
-    // and profile: nothing in the proof names what the provider is asked about.
-    if (port.ensureDriverFactsFresh && driver.externalParkId && driver.externalDriverProfileId) {
-        const freshness = await port.ensureDriverFactsFresh({
-            driverId: proof.driverId,
-            externalParkId: driver.externalParkId,
-            externalDriverProfileId: driver.externalDriverProfileId,
-            factsStated: driver.facts.isSelfEmployed !== null && driver.facts.parkHireDate !== null,
-        })
-        // Facts the provider could not confirm decide nothing; the driver retries.
-        if (freshness === 'unavailable') return { proven: false, refusal: 'identity_busy' }
-        if (freshness === 'refreshed') {
-            driver = await port.findDriverFacts(proof.driverId)
-            if (!driver) return { proven: false, refusal: 'identity_not_proven' }
-        }
-    }
+    const read = await freshDriverFactsV1(proof.driverId, port)
+    if ('refusal' in read) return { proven: false, refusal: read.refusal }
+    const driver = read.driver
 
     return {
         proven: true,
@@ -351,6 +355,107 @@ export async function resolvePilotIdentityV1(
             facts: driver.facts,
         },
     }
+}
+
+/**
+ * Reads the linked Driver row and, in a park Cash is live in, makes its facts
+ * fresh first. Only the row's own park and profile are ever asked about:
+ * nothing in the proof names what the provider is asked about.
+ */
+async function freshDriverFactsV1(
+    driverId: string,
+    port: CompensationPilotPortV1,
+): Promise<{ driver: PilotDriverFactsV1 } | { refusal: 'identity_not_proven' | 'identity_busy' }> {
+    let driver = await port.findDriverFacts(driverId)
+    if (!driver) return { refusal: 'identity_not_proven' }
+    if (port.ensureDriverFactsFresh && driver.externalParkId && driver.externalDriverProfileId) {
+        const freshness = await port.ensureDriverFactsFresh({
+            driverId,
+            externalParkId: driver.externalParkId,
+            externalDriverProfileId: driver.externalDriverProfileId,
+            factsStated: driver.facts.isSelfEmployed !== null && driver.facts.parkHireDate !== null,
+        })
+        // Facts the provider could not confirm decide nothing; the driver retries.
+        if (freshness === 'unavailable') return { refusal: 'identity_busy' }
+        if (freshness === 'refreshed') {
+            driver = await port.findDriverFacts(driverId)
+            if (!driver) return { refusal: 'identity_not_proven' }
+        }
+    }
+    return { driver }
+}
+
+/**
+ * The Driver the Telegram link names. Nothing here needs a Contact: a linked
+ * driver learns whether the programme admits them, and sees their own orders,
+ * without any further confirmation.
+ */
+export async function resolvePilotDriverV1(
+    proof: PilotTelegramPersonProofV1,
+    port: CompensationPilotPortV1,
+): Promise<PilotDriverResolutionV1> {
+    if (!exactText(proof.telegramUserId) || !exactText(proof.driverId)) {
+        return { proven: false, refusal: 'identity_not_proven' }
+    }
+    const read = await freshDriverFactsV1(proof.driverId, port)
+    if ('refusal' in read) return { proven: false, refusal: read.refusal }
+    return {
+        proven: true,
+        driver: {
+            telegramUserId: proof.telegramUserId,
+            externalParkId: read.driver.externalParkId,
+            externalDriverProfileId: read.driver.externalDriverProfileId,
+            facts: read.driver.facts,
+        },
+    }
+}
+
+/**
+ * The person a claim is bound to, for the monetary steps only: the Contact
+ * proven for this Telegram account, confirmed as this Driver's person, with a
+ * lineage C1 can bind (see resolvePilotIdentityV1 for why only one contact).
+ * Without one the driver still sees the programme, but no claim reaches C1:
+ * money is never bound to a person Contacts has not proven, and no person is
+ * made up from the Driver or the Telegram account instead.
+ */
+export async function resolvePilotPersonV1(
+    proof: PilotTelegramPersonProofV1,
+    port: CompensationPilotPortV1,
+): Promise<PilotPersonResolutionV1> {
+    if (!exactText(proof.contactId) || !exactText(proof.driverId)) {
+        return { proven: false, refusal: 'cash_person_unconfirmed' }
+    }
+    const confirmation = await port.confirmMainDriver(proof.contactId, proof.driverId)
+    if (confirmation === 'busy') return { proven: false, refusal: 'identity_busy' }
+    if (confirmation !== 'confirmed') return { proven: false, refusal: 'cash_person_unconfirmed' }
+    const admission = admitPilotContactLineageV1(
+        proof.contactId,
+        await port.resolveContactLineage(proof.contactId),
+    )
+    if (!admission.admitted) return { proven: false, refusal: 'cash_person_unconfirmed' }
+    return {
+        proven: true,
+        person: { canonicalContactId: admission.canonicalContactId, lineage: admission.lineage },
+    }
+}
+
+type PilotSubjectV1 =
+    | { proven: true; driver: PilotLinkedDriverV1; person: PilotMonetaryPersonV1 | null }
+    | { proven: false; refusal: 'identity_not_proven' | 'identity_busy' }
+
+/**
+ * The driver first, so eligibility never waits on Contacts; then the person,
+ * when there is one. A Contacts lock is a retry, never a verdict.
+ */
+async function resolvePilotSubjectV1(
+    proof: PilotTelegramPersonProofV1,
+    port: CompensationPilotPortV1,
+): Promise<PilotSubjectV1> {
+    const driver = await resolvePilotDriverV1(proof, port)
+    if (!driver.proven) return driver
+    const person = await resolvePilotPersonV1(proof, port)
+    if (!person.proven && person.refusal === 'identity_busy') return { proven: false, refusal: 'identity_busy' }
+    return { proven: true, driver: driver.driver, person: person.proven ? person.person : null }
 }
 
 interface ScopedSectionV1 {
@@ -373,18 +478,20 @@ type ScopedSectionResultV1 =
     }
 
 /**
- * Everything the Telegram surface may act on for one proven person, rebuilt
- * from the database on every request. Local reads only.
+ * Everything the Telegram surface may act on for one linked driver, rebuilt
+ * from the database on every request. Local reads only. Applications and
+ * claims belong to the person, so without one there are none to show.
  */
 async function scopedSectionV1(
-    identity: PilotDriverIdentityV1,
+    identity: PilotLinkedDriverV1,
+    person: PilotMonetaryPersonV1 | null,
     selectedExternalParkId: string | null,
     driverId: string,
     port: CompensationPilotPortV1,
     ingestion: CompensationPilotIngestionPortV1,
     now: Date,
 ): Promise<ScopedSectionResultV1> {
-    const applications = await port.findDriverApplications(identity.lineage)
+    const applications = person ? await port.findDriverApplications(person.lineage) : []
 
     const scoped = resolvePilotScopeV1({
         driverId,
@@ -423,7 +530,7 @@ async function scopedSectionV1(
             catalogueStatus,
             dbNow: facts.dbNow,
             orders: catalogue.orders,
-            claimedOrderIds: await port.findClaimedOrderIds(identity.lineage),
+            claimedOrderIds: person ? await port.findClaimedOrderIds(person.lineage) : [],
         },
     }
 }
@@ -443,12 +550,15 @@ export async function compensationSectionViewV1(
     now: Date,
     options: { search?: string | null } = {},
 ): Promise<CompensationSectionViewV1> {
-    const resolved = await resolvePilotIdentityV1(proof, port)
+    const resolved = await resolvePilotSubjectV1(proof, port)
     if (!resolved.proven) return { available: false, reason: resolved.refusal, applications: [] }
     // The public section is a plain view built here, never a value handed back
     // from a helper that holds the port.
-    const view = await scopedSectionV1(resolved.identity, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
+    const view = await scopedSectionV1(resolved.driver, resolved.person, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
     if (!view.available) return { available: false, reason: view.reason, applications: view.applications }
+    // The programme admits this driver, but no claim could be bound to a person:
+    // no list is offered, and no provider is asked about a day.
+    if (resolved.person === null) return { available: false, reason: 'cash_person_unconfirmed', applications: [] }
 
     let section = view.section
     let applications = view.applications
@@ -471,7 +581,7 @@ export async function compensationSectionViewV1(
                 : { state: 'failed', code: 'driver_day_unavailable' }
             // Rebuilt from storage: whatever the answer wrote is listed by the
             // same catalogue rules every other list uses.
-            const rebuilt = await scopedSectionV1(resolved.identity, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
+            const rebuilt = await scopedSectionV1(resolved.driver, resolved.person, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
             if (!rebuilt.available) return { available: false, reason: rebuilt.reason, applications: rebuilt.applications }
             section = rebuilt.section
             applications = rebuilt.applications
@@ -558,14 +668,16 @@ export async function checkPilotOrderV1(
     ingestion: CompensationPilotIngestionPortV1,
     now: Date,
 ): Promise<PilotOrderCheckV1> {
-    const resolved = await resolvePilotIdentityV1(input, port)
+    const resolved = await resolvePilotSubjectV1(input, port)
     if (!resolved.proven) return { state: 'refused', order: null, refusal: resolved.refusal }
-    const view = await scopedSectionV1(resolved.identity, input.selectedExternalParkId, input.driverId, port, ingestion, now)
+    const view = await scopedSectionV1(resolved.driver, resolved.person, input.selectedExternalParkId, input.driverId, port, ingestion, now)
     if (!view.available) {
         return view.reason === 'catalogue_disabled'
             ? { state: 'unavailable', order: null, refusal: null }
             : { state: 'refused', order: null, refusal: view.reason }
     }
+    // A check leads only to a claim, and a claim needs the person.
+    if (resolved.person === null) return { state: 'refused', order: null, refusal: 'cash_person_unconfirmed' }
     const section = view.section
     if (input.scopeKey !== section.scope.scopeKey) return { state: 'stale_context', order: null, refusal: null }
 
@@ -594,9 +706,9 @@ export async function requestPilotRefreshV1(
     ingestion: CompensationPilotIngestionPortV1,
     now: Date,
 ): Promise<PilotRefreshOutcomeV1> {
-    const resolved = await resolvePilotIdentityV1(proof, port)
+    const resolved = await resolvePilotSubjectV1(proof, port)
     if (!resolved.proven) return { status: 'refused', refusal: resolved.refusal }
-    const view = await scopedSectionV1(resolved.identity, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
+    const view = await scopedSectionV1(resolved.driver, resolved.person, proof.selectedExternalParkId, proof.driverId, port, ingestion, now)
     if (!view.available) {
         return view.reason === 'catalogue_disabled'
             ? { status: 'unavailable', refusal: null }
@@ -655,12 +767,14 @@ export async function submitPilotApplicationV1(
     ingestion: CompensationPilotIngestionPortV1,
     now: Date,
 ): Promise<PilotSubmitOutcomeV1> {
-    const resolved = await resolvePilotIdentityV1(input, port)
+    const resolved = await resolvePilotSubjectV1(input, port)
     if (!resolved.proven) return { submitted: false, refusal: resolved.refusal }
-    const identity = resolved.identity
 
-    const view = await scopedSectionV1(identity, input.selectedExternalParkId, input.driverId, port, ingestion, now)
+    const view = await scopedSectionV1(resolved.driver, resolved.person, input.selectedExternalParkId, input.driverId, port, ingestion, now)
     if (!view.available) return { submitted: false, refusal: view.reason }
+    // Money is bound only to a person Contacts proved; without one nothing reaches C1.
+    if (resolved.person === null) return { submitted: false, refusal: 'cash_person_unconfirmed' }
+    const person = resolved.person
     const section = view.section
     if (input.scopeKey !== section.scope.scopeKey) return { submitted: false, refusal: 'stale_context' }
 
@@ -687,11 +801,11 @@ export async function submitPilotApplicationV1(
     }
 
     const result = await port.submitApplication({
-        canonicalContactId: identity.canonicalContactId,
-        lineage: identity.lineage,
+        canonicalContactId: person.canonicalContactId,
+        lineage: person.lineage,
         order,
         claimedRubles: gate.claimedRubles,
-        telegramUserId: identity.telegramUserId,
+        telegramUserId: resolved.driver.telegramUserId,
         attachmentFileId: gate.attachmentFileId,
         attachmentKind: gate.attachmentKind,
         idempotencyKey: input.idempotencyKey,
