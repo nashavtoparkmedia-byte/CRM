@@ -432,8 +432,8 @@ assert.doesNotMatch(runnerStep, /^        (?:if|continue-on-error):/mu, 'the aut
 assert.match(runnerStep, /^          YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution\.json$/mu)
 assert.match(
   workflow,
-  /jobs:\n  architecture:\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 240\n/u,
-  'the architecture job needs bounded 240-minute headroom for 112 boundary controls and the full repository scans',
+  /jobs:\n  architecture:\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 360\n/u,
+  'the architecture job needs bounded 360-minute headroom (the hosted maximum) for the full boundary-control inventory and the full repository scans',
 )
 assert.match(
   workflow,
