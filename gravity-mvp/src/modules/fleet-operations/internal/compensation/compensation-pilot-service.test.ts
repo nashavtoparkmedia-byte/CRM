@@ -303,6 +303,22 @@ describe('proving the canonical person from the Telegram proof', () => {
         }))).toEqual({ proven: false, refusal: 'identity_needs_review' })
     })
 
+    it('answers needs-review only for a person Contacts confirmed as the main driver', async () => {
+        // The bot tells this refusal's driver that their Telegram link is
+        // confirmed, so an unconfirmed person with a merged lineage stays unproven.
+        for (const lineage of [
+            { status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-merged-away'] },
+            { status: 'unresolvable' as const },
+        ]) {
+            const p = port({
+                confirmMainDriver: vi.fn(async () => 'not_confirmed' as const),
+                resolveContactLineage: vi.fn(async () => lineage),
+            })
+            expect(await resolvePilotIdentityV1(PROOF, p)).toEqual({ proven: false, refusal: 'identity_not_proven' })
+            expect(p.resolveContactLineage).not.toHaveBeenCalled()
+        }
+    })
+
     it('refuses when the proven Driver row is gone', async () => {
         expect(await resolvePilotIdentityV1(PROOF, port({ findDriverFacts: vi.fn(async () => null) })))
             .toEqual({ proven: false, refusal: 'identity_not_proven' })

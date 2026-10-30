@@ -84,6 +84,8 @@ function createFakeCrm() {
             fake.dayKinds = {};
             // A refusal the section answers with before anything else (identity, eligibility).
             fake.reason = null;
+            // A refusal every later action answers with, as when the person changed after the list was shown.
+            fake.laterRefusal = null;
             fake.applications = [];
             fake.remainingBudgetKopecks = 500_000;
         },
@@ -99,9 +101,10 @@ function createFakeCrm() {
                 error.status = failure;
                 throw error;
             }
-            const refusal = !fake.selectedPark ? 'park_not_selected'
+            const parkRefusal = !fake.selectedPark ? 'park_not_selected'
                 : fake.selectedPark !== fake.provenPark ? 'selected_park_profile_unproven'
                     : null;
+            const refusal = action === 'compensation_section' ? parkRefusal : fake.laterRefusal || parkRefusal;
             switch (action) {
                 case 'compensation_section': {
                     if (fake.reason) return { available: false, reason: fake.reason, applications: fake.applications };
@@ -671,6 +674,10 @@ const RESTRICTED_LINES = [
 ];
 const NOT_ELIGIBLE_TEXT = /Причина: ваш профиль не соответствует действующим условиям программы\.\nЧто делать: сейчас компенсация доступна новым водителям, подключённым как парковые самозанятые, за заказы первого месяца работы\.$/;
 
+// The Orchestrator-approved sentence for a confirmed link whose contact the CRM
+// will not bind to money because of its merge history. Pinned here, not imported.
+const MERGE_HISTORY_TEXT = 'Связь Telegram с вашим профилем водителя подтверждена. Однако для участия в программе компенсации требуется дополнительная проверка истории объединения учётных записей. Пока подать заявку нельзя. Обратитесь к менеджеру';
+
 function assertLines(text, lines) {
     for (const line of lines) assert.ok(text.split('\n').includes(line), `missing line: ${line}`);
 }
@@ -737,15 +744,79 @@ test('an unknown Telegram user is asked to link and never reaches a claim', asyn
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
 });
 
-test('a conflicting identity is sent to a manager, and the bot links nothing', async () => {
+test('a confirmed link with a merge history is named as confirmed, and the bot links nothing', async () => {
     crm.reason = 'identity_needs_review';
     const harness = createBot();
     await press(harness);
     const text = harness.last().text;
-    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: напишите менеджеру: ваш профиль нужно проверить\.$/);
-    assert.doesNotMatch(text, /поделитесь номером|не соответствует действующим условиям/);
+    // The approved sentence says itself that applying is closed, so the banner's own line is not repeated.
+    assertLines(text, RESTRICTED_LINES.filter((line) => line !== 'Сейчас подать заявку нельзя.'));
+    assert.ok(text.endsWith(`4. Отправьте заявку и дождитесь решения менеджера.\n\n${MERGE_HISTORY_TEXT}`), text);
+    assert.doesNotMatch(text, /не смог подтвердить|Причина:|Что делать:|Сейчас подать заявку нельзя|поделитесь номером|не соответствует действующим условиям/);
+    assert.deepEqual(harness.buttons(), []);
+
+    // The scene is closed: an apply tap is answered as stale and asks the CRM nothing.
+    await harness.tap('comp_apply');
+    assert.match(harness.last().text, /Этот список устарел/);
     // The fake CRM throws on any action it does not know, so this is every call.
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+});
+
+test('a merge history the CRM finds at a later step gets the same sentence and ends the claim', async () => {
+    for (const [step, act] of [
+        ['compensation_order_check', (harness) => harness.tap(orderData(O1))],
+        ['compensation_refresh', (harness) => harness.tap('comp_refresh')],
+        ['compensation_submit', (harness) => harness.photo('support-reply')],
+    ]) {
+        crm.reset();
+        const harness = createBot();
+        if (step === 'compensation_submit') await reachAttach(harness);
+        else await open(harness);
+        crm.laterRefusal = 'identity_needs_review';
+        await act(harness);
+        assert.equal(harness.last().text, MERGE_HISTORY_TEXT, step);
+        assert.deepEqual(harness.buttons(), [], step);
+        assert.equal(crm.of('compensation_submit').length, step === 'compensation_submit' ? 1 : 0, step);
+
+        // The claim is over: nothing more reaches the CRM.
+        const before = crm.calls.length;
+        await harness.tap(orderData(O1));
+        await harness.tap('comp_support_yes');
+        await harness.photo('support-reply');
+        assert.equal(crm.calls.length, before, step);
+    }
+});
+
+test('only the confirmed-link refusal says the link is confirmed', async () => {
+    // A missing contact and an unconfirmed driver both arrive as identity_not_proven;
+    // a chat the CRM cannot bind right now arrives as a 409.
+    for (const setup of [
+        () => { crm.reason = 'identity_not_proven'; },
+        () => { crm.failures.compensation_section = [409]; },
+        () => { crm.reason = 'identity_busy'; },
+        () => { crm.reason = 'selected_park_profile_unproven'; },
+        () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
+        () => { crm.laterRefusal = 'identity_not_proven'; },
+    ]) {
+        crm.reset();
+        setup();
+        const harness = createBot();
+        if (crm.laterRefusal) {
+            await open(harness);
+            await harness.tap(orderData(O1));
+        } else {
+            await press(harness);
+        }
+        assert.ok(harness.messages().length > 0);
+        for (const message of harness.messages()) {
+            assert.doesNotMatch(message.text, /подтверждена|истории объединения/, message.text);
+        }
+    }
+    crm.reset();
+    crm.reason = 'identity_not_proven';
+    const harness = createBot();
+    await press(harness);
+    assert.match(harness.last().text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: откройте «🚘 Мой автомобиль», поделитесь номером телефона/);
 });
 
 test('a fact the CRM could not read asks for verification, never says the driver is not eligible', async () => {
