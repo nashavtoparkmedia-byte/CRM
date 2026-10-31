@@ -45,4 +45,14 @@ function startPayloadEvidence(payload) {
     return { sha256: crypto.createHash('sha256').update(payload, 'utf8').digest('hex') };
 }
 
-module.exports = { redactText, sanitizeLogValue, startPayloadEvidence };
+/**
+ * A /start command as it may leave the bot: the command without its deep-link
+ * payload. Every other text, and a bare /start, is returned unchanged.
+ */
+function redactStartCommandText(text) {
+    if (typeof text !== 'string') return text;
+    const command = /^(\/start(?:@[A-Za-z0-9_]+)?)\s+\S/.exec(text);
+    return command ? command[1] : text;
+}
+
+module.exports = { redactText, sanitizeLogValue, startPayloadEvidence, redactStartCommandText };

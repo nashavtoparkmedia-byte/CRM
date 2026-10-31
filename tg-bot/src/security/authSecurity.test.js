@@ -6,7 +6,7 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const adminAuth = require('../middleware/auth');
 const { isAcceptableWebhookSecret, requireTelegramWebhookSecret } = require('./webhookAuth');
-const { redactText, sanitizeLogValue, startPayloadEvidence } = require('./redactSecrets');
+const { redactText, sanitizeLogValue, startPayloadEvidence, redactStartCommandText } = require('./redactSecrets');
 const serverAuth = require('../../tg-bot-frontend/lib/serverAuth');
 
 const root = resolve(__dirname, '../..');
@@ -242,6 +242,17 @@ test('a /start deep-link payload is recorded only as its sha256', () => {
     assert.deepEqual(evidence, { sha256: require('node:crypto').createHash('sha256').update(token).digest('hex') });
     assert.ok(!JSON.stringify(evidence).includes(token.slice(2)));
     for (const absent of [undefined, null, '', 42, {}]) assert.equal(startPayloadEvidence(absent), null);
+});
+
+test('a /start command leaves the bot without its deep-link payload', () => {
+    assert.equal(redactStartCommandText('/start r_0123456789abcdef'), '/start');
+    assert.equal(redactStartCommandText('/start@yoko_park_bot r_0123456789abcdef'), '/start@yoko_park_bot');
+    assert.equal(redactStartCommandText('/start   r_0123456789abcdef extra words'), '/start');
+    for (const unchanged of ['/start', '/start ', 'hello /start r_x', '/startx r_x', '🚘 Мой автомобиль', '']) {
+        assert.equal(redactStartCommandText(unchanged), unchanged);
+    }
+    assert.equal(redactStartCommandText(undefined), undefined);
+    assert.match(read('src/services/crmIntegration.js'), /let text = redactStartCommandText\(ctx\.message\?\.text\) \|\| ctx\.callbackQuery\?\.data;/);
 });
 
 test('the /start handler never logs or records the raw deep-link payload', async () => {

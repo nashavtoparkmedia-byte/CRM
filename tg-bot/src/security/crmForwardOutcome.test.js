@@ -109,6 +109,24 @@ test('a 2xx forward reports success after exactly one request', async () => {
     }
 });
 
+test('a /start deep-link payload is never forwarded to the CRM', async () => {
+    const token = 'r_0123456789abcdef0123456789abcdef';
+    const crm = await crmStub([200]);
+    const restore = withEnv(crm.url);
+    try {
+        const service = new CrmIntegrationService();
+        const result = await service.forwardMessageToCrm(telegramUpdate({ text: `/start ${token}` }), 'INCOMING');
+
+        assert.equal(result.outcome, CRM_FORWARD_OUTCOME.SUCCESS);
+        assert.equal(crm.received.length, 1);
+        assert.equal(crm.received[0].payload.text, '/start');
+        assert.ok(!JSON.stringify(crm.received[0].payload).includes(token.slice(2)));
+    } finally {
+        restore();
+        await crm.close();
+    }
+});
+
 for (const status of [400, 401, 403, 404, 409]) {
     test(`a ${status} is terminal and is never retried`, async () => {
         const crm = await crmStub([status]);

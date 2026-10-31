@@ -3,6 +3,7 @@ const https = require('https');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
+const { redactStartCommandText } = require('../security/redactSecrets');
 
 function concreteProviderId(value) {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
@@ -105,7 +106,9 @@ class CrmIntegrationService {
 
             try {
                 const telegramId = ctx.from?.id;
-                let text = ctx.message?.text || ctx.callbackQuery?.data;
+                // A /start deep-link payload can carry a referral token; the CRM
+                // receives the command only.
+                let text = redactStartCommandText(ctx.message?.text) || ctx.callbackQuery?.data;
                 const username = ctx.from?.username;
 
                 // Group chat metadata (for CRM group/private routing)
