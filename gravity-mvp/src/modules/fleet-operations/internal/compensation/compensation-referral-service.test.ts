@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
-import { cashReferralPersonKeyDigestV1, type CashAccessEventV1 } from './compensation-referral-ledger'
+import { cashAccessEventHashV1, cashReferralPersonKeyDigestV1, type CashAccessEventV1 } from './compensation-referral-ledger'
 import {
+    checkCashAccessChainsV1,
     runCashReferralDecisionPassV1,
     type CashReferralAttributionV1,
     type CashReferralDecisionPortV1,
@@ -40,6 +41,7 @@ const fleet = (overrides: Partial<CashReferralInviteeFleetFactsV1> = {}): CashRe
     proven: profile('new', '2026-11-05T06:00:00.000Z'),
     isSelfEmployed: true,
     workStatus: 'working',
+    observedAt: new Date('2026-11-20T00:00:00.000Z'),
     externalPersonKey: 'vu:7700123456',
     earlierProfiles: [],
     ...overrides,
@@ -59,6 +61,7 @@ function port(overrides: Partial<CashReferralDecisionPortV1> = {}, rows: CashRef
         personKeysOfContact: vi.fn(async () => ['vu:inviter']),
         contactsSharePhone: vi.fn(async () => false),
         readYandexProfile: vi.fn(async () => null),
+        markExamined: vi.fn(async () => {}),
         now: vi.fn(async () => NOW),
         ...overrides,
     }
@@ -185,5 +188,66 @@ describe('a pass decides captured invitations', () => {
         const p = port({ readInviteeFleetFacts: vi.fn(async () => fleet({ externalPersonKey: null })) })
         await runCashReferralDecisionPassV1(p, 50)
         expect(written(p)[0]).toMatchObject({ state: 'pending', reason: 'invitee_facts_unavailable', grant: false })
+    })
+
+    it('never qualifies a person a read made now shows fired, whatever the stored status says', async () => {
+        const p = port({
+            readInviteeFleetFacts: vi.fn(async () => fleet({
+                proven: profile('old', '2025-06-01T06:00:00.000Z'),
+                workStatus: 'working',
+                observedAt: new Date('2026-10-01T00:00:00.000Z'),
+            })),
+            readYandexProfile: vi.fn(async () => ({ workStatus: 'fired', fireDate: '2026-07-10', readAt: NOW })),
+        })
+        await runCashReferralDecisionPassV1(p, 50)
+        expect(written(p)[0]).toMatchObject({ state: 'not_qualified', reason: 'invitee_not_connected', grant: false })
+    })
+
+    it('decides connection only on a status read after the capture and within the TTL; otherwise it reads now or waits', async () => {
+        const stale = { observedAt: new Date('2026-11-01T00:00:00.000Z') }
+        const old = { observedAt: new Date('2026-11-19T17:59:59.999Z') }
+        for (const observed of [stale, old, { observedAt: null }]) {
+            const failed = port({ readInviteeFleetFacts: vi.fn(async () => fleet(observed)) })
+            await runCashReferralDecisionPassV1(failed, 50)
+            expect(written(failed)[0], JSON.stringify(observed)).toMatchObject({ state: 'pending', reason: 'invitee_facts_unavailable', grant: false })
+            expect(failed.readYandexProfile).toHaveBeenCalledTimes(1)
+
+            const read = port({
+                readInviteeFleetFacts: vi.fn(async () => fleet({ ...observed, workStatus: 'fired' })),
+                readYandexProfile: vi.fn(async () => ({ workStatus: 'working', fireDate: null, readAt: NOW })),
+            })
+            await runCashReferralDecisionPassV1(read, 50)
+            expect(written(read)[0]).toMatchObject({ state: 'qualified', reason: 'new_park_smz' })
+        }
+    })
+
+    it('stamps every invitation it examines, before deciding it', async () => {
+        const rows = [attribution({ id: 'attr-1' }), attribution({ id: 'attr-2', inviteeDriverId: null })]
+        const p = port({ readInviteeFleetFacts: vi.fn(async () => { throw new Error('fleet down') }) }, rows)
+        await expect(runCashReferralDecisionPassV1(p, 50)).rejects.toThrow('fleet down')
+        expect(p.markExamined).toHaveBeenCalledWith(['attr-1'])
+        const ok = port({}, rows)
+        await runCashReferralDecisionPassV1(ok, 50)
+        expect((ok.markExamined as ReturnType<typeof vi.fn>).mock.calls).toEqual([[['attr-1']], [['attr-2']]])
+    })
+})
+
+describe('the scheduled chain check', () => {
+    it('counts broken chains per problem and names no contact', async () => {
+        const unhashed = {
+            id: 'row-1', chainContactId: 'contact-a', seq: 1, kind: 'referral_code_issued' as const, lineageDigest: 'l',
+            codeHash: 'c'.repeat(64), attributionId: null, payload: {}, actorKind: 'system' as const, actorId: 'system:cash-referral',
+            actorCapability: null, actorSessionId: null, actorAuthenticatedAt: null, reason: null, idempotencyKey: 'k1',
+            occurredAt: new Date('2026-11-05T06:00:00.000Z'), prevHash: null,
+        }
+        const good = { ...unhashed, hash: cashAccessEventHashV1(unhashed) }
+        const forged = { ...good, chainContactId: 'contact-b', payload: { forged: true } }
+        const chains: Record<string, CashAccessEventV1[]> = { 'contact-a': [good], 'contact-b': [forged] }
+        const outcome = await checkCashAccessChainsV1({
+            listChainContacts: vi.fn(async () => Object.keys(chains)),
+            readChain: vi.fn(async (id: string) => chains[id]),
+        }, 100)
+        expect(outcome).toEqual({ checked: 2, broken: 1, problems: { hash_mismatch: 1 } })
+        expect(JSON.stringify(outcome)).not.toContain('contact-')
     })
 })

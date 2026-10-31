@@ -346,17 +346,44 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
         return changed > 0
     },
 
-    /** Invitations not yet decided for good, oldest first. */
+    /**
+     * Invitations not yet decided for good, the longest unexamined first, so
+     * every open invitation is examined within ceil(open / limit) passes. One
+     * examined in the last 50 minutes waits, so two passes do not both take it.
+     */
     async findUndecided(limit: number): Promise<CashReferralAttributionRowV1[]> {
         const rows = await prisma.$queryRawUnsafe<AttributionRow[]>(
             `SELECT "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeDriverId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"
              FROM "CashReferralAttribution"
              WHERE "state" IN ('captured','pending','needs_review','not_qualified')
-             ORDER BY "capturedAt" ASC
+               AND ("checkedAt" IS NULL OR "checkedAt" < now() - interval '50 minutes')
+             ORDER BY "checkedAt" ASC NULLS FIRST, "capturedAt" ASC
              LIMIT $1`,
             limit,
         )
         return rows.map(toAttribution)
+    },
+
+    /** Stamps invitations as examined now. Changes no decision and no version. */
+    async markExamined(attributionIds: readonly string[]): Promise<void> {
+        if (attributionIds.length === 0) return
+        await prisma.$executeRawUnsafe(
+            `UPDATE "CashReferralAttribution"
+             SET "checkedAt" = date_trunc('milliseconds', now())
+             WHERE "id" = ANY($1::text[])`,
+            [...attributionIds],
+        )
+    },
+
+    /** The contacts that hold a ledger chain, in a stable order, for the chain check. */
+    async listChainContacts(limit: number): Promise<string[]> {
+        const rows = await prisma.$queryRawUnsafe<Array<{ chainContactId: string }>>(
+            `SELECT DISTINCT "chainContactId" FROM "CashAccessEvent"
+             ORDER BY "chainContactId" ASC
+             LIMIT $1`,
+            limit,
+        )
+        return rows.map((row) => String(row.chainContactId))
     },
 
     /** Whether another invitation already qualified this person. */

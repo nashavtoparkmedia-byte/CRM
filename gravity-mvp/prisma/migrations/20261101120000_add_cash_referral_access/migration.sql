@@ -5,10 +5,11 @@
 -- no foreign key reaches outside them, and nothing here changes a monetary
 -- table, constraint or rule.
 --
--- CashAccessEvent is append-only. A trigger refuses UPDATE, DELETE and
--- TRUNCATE; it reads no relation, so no name it uses can be redirected. The
--- hash chain over the rows is checked by the application verifier, because
--- the database role can still rewrite rows directly.
+-- CashAccessEvent is append-only. A row trigger refuses UPDATE and DELETE; it
+-- reads no relation, so no name it uses can be redirected. TRUNCATE is not
+-- guarded here, as in the Contacts foundation: it needs the table owner, and
+-- the hash chain over the rows is checked by the application verifier,
+-- because the database role can rewrite rows directly anyway.
 
 BEGIN;
 
@@ -28,6 +29,7 @@ CREATE TABLE "CashReferralAttribution" (
     "factsSnapshot" JSONB,
     "capturedAt" TIMESTAMPTZ(3) NOT NULL,
     "decidedAt" TIMESTAMPTZ(3),
+    "checkedAt" TIMESTAMPTZ(3),
     "version" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -66,7 +68,7 @@ CREATE UNIQUE INDEX "CashReferralAttribution_invitee_telegram_key" ON "CashRefer
 CREATE INDEX "CashReferralAttribution_inviter_idx" ON "CashReferralAttribution"("inviterContactId", "capturedAt");
 
 -- CreateIndex
-CREATE INDEX "CashReferralAttribution_state_idx" ON "CashReferralAttribution"("state", "capturedAt");
+CREATE INDEX "CashReferralAttribution_state_idx" ON "CashReferralAttribution"("state", "checkedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CashAccessEvent_idempotency_key" ON "CashAccessEvent"("idempotencyKey");
@@ -183,9 +185,5 @@ $$;
 CREATE TRIGGER "CashAccessEvent_append_only_row"
   BEFORE UPDATE OR DELETE ON "CashAccessEvent"
   FOR EACH ROW EXECUTE FUNCTION "cash_access_event_append_only"();
-
-CREATE TRIGGER "CashAccessEvent_append_only_truncate"
-  BEFORE TRUNCATE ON "CashAccessEvent"
-  FOR EACH STATEMENT EXECUTE FUNCTION "cash_access_event_append_only"();
 
 COMMIT;

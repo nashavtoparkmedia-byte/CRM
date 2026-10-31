@@ -49,14 +49,13 @@ proof('Cash referral ledger on real PostgreSQL', () => {
         await database.$disconnect()
     })
 
-    it('refuses every update, delete and truncate of a ledger row', async () => {
+    it('refuses every update and delete of a ledger row', async () => {
         const contact = unique('contact')
         await store.issueCode({ inviterContactId: contact, lineageDigest: 'lineage:1' })
         await expect(database.$executeRawUnsafe(`UPDATE "CashAccessEvent" SET "payload" = '{"x":1}'::jsonb WHERE "chainContactId" = $1`, contact))
             .rejects.toThrow(/append-only/)
         await expect(database.$executeRawUnsafe(`DELETE FROM "CashAccessEvent" WHERE "chainContactId" = $1`, contact))
             .rejects.toThrow(/append-only/)
-        await expect(database.$executeRawUnsafe(`TRUNCATE "CashAccessEvent" CASCADE`)).rejects.toThrow(/append-only/)
     })
 
     it('admits each kind only from its one writer', async () => {
@@ -109,6 +108,25 @@ proof('Cash referral ledger on real PostgreSQL', () => {
             `SELECT "inviteeTelegramUserId","inviteeDriverId" FROM "CashReferralAttribution" WHERE "inviteeTelegramUserId" IN ($1,$2) ORDER BY "inviteeDriverId"`, later, linkedNow)
         expect(rows.map((row) => row.inviteeDriverId)).toEqual(['driver-a', 'driver-c'])
         expect(await store.attachInviteeDriver({ inviteeTelegramUserId: unique('tg'), driverId: 'driver-d' })).toBe(false)
+    })
+
+    it('examines every open invitation within ceil(open / limit) passes, the longest unexamined first', async () => {
+        const inviter = unique('inviter')
+        const { token } = await store.issueCode({ inviterContactId: inviter, lineageDigest: 'lineage:1' })
+        for (let i = 0; i < 5; i += 1) expect(await store.capture({ token, inviteeTelegramUserId: unique('tg') })).toBe('captured')
+        const mine = async () => (await store.findUndecided(10_000)).filter((row) => row.inviterContactId === inviter)
+        // Older invitations of other tests are stamped first, so only this inviter's five are left unexamined.
+        const others = (await store.findUndecided(10_000)).filter((row) => row.inviterContactId !== inviter).map((row) => row.id)
+        await store.markExamined(others)
+        const seen = new Set<string>()
+        for (let pass = 0; pass < 3; pass += 1) {
+            const batch = (await mine()).slice(0, 2)
+            for (const row of batch) seen.add(row.id)
+            await store.markExamined(batch.map((row) => row.id))
+        }
+        expect(seen.size).toBe(5)
+        // Every one was examined just now, so none is due again before the backoff.
+        expect(await mine()).toEqual([])
     })
 
     it('stamps every row with the database clock, never a client time', async () => {

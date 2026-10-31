@@ -10,8 +10,12 @@
  * Only facts the fleet holds for the invited person's proven profile, and
  * for that person's earlier profiles in the same park, are read:
  *
- *   connected now      fleetSource.workStatus of the proven row, never
- *                      Driver.dismissedAt, which no Fleet writer maintains
+ *   connected now      a Yandex read made now of the proven profile when
+ *                      there is one, otherwise fleetSource.workStatus of the
+ *                      proven row if the fleet read it after the capture and
+ *                      within the facts TTL; never Driver.dismissedAt, which no
+ *                      Fleet writer maintains. A fired read is not connected;
+ *                      no current status leaves the invitation pending
  *   registrations      yandexHireDate of each target-park row with the same
  *                      park person key
  *   departures         a successful Yandex profile read made now, after the
@@ -29,6 +33,7 @@ import { decideCashReferralQualificationV1, cashReferralDismissalReadingFromYand
 import {
     cashReferralPersonKeyDigestV1,
     foldCashAccessLedgerV1,
+    verifyCashAccessChainV1,
     keptCashReferralDismissalsV1,
     latestCashReferralSanctionV1,
     type CashAccessEventV1,
@@ -53,6 +58,8 @@ export interface CashReferralInviteeFleetFactsV1 {
     isSelfEmployed: boolean | null
     /** fleetSource.workStatus: working, not_working or fired; null when never read. */
     workStatus: string | null
+    /** fleetSource.lastObservedAt: when the fleet last read the proven row; null when never. */
+    observedAt: Date | null
     /** The park's person key of the proven row; null when the park states none. */
     externalPersonKey: string | null
     /** Every other row with the same person key in the same park. Null when that cannot be read. */
@@ -113,9 +120,14 @@ export interface CashReferralDecisionPortV1 {
     contactsSharePhone(left: string, right: string): Promise<boolean>
     /** A bounded Yandex read of one profile; null when it was skipped or failed. */
     readYandexProfile(profile: CashReferralFleetProfileV1): Promise<CashReferralYandexReadV1 | null>
+    /** Stamps the invitations a pass examined, so the next pass starts with the others. */
+    markExamined(attributionIds: readonly string[]): Promise<void>
     /** The database clock. */
     now(): Promise<Date>
 }
+
+/** How old the stored work status of the proven row may be before only a fresh read decides. */
+export const CASH_REFERRAL_FACTS_TTL_MS_V1 = 12 * 60 * 60 * 1000
 
 export type CashReferralPassOutcomeV1 = {
     examined: number
@@ -214,10 +226,11 @@ export async function decideCashReferralAttributionV1(
     const before = (profile: CashReferralFleetProfileV1) =>
         profile.registeredAt !== null && compensationBusinessDayKeyV1(profile.registeredAt) < captureDay
     const observedDismissals: DecidedV1['observedDismissals'] = []
-    const readFor = async (profile: CashReferralFleetProfileV1) => {
-        if (!before(profile)) return { readAt: null, dismissals: kept.get(profile.profileRef) ?? [] }
+    const readFor = async (profile: CashReferralFleetProfileV1, force = false) => {
+        const none = { readAt: null as Date | null, dismissals: kept.get(profile.profileRef) ?? [], workStatus: null as string | null }
+        if (!before(profile) && !force) return none
         const read = await port.readYandexProfile(profile)
-        if (read === null) return { readAt: null, dismissals: kept.get(profile.profileRef) ?? [] }
+        if (read === null) return none
         const reading = cashReferralDismissalReadingFromYandexV1(read)
         const dismissals: CashReferralDismissalReadingV1[] = [...(kept.get(profile.profileRef) ?? [])]
         if (reading !== null) {
@@ -226,13 +239,20 @@ export async function decideCashReferralAttributionV1(
                 observedDismissals.push({ profileKey: profile.profileRef, dismissedAt: reading.dismissedAt, readAt: reading.readAt })
             }
         }
-        return { readAt: read.readAt, dismissals }
+        return { readAt: read.readAt as Date | null, dismissals, workStatus: read.workStatus }
     }
 
     let inviteeFacts = null
     let snapshot: { [key: string]: CashAccessJsonV1 } = {}
-    if (fleet !== null && fleet.workStatus !== null && personKey !== null) {
-        const proven = await readFor(fleet.proven)
+    // The stored status counts only when the fleet read it after the capture
+    // and recently; otherwise the proven profile is read now, and without a
+    // current status the invitation waits.
+    const storedFresh = fleet !== null && fleet.observedAt !== null
+        && fleet.observedAt.getTime() >= attribution.capturedAt.getTime()
+        && at.getTime() - fleet.observedAt.getTime() <= CASH_REFERRAL_FACTS_TTL_MS_V1
+    const proven = fleet !== null && personKey !== null ? await readFor(fleet.proven, !storedFresh) : null
+    const workStatus = proven?.workStatus ?? (storedFresh ? fleet?.workStatus ?? null : null)
+    if (fleet !== null && proven !== null && workStatus !== null && personKey !== null) {
         const earlier = fleet.earlierProfiles === null ? null : await Promise.all(fleet.earlierProfiles.map(async (profile) => {
             const read = await readFor(profile)
             return { profile, ...read }
@@ -241,8 +261,8 @@ export async function decideCashReferralAttributionV1(
             targetParkId: fleet.proven.externalParkId,
             isSelfEmployed: fleet.isSelfEmployed,
             parkHireDate: fleet.proven.registeredAt,
-            // Only the fleet's own work status says whether the person is connected now.
-            dismissedAt: fleet.workStatus === 'fired' ? at : null,
+            // A fired status now, read or stored, is not connected, whatever the dates.
+            dismissedAt: workStatus === 'fired' ? at : null,
             dismissals: proven.dismissals,
             otherProfiles: earlier === null ? null : earlier.map((entry) => ({
                 parkId: entry.profile.externalParkId,
@@ -254,7 +274,8 @@ export async function decideCashReferralAttributionV1(
         snapshot = {
             targetParkId: fleet.proven.externalParkId,
             provenProfile: fleet.proven.profileRef,
-            workStatus: fleet.workStatus,
+            workStatus,
+            workStatusSource: proven.workStatus !== null ? 'read' : 'stored',
             isSelfEmployed: fleet.isSelfEmployed,
             parkHireDate: fleet.proven.registeredAt?.toISOString() ?? null,
             earlierProfiles: earlier === null ? null : earlier.map((entry) => ({
@@ -296,6 +317,8 @@ export async function runCashReferralDecisionPassV1(port: CashReferralDecisionPo
     const outcome: CashReferralPassOutcomeV1 = { examined: 0, written: 0, unchanged: 0, conflicts: 0, states: {} }
     for (const attribution of await port.findUndecided(limit)) {
         outcome.examined += 1
+        // Stamped first, so a failed decision still lets the next pass move on.
+        await port.markExamined([attribution.id])
         const decided = await decideCashReferralAttributionV1(attribution, port)
         const state = stateOfV1(decided.decision)
         const reason = reasonOfV1(decided.decision)
@@ -328,6 +351,33 @@ export async function runCashReferralDecisionPassV1(port: CashReferralDecisionPo
         })
         if (written === 'written') outcome.written += 1
         else outcome.conflicts += 1
+    }
+    return outcome
+}
+
+export type CashAccessChainCheckOutcomeV1 = {
+    checked: number
+    broken: number
+    /** Broken chains per problem; no contact is named. */
+    problems: Record<string, number>
+}
+
+/**
+ * Report-only: recomputes every ledger chain it is given and counts the
+ * broken ones. It changes nothing and names nobody, so a tampered row is
+ * found and reported without the report itself carrying personal data.
+ */
+export async function checkCashAccessChainsV1(
+    port: { listChainContacts(limit: number): Promise<readonly string[]>; readChain(contactId: string): Promise<CashAccessEventV1[]> },
+    limit: number,
+): Promise<CashAccessChainCheckOutcomeV1> {
+    const outcome: CashAccessChainCheckOutcomeV1 = { checked: 0, broken: 0, problems: {} }
+    for (const contactId of await port.listChainContacts(limit)) {
+        outcome.checked += 1
+        const check = verifyCashAccessChainV1(await port.readChain(contactId))
+        if (check.ok) continue
+        outcome.broken += 1
+        outcome.problems[check.problem] = (outcome.problems[check.problem] ?? 0) + 1
     }
     return outcome
 }

@@ -16,7 +16,12 @@
 import { compensationLineageDigestV1 } from '../internal/compensation/compensation-pilot-lineage'
 import { resolvePilotPersonV1, type PilotTelegramPersonProofV1 } from '../internal/compensation/compensation-pilot-service'
 import { foldCashAccessLedgerV1 } from '../internal/compensation/compensation-referral-ledger'
-import { runCashReferralDecisionPassV1, type CashReferralPassOutcomeV1 } from '../internal/compensation/compensation-referral-service'
+import {
+    checkCashAccessChainsV1,
+    runCashReferralDecisionPassV1,
+    type CashAccessChainCheckOutcomeV1,
+    type CashReferralPassOutcomeV1,
+} from '../internal/compensation/compensation-referral-service'
 import { legacyPrismaCashReferralLedgerStoreV1 } from '../internal/compensation/legacy-prisma-cash-referral-ledger-adapter'
 import {
     CashReferralYandexReadRationV1,
@@ -142,4 +147,15 @@ export function cashReferralDecisionScheduleV1(): CashReferralDecisionScheduleV1
 export async function runScheduledCashReferralDecisionsV1(): Promise<CashReferralPassOutcomeV1 | { skipped: 'disabled' }> {
     if (!cashReferralAccessEnabledV1()) return { skipped: 'disabled' }
     return runCashReferralDecisionPassV1(legacyPrismaCashReferralDecisionPortV1(yandexReadRationV1), 50)
+}
+
+/**
+ * One scheduled, report-only check of every ledger chain (Security C4): it
+ * logs counts per problem and changes nothing.
+ */
+export async function runScheduledCashAccessChainCheckV1(): Promise<CashAccessChainCheckOutcomeV1 | { skipped: 'disabled' }> {
+    if (!cashReferralAccessEnabledV1()) return { skipped: 'disabled' }
+    const outcome = await checkCashAccessChainsV1(legacyPrismaCashReferralLedgerStoreV1, 5_000)
+    if (outcome.broken > 0) console.error(JSON.stringify({ event: 'cash_access_chain_broken', ...outcome }))
+    return outcome
 }

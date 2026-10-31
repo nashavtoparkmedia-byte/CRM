@@ -3725,7 +3725,7 @@ model CompensationCashOrderIngestionCheckpoint {
 /// hash-chained list of events per canonical contact: referral codes,
 /// captures, qualification decisions, entitlements, sanctions, manual
 /// decisions and the dismissal readings an invitation was decided on.
-/// UPDATE, DELETE and TRUNCATE are refused by trigger. No foreign key into
+/// UPDATE and DELETE are refused by trigger. No foreign key into
 /// Contacts: contact ids are the canonical ids at the event.
 model CashAccessEvent {
   id                   String                   @id
@@ -3770,11 +3770,12 @@ model CashReferralAttribution {
   factsSnapshot         Json?
   capturedAt            DateTime          @db.Timestamptz(3)
   decidedAt             DateTime?         @db.Timestamptz(3)
+  checkedAt             DateTime?         @db.Timestamptz(3)
   version               Int               @default(0)
   createdAt             DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
   events                CashAccessEvent[]
 
   @@index([inviterContactId, capturedAt], map: "CashReferralAttribution_inviter_idx")
-  @@index([state, capturedAt], map: "CashReferralAttribution_state_idx")
+  @@index([state, checkedAt], map: "CashReferralAttribution_state_idx")
 }

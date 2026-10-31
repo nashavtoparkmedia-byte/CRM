@@ -422,6 +422,11 @@ export async function register() {
                         const { runScheduledCashReferralDecisionsV1 } = await import('@/modules/fleet-operations/public/v1')
                         return await runScheduledCashReferralDecisionsV1()
                     })
+                    // Report-only: recomputes the ledger chains and logs counts.
+                    await runOperationalJobV1('cash_access_chain_check', async () => {
+                        const { runScheduledCashAccessChainCheckV1 } = await import('@/modules/fleet-operations/public/v1')
+                        return await runScheduledCashAccessChainCheckV1()
+                    })
                 }
                 setTimeout(runReferralDecisions, referralSchedule.firstRunDelayMs)
                 registerOperationalIntervalV1(setInterval(runReferralDecisions, referralSchedule.intervalMs))

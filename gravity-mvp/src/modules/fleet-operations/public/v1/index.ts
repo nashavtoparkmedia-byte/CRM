@@ -137,6 +137,7 @@ export {
   cashReferralDecisionScheduleV1,
   cashReferralIssueV1,
   cashReferralStatusV1,
+  runScheduledCashAccessChainCheckV1,
   runScheduledCashReferralDecisionsV1,
 } from '../../application/cash-referral-operations'
 export type {

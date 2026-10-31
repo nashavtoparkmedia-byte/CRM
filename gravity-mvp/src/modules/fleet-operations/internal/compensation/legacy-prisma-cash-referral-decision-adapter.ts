@@ -29,8 +29,15 @@ interface DriverFactsRow {
     yandexHireDate: Date | null
     isSelfEmployed: boolean | null
     workStatus: string | null
+    observedAt: string | null
     externalPersonKey: string | null
     personResolutionStatus: string | null
+}
+
+function observedAtOf(value: string | null): Date | null {
+    if (value === null) return null
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
 }
 
 function profileOf(row: DriverFactsRow): CashReferralFleetProfileV1 | null {
@@ -98,6 +105,7 @@ export function legacyPrismaCashReferralDecisionPortV1(ration: CashReferralYande
         readAttributionEvents: (attributionId) => store.readAttributionEvents(attributionId),
         personAlreadyQualified: (digest, except) => store.personAlreadyQualified(digest, except),
         writeDecision: (write) => store.writeDecision(write),
+        markExamined: (ids) => store.markExamined(ids),
         resolveContactLineage: (contactId) => legacyPrismaCompensationPilotPortV1.resolveContactLineage(contactId),
         async confirmMainDriver(contactId, driverId) {
             const confirmation = await legacyPrismaCompensationPilotPortV1.confirmMainDriver(contactId, driverId)
@@ -115,7 +123,8 @@ export function legacyPrismaCashReferralDecisionPortV1(ration: CashReferralYande
         async readInviteeFleetFacts(driverId) {
             const proven = await prisma.$queryRawUnsafe<DriverFactsRow[]>(
                 `SELECT "id","externalParkId","externalDriverProfileId","yandexHireDate","isSelfEmployed",
-                        "customFields"->'fleetSource'->>'workStatus' AS "workStatus","externalPersonKey","personResolutionStatus"
+                        "customFields"->'fleetSource'->>'workStatus' AS "workStatus",
+                        "customFields"->'fleetSource'->>'lastObservedAt' AS "observedAt","externalPersonKey","personResolutionStatus"
                  FROM "Driver"
                  WHERE "id" = $1`,
                 driverId,
@@ -127,7 +136,8 @@ export function legacyPrismaCashReferralDecisionPortV1(ration: CashReferralYande
             if (row.externalPersonKey !== null && row.personResolutionStatus !== 'conflict') {
                 const rows = await prisma.$queryRawUnsafe<DriverFactsRow[]>(
                     `SELECT "id","externalParkId","externalDriverProfileId","yandexHireDate","isSelfEmployed",
-                            "customFields"->'fleetSource'->>'workStatus' AS "workStatus","externalPersonKey","personResolutionStatus"
+                            "customFields"->'fleetSource'->>'workStatus' AS "workStatus",
+                            "customFields"->'fleetSource'->>'lastObservedAt' AS "observedAt","externalPersonKey","personResolutionStatus"
                      FROM "Driver"
                      WHERE "externalParkId" = $1 AND "externalPersonKey" = $2 AND "id" <> $3`,
                     provenProfile.externalParkId,
@@ -143,6 +153,7 @@ export function legacyPrismaCashReferralDecisionPortV1(ration: CashReferralYande
                 proven: provenProfile,
                 isSelfEmployed: row.isSelfEmployed === null ? null : Boolean(row.isSelfEmployed),
                 workStatus: row.workStatus === null ? null : String(row.workStatus),
+                observedAt: observedAtOf(row.observedAt),
                 externalPersonKey: row.externalPersonKey === null ? null : String(row.externalPersonKey),
                 earlierProfiles,
             }
