@@ -19,6 +19,8 @@ import {
 } from './compensation-pilot-service'
 import { pilotScopeKeyV1 } from './compensation-pilot-selection'
 import { compensationSubmissionWindowV1 } from './compensation-submission-window'
+import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
+import type { CashAccessEventV1 } from './compensation-referral-ledger'
 
 const NOW = new Date('2026-09-20T09:00:00.000Z')
 const PARK = 'park-1'
@@ -1299,5 +1301,88 @@ describe('the Telegram link opens Cash; a claim needs the person Contacts proved
         expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toMatchObject({ available: false, reason: 'identity_busy' })
         expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'identity_busy' })
         expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+})
+
+describe('referral and manual access from the person\'s ledger', () => {
+    const LINEAGE = compensationLineageDigestV1([CONTACT])
+    const OLD_NON_SMZ: PilotDriverFactsV1 = {
+        ...ELIGIBLE_DRIVER,
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: new Date('2024-02-01T06:00:00.000Z') },
+    }
+    const event = (seq: number, kind: CashAccessEventV1['kind'], occurredAt: string, overrides: Partial<CashAccessEventV1> = {}): CashAccessEventV1 => {
+        const staff = kind.startsWith('manual_') || kind === 'referral_entitlement_revoked'
+        return {
+            id: `row-${seq}`,
+            chainContactId: CONTACT,
+            seq,
+            kind,
+            lineageDigest: LINEAGE,
+            codeHash: null,
+            attributionId: kind.startsWith('referral_') ? 'attr-1' : null,
+            payload: {},
+            actorKind: staff ? 'signed_staff_session' : 'system',
+            actorId: staff ? 'staff:manager-1' : 'system:cash-referral',
+            actorCapability: staff ? 'cash.access.manage' : null,
+            actorSessionId: staff ? 'session-1' : null,
+            actorAuthenticatedAt: staff ? new Date('2026-09-01T00:00:00.000Z') : null,
+            reason: staff ? 'checked the park documents' : null,
+            idempotencyKey: `key-${seq}`,
+            occurredAt: new Date(occurredAt),
+            prevHash: null,
+            hash: 'f'.repeat(64),
+            ...overrides,
+        }
+    }
+    const withLedger = (rows: CashAccessEventV1[], overrides: Partial<CompensationPilotPortV1> = {}) =>
+        port({ readCashAccessChain: vi.fn(async () => rows), ...overrides })
+
+    it('lists a referral inviter\'s orders although the standard programme refuses them', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z')], { findDriverFacts: vi.fn(async () => OLD_NON_SMZ) })
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        expect(view.available && view.orders.map((order) => order.externalOrderId)).toEqual([ORDER.externalOrderId])
+        expect(p.readCashAccessChain).toHaveBeenCalledWith(CONTACT)
+
+        const standardOnly = await compensationSectionViewV1(PROOF, port({ findDriverFacts: vi.fn(async () => OLD_NON_SMZ) }), ingestion(), NOW)
+        expect(standardOnly).toMatchObject({ available: false, reason: 'not_self_employed' })
+    })
+
+    it('never lists an order completed before the grant', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-15T00:00:00.000Z')], { findDriverFacts: vi.fn(async () => OLD_NON_SMZ) })
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true })
+        expect(view.available && view.orders).toEqual([])
+    })
+
+    it('lets a general denial close the standard first month and every grant', async () => {
+        const p = withLedger([
+            event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z'),
+            event(2, 'manual_denied', '2026-09-05T00:00:00.000Z'),
+        ])
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: false, reason: 'manual_deny' })
+    })
+
+    it('keeps the standard first month when only the referral grant is revoked', async () => {
+        const p = withLedger([
+            event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z'),
+            event(2, 'referral_entitlement_revoked', '2026-09-05T00:00:00.000Z'),
+        ])
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+    })
+
+    it('sends a person merged since an access event to a manager', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z', { lineageDigest: 'lineage:before-merge' })])
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
+    })
+
+    it('reads no ledger for a link without a proven person', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z')], {
+            confirmMainDriver: vi.fn(async () => 'not_confirmed' as const),
+        })
+        await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(p.readCashAccessChain).not.toHaveBeenCalled()
     })
 })
