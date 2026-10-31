@@ -3720,3 +3720,60 @@ model CompensationCashOrderIngestionCheckpoint {
 
   @@unique([provider, externalParkId], map: "CompensationCashOrderIngestionCheckpoint_park_key")
 }
+
+/// Cash Referral Access ledger (fleet_operations). One append-only,
+/// hash-chained list of events per canonical contact: referral codes,
+/// captures, qualification decisions, entitlements, sanctions, manual
+/// decisions and the dismissal readings an invitation was decided on.
+/// UPDATE, DELETE and TRUNCATE are refused by trigger. No foreign key into
+/// Contacts: contact ids are the canonical ids at the event.
+model CashAccessEvent {
+  id                   String                   @id
+  chainContactId       String                   @db.VarChar(255)
+  seq                  Int
+  kind                 String                   @db.VarChar(64)
+  lineageDigest        String                   @db.VarChar(128)
+  codeHash             String?                  @db.VarChar(64)
+  attributionId        String?                  @db.VarChar(255)
+  payload              Json                     @default("{}")
+  actorKind            String                   @db.VarChar(32)
+  actorId              String                   @db.VarChar(255)
+  actorCapability      String?                  @db.VarChar(64)
+  actorSessionId       String?                  @db.VarChar(255)
+  actorAuthenticatedAt DateTime?                @db.Timestamptz(3)
+  reason               String?                  @db.VarChar(1000)
+  idempotencyKey       String                   @unique(map: "CashAccessEvent_idempotency_key") @db.VarChar(255)
+  occurredAt           DateTime                 @db.Timestamptz(3)
+  prevHash             String?                  @db.VarChar(64)
+  hash                 String                   @db.VarChar(64)
+  attribution          CashReferralAttribution? @relation(fields: [attributionId], references: [id], onDelete: Restrict)
+
+  @@unique([chainContactId, seq], map: "CashAccessEvent_chain_seq_key")
+  @@index([attributionId, seq], map: "CashAccessEvent_attribution_idx")
+}
+
+/// One captured referral invitation and where its decision stands
+/// (fleet_operations). The first Telegram account to open a code owns the
+/// row; one person can hold one qualified invitation.
+model CashReferralAttribution {
+  id                    String            @id
+  inviterContactId      String            @db.VarChar(255)
+  inviterLineageDigest  String            @db.VarChar(128)
+  codeHash              String            @db.VarChar(64)
+  inviteeTelegramUserId String            @unique(map: "CashReferralAttribution_invitee_telegram_key") @db.VarChar(64)
+  inviteeContactId      String?           @db.VarChar(255)
+  inviteePersonKey      String?           @db.VarChar(255)
+  state                 String            @default("captured") @db.VarChar(32)
+  reason                String?           @db.VarChar(64)
+  targetParkId          String?           @db.VarChar(255)
+  factsSnapshot         Json?
+  capturedAt            DateTime          @db.Timestamptz(3)
+  decidedAt             DateTime?         @db.Timestamptz(3)
+  version               Int               @default(0)
+  createdAt             DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime          @default(now()) @updatedAt @db.Timestamptz(3)
+  events                CashAccessEvent[]
+
+  @@index([inviterContactId, capturedAt], map: "CashReferralAttribution_inviter_idx")
+  @@index([state, capturedAt], map: "CashReferralAttribution_state_idx")
+}

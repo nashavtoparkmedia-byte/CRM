@@ -492,7 +492,7 @@ describe('determinism and isolation', () => {
         expect(decideCashAccessV1(frozen)).toEqual(decideCashAccessV1(frozen))
     })
 
-    it('is wired into the pilot section only, and reads nothing monetary', () => {
+    it('is used only by the pilot section and its ledger store, and reads nothing monetary', () => {
         const root = join(process.cwd(), 'src')
         const files: string[] = []
         const walk = (dir: string) => {
@@ -512,7 +512,11 @@ describe('determinism and isolation', () => {
             .filter((file) => !/\.test\.(ts|tsx)$/.test(file) && !s0.has(relative(root, file)))
             .filter((file) => /compensation-access['"]|compensation-referral-qualification['"]|compensation-referral-ledger['"]/.test(readFileSync(file, 'utf8')))
             .map((file) => relative(root, file))
-        expect(importers).toEqual(['modules/fleet-operations/internal/compensation/compensation-pilot-service.ts'])
+        // The pilot section decides through it; the ledger store is its storage.
+        expect([...importers].sort()).toEqual([
+            'modules/fleet-operations/internal/compensation/compensation-pilot-service.ts',
+            'modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-ledger-adapter.ts',
+        ])
 
         for (const file of s0) {
             const source = readFileSync(join(root, file), 'utf8')

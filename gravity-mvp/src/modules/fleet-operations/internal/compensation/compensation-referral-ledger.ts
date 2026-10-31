@@ -70,6 +70,7 @@ export type CashAccessJsonV1 = null | boolean | number | string | CashAccessJson
 
 /** One ledger row, as stored. */
 export interface CashAccessEventV1 {
+    id: string
     chainContactId: string
     seq: number
     kind: CashAccessEventKindV1
@@ -80,6 +81,8 @@ export interface CashAccessEventV1 {
     actorKind: 'signed_staff_session' | 'system'
     actorId: string
     actorCapability: string | null
+    actorSessionId: string | null
+    actorAuthenticatedAt: Date | null
     reason: string | null
     idempotencyKey: string
     /** The database clock at the insert. */
@@ -94,9 +97,10 @@ function canonicalJsonV1(value: CashAccessJsonV1): string {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJsonV1(value[key])}`).join(',')}}`
 }
 
-/** The hash of one row: every field but the hash itself, in a fixed order. */
+/** The hash of one row: every column but the hash itself, in a fixed order, times in UTC. */
 export function cashAccessEventHashV1(event: Omit<CashAccessEventV1, 'hash'>): string {
     const canonical = canonicalJsonV1([
+        event.id,
         event.chainContactId,
         event.seq,
         event.kind,
@@ -107,6 +111,8 @@ export function cashAccessEventHashV1(event: Omit<CashAccessEventV1, 'hash'>): s
         event.actorKind,
         event.actorId,
         event.actorCapability,
+        event.actorSessionId,
+        event.actorAuthenticatedAt === null ? null : event.actorAuthenticatedAt.toISOString(),
         event.reason,
         event.idempotencyKey,
         event.occurredAt.toISOString(),
@@ -115,13 +121,27 @@ export function cashAccessEventHashV1(event: Omit<CashAccessEventV1, 'hash'>): s
     return createHash('sha256').update(canonical, 'utf8').digest('hex')
 }
 
+/**
+ * The form a park's person key is stored in: a domain-separated sha256, so
+ * the ledger and the attribution hold no licence number.
+ */
+export function cashReferralPersonKeyDigestV1(externalPersonKey: string): string {
+    return createHash('sha256').update(`yoko.cash-referral.person-key.v1:${externalPersonKey}`, 'utf8').digest('hex')
+}
+
 /** Whether a row was written by the one writer its kind admits. */
-export function cashAccessWriterAllowedV1(event: Pick<CashAccessEventV1, 'kind' | 'actorKind' | 'actorId' | 'actorCapability' | 'reason'>): boolean {
+export function cashAccessWriterAllowedV1(
+    event: Pick<CashAccessEventV1, 'kind' | 'actorKind' | 'actorId' | 'actorCapability' | 'actorSessionId' | 'actorAuthenticatedAt' | 'reason'>,
+): boolean {
     const writer = CASH_ACCESS_EVENT_WRITER_V1[event.kind]
     if (writer === undefined || event.actorId.trim() === '') return false
-    if (writer.actorKind === 'system') return event.actorKind === 'system'
+    if (writer.actorKind === 'system') {
+        return event.actorKind === 'system' && event.actorCapability === null && event.actorSessionId === null
+    }
     return event.actorKind === 'signed_staff_session'
         && event.actorCapability === writer.capability
+        && event.actorSessionId !== null
+        && event.actorAuthenticatedAt !== null
         && event.reason !== null
         && event.reason.trim().length >= 10
 }
@@ -204,7 +224,7 @@ export function foldCashAccessLedgerV1(events: readonly CashAccessEventV1[], cur
                 referral = { confirmedAt: event.occurredAt, revokedAt: null }
                 break
             case 'referral_entitlement_revoked':
-                if (referral !== null && referral.revokedAt === null) referral = { ...referral, revokedAt: event.occurredAt }
+                if (referral !== null && referral.revokedAt === null) referral = { confirmedAt: referral.confirmedAt, revokedAt: event.occurredAt }
                 break
             case 'manual_granted':
             case 'manual_denied':

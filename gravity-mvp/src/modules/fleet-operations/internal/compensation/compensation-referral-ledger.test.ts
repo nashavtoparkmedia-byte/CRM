@@ -7,6 +7,7 @@ import {
     CASH_ACCESS_EVENT_WRITER_V1,
     cashAccessEventHashV1,
     cashAccessWriterAllowedV1,
+    cashReferralPersonKeyDigestV1,
     foldCashAccessLedgerV1,
     keptCashReferralDismissalsV1,
     latestCashReferralSanctionV1,
@@ -21,7 +22,14 @@ const T0 = Date.parse('2026-11-05T06:00:00.000Z')
 type Draft = Partial<Omit<CashAccessEventV1, 'seq' | 'prevHash' | 'hash'>> & { kind: CashAccessEventKindV1 }
 
 function staff(capability: string) {
-    return { actorKind: 'signed_staff_session' as const, actorId: 'staff:manager-1', actorCapability: capability, reason: 'checked the park documents' }
+    return {
+        actorKind: 'signed_staff_session' as const,
+        actorId: 'staff:manager-1',
+        actorCapability: capability,
+        actorSessionId: 'session-1',
+        actorAuthenticatedAt: new Date(T0 - 60_000),
+        reason: 'checked the park documents',
+    }
 }
 
 /** A well-formed chain: each row hashed and linked the way the writer does it. */
@@ -30,9 +38,10 @@ function chain(drafts: readonly Draft[]): CashAccessEventV1[] {
     drafts.forEach((draft, index) => {
         const writer = CASH_ACCESS_EVENT_WRITER_V1[draft.kind]
         const base = writer.actorKind === 'system'
-            ? { actorKind: 'system' as const, actorId: 'system:fleet', actorCapability: null, reason: null }
+            ? { actorKind: 'system' as const, actorId: 'system:fleet', actorCapability: null, actorSessionId: null, actorAuthenticatedAt: null, reason: null }
             : staff(writer.capability)
         const row = {
+            id: `row-${index + 1}`,
             chainContactId: 'contact-1',
             seq: index + 1,
             lineageDigest: LINEAGE,
@@ -82,7 +91,7 @@ describe('the hash chain detects tampering', () => {
     })
 
     it('finds a manager kind written by the system, or a system kind written by a manager, even when hashed correctly', () => {
-        const forgedGrant = chain([{ kind: 'manual_granted', actorKind: 'system', actorId: 'system:fleet', actorCapability: null, reason: null }])
+        const forgedGrant = chain([{ kind: 'manual_granted', actorKind: 'system', actorId: 'system:fleet', actorCapability: null, actorSessionId: null, actorAuthenticatedAt: null, reason: null }])
         expect(verifyCashAccessChainV1(forgedGrant)).toEqual({ ok: false, problem: 'writer_not_allowed', seq: 1 })
         const staffGrant = chain([{ kind: 'referral_entitlement_granted', ...staff(CASH_ACCESS_MANAGE_CAPABILITY_V1) }])
         expect(verifyCashAccessChainV1(staffGrant)).toEqual({ ok: false, problem: 'writer_not_allowed', seq: 1 })
@@ -93,12 +102,14 @@ describe('who may write each kind', () => {
     it('admits system kinds only from the system and manager kinds only from a signed session with the capability and a reason', () => {
         for (const kind of CASH_ACCESS_EVENT_KINDS_V1) {
             const writer = CASH_ACCESS_EVENT_WRITER_V1[kind]
-            const system = { kind, actorKind: 'system' as const, actorId: 'system:fleet', actorCapability: null, reason: null }
+            const system = { kind, actorKind: 'system' as const, actorId: 'system:fleet', actorCapability: null, actorSessionId: null, actorAuthenticatedAt: null, reason: null }
             const signed = (capability: string, reason: string | null = 'checked the park documents') => ({
-                kind, actorKind: 'signed_staff_session' as const, actorId: 'staff:m1', actorCapability: capability, reason,
+                kind, actorKind: 'signed_staff_session' as const, actorId: 'staff:m1', actorCapability: capability,
+                actorSessionId: 'session-1', actorAuthenticatedAt: new Date(T0), reason,
             })
             if (writer.actorKind === 'system') {
                 expect(cashAccessWriterAllowedV1(system), kind).toBe(true)
+                expect(cashAccessWriterAllowedV1({ ...system, actorSessionId: 'session-1' }), kind).toBe(false)
                 expect(cashAccessWriterAllowedV1(signed(CASH_ACCESS_MANAGE_CAPABILITY_V1)), kind).toBe(false)
             } else {
                 expect(cashAccessWriterAllowedV1(system), kind).toBe(false)
@@ -107,6 +118,8 @@ describe('who may write each kind', () => {
                 expect(cashAccessWriterAllowedV1(signed(writer.capability, null)), kind).toBe(false)
                 expect(cashAccessWriterAllowedV1(signed(writer.capability, 'too short')), kind).toBe(false)
                 expect(cashAccessWriterAllowedV1({ ...signed(writer.capability), actorId: '  ' }), kind).toBe(false)
+                expect(cashAccessWriterAllowedV1({ ...signed(writer.capability), actorSessionId: null }), kind).toBe(false)
+                expect(cashAccessWriterAllowedV1({ ...signed(writer.capability), actorAuthenticatedAt: null }), kind).toBe(false)
             }
         }
         expect(CASH_ACCESS_EVENT_WRITER_V1.referral_sanctioned).toEqual({ actorKind: 'signed_staff_session', capability: CASH_REFERRAL_QUALIFY_CAPABILITY_V1 })
@@ -151,7 +164,7 @@ describe('the access fold', () => {
 
     it('never folds a row its kind\'s writer did not make', () => {
         const forged = chain([
-            { kind: 'manual_granted', actorKind: 'system', actorId: 'system:fleet', actorCapability: null, reason: null },
+            { kind: 'manual_granted', actorKind: 'system', actorId: 'system:fleet', actorCapability: null, actorSessionId: null, actorAuthenticatedAt: null, reason: null },
             { kind: 'referral_entitlement_granted', ...staff(CASH_ACCESS_MANAGE_CAPABILITY_V1) },
         ])
         expect(foldCashAccessLedgerV1(forged, LINEAGE)).toEqual({ referral: null, manual: null, staleLineage: false })
@@ -189,6 +202,30 @@ describe('the access fold', () => {
             ownerPolicy: { manualDenyClosesStandardProgramme: true, referralOfferAfterManualDeny: false },
             at: new Date('2027-03-15T06:00:00.000Z'),
         })).toMatchObject({ access: 'refused', reasons: ['manual_deny'], referralOffer: 'no_offer' })
+    })
+})
+
+describe('the person key is never stored readable', () => {
+    it('stores a domain-separated digest of the park person key', () => {
+        const digest = cashReferralPersonKeyDigestV1('vu:7700123456')
+        expect(digest).toMatch(/^[0-9a-f]{64}$/)
+        expect(digest).not.toContain('7700123456')
+        expect(digest).toBe(cashReferralPersonKeyDigestV1('vu:7700123456'))
+        expect(digest).not.toBe(cashReferralPersonKeyDigestV1('vu:7700123457'))
+        expect(digest).not.toBe(require('node:crypto').createHash('sha256').update('vu:7700123456').digest('hex'))
+    })
+
+    it('hashes every column: changing any one of them breaks the row', () => {
+        const [row] = chain([{ kind: 'manual_granted' }])
+        const changed: Array<Partial<CashAccessEventV1>> = [
+            { id: 'row-x' }, { chainContactId: 'contact-x' }, { lineageDigest: 'lineage:x' }, { codeHash: 'd'.repeat(64) },
+            { attributionId: 'attr-x' }, { payload: { x: 1 } }, { actorId: 'staff:x' }, { actorCapability: 'cash.x' },
+            { actorSessionId: 'session-x' }, { actorAuthenticatedAt: new Date(0) }, { reason: 'another reason here' },
+            { idempotencyKey: 'key-x' }, { occurredAt: new Date(0) }, { prevHash: 'e'.repeat(64) },
+        ]
+        for (const change of changed) {
+            expect(verifyCashAccessChainV1([{ ...row, ...change }]).ok, JSON.stringify(Object.keys(change))).toBe(false)
+        }
     })
 })
 
