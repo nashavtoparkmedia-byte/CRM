@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-CASH-REFERRAL-ACCESS",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:CashAccessEvent",
+        "gravity-mvp/prisma/schema.prisma:CashReferralAttribution"
+      ],
+      "reason": "Fleet Operations owns the Cash referral access ledger and the referral attribution workflow row. CashAccessEvent is one append-only, hash-chained list of events per canonical contact (referral codes as token digests, captures, qualification decisions, referral entitlements, manager sanctions, manual grants and denials, and dismissal readings), written only by the Fleet referral store; a row trigger refuses UPDATE and DELETE and a per-kind CHECK admits manager kinds only from a signed staff session holding the capability. CashReferralAttribution holds one captured invitation per invitee Telegram account and admits one qualified invitation per person-key digest. Contact ids are plain canonical ids at the event: there is no foreign key into Contacts, Telegram or any monetary table, and nothing here changes a C1 table, constraint or rule. Both are pending source state created by an expand-only migration and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}
