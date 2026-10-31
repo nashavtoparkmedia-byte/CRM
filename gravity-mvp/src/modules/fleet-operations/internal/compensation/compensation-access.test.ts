@@ -506,10 +506,11 @@ describe('determinism and isolation', () => {
         const s0 = new Set([
             'modules/fleet-operations/internal/compensation/compensation-access.ts',
             'modules/fleet-operations/internal/compensation/compensation-referral-qualification.ts',
+            'modules/fleet-operations/internal/compensation/compensation-referral-ledger.ts',
         ])
         const importers = files
             .filter((file) => !/\.test\.(ts|tsx)$/.test(file) && !s0.has(relative(root, file)))
-            .filter((file) => /compensation-access['"]|compensation-referral-qualification['"]/.test(readFileSync(file, 'utf8')))
+            .filter((file) => /compensation-access['"]|compensation-referral-qualification['"]|compensation-referral-ledger['"]/.test(readFileSync(file, 'utf8')))
             .map((file) => relative(root, file))
         expect(importers).toEqual(['modules/fleet-operations/internal/compensation/compensation-pilot-service.ts'])
 
