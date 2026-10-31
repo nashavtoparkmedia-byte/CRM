@@ -372,11 +372,11 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
 async function handleStart(ctx) {
     try {
         const { from, startPayload } = ctx;
-        logger.info('/start pressed by user:', from.id, 'payload:', startPayload);
-
-        // Register user and log command
+        const payload = require('../security/redactSecrets').startPayloadEvidence(startPayload);
+        logger.info('/start pressed by user:', from.id, 'payload:', payload ? `sha256:${payload.sha256.slice(0, 12)}` : 'none');
+        // Register user and log command. A deep-link payload is kept only as its sha256.
         await userService.registerUser(from);
-        await userService.logAction(from.id, from.username, 'START_COMMAND', { payload: startPayload });
+        await userService.logAction(from.id, from.username, 'START_COMMAND', { payload });
 
         // IMPORTANT: Ensure the bot exists in Prisma DB so surveys work
         const botToken = config.botToken?.trim() || '';

@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 const TELEGRAM_TOKEN_PATTERN = /\b\d{6,15}:[A-Za-z0-9_-]{20,}\b/g;
 const BASIC_AUTH_PATTERN = /\bBasic\s+[A-Za-z0-9+/]+={0,2}/gi;
 const SECRET_KEY_PATTERN = /^(?:authorization|cookie|set-cookie|api[-_]?key|apiHash|password|passphrase|credential|session(?:Data|String|Token)?|.*token|.*secret)$/i;
@@ -33,4 +35,14 @@ function sanitizeLogValue(value, seen = new WeakSet()) {
     return clean;
 }
 
-module.exports = { redactText, sanitizeLogValue };
+/**
+ * What may be recorded about a /start deep-link payload: whether there was
+ * one, and its sha256. A payload can carry a referral token, so the payload
+ * itself never reaches a log line or the action record.
+ */
+function startPayloadEvidence(payload) {
+    if (typeof payload !== 'string' || payload === '') return null;
+    return { sha256: crypto.createHash('sha256').update(payload, 'utf8').digest('hex') };
+}
+
+module.exports = { redactText, sanitizeLogValue, startPayloadEvidence };

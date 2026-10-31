@@ -6,7 +6,7 @@ const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const adminAuth = require('../middleware/auth');
 const { isAcceptableWebhookSecret, requireTelegramWebhookSecret } = require('./webhookAuth');
-const { redactText, sanitizeLogValue } = require('./redactSecrets');
+const { redactText, sanitizeLogValue, startPayloadEvidence } = require('./redactSecrets');
 const serverAuth = require('../../tg-bot-frontend/lib/serverAuth');
 
 const root = resolve(__dirname, '../..');
@@ -234,6 +234,63 @@ test('known bot-token diagnostics and runtime paths never log token values or pr
     assert.doesNotMatch(sources, /(?:console|logger)\.(?:log|info|warn|error|debug)\([^\n]*(?:\$\{\s*(?:botToken|token)\b|,\s*(?:botToken|token)\s*\))/);
     assert.doesNotMatch(sources, /(?:botToken|token)\.(?:substring|substr|slice)\(/);
     assert.doesNotMatch(read('src/bot.js'), /logger\.(?:info|error)\([^\n]*\$\{socksUrl\}/);
+});
+
+test('a /start deep-link payload is recorded only as its sha256', () => {
+    const token = 'r_9f86d081884c7d659a2feaa0c55ad015';
+    const evidence = startPayloadEvidence(token);
+    assert.deepEqual(evidence, { sha256: require('node:crypto').createHash('sha256').update(token).digest('hex') });
+    assert.ok(!JSON.stringify(evidence).includes(token.slice(2)));
+    for (const absent of [undefined, null, '', 42, {}]) assert.equal(startPayloadEvidence(absent), null);
+});
+
+test('the /start handler never logs or records the raw deep-link payload', async () => {
+    const token = 'r_0123456789abcdef0123456789abcdef';
+    const logged = [];
+    const actions = [];
+    const startPath = require.resolve('../handlers/start');
+    const stubs = {
+        '@prisma/client': { PrismaClient: class { constructor() { this.bot = { findUnique: async () => null }; this.user = { findFirst: async () => null }; } } },
+        '../services/userService': {
+            registerUser: async () => {},
+            logAction: async (...args) => { actions.push(args); },
+            resetUserFlow: async () => {},
+        },
+        '../services/sheets': { upsertUserRow: async () => {} },
+        '../utils/logger': { info: (...a) => logged.push(a), warn: (...a) => logged.push(a), error: (...a) => logged.push(a), debug: (...a) => logged.push(a) },
+        '../public-bot-maintenance': { ensureBotMappingV1: async () => null },
+    };
+    const saved = new Map([[startPath, require.cache[startPath]]]);
+    for (const [specifier, exports] of Object.entries(stubs)) {
+        const resolved = require.resolve(specifier, { paths: [resolve(__dirname, '../handlers')] });
+        saved.set(resolved, require.cache[resolved]);
+        require.cache[resolved] = { id: resolved, filename: resolved, loaded: true, exports };
+    }
+    delete require.cache[startPath];
+    try {
+        const { handleStart } = require('../handlers/start');
+        const replies = [];
+        await handleStart({
+            from: { id: 1001, username: 'driver' },
+            chat: { id: 1001, type: 'private' },
+            startPayload: token,
+            session: {},
+            scene: { leave: async () => {} },
+            reply: async (body) => { replies.push(body); return { message_id: 1 }; },
+        });
+        assert.ok(replies.length > 0, 'the handler answered');
+        const recorded = JSON.stringify({ logged, actions });
+        assert.ok(!recorded.includes(token.slice(2)), 'the raw payload reached the log or the action record');
+        const start = actions.find((entry) => entry[2] === 'START_COMMAND');
+        assert.deepEqual(start[3], { payload: startPayloadEvidence(token) });
+        assert.ok(logged.some((entry) => entry.includes(`sha256:${startPayloadEvidence(token).sha256.slice(0, 12)}`)));
+    } finally {
+        for (const [resolved, entry] of saved) {
+            if (entry === undefined) delete require.cache[resolved];
+            else require.cache[resolved] = entry;
+        }
+    }
+    assert.doesNotMatch(read('src/handlers/start.js'), /(?:logger\.\w+|logAction)\([^\n]*\bstartPayload\b/);
 });
 
 test('driver registry sync preserves identity, fails closed and retries historical users', () => {
