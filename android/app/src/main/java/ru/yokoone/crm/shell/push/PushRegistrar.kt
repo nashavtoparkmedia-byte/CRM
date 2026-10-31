@@ -1,13 +1,18 @@
 package ru.yokoone.crm.shell.push
 
+import android.content.Context
 import android.webkit.CookieManager
 import androidx.annotation.VisibleForTesting
 import org.json.JSONObject
 import ru.yokoone.crm.shell.BuildConfig
+import ru.yokoone.crm.shell.ContinuityGuard
 import ru.yokoone.crm.shell.CrmOrigin
+import ru.yokoone.crm.shell.EdgeAuthPolicy
+import ru.yokoone.crm.shell.EdgeCredentialHolder
 import ru.yokoone.crm.shell.ShellDiagnostics
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Proxy
 import java.net.URL
 
 /**
@@ -24,9 +29,16 @@ import java.net.URL
  * that app. Nothing here copies, stores, hashes or logs the value — it is read
  * out of the jar, put on one request, and forgotten.
  *
- * Every outcome is one of three kinds, because the caller only ever needs three
- * decisions: it worked, it will never work as asked (stop), or the network was
- * unhelpful (try again later under a bounded policy).
+ * Every outcome is one of four kinds: it worked, it will never work as asked
+ * (stop), the network was unhelpful (try again later under a bounded policy),
+ * or nothing was decided because the edge gate needs a credential the shell may
+ * not use right now (deferred: no block, no retry, re-driven by an event).
+ *
+ * Edge Basic auth, Variant A (R5.1 §3.2 item 5, §4.1): the connection never
+ * uses a proxy and no Authenticator is installed; the staff `Authorization`
+ * header is written only on this one request to the compile-time https
+ * endpoint, only while the activity is STARTED with an accepted, unexpired
+ * credential. Without one, and with the gate known to exist, no request is made.
  */
 object PushRegistrar {
 
@@ -47,13 +59,40 @@ object PushRegistrar {
 
         /** Nothing was decided; the request may be repeated later. */
         data class Retryable(val detail: String) : Outcome
+
+        /** No decision and no request (or an edge refusal); nothing blocked, no retry. */
+        data class Deferred(val reason: String) : Outcome
     }
 
-    fun register(token: String): Outcome {
+    fun register(context: Context, token: String): Outcome {
         if (!TOKEN_SHAPE.matches(token)) return refused("INVALID_TOKEN_SHAPE")
         val cookie = sessionCookiePair(CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN))
             ?: return refused("NO_SESSION_COOKIE")
-        return post(endpoint(), token, cookie)
+        val header = EdgeCredentialHolder.authorizationHeaderOrNull()
+        if (header == null && PushTokenState.edgeGate(context) == ContinuityGuard.EdgeGate.PRESENT) {
+            return deferred("EDGE_CREDENTIAL_ABSENT", header = false)
+        }
+        val outcome = post(endpoint(), token, cookie, header)
+        if (outcome is Outcome.Deferred) {
+            when (outcome.reason) {
+                EDGE_AUTH_REQUIRED -> PushTokenState.setEdgeGate(context, ContinuityGuard.EdgeGate.PRESENT)
+                EDGE_AUTH_REFUSED -> {
+                    // The accepted credential was refused: drop it, and let the
+                    // activity reset at its next challenge or onStart.
+                    EdgeCredentialHolder.clear()
+                    EdgeCredentialHolder.refusedByRegistrar = true
+                }
+            }
+        }
+        return outcome
+    }
+
+    const val EDGE_AUTH_REQUIRED = "EDGE_AUTH_REQUIRED"
+    const val EDGE_AUTH_REFUSED = "EDGE_AUTH_REFUSED"
+
+    private fun deferred(reason: String, header: Boolean): Outcome {
+        ShellDiagnostics.write("YOKO_NET fail push-registration deferred $reason edge=${if (header) "present" else "absent"}")
+        return Outcome.Deferred(reason)
     }
 
     /**
@@ -92,11 +131,25 @@ object PushRegistrar {
         return null
     }
 
+    /**
+     * [mayAuthorize] decides whether [authorization] may be attached to
+     * [endpoint]; the production rule is "https, exactly the pinned host"
+     * (T7). Tests that speak to a loopback stub pass a wider rule.
+     */
     @VisibleForTesting
-    fun post(endpoint: String, token: String, cookiePair: String): Outcome {
+    fun post(
+        endpoint: String,
+        token: String,
+        cookiePair: String,
+        authorization: String? = null,
+        mayAuthorize: (String) -> Boolean = EdgeAuthPolicy::isPinnedHttpsEndpoint,
+    ): Outcome {
         var connection: HttpURLConnection? = null
+        val sendHeader = authorization != null && mayAuthorize(endpoint)
         return try {
-            connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            // NO_PROXY: the system proxy selector is never consulted, so the
+            // header can only ever travel inside TLS to the origin itself.
+            connection = (URL(endpoint).openConnection(Proxy.NO_PROXY) as HttpURLConnection).apply {
                 requestMethod = "POST"
                 // A redirect is never a valid answer here. Following one would
                 // put the session cookie on a URL the shell never chose.
@@ -108,6 +161,7 @@ object PushRegistrar {
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("Cookie", cookiePair)
+                if (sendHeader) setRequestProperty("Authorization", authorization)
             }
 
             // The token shape is validated above and contains no character that
@@ -120,7 +174,16 @@ object PushRegistrar {
                     ShellDiagnostics.write("YOKO_NET done POST /api/mobile/push-registration status=200")
                     Outcome.Registered
                 }
-                401, 409, 422, 400, 413, 415 -> refused(errorCode(connection, status))
+                401 -> {
+                    val challenge = connection.getHeaderField("WWW-Authenticate")?.trim().orEmpty()
+                    if (challenge.regionMatches(0, "Basic", 0, 5, ignoreCase = true)) {
+                        // nginx, not the CRM: an edge answer decides nothing about push.
+                        deferred(if (sendHeader) EDGE_AUTH_REFUSED else EDGE_AUTH_REQUIRED, sendHeader)
+                    } else {
+                        refused(errorCode(connection, status))
+                    }
+                }
+                409, 422, 400, 413, 415 -> refused(errorCode(connection, status))
                 in 300..399 -> refused("UNEXPECTED_REDIRECT")
                 in 500..599 -> retryable("http_$status")
                 else -> retryable("http_$status")

@@ -3,6 +3,7 @@ package ru.yokoone.crm.shell.push
 import android.content.Context
 import ru.yokoone.crm.shell.ChatNotifications
 import ru.yokoone.crm.shell.R
+import ru.yokoone.crm.shell.ShellDiagnostics
 
 /**
  * Everything the shell does with a remote push, and the only place that does it.
@@ -41,6 +42,13 @@ object RemotePushHandler {
         data class Accepted(val notificationPosted: Boolean) : Outcome
         data object Duplicate : Outcome
         data class Rejected(val reason: String) : Outcome
+
+        /**
+         * Valid, but display is off after an edge context reset until a
+         * registration with a current ticket returned 200 (R5.1 §5.3, §5.7.3).
+         * Not recorded as seen.
+         */
+        data object Suppressed : Outcome
     }
 
     /**
@@ -61,6 +69,11 @@ object RemotePushHandler {
         val payload = when (val parsed = PushPayload.parse(data)) {
             is PushPayloadResult.Rejected -> return Outcome.Rejected(parsed.reason)
             is PushPayloadResult.Valid -> parsed.payload
+        }
+
+        if (!PushTokenState.displayAllowed(context)) {
+            ShellDiagnostics.write("YOKO_NET fail push drop reason=after_reset")
+            return Outcome.Suppressed
         }
 
         synchronized(LOCK) {

@@ -34,7 +34,35 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Static launcher shortcut «Выйти и сменить сотрудника»
+                 (edge design R5.1 §5.4). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Target of the static shortcut. Not exported: static shortcuts are
+             started on behalf of this app (P8), so no other app can reach it.
+             It hands MainActivity a process-local flag, never a trusted extra. -->
+        <activity
+            android:name=".OperatorResetActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Relaunch after an edge context reset (R5.1 §5.3 step 7). Its own
+             process so MainActivity's process can end while it waits; its own
+             task (empty affinity) so finishAffinity() cannot take it along.
+             The :reset process is inert: ShellApplication returns early there. -->
+        <activity
+            android:name=".ResetTrampolineActivity"
+            android:process=":reset"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <!-- WorkManager initializes on demand rather than through androidx
              startup. Every process this app starts - including the ones the
@@ -53,6 +81,14 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- N6: no token is created behind the token actor's back. Firebase
+             auto-init would otherwise issue a token at every start; the actor
+             (R5.1 §5.7.2) reads the provider itself, serially, and commits only
+             under the reset epoch and the retired set. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
 
         <!-- Firebase only dispatches to this when a default FirebaseApp exists,
              which requires an external google-services.json that this

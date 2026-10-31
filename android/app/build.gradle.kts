@@ -55,6 +55,10 @@ android {
         // origin it is appended to: there is no setting, no intent extra and no
         // payload field that can point the registrar anywhere else.
         buildConfigField("String", "PUSH_REGISTRATION_PATH", "\"/api/mobile/push-registration\"")
+        // Edge Basic auth (design R5.1 §3.1): an accepted staff credential and
+        // the CRM context riding on it end 12 h after the credential was typed.
+        // Release pins 43 200 000 ms and a unit test asserts it.
+        buildConfigField("long", "EDGE_MAX_AGE_MS", "43200000L")
     }
 
     signingConfigs {
@@ -113,6 +117,9 @@ android {
             // only happens in the device WebView can actually be read. Test
             // builds only; the production variant below leaves this false.
             buildConfigField("boolean", "CAPTURE_CONSOLE", "true")
+            // T36 may shorten the 12 h edge limit, in this variant only.
+            val edgeMaxAge = (project.findProperty("yokoEdgeMaxAgeMs") as String?)?.toLongOrNull()
+            if (edgeMaxAge != null) buildConfigField("long", "EDGE_MAX_AGE_MS", "${edgeMaxAge}L")
 
             if (keystoreProperties != null) {
                 signingConfig = signingConfigs.getByName("release")

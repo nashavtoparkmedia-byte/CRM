@@ -56,7 +56,10 @@ class AcceptancePushInjection : BroadcastReceiver() {
                         " registered=${state.isRegistered}" +
                         " needs=${state.needsRegistration}" +
                         " blocked=${state.blockedReason ?: "none"}" +
-                        " observations=${PushRegistration.observations}",
+                        " observations=${PushRegistration.observations}" +
+                        " reset_pending=${state.resetPending != null}" +
+                        " rotation_pending=${state.rotationPending}" +
+                        " display=${state.displayAllowed}",
                 )
                 Log.i(TAG, "$STATE_PREFIX registered=${state.isRegistered} blocked=${state.blockedReason ?: "none"}")
             }
@@ -67,9 +70,16 @@ class AcceptancePushInjection : BroadcastReceiver() {
                     Log.w(TAG, "${SEED_PREFIX}refused: no token")
                     return
                 }
-                // The same entry point FirebaseMessagingService.onNewToken
-                // uses. From here on the registration is entirely real: real
-                // state machine, real WorkManager, real request, real CRM.
+                // The token goes into the acceptance provider, and the actor is
+                // signalled through the same entry point
+                // FirebaseMessagingService.onNewToken uses. The actor then reads
+                // the provider and commits (R5.1 §5.7.2); from there on the
+                // registration is entirely real: real state machine, real
+                // WorkManager, real request, real CRM.
+                if (!AcceptanceTokenProvider.seed(application, token)) {
+                    Log.w(TAG, "${SEED_PREFIX}refused: provider store")
+                    return
+                }
                 PushRegistration.onNewToken(application, token)
                 Log.i(TAG, "${SEED_PREFIX}accepted length=${token.length}")
             }
