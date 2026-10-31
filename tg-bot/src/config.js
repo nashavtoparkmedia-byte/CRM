@@ -26,6 +26,8 @@ const config = {
     // state, budget and order freshness all stay with the CRM, which refuses
     // independently. The flag can therefore only ever hide, never grant.
     compensationEntryEnabled: process.env.BOT_COMPENSATION_ENTRY_ENABLED === 'true',
+    // Only the exact string "true" releases the referral entry and link capture.
+    referralEntryEnabled: process.env.BOT_REFERRAL_ENTRY_ENABLED === 'true',
 
     // Bot settings
     botName: 'SurveyBot',

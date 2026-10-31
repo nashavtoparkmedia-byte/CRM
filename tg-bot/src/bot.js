@@ -67,7 +67,8 @@ const staticButtons = [
     // checked before Stage and resets whatever scene is open, so a stale
     // keyboard press would otherwise throw a driver out of an unrelated
     // survey, car or order flow before anything refused it.
-    ...startHandler.compensationEntryButtons()
+    ...startHandler.compensationEntryButtons(),
+    ...require('./handlers/referral').referralEntryButtons()
 ];
 
 bot.use(async (ctx, next) => {
