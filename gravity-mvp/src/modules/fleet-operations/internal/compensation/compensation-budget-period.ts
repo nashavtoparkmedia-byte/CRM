@@ -17,6 +17,7 @@
  */
 
 import {
+    compensationCalendarMonthV1,
     compensationMonthEndInstantV1,
     compensationMonthStartInstantV1,
     compensationPeriodKeyV1,
@@ -109,9 +110,13 @@ export function isCompensationBudgetLimitV1(limitKopecks: unknown): limitKopecks
  * `null` means no row exists yet. The same decision is taken again under the
  * row lock, so a month that appeared in between is handled as the month it is
  * rather than as the month the caller last saw.
+ *
+ * `createOnly` is the scheduler's mode: it opens a missing month and leaves a
+ * stored one exactly as it is, whatever its limit or state, so no automatic
+ * run can raise a budget an operator set or touch a month that was closed.
  */
 export function planCompensationBudgetPeriodV1(
-    input: { periodKey: unknown; limitKopecks: unknown },
+    input: { periodKey: unknown; limitKopecks: unknown; createOnly?: boolean },
     existing: CompensationBudgetPeriodRowV1 | null,
 ): CompensationBudgetPeriodPlanV1 {
     const window = compensationBudgetPeriodWindowV1(input.periodKey)
@@ -120,12 +125,39 @@ export function planCompensationBudgetPeriodV1(
     const id = compensationBudgetPeriodIdV1(window.periodKey)
 
     if (existing === null) return { action: 'create', window, id, limitKopecks: input.limitKopecks }
+    if (input.createOnly === true) return { action: 'none' }
     // A closed month is not reopened by provisioning it again: closing is a
     // monetary decision, and undoing it silently would resurrect a budget.
     if (existing.state !== COMPENSATION_BUDGET_PERIOD_OPEN_STATE_V1) return { refusal: 'period_not_open' }
     if (existing.limitKopecks === input.limitKopecks) return { action: 'none' }
     if (existing.limitKopecks > input.limitKopecks) return { refusal: 'limit_below_configured' }
     return { action: 'increase', id: existing.id, limitKopecks: input.limitKopecks }
+}
+
+/**
+ * The months scheduled provisioning keeps open at an instant: the business
+ * month the instant falls in and the one after it. The next month therefore
+ * exists before its first day starts on the compensation calendar, and a run
+ * that was missed is made good by the next one.
+ */
+export function compensationBudgetProvisioningPeriodKeysV1(now: Date): [string, string] {
+    const month = compensationCalendarMonthV1(now)
+    const next = month.month === 12
+        ? { year: month.year + 1, month: 1 }
+        : { year: month.year, month: month.month + 1 }
+    return [compensationPeriodKeyV1(month), compensationPeriodKeyV1(next)]
+}
+
+/**
+ * The limit scheduled provisioning opens new months at, read from explicit
+ * configuration: whole kopecks, digits only. Anything else, unset included, is
+ * no limit at all, so the scheduler opens nothing rather than a month at a
+ * guessed amount or at one inherited from a previous month.
+ */
+export function parseCompensationMonthlyBudgetLimitV1(raw: unknown): number | null {
+    if (typeof raw !== 'string' || !/^[1-9]\d{0,9}$/u.test(raw)) return null
+    const limitKopecks = Number(raw)
+    return isCompensationBudgetLimitV1(limitKopecks) ? limitKopecks : null
 }
 
 /** What an operator sees after provisioning: the month, stated by storage. */

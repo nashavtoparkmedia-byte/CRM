@@ -56,7 +56,7 @@ export const legacyPrismaCompensationBudgetPeriodStoreV1: CompensationBudgetPeri
         return toRow(rows[0])
     },
 
-    async provisionPeriod({ window, id, limitKopecks }) {
+    async provisionPeriod({ window, id, limitKopecks, createOnly }) {
         return prisma.$transaction(async (tx) => {
             const locked = async (): Promise<CompensationBudgetPeriodRowV1 | null> => toRow(
                 (await tx.$queryRawUnsafe<PeriodRow[]>(
@@ -87,8 +87,10 @@ export const legacyPrismaCompensationBudgetPeriodStoreV1: CompensationBudgetPeri
                 existing = stored
             }
 
+            // A month that appeared between the caller's read and this lock is
+            // re-decided in the caller's mode: create-only leaves it as it is.
             const plan = planCompensationBudgetPeriodV1(
-                { periodKey: window.periodKey, limitKopecks },
+                { periodKey: window.periodKey, limitKopecks, createOnly },
                 existing,
             )
             if ('refusal' in plan) return { ok: false as const, refusal: plan.refusal, row: existing }
