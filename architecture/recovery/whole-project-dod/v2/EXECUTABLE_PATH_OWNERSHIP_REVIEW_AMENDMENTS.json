@@ -3035,6 +3035,141 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-referral-access-delivery-main-999e289f-20261031",
+      "reviewed_at": "2026-10-31T00:00:00Z",
+      "reviewed_by": "CASH_REFERRAL_ACCESS_DELIVERY_EXECUTOR_REVIEW_999E289F",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_YOKO_REFERRAL_ACCESS_FULL_AUTONOMOUS_DELIVERY_20261031",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is cash-auth-alignment-d2-integration-d5ed8cc1-20261029, and leaves that amendment untouched. The rebind of the driver-bot webhook starts from the exact fingerprint that amendment approved."
+      },
+      "reason": "Records the tracked executable surfaces Cash Referral Access adds on top of main 999e289f, and the one source fingerprint it moves: 2,715 + 15 = 2,730 surfaces, context-owned 1,478 -> 1,492 and governed exclusions 1,237 -> 1,238. Twelve new paths sit under gravity-mvp/src/modules/fleet-operations and two under tg-bot/src, owned through their context manifests; the expand-only migration falls under the gravity_schema governed exclusion. The driver-bot webhook keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. No assignment, exact-inventory transition, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree (preview-reviewed-current-denominator on the clean commit 19e9fe25). Its position, predecessor and current triple bind it to main 999e289f only and claim no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses, with the same surfaces and rebind.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2730,
+        "tracked_inventory_sha256": "b117b03fce730946372c36e3f1a7b9302a8616c4097b1790a9570faa02e4452e",
+        "coverage_sha256": "5fb221a9daf64b6e707a5bc8a2a723ccbc28615221201003ed6825b4b380e1e2"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "e7681bfab132af787388e27e2541e63b7e171831ed2ecb8b4b9dfe40c28f2b19",
+          "current_source_sha256": "71bf4ea7892c405fda0ef1ee4ab6be2b02cebf5de417fbef729ced8fb03958f8",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner GO of 2026-10-31 (Cash Referral Access, Security implementation verdicts 451f6bd5 and 79597acd): the driver-bot webhook gains referral_issue, referral_status and referral_capture, each a no-op unless YOKO_CASH_REFERRAL_ACCESS=on. Issue and status take the same Cash person proof the compensation actions take; capture answers every caller the same and never logs the token; a proven link records the invitee Driver, best effort. Every existing action keeps the same authority gate, status codes and responses. It adds no credential and no model write of its own."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20261101120000_add_cash_referral_access/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the two Fleet Operations-owned Cash referral access tables, their constraints and indexes and one append-only row guard; it names no existing table."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The composition root of Cash referral access: code issue, the inviter's own counts, the uniform capture, the invitee Driver attach, the hourly decision pass and the report-only chain check, each behind YOKO_CASH_REFERRAL_ACCESS=on. It injects the Fleet stores and the bounded Yandex dismissal read and touches no money, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-access.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the Cash access decision and the order catalogue (standard first month equal to the live rule, referral and manual windows, identity blockers, unknown facts); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-access.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure Cash access decision: precedence of identity, manual denial, manual grant, referral entitlement and the standard first month, and the order windows and budget periods they open. It reads no database, environment or provider and changes no money rule, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The env-gated PostgreSQL proof of the referral migration and store (writer check, append-only row guard, unique code and qualified person, first touch, version conflicts, rotation); it runs only against an isolated database the caller provides, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the Cash access ledger (writer rule, row hash over every column, chain verifier, access fold, sanctions and kept dismissal readings); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure Cash access ledger: event kinds and writers, the canonical row hash, the chain verifier, the access fold and the domain-separated person-key digest. It reads no database, environment or provider, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-qualification.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the referral qualification decision (new and returning invitees, dismissal readings after the capture, shared phone, sanctions, duplicates); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-qualification.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure referral qualification decision and the reader of a Yandex dismissal reading (fired plus a valid fire date only). It reads no database, environment or provider, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-service.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the referral decision pass and the chain check against port fakes; it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-service.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The referral decision pass and the report-only chain check behind ports: an unknown or stale fact or a skipped read leaves the invitation pending, and a grant is written only with a qualified decision. It has no provider or database dependency of its own, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-decision-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Prisma decision port: Fleet's own Driver rows for the invitee facts, Contacts through the pilot port, and the rationed Yandex dismissal read (a cap per pass and a per-park cooldown). It writes nothing, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-ledger-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one raw-SQL store of CashAccessEvent and CashReferralAttribution: hashed appends on the database clock, token-digest codes, first-touch captures and version-checked decisions. It writes only Fleet Operations-owned referral state, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "tg-bot/src/handlers/referral.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The driver bot referral entry behind BOT_REFERRAL_ENTRY_ENABLED: the personal link, the inviter's own counts and the uniform capture reply; the token reaches only the CRM and never the log. It holds no Prisma or credential reference, under tg-bot/src, a path the telegram_channel context owns by prefix in architecture/contexts/v1/manifests/telegram_channel.json owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "tg-bot/src/security/referralEntryGate.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A node:test contract test of the referral entry release gate and the uniform capture with in-process fakes; it opens no database connection and holds no credential, placed under src/security so the authoritative tg-bot-security control runs it, under tg-bot/src, a path the telegram_channel context owns by prefix in architecture/contexts/v1/manifests/telegram_channel.json owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
