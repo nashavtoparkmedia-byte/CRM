@@ -236,11 +236,11 @@ test('known bot-token diagnostics and runtime paths never log token values or pr
     assert.doesNotMatch(read('src/bot.js'), /logger\.(?:info|error)\([^\n]*\$\{socksUrl\}/);
 });
 
-test('a /start deep-link payload is recorded only as its sha256', () => {
+test('a /start deep-link payload is recorded only as present, with no digest', () => {
     const token = 'r_9f86d081884c7d659a2feaa0c55ad015';
     const evidence = startPayloadEvidence(token);
-    assert.deepEqual(evidence, { sha256: require('node:crypto').createHash('sha256').update(token).digest('hex') });
-    assert.ok(!JSON.stringify(evidence).includes(token.slice(2)));
+    assert.deepEqual(evidence, { present: true });
+    assert.ok(!JSON.stringify(evidence).includes(require('node:crypto').createHash('sha256').update(token).digest('hex').slice(0, 12)));
     for (const absent of [undefined, null, '', 42, {}]) assert.equal(startPayloadEvidence(absent), null);
 });
 
@@ -293,8 +293,10 @@ test('the /start handler never logs or records the raw deep-link payload', async
         const recorded = JSON.stringify({ logged, actions });
         assert.ok(!recorded.includes(token.slice(2)), 'the raw payload reached the log or the action record');
         const start = actions.find((entry) => entry[2] === 'START_COMMAND');
-        assert.deepEqual(start[3], { payload: startPayloadEvidence(token) });
-        assert.ok(logged.some((entry) => entry.includes(`sha256:${startPayloadEvidence(token).sha256.slice(0, 12)}`)));
+        assert.deepEqual(start[3], { payload: { present: true } });
+        assert.ok(logged.some((entry) => entry[0] === '/start pressed by user:' && entry.includes('present')));
+        const digest = require('node:crypto').createHash('sha256').update(token).digest('hex');
+        assert.ok(!recorded.includes(digest.slice(0, 12)), 'a digest of the payload reached the log or the action record');
     } finally {
         for (const [resolved, entry] of saved) {
             if (entry === undefined) delete require.cache[resolved];

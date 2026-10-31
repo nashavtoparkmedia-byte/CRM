@@ -1,7 +1,5 @@
 'use strict';
 
-const crypto = require('node:crypto');
-
 const TELEGRAM_TOKEN_PATTERN = /\b\d{6,15}:[A-Za-z0-9_-]{20,}\b/g;
 const BASIC_AUTH_PATTERN = /\bBasic\s+[A-Za-z0-9+/]+={0,2}/gi;
 const SECRET_KEY_PATTERN = /^(?:authorization|cookie|set-cookie|api[-_]?key|apiHash|password|passphrase|credential|session(?:Data|String|Token)?|.*token|.*secret)$/i;
@@ -36,13 +34,15 @@ function sanitizeLogValue(value, seen = new WeakSet()) {
 }
 
 /**
- * What may be recorded about a /start deep-link payload: whether there was
- * one, and its sha256. A payload can carry a referral token, so the payload
- * itself never reaches a log line or the action record.
+ * What may be recorded about a /start deep-link payload: only that there was
+ * one. A payload can carry a referral token, so neither the payload nor a
+ * digest of it reaches a log line or the action record: a digest would match
+ * the referral ledger's code hash and link the Telegram account to the
+ * inviter for anyone who can read both.
  */
 function startPayloadEvidence(payload) {
     if (typeof payload !== 'string' || payload === '') return null;
-    return { sha256: crypto.createHash('sha256').update(payload, 'utf8').digest('hex') };
+    return { present: true };
 }
 
 /**

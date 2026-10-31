@@ -373,8 +373,8 @@ async function handleStart(ctx) {
     try {
         const { from, startPayload } = ctx;
         const payload = require('../security/redactSecrets').startPayloadEvidence(startPayload);
-        logger.info('/start pressed by user:', from.id, 'payload:', payload ? `sha256:${payload.sha256.slice(0, 12)}` : 'none');
-        // Register user and log command. A deep-link payload is kept only as its sha256.
+        logger.info('/start pressed by user:', from.id, 'payload:', payload ? 'present' : 'none');
+        // Register user and log command. A deep-link payload is kept only as "present".
         await userService.registerUser(from);
         await userService.logAction(from.id, from.username, 'START_COMMAND', { payload });
 
