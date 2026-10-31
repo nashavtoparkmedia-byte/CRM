@@ -3761,6 +3761,7 @@ model CashReferralAttribution {
   inviterLineageDigest  String            @db.VarChar(128)
   codeHash              String            @db.VarChar(64)
   inviteeTelegramUserId String            @unique(map: "CashReferralAttribution_invitee_telegram_key") @db.VarChar(64)
+  inviteeDriverId       String?           @db.VarChar(255)
   inviteeContactId      String?           @db.VarChar(255)
   inviteePersonKey      String?           @db.VarChar(255)
   state                 String            @default("captured") @db.VarChar(32)

@@ -97,6 +97,20 @@ proof('Cash referral ledger on real PostgreSQL', () => {
         expect(Number(kept[0].count)).toBe(0)
     })
 
+    it('records the proven invitee Driver once, at capture or later, and never moves it', async () => {
+        const { token } = await store.issueCode({ inviterContactId: unique('inviter'), lineageDigest: 'lineage:1' })
+        const later = unique('tg')
+        expect(await store.capture({ token, inviteeTelegramUserId: later })).toBe('captured')
+        expect(await store.attachInviteeDriver({ inviteeTelegramUserId: later, driverId: 'driver-a' })).toBe(true)
+        expect(await store.attachInviteeDriver({ inviteeTelegramUserId: later, driverId: 'driver-b' })).toBe(false)
+        const linkedNow = unique('tg')
+        expect(await store.capture({ token, inviteeTelegramUserId: linkedNow, inviteeDriverId: 'driver-c' })).toBe('captured')
+        const rows = await database.$queryRawUnsafe<Array<{ inviteeTelegramUserId: string; inviteeDriverId: string }>>(
+            `SELECT "inviteeTelegramUserId","inviteeDriverId" FROM "CashReferralAttribution" WHERE "inviteeTelegramUserId" IN ($1,$2) ORDER BY "inviteeDriverId"`, later, linkedNow)
+        expect(rows.map((row) => row.inviteeDriverId)).toEqual(['driver-a', 'driver-c'])
+        expect(await store.attachInviteeDriver({ inviteeTelegramUserId: unique('tg'), driverId: 'driver-d' })).toBe(false)
+    })
+
     it('stamps every row with the database clock, never a client time', async () => {
         const contact = unique('contact')
         const before = await database.$queryRawUnsafe<Array<{ now: Date }>>(`SELECT now() AS "now"`)

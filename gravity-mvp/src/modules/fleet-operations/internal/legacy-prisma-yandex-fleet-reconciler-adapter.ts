@@ -893,3 +893,55 @@ export async function refreshYandexFleetDriverProfileV1(
   }
   return { status: 'refreshed' }
 }
+
+/** What one single-profile read states about a dismissal; nothing else is kept. */
+export type YandexFleetDriverDismissalReadV1 =
+  | { status: 'read'; workStatus: string | null; fireDate: string | null }
+  | { status: 'rate_limited'; retryAfterMs: number | null }
+  | { status: 'failed'; code: 'no_connection' | 'provider_error' | 'not_returned' }
+
+/**
+ * Reads one profile through the single-profile method, the only method that
+ * states a dismissal date (`profile.fire_date`, a date without a time), with
+ * `profile.work_status`. Only those two fields leave this function; the body
+ * is never logged or stored, and nothing is written.
+ */
+export async function readYandexFleetDriverDismissalV1(
+  target: YandexFleetDriverProfileTargetV1,
+): Promise<YandexFleetDriverDismissalReadV1> {
+  const connections = await listYandexConnectionCredentialsV1()
+  const connection = connections.find(row => row.parkId === target.externalParkId)
+  if (!connection) return { status: 'failed', code: 'no_connection' }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), YANDEX_FLEET_PROFILE_REFRESH_TIMEOUT_MS)
+  try {
+    const response = await fetch(
+      `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${encodeURIComponent(target.externalDriverProfileId)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          'X-Client-ID': connection.clid,
+          'X-API-Key': connection.apiKey,
+          'X-Park-ID': connection.parkId,
+          'Accept-Language': 'ru',
+        },
+      },
+    )
+    if (response.status === 429) return { status: 'rate_limited', retryAfterMs: retryAfterMs(response.headers?.get('retry-after') ?? null) }
+    if (!response.ok) return { status: 'failed', code: 'provider_error' }
+    const body = await response.json() as { profile?: { work_status?: unknown; fire_date?: unknown } } | null
+    const profile = body?.profile
+    if (profile === null || typeof profile !== 'object') return { status: 'failed', code: 'not_returned' }
+    return {
+      status: 'read',
+      workStatus: typeof profile.work_status === 'string' ? profile.work_status : null,
+      fireDate: typeof profile.fire_date === 'string' ? profile.fire_date : null,
+    }
+  } catch {
+    return { status: 'failed', code: 'provider_error' }
+  } finally {
+    clearTimeout(timeout)
+  }
+}

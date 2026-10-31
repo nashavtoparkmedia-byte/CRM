@@ -21,6 +21,7 @@ const attribution = (overrides: Partial<CashReferralAttributionV1> = {}): CashRe
     inviterContactId: INVITER,
     inviterLineageDigest: compensationLineageDigestV1([INVITER]),
     inviteeTelegramUserId: '2002',
+    inviteeDriverId: 'driver-invitee',
     state: 'captured',
     reason: null,
     capturedAt: CAPTURED_AT,
@@ -52,7 +53,7 @@ function port(overrides: Partial<CashReferralDecisionPortV1> = {}, rows: CashRef
         personAlreadyQualified: vi.fn(async () => false),
         writeDecision: vi.fn(async () => 'written' as const),
         resolveContactLineage: vi.fn(async (contactId: string) => ({ status: 'resolved' as const, canonicalContactId: contactId, contactIds: [contactId] })),
-        findLinkedDriver: vi.fn(async () => ({ driverId: 'driver-invitee', contactId: INVITEE })),
+        findDriverContact: vi.fn(async () => ({ contactId: INVITEE })),
         confirmMainDriver: vi.fn(async () => 'confirmed' as const),
         readInviteeFleetFacts: vi.fn(async () => fleet()),
         personKeysOfContact: vi.fn(async () => ['vu:inviter']),
@@ -158,9 +159,13 @@ describe('a pass decides captured invitations', () => {
         await runCashReferralDecisionPassV1(merged, 50)
         expect(written(merged)[0]).toMatchObject({ state: 'pending', reason: 'inviter_identity_blocked' })
 
-        const notLinked = port({ findLinkedDriver: vi.fn(async () => null) })
+        const notLinked = port({}, [attribution({ inviteeDriverId: null })])
         await runCashReferralDecisionPassV1(notLinked, 50)
         expect(written(notLinked)[0]).toMatchObject({ state: 'pending', reason: 'invitee_not_linked' })
+        expect(notLinked.findDriverContact).not.toHaveBeenCalled()
+        const noContact = port({ findDriverContact: vi.fn(async () => ({ contactId: null })) })
+        await runCashReferralDecisionPassV1(noContact, 50)
+        expect(written(noContact)[0]).toMatchObject({ state: 'pending', reason: 'invitee_not_linked' })
 
         const unconfirmed = port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) })
         await runCashReferralDecisionPassV1(unconfirmed, 50)
@@ -168,7 +173,7 @@ describe('a pass decides captured invitations', () => {
     })
 
     it('writes nothing when nothing changed, and counts a raced write as a conflict', async () => {
-        const unchanged = port({ findLinkedDriver: vi.fn(async () => null) }, [attribution({ state: 'pending', reason: 'invitee_not_linked', version: 3 })])
+        const unchanged = port({}, [attribution({ inviteeDriverId: null, state: 'pending', reason: 'invitee_not_linked', version: 3 })])
         expect(await runCashReferralDecisionPassV1(unchanged, 50)).toMatchObject({ examined: 1, written: 0, unchanged: 1 })
         expect(unchanged.writeDecision).not.toHaveBeenCalled()
 

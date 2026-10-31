@@ -72,6 +72,12 @@ export interface CashReferralAttributionV1 {
     inviterContactId: string
     inviterLineageDigest: string
     inviteeTelegramUserId: string
+    /**
+     * The Driver the invited Telegram account was proven linked to, recorded by
+     * the bot route the first time it proved that account. Fleet never reads
+     * Telegram state itself; until then the invitee is not linked.
+     */
+    inviteeDriverId: string | null
     state: string
     reason: string | null
     capturedAt: Date
@@ -98,8 +104,8 @@ export interface CashReferralDecisionPortV1 {
         idempotencyKey: string
     }): Promise<'written' | 'version_conflict' | 'person_already_qualified'>
     resolveContactLineage(contactId: string): Promise<PilotContactLineageReadV1>
-    /** The Driver the invited Telegram account is linked to, with its Contact. */
-    findLinkedDriver(telegramUserId: string): Promise<{ driverId: string; contactId: string | null } | null>
+    /** The Contact a Driver row is attached to; null when it has none. */
+    findDriverContact(driverId: string): Promise<{ contactId: string | null } | null>
     confirmMainDriver(contactId: string, driverId: string): Promise<'confirmed' | 'not_confirmed' | 'busy'>
     readInviteeFleetFacts(driverId: string): Promise<CashReferralInviteeFleetFactsV1 | null>
     /** The park person keys of a contact's Drivers. */
@@ -179,8 +185,9 @@ export async function decideCashReferralAttributionV1(
         inviteeContactId: null, inviteePersonKey: null, targetParkId: null, factsSnapshot: {}, observedDismissals: [],
     })
 
-    const linked = await port.findLinkedDriver(attribution.inviteeTelegramUserId)
-    if (linked === null || linked.contactId === null) return undecided('not_linked')
+    const driver = attribution.inviteeDriverId === null ? null : await port.findDriverContact(attribution.inviteeDriverId)
+    if (attribution.inviteeDriverId === null || driver === null || driver.contactId === null) return undecided('not_linked')
+    const linked = { driverId: attribution.inviteeDriverId, contactId: driver.contactId }
     const confirmation = await port.confirmMainDriver(linked.contactId, linked.driverId)
     if (confirmation === 'busy') return undecided('identity_busy')
     if (confirmation !== 'confirmed') return undecided('identity_needs_review')

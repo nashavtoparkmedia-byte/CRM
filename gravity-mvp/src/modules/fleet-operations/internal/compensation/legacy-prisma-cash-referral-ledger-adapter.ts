@@ -174,6 +174,7 @@ export interface CashReferralAttributionRowV1 {
     inviterContactId: string
     inviterLineageDigest: string
     inviteeTelegramUserId: string
+    inviteeDriverId: string | null
     inviteeContactId: string | null
     inviteePersonKey: string | null
     state: string
@@ -188,6 +189,7 @@ interface AttributionRow {
     inviterContactId: string
     inviterLineageDigest: string
     inviteeTelegramUserId: string
+    inviteeDriverId: string | null
     inviteeContactId: string | null
     inviteePersonKey: string | null
     state: string
@@ -203,6 +205,7 @@ function toAttribution(row: AttributionRow): CashReferralAttributionRowV1 {
         inviterContactId: String(row.inviterContactId),
         inviterLineageDigest: String(row.inviterLineageDigest),
         inviteeTelegramUserId: String(row.inviteeTelegramUserId),
+        inviteeDriverId: row.inviteeDriverId === null ? null : String(row.inviteeDriverId),
         inviteeContactId: row.inviteeContactId === null ? null : String(row.inviteeContactId),
         inviteePersonKey: row.inviteePersonKey === null ? null : String(row.inviteePersonKey),
         state: String(row.state),
@@ -278,7 +281,7 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
      * open any code owns its attribution; nothing about the outcome may reach
      * the person who opened it.
      */
-    async capture(input: { token: string; inviteeTelegramUserId: string }): Promise<CashReferralCaptureOutcomeV1> {
+    async capture(input: { token: string; inviteeTelegramUserId: string; inviteeDriverId?: string | null }): Promise<CashReferralCaptureOutcomeV1> {
         const codeHash = createHash('sha256').update(input.token, 'utf8').digest('hex')
         return prisma.$transaction(async (tx) => {
             const issued = await tx.$queryRawUnsafe<Array<{ chainContactId: string; lineageDigest: string }>>(
@@ -290,8 +293,8 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
             const attributionId = randomUUID()
             const inserted = await tx.$queryRawUnsafe<Array<{ id: string }>>(
                 `INSERT INTO "CashReferralAttribution"
-                   ("id","inviterContactId","inviterLineageDigest","codeHash","inviteeTelegramUserId","state","capturedAt","updatedAt")
-                 VALUES ($1,$2,$3,$4,$5,'captured',date_trunc('milliseconds', now()),date_trunc('milliseconds', now()))
+                   ("id","inviterContactId","inviterLineageDigest","codeHash","inviteeTelegramUserId","inviteeDriverId","state","capturedAt","updatedAt")
+                 VALUES ($1,$2,$3,$4,$5,$6,'captured',date_trunc('milliseconds', now()),date_trunc('milliseconds', now()))
                  ON CONFLICT ("inviteeTelegramUserId") DO NOTHING
                  RETURNING "id"`,
                 attributionId,
@@ -299,6 +302,7 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
                 String(issued[0].lineageDigest),
                 codeHash,
                 input.inviteeTelegramUserId,
+                input.inviteeDriverId ?? null,
             )
             if (inserted.length === 0) return 'already_attributed' as const
             await appendInV1(tx, {
@@ -318,7 +322,7 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
 
     async findAttribution(attributionId: string): Promise<CashReferralAttributionRowV1 | null> {
         const rows = await prisma.$queryRawUnsafe<AttributionRow[]>(
-            `SELECT "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"
+            `SELECT "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeDriverId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"
              FROM "CashReferralAttribution"
              WHERE "id" = $1`,
             attributionId,
@@ -326,10 +330,26 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
         return rows.length === 0 ? null : toAttribution(rows[0])
     },
 
+    /**
+     * Records the Driver an invited Telegram account was proven linked to, the
+     * first time the bot route proves it. Never moves an invitation to another
+     * Driver once set.
+     */
+    async attachInviteeDriver(input: { inviteeTelegramUserId: string; driverId: string }): Promise<boolean> {
+        const changed = await prisma.$executeRawUnsafe(
+            `UPDATE "CashReferralAttribution"
+             SET "inviteeDriverId" = $2, "updatedAt" = date_trunc('milliseconds', now())
+             WHERE "inviteeTelegramUserId" = $1 AND "inviteeDriverId" IS NULL`,
+            input.inviteeTelegramUserId,
+            input.driverId,
+        )
+        return changed > 0
+    },
+
     /** Invitations not yet decided for good, oldest first. */
     async findUndecided(limit: number): Promise<CashReferralAttributionRowV1[]> {
         const rows = await prisma.$queryRawUnsafe<AttributionRow[]>(
-            `SELECT "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"
+            `SELECT "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeDriverId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"
              FROM "CashReferralAttribution"
              WHERE "state" IN ('captured','pending','needs_review','not_qualified')
              ORDER BY "capturedAt" ASC
@@ -377,7 +397,7 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
                          "factsSnapshot" = $8::jsonb, "decidedAt" = date_trunc('milliseconds', now()),
                          "version" = "version" + 1, "updatedAt" = date_trunc('milliseconds', now())
                      WHERE "id" = $1 AND "version" = $2
-                     RETURNING "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"`,
+                     RETURNING "id","inviterContactId","inviterLineageDigest","inviteeTelegramUserId","inviteeDriverId","inviteeContactId","inviteePersonKey","state","reason","capturedAt","decidedAt","version"`,
                     write.attributionId,
                     write.expectedVersion,
                     write.state,

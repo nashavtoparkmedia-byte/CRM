@@ -19,6 +19,7 @@ CREATE TABLE "CashReferralAttribution" (
     "inviterLineageDigest" VARCHAR(128) NOT NULL,
     "codeHash" VARCHAR(64) NOT NULL,
     "inviteeTelegramUserId" VARCHAR(64) NOT NULL,
+    "inviteeDriverId" VARCHAR(255),
     "inviteeContactId" VARCHAR(255),
     "inviteePersonKey" VARCHAR(255),
     "state" VARCHAR(32) NOT NULL DEFAULT 'captured',
