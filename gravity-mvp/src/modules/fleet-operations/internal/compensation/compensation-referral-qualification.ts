@@ -28,6 +28,10 @@
  * one question and nothing else: identity, self-referral, a second
  * attribution and the park-SMZ status are decided before it is read.
  *
+ * A phone the two people share proves neither that they are one person nor
+ * that they are two, so it neither qualifies nor rejects: the invitation
+ * goes to a manager, and only a signed sanction qualifies it.
+ *
  * Missing provider facts never refuse, and never qualify on their own. An
  * unknown SMZ status, hire date or target-park registration history, or an
  * earlier profile not read since the capture, leaves the invitation pending.
@@ -161,7 +165,7 @@ export interface CashReferralQualificationInputV1 {
     invitee: CashReferralPersonV1
     /** Null when the provider could not confirm the invitee's profile now. */
     inviteeFacts: CashReferralInviteeFactsV1 | null
-    /** The two people share a phone number. A phone can only ever block, never qualify. */
+    /** The two people share a phone number: a manager decides, a phone never qualifies or rejects. */
     sharedPhone: boolean
     /** Another invitation has already qualified for this invited person. */
     inviteeAlreadyAttributed: boolean
@@ -204,9 +208,12 @@ export type CashReferralQualificationV1 =
     }
     | { outcome: 'pending'; reason: CashReferralPendingReasonV1; ignored: readonly CashReferralIgnoredSanctionV1[] }
     | {
-        /** Registered in the target park before the invitation, and not shown to have left it. */
+        /**
+         * Registered in the target park before the invitation and not shown to
+         * have left it, or sharing a phone with the inviter.
+         */
         outcome: 'needs_review'
-        reason: 'invitee_departure_unproven'
+        reason: 'invitee_departure_unproven' | 'invitee_shares_phone'
         ignored: readonly CashReferralIgnoredSanctionV1[]
     }
     | {
@@ -217,7 +224,7 @@ export type CashReferralQualificationV1 =
     }
     | {
         outcome: 'rejected'
-        reason: 'self_referral' | 'self_referral_suspected' | 'invitee_already_attributed'
+        reason: 'self_referral' | 'invitee_already_attributed'
         ignored: readonly CashReferralIgnoredSanctionV1[]
     }
 
@@ -288,7 +295,6 @@ export function decideCashReferralQualificationV1(
         }
     }
     if (samePersonV1(inviter, invitee)) return { outcome: 'rejected', reason: 'self_referral', ignored }
-    if (input.sharedPhone) return { outcome: 'rejected', reason: 'self_referral_suspected', ignored }
     if (input.inviteeAlreadyAttributed) return { outcome: 'rejected', reason: 'invitee_already_attributed', ignored }
 
     const facts = input.inviteeFacts
@@ -307,6 +313,10 @@ export function decideCashReferralQualificationV1(
         confirmedAt: input.at,
         ignored,
     })
+
+    if (input.sharedPhone) {
+        return sanction !== null ? qualified('manager_sanction') : { outcome: 'needs_review', reason: 'invitee_shares_phone', ignored }
+    }
 
     // Registered before the capture's business day, on the monetary core's
     // own calendar, so a same-day hire after the link counts as new.

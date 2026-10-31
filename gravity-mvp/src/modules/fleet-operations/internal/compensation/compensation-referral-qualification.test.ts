@@ -326,8 +326,6 @@ describe('a working driver cannot qualify an invitation by opening a link', () =
             .toMatchObject({ outcome: 'not_qualified', reason: 'invitee_not_park_smz' })
         expect(decideCashReferralQualificationV1(qualification({ ...withSanction, invitee: { proven: false, refusal: 'identity_needs_review' } })))
             .toMatchObject({ outcome: 'pending', reason: 'invitee_identity_blocked' })
-        expect(decideCashReferralQualificationV1(qualification({ ...withSanction, sharedPhone: true })))
-            .toMatchObject({ outcome: 'rejected', reason: 'self_referral_suspected' })
         expect(decideCashReferralQualificationV1(qualification({ ...withSanction, inviteeAlreadyAttributed: true })))
             .toMatchObject({ outcome: 'rejected', reason: 'invitee_already_attributed' })
     })
@@ -446,9 +444,19 @@ describe('self-referral and duplicates', () => {
         }
     })
 
-    it('lets a shared phone only block, never qualify', () => {
+    it('sends a shared phone to a manager: neither a qualification nor a rejection', () => {
         expect(decideCashReferralQualificationV1(qualification({ sharedPhone: true })))
-            .toEqual({ outcome: 'rejected', reason: 'self_referral_suspected', ignored: [] })
+            .toEqual({ outcome: 'needs_review', reason: 'invitee_shares_phone', ignored: [] })
+        expect(decideCashReferralQualificationV1(qualification({ sharedPhone: true, sanction: sanction() })))
+            .toEqual({ outcome: 'qualified', via: 'manager_sanction', grant: 'grant', confirmedAt: AT, ignored: [] })
+        // The phone is read only after every hard rule: it cannot undo a self-referral, a duplicate or the facts.
+        expect(decideCashReferralQualificationV1(qualification({ sharedPhone: true, sanction: sanction(), inviteeAlreadyAttributed: true })))
+            .toMatchObject({ outcome: 'rejected', reason: 'invitee_already_attributed' })
+        expect(decideCashReferralQualificationV1(qualification({ sharedPhone: true, sanction: sanction(), inviteeFacts: inviteeFacts({ isSelfEmployed: false }) })))
+            .toMatchObject({ outcome: 'not_qualified', reason: 'invitee_not_park_smz' })
+        // A sanction that is not authorised leaves it with the manager.
+        expect(decideCashReferralQualificationV1(qualification({ sharedPhone: true, sanction: sanction({ actor: { kind: 'crm_user', principalId: 'crm_user:u1' } }) })))
+            .toEqual({ outcome: 'needs_review', reason: 'invitee_shares_phone', ignored: ['sanction_unsigned'] })
     })
 
     it('does not treat two people without a person key as the same', () => {
