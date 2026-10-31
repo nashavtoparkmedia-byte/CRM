@@ -5,6 +5,7 @@ import {
     CASH_REFERRAL_QUALIFY_CAPABILITY_V1,
     decideCashReferralQualificationV1,
     type CashReferralInviteeFactsV1,
+    type CashReferralPersonV1,
     type CashReferralQualificationInputV1,
     type CashReferralSanctionV1,
 } from './compensation-referral-qualification'
@@ -21,10 +22,11 @@ const signedQualifier: CashAccessActorV1 = {
 
 function inviteeFacts(overrides: Partial<CashReferralInviteeFactsV1> = {}): CashReferralInviteeFactsV1 {
     return {
+        targetParkId: 'park-target',
         isSelfEmployed: true,
         parkHireDate: new Date('2026-11-05T06:00:00.000Z'),
         dismissedAt: null,
-        otherProfileRegisteredBeforeCapture: false,
+        otherProfiles: [],
         ...overrides,
     }
 }
@@ -55,6 +57,8 @@ function sanction(overrides: Partial<CashReferralSanctionV1> = {}): CashReferral
 }
 
 const previouslyRegistered = inviteeFacts({ parkHireDate: new Date('2025-06-01T06:00:00.000Z') })
+// Hired again after the invitation, but an earlier profile in the same park predates it.
+const reRegisteredInTargetPark = inviteeFacts({ otherProfiles: [{ parkId: 'park-target', registeredAt: new Date('2024-03-01T06:00:00.000Z') }] })
 
 describe('a new park-SMZ invitee qualifies the inviter', () => {
     it('confirms referral access at the instant of the decision, never earlier', () => {
@@ -119,7 +123,7 @@ describe('unknown provider facts never refuse', () => {
             [null, 'invitee_facts_unavailable'],
             [inviteeFacts({ isSelfEmployed: null }), 'invitee_smz_unknown'],
             [inviteeFacts({ parkHireDate: null }), 'invitee_hire_date_unknown'],
-            [inviteeFacts({ otherProfileRegisteredBeforeCapture: null }), 'invitee_registration_history_unknown'],
+            [inviteeFacts({ otherProfiles: null }), 'invitee_registration_history_unknown'],
         ]
         for (const [facts, reason] of cases) {
             expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: facts }))).toEqual({ outcome: 'pending', reason, ignored: [] })
@@ -128,8 +132,8 @@ describe('unknown provider facts never refuse', () => {
 })
 
 describe('a previously registered invitee needs a manager\'s sanction', () => {
-    it('asks for it when the invitee joined before the invitation, here or in another park', () => {
-        for (const facts of [previouslyRegistered, inviteeFacts({ otherProfileRegisteredBeforeCapture: true })]) {
+    it('asks for it when the invitee was registered in the target park before the invitation', () => {
+        for (const facts of [previouslyRegistered, reRegisteredInTargetPark]) {
             expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: facts }))).toEqual({
                 outcome: 'requires_manager_qualification',
                 reason: 'invitee_registered_before_invitation',
@@ -148,7 +152,7 @@ describe('a previously registered invitee needs a manager\'s sanction', () => {
         })
         // An unknown registration history is resolved by the same sanction.
         expect(decideCashReferralQualificationV1(qualification({
-            inviteeFacts: inviteeFacts({ otherProfileRegisteredBeforeCapture: null }),
+            inviteeFacts: inviteeFacts({ otherProfiles: null }),
             sanction: sanction(),
         }))).toMatchObject({ outcome: 'qualified', via: 'manager_sanction' })
     })
@@ -180,6 +184,101 @@ describe('a previously registered invitee needs a manager\'s sanction', () => {
             .toMatchObject({ outcome: 'rejected', reason: 'self_referral_suspected' })
         expect(decideCashReferralQualificationV1(qualification({ ...withSanction, inviteeAlreadyAttributed: true })))
             .toMatchObject({ outcome: 'rejected', reason: 'invitee_already_attributed' })
+    })
+})
+
+describe('P4: only a registration in the target park needs a manager', () => {
+    it('qualifies a new park-SMZ of the target park whatever profiles they hold in other parks', () => {
+        const elsewhere = inviteeFacts({
+            otherProfiles: [
+                { parkId: 'park-other', registeredAt: new Date('2019-04-01T06:00:00.000Z') },
+                { parkId: 'park-third', registeredAt: null },
+            ],
+        })
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: elsewhere }))).toEqual({
+            outcome: 'qualified',
+            via: 'new_park_smz',
+            grant: 'grant',
+            confirmedAt: AT,
+            ignored: [],
+        })
+    })
+
+    it('asks for a manager when an earlier profile in the target park predates the invitation, even after a dismissal', () => {
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: reRegisteredInTargetPark }))).toEqual({
+            outcome: 'requires_manager_qualification',
+            reason: 'invitee_registered_before_invitation',
+            ignored: [],
+        })
+        const elsewhereToo = inviteeFacts({
+            otherProfiles: [
+                { parkId: 'park-other', registeredAt: new Date('2019-04-01T06:00:00.000Z') },
+                { parkId: 'park-target', registeredAt: new Date('2025-01-15T06:00:00.000Z') },
+            ],
+        })
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: elsewhereToo })))
+            .toMatchObject({ outcome: 'requires_manager_qualification', reason: 'invitee_registered_before_invitation' })
+    })
+
+    it('counts an earlier target-park profile from the capture\'s own business day as after it, and the day before as before', () => {
+        // 2 November local runs 2026-11-01T19:00Z to 2026-11-02T19:00Z.
+        const at = (registeredAt: string) => inviteeFacts({ otherProfiles: [{ parkId: 'park-target', registeredAt: new Date(registeredAt) }] })
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: at('2026-11-01T19:00:00.000Z') })))
+            .toMatchObject({ outcome: 'qualified', via: 'new_park_smz' })
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: at('2026-11-01T18:59:59.999Z') })))
+            .toMatchObject({ outcome: 'requires_manager_qualification', reason: 'invitee_registered_before_invitation' })
+    })
+
+    it('never qualifies on an unknown target-park history without a manager', () => {
+        const unknowns = [
+            inviteeFacts({ otherProfiles: null }),
+            inviteeFacts({ otherProfiles: [{ parkId: 'park-target', registeredAt: null }] }),
+            inviteeFacts({ otherProfiles: [{ parkId: 'park-other', registeredAt: new Date('2019-04-01T06:00:00.000Z') }, { parkId: 'park-target', registeredAt: null }] }),
+        ]
+        for (const facts of unknowns) {
+            expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: facts })))
+                .toEqual({ outcome: 'pending', reason: 'invitee_registration_history_unknown', ignored: [] })
+        }
+        // A known earlier registration in the target park decides even beside an unknown one.
+        expect(decideCashReferralQualificationV1(qualification({
+            inviteeFacts: inviteeFacts({ otherProfiles: [{ parkId: 'park-target', registeredAt: null }, { parkId: 'park-target', registeredAt: new Date('2024-03-01T06:00:00.000Z') }] }),
+        }))).toMatchObject({ outcome: 'requires_manager_qualification' })
+    })
+
+    it('qualifies a target-park re-registration only through a signed manager sanction for this invitation', () => {
+        expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: reRegisteredInTargetPark, sanction: sanction() })))
+            .toEqual({ outcome: 'qualified', via: 'manager_sanction', grant: 'grant', confirmedAt: AT, ignored: [] })
+        const unsigned: CashReferralSanctionV1[] = [
+            sanction({ actor: { kind: 'crm_user', principalId: 'crm_user:u1' } }),
+            sanction({ actor: { kind: 'system', principalId: 'system' } }),
+            sanction({ attributionId: 'attr-other' }),
+        ]
+        for (const given of unsigned) {
+            expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: reRegisteredInTargetPark, sanction: given })))
+                .toMatchObject({ outcome: 'requires_manager_qualification' })
+        }
+    })
+
+    it('never qualifies without a confirmed park-SMZ, a proven identity and the invitation bound to the inviter', () => {
+        const missing: Array<[string, Partial<CashReferralQualificationInputV1>]> = [
+            ['SMZ stated false', { inviteeFacts: inviteeFacts({ isSelfEmployed: false }) }],
+            ['SMZ unknown', { inviteeFacts: inviteeFacts({ isSelfEmployed: null }) }],
+            ['dismissed', { inviteeFacts: inviteeFacts({ dismissedAt: new Date('2026-11-10T00:00:00.000Z') }) }],
+            ['hire date unknown', { inviteeFacts: inviteeFacts({ parkHireDate: null }) }],
+            ['facts unavailable', { inviteeFacts: null }],
+            ['invitee not linked', { invitee: { proven: false, refusal: 'not_linked' } }],
+            ['invitee identity unproven', { invitee: { proven: false, refusal: 'identity_not_proven' } }],
+            ['inviter identity unproven', { inviter: { proven: false, refusal: 'identity_busy' } }],
+            ['inviter is another contact than the one that shared the link', {
+                inviter: { proven: true, contactId: 'contact-elsewhere', lineage: ['contact-elsewhere'], externalPersonKey: 'vu:inviter' } as CashReferralPersonV1,
+            }],
+        ]
+        for (const [label, overrides] of missing) {
+            for (const withSanction of [null, sanction()]) {
+                const decided = decideCashReferralQualificationV1(qualification({ ...overrides, sanction: withSanction }))
+                expect(decided.outcome, `${label} / sanction=${withSanction !== null}`).not.toBe('qualified')
+            }
+        }
     })
 })
 

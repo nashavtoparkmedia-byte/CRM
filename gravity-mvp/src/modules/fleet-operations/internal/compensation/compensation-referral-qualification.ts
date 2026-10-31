@@ -6,17 +6,21 @@
  * invitation is checked; nothing is stored, granted or sent from here.
  *
  * An invitation qualifies when the invited person is proven, is a different
- * person from the inviter, is connected to the park as a park-SMZ, and joined
- * after the invitation was captured. A person already registered before that
+ * person from the inviter, is connected to the target park as a park-SMZ, and
+ * had never been registered in that park before the invitation was captured.
+ * The target park is the park of the invited person's proven profile. A
+ * profile in another park is not a registration in the target park and plays
+ * no part. A person registered in the target park before the invitation
  * qualifies only with a manager's sanction, made through a signed staff
  * session and naming this invitation. The sanction answers that one question
  * and nothing else: identity, self-referral, a second attribution and the
  * park-SMZ status are decided before it is read.
  *
- * Missing provider facts never refuse. An unknown SMZ status, hire date or
- * registration history leaves the invitation pending. A stated "not
- * self-employed" is "not qualified" rather than a final rejection, because
- * an invitation does not expire and is checked again later.
+ * Missing provider facts never refuse, and never qualify on their own. An
+ * unknown SMZ status, hire date or target-park registration history leaves
+ * the invitation pending. A stated "not self-employed" is "not qualified"
+ * rather than a final rejection, because an invitation does not expire and
+ * is checked again later.
  *
  * A qualifying invitation confirms referral access at the instant of this
  * decision, so the inviter's access never reaches back before it. The
@@ -51,18 +55,28 @@ export type CashReferralPersonV1 =
         externalPersonKey: string | null
     }
 
+/** Another Driver profile of the same person, in any park. */
+export interface CashReferralOtherProfileV1 {
+    parkId: string
+    /** When the park registered that profile (`driver_profile.hire_date`); null when it never stated it. */
+    registeredAt: Date | null
+}
+
 /** What the provider states about the invited person's proven profile. */
 export interface CashReferralInviteeFactsV1 {
+    /** The park the invitation is for: the park of the invited person's proven profile. */
+    targetParkId: string
     /** `driver_profile.is_selfemployed`; null when the park never stated it. */
     isSelfEmployed: boolean | null
     /** `driver_profile.hire_date`; null when the park never stated it. */
     parkHireDate: Date | null
     dismissedAt: Date | null
     /**
-     * Whether another profile of the same person, in any park, was registered
-     * before the invitation was captured. Null when that history is unknown.
+     * Every other profile of the same person the provider knows of, in any
+     * park, dismissed ones included. Null when that history is unknown. Only
+     * the profiles in the target park are read.
      */
-    otherProfileRegisteredBeforeCapture: boolean | null
+    otherProfiles: readonly CashReferralOtherProfileV1[] | null
 }
 
 /** A manager's sanction to qualify an invitation of an already registered person. */
@@ -120,6 +134,7 @@ export type CashReferralQualificationV1 =
     }
     | { outcome: 'pending'; reason: CashReferralPendingReasonV1; ignored: readonly CashReferralIgnoredSanctionV1[] }
     | {
+        /** Registered in the target park before the invitation. */
         outcome: 'requires_manager_qualification'
         reason: 'invitee_registered_before_invitation'
         ignored: readonly CashReferralIgnoredSanctionV1[]
@@ -223,12 +238,19 @@ export function decideCashReferralQualificationV1(
         ignored,
     })
 
-    // Joined on the capture's business day or later, on the monetary core's
+    // Registered before the capture's business day, on the monetary core's
     // own calendar, so a same-day hire after the link counts as new.
-    const joinedAfterCapture = compensationBusinessDayKeyV1(facts.parkHireDate)
-        >= compensationBusinessDayKeyV1(capture.capturedAt)
-    const registeredBefore = !joinedAfterCapture || facts.otherProfileRegisteredBeforeCapture === true
-    if (!registeredBefore && facts.otherProfileRegisteredBeforeCapture === false) return qualified('new_park_smz')
+    const captureDay = compensationBusinessDayKeyV1(capture.capturedAt)
+    const beforeCapture = (registeredAt: Date) => compensationBusinessDayKeyV1(registeredAt) < captureDay
+    // Only the target park's own history counts: a profile elsewhere is not a
+    // registration in this park.
+    const targetParkProfiles = facts.otherProfiles === null
+        ? null
+        : facts.otherProfiles.filter((profile) => profile.parkId === facts.targetParkId)
+    const registeredBefore = beforeCapture(facts.parkHireDate)
+        || (targetParkProfiles ?? []).some((profile) => profile.registeredAt !== null && beforeCapture(profile.registeredAt))
+    const historyUnknown = targetParkProfiles === null || targetParkProfiles.some((profile) => profile.registeredAt === null)
+    if (!registeredBefore && !historyUnknown) return qualified('new_park_smz')
     if (sanction !== null) return qualified('manager_sanction')
     if (registeredBefore) {
         return { outcome: 'requires_manager_qualification', reason: 'invitee_registered_before_invitation', ignored }
