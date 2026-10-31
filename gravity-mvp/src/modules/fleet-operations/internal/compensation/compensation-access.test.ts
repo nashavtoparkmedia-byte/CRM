@@ -9,6 +9,7 @@ import {
     CASH_ACCESS_REASON_KIND_V1,
     CASH_ACCESS_REFUSAL_REASONS_V1,
     cashAccessDayAllowedV1,
+    cashAccessOrderCatalogueV1,
     cashAccessOrderClaimableV1,
     decideCashAccessV1,
     type CashAccessActorV1,
@@ -365,6 +366,113 @@ describe('refusal reasons are the true ones', () => {
         expect(CASH_ACCESS_REASON_KIND_V1.not_self_employed).toBe('stated')
         expect(CASH_ACCESS_REASON_KIND_V1.manual_deny).toBe('decided')
         expect(CASH_ACCESS_REASON_KIND_V1.identity_needs_review).toBe('identity')
+    })
+})
+
+describe('the order catalogue under every basis', () => {
+    const ids = (rows: readonly StoredCashOrderV1[]) => rows.map((row) => row.id)
+    const everyFiveHours = (from: string, until: string) => {
+        const rows: StoredCashOrderV1[] = []
+        for (let t = Date.parse(from); t < Date.parse(until); t += 5 * HOUR) rows.push(order(new Date(t)))
+        return rows
+    }
+    const referralFrom = (confirmedAt: string, revokedAt: string | null = null) => ({
+        confirmedAt: new Date(confirmedAt),
+        revokedAt: revokedAt === null ? null : new Date(revokedAt),
+    })
+
+    it('is the live first-month catalogue for the standard basis alone, with the first month as its one budget', () => {
+        const orders = everyFiveHours('2026-09-25T00:00:00.000Z', '2026-11-06T00:00:00.000Z')
+        const cases = [
+            facts(),
+            facts({ isSelfEmployed: false, employmentType: 'park_employee', ownerPilotAdmission: { monthKeys: ['2026-10'] } }),
+        ]
+        let compared = 0
+        for (const standardFacts of cases) {
+            for (let t = Date.parse('2026-09-26T00:00:00.000Z'); t < Date.parse('2026-11-06T00:00:00.000Z'); t += 7 * HOUR) {
+                const now = new Date(t)
+                const ours = cashAccessOrderCatalogueV1(decideCashAccessV1(input({ standardFacts, at: now })), orders)
+                const live = cashOrderCatalogueV1(standardFacts, orders, now)
+                expect(ours.eligible, now.toISOString()).toBe(live.eligible)
+                expect(ids(ours.orders)).toEqual(ids(live.orders))
+                if (ours.eligible && live.eligible) expect(ours.budgetPeriodKeys).toEqual([live.firstMonthKey])
+                compared += 1
+            }
+        }
+        expect(compared).toBeGreaterThan(200)
+    })
+
+    it('lists a referral inviter\'s later months, each order while its own month is open', () => {
+        // Stored orders are completed ones, so none ends after the instant asked about.
+        const orders = everyFiveHours('2027-01-20T00:00:00.000Z', '2027-03-15T06:00:00.000Z')
+        const referral = referralFrom('2026-10-10T06:00:00.000Z')
+        const midMarch = cashAccessOrderCatalogueV1(
+            decideCashAccessV1(input({ standardFacts: oldNonSmz, referral, at: new Date('2027-03-15T06:00:00.000Z') })),
+            orders,
+        )
+        expect(midMarch).toMatchObject({ eligible: true, budgetPeriodKeys: ['2027-03'] })
+        const listed = midMarch.orders.map((row) => row.endedAt.getTime())
+        expect(Math.min(...listed)).toBeGreaterThanOrEqual(Date.parse('2027-02-28T19:00:00.000Z'))
+        expect(Math.max(...listed)).toBeLessThanOrEqual(Date.parse('2027-03-15T06:00:00.000Z'))
+
+        // In the grace after February's end both months are open, each against its own budget.
+        const graceDay = cashAccessOrderCatalogueV1(
+            decideCashAccessV1(input({ standardFacts: oldNonSmz, referral, at: new Date('2027-03-02T06:00:00.000Z') })),
+            orders,
+        )
+        expect(graceDay).toMatchObject({ eligible: true, budgetPeriodKeys: ['2027-02', '2027-03'] })
+        expect(graceDay.orders.some((row) => row.endedAt.getTime() < Date.parse('2027-01-31T19:00:00.000Z'))).toBe(false)
+        expect(graceDay.orders.some((row) => row.endedAt.getTime() < Date.parse('2027-02-28T19:00:00.000Z'))).toBe(true)
+    })
+
+    it('never lists an order completed before the confirmation, even in an open month', () => {
+        const orders = everyFiveHours('2026-11-01T00:00:00.000Z', '2026-11-20T00:00:00.000Z')
+        const catalogue = cashAccessOrderCatalogueV1(
+            decideCashAccessV1(input({ standardFacts: oldNonSmz, referral: referralFrom('2026-11-10T06:00:00.000Z'), at: new Date('2026-11-20T06:00:00.000Z') })),
+            orders,
+        )
+        expect(catalogue.eligible).toBe(true)
+        expect(catalogue.orders.every((row) => row.endedAt.getTime() >= Date.parse('2026-11-10T06:00:00.000Z'))).toBe(true)
+        expect(catalogue.orders.length).toBeGreaterThan(0)
+    })
+
+    it('reads no budget for a month the window does not reach, even while that month is open', () => {
+        const granted = decideCashAccessV1(input({
+            standardFacts: oldNonSmz,
+            manual: manual('grant', '2027-03-01T10:00:00.000Z'),
+            at: new Date('2027-03-02T06:00:00.000Z'),
+        }))
+        const orders = everyFiveHours('2027-02-20T00:00:00.000Z', '2027-03-02T06:00:00.000Z')
+        const catalogue = cashAccessOrderCatalogueV1(granted, orders)
+        expect(catalogue).toMatchObject({ eligible: true, budgetPeriodKeys: ['2027-03'] })
+        expect(catalogue.orders.every((row) => row.endedAt.getTime() >= Date.parse('2027-03-01T10:00:00.000Z'))).toBe(true)
+    })
+
+    it('joins a new driver\'s first month and a referral, listing both months in the grace', () => {
+        const orders = everyFiveHours('2026-10-01T00:00:00.000Z', '2026-11-02T06:00:00.000Z')
+        const catalogue = cashAccessOrderCatalogueV1(
+            decideCashAccessV1(input({ referral: referralFrom('2026-10-20T06:00:00.000Z'), at: new Date('2026-11-02T06:00:00.000Z') })),
+            orders,
+        )
+        expect(catalogue).toMatchObject({ eligible: true, budgetPeriodKeys: ['2026-10', '2026-11'] })
+        expect(catalogue.orders.some((row) => row.endedAt.getTime() < Date.parse('2026-10-20T06:00:00.000Z'))).toBe(true)
+        expect(catalogue.orders.some((row) => row.endedAt.getTime() >= OCTOBER_END.getTime())).toBe(true)
+    })
+
+    it('lists nothing once refused, revoked or waiting for the Owner, and says why', () => {
+        const orders = everyFiveHours('2026-11-01T00:00:00.000Z', '2026-11-20T00:00:00.000Z')
+        const at = new Date('2026-11-20T06:00:00.000Z')
+        expect(cashAccessOrderCatalogueV1(decideCashAccessV1(input({ standardFacts: oldNonSmz, at })), orders))
+            .toEqual({ eligible: false, reason: 'not_self_employed', orders: [] })
+        expect(cashAccessOrderCatalogueV1(decideCashAccessV1(input({
+            standardFacts: oldNonSmz,
+            referral: referralFrom('2026-11-01T00:00:00.000Z', '2026-11-15T00:00:00.000Z'),
+            at,
+        })), orders)).toMatchObject({ eligible: false, orders: [] })
+        expect(cashAccessOrderCatalogueV1(decideCashAccessV1(input({
+            manual: manual('deny', '2026-10-15T00:00:00.000Z'),
+            at: new Date('2026-10-20T06:00:00.000Z'),
+        })), orders)).toEqual({ eligible: false, reason: 'owner_decision_required', orders: [] })
     })
 })
 

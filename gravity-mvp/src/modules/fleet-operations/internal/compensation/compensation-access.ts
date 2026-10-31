@@ -30,14 +30,21 @@
  * This module decides who may claim and which orders. It never touches money:
  * the cap, the one order per day, the monthly budget, provider confirmation,
  * the submission deadline and idempotency stay with C1, for every basis alike.
+ * A referral or manual window has no end, so its orders are claimable month
+ * after month, each against its own month's budget and deadline; the order
+ * catalogue below is the one the Cash section lists from once it is wired.
  */
 
 import {
+    compensationCalendarMonthV1,
     compensationDayEndInstantV1,
     compensationDayStartInstantV1,
+    compensationMonthEndInstantV1,
+    compensationMonthStartInstantV1,
+    compensationPeriodKeyV1,
     parseCompensationBusinessDayKeyV1,
 } from './compensation-calendar'
-import { cashOrderSubmissionOpenV1 } from './compensation-cash-order-ingestion'
+import { cashOrderSubmissionOpenV1, type StoredCashOrderV1 } from './compensation-cash-order-ingestion'
 import {
     compensationPilotAdmissionBasisV1,
     compensationPilotEligibilityV1,
@@ -347,4 +354,60 @@ export function cashAccessDayAllowedV1(decision: CashAccessDecisionV1, dayKey: s
     if (!cashOrderSubmissionOpenV1({ endedAt: dayStart }, decision.at)) return false
     return decision.windows.some((window) => window.ordersFrom.getTime() < dayEnd.getTime()
         && (window.ordersUntil === null || dayStart.getTime() < window.ordersUntil.getTime()))
+}
+
+export type CashAccessOrderCatalogueV1<T extends StoredCashOrderV1 = StoredCashOrderV1> =
+    | {
+        eligible: true
+        /** The budget period of every month whose orders may be claimed now, oldest first. */
+        budgetPeriodKeys: readonly string[]
+        orders: readonly T[]
+    }
+    | {
+        eligible: false
+        reason: CashAccessRefusalReasonV1 | 'owner_decision_required'
+        orders: readonly []
+    }
+
+/**
+ * The months a decision lets the driver claim from right now: begun, still
+ * open for submissions, and reached by some window. At most the current
+ * month and, in the grace after a month's end, the one before it.
+ */
+function claimableMonthKeysV1(decision: Extract<CashAccessDecisionV1, { access: 'granted' }>): string[] {
+    const current = compensationCalendarMonthV1(decision.at)
+    const previous = compensationCalendarMonthV1(new Date(compensationMonthStartInstantV1(current).getTime() - 1))
+    return [previous, current]
+        .filter((month) => {
+            const monthStart = compensationMonthStartInstantV1(month)
+            const monthEnd = compensationMonthEndInstantV1(month).getTime()
+            // Every order of a month shares the month's own deadline.
+            return cashOrderSubmissionOpenV1({ endedAt: monthStart }, decision.at)
+                && decision.windows.some((window) => window.ordersFrom.getTime() < monthEnd
+                    && (window.ordersUntil === null || monthStart.getTime() < window.ordersUntil.getTime()))
+        })
+        .map(compensationPeriodKeyV1)
+}
+
+/**
+ * The orders a driver may claim against right now, under every basis they
+ * hold, newest first.
+ *
+ * For the standard basis alone this is exactly the first-month catalogue the
+ * section lists today, and its one budget period is the first month. A
+ * referral or manual window carries the same rule into every later month: an
+ * order is listed while its own submission window is open, and its claim
+ * reserves against its own month's budget in C1.
+ */
+export function cashAccessOrderCatalogueV1<T extends StoredCashOrderV1>(
+    decision: CashAccessDecisionV1,
+    storedOrders: readonly T[],
+): CashAccessOrderCatalogueV1<T> {
+    if (decision.access === 'refused') return { eligible: false, reason: decision.reasons[0], orders: [] }
+    if (decision.access === 'owner_decision_required') return { eligible: false, reason: 'owner_decision_required', orders: [] }
+    const orders = storedOrders
+        .filter((order) => cashAccessOrderClaimableV1(decision, order))
+        .slice()
+        .sort((left, right) => right.endedAt.getTime() - left.endedAt.getTime())
+    return { eligible: true, budgetPeriodKeys: claimableMonthKeysV1(decision), orders }
 }
