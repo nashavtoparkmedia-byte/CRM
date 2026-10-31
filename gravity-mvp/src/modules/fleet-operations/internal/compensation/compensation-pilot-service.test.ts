@@ -119,12 +119,13 @@ describe('the compensation section a driver sees', () => {
         expect(view.available && view.orders).toHaveLength(1)
     })
 
-    it('tells an unproven person it is unlinked rather than showing an empty list', async () => {
+    it('gives a linked driver without a proven person the verdict, but no list and no applications', async () => {
         const p = port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) })
         const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
-        expect(view).toEqual({ available: false, reason: 'identity_not_proven', applications: [] })
-        expect(p.findDriverFacts).not.toHaveBeenCalled()
+        expect(view).toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        expect(p.findDriverFacts).toHaveBeenCalledWith(DRIVER)
         expect(p.findDriverApplications).not.toHaveBeenCalled()
+        expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
     })
 
     it('names the eligibility reason when the driver is not park-SMZ', async () => {
@@ -191,11 +192,16 @@ describe('submitting from the bot', () => {
     })
 
     it('never reaches C1 when the person cannot be proven', async () => {
-        const p = port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) })
-        const outcome = await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_not_proven' })
-        expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
-        expect(p.submitApplication).not.toHaveBeenCalled()
+        for (const [proof, overrides] of [
+            [SUBMIT, { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }],
+            [{ ...SUBMIT, contactId: null }, {}],
+        ] as const) {
+            const p = port(overrides)
+            const outcome = await submitPilotApplicationV1(proof, p, ingestion(), NOW)
+            expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+            expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
+            expect(p.submitApplication).not.toHaveBeenCalled()
+        }
     })
 
     it('rejects above the monetary core\'s request bound without touching C1', async () => {
@@ -289,7 +295,7 @@ describe('proving the canonical person from the Telegram proof', () => {
             })),
         })
         const outcome = await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_needs_review' })
+        expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
         expect(p.findDriverApplications).not.toHaveBeenCalled()
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
@@ -850,7 +856,7 @@ describe('on demand: the driver picks a day and only that driver\'s day is asked
         expect(await compensationSectionViewV1(PROOF, port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) }), i, NOW, { search: '2026-09-12' }))
             .toMatchObject({ available: false, reason: 'not_self_employed' })
         expect(await compensationSectionViewV1(PROOF, port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }), i, NOW, { search: '2026-09-12' }))
-            .toMatchObject({ available: false, reason: 'identity_not_proven' })
+            .toMatchObject({ available: false, reason: 'cash_person_unconfirmed' })
         expect(await compensationSectionViewV1({ ...PROOF, selectedExternalParkId: 'park-2' }, port(), i, NOW, { search: '2026-09-12' }))
             .toMatchObject({ available: false, reason: 'selected_park_profile_unproven' })
         expect(i.fetchDriverDay).not.toHaveBeenCalled()
@@ -1026,16 +1032,19 @@ describe('driver facts refreshed on demand, without the nightly park sync', () =
         expect(other.ensureDriverFactsFresh).not.toHaveBeenCalledWith(expect.objectContaining({ externalParkId: PARK }))
     })
 
-    it('never asks the provider for a person who is not proven', async () => {
-        for (const overrides of [
-            { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) },
-            { confirmMainDriver: vi.fn(async () => 'busy' as const) },
-            { resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-2'] })) },
-        ]) {
+    it('asks the provider about the linked row\'s own profile only, with or without a proven person', async () => {
+        for (const [overrides, reason] of [
+            [{ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }, 'cash_person_unconfirmed'],
+            [{ confirmMainDriver: vi.fn(async () => 'busy' as const) }, 'identity_busy'],
+            [{ resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-2'] })) }, 'cash_person_unconfirmed'],
+        ] as const) {
             const { p, ensureDriverFactsFresh } = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
             const unproven = { ...p, ...overrides }
-            expect(await compensationSectionViewV1(PROOF, unproven, ingestion(), NOW)).toMatchObject({ available: false })
-            expect(ensureDriverFactsFresh).not.toHaveBeenCalled()
+            expect(await compensationSectionViewV1(PROOF, unproven, ingestion(), NOW)).toMatchObject({ available: false, reason })
+            expect(ensureDriverFactsFresh).toHaveBeenCalledTimes(1)
+            expect(ensureDriverFactsFresh).toHaveBeenCalledWith(expect.objectContaining({
+                driverId: DRIVER, externalParkId: PARK, externalDriverProfileId: PROFILE,
+            }))
         }
         const noProfile = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER, row: { externalParkId: PARK, externalDriverProfileId: '' } })
         await compensationSectionViewV1(PROOF, noProfile.p, ingestion(), NOW)
@@ -1209,5 +1218,86 @@ describe('what reaches the provider when a driver taps', () => {
         missing.advance(10_000)
         expect(await missing.refresher.ensureFresh(target(), true)).toBe('unavailable')
         expect(missing.refresh).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('the Telegram link opens Cash; a claim needs the person Contacts proved', () => {
+    const LINK_ONLY: PilotTelegramPersonProofV1 = { ...PROOF, contactId: null }
+
+    it('decides the programme for a linked driver without a Contact, and asks Contacts nothing', async () => {
+        const p = port()
+        expect(await compensationSectionViewV1(LINK_ONLY, p, ingestion(), NOW))
+            .toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        expect(p.confirmMainDriver).not.toHaveBeenCalled()
+        expect(p.resolveContactLineage).not.toHaveBeenCalled()
+        expect(p.findDriverApplications).not.toHaveBeenCalled()
+    })
+
+    it('gives a linked driver without a Contact the real programme refusal first', async () => {
+        const notSmz = port({
+            findDriverFacts: vi.fn(async () => ({ ...ELIGIBLE_DRIVER, facts: { ...ELIGIBLE_DRIVER.facts, isSelfEmployed: false, employmentType: 'park_employee' } })),
+        })
+        expect(await compensationSectionViewV1(LINK_ONLY, notSmz, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        const hiredInJuly = port({
+            findDriverFacts: vi.fn(async () => ({ ...ELIGIBLE_DRIVER, facts: { ...ELIGIBLE_DRIVER.facts, parkHireDate: new Date('2026-07-15T06:00:00.000Z') } })),
+        })
+        expect(await compensationSectionViewV1(LINK_ONLY, hiredInJuly, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        expect(await compensationSectionViewV1({ ...LINK_ONLY, selectedExternalParkId: 'park-2' }, port(), ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'selected_park_profile_unproven' })
+        expect(await compensationSectionViewV1({ ...LINK_ONLY, driverId: '' }, port(), ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'identity_not_proven' })
+    })
+
+    it('refuses an order check without a person before any provider confirmation is asked for', async () => {
+        const i = ingestion()
+        const p = port({ findCashOrders: vi.fn(async () => [{ ...ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }]) })
+        expect(await checkPilotOrderV1({ ...LINK_ONLY, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, i, NOW))
+            .toEqual({ state: 'refused', order: null, refusal: 'cash_person_unconfirmed' })
+        expect(i.readOrderConfirmation).not.toHaveBeenCalled()
+        expect(i.requestOrderConfirmation).not.toHaveBeenCalled()
+    })
+
+    it('lets a linked driver without a person refresh the park list, which binds nothing', async () => {
+        const i = ingestion()
+        expect(await requestPilotRefreshV1(LINK_ONLY, port(), i, NOW)).toEqual({ status: 'scheduled', refusal: null })
+        expect(i.requestHotRefresh).toHaveBeenCalledWith(PARK)
+    })
+
+    it('asks Contacts whether the Contact confirms exactly the Driver the link names', async () => {
+        const p = port({
+            confirmMainDriver: vi.fn(async (_contactId: string, driverId: string) => (driverId === 'driver-other' ? 'confirmed' as const : 'not_confirmed' as const)),
+        })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+        expect(p.confirmMainDriver).toHaveBeenCalledWith(CONTACT, DRIVER)
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('binds a claim to the proven person and the link\'s own Telegram account, never to the Driver', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toMatchObject({ submitted: true, status: 'created' })
+        expect(p.submitApplication).toHaveBeenCalledWith(expect.objectContaining({
+            canonicalContactId: CONTACT, lineage: [CONTACT], telegramUserId: '777', idempotencyKey: SUBMIT.idempotencyKey,
+        }))
+        expect(p.findClaimedOrderIds).toHaveBeenCalledWith([CONTACT])
+    })
+
+    it('answers a relink or a park switch after the list as stale, and reaches C1 with neither', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, driverId: 'driver-relinked' }, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'stale_context' })
+        expect(await checkPilotOrderV1({ ...PROOF, driverId: 'driver-relinked', externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, ingestion(), NOW))
+            .toEqual({ state: 'stale_context', order: null, refusal: null })
+        expect(await submitPilotApplicationV1({ ...SUBMIT, selectedExternalParkId: 'park-2' }, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'selected_park_profile_unproven' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('treats a Contacts lock on the person as a retry at every step', async () => {
+        const p = port({ confirmMainDriver: vi.fn(async () => 'busy' as const) })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toMatchObject({ available: false, reason: 'identity_busy' })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'identity_busy' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
     })
 })

@@ -131,7 +131,7 @@ describe('the telegram scene calls the backend for every decision', () => {
 
     it('renders every refusal the backend can return', () => {
         for (const refusal of [
-            'identity_not_proven', 'identity_needs_review', 'identity_busy',
+            'identity_not_proven', 'identity_needs_review', 'identity_busy', 'cash_person_unconfirmed',
             'not_self_employed', 'self_employment_unknown',
             'outside_first_calendar_month', 'support_not_confirmed', 'attachment_missing',
             'claim_above_pilot_cap', 'order_not_in_catalogue', 'order_already_claimed',
@@ -219,7 +219,9 @@ describe('the webhook routes those actions to the service', () => {
         const block = ROUTE.slice(ROUTE.indexOf('// ── Cash compensation pilot'), ROUTE.indexOf('// Handle a phone submitted through the driver bot'))
         expect(block).toContain('resolveCurrentBotDriverAuthority(payload')
         expect(block).toContain('prepareDriverTelegramConversationAuthorityV1({ driverId: mapping.driverId, telegramId })')
-        expect(block).toContain('contactId: person.contactId')
+        // The person is passed only when the Contacts proof confirms the link's own Driver; otherwise none.
+        expect(block).toMatch(/person\.driverId === mapping\.driverId\s*\?\s*person\.contactId\s*:\s*null/u)
+        expect(block).toContain('contactId: personContactId')
         expect(block).not.toMatch(/driverTelegram\.(create|update|upsert|delete)/)
         expect(block).not.toMatch(/phone|BotUserRegistry|botUserRegistry|fetch\(/)
     })

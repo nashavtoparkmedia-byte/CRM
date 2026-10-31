@@ -902,25 +902,25 @@ describe('driver-bot cash compensation pilot', () => {
         expectNoCompensationService()
     })
 
-    // A linked driver is never told the profile is not linked. Cash pays a
-    // Contacts-proven person, so without one the driver is sent to a manager.
-    test('tells a linked driver with no Contacts person to ask a manager, on every compensation action, reaching no service', async () => {
+    // A linked driver is never told the profile is not linked. Cash opens on
+    // the link alone; the pilot decides the programme and binds no money
+    // without a Contacts-proven person, so none is passed.
+    test('opens every compensation action to a linked driver with no Contacts person, passing no person', async () => {
         mocks.authorizeDriverTelegram.mockRejectedValue(new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'))
-        const answers = []
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        mocks.compensationPilotOrderCheck.mockResolvedValue({ state: 'refused', refusal: 'cash_person_unconfirmed', order: null })
+        mocks.compensationPilotRefresh.mockResolvedValue({ status: 'scheduled', refusal: null })
+        mocks.compensationPilotSubmit.mockResolvedValue({ submitted: false, refusal: 'cash_person_unconfirmed' })
         for (const request of everyCompensationAction()) {
-            const response = await POST(request)
-            expect(response.status).toBe(200)
-            answers.push(await response.json())
+            expect((await POST(request)).status).toBe(200)
         }
-        expect(answers).toEqual([
-            { available: false, reason: 'identity_needs_review', applications: [] },
-            { state: 'refused', refusal: 'identity_needs_review', order: null },
-            { status: 'refused', refusal: 'identity_needs_review' },
-            { submitted: false, refusal: 'identity_needs_review' },
-        ])
-        // The refusal came from Cash's person proof, after the link was proven.
+        const linkOnly = { ...proven, contactId: null }
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith(linkOnly, { search: null })
+        expect(mocks.compensationPilotRefresh).toHaveBeenCalledWith(linkOnly)
+        for (const call of [...mocks.compensationPilotOrderCheck.mock.calls, ...mocks.compensationPilotSubmit.mock.calls]) {
+            expect(call[0]).toMatchObject(linkOnly)
+        }
         expect(mocks.authorizeDriverTelegram).toHaveBeenCalledTimes(4)
-        expectNoCompensationService()
     })
 
     // The compensation entry shares the one Bot runtime authority of every Driver
@@ -948,10 +948,11 @@ describe('driver-bot cash compensation pilot', () => {
             target: '123456',
         })
 
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
         const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
 
-        await expect(response.json()).resolves.toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
-        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+        await expect(response.json()).resolves.toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith({ ...proven, contactId: null }, { search: null })
     })
 
     test.each([
@@ -2823,12 +2824,13 @@ describe('Owner scenarios: the simple Telegram → Driver link is the authority'
         expect(mocks.providerFetch).not.toHaveBeenCalled()
     })
 
-    test('Cash tells the same linked driver to ask a manager, never that the profile is not linked', async () => {
+    test('Cash opens for the same linked driver with no person for the money, never saying the profile is not linked', async () => {
+        mocks.compensationPilotSection.mockResolvedValue({ available: false, reason: 'not_self_employed', applications: [] })
         const response = await POST(actionRequest('compensation_section', { telegramId: '123456', ...binding }))
 
         expect(response.status).toBe(200)
-        await expect(response.json()).resolves.toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
-        expect(mocks.compensationPilotSection).not.toHaveBeenCalled()
+        await expect(response.json()).resolves.toEqual({ available: false, reason: 'not_self_employed', applications: [] })
+        expect(mocks.compensationPilotSection).toHaveBeenCalledWith(expect.objectContaining({ driverId: 'driver-1', contactId: null }), { search: null })
     })
 
     test('an unknown visitor stays a guest on every surface', async () => {
