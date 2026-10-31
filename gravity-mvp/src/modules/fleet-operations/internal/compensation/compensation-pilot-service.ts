@@ -18,7 +18,7 @@
  * Yandex confirmed within the submission threshold.
  */
 
-import { cashOrderCatalogueV1 } from './compensation-cash-order-ingestion'
+import { cashAccessDayAllowedV1, cashAccessOrderCatalogueV1, decideCashAccessV1, type CashAccessDecisionV1 } from './compensation-access'
 import { compensationBusinessDayKeyV1 } from './compensation-calendar'
 import {
     withOwnerPilotAdmissionV1,
@@ -31,7 +31,6 @@ import {
     pilotCatalogueStatusV1,
     pilotConfirmationFollowUpV1,
     pilotListedOrderV1,
-    pilotDriverDayAllowedV1,
     pilotDriverDayQueryV1,
     pilotDriverDaySearchV1,
     pilotOrderSearchV1,
@@ -460,6 +459,8 @@ async function resolvePilotSubjectV1(
 
 interface ScopedSectionV1 {
     scope: PilotScopeV1
+    /** The facts the access decision read, kept so a day pick is decided on the same rule. */
+    facts: CompensationEligibilityFactsV1
     firstMonthKey: string
     remainingBudgetKopecks: number
     catalogueStatus: 'ready' | 'partial' | 'stale' | 'on_demand'
@@ -476,6 +477,16 @@ type ScopedSectionResultV1 =
         reason: PilotScopeRefusalV1 | 'catalogue_disabled' | string
         applications: readonly PilotApplicationSummaryV1[]
     }
+
+/**
+ * Who may claim which orders, through the Cash access decision. Referral and
+ * manual access are not stored yet, so the decision holds the standard
+ * programme alone and answers exactly as the first-month catalogue does: the
+ * same eligibility, refusal reason, orders, day picks and budget period.
+ */
+function pilotAccessV1(facts: CompensationEligibilityFactsV1, at: Date): CashAccessDecisionV1 {
+    return decideCashAccessV1({ identity: { proven: true }, standardFacts: facts, referral: null, manual: null, ownerPolicy: {}, at })
+}
 
 /**
  * Everything the Telegram surface may act on for one linked driver, rebuilt
@@ -506,10 +517,13 @@ async function scopedSectionV1(
         externalParkId: scope.externalParkId,
         externalDriverProfileId: scope.externalDriverProfileId,
     })
-    const catalogue = cashOrderCatalogueV1(identity.facts, stored, now)
+    const catalogue = cashAccessOrderCatalogueV1(pilotAccessV1(identity.facts, now), stored)
     if (!catalogue.eligible) {
         return { available: false, reason: catalogue.reason, applications }
     }
+    // The standard programme alone opens exactly one budget period, its first
+    // month; a referral or manual window would add the current month.
+    const firstMonthKey = catalogue.budgetPeriodKeys[0]
 
     // No catalogue is not the same as an empty one: a park ingestion does not
     // write has no list to show at all.
@@ -519,13 +533,14 @@ async function scopedSectionV1(
         return { available: false, reason: 'catalogue_disabled', applications }
     }
 
-    const period = await port.findBudgetPeriod(catalogue.firstMonthKey)
+    const period = await port.findBudgetPeriod(firstMonthKey)
     return {
         available: true,
         applications,
         section: {
             scope,
-            firstMonthKey: catalogue.firstMonthKey,
+            facts: identity.facts,
+            firstMonthKey,
             remainingBudgetKopecks: period ? remainingBudgetKopecksV1(period) : 0,
             catalogueStatus,
             dbNow: facts.dbNow,
@@ -569,7 +584,7 @@ export async function compensationSectionViewV1(
         // Every rule above has already passed: the person is proven, the driver
         // is eligible and the park and profile are the proven ones. Only now,
         // and only for a day the driver may claim, is the provider asked.
-        if (!pilotDriverDayAllowedV1(dayKey, section.firstMonthKey, section.dbNow)) {
+        if (!cashAccessDayAllowedV1(pilotAccessV1(section.facts, section.dbNow), dayKey)) {
             search = pilotDriverDaySearchV1([], dayKey, 'date_not_allowed')
         } else {
             const fetched: PilotDriverDayFetchV1 = ingestion.fetchDriverDay

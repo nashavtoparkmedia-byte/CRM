@@ -386,6 +386,10 @@ describe('the order catalogue under every basis', () => {
         const cases = [
             facts(),
             facts({ isSelfEmployed: false, employmentType: 'park_employee', ownerPilotAdmission: { monthKeys: ['2026-10'] } }),
+            facts({ isSelfEmployed: false, employmentType: 'park_employee', ownerPilotAdmission: { monthKeys: ['2026-11'] } }),
+            facts({ isSelfEmployed: false, employmentType: 'park_employee' }),
+            facts({ isSelfEmployed: null, employmentType: null }),
+            facts({ parkHireDate: null }),
         ]
         let compared = 0
         for (const standardFacts of cases) {
@@ -394,6 +398,7 @@ describe('the order catalogue under every basis', () => {
                 const ours = cashAccessOrderCatalogueV1(decideCashAccessV1(input({ standardFacts, at: now })), orders)
                 const live = cashOrderCatalogueV1(standardFacts, orders, now)
                 expect(ours.eligible, now.toISOString()).toBe(live.eligible)
+                if (!ours.eligible && !live.eligible) expect(ours.reason, now.toISOString()).toBe(live.reason)
                 expect(ids(ours.orders)).toEqual(ids(live.orders))
                 if (ours.eligible && live.eligible) expect(ours.budgetPeriodKeys).toEqual([live.firstMonthKey])
                 compared += 1
@@ -487,7 +492,7 @@ describe('determinism and isolation', () => {
         expect(decideCashAccessV1(frozen)).toEqual(decideCashAccessV1(frozen))
     })
 
-    it('is not wired into anything yet, and reads nothing monetary', () => {
+    it('is wired into the pilot section only, and reads nothing monetary', () => {
         const root = join(process.cwd(), 'src')
         const files: string[] = []
         const walk = (dir: string) => {
@@ -506,7 +511,7 @@ describe('determinism and isolation', () => {
             .filter((file) => !/\.test\.(ts|tsx)$/.test(file) && !s0.has(relative(root, file)))
             .filter((file) => /compensation-access['"]|compensation-referral-qualification['"]/.test(readFileSync(file, 'utf8')))
             .map((file) => relative(root, file))
-        expect(importers).toEqual([])
+        expect(importers).toEqual(['modules/fleet-operations/internal/compensation/compensation-pilot-service.ts'])
 
         for (const file of s0) {
             const source = readFileSync(join(root, file), 'utf8')

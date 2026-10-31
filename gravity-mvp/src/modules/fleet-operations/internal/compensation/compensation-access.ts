@@ -386,7 +386,7 @@ function claimableMonthKeysV1(decision: Extract<CashAccessDecisionV1, { access: 
                 && decision.windows.some((window) => window.ordersFrom.getTime() < monthEnd
                     && (window.ordersUntil === null || monthStart.getTime() < window.ordersUntil.getTime()))
         })
-        .map(compensationPeriodKeyV1)
+        .map((month) => compensationPeriodKeyV1(month))
 }
 
 /**
