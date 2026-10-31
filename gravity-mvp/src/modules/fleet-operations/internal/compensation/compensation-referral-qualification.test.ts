@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { CASH_ACCESS_IDENTITY_REFUSALS_V1, decideCashAccessV1, type CashAccessActorV1 } from './compensation-access'
 import {
     CASH_REFERRAL_QUALIFY_CAPABILITY_V1,
+    cashReferralDismissalReadingFromYandexV1,
     decideCashReferralQualificationV1,
     type CashReferralInviteeFactsV1,
     type CashReferralOtherProfileV1,
@@ -212,6 +213,51 @@ describe('a returned driver qualifies the inviter without a manager', () => {
             .toMatchObject({ outcome: 'not_qualified', reason: 'invitee_not_park_smz' })
         expect(decideCashReferralQualificationV1(qualification({ inviteeFacts: { ...returnedToTargetPark, dismissedAt: new Date('2026-11-15T00:00:00.000Z') } })))
             .toMatchObject({ outcome: 'not_qualified', reason: 'invitee_not_connected' })
+    })
+})
+
+describe('a Yandex read is a dismissal reading only when it states a dismissal date', () => {
+    const readAt = new Date('2026-11-03T19:00:00.000Z')
+
+    it('places a fired profile\'s date-only dismissal at the end of that date in every zone', () => {
+        expect(cashReferralDismissalReadingFromYandexV1({ workStatus: 'fired', fireDate: '2026-07-10', readAt }))
+            .toEqual({ dismissedAt: new Date('2026-07-11T12:00:00.000Z'), readAt })
+        // A time part does not make the date more precise than a date.
+        expect(cashReferralDismissalReadingFromYandexV1({ workStatus: 'fired', fireDate: '2026-07-10T00:00:00+0000', readAt }))
+            .toEqual({ dismissedAt: new Date('2026-07-11T12:00:00.000Z'), readAt })
+    })
+
+    it('gives no reading for a working profile, a missing or malformed date, or anything else', () => {
+        const none: Array<[string | null, string | null]> = [
+            ['working', '2026-07-10'],
+            ['not_working', '2026-07-10'],
+            [null, '2026-07-10'],
+            ['FIRED', '2026-07-10'],
+            ['fired', null],
+            ['fired', ''],
+            ['fired', '2026-02-30'],
+            ['fired', '10.07.2026'],
+            ['fired', '2026-7-10'],
+            ['fired', 'yesterday'],
+        ]
+        for (const [workStatus, fireDate] of none) {
+            expect(cashReferralDismissalReadingFromYandexV1({ workStatus, fireDate, readAt }), `${workStatus} ${fireDate}`).toBeNull()
+        }
+    })
+
+    it('never proves a departure dated the capture\'s day or the day before it', () => {
+        // The capture is 2 November 08:00Z.
+        const decide = (fireDate: string) => decideCashReferralQualificationV1(qualification({
+            inviteeFacts: inviteeFacts({
+                otherProfiles: [profile({
+                    readAt,
+                    dismissals: [cashReferralDismissalReadingFromYandexV1({ workStatus: 'fired', fireDate, readAt })!],
+                })],
+            }),
+        }))
+        expect(decide('2026-11-02')).toMatchObject({ outcome: 'needs_review', reason: 'invitee_departure_unproven' })
+        expect(decide('2026-11-01')).toMatchObject({ outcome: 'needs_review', reason: 'invitee_departure_unproven' })
+        expect(decide('2026-10-31')).toMatchObject({ outcome: 'qualified', via: 'returned_park_smz' })
     })
 })
 

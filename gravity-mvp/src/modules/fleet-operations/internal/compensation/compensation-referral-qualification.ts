@@ -73,10 +73,45 @@ export type CashReferralPersonV1 =
 
 /** A fleet reading that showed a profile dismissed. */
 export interface CashReferralDismissalReadingV1 {
-    /** The profile's latest dismissal, as the reading states it. */
+    /**
+     * The latest instant the profile's latest dismissal can have happened, as
+     * the reading states it. A reading that states only a date gives the end of
+     * that date; see cashReferralDismissalReadingFromYandexV1.
+     */
     dismissedAt: Date
     /** When the fleet made the reading. */
     readAt: Date
+}
+
+/** The two fields of one Yandex profile read that may show a dismissal. */
+export interface YandexProfileDismissalFactsV1 {
+    /** `profile.work_status` as read: working, not_working or fired. */
+    workStatus: string | null
+    /** `profile.fire_date` as read: a calendar date without a time or zone. */
+    fireDate: string | null
+    /** When the read was made. */
+    readAt: Date
+}
+
+/**
+ * The dismissal reading one Yandex profile read gives, or null when it proves
+ * nothing.
+ *
+ * Only `work_status` fired with a valid `fire_date` counts. The date carries
+ * no time or zone, so the dismissal is placed at the latest instant any zone
+ * is still on that date, 12:00 UTC the next day: a dismissal dated the day of
+ * the capture, or the day before it, never proves the driver had left by the
+ * capture. The driver's online status (`current_status`) and the time it last
+ * changed are not a dismissal, so they are not accepted here at all.
+ */
+export function cashReferralDismissalReadingFromYandexV1(read: YandexProfileDismissalFactsV1): CashReferralDismissalReadingV1 | null {
+    if (read.workStatus !== 'fired' || read.fireDate === null) return null
+    const match = /^(\d{4})-(\d{2})-(\d{2})(?:T[^\s]*)?$/.exec(read.fireDate)
+    if (match === null) return null
+    const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
+    const date = new Date(Date.UTC(year, month - 1, day))
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+    return { dismissedAt: new Date(Date.UTC(year, month - 1, day + 1, 12)), readAt: read.readAt }
 }
 
 /** Another Driver profile of the same person, in any park. */
