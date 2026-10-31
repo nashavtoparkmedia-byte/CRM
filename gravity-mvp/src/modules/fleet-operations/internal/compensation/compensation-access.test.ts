@@ -492,7 +492,7 @@ describe('determinism and isolation', () => {
         expect(decideCashAccessV1(frozen)).toEqual(decideCashAccessV1(frozen))
     })
 
-    it('is used only by the pilot section, the referral pass and the ledger store, and reads nothing monetary', () => {
+    it('is used only by the pilot section, the referral pass and operations, and the ledger store, and reads nothing monetary', () => {
         const root = join(process.cwd(), 'src')
         const files: string[] = []
         const walk = (dir: string) => {
@@ -514,6 +514,7 @@ describe('determinism and isolation', () => {
             .map((file) => relative(root, file))
         // The pilot section and the referral pass decide through it; the ledger store is its storage.
         expect([...importers].sort()).toEqual([
+            'modules/fleet-operations/application/cash-referral-operations.ts',
             'modules/fleet-operations/internal/compensation/compensation-pilot-service.ts',
             'modules/fleet-operations/internal/compensation/compensation-referral-service.ts',
             'modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-ledger-adapter.ts',

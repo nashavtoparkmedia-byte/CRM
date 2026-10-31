@@ -27,6 +27,10 @@ const mocks = vi.hoisted(() => ({
     compensationPilotSubmit: vi.fn(),
     compensationPilotOrderCheck: vi.fn(),
     compensationPilotRefresh: vi.fn(),
+    cashReferralAttachInvitee: vi.fn(),
+    cashReferralCapture: vi.fn(),
+    cashReferralIssue: vi.fn(),
+    cashReferralStatus: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -72,6 +76,10 @@ vi.mock('@/modules/messaging/public/v1', () => ({
 }))
 
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
+    cashReferralAttachInviteeV1: mocks.cashReferralAttachInvitee,
+    cashReferralCaptureV1: mocks.cashReferralCapture,
+    cashReferralIssueV1: mocks.cashReferralIssue,
+    cashReferralStatusV1: mocks.cashReferralStatus,
     compensationPilotOrderCheckV1: mocks.compensationPilotOrderCheck,
     compensationPilotRefreshV1: mocks.compensationPilotRefresh,
     compensationPilotSectionV1: mocks.compensationPilotSection,
@@ -668,6 +676,8 @@ describe('driver-bot cash compensation pilot', () => {
             target: '123456',
         })
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.cashReferralAttachInvitee.mockResolvedValue(undefined)
+        mocks.cashReferralCapture.mockResolvedValue({ status: 'recorded' })
         vi.stubGlobal('fetch', mocks.providerFetch)
     })
 
@@ -2862,5 +2872,66 @@ describe('Owner scenarios: the simple Telegram → Driver link is the authority'
 
         const linked = await POST(actionRequest('check_link', { telegramId: '123456', ...binding }))
         await expect(linked.json()).resolves.toMatchObject({ linked: true, driverId: 'driver-1' })
+    })
+})
+
+describe('driver-bot cash referral', () => {
+    const binding = { providerAccountId: '8447212640', connectionId: BOT_CONNECTION }
+    const TOKEN = 'r_AbCdEfGhIjKlMnOpQrStUv'
+    const proven = { telegramUserId: '123456', driverId: 'driver-1', contactId: 'contact-1', selectedExternalParkId: 'park-a' }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: 'park-a' })
+        mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
+        mocks.authorizeDriverTelegram.mockResolvedValue({
+            chatId: 'chat-1', contactId: 'contact-1', contactIdentityId: 'identity-1', driverId: 'driver-1', target: '123456',
+        })
+        mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
+        mocks.cashReferralAttachInvitee.mockResolvedValue(undefined)
+        mocks.cashReferralCapture.mockResolvedValue({ status: 'recorded' })
+        vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    test('issues a code only to the person Telegram authority proved', async () => {
+        mocks.cashReferralIssue.mockResolvedValue({
+            status: 'issued', token: TOKEN, invitations: { captured: 1 }, accessSince: new Date('2026-11-05T06:00:00.000Z'),
+        })
+        const response = await POST(actionRequest('referral_issue', { telegramId: '123456', contactId: 'forged', ...binding }))
+        await expect(response.json()).resolves.toEqual({
+            status: 'issued', token: TOKEN, invitations: { captured: 1 }, accessSince: '2026-11-05T06:00:00.000Z',
+        })
+        expect(mocks.cashReferralIssue).toHaveBeenCalledWith(proven)
+    })
+
+    test('refuses an unlinked account in band without issuing', async () => {
+        mocks.findDriverTelegramFirst.mockResolvedValue(null)
+        const response = await POST(actionRequest('referral_issue', { telegramId: '123456', ...binding }))
+        await expect(response.json()).resolves.toEqual({ status: 'refused', reason: 'identity_not_proven' })
+        expect(mocks.cashReferralIssue).not.toHaveBeenCalled()
+    })
+
+    test('answers every capture the same, passing the proven Driver only when the account is proven', async () => {
+        const linked = await POST(actionRequest('referral_capture', { telegramId: '123456', token: TOKEN, ...binding }))
+        await expect(linked.json()).resolves.toEqual({ status: 'recorded' })
+        expect(mocks.cashReferralCapture).toHaveBeenCalledWith({ token: TOKEN, telegramUserId: '123456', driverId: 'driver-1' })
+
+        mocks.findDriverTelegramFirst.mockResolvedValue(null)
+        const unlinked = await POST(actionRequest('referral_capture', { telegramId: '654321', token: TOKEN, ...binding }))
+        await expect(unlinked.json()).resolves.toEqual({ status: 'recorded' })
+        expect(mocks.cashReferralCapture).toHaveBeenLastCalledWith({ token: TOKEN, telegramUserId: '654321', driverId: null })
+
+        const malformed = await POST(actionRequest('referral_capture', { token: TOKEN, ...binding }))
+        expect(malformed.status).toBe(200)
+        await expect(malformed.json()).resolves.toEqual({ status: 'recorded' })
+    })
+
+    test('records the proven Driver of an invited account on every proof, and never fails the request for it', async () => {
+        mocks.cashReferralStatus.mockResolvedValue({ status: 'ok', invitations: {}, accessSince: null })
+        mocks.cashReferralAttachInvitee.mockRejectedValue(new Error('table missing'))
+        const response = await POST(actionRequest('referral_status', { telegramId: '123456', ...binding }))
+        await expect(response.json()).resolves.toEqual({ status: 'ok', invitations: {}, accessSince: null })
+        expect(mocks.cashReferralAttachInvitee).toHaveBeenCalledWith({ telegramUserId: '123456', driverId: 'driver-1' })
     })
 })

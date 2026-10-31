@@ -410,6 +410,26 @@ export async function register() {
             opsLog('error', 'compensation_budget_provisioning_schedule_failed', { operation: 'startup', error: err.message })
         }
 
+        // Cash referral decisions. Fleet owns the pass and decides whether it is
+        // enabled; referral access off (the default) registers nothing here,
+        // so the pass never asks the provider or reads tables that may not exist.
+        try {
+            const { cashReferralDecisionScheduleV1 } = await import('@/modules/fleet-operations/public/v1')
+            const referralSchedule = cashReferralDecisionScheduleV1()
+            if (referralSchedule.enabled) {
+                const runReferralDecisions = async () => {
+                    await runOperationalJobV1('cash_referral_decisions', async () => {
+                        const { runScheduledCashReferralDecisionsV1 } = await import('@/modules/fleet-operations/public/v1')
+                        return await runScheduledCashReferralDecisionsV1()
+                    })
+                }
+                setTimeout(runReferralDecisions, referralSchedule.firstRunDelayMs)
+                registerOperationalIntervalV1(setInterval(runReferralDecisions, referralSchedule.intervalMs))
+            }
+        } catch (err: any) {
+            opsLog('error', 'cash_referral_decision_schedule_failed', { operation: 'startup', error: err.message })
+        }
+
         opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00', 'compensation_budget_provisioning:1h'] })
 
     }, 5000) // 5 second delay after server start
