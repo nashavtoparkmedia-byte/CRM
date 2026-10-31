@@ -18,8 +18,8 @@ import {
     compensationMonthStartInstantV1,
     compensationPeriodKeyV1,
 } from './compensation-calendar'
-import { compensationBudgetPeriodIdV1 } from './compensation-budget-period'
-import { ensureCompensationBudgetPeriodV1 } from './compensation-budget-period-service'
+import { compensationBudgetPeriodIdV1, compensationBudgetPeriodWindowV1 } from './compensation-budget-period'
+import { ensureCompensationBudgetPeriodV1, provisionCompensationBudgetPeriodsV1 } from './compensation-budget-period-service'
 import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
 import { legacyPrismaCompensationBudgetPeriodStoreV1 as store } from './legacy-prisma-compensation-budget-period-adapter'
 
@@ -192,5 +192,99 @@ proof('compensation budget-period provisioning on real PostgreSQL', () => {
         const rows = await periodRows()
         expect(rows.map((row) => row.periodKey)).toEqual(['2026-10', '2026-11', '2026-12'])
         expect(new Set(rows.map((row) => row.id)).size).toBe(3)
+    })
+
+    describe('scheduled create-only provisioning', () => {
+        const LATE_OCTOBER = new Date('2026-10-31T10:30:00Z')
+        const run = (now: Date, limitKopecks: number | null) => provisionCompensationBudgetPeriodsV1({ now, limitKopecks }, store)
+
+        async function fullRows() {
+            return database.$queryRawUnsafe<Array<Record<string, unknown>>>(
+                `SELECT * FROM "CompensationBudgetPeriod" ORDER BY "periodKey"`,
+            )
+        }
+
+        it('opens the current and the next month at the configured limit with the derived windows', async () => {
+            const result = await run(LATE_OCTOBER, LIMIT)
+            expect(result.months.map((month) => [month.periodKey, month.status])).toEqual([['2026-10', 'created'], ['2026-11', 'created']])
+
+            const rows = await periodRows()
+            expect(rows.map((row) => [row.periodKey, row.limitKopecks, row.reservedKopecks, row.settledKopecks, row.state]))
+                .toEqual([['2026-10', LIMIT, 0, 0, 'open'], ['2026-11', LIMIT, 0, 0, 'open']])
+            const november = compensationBudgetPeriodWindowV1('2026-11')!
+            expect(rows[1].periodStartsAt).toEqual(november.periodStartsAt)
+            expect(rows[1].periodEndsAt).toEqual(november.periodEndsAt)
+            expect(rows[1].submissionClosesAt).toEqual(november.submissionClosesAt)
+        })
+
+        it('never raises a stored month and leaves it byte for byte, updatedAt included', async () => {
+            await ensure('2026-11', 300_000)
+            const before = await fullRows()
+            const result = await run(LATE_OCTOBER, 900_000)
+
+            expect(result.months[1]).toMatchObject({ periodKey: '2026-11', status: 'present', limitKopecks: 300_000, limitDiffersFromConfiguration: true })
+            expect((await fullRows()).find((row) => row.periodKey === '2026-11')).toEqual(before[0])
+        })
+
+        it('re-decides create-only under the row lock, so the race path cannot raise a limit either', async () => {
+            await ensure('2026-11', 300_000)
+            const window = compensationBudgetPeriodWindowV1('2026-11')!
+            const answer = await store.provisionPeriod({ window, id: compensationBudgetPeriodIdV1('2026-11'), limitKopecks: 900_000, createOnly: true })
+
+            expect(answer).toMatchObject({ ok: true, outcome: 'already_configured' })
+            expect((await periodRows())[0].limitKopecks).toBe(300_000)
+        })
+
+        it('leaves October, its counters and its grace untouched while November and December open', async () => {
+            await ensure('2026-10', LIMIT)
+            await database.$executeRawUnsafe(
+                `UPDATE "CompensationBudgetPeriod" SET "reservedKopecks" = 40000, "settledKopecks" = 10000 WHERE "periodKey" = '2026-10'`,
+            )
+            const october = (await fullRows())[0]
+            const insideGrace = new Date('2026-11-02T10:00:00Z')
+            expect(insideGrace.getTime()).toBeLessThan((october.submissionClosesAt as Date).getTime())
+
+            const result = await run(insideGrace, LIMIT)
+            expect(result.months.map((month) => [month.periodKey, month.status])).toEqual([['2026-11', 'created'], ['2026-12', 'created']])
+            expect((await fullRows())[0]).toEqual(october)
+        })
+
+        it('leaves a closed month closed', async () => {
+            await ensure('2026-11', LIMIT)
+            await database.$executeRawUnsafe(`UPDATE "CompensationBudgetPeriod" SET "state" = 'closed' WHERE "periodKey" = '2026-11'`)
+            const before = await fullRows()
+
+            const result = await run(LATE_OCTOBER, LIMIT)
+            expect(result.months[1]).toMatchObject({ periodKey: '2026-11', status: 'present', state: 'closed' })
+            expect((await fullRows()).find((row) => row.periodKey === '2026-11')).toEqual(before[0])
+        })
+
+        it('gives concurrent runs one row per month and exactly one creator each', async () => {
+            const results = await Promise.all([run(LATE_OCTOBER, LIMIT), run(LATE_OCTOBER, LIMIT), run(LATE_OCTOBER, LIMIT)])
+
+            expect(results.every((result) => result.ok)).toBe(true)
+            for (const periodKey of ['2026-10', '2026-11']) {
+                const creators = results.filter((result) => result.months.find((month) => month.periodKey === periodKey)?.status === 'created')
+                expect(creators).toHaveLength(1)
+            }
+            expect((await periodRows()).map((row) => row.periodKey)).toEqual(['2026-10', '2026-11'])
+        })
+
+        it('writes nothing without a configured limit and reports the missing months', async () => {
+            const result = await run(LATE_OCTOBER, null)
+
+            expect(result).toMatchObject({ ok: false, configuredLimitKopecks: null })
+            expect(result.months.map((month) => month.status)).toEqual(['missing_unconfigured', 'missing_unconfigured'])
+            expect(await periodRows()).toHaveLength(0)
+        })
+
+        it('is idempotent: a repeated run changes no row', async () => {
+            await run(LATE_OCTOBER, LIMIT)
+            const before = await fullRows()
+            const again = await run(LATE_OCTOBER, LIMIT)
+
+            expect(again.months.map((month) => month.status)).toEqual(['present', 'present'])
+            expect(await fullRows()).toEqual(before)
+        })
     })
 })
