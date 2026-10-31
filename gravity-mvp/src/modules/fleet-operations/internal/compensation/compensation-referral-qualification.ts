@@ -6,21 +6,37 @@
  * invitation is checked; nothing is stored, granted or sent from here.
  *
  * An invitation qualifies when the invited person is proven, is a different
- * person from the inviter, is connected to the target park as a park-SMZ, and
- * had never been registered in that park before the invitation was captured.
- * The target park is the park of the invited person's proven profile. A
- * profile in another park is not a registration in the target park and plays
- * no part. A person registered in the target park before the invitation
- * qualifies only with a manager's sanction, made through a signed staff
- * session and naming this invitation. The sanction answers that one question
- * and nothing else: identity, self-referral, a second attribution and the
- * park-SMZ status are decided before it is read.
+ * person from the inviter, is connected to the target park as a park-SMZ now,
+ * and was not connected to that park when the invitation was captured. The
+ * target park is the park of the invited person's proven profile. A profile in
+ * another park is not a registration in the target park and plays no part.
+ *
+ * Not connected at the capture means one of two things the fleet can show:
+ *
+ *   new       no profile of the person in the target park was registered
+ *             before the capture's business day
+ *   returned  every such earlier profile had been dismissed before the
+ *             capture, as a fleet reading made at or after the capture states
+ *
+ * A registration in the target park is never a refusal by itself, and no
+ * length of absence is read: the capture instant is the only clock. A reading
+ * from before the capture proves nothing about the capture, because the
+ * profile may have been restored in between. A driver whose earlier profile
+ * is not shown to have ended before the capture may be working there still,
+ * so the invitation needs a review: a manager's sanction, made through a
+ * signed staff session and naming this invitation. The sanction answers that
+ * one question and nothing else: identity, self-referral, a second
+ * attribution and the park-SMZ status are decided before it is read.
  *
  * Missing provider facts never refuse, and never qualify on their own. An
- * unknown SMZ status, hire date or target-park registration history leaves
- * the invitation pending. A stated "not self-employed" is "not qualified"
- * rather than a final rejection, because an invitation does not expire and
- * is checked again later.
+ * unknown SMZ status, hire date or target-park registration history, or an
+ * earlier profile not read since the capture, leaves the invitation pending.
+ * A stated "not self-employed" is "not qualified" rather than a final
+ * rejection, because an invitation does not expire and is checked again later.
+ *
+ * Only the inviter's access is decided here. The invited person gains nothing
+ * from the invitation: their own Cash access is the standard programme's,
+ * unchanged, and a returned driver is never given a first month by it.
  *
  * A qualifying invitation confirms referral access at the instant of this
  * decision, so the inviter's access never reaches back before it. The
@@ -55,11 +71,23 @@ export type CashReferralPersonV1 =
         externalPersonKey: string | null
     }
 
+/** A fleet reading that showed a profile dismissed. */
+export interface CashReferralDismissalReadingV1 {
+    /** The profile's latest dismissal, as the reading states it. */
+    dismissedAt: Date
+    /** When the fleet made the reading. */
+    readAt: Date
+}
+
 /** Another Driver profile of the same person, in any park. */
 export interface CashReferralOtherProfileV1 {
     parkId: string
     /** When the park registered that profile (`driver_profile.hire_date`); null when it never stated it. */
     registeredAt: Date | null
+    /** When the fleet last read this profile; null when it never did. */
+    readAt: Date | null
+    /** Every kept reading that showed this profile dismissed, the latest reading included when it did. */
+    dismissals: readonly CashReferralDismissalReadingV1[]
 }
 
 /** What the provider states about the invited person's proven profile. */
@@ -71,6 +99,12 @@ export interface CashReferralInviteeFactsV1 {
     /** `driver_profile.hire_date`; null when the park never stated it. */
     parkHireDate: Date | null
     dismissedAt: Date | null
+    /**
+     * Kept readings that showed the proven profile itself dismissed. They
+     * matter only when that profile was registered before the capture and
+     * has since been restored.
+     */
+    dismissals: readonly CashReferralDismissalReadingV1[]
     /**
      * Every other profile of the same person the provider knows of, in any
      * park, dismissed ones included. Null when that history is unknown. Only
@@ -111,6 +145,7 @@ export const CASH_REFERRAL_PENDING_REASONS_V1 = [
     'invitee_smz_unknown',
     'invitee_hire_date_unknown',
     'invitee_registration_history_unknown',
+    'invitee_departure_unknown',
 ] as const
 
 export type CashReferralPendingReasonV1 = typeof CASH_REFERRAL_PENDING_REASONS_V1[number]
@@ -125,7 +160,7 @@ export type CashReferralIgnoredSanctionV1 =
 export type CashReferralQualificationV1 =
     | {
         outcome: 'qualified'
-        via: 'new_park_smz' | 'manager_sanction'
+        via: 'new_park_smz' | 'returned_park_smz' | 'manager_sanction'
         /** `already_entitled`: recorded, but the inviter gets no second grant. */
         grant: 'grant' | 'already_entitled'
         /** The instant referral access starts; never earlier than this decision. */
@@ -134,9 +169,9 @@ export type CashReferralQualificationV1 =
     }
     | { outcome: 'pending'; reason: CashReferralPendingReasonV1; ignored: readonly CashReferralIgnoredSanctionV1[] }
     | {
-        /** Registered in the target park before the invitation. */
-        outcome: 'requires_manager_qualification'
-        reason: 'invitee_registered_before_invitation'
+        /** Registered in the target park before the invitation, and not shown to have left it. */
+        outcome: 'needs_review'
+        reason: 'invitee_departure_unproven'
         ignored: readonly CashReferralIgnoredSanctionV1[]
     }
     | {
@@ -230,7 +265,7 @@ export function decideCashReferralQualificationV1(
     if (!facts.isSelfEmployed) return { outcome: 'not_qualified', reason: 'invitee_not_park_smz', ignored }
     if (facts.parkHireDate === null) return { outcome: 'pending', reason: 'invitee_hire_date_unknown', ignored }
 
-    const qualified = (via: 'new_park_smz' | 'manager_sanction'): CashReferralQualificationV1 => ({
+    const qualified = (via: 'new_park_smz' | 'returned_park_smz' | 'manager_sanction'): CashReferralQualificationV1 => ({
         outcome: 'qualified',
         via,
         grant: input.inviterAlreadyEntitled ? 'already_entitled' : 'grant',
@@ -240,20 +275,36 @@ export function decideCashReferralQualificationV1(
 
     // Registered before the capture's business day, on the monetary core's
     // own calendar, so a same-day hire after the link counts as new.
+    const capturedAt = capture.capturedAt.getTime()
     const captureDay = compensationBusinessDayKeyV1(capture.capturedAt)
     const beforeCapture = (registeredAt: Date) => compensationBusinessDayKeyV1(registeredAt) < captureDay
+    // Dismissed before the capture and still dismissed when read at or after
+    // it, so the profile was not connected at the capture itself.
+    const endedBeforeCapture = (dismissals: readonly CashReferralDismissalReadingV1[]) => dismissals.some(
+        (reading) => reading.dismissedAt.getTime() < capturedAt && reading.readAt.getTime() >= capturedAt,
+    )
     // Only the target park's own history counts: a profile elsewhere is not a
     // registration in this park.
     const targetParkProfiles = facts.otherProfiles === null
         ? null
         : facts.otherProfiles.filter((profile) => profile.parkId === facts.targetParkId)
-    const registeredBefore = beforeCapture(facts.parkHireDate)
-        || (targetParkProfiles ?? []).some((profile) => profile.registeredAt !== null && beforeCapture(profile.registeredAt))
-    const historyUnknown = targetParkProfiles === null || targetParkProfiles.some((profile) => profile.registeredAt === null)
-    if (!registeredBefore && !historyUnknown) return qualified('new_park_smz')
-    if (sanction !== null) return qualified('manager_sanction')
-    if (registeredBefore) {
-        return { outcome: 'requires_manager_qualification', reason: 'invitee_registered_before_invitation', ignored }
+
+    // What each earlier registration in the target park shows about the
+    // capture. The proven profile is connected now, so only a kept reading
+    // can show it had ended before the capture.
+    const earlier: Array<'ended' | 'unproven' | 'unread'> = []
+    if (beforeCapture(facts.parkHireDate)) earlier.push(endedBeforeCapture(facts.dismissals) ? 'ended' : 'unproven')
+    for (const profile of targetParkProfiles ?? []) {
+        if (profile.registeredAt === null || !beforeCapture(profile.registeredAt)) continue
+        if (endedBeforeCapture(profile.dismissals)) earlier.push('ended')
+        else earlier.push(profile.readAt !== null && profile.readAt.getTime() >= capturedAt ? 'unproven' : 'unread')
     }
-    return { outcome: 'pending', reason: 'invitee_registration_history_unknown', ignored }
+    const historyUnknown = targetParkProfiles === null || targetParkProfiles.some((profile) => profile.registeredAt === null)
+
+    if (!historyUnknown && earlier.length === 0) return qualified('new_park_smz')
+    if (!historyUnknown && earlier.every((state) => state === 'ended')) return qualified('returned_park_smz')
+    if (sanction !== null) return qualified('manager_sanction')
+    if (earlier.includes('unproven')) return { outcome: 'needs_review', reason: 'invitee_departure_unproven', ignored }
+    if (historyUnknown) return { outcome: 'pending', reason: 'invitee_registration_history_unknown', ignored }
+    return { outcome: 'pending', reason: 'invitee_departure_unknown', ignored }
 }
