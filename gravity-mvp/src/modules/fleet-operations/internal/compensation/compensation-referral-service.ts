@@ -381,3 +381,11 @@ export async function checkCashAccessChainsV1(
     }
     return outcome
 }
+
+/**
+ * A scheduled check that found a broken chain fails, so the job's cron health
+ * records an error. The message carries counts only.
+ */
+export function assertCashAccessChainsIntactV1(outcome: CashAccessChainCheckOutcomeV1): void {
+    if (outcome.broken > 0) throw new Error(`cash access ledger: ${outcome.broken} of ${outcome.checked} chains broken`)
+}

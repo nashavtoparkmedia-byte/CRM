@@ -17,6 +17,7 @@ import { compensationLineageDigestV1 } from '../internal/compensation/compensati
 import { resolvePilotPersonV1, type PilotTelegramPersonProofV1 } from '../internal/compensation/compensation-pilot-service'
 import { foldCashAccessLedgerV1 } from '../internal/compensation/compensation-referral-ledger'
 import {
+    assertCashAccessChainsIntactV1,
     checkCashAccessChainsV1,
     runCashReferralDecisionPassV1,
     type CashAccessChainCheckOutcomeV1,
@@ -150,12 +151,15 @@ export async function runScheduledCashReferralDecisionsV1(): Promise<CashReferra
 }
 
 /**
- * One scheduled, report-only check of every ledger chain (Security C4): it
- * logs counts per problem and changes nothing.
+ * One scheduled check of every ledger chain (Security C4). It changes nothing
+ * and logs counts on every run; a broken chain fails the job, so its cron
+ * health records an error and the existing failure detection raises it.
  */
 export async function runScheduledCashAccessChainCheckV1(): Promise<CashAccessChainCheckOutcomeV1 | { skipped: 'disabled' }> {
     if (!cashReferralAccessEnabledV1()) return { skipped: 'disabled' }
     const outcome = await checkCashAccessChainsV1(legacyPrismaCashReferralLedgerStoreV1, 5_000)
+    console.info(JSON.stringify({ event: 'cash_access_chain_check', checked: outcome.checked, broken: outcome.broken }))
     if (outcome.broken > 0) console.error(JSON.stringify({ event: 'cash_access_chain_broken', ...outcome }))
+    assertCashAccessChainsIntactV1(outcome)
     return outcome
 }

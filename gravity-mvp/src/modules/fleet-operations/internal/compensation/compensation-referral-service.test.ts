@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import { cashAccessEventHashV1, cashReferralPersonKeyDigestV1, type CashAccessEventV1 } from './compensation-referral-ledger'
 import {
+    assertCashAccessChainsIntactV1,
     checkCashAccessChainsV1,
     runCashReferralDecisionPassV1,
     type CashReferralAttributionV1,
@@ -249,5 +250,12 @@ describe('the scheduled chain check', () => {
         }, 100)
         expect(outcome).toEqual({ checked: 2, broken: 1, problems: { hash_mismatch: 1 } })
         expect(JSON.stringify(outcome)).not.toContain('contact-')
+    })
+
+    it('fails the job on a broken chain with counts only, and passes an intact ledger', () => {
+        expect(() => assertCashAccessChainsIntactV1({ checked: 2, broken: 1, problems: { hash_mismatch: 1 } }))
+            .toThrow('cash access ledger: 1 of 2 chains broken')
+        expect(() => assertCashAccessChainsIntactV1({ checked: 3, broken: 0, problems: {} })).not.toThrow()
+        expect(() => assertCashAccessChainsIntactV1({ checked: 0, broken: 0, problems: {} })).not.toThrow()
     })
 })

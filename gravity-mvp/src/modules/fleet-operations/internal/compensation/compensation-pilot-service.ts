@@ -27,6 +27,7 @@ import {
 } from './compensation-access'
 import { foldCashAccessLedgerV1, type CashAccessEventV1, type CashAccessLedgerFoldV1 } from './compensation-referral-ledger'
 import { compensationBusinessDayKeyV1 } from './compensation-calendar'
+import { compensationSubmissionWindowV1 } from './compensation-submission-window'
 import {
     withOwnerPilotAdmissionV1,
     type CompensationEligibilityFactsV1,
@@ -477,6 +478,8 @@ interface ScopedSectionV1 {
     ledger: CashAccessLedgerFoldV1 | null
     firstMonthKey: string
     remainingBudgetKopecks: number
+    /** What each claimable month's budget period can still reserve; an order reserves from its own month's. */
+    remainingBudgetByPeriodKopecks: ReadonlyMap<string, number>
     catalogueStatus: 'ready' | 'partial' | 'stale' | 'on_demand'
     dbNow: Date
     /** The eligible catalogue of this scope, newest first. */
@@ -559,7 +562,8 @@ async function scopedSectionV1(
         return { available: false, reason: catalogue.reason, applications }
     }
     // The standard programme alone opens exactly one budget period, its first
-    // month; a referral or manual window would add the current month.
+    // month; a referral or manual window adds the current month in the grace
+    // days, and each order reserves from its own month's period.
     const firstMonthKey = catalogue.budgetPeriodKeys[0]
 
     // No catalogue is not the same as an empty one: a park ingestion does not
@@ -570,7 +574,11 @@ async function scopedSectionV1(
         return { available: false, reason: 'catalogue_disabled', applications }
     }
 
-    const period = await port.findBudgetPeriod(firstMonthKey)
+    const remainingBudgetByPeriodKopecks = new Map<string, number>()
+    for (const periodKey of catalogue.budgetPeriodKeys) {
+        const period = await port.findBudgetPeriod(periodKey)
+        remainingBudgetByPeriodKopecks.set(periodKey, period ? remainingBudgetKopecksV1(period) : 0)
+    }
     return {
         available: true,
         applications,
@@ -579,7 +587,8 @@ async function scopedSectionV1(
             facts: identity.facts,
             ledger,
             firstMonthKey,
-            remainingBudgetKopecks: period ? remainingBudgetKopecksV1(period) : 0,
+            remainingBudgetKopecks: remainingBudgetByPeriodKopecks.get(firstMonthKey) ?? 0,
+            remainingBudgetByPeriodKopecks,
             catalogueStatus,
             dbNow: facts.dbNow,
             orders: catalogue.orders,
@@ -831,6 +840,12 @@ export async function submitPilotApplicationV1(
     const section = view.section
     if (input.scopeKey !== section.scope.scopeKey) return { submitted: false, refusal: 'stale_context' }
 
+    // The budget pre-check reads the period the order itself reserves from in
+    // C1, its own month's; an order not in the catalogue is refused below.
+    const requested = section.orders.find((candidate) => candidate.externalOrderId === input.externalOrderId)
+    const remainingBudgetKopecks = requested === undefined
+        ? section.remainingBudgetKopecks
+        : section.remainingBudgetByPeriodKopecks.get(compensationSubmissionWindowV1(requested.endedAt).periodKey) ?? 0
     const gate = decidePilotSubmissionV1({
         externalOrderId: input.externalOrderId,
         claimedRubles: input.claimedRubles,
@@ -840,7 +855,7 @@ export async function submitPilotApplicationV1(
     }, {
         catalogue: section.orders,
         alreadyClaimedOrderIds: section.claimedOrderIds,
-        remainingBudgetKopecks: section.remainingBudgetKopecks,
+        remainingBudgetKopecks,
     })
     if (!gate.accepted) return { submitted: false, refusal: gate.refusal }
 
