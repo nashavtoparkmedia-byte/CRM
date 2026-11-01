@@ -11,6 +11,7 @@
  */
 
 import { legacyPrismaCompensationPilotPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-adapter'
+import { legacyPrismaCashReferralLedgerStoreV1 } from '../internal/compensation/legacy-prisma-cash-referral-ledger-adapter'
 import { refreshYandexFleetDriverProfileV1 } from '../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
 import { legacyPrismaCompensationPilotReadinessPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-readiness-adapter'
 import {
@@ -84,6 +85,11 @@ const driverFactsRefresherV1 = new DriverFactsRefresherV1({
  */
 const telegramPilotPortV1: CompensationPilotPortV1 = {
     ...pilotPortV1,
+    // Referral and manual access are read only once their tables exist in this
+    // database: the flag is set after the migration is applied, never before.
+    ...(process.env.YOKO_CASH_REFERRAL_ACCESS === 'on'
+        ? { readCashAccessChain: (canonicalContactId: string) => legacyPrismaCashReferralLedgerStoreV1.readChain(canonicalContactId) }
+        : {}),
     async ensureDriverFactsFresh(driver) {
         const scope = cashOrderPilotParkScopeV1()
         if (scope.mode === 'off' || scope.configError !== null || !scope.enabledParks.includes(driver.externalParkId)) {

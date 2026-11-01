@@ -18,8 +18,16 @@
  * Yandex confirmed within the submission threshold.
  */
 
-import { cashOrderCatalogueV1 } from './compensation-cash-order-ingestion'
+import {
+    cashAccessDayAllowedV1,
+    cashAccessOrderCatalogueV1,
+    decideCashAccessV1,
+    type CashAccessDecisionV1,
+    type CashAccessOwnerPolicyV1,
+} from './compensation-access'
+import { foldCashAccessLedgerV1, type CashAccessEventV1, type CashAccessLedgerFoldV1 } from './compensation-referral-ledger'
 import { compensationBusinessDayKeyV1 } from './compensation-calendar'
+import { compensationSubmissionWindowV1 } from './compensation-submission-window'
 import {
     withOwnerPilotAdmissionV1,
     type CompensationEligibilityFactsV1,
@@ -31,7 +39,6 @@ import {
     pilotCatalogueStatusV1,
     pilotConfirmationFollowUpV1,
     pilotListedOrderV1,
-    pilotDriverDayAllowedV1,
     pilotDriverDayQueryV1,
     pilotDriverDaySearchV1,
     pilotOrderSearchV1,
@@ -54,6 +61,7 @@ import {
 } from './compensation-pilot-flow'
 import {
     admitPilotContactLineageV1,
+    compensationLineageDigestV1,
     type PilotContactLineageReadV1,
     type PilotLineageAdmissionRefusalV1,
 } from './compensation-pilot-lineage'
@@ -143,6 +151,11 @@ export interface CompensationPilotPortV1 {
     } | null>
     findClaimedOrderIds(lineage: readonly string[]): Promise<string[]>
     findDriverApplications(lineage: readonly string[]): Promise<PilotApplicationSummaryV1[]>
+    /**
+     * The person's Cash access ledger, oldest first. Absent: no referral or
+     * manual access exists, and the standard programme alone decides.
+     */
+    readCashAccessChain?(canonicalContactId: string): Promise<readonly CashAccessEventV1[]>
     /**
      * C1 submit, plus the pilot evidence, as one unit. The order carries the
      * observation time C1 records as its verification time.
@@ -460,8 +473,13 @@ async function resolvePilotSubjectV1(
 
 interface ScopedSectionV1 {
     scope: PilotScopeV1
+    /** The facts and ledger the access decision read, kept so a day pick is decided on the same rule. */
+    facts: CompensationEligibilityFactsV1
+    ledger: CashAccessLedgerFoldV1 | null
     firstMonthKey: string
     remainingBudgetKopecks: number
+    /** What each claimable month's budget period can still reserve; an order reserves from its own month's. */
+    remainingBudgetByPeriodKopecks: ReadonlyMap<string, number>
     catalogueStatus: 'ready' | 'partial' | 'stale' | 'on_demand'
     dbNow: Date
     /** The eligible catalogue of this scope, newest first. */
@@ -476,6 +494,33 @@ type ScopedSectionResultV1 =
         reason: PilotScopeRefusalV1 | 'catalogue_disabled' | string
         applications: readonly PilotApplicationSummaryV1[]
     }
+
+/**
+ * The Owner's rule (GO 2026-10-31): a general denial overrides every grant,
+ * the standard programme included, and a denied person is not offered the
+ * referral programme. Revoking one grant leaves every other right alone.
+ */
+const CASH_ACCESS_OWNER_POLICY_V1: CashAccessOwnerPolicyV1 = {
+    manualDenyClosesStandardProgramme: true,
+    referralOfferAfterManualDeny: false,
+}
+
+/**
+ * Who may claim which orders, through the Cash access decision: the standard
+ * programme, and the referral entitlement and manual decision the person's
+ * ledger holds. Without a ledger the decision is the standard programme alone
+ * and answers exactly as the first-month catalogue does.
+ */
+function pilotAccessV1(facts: CompensationEligibilityFactsV1, at: Date, ledger: CashAccessLedgerFoldV1 | null): CashAccessDecisionV1 {
+    return decideCashAccessV1({
+        identity: { proven: true },
+        standardFacts: facts,
+        referral: ledger?.referral ?? null,
+        manual: ledger?.manual ?? null,
+        ownerPolicy: CASH_ACCESS_OWNER_POLICY_V1,
+        at,
+    })
+}
 
 /**
  * Everything the Telegram surface may act on for one linked driver, rebuilt
@@ -506,10 +551,20 @@ async function scopedSectionV1(
         externalParkId: scope.externalParkId,
         externalDriverProfileId: scope.externalDriverProfileId,
     })
-    const catalogue = cashOrderCatalogueV1(identity.facts, stored, now)
+    // The ledger is read for the proven person only: access binds to a person.
+    // A merge since an access event leaves the person for a manager to look at.
+    const ledger = person !== null && port.readCashAccessChain
+        ? foldCashAccessLedgerV1(await port.readCashAccessChain(person.canonicalContactId), compensationLineageDigestV1(person.lineage))
+        : null
+    if (ledger?.staleLineage) return { available: false, reason: 'identity_needs_review', applications }
+    const catalogue = cashAccessOrderCatalogueV1(pilotAccessV1(identity.facts, now, ledger), stored)
     if (!catalogue.eligible) {
         return { available: false, reason: catalogue.reason, applications }
     }
+    // The standard programme alone opens exactly one budget period, its first
+    // month; a referral or manual window adds the current month in the grace
+    // days, and each order reserves from its own month's period.
+    const firstMonthKey = catalogue.budgetPeriodKeys[0]
 
     // No catalogue is not the same as an empty one: a park ingestion does not
     // write has no list to show at all.
@@ -519,14 +574,21 @@ async function scopedSectionV1(
         return { available: false, reason: 'catalogue_disabled', applications }
     }
 
-    const period = await port.findBudgetPeriod(catalogue.firstMonthKey)
+    const remainingBudgetByPeriodKopecks = new Map<string, number>()
+    for (const periodKey of catalogue.budgetPeriodKeys) {
+        const period = await port.findBudgetPeriod(periodKey)
+        remainingBudgetByPeriodKopecks.set(periodKey, period ? remainingBudgetKopecksV1(period) : 0)
+    }
     return {
         available: true,
         applications,
         section: {
             scope,
-            firstMonthKey: catalogue.firstMonthKey,
-            remainingBudgetKopecks: period ? remainingBudgetKopecksV1(period) : 0,
+            facts: identity.facts,
+            ledger,
+            firstMonthKey,
+            remainingBudgetKopecks: remainingBudgetByPeriodKopecks.get(firstMonthKey) ?? 0,
+            remainingBudgetByPeriodKopecks,
             catalogueStatus,
             dbNow: facts.dbNow,
             orders: catalogue.orders,
@@ -569,7 +631,7 @@ export async function compensationSectionViewV1(
         // Every rule above has already passed: the person is proven, the driver
         // is eligible and the park and profile are the proven ones. Only now,
         // and only for a day the driver may claim, is the provider asked.
-        if (!pilotDriverDayAllowedV1(dayKey, section.firstMonthKey, section.dbNow)) {
+        if (!cashAccessDayAllowedV1(pilotAccessV1(section.facts, section.dbNow, section.ledger), dayKey)) {
             search = pilotDriverDaySearchV1([], dayKey, 'date_not_allowed')
         } else {
             const fetched: PilotDriverDayFetchV1 = ingestion.fetchDriverDay
@@ -778,6 +840,12 @@ export async function submitPilotApplicationV1(
     const section = view.section
     if (input.scopeKey !== section.scope.scopeKey) return { submitted: false, refusal: 'stale_context' }
 
+    // The budget pre-check reads the period the order itself reserves from in
+    // C1, its own month's; an order not in the catalogue is refused below.
+    const requested = section.orders.find((candidate) => candidate.externalOrderId === input.externalOrderId)
+    const remainingBudgetKopecks = requested === undefined
+        ? section.remainingBudgetKopecks
+        : section.remainingBudgetByPeriodKopecks.get(compensationSubmissionWindowV1(requested.endedAt).periodKey) ?? 0
     const gate = decidePilotSubmissionV1({
         externalOrderId: input.externalOrderId,
         claimedRubles: input.claimedRubles,
@@ -787,7 +855,7 @@ export async function submitPilotApplicationV1(
     }, {
         catalogue: section.orders,
         alreadyClaimedOrderIds: section.claimedOrderIds,
-        remainingBudgetKopecks: section.remainingBudgetKopecks,
+        remainingBudgetKopecks,
     })
     if (!gate.accepted) return { submitted: false, refusal: gate.refusal }
 

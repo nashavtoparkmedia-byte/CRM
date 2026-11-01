@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "e3f56bc8059d432c14d91ddda4c15f1eb8aec08c45ab6120767358c14a4a38ae",
-    "size": 168415,
+    "sha256": "0e2a2b0a88c81eb9f6e28a7b5a2e6e542a23b262c5b0822378830e87b3d44223",
+    "size": 171861,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -178,6 +178,24 @@
         "tables": [
           "ContactCommunicationPolicy",
           "ContactCommunicationPolicyEvent"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261101120000_add_cash_referral_access",
+      "path": "gravity-mvp/prisma/migrations/20261101120000_add_cash_referral_access/migration.sql",
+      "sha256": "f85c0c616ab21fb7c2fc6f9cf19809cbe7226e56c5d365a21f0b0023781db40e",
+      "size": 7774,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CashAccessEvent",
+          "CashReferralAttribution"
         ],
         "columns": [],
         "forbidden_indexes": []

@@ -4,10 +4,10 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 736,
+    "total_entries": 737,
     "test": 39,
     "dead_historical": 92,
-    "migration_only": 86,
+    "migration_only": 87,
     "active_operational": 514,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
@@ -6721,6 +6721,16 @@
       "rationale": "Security's shared read-only P0 invariant checker p0-invariant/v1 (content owner Security, contract in CONTRACT.md beside it), byte-identical to the Security release and versioned with its approved-template list; the Cash perimeter scripts verify both SHA-256 values and run it under env -i on the production host. It parses nginx templates and renders, inspects file ownership and modes, runs nginx -T and anonymous probes inside the nginx container; it never writes, never prints credential material and reads no database or environment secret. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "platform_operations"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261101120000_add_cash_referral_access/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned Cash referral access schema (two new tables with their constraints, partial unique indexes, one foreign key between them, one guard function that reads no relation and its row trigger) inside one explicit transaction through controlled migration tooling; it names no existing table, changes no existing row, carries no data statement and no backfill; it stores no credential, token, provider identifier or monetary amount; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "fleet_operations",
+      "source_sha256": "f85c0c616ab21fb7c2fc6f9cf19809cbe7226e56c5d365a21f0b0023781db40e"
     }
   ]
 }

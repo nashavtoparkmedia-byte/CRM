@@ -118,6 +118,7 @@ async function getMainMenu(ctx) {
         ['🚗 Подключиться', surveyButtons[0]],
         ['💬 Чат водителей', '🛠 Поддержка'],
         ...(config.compensationEntryEnabled ? [[COMPENSATION_ENTRY_LABEL]] : []),
+        ...(config.referralEntryEnabled ? [[require('./referral').REFERRAL_ENTRY_LABEL]] : []),
         ['© Yoko Park · Бот для водителей'],
     ];
 
@@ -257,6 +258,9 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
             if (ctx.scene) return await ctx.scene.enter('compensation');
             return await ctx.reply('Компенсация временно недоступна.');
 
+        case '🎁 Пригласить водителя':
+            return await require('./referral').showReferral(ctx);
+
         case '🛠 Поддержка':
             return await ctx.reply('🧑‍💻 *Техподдержка*\n\nНажмите кнопку ниже, чтобы написать в поддержку парка или задать вопрос.', {
                 parse_mode: 'Markdown',
@@ -372,11 +376,12 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
 async function handleStart(ctx) {
     try {
         const { from, startPayload } = ctx;
-        logger.info('/start pressed by user:', from.id, 'payload:', startPayload);
-
-        // Register user and log command
+        const payload = require('../security/redactSecrets').startPayloadEvidence(startPayload);
+        logger.info('/start pressed by user:', from.id, 'payload:', payload ? 'present' : 'none');
+        // Register user and log command. A deep-link payload is kept only as "present".
         await userService.registerUser(from);
-        await userService.logAction(from.id, from.username, 'START_COMMAND', { payload: startPayload });
+        await userService.logAction(from.id, from.username, 'START_COMMAND', { payload });
+        if (config.referralEntryEnabled && require('./referral').isReferralPayload(startPayload)) await require('./referral').captureReferral(ctx, startPayload);
 
         // IMPORTANT: Ensure the bot exists in Prisma DB so surveys work
         const botToken = config.botToken?.trim() || '';

@@ -21,6 +21,10 @@ import {
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
 import {
+    cashReferralAttachInviteeV1,
+    cashReferralCaptureV1,
+    cashReferralIssueV1,
+    cashReferralStatusV1,
     compensationPilotOrderCheckV1,
     compensationPilotRefreshV1,
     compensationPilotSectionV1,
@@ -72,6 +76,12 @@ export async function POST(request: Request) {
                 return await handleCompensationOrderCheck(payload)
             case 'compensation_refresh':
                 return await handleCompensationRefresh(payload)
+            case 'referral_issue':
+                return await handleReferralIssue(payload)
+            case 'referral_status':
+                return await handleReferralStatus(payload)
+            case 'referral_capture':
+                return await handleReferralCapture(payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -836,6 +846,11 @@ async function proveCompensationTelegramPerson(payload: any): Promise<Compensati
     const personContactId = person && person.target === telegramId.toString() && person.driverId === mapping.driverId
         ? person.contactId
         : null
+    // An invitation this account opened learns its Driver here, from the proof
+    // just made; Fleet never reads Telegram state itself. Best effort only.
+    cashReferralAttachInviteeV1({ telegramUserId: telegramId.toString(), driverId: mapping.driverId }).catch((error: unknown) => {
+        console.warn('[driver-bot] referral invitee not attached:', error instanceof Error ? error.name : 'unknown')
+    })
     return {
         proven: true,
         // The canonical decimal form authority proved, never the raw payload.
@@ -891,6 +906,50 @@ async function handleCompensationSection(payload: any) {
         },
         applications: view.applications.map(serializeCompensationApplication),
     })
+}
+
+async function handleReferralIssue(payload: any) {
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({ status: 'refused', reason: proof.refusal })
+    }
+    const issued = await cashReferralIssueV1(compensationProofFields(proof))
+    if (issued.status !== 'issued') return NextResponse.json(issued)
+    return NextResponse.json({
+        status: 'issued',
+        token: issued.token,
+        invitations: issued.invitations,
+        accessSince: issued.accessSince === null ? null : issued.accessSince.toISOString(),
+    })
+}
+
+async function handleReferralStatus(payload: any) {
+    const proof = await proveCompensationTelegramPerson(payload)
+    if (!proof.proven) {
+        return proof.response ?? NextResponse.json({ status: 'refused', reason: proof.refusal })
+    }
+    const status = await cashReferralStatusV1(compensationProofFields(proof))
+    if (status.status !== 'ok') return NextResponse.json(status)
+    return NextResponse.json({
+        status: 'ok',
+        invitations: status.invitations,
+        accessSince: status.accessSince === null ? null : status.accessSince.toISOString(),
+    })
+}
+
+/**
+ * A Telegram account opened a referral link. The answer is the same for every
+ * caller and every outcome; the token is never logged.
+ */
+async function handleReferralCapture(payload: any) {
+    const token = typeof payload?.token === 'string' ? payload.token : ''
+    const proof = await proveCompensationTelegramPerson(payload)
+    // A malformed telegramId is still answered like every other capture.
+    const telegramUserId = proof.proven
+        ? proof.telegramUserId
+        : (typeof payload?.telegramId === 'string' || typeof payload?.telegramId === 'number' ? String(payload.telegramId) : '')
+    await cashReferralCaptureV1({ token, telegramUserId, driverId: proof.proven ? proof.driverId : null })
+    return NextResponse.json({ status: 'recorded' })
 }
 
 async function handleCompensationOrderCheck(payload: any) {
