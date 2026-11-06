@@ -1,6 +1,6 @@
 # Staff Session v1 — a verified browser identity for one CRM employee
 
-**Status: DESIGN v1.1 — revised after the Security DESIGN review (CHANGES REQUIRED, 2026-11-07: B1–B5, M1–M8). Awaiting Identity Access domain-owner agreement and the Security delta re-review. No code of this design has landed.**
+**Status: DESIGN v1.2 — revised after the Security DESIGN review (2026-11-07: B1–B5, M1–M8 closed in v1.1; N1, R2, R3 applied in v1.2). Awaiting Identity Access domain-owner agreement and the Security DESIGN PASS. No code of this design has landed.**
 Owner context: `identity_access`. Mandate: Orchestrator V7 Contact Identity full conditional delivery mandate, 2026-11-07 (§7).
 
 ## 1. Why
@@ -34,19 +34,24 @@ Reused from `integration-admin-credentials.ts` / `mobile-session-credentials.ts`
 
 ```
 StaffCredential {
-  userId        String   @id            -- the registry UserItem.id
-  algo          String                  -- 'scrypt'
-  n, r, p       Int                     -- 32768, 8, 1
-  maxmemBytes   Int                     -- 67108864 (64 MiB)
-  salt          Bytes                   -- 16 random bytes
-  hash          Bytes                   -- 64 bytes
-  sessionEpoch  Int      @default(0)    -- bumped by logout, password set/reset, role/status change
+  userId            String   @id        -- the registry UserItem.id (random, immutable; see N1)
+  registryCreatedAt DateTime            -- the registry record's createdAt at binding time: a reused id inherits nothing
+  role              String              -- the durable authority copy: 'Менеджер' | 'Руководитель' | 'Администратор'
+  status            String              -- the durable authority copy: 'Активен' | 'Отключен' | 'Удалён'
+  algo              String              -- 'scrypt'
+  n, r, p           Int                 -- 32768, 8, 1
+  maxmemBytes       Int                 -- 67108864 (64 MiB)
+  salt              Bytes               -- 16 random bytes
+  hash              Bytes               -- 64 bytes
+  sessionEpoch      Int      @default(0) -- bumped by logout, password set/reset, role/status change, delete
   createdAt, updatedAt  DateTime
-  updatedBy     String                  -- actor: 'staff:<userId>' | 'integration-admin'
+  updatedBy         String              -- actor: 'staff:<userId>' | 'integration-admin'
 }
-StaffCredentialEvent { id, userId, kind ('password_set'|'password_reset'|'epoch_bump'|'login'|'login_refused'|'logout'), actor, sid?, recordedAt }  -- append-only audit
+StaffCredentialEvent { id, userId, kind ('password_set'|'password_reset'|'epoch_bump'|'login'|'login_refused'|'logout'|'revoked'), actor, sid?, recordedAt }  -- append-only audit
 ```
-Password set/reset and epoch bump are single database transactions (atomic; M7). Nothing credential-shaped is ever added to `users.json`, and `getUsers()` keeps its field set.
+Password set/reset, epoch bump and every role/status/delete change are single database transactions (atomic; M7). Nothing credential-shaped is ever added to `users.json`, and `getUsers()` keeps its field set.
+
+**Durable authority (N1).** `users.json` is baked into the production image, so a file edit is rolled back by the next deployment: a disabled or demoted employee would be active or privileged again. Therefore the table above holds the **authority copy** of `role` and `status`, written in the same transaction as the registry change and the epoch bump, and verification requires the registry record and the table to agree (`id`, `registryCreatedAt`, `role`, `status`); any disagreement — a rolled-back file, a re-created id, a stale copy — answers `null`. `deleteUser` revokes the credential atomically (`status = 'Удалён'`, epoch bump, audit `revoked`); registry ids are generated with `randomUUID()` and are immutable (today's `"u" + (users.length + 1)` is retired, because a deleted id could be reused and inherit a credential). The infrastructure alternative — a persistent volume for `src/data` — remains an Owner decision and is not assumed.
 
 ### 4.2 Token and cookie
 
@@ -56,7 +61,7 @@ Password set/reset and epoch bump are single database transactions (atomic; M7).
 | Signing key | `STAFF_SESSION_SECRET` (C-class, `docs/SECRETS.md`). At startup Identity Access **refuses to issue or verify** (fail closed, one error line) when it is absent, shorter than 32 bytes, a placeholder, or equal to `ADMIN_PASS`, `ADMIN_SESSION_SECRET`, `MOBILE_ACCESS_PASS` or `BOT_CRM_SECRET`. |
 | Payload | `{ v: 1, aud: 'yoko-staff-session', sub: userId, iat, exp, epoch, uepoch, sid }` — `epoch` = `STAFF_SESSION_REVOCATION_EPOCH`; `uepoch` = `StaffCredential.sessionEpoch` at issue; `sid` = random session instance id. **No role in the token**: the role is read from the registry at every verification. |
 | TTL | 12 h. |
-| Verify | `getStaffSessionPrincipalV1()`: signature; `v === 1`; `aud`; `exp`; `epoch` equals the current global epoch; `uepoch` equals the stored `sessionEpoch` (one indexed read); the registry user exists and is `Активен`. Any mismatch → `null`, never a partial principal. |
+| Verify | `getStaffSessionPrincipalV1()`: signature; `v === 1`; `aud`; `exp`; `epoch` equals the current global epoch; `uepoch` equals the stored `sessionEpoch` (one indexed read); the registry user exists, is `Активен`, and matches the table's authority copy (`registryCreatedAt`, `role`, `status`). Any mismatch → `null`, never a partial principal. **Unverifiable = refused (R3):** when the store cannot be read (database unavailable, timeout) while a staff cookie is present, the request has **no operator** — no fallback to `crm_user_id` — and the browser lane answers **503**, as BR-4's unreadable logout barrier does for the shell lane; it is never treated as a logout. |
 | Principal | `StaffSessionPrincipalV1 { kind: 'staff_session', userId, role, sid, issuedAt, expiresAt }` — exported from `identity_access.public.v1`. Consumers derive capabilities from `role` through their own policy. **Consumers take authority only from `getStaffSessionPrincipalV1()` (kind `staff_session`), never from `getCurrentUser()`**, which still answers the legacy cookie while enforcement is off (M6). |
 
 ### 4.3 Login, logout, revocation
@@ -71,7 +76,8 @@ Password set/reset and epoch bump are single database transactions (atomic; M7).
 ### 4.4 Credential administration (B2, B3)
 
 - `setStaffPassword(targetUserId, newPassword)`: allowed for the user themself (with the current password) or for an **Администратор under a Staff Session**. Audit line names actor and target.
-- **Bootstrap only:** the integration-admin session may set a credential **only for a user who has none yet**, audited as `actor=integration-admin`; it can never reset an existing one. Operational precondition, recorded in `docs/SECRETS.md`: `ADMIN_PASS` is rotated before the first bootstrap (the Beget copy is considered exposed).
+- **Bootstrap only, and only while the system has no credentialed Администратор (R2):** the integration-admin session may set a credential only for a user who has none yet, and only while **no user with role Администратор holds a credential**; from the moment one does, the first password of every new user is set by a Staff Session Администратор, and the integration-admin path is closed (so a holder of `ADMIN_PASS` cannot claim new accounts indefinitely). It can never reset an existing credential; every bootstrap is audited as `actor=integration-admin`. Operational precondition, recorded in `docs/SECRETS.md`: `ADMIN_PASS` is rotated before the first bootstrap (the Beget copy is considered exposed).
+- Same timing for a disabled user as for an unknown one (dummy scrypt); `login_refused` for an id that does not exist in the registry is written to the structured log only, never to `StaffCredentialEvent`, so a guesser cannot grow the table; the last-privileged invariants (`wouldDeleteLastPrivileged` / `wouldDemoteLastPrivileged`) count Администратор users **with a credential**, so the system is never left without a manageable administrator.
 - User management (`addUser`, `updateUser`, `deleteUser`, role and status changes) — **from the implementation PR on, regardless of `YOKO_STAFF_SESSION_ENFORCE`** — requires a Staff Session; role and status changes, add, delete and any write to a user who holds a credential require role **Администратор**; the role Администратор is granted only by an Администратор (`canManageUsers` no longer suffices for Руководитель here). `updateUser` applies an **explicit field allowlist** (`firstName, lastName, email, phone, role, status`); credential and epoch fields are never writable through CRUD. A role or status change bumps the target's `sessionEpoch`.
 
 ### 4.5 One operator resolution (B4)
@@ -81,6 +87,7 @@ After #197 lands, the staff session is added to the **same** BR-4 mechanism, nev
 - `resolveRequestOperatorV1` / `resolveCookieOperatorV1` gain a `staff_session` branch; `proxy.ts` rewrites the `Cookie` header on the browser lane exactly as on the shell lane: a valid staff session → downstream readers see **exactly one** `crm_user_id = sub`; a refused staff session, or `YOKO_STAFF_SESSION_ENFORCE=on` without a session → `crm_user_id` is **removed**, so the ~20 direct cookie readers and `getCurrentUser` all fail closed without edits.
 - Both `yoko_mobile_session` and `__Host-yoko_staff_session` present in one request → **no operator** (refused), logged once.
 - `YOKO_STAFF_SESSION_ENFORCE` acts on the browser lane only; the shell lane keeps BR-4 semantics unchanged.
+- A staff cookie that cannot be verified because the store is unreadable → no operator and 503 for the browser lane (R3); never a silent fallback to the legacy cookie.
 - `contacts`: `identityAccessContactPersonCardAuthorityV1` and the lookup route admit `kind === 'staff_session'` beside `integration_admin_session` — one named kind in one file.
 
 ## 5. Invariants
@@ -102,7 +109,10 @@ After #197 lands, the staff session is added to the **same** BR-4 mechanism, nev
 | Memory DoS via scrypt | async scrypt with a 4-slot limiter, 503 beyond it |
 | Shared / weak password | individual per user; 10–256 chars; placeholder and common-password denylist |
 | Escalation via user management | Staff Session Администратор required for role/status/add/delete; field allowlist; Администратор granted only by Администратор; epoch bump on role change |
-| Master key through bootstrap | integration-admin may only set a **first** credential, never reset; `ADMIN_PASS` rotated before bootstrap; audited |
+| Master key through bootstrap | integration-admin may only set a **first** credential, never reset, and only while no Администратор holds a credential; `ADMIN_PASS` rotated before bootstrap; audited |
+| Authority rollback by redeploy (`users.json` baked into the image) | `role`/`status` authority copy in `StaffCredential`, written with the registry change; verification requires agreement; a rolled-back file refuses instead of re-enabling |
+| Reused registry id inheriting a credential | random immutable ids; `registryCreatedAt` bound at credential creation and checked at verify; `deleteUser` revokes atomically |
+| Unreadable credential store with a staff cookie | refused: no operator, 503 on the browser lane, no legacy-cookie fallback |
 | Two sessions in one request | no operator |
 | CSRF | Server Actions under Next's Origin/Host check (allowedOrigins unset); Route Handlers keep same-origin checks; no side-effecting GET under `staff_session` |
 | Key reuse / weak key | dedicated secret, startup refusal on length/placeholder/equality with other secrets; rotation = new secret + global epoch |
