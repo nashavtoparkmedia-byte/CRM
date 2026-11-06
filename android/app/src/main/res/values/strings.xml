@@ -29,4 +29,33 @@
          no name, so a lock screen discloses only that a call happened. -->
     <string name="call_alert_incoming_title">Входящий звонок</string>
     <string name="call_alert_missed_title">Пропущенный звонок</string>
+    <!-- Edge Basic auth (design R5.1 §3.6, §5). The staff gate, not the CRM
+         login: these screens only ever ask for the staff login of the nginx
+         gate in front of the CRM, and say nothing about who is signed in. -->
+    <string name="edge_dialog_title">Вход в CRM</string>
+    <string name="edge_dialog_target">%1$s · %2$s</string>
+    <string name="edge_dialog_login">Логин</string>
+    <string name="edge_dialog_password">Пароль</string>
+    <string name="edge_dialog_pinned">Сотрудник: %1$s</string>
+    <string name="edge_dialog_wrong_password">Пароль не подошёл</string>
+    <string name="edge_login">Войти</string>
+    <string name="edge_cancel">Отмена</string>
+    <string name="edge_switch_operator">Выйти и сменить сотрудника</string>
+    <string name="edge_switch_operator_short">Сменить сотрудника</string>
+    <string name="edge_required_title">Нужен вход в CRM</string>
+    <string name="edge_required_text">Чтобы продолжить, войдите в CRM.</string>
+    <string name="edge_exhausted_text">Не удалось подтвердить доступ. Проверьте логин и пароль.</string>
+    <string name="edge_unsupported_text">Вход недоступен: обновите Android System WebView</string>
+    <string name="edge_proxy_timeout_text">Не удалось подготовить защищённое соединение</string>
+    <string name="edge_insecure_origin_text">Вход недоступен в этой сборке приложения</string>
+    <string name="edge_guard_text">Выйдите и войдите заново, чтобы продолжить.</string>
+    <string name="session_expired_title">Сессия истекла</string>
+    <string name="session_expired_text">Войдите в CRM заново.</string>
+    <string name="reset_in_progress">Выполняется выход…</string>
+    <string name="reset_incomplete_title">Не удалось завершить выход</string>
+    <string name="reset_incomplete_text">Закройте приложение и откройте снова</string>
+    <string name="reset_close_app">Закройте приложение и откройте снова</string>
+    <string name="shortcut_reset_limited">Слишком много попыток выхода. Повторите позже.</string>
+    <string name="push_notice_rotation">Уведомления отключены до следующего входа в CRM с доступом к сети</string>
+    <string name="push_notice_conflict">Уведомления временно недоступны на этом устройстве; войдите заново, чтобы повторить</string>
 </resources>
