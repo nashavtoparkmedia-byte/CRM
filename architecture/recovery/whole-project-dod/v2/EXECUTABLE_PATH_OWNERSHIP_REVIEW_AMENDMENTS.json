@@ -3274,6 +3274,103 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "contact-identity-cc1-card-read-model-main-d46100e8-br4-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_CC1_CARD_READ_MODEL_EXECUTOR_REVIEW_D46100E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is identity-access-br4-signed-mobile-operator-main-d46100e8-20261107 (the BR-4 reconcile onto main d46100e8), and leaves that amendment untouched. It reviews only the 10 surfaces the CC-1 Contact Card read model adds; it rebinds no source fingerprint."
+      },
+      "reason": "Records the tracked executable surfaces the CC-1 Contact Card read model adds on top of the BR-4 reconcile of main d46100e8: 2,734 + 10 = 2,744 surfaces, context-owned 1,495 -> 1,504 and governed exclusions 1,239 -> 1,240. Nine new paths are owned by the contacts context through its manifest owned_paths: the contacts.ContactCardForConversationQuery.v1 contract and its test under gravity-mvp/src/contracts/contacts, and under gravity-mvp/src/modules/contacts/internal the handler, the single Prisma reader and the Identity Access authority binding with their tests. The tenth is a boundary control under tools/architecture, covered by the architecture_recovery governed exclusion as an OPERATIONAL_SCRIPT recorded in the lifecycle registry. No existing path changes bytes in any reviewed exact inventory, so this amendment carries no source-fingerprint rebind; the two context-owned files it edits (contact-operations.ts and the contacts public index) are in no exact inventory. Its predecessor is the current triple of the BR-4 amendment identity-access-br4-signed-mobile-operator-main-d46100e8-20261107, and its current triple differs from the predecessor by exactly these 10 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 43. It re-records, unchanged in surfaces and rationales, the CC-1 amendment contact-identity-cc1-card-read-model-main-e256d14b-20261027 published on PR #186 HEAD e5905000 as amendment 34 over main e256d14b but never landed: main moved to d46100e8 and BR-4 took amendment 42, so this one follows BR-4 and takes its predecessor triple, with the exact product bytes of e5905000 (CC1-L1 hardening included). The provisional engineering-map invariant I-CC1 is assigned its landing number I-63 in this reconcile. Reconciled under the Orchestrator V7 Contact Identity full conditional delivery mandate of 2026-11-07.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2734,
+        "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
+        "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2744,
+        "tracked_inventory_sha256": "599448af48b343cc07ef702c48c7db672a46bae34d57457cfb78cbd0f25b3c5b",
+        "coverage_sha256": "2fb18af75c9579ebd8573a1e078f9de3f1f60d62f5c08b8f02688bed5e93033a"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The contract test of contacts.ContactCardForConversationQuery.v1 (exact fields, exact Chat.id, versions); it opens no database connection and holds no credential, under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral contacts.ContactCardForConversationQuery.v1 contract: an exact Chat.id as the only input, the six answer states and the minimal card that only the confirmed answer carries. Under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.rcq1.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The card read model bound to the real Messaging RCQ1 handler over an in-memory store whose links and merges change mid-read; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The protocol and projection proofs of the card read model against recorded in-memory ports (authorization, cross-person, cross-fleet, races, no fallback, no data in any non-confirmed answer); it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The internal handler of the card read model: verified principal first, conversation access before RCQ1, Contact access before any Contact read, one read of exactly the Contact RCQ1 named and a second RCQ1 resolution that must name it again, plus the pure card projection over ContactDisplayPolicy and both Contacts conflict stores. It writes nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the card authority with Identity Access mocked, plus a source scan that it reads no client-held identity; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The production authority of the card read model: the principal is the Identity Access signed integration-admin principal (the declared contacts > identity_access.public dependency) and never crm_user_id, a cookie, a header or a mobile session; any other principal kind may read nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the card reader against a recording transaction double that throws on every write, raw query and foreign model; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one database reader of the card: Contact and ContactMerge read by exact id in one repeatable-read snapshot, no provider external id selected and no write. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "tools/architecture/check-contact-card-read-model-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the card read model answers only for an exact Chat.id through RCQ1, under a verified principal, reading exactly one Contact in one snapshot without writes, with its handler and bindings internal, and runs its proofs; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
