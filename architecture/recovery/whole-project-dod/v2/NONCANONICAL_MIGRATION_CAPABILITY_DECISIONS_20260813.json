@@ -410,6 +410,21 @@
         "f808f58accd6b7a320ac8999253f8317b348179edf0a0388313ce4f63512b50d",
         "ff805b428b083e81626b7146c18e9290e64a152afb962590643b5654c23f123b"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned Cash referral schema (one new table for the invitations a manager records, with its CHECK constraints, two indexes and one partial unique index) and widens the admitted kinds, writers and payload rule of the existing Fleet Operations-owned CashAccessEvent ledger by replacing its kind and writer CHECK constraints with supersets and adding one payload CHECK, inside one explicit transaction through controlled migration tooling; it names no table outside the Cash referral tables, adds no column, changes no existing row and carries no data statement or backfill; it stores no credential, token, provider identifier or monetary amount; this review grants no application-runtime or production-application authority. All six sites are exact DDL statements on the new table and on CashAccessEvent.",
+      "expected_site_signatures": [
+        "30d7fab32a8ea2efba50b32e92da138fb003c3c12c3253a7e0d9350eaf374ab0",
+        "3fa826f20076653200f629a242bfc8276326ca08a560424ed5a51a7ef824b635",
+        "4b38069184a9775c40eee331061cdb8ea89aeeed90148580b16d4f32ae35125f",
+        "75b49d22e16acc823c3f26035aae0287ae889cd846d82ddf5f52e6ab6abf928b",
+        "8355d1e0323ff88140d70b0ae6e053585c822315a10b1be711222e1fbc6c4fb8",
+        "96a50541556088f431a9a2579089da665f2d868ca2e7507d8fbb204789bf7ccd"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -3644,6 +3659,114 @@
         }
       ],
       "review_rationale": "Expand-only statement of the Cash referral access migration: CREATE_TRIGGER on CashAccessEvent_append_only_row. It creates or constrains only Fleet Operations-owned referral objects, references no existing table, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "75b49d22e16acc823c3f26035aae0287ae889cd846d82ddf5f52e6ab6abf928b",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 19,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashReferralManagerInvitation",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: CREATE_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "8355d1e0323ff88140d70b0ae6e053585c822315a10b1be711222e1fbc6c4fb8",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 35,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashReferralManagerInvitation",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "4b38069184a9775c40eee331061cdb8ea89aeeed90148580b16d4f32ae35125f",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 38,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashReferralManagerInvitation",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "3fa826f20076653200f629a242bfc8276326ca08a560424ed5a51a7ef824b635",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 40,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashReferralManagerInvitation",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "30d7fab32a8ea2efba50b32e92da138fb003c3c12c3253a7e0d9350eaf374ab0",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 53,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashReferralManagerInvitation",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "96a50541556088f431a9a2579089da665f2d868ca2e7507d8fbb204789bf7ccd",
+      "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
+      "line": 63,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "CashAccessEvent",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashAccessEvent. It creates or constrains only Fleet Operations-owned referral objects, widens the admitted ledger kinds and writers without removing any, touches no existing row and stores no credential."
     }
   ]
 }
