@@ -681,6 +681,9 @@ const CONDITION_TEXT = {
 const NOT_LINKED_TEXT = 'Чтобы воспользоваться компенсацией, привяжите Telegram к своему профилю водителя: откройте «🚘 Мой автомобиль» и поделитесь номером телефона. Если автоматически привязать не получится, напишите менеджеру — он привяжет профиль вручную.';
 const PERSON_UNCONFIRMED_TEXT = 'Подать заявку пока нельзя: профиль для выплаты ещё не подтверждён в CRM. Напишите менеджеру — после подтверждения откройте этот раздел снова.';
 const TECHNICAL_FAILURE_TEXT = 'Не удалось проверить данные. Попробуйте ещё раз чуть позже 🔄';
+// The Orchestrator-approved sentence for a confirmed link the CRM holds for a
+// manager because of a merge. Pinned here, not imported.
+const MERGE_HISTORY_TEXT = 'Связь Telegram с вашим профилем водителя подтверждена. Однако для участия в программе компенсации требуется дополнительная проверка истории объединения учётных записей. Пока подать заявку нельзя. Обратитесь к менеджеру';
 // A sentence that says itself why applying is closed replaces the banner's own line.
 const SENTENCE_LINES = RESTRICTED_LINES.filter((line) => line !== 'Сейчас подать заявку нельзя.');
 
@@ -766,16 +769,76 @@ test('a linked driver the programme admits, with no person for the money yet, se
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
 });
 
-test('a CRM that still decides the person first sends the person sentence, never "not linked"', async () => {
+test('a confirmed link held for a merge is named as confirmed, and the bot links nothing', async () => {
     crm.reason = 'identity_needs_review';
     const harness = createBot();
     await press(harness);
     const text = harness.last().text;
+    // The restricted banner, then the approved sentence, which says itself that applying is closed.
     assertLines(text, SENTENCE_LINES);
-    assert.ok(text.endsWith(`\n\n${PERSON_UNCONFIRMED_TEXT}`), text);
-    assert.doesNotMatch(text, /поделитесь номером|не соответствует действующим условиям/);
+    assert.ok(text.endsWith(`\n\n${MERGE_HISTORY_TEXT}`), text);
+    assert.doesNotMatch(text, /Если Яндекс отказал в компенсации|не смог подтвердить|не подтверждён|Причина:|Что делать:|Сейчас подать заявку нельзя|поделитесь номером|не соответствует действующим условиям/);
+    assert.deepEqual(harness.buttons(), []);
+
+    // The scene is closed: an apply tap is answered as stale and asks the CRM nothing.
+    await harness.tap('comp_apply');
+    assert.match(harness.last().text, /Этот список устарел/);
     // The fake CRM throws on any action it does not know, so this is every call.
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+});
+
+test('a merge the CRM finds at a later step gets the same sentence and ends the claim', async () => {
+    for (const [step, act] of [
+        ['compensation_order_check', (harness) => harness.tap(orderData(O1))],
+        ['compensation_refresh', (harness) => harness.tap('comp_refresh')],
+        ['compensation_submit', (harness) => harness.photo('support-reply')],
+    ]) {
+        crm.reset();
+        const harness = createBot();
+        if (step === 'compensation_submit') await reachAttach(harness);
+        else await open(harness);
+        crm.laterRefusal = 'identity_needs_review';
+        await act(harness);
+        assert.equal(crm.of(step).length, 1, step);
+        assert.equal(harness.last().text, MERGE_HISTORY_TEXT, step);
+        assert.deepEqual(harness.buttons(), [], step);
+        assert.equal(crm.of('compensation_submit').length, step === 'compensation_submit' ? 1 : 0, step);
+
+        // The claim is over: nothing more reaches the CRM.
+        const before = crm.calls.length;
+        await harness.tap(orderData(O1));
+        await harness.tap('comp_support_yes');
+        await harness.photo('support-reply');
+        assert.equal(crm.calls.length, before, step);
+    }
+});
+
+test('only the merge refusal says the link is confirmed', async () => {
+    // Every other answer, an unconfirmed person included, keeps its own sentence.
+    for (const setup of [
+        () => { crm.reason = 'identity_not_proven'; },
+        () => { crm.reason = 'cash_person_unconfirmed'; },
+        () => { crm.failures.compensation_section = [409]; },
+        () => { crm.reason = 'identity_busy'; },
+        () => { crm.reason = 'selected_park_profile_unproven'; },
+        () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
+        () => { crm.laterRefusal = 'identity_not_proven'; },
+        () => { crm.laterRefusal = 'cash_person_unconfirmed'; },
+    ]) {
+        crm.reset();
+        setup();
+        const harness = createBot();
+        if (crm.laterRefusal) {
+            await open(harness);
+            await harness.tap(orderData(O1));
+        } else {
+            await press(harness);
+        }
+        assert.ok(harness.messages().length > 0);
+        for (const message of harness.messages()) {
+            assert.doesNotMatch(message.text, /подтверждена|истории объединения/, message.text);
+        }
+    }
 });
 
 test('a claim the CRM refuses for want of a person is told so, and nothing is sent again', async () => {
