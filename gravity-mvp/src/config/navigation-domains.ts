@@ -42,6 +42,14 @@ export const DOMAINS: NavigationDomain[] = [
         ]
     },
     {
+        key: 'people',
+        label: 'Люди',
+        icon: UserCheck,
+        items: [
+            { label: 'Поиск человека', href: '/contacts', icon: UserCheck, sectionKey: 'people' }
+        ]
+    },
+    {
         key: 'drivers',
         label: 'Водители',
         icon: Users,
