@@ -43,6 +43,8 @@ export async function submitMobileLoginAction(
             return { error: 'Учётная запись отключена.' }
         case 'invalid_device':
             return { error: 'Устройство не распознано. Переустановите приложение.' }
+        case 'session_active':
+            return { error: 'Сначала выйдите из текущей сессии.' }
         default:
             return { error: 'Неверный логин или пароль.' }
     }
