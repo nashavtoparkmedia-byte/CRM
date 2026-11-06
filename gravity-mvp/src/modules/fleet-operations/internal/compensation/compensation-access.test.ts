@@ -512,9 +512,12 @@ describe('determinism and isolation', () => {
             .filter((file) => !/\.test\.(ts|tsx)$/.test(file) && !s0.has(relative(root, file)))
             .filter((file) => /compensation-access['"]|compensation-referral-qualification['"]|compensation-referral-ledger['"]/.test(readFileSync(file, 'utf8')))
             .map((file) => relative(root, file))
-        // The pilot section and the referral pass decide through it; the ledger store is its storage.
+        // The pilot section and the referral pass decide through it; the manager tools show and write
+        // access through the same fold; the ledger store is its storage.
         expect([...importers].sort()).toEqual([
             'modules/fleet-operations/application/cash-referral-operations.ts',
+            'modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts',
+            'modules/fleet-operations/internal/compensation/cash-referral-manager.ts',
             'modules/fleet-operations/internal/compensation/compensation-pilot-service.ts',
             'modules/fleet-operations/internal/compensation/compensation-referral-service.ts',
             'modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-ledger-adapter.ts',
