@@ -62,6 +62,11 @@ import {
     type ContactCardConversationResolverV1,
 } from '../internal/contact-card-for-conversation'
 import { legacyPrismaContactCardSourcePortV1 } from '../internal/legacy-prisma-contact-card-source-adapter'
+import { createContactPersonCardHandlerV1 } from '../internal/contact-person-card'
+import { legacyPrismaContactPersonCardSourcePortV1 } from '../internal/legacy-prisma-contact-person-card-source-adapter'
+import { identityAccessContactPersonCardAuthorityV1 } from '../internal/identity-access-contact-person-card-authority'
+import { createSearchContactsHandlerV1 } from '../public/v1/contact-lookup'
+import { legacyPrismaContactLookupPortV1 } from '../public/v1/legacy-prisma-contact-lookup-adapter'
 import { identityAccessContactCardAuthorityV1 } from '../internal/identity-access-contact-card-authority'
 
 const resolveContact = createResolveContactHandlerV1(legacyPrismaResolveContactPortV1)
@@ -117,6 +122,20 @@ export function runDriverClusterContactOwnershipV1<T>(
     return runDriverClusterContactOwnership<T>(work)
 }
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)
+
+const readContactPersonCard = createContactPersonCardHandlerV1({
+    authority: identityAccessContactPersonCardAuthorityV1,
+    cardSource: legacyPrismaContactPersonCardSourcePortV1,
+})
+/**
+ * The ContactPersonCardQuery.v1 reader. The principal and the access decision
+ * are bound here to Identity Access; a composition only supplies the exact
+ * Contact id and renders the answer.
+ */
+export const readContactPersonCardV1 = (...args: Parameters<typeof readContactPersonCard>) => readContactPersonCard(...args)
+const searchContacts = createSearchContactsHandlerV1(legacyPrismaContactLookupPortV1)
+/** ContactLookup.v1: which Contact is this? Never whether it can be reached or messaged. */
+export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => searchContacts(...args)
 export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
 export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)
 
