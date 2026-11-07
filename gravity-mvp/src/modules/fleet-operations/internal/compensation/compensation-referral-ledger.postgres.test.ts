@@ -283,7 +283,8 @@ proof('Cash referral ledger on real PostgreSQL', () => {
         await expect(insert(unique('i'), unique('c'), 'recorded', true)).rejects.toThrow(/withdrawn_check/)
         const invitee = unique('c')
         await expect(insert(unique('i'), invitee, 'recorded', false)).resolves.toBe(1)
-        await expect(insert(unique('i'), invitee, 'recorded', false)).rejects.toThrow(/recorded_invitee_key|duplicate key/)
+        // Prisma reports a unique violation by its SQLSTATE and key, not by the index name.
+        await expect(insert(unique('i'), invitee, 'recorded', false)).rejects.toThrow(/23505|already exists|recorded_invitee_key|duplicate key/)
         await expect(insert(unique('i'), invitee, 'withdrawn', true)).resolves.toBe(1)
     })
 
@@ -333,6 +334,27 @@ proof('Cash referral ledger on real PostgreSQL', () => {
         await expect(insert('referral_link_recorded', 'system', null, null, named)).rejects.toThrow(/writer_check/)
         await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.access.manage', 'session-1', named)).rejects.toThrow(/writer_check/)
         await expect(insert('referral_link_withdrawn', 'signed_staff_session', 'cash.referral.qualify', 'session-1', '{}')).rejects.toThrow(/invitation_check/)
+        await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', '{}')).rejects.toThrow(/invitation_check/)
+        // The invitation must be a non-empty string, not a JSON null, a number or an empty string.
+        for (const payload of ['{"invitationId":null}', '{"invitationId":7}', '{"invitationId":""}']) {
+            await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', payload)).rejects.toThrow(/invitation_check/)
+        }
         await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', named)).resolves.toBe(1)
+    })
+
+    it('refuses a staff kind whose session names no capability: a CHECK must not admit unknown', async () => {
+        const insert = (kind: string, capability: string | null, payload: string) =>
+            database.$executeRawUnsafe(
+                `INSERT INTO "CashAccessEvent" ("id","chainContactId","seq","kind","lineageDigest","payload","actorKind","actorId","actorCapability","actorSessionId","actorAuthenticatedAt","reason","idempotencyKey","occurredAt","prevHash","hash")
+                 VALUES ($1,$2,1,$3,'l',$4::jsonb,'signed_staff_session','actor',$5,'session-1',now(),'Бессрочный доступ по решению менеджера',$6,now(),NULL,$7)`,
+                unique('id'), unique('contact'), kind, payload, capability, unique('key'), 'c'.repeat(64),
+            )
+        const named = JSON.stringify({ invitationId: unique('inv') })
+        for (const kind of ['manual_granted', 'manual_cleared', 'manual_denied']) {
+            await expect(insert(kind, null, '{}')).rejects.toThrow(/writer_check/)
+        }
+        await expect(insert('referral_link_recorded', null, named)).rejects.toThrow(/writer_check/)
+        await expect(insert('referral_link_withdrawn', null, named)).rejects.toThrow(/writer_check/)
+        await expect(insert('manual_granted', 'cash.access.manage', '{}')).resolves.toBe(1)
     })
 })

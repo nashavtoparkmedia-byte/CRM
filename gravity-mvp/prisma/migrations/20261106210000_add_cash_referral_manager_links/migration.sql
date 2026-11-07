@@ -77,6 +77,10 @@ ALTER TABLE "CashAccessEvent"
       'referral_link_recorded',
       'referral_link_withdrawn'
     )),
+  -- A CHECK admits a row whose expression is NULL, so every comparison on a
+  -- nullable column below is made total: a staff kind without a capability
+  -- is refused, not let through as unknown. The writer table is otherwise
+  -- the one 20261101120000 created, with the two invitation kinds added.
   DROP CONSTRAINT "CashAccessEvent_writer_check",
   ADD CONSTRAINT "CashAccessEvent_writer_check"
     CHECK (
@@ -89,6 +93,7 @@ ALTER TABLE "CashAccessEvent"
       OR (
         "kind" IN ('referral_entitlement_revoked', 'manual_granted', 'manual_denied', 'manual_cleared')
         AND "actorKind" = 'signed_staff_session'
+        AND "actorCapability" IS NOT NULL
         AND "actorCapability" = 'cash.access.manage'
         AND "actorSessionId" IS NOT NULL
         AND "actorAuthenticatedAt" IS NOT NULL
@@ -98,6 +103,7 @@ ALTER TABLE "CashAccessEvent"
       OR (
         "kind" IN ('referral_sanctioned', 'referral_link_recorded', 'referral_link_withdrawn')
         AND "actorKind" = 'signed_staff_session'
+        AND "actorCapability" IS NOT NULL
         AND "actorCapability" = 'cash.referral.qualify'
         AND "actorSessionId" IS NOT NULL
         AND "actorAuthenticatedAt" IS NOT NULL
@@ -109,7 +115,7 @@ ALTER TABLE "CashAccessEvent"
   ADD CONSTRAINT "CashAccessEvent_invitation_check"
     CHECK (
       "kind" NOT IN ('referral_link_recorded', 'referral_link_withdrawn')
-      OR (jsonb_typeof("payload" -> 'invitationId') = 'string' AND char_length("payload" ->> 'invitationId') > 0)
+      OR COALESCE(jsonb_typeof("payload" -> 'invitationId') = 'string' AND char_length("payload" ->> 'invitationId') > 0, false)
     );
 
 COMMIT;

@@ -204,8 +204,8 @@
     {
       "name": "20261106210000_add_cash_referral_manager_links",
       "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-      "sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-      "size": 4973,
+      "sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+      "size": 5374,
       "owner_context": "fleet_operations",
       "classification": "EXPAND_ONLY",
       "production_application": false,

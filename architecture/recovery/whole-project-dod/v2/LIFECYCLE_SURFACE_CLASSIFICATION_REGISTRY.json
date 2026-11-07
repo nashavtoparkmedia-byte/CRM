@@ -6740,7 +6740,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned Cash referral schema (one new table for the invitations a manager records, with its constraints and indexes) and widens the admitted kinds, writers and payload rule of the existing Fleet Operations-owned CashAccessEvent ledger, inside one explicit transaction through controlled migration tooling; it names no table outside the Cash referral tables, adds no column to an existing table, changes no existing row and carries no data statement or backfill; it stores no credential, token, provider identifier or monetary amount; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
-      "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10"
+      "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183"
     }
   ]
 }
