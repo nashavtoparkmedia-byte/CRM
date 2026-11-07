@@ -960,6 +960,12 @@ effect in `Call.metadata.aiCallCampaignLiveDialV1` through the namespace-agnosti
 accepted | rejected | outcome_unknown`, compare-and-set, `dispatch_started`
 committed before the originate. Past `prepared` a launch never originates again;
 recovery reads the deterministic fsUuid and the `Call`'s provider-written facts.
+Before `T1` the live adapter reads the member Contact's voice permission fresh
+through `contacts.ContactCommunicationPermissionQuery.v1`
+(`getContactCommunicationPermissionV1`, class `voice`): a refusal creates no `Call`
+and sends nothing (`voice_restricted` permanent, `voice_permission_unavailable`
+retryable), and a `driver` or `external` target, which carries no Contact identity,
+is refused permanently (`voice_permission_unverifiable`).
 The live port is not selected yet: `application/ai-call-campaign-runtime-startup.ts`
 wires only the simulated port, any other `AI_CALL_CAMPAIGN_RUNTIME_MODE` resolves
 to `unsupported_live`, and `inspectAiCallCampaignLiveReadiness` also requires
