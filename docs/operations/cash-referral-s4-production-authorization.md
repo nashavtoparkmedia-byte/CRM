@@ -29,7 +29,7 @@ The Owner opens the CRM and:
 | # | Gate | Owner of the gate | State on 2026-11-07 |
 |---|---|---|---|
 | G0 | **Which host is production, and in what state.** `yokoone.ru` is understood to point at the Beget host, whose status the Owner has not established. If production is that host with an unknown status, rotate **every** class C secret in `docs/SECRETS.md` before the window, not only `ADMIN_PASS`. If production was rebuilt, the new host needs a Security perimeter admission. | **Owner**, with Security | Open. |
-| G1 | PR #198 (S4) merged into MAIN through Orchestrator admission. Hosted CI must be green on the exact head, and Security PASS, including the C1 delta. | Orchestrator | CI on `bbb3a5d7` in progress. Security: PASS WITH CONDITIONS; C1 is fixed in `b665bd09` and awaits delta confirmation. Waits for Calling #203, which has priority, then a mechanical governance regen. |
+| G1 | PR #198 (S4) merged into MAIN through Orchestrator admission. Hosted CI must be green on the exact head, and Security PASS, including the C1 delta. | Orchestrator | Security: PASS on `50250db2` / `eb5b508a` (C1 and N1 closed; C2 and P1 belong to the wiring and to production). Hosted CI `42386134400` on `bbb3a5d7` was SUCCESS; `42405313167` runs on `eb5b508a`. The full Heavy pass on `eb5b508a` is 26/26. Waits for Calling #203, which has priority, then a mechanical governance regen. |
 | G2 | PR #196 (bot wording for a merge-held confirmed link) merged. CASH PILOT requires it before referral access is activated. | Orchestrator | CI SUCCESS on `104e38dc`. Local re-check on current main passes (tg-bot 159/159, pilot 147/147, security 34/34). Waits for the integration slot after #203. |
 | G3 | Identity Access implements `getIntegrationAdminSessionFactsV1()` and `sid` in the signed integration-admin session (contract `docs/design/cash-staff-authority-v1.md`, parts 1–2), with an independent Security review. | Identity Access owner, named by the Orchestrator or Owner | **Not started; no owner named.** Security recommends the `identity_access` owner who also decides Staff Session v1.2 (#200), so the payload format changes once. |
 | G4 | Cash wiring: the 2 lines in `resolveCashStaffAuthorityV1`, the C2 source control (allowlist of the four write callers and the binder, and no `authority` literal outside the binder), and negative proofs, all merged. | Cash executor | Ready to do as soon as G3 lands. |
@@ -107,6 +107,7 @@ Each numbered step is **Owner GO** unless marked otherwise.
 4. **Migrations (S1 then S4)**, through a deploy of the admitted MAIN commit **for the application services only**. The image's `migrate deploy` applies the migrations in name order.
    - Name the services: `TARGET_SERVICES` lists the application services (gravity-mvp, and tg-bot for #196) and **never nginx**. nginx is not recreated.
    - The production nginx template is never replaced by MAIN's. What happens to `deploy/nginx/templates` in the checkout after `git pull` is decided beforehand, from D5.
+   - The decision made from D5 must keep the production template as what nginx renders after the window too, including on an automatic certificate-renewal reload; after the first such reload, `verify-gate.sh post` and P0 `live` are run again.
    - **Right after the deploy**, before step 5 and before any nginx reload, run `verify-gate.sh post` and the P0 checker's `live`. Both only read. Anything other than PASS / HOLDS: stop, and roll back the code.
    - Converging MAIN's nginx template with production is a separate change, owned by Security. It is not part of this window.
    - Each migration is one transaction; a failed one rolls back its DDL. Run `prisma migrate resolve --rolled-back <name>` before any retry.
@@ -136,7 +137,7 @@ Each numbered step is **Owner GO** unless marked otherwise.
 Rollback is cheapest first; every step is reversible without data loss.
 - **Flag off.** Set `YOKO_CASH_ACCESS_LEDGER` off and restart gravity-mvp. Cash stops reading the ledger: grants and revocations stop having any effect, the bot falls back to the standard first-month programme, and the referral screens refuse with `disabled`. The ledger rows stay.
 - **Gate map.** `rollback-gate.sh <backup>` restores the one backup `apply-gate.sh` made, and only if that backup keeps P0.
-- **Code.** Roll back the image and keep the additive tables (`ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES` in the pending-migration registry). There is no destructive schema rollback.
+- **Code.** Roll back the image of the application services only, never nginx, and keep the additive tables (`ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES` in the pending-migration registry). After the rollback, run `verify-gate.sh post` and P0 `live` again. There is no destructive schema rollback.
 - **A wrong grant** is corrected in the product by a revoke (`manual_cleared`). The ledger is append-only and hash-chained, so nothing is deleted.
 
 ## 5. Owner acceptance script
