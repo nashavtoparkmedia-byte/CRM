@@ -178,6 +178,7 @@
     },
     {
       "capabilities": [
+        "ContactCardForConversationQuery.v1",
         "ContactCommunicationPermissionQuery.v1",
         "ContactDisplayPolicy.v1",
         "ContactIdentityMaintenance.v1",

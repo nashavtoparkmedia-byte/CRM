@@ -79,6 +79,8 @@ export {
     resolveContactV1,
     setContactDisplayNameV1,
     getContactCommunicationPermissionV1,
+    createContactCardForConversationReaderV1,
+    type ContactCardConversationResolverV1,
 } from '../../application/contact-operations'
 // ContactCommunicationPermissionQuery.v1 is the only communication-policy
 // surface other contexts may reach. The mutation (setContactCommunicationPolicyV1,
