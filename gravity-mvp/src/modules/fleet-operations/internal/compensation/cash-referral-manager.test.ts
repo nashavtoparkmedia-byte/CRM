@@ -11,10 +11,15 @@ import {
 } from './compensation-referral-ledger'
 import {
     CASH_ACCESS_GRANT_CAPABILITY_V1,
+    CASH_ADMIN_OPERATOR_LABEL_V1,
     CASH_REFERRAL_LINK_CAPABILITY_V1,
     cashAccessManagerViewV1,
+    cashReferralContactLookupsV1,
     cashReferralRequestIdValidV1,
+    cashStaffActorV1,
     cashStaffAuthorityAdmitsV1,
+    cashStaffAuthorityForV1,
+    cashStaffAuthorityFromAdminSessionV1,
     decideCashAccessGrantV1,
     decideCashAccessRevokeV1,
     decideCashReferralLinkV1,
@@ -103,14 +108,15 @@ function invitation(over: Partial<CashReferralInvitationRowV1>): CashReferralInv
 
 describe('search query', () => {
     it('reads a name, a phone and a licence, and refuses a query that names nobody', () => {
-        expect(parseCashReferralManagerQueryV1('Иванов  Иван')).toEqual({ ok: true, query: { nameTokens: ['иванов', 'иван'], phoneDigits: null, licence: null } })
+        expect(parseCashReferralManagerQueryV1('Иванов  Иван')).toEqual({ ok: true, query: { nameTokens: ['Иванов', 'Иван'], phoneDigits: null, licence: null } })
         expect(parseCashReferralManagerQueryV1('+7 (922) 185-31-50')).toEqual({ ok: true, query: { nameTokens: [], phoneDigits: '9221853150', licence: '79221853150' } })
         // Ten digits are tried as a phone and as a licence alike.
         expect(parseCashReferralManagerQueryV1('9912 345678')).toEqual({ ok: true, query: { nameTokens: [], phoneDigits: '9912345678', licence: '9912345678' } })
-        expect(parseCashReferralManagerQueryV1('77 АВ 123456')).toMatchObject({ ok: true, query: { licence: '77АВ123456' } })
+        expect(parseCashReferralManagerQueryV1('77 АВ 123456')).toEqual({ ok: true, query: { nameTokens: [], phoneDigits: null, licence: '77АВ123456' } })
+        expect(parseCashReferralManagerQueryV1('77ав123456')).toEqual({ ok: true, query: { nameTokens: [], phoneDigits: null, licence: '77АВ123456' } })
         // Initials drop out instead of fusing into a word, and a phone beside a name still counts.
-        expect(parseCashReferralManagerQueryV1('Иванов И.И.')).toEqual({ ok: true, query: { nameTokens: ['иванов'], phoneDigits: null, licence: null } })
-        expect(parseCashReferralManagerQueryV1('Иванов 922 185 31 50')).toMatchObject({ ok: true, query: { nameTokens: ['иванов'], phoneDigits: '9221853150' } })
+        expect(parseCashReferralManagerQueryV1('Иванов И.И.')).toEqual({ ok: true, query: { nameTokens: ['Иванов'], phoneDigits: null, licence: null } })
+        expect(parseCashReferralManagerQueryV1('Иванов 922 185 31 50')).toMatchObject({ ok: true, query: { nameTokens: ['Иванов'], phoneDigits: '9221853150' } })
         expect(parseCashReferralManagerQueryV1('И')).toEqual({ ok: false, refusal: 'query_too_short' })
         expect(parseCashReferralManagerQueryV1('12')).toEqual({ ok: false, refusal: 'query_too_short' })
         expect(parseCashReferralManagerQueryV1('я'.repeat(101))).toEqual({ ok: false, refusal: 'query_too_long' })
@@ -123,7 +129,8 @@ describe('people from search hits', () => {
         const hit = profile({ driverId: 'd1', contactId: 'contact-A' })
         const other = profile({ driverId: 'd2', contactId: 'contact-A2', parkName: 'Парк 2', dismissed: true })
         const candidates = groupCashReferralCandidatesV1(
-            [{ profile: hit, matchedBy: ['name'] }],
+            [],
+            [{ profile: hit, matchedBy: ['licence'] }],
             new Map([['contact-A', { status: 'resolved' as const, canonicalContactId: 'contact-A', contactIds: ['contact-A', 'contact-A2'] }]]),
             new Map([['contact-A', [hit, other]]]),
         )
@@ -138,7 +145,8 @@ describe('people from search hits', () => {
         const orphan = profile({ driverId: 'd3', contactId: null })
         const unresolved = profile({ driverId: 'd4', contactId: 'contact-X' })
         const candidates = groupCashReferralCandidatesV1(
-            [first, second, orphan, unresolved].map((p) => ({ profile: p, matchedBy: ['name' as const] })),
+            [],
+            [first, second, orphan, unresolved].map((p) => ({ profile: p, matchedBy: ['licence' as const] })),
             new Map([
                 ['contact-A', { status: 'resolved' as const, canonicalContactId: 'contact-A', contactIds: ['contact-A'] }],
                 ['contact-B', { status: 'resolved' as const, canonicalContactId: 'contact-B', contactIds: ['contact-B'] }],
@@ -148,6 +156,94 @@ describe('people from search hits', () => {
         )
         expect(candidates.filter((c) => c.selectable).map((c) => c.selectable && c.personContactId)).toEqual(['contact-A', 'contact-B'])
         expect(candidates.filter((c) => !c.selectable).map((c) => !c.selectable && c.reason)).toEqual(['no_contact', 'contact_unresolved'])
+    })
+
+    it('makes one person of what Contacts found and what a licence found, named by a profile before Contacts\' title', () => {
+        const licenced = profile({ driverId: 'd1', contactId: 'contact-A2', fullName: 'Иванов Иван Иванович' })
+        const candidates = groupCashReferralCandidatesV1(
+            [{ contactId: 'contact-A', displayTitle: 'Ваня', matchedBy: ['phone'] }],
+            [{ profile: licenced, matchedBy: ['licence'] }],
+            new Map([
+                ['contact-A', { status: 'resolved' as const, canonicalContactId: 'contact-A', contactIds: ['contact-A', 'contact-A2'] }],
+                ['contact-A2', { status: 'resolved' as const, canonicalContactId: 'contact-A', contactIds: ['contact-A', 'contact-A2'] }],
+            ]),
+            new Map([['contact-A', [licenced]]]),
+        )
+        expect(candidates).toEqual([expect.objectContaining({
+            selectable: true, personContactId: 'contact-A', displayName: 'Иванов Иван Иванович', matchedBy: ['phone', 'licence'],
+        })])
+    })
+
+    it('names a person with no profile by Contacts\' title, and never offers a contact Contacts cannot resolve', () => {
+        const candidates = groupCashReferralCandidatesV1(
+            [
+                { contactId: 'contact-T', displayTitle: 'Тарасов Олег', matchedBy: ['name'] },
+                { contactId: 'contact-R', displayTitle: 'Романов', matchedBy: ['name'] },
+            ],
+            [],
+            new Map([
+                ['contact-T', { status: 'resolved' as const, canonicalContactId: 'contact-T', contactIds: ['contact-T'] }],
+                ['contact-R', { status: 'unresolvable' as const }],
+            ]),
+            new Map(),
+        )
+        expect(candidates).toEqual([
+            expect.objectContaining({ selectable: true, personContactId: 'contact-T', displayName: 'Тарасов Олег', profiles: [] }),
+            expect.objectContaining({ selectable: false, reason: 'contact_unresolved', displayName: 'Романов', profiles: [] }),
+        ])
+    })
+})
+
+describe('what Cash asks ContactLookup.v1', () => {
+    it('asks the name as one text and the phone as its last ten digits; a licence is not asked of Contacts', () => {
+        const ask = (raw: string) => {
+            const parsed = parseCashReferralManagerQueryV1(raw)
+            if (!parsed.ok) throw new Error(parsed.refusal)
+            return cashReferralContactLookupsV1(parsed.query)
+        }
+        expect(ask('Иванов Иван')).toEqual([{ query: 'Иванов Иван', match: 'name' }])
+        expect(ask('+7 916 123-45-67')).toEqual([{ query: '9161234567', match: 'phone' }])
+        expect(ask('Иванов 8 916 123 45 67')).toEqual([{ query: 'Иванов', match: 'name' }, { query: '9161234567', match: 'phone' }])
+        expect(ask('77 АВ 123456')).toEqual([])
+    })
+})
+
+describe('the Cash capabilities of the verified integration-admin session', () => {
+    const facts = {
+        principal: { id: 'identity-access:integration-admin-session', kind: 'integration_admin_session' },
+        sessionId: 'sid-binding-1',
+        authenticatedAt: new Date('2026-11-07T08:00:00.000Z'),
+    }
+
+    it('binds exactly the two Cash capabilities to the session, labelled as the CRM manager', () => {
+        const authority = cashStaffAuthorityFromAdminSessionV1(facts)
+        expect(authority).toEqual({
+            principalId: 'identity-access:integration-admin-session',
+            operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1,
+            sessionId: 'sid-binding-1',
+            authenticatedAt: facts.authenticatedAt,
+            capabilities: [CASH_REFERRAL_LINK_CAPABILITY_V1, CASH_ACCESS_GRANT_CAPABILITY_V1],
+        })
+        const at = new Date('2026-11-07T09:00:00.000Z')
+        expect(cashStaffAuthorityForV1(authority!, 'invitation', at)).toEqual({ admitted: true })
+        expect(cashStaffAuthorityForV1(authority!, 'access', at)).toEqual({ admitted: true })
+        expect(cashStaffActorV1(authority!, 'access')).toEqual({
+            kind: 'signed_staff_session',
+            id: 'identity-access:integration-admin-session',
+            capability: 'cash.access.manage',
+            sessionId: 'sid-binding-1',
+            authenticatedAt: facts.authenticatedAt,
+        })
+    })
+
+    it('binds nothing without well-formed facts of that principal kind', () => {
+        expect(cashStaffAuthorityFromAdminSessionV1(null)).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1(undefined)).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, principal: { ...facts.principal, kind: 'mobile_session' } })).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, principal: { ...facts.principal, id: ' ' } })).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, sessionId: '' })).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, authenticatedAt: new Date('not a date') })).toBeNull()
+        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, authenticatedAt: '2026-11-07T08:00:00.000Z' as unknown as Date })).toBeNull()
     })
 })
 

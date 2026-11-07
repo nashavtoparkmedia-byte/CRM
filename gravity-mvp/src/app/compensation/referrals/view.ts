@@ -126,7 +126,7 @@ export const CASH_IDENTITY_LABELS: Record<ReferralPersonView['cashIdentity'], st
 
 export const UNSELECTABLE_LABELS: Record<string, string> = {
     no_contact: 'Профиль не привязан к контакту — выбрать нельзя',
-    contact_unresolved: 'Контакт профиля не определён — выбрать нельзя',
+    contact_unresolved: 'Контакт не определён — выбрать нельзя',
 }
 
 /** Every refusal the backend gives, in the words a manager reads. */
@@ -136,6 +136,7 @@ export const REFUSAL_LABELS: Record<string, string> = {
     user_disabled: 'Учётная запись отключена.',
     user_identity_incomplete: 'Не удалось определить пользователя.',
     role_not_allowed: 'Раздел доступен менеджерам, руководителям и администраторам.',
+    admin_session_required: 'Поиск людей доступен после входа администратора CRM.',
     query_too_short: 'Введите ФИО, телефон (от 7 цифр) или номер ВУ.',
     query_too_long: 'Слишком длинный запрос.',
     person_unresolved: 'Водитель не найден в контактах.',

@@ -3,8 +3,9 @@
  *
  * Profiles are Fleet's own Driver rows; park names come to the service from
  * the park metadata capability, never from a connection row read here. Who a
- * profile's person is comes from Contacts through its public lineage and
- * confirmation reads only; Contacts tables are never read here.
+ * person is comes from Contacts through its public capabilities only: who a
+ * name or a phone belongs to (ContactLookup.v1), a contact's lineage and its
+ * confirmations. Contacts tables are never read here.
  *
  * Each statement below is written out in full, so the analyzer reads it end
  * to end as a read of one named table.
@@ -15,15 +16,12 @@ import {
     contactOwnershipBusyResultV1,
     isContactConfirmedMainDriverV1,
     resolveContactLineageV1,
+    searchContactsV1,
 } from '@/modules/contacts/public/v1'
 
 import {
-    cashReferralLicenceKeyV1,
     type CashReferralLineageReadV1,
-    type CashReferralManagerHitV1,
     type CashReferralManagerProfileV1,
-    type CashReferralManagerQueryV1,
-    type CashReferralMatchV1,
 } from './cash-referral-manager'
 
 interface ProfileRow {
@@ -54,43 +52,32 @@ function toProfileV1(row: ProfileRow): CashReferralManagerProfileV1 {
     }
 }
 
-/** Names compare without case and with ё as е, the way managers type them. */
-function nameKeyV1(text: string): string {
-    return text.toLowerCase().replace(/ё/gu, 'е')
-}
-
-function matchesOfV1(profile: CashReferralManagerProfileV1, query: CashReferralManagerQueryV1): CashReferralMatchV1[] {
-    const matched: CashReferralMatchV1[] = []
-    const name = nameKeyV1(profile.fullName)
-    if (query.nameTokens.length > 0 && query.nameTokens.every((token) => name.includes(nameKeyV1(token)))) matched.push('name')
-    if (query.phoneDigits !== null && (profile.phone ?? '').replace(/\D/gu, '').endsWith(query.phoneDigits)) matched.push('phone')
-    if (query.licence !== null && cashReferralLicenceKeyV1(profile.licenseNumber) === query.licence) matched.push('licence')
-    return matched
-}
-
 export const legacyPrismaCashReferralManagerReadsV1 = {
     /**
-     * Profiles whose name holds every typed word, whose phone ends in the
-     * typed digits, or whose licence is the typed one. Each hit says which.
+     * Who a name or a phone belongs to, as Contacts answers it for every
+     * module: live canonical Contacts only, in ContactLookup.v1's own order.
      */
-    async searchProfiles(query: CashReferralManagerQueryV1, limit: number): Promise<CashReferralManagerHitV1[]> {
-        // Name words hold letters and hyphens only, so they carry no LIKE wildcard of their own.
-        const patterns = query.nameTokens.map((token) => `%${nameKeyV1(token)}%`)
+    async lookupContacts(query: string, limit: number): Promise<{ contacts: { contactId: string; displayTitle: string }[]; truncated: boolean }> {
+        const result = await searchContactsV1({ query, limit })
+        return {
+            contacts: result.items.map((item) => ({ contactId: item.contactId, displayTitle: item.displayTitle })),
+            truncated: result.truncated,
+        }
+    },
+
+    /** Profiles whose licence, as letters and digits only, is the typed one. */
+    async searchProfilesByLicence(licence: string, limit: number): Promise<CashReferralManagerProfileV1[]> {
         const rows = await prisma.$queryRawUnsafe<ProfileRow[]>(
             `SELECT d."id", d."fullName", d."phone", d."licenseNumber", d."externalParkId", d."contactId",
                     d."dismissedAt", d."isSelfEmployed", d."employmentType"
              FROM "Driver" d
-             WHERE (cardinality($1::text[]) > 0 AND translate(lower(coalesce(d."fullName", '')), 'ё', 'е') LIKE ALL ($1::text[]))
-                OR ($2::text IS NOT NULL AND right(regexp_replace(coalesce(d."phone", ''), '[^0-9]', '', 'g'), length($2::text)) = $2::text)
-                OR ($3::text IS NOT NULL AND upper(regexp_replace(coalesce(d."licenseNumber", ''), '[^0-9A-Za-zА-Яа-яЁё]', '', 'g')) = $3::text)
+             WHERE upper(regexp_replace(coalesce(d."licenseNumber", ''), '[^0-9A-Za-zА-Яа-яЁё]', '', 'g')) = $1::text
              ORDER BY d."fullName" ASC, d."id" ASC
-             LIMIT $4`,
-            patterns,
-            query.phoneDigits,
-            query.licence,
+             LIMIT $2`,
+            licence,
             limit,
         )
-        return rows.map(toProfileV1).map((profile) => ({ profile, matchedBy: matchesOfV1(profile, query) }))
+        return rows.map(toProfileV1)
     },
 
     /** Every profile Fleet projects to one of these contacts. */

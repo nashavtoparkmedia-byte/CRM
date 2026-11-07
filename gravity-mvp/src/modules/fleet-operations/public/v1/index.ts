@@ -156,8 +156,10 @@ export {
   cashReferralManagerRecordInvitationV1,
   cashReferralManagerSearchV1,
   cashReferralManagerWithdrawInvitationV1,
+  cashStaffAuthorityFromAdminSessionV1,
 } from '../../application/cash-referral-manager-operations'
 export type {
+  CashAdminSessionFactsV1,
   CashAccessGrantBasisV1,
   CashAccessGrantResultV1,
   CashAccessHistoryEntryV1,

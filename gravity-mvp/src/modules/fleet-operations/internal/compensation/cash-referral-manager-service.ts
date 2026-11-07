@@ -17,6 +17,7 @@ import type { CashAccessEventDraftV1, CashAccessStaffActorDraftV1 } from './lega
 import type { CashAccessEventV1, CashAccessJsonV1 } from './compensation-referral-ledger'
 import {
     cashAccessManagerViewV1,
+    cashReferralContactLookupsV1,
     cashReferralDisplayNameV1,
     cashReferralLicenceKeyV1,
     cashReferralLinkReasonV1,
@@ -32,24 +33,30 @@ import {
     parseCashReferralManagerQueryV1,
     type CashAccessGrantBasisV1,
     type CashAccessManagerViewV1,
+    type CashReferralContactHitV1,
     type CashReferralInvitationRowV1,
     type CashReferralLineageReadV1,
     type CashReferralManagerCandidateV1,
-    type CashReferralManagerHitV1,
     type CashReferralManagerProfileV1,
-    type CashReferralManagerQueryV1,
+    type CashReferralMatchV1,
     type CashStaffAuthorityRefusalV1,
     type CashStaffPurposeV1,
     type CashStaffAuthorityV1,
 } from './cash-referral-manager'
 
+/** At most this many profiles found by one licence. */
 export const CASH_REFERRAL_MANAGER_SEARCH_ROWS_V1 = 60
+/** Asked of ContactLookup.v1 per lookup; Contacts clamps it to its own bounds. */
+export const CASH_REFERRAL_MANAGER_LOOKUP_LIMIT_V1 = 20
 
 export interface CashReferralManagerPortV1 {
     now(): Date
     /** Each park's display name, from the park metadata; no credential. */
     parkNames(): Promise<ReadonlyMap<string, string>>
-    searchProfiles(query: CashReferralManagerQueryV1, limit: number): Promise<CashReferralManagerHitV1[]>
+    /** Contacts' ContactLookup.v1: live Contacts matching a name or a phone, in its own order. */
+    lookupContacts(query: string, limit: number): Promise<{ contacts: readonly { contactId: string; displayTitle: string }[]; truncated: boolean }>
+    /** Fleet's own profiles whose licence is this one. */
+    searchProfilesByLicence(licence: string, limit: number): Promise<CashReferralManagerProfileV1[]>
     profilesOfContacts(contactIds: readonly string[]): Promise<CashReferralManagerProfileV1[]>
     resolveLineage(contactId: string): Promise<CashReferralLineageReadV1>
     confirmedMainDriver(contactId: string, driverIds: readonly string[]): Promise<{ status: 'confirmed'; driverId: string } | { status: 'not_confirmed' | 'busy' }>
@@ -96,12 +103,34 @@ export type CashReferralManagerSearchV1 =
 export async function searchCashReferralPeopleV1(port: CashReferralManagerPortV1, raw: unknown): Promise<CashReferralManagerSearchV1> {
     const parsed = parseCashReferralManagerQueryV1(raw)
     if (!parsed.ok) return { status: 'refused', reason: parsed.refusal }
-    const names = await port.parkNames()
-    const hits = (await port.searchProfiles(parsed.query, CASH_REFERRAL_MANAGER_SEARCH_ROWS_V1))
-        .map((hit) => ({ ...hit, profile: namedV1([hit.profile], names)[0] }))
-    const lineages = new Map<string, CashReferralLineageReadV1>()
-    const contactIds = [...new Set(hits.flatMap((hit) => (hit.profile.contactId === null ? [] : [hit.profile.contactId])))]
+    const { licence } = parsed.query
+    const [names, lookups, licenceProfiles] = await Promise.all([
+        port.parkNames(),
+        Promise.all(cashReferralContactLookupsV1(parsed.query).map(async (lookup) => ({
+            match: lookup.match,
+            result: await port.lookupContacts(lookup.query, CASH_REFERRAL_MANAGER_LOOKUP_LIMIT_V1),
+        }))),
+        licence === null ? Promise.resolve([]) : port.searchProfilesByLicence(licence, CASH_REFERRAL_MANAGER_SEARCH_ROWS_V1),
+    ])
+
+    const found = new Map<string, { displayTitle: string; matchedBy: Set<CashReferralMatchV1> }>()
+    for (const lookup of lookups) {
+        for (const contact of lookup.result.contacts) {
+            const entry = found.get(contact.contactId) ?? { displayTitle: contact.displayTitle, matchedBy: new Set<CashReferralMatchV1>() }
+            entry.matchedBy.add(lookup.match)
+            found.set(contact.contactId, entry)
+        }
+    }
+    const contactHits: CashReferralContactHitV1[] = [...found.entries()]
+        .map(([contactId, entry]) => ({ contactId, displayTitle: entry.displayTitle, matchedBy: [...entry.matchedBy] }))
+    const hits = namedV1(licenceProfiles, names).map((profile) => ({ profile, matchedBy: ['licence' as const] }))
+
+    const contactIds = [...new Set([
+        ...contactHits.map((hit) => hit.contactId),
+        ...hits.flatMap((hit) => (hit.profile.contactId === null ? [] : [hit.profile.contactId])),
+    ])]
     const reads = await Promise.all(contactIds.map((contactId) => port.resolveLineage(contactId)))
+    const lineages = new Map<string, CashReferralLineageReadV1>()
     contactIds.forEach((contactId, index) => lineages.set(contactId, reads[index]))
     const lineageOf = new Map<string, readonly string[]>()
     for (const read of lineages.values()) {
@@ -115,8 +144,8 @@ export async function searchCashReferralPeopleV1(port: CashReferralManagerPortV1
     }
     return {
         status: 'ok',
-        candidates: groupCashReferralCandidatesV1(hits, lineages, profilesOf),
-        truncated: hits.length >= CASH_REFERRAL_MANAGER_SEARCH_ROWS_V1,
+        candidates: groupCashReferralCandidatesV1(contactHits, hits, lineages, profilesOf),
+        truncated: lookups.some((lookup) => lookup.result.truncated) || licenceProfiles.length >= CASH_REFERRAL_MANAGER_SEARCH_ROWS_V1,
     }
 }
 

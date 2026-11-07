@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import { cashAccessEventHashV1, foldCashAccessLedgerV1, verifyCashAccessChainV1, type CashAccessEventV1 } from './compensation-referral-ledger'
-import type { CashReferralInvitationRowV1, CashReferralManagerProfileV1, CashStaffAuthorityV1 } from './cash-referral-manager'
+import { cashReferralLicenceKeyV1, type CashReferralInvitationRowV1, type CashReferralManagerProfileV1, type CashStaffAuthorityV1 } from './cash-referral-manager'
 import {
     cashReferralPersonCardV1,
     grantCashAccessV1,
@@ -52,6 +52,9 @@ function profile(driverId: string, contactId: string, fullName: string, over: Pa
 
 class MemoryStore {
     profiles: CashReferralManagerProfileV1[] = []
+    /** What ContactLookup.v1 searches: live Contacts, their name and their stored phone digits. */
+    contacts: Array<{ contactId: string; displayTitle: string; phones: string[] }> = []
+    lookups: string[] = []
     lineages = new Map<string, string[]>()
     events: CashAccessEventV1[] = []
     rows: CashReferralInvitationRowV1[] = []
@@ -89,9 +92,15 @@ class MemoryStore {
         return {
             now: () => NOW,
             parkNames: async () => new Map([['park-1', 'Парк 1'], ['park-2', 'Парк 2']]),
-            searchProfiles: async (query) => this.profiles
-                .filter((p) => query.nameTokens.length > 0 && query.nameTokens.every((token) => p.fullName.toLowerCase().includes(token)))
-                .map((p) => ({ profile: p, matchedBy: ['name' as const] })),
+            lookupContacts: async (query, limit) => {
+                this.lookups.push(query)
+                const phone = /^\d+$/u.test(query)
+                const found = this.contacts.filter((c) => (phone
+                    ? c.phones.some((stored) => stored.includes(query))
+                    : c.displayTitle.toLowerCase().includes(query.toLowerCase())))
+                return { contacts: found.slice(0, limit).map(({ contactId, displayTitle }) => ({ contactId, displayTitle })), truncated: found.length > limit }
+            },
+            searchProfilesByLicence: async (licence) => this.profiles.filter((p) => cashReferralLicenceKeyV1(p.licenseNumber) === licence),
             profilesOfContacts: async (ids) => this.profiles.filter((p) => p.contactId !== null && ids.includes(p.contactId)),
             resolveLineage: async (contactId) => {
                 for (const [canonical, lineage] of this.lineages) {
@@ -161,6 +170,12 @@ beforeEach(() => {
         profile('d-petrov', 'contact-P', 'Петров Алексей', { licenseNumber: '9900 222222' }),
         profile('d-ivanov-namesake', 'contact-N', 'Иванов Иван Сергеевич', { licenseNumber: '9900 333333' }),
     ]
+    store.contacts = [
+        { contactId: 'contact-A', displayTitle: 'Иванов Иван Иванович', phones: ['79161234567'] },
+        { contactId: 'contact-B', displayTitle: 'Сидоров Сергей Петрович', phones: ['79260000001'] },
+        { contactId: 'contact-P', displayTitle: 'Петров Алексей', phones: ['79260000002'] },
+        { contactId: 'contact-N', displayTitle: 'Иванов Иван Сергеевич', phones: ['79260000003'] },
+    ]
     store.lineages = new Map([
         ['contact-A', ['contact-A']],
         ['contact-B', ['contact-B']],
@@ -185,6 +200,54 @@ describe('scenario A: recording an invitation', () => {
         const ivanov = people.find((c) => c.selectable && c.personContactId === 'contact-A')
         expect(ivanov?.profiles.map((p) => p.parkName)).toEqual(['Парк 1', 'Парк 2'])
         expect(await searchCashReferralPeopleV1(port, 'Кузьмин')).toEqual({ status: 'ok', candidates: [], truncated: false })
+    })
+
+    it('asks Contacts who a name or a phone is, the phone as its last ten digits whatever prefix was typed', async () => {
+        const byPhone = await searchCashReferralPeopleV1(port, '8 (916) 123-45-67')
+        expect(store.lookups).toEqual(['9161234567'])
+        expect(byPhone).toMatchObject({ status: 'ok', candidates: [{ selectable: true, personContactId: 'contact-A', matchedBy: ['phone'] }] })
+
+        store.lookups = []
+        await searchCashReferralPeopleV1(port, 'Иванов И.И.')
+        expect(store.lookups).toEqual(['Иванов'])
+    })
+
+    it('finds a person by the licence Fleet holds, and shows a profile with no contact without letting it be chosen', async () => {
+        store.profiles.push(profile('d-loose', 'contact-none', 'Кузьмин Олег', { contactId: null, licenseNumber: '7700 555555' }))
+        const byLicence = await searchCashReferralPeopleV1(port, '9912 345678')
+        expect(byLicence).toMatchObject({ status: 'ok' })
+        if (byLicence.status !== 'ok') return
+        // The ten digits are asked of Contacts as a phone too; only the licence matched.
+        expect(byLicence.candidates).toEqual([expect.objectContaining({ selectable: true, personContactId: 'contact-A', matchedBy: ['licence'] })])
+        expect(byLicence.candidates[0].profiles).toHaveLength(2)
+
+        const loose = await searchCashReferralPeopleV1(port, '7700555555')
+        expect(loose).toMatchObject({ status: 'ok', candidates: [{ selectable: false, reason: 'no_contact', displayName: 'Кузьмин Олег', matchedBy: ['licence'] }] })
+    })
+
+    it('is one person when Contacts finds the digits as a phone and Fleet as a licence', async () => {
+        store.contacts.find((c) => c.contactId === 'contact-B')!.phones.push('79900111111')
+        const both = await searchCashReferralPeopleV1(port, '9900 111111')
+        expect(both).toMatchObject({ status: 'ok' })
+        if (both.status !== 'ok') return
+        expect(both.candidates).toHaveLength(1)
+        expect(both.candidates[0]).toMatchObject({ selectable: true, personContactId: 'contact-B' })
+        expect([...both.candidates[0].matchedBy].sort()).toEqual(['licence', 'phone'])
+    })
+
+    it('names a person who has no park profile by the title Contacts shows', async () => {
+        store.contacts.push({ contactId: 'contact-T', displayTitle: 'Тарасов Олег', phones: [] })
+        store.lineages.set('contact-T', ['contact-T'])
+        const found = await searchCashReferralPeopleV1(port, 'Тарасов')
+        expect(found).toMatchObject({ status: 'ok', candidates: [{ selectable: true, personContactId: 'contact-T', displayName: 'Тарасов Олег', profiles: [] }] })
+    })
+
+    it('passes on that Contacts holds more matches than it returned', async () => {
+        store.contacts = Array.from({ length: 25 }, (_, index) => ({ contactId: `contact-I${index}`, displayTitle: `Иванов ${index}`, phones: [] }))
+        for (const contact of store.contacts) store.lineages.set(contact.contactId, [contact.contactId])
+        const many = await searchCashReferralPeopleV1(port, 'Иванов')
+        expect(many).toMatchObject({ status: 'ok', truncated: true })
+        if (many.status === 'ok') expect(many.candidates).toHaveLength(20)
     })
 
     it('records Иванов → Сидоров, shows it in Иванов\'s history, and leaves both people\'s access as it was', async () => {

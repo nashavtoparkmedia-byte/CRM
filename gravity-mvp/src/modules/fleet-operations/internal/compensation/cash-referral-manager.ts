@@ -96,6 +96,44 @@ export function cashStaffAuthorityForV1(
     return cashStaffAuthorityAdmitsV1(authority, capabilityForV1(purpose), at)
 }
 
+/**
+ * The facts of a verified integration-admin session, as Identity Access
+ * will hand them over (docs/design/cash-staff-authority-v1.md, part 1). The
+ * shape is the contract's; nothing in Cash produces it.
+ */
+export interface CashAdminSessionFactsV1 {
+    principal: { id: string; kind: string }
+    sessionId: string
+    authenticatedAt: Date
+}
+
+/** How the history names the one CRM manager: a label, never an identity. */
+export const CASH_ADMIN_OPERATOR_LABEL_V1 = 'Администратор CRM'
+
+/**
+ * The Cash capabilities of a verified integration-admin session (part 3 of
+ * the contract). The binding is Cash's own, as CC-1 binds the same principal
+ * to Contact Card reads: the session already administers the whole CRM, so
+ * the two capabilities widen nothing. Anything but well-formed facts of that
+ * principal kind binds nothing.
+ */
+export function cashStaffAuthorityFromAdminSessionV1(facts: CashAdminSessionFactsV1 | null | undefined): CashStaffAuthorityV1 | null {
+    if (facts === null || facts === undefined || typeof facts !== 'object') return null
+    const principal = facts.principal
+    if (principal === null || typeof principal !== 'object' || principal.kind !== 'integration_admin_session') return null
+    const principalId = typeof principal.id === 'string' ? principal.id.trim() : ''
+    const sessionId = typeof facts.sessionId === 'string' ? facts.sessionId.trim() : ''
+    const authenticatedAt = facts.authenticatedAt instanceof Date ? facts.authenticatedAt : null
+    if (principalId === '' || sessionId === '' || authenticatedAt === null || Number.isNaN(authenticatedAt.getTime())) return null
+    return {
+        principalId,
+        operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1,
+        sessionId,
+        authenticatedAt,
+        capabilities: [CASH_REFERRAL_LINK_CAPABILITY_V1, CASH_ACCESS_GRANT_CAPABILITY_V1],
+    }
+}
+
 /** The ledger actor of an admitted staff session, for a write of this purpose. */
 export function cashStaffActorV1(authority: CashStaffAuthorityV1, purpose: CashStaffPurposeV1): {
     kind: 'signed_staff_session'
@@ -122,20 +160,40 @@ export function cashReferralRequestIdValidV1(requestId: unknown): requestId is s
 
 // ---------------------------------------------------------------------------
 // Search.
+//
+// Finding a person by name or phone is Contacts' question («which Contact is
+// this?»), answered by its ContactLookup.v1 for every module alike. Cash adds
+// only what Contacts cannot answer: a person found by a driving licence,
+// which Fleet's own profiles hold, and the profiles a manager needs to tell
+// two namesakes apart.
 // ---------------------------------------------------------------------------
 
 export const CASH_REFERRAL_MANAGER_MAX_QUERY_V1 = 100
 
 export interface CashReferralManagerQueryV1 {
-    /** Lower-case name words, each matched anywhere in the profile's full name. */
+    /** Name words as typed; asked of Contacts as one name. */
     nameTokens: readonly string[]
-    /** The phone's last ten digits, or fewer when fewer were typed; matched as a suffix. */
+    /** The phone's last ten digits, or fewer when fewer were typed; asked of Contacts. */
     phoneDigits: string | null
-    /** The licence as letters and digits only, upper-case; matched exactly. */
+    /** The licence as letters and digits only, upper-case; matched exactly against Fleet's profiles. */
     licence: string | null
 }
 
+/**
+ * What to ask ContactLookup.v1 for one manager query: the name as one text,
+ * and the phone as its last ten digits, which a stored number contains
+ * whether the manager typed it with 8, +7 or neither.
+ */
+export function cashReferralContactLookupsV1(query: CashReferralManagerQueryV1): Array<{ query: string; match: 'name' | 'phone' }> {
+    const lookups: Array<{ query: string; match: 'name' | 'phone' }> = []
+    if (query.nameTokens.length > 0) lookups.push({ query: query.nameTokens.join(' '), match: 'name' })
+    if (query.phoneDigits !== null) lookups.push({ query: query.phoneDigits, match: 'phone' })
+    return lookups
+}
+
 const LETTER_V1 = /[A-Za-zА-Яа-яЁё]/u
+/** An old-format Russian licence: two region digits, two series letters, six digits («77 АВ 123456»). */
+const SERIES_LICENCE_V1 = /^\d{2}\s*[A-Za-zА-Яа-яЁё]{2}\s*\d{6}$/u
 
 /**
  * What a manager typed, as the three ways a person can be found. Digits are
@@ -148,17 +206,21 @@ export function parseCashReferralManagerQueryV1(raw: unknown):
     const text = typeof raw === 'string' ? raw.replace(/\s+/gu, ' ').trim() : ''
     if (text.length > CASH_REFERRAL_MANAGER_MAX_QUERY_V1) return { ok: false, refusal: 'query_too_long' }
     const digits = text.replace(/\D/gu, '')
-    const hasLetters = LETTER_V1.test(text)
+    // The series letters of an old-format licence are the licence, not a name,
+    // and its digits are not a phone: such a query is a licence and only that.
+    const seriesLicence = SERIES_LICENCE_V1.test(text)
+    const hasLetters = LETTER_V1.test(text) && !seriesLicence
 
     // Words split on spaces and dots, so initials such as «И.И.» drop out
     // instead of fusing into a word no name contains.
+    // Words keep the case they were typed in: Contacts' match ignores case itself.
     const nameTokens = hasLetters
-        ? text.toLowerCase().split(/[\s.]+/u)
-            .map((token) => token.replace(/[^a-zа-яё-]/gu, ''))
+        ? text.split(/[\s.]+/u)
+            .map((token) => token.replace(/[^A-Za-zА-Яа-яЁё-]/gu, ''))
             .filter((token) => token.replace(/-/gu, '').length >= 2)
         : []
     // A phone typed beside a name still counts as a phone.
-    const phoneDigits = digits.length >= 7 ? digits.slice(-10) : null
+    const phoneDigits = digits.length >= 7 && !seriesLicence ? digits.slice(-10) : null
     const licenceText = text.toUpperCase().replace(/[^0-9A-ZА-ЯЁ]/gu, '')
     const licence = licenceText.length >= 6 && /\d/u.test(licenceText) ? licenceText : null
 
@@ -192,8 +254,16 @@ export interface CashReferralManagerProfileV1 {
 
 export type CashReferralMatchV1 = 'name' | 'phone' | 'licence'
 
+/** A profile Fleet found by its licence. */
 export interface CashReferralManagerHitV1 {
     profile: CashReferralManagerProfileV1
+    matchedBy: readonly CashReferralMatchV1[]
+}
+
+/** A live Contact that ContactLookup.v1 found by name or phone, with the title Contacts shows it by. */
+export interface CashReferralContactHitV1 {
+    contactId: string
+    displayTitle: string
     matchedBy: readonly CashReferralMatchV1[]
 }
 
@@ -238,20 +308,45 @@ function displayNameOfV1(profiles: readonly CashReferralManagerProfileV1[]): str
 }
 
 /**
- * The search hits as people. Profiles that Contacts places in one lineage are
- * one person; a profile with no contact, or whose contact Contacts cannot
- * resolve, is shown on its own and cannot be chosen.
+ * The search hits as people. Contacts and profiles that Contacts places in
+ * one lineage are one person; a profile with no contact, or a contact
+ * Contacts cannot resolve, is shown on its own and cannot be chosen.
  *
  * `lineages` holds the read for every contact a hit names; `profilesOf`
- * holds every profile of each canonical contact found.
+ * holds every profile of each canonical contact found. A person is shown by
+ * a profile's name, and by Contacts' title only when no profile has one.
  */
 export function groupCashReferralCandidatesV1(
+    contactHits: readonly CashReferralContactHitV1[],
     hits: readonly CashReferralManagerHitV1[],
     lineages: ReadonlyMap<string, CashReferralLineageReadV1>,
     profilesOf: ReadonlyMap<string, readonly CashReferralManagerProfileV1[]>,
 ): CashReferralManagerCandidateV1[] {
-    const people = new Map<string, { lineage: readonly string[]; matchedBy: Set<CashReferralMatchV1>; matched: CashReferralManagerProfileV1[] }>()
+    const people = new Map<string, { lineage: readonly string[]; matchedBy: Set<CashReferralMatchV1>; matched: CashReferralManagerProfileV1[]; title: string | null }>()
     const loose: CashReferralManagerCandidateV1[] = []
+    const personOf = (read: { canonicalContactId: string; contactIds: readonly string[] }) => {
+        const person = people.get(read.canonicalContactId)
+            ?? { lineage: read.contactIds, matchedBy: new Set<CashReferralMatchV1>(), matched: [], title: null }
+        people.set(read.canonicalContactId, person)
+        return person
+    }
+    for (const hit of contactHits) {
+        const read = lineages.get(hit.contactId) ?? { status: 'missing' as const }
+        const title = hit.displayTitle.trim() === '' ? null : hit.displayTitle.trim()
+        if (read.status !== 'resolved') {
+            loose.push({
+                selectable: false,
+                reason: 'contact_unresolved',
+                displayName: title ?? 'Без имени',
+                matchedBy: [...hit.matchedBy],
+                profiles: [],
+            })
+            continue
+        }
+        const person = personOf(read)
+        for (const match of hit.matchedBy) person.matchedBy.add(match)
+        person.title = person.title ?? title
+    }
     for (const hit of hits) {
         const contactId = hit.profile.contactId
         const read = contactId === null ? null : lineages.get(contactId) ?? { status: 'missing' as const }
@@ -265,11 +360,9 @@ export function groupCashReferralCandidatesV1(
             })
             continue
         }
-        const person = people.get(read.canonicalContactId)
-            ?? { lineage: read.contactIds, matchedBy: new Set<CashReferralMatchV1>(), matched: [] }
+        const person = personOf(read)
         for (const match of hit.matchedBy) person.matchedBy.add(match)
         person.matched.push(hit.profile)
-        people.set(read.canonicalContactId, person)
     }
     const grouped: CashReferralManagerCandidateV1[] = [...people.entries()].map(([personContactId, person]) => {
         const all = new Map<string, CashReferralManagerProfileV1>()
@@ -279,7 +372,7 @@ export function groupCashReferralCandidatesV1(
             selectable: true,
             personContactId,
             lineage: person.lineage,
-            displayName: displayNameOfV1(profiles),
+            displayName: cashReferralDisplayNameV1(profiles) ?? person.title ?? 'Без имени',
             matchedBy: [...person.matchedBy],
             profiles,
         }

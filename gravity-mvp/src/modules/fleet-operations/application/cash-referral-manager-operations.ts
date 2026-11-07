@@ -16,6 +16,8 @@
 import {
     cashAccessGrantBasisV1,
     cashReferralCommentV1,
+    cashStaffAuthorityFromAdminSessionV1 as bindAdminSessionV1,
+    type CashAdminSessionFactsV1,
     type CashStaffAuthorityV1,
 } from '../internal/compensation/cash-referral-manager'
 import {
@@ -38,6 +40,7 @@ import { legacyPrismaCashReferralManagerReadsV1 } from '../internal/compensation
 import { listYandexConnectionMetadataV1 } from '../public/v1/yandex-connection-capability'
 
 export type {
+    CashAdminSessionFactsV1,
     CashAccessGrantBasisV1,
     CashAccessHistoryEntryV1,
     CashAccessManagerViewV1,
@@ -56,6 +59,16 @@ export type {
     CashReferralWithdrawResultV1,
 } from '../internal/compensation/cash-referral-manager-service'
 
+/**
+ * The Cash capabilities of a verified integration-admin session's facts, as
+ * Identity Access will hand them over (docs/design/cash-staff-authority-v1.md,
+ * part 3): the authority holding cash.referral.qualify and cash.access.manage,
+ * or null for anything else.
+ */
+export function cashStaffAuthorityFromAdminSessionV1(facts: CashAdminSessionFactsV1 | null | undefined): CashStaffAuthorityV1 | null {
+    return bindAdminSessionV1(facts)
+}
+
 /** The manager screens open only once the manager-links migration is applied. */
 export function cashReferralManagerEnabledV1(): boolean {
     return process.env.YOKO_CASH_ACCESS_LEDGER === 'on'
@@ -73,7 +86,8 @@ const portV1: CashReferralManagerPortV1 = {
         }
         return names
     },
-    searchProfiles: (query, limit) => reads.searchProfiles(query, limit),
+    lookupContacts: (query, limit) => reads.lookupContacts(query, limit),
+    searchProfilesByLicence: (licence, limit) => reads.searchProfilesByLicence(licence, limit),
     profilesOfContacts: (contactIds) => reads.profilesOfContacts(contactIds),
     resolveLineage: (contactId) => reads.resolveLineage(contactId),
     confirmedMainDriver: (contactId, driverIds) => reads.confirmedMainDriver(contactId, driverIds),

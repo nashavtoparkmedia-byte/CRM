@@ -1,8 +1,12 @@
 # Cash staff authority — the one contract the manager writes need (v1)
 
-**Status: CONTRACT RECORDED, NOT IMPLEMENTED.**
-- Producer: Identity Access (`identity_access`).
+**Status: CONTRACT AGREED; Cash side READY, Identity Access side NOT YET IMPLEMENTED.**
+- Producer: Identity Access (`identity_access`). The Orchestrator V7 GO (2026-11-07) gave Identity Access this minimal extension of the existing HMAC-signed integration-admin session; Security Claude reviews it independently.
 - Consumer: the Cash referral manager tools (S4, PR #198).
+- Cash side, done in PR #198 and tested:
+  - the capability binding `cashStaffAuthorityFromAdminSessionV1(facts)` (part 3 below), exported from `fleet-operations/public/v1`;
+  - an isolated-PostgreSQL proof of the whole manager scenario through that binding (`fleet-operations/application/cash-referral-manager-scenario.postgres.test.ts`): the events land with `actorId = identity-access:integration-admin-session`, the right capability and the session id, and a session binding no capability writes nothing.
+- What is left is Identity Access's parts 1 and 2, then the two-line wiring in `resolveCashStaffAuthorityV1` (part 3).
 
 This note records the one thing still missing before a manager can record an invitation, or grant or revoke Cash access, in production. It is not an implementation plan for Fleet, and it brings no schema, migration or new credential.
 
@@ -22,6 +26,8 @@ Three layers enforce this:
 - the PostgreSQL proofs in `compensation-referral-ledger.postgres.test.ts`, which also prove that a NULL capability is refused.
 
 S4 therefore has a single integration point, `resolveCashStaffAuthorityV1` in `gravity-mvp/src/app/compensation/referrals/referral-data.ts`. Today it refuses every write with `staff_session_unavailable`. The screens stay readable.
+
+The screens' people search already requires the verified integration-admin principal (`getIntegrationAdminPrincipal()`), because it is answered by Contacts' ContactLookup.v1, which Contacts names people through only to that principal. So the manager signs in once with the integration-admin session to search; with part 1 shipped, the same login also writes.
 
 ## Decision: reuse the one signed staff session the CRM already has
 
@@ -60,6 +66,13 @@ export async function getIntegrationAdminSessionFactsV1(): Promise<null | {
 - A session issued before this change yields `null` facts. The manager signs in once more; nothing else changes.
 
 ### 3. The Cash consumer: the capability binding and the wiring (S4, one function)
+The binding is implemented: `cashStaffAuthorityFromAdminSessionV1(facts)` returns the authority below for well-formed facts of the `integration_admin_session` principal kind, and `null` for anything else. The wiring that remains, once part 1 exists:
+
+```ts
+const authority = cashStaffAuthorityFromAdminSessionV1(await getIntegrationAdminSessionFactsV1())
+return authority === null ? { ok: false, refusal: 'staff_session_unavailable' } : { ok: true, authority }
+```
+
 `resolveCashStaffAuthorityV1` returns `{ ok: true, authority }` only when both hold:
 - `getIntegrationAdminSessionFactsV1()` is non-null;
 - `managerSession()` still admits the request. It is the UI identity and role gate the board already applies, never the authority.

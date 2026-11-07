@@ -20,15 +20,22 @@ import type {
 /**
  * The signed staff session a referral or access write is made by.
  *
- * Identity Access does not provide a signed staff session yet. The browser
- * lane is the unsigned crm_user_id cookie, which proves nobody, and the
- * database admits a manager event only from a signed session holding the
- * capability. Until Identity Access provides one, every write is refused
- * here, whatever the cookie or the role says; the screens stay readable.
+ * The contract is docs/design/cash-staff-authority-v1.md: the one CRM
+ * manager is the verified integration-admin session, and Identity Access is
+ * to expose its facts (principal, session id, when it authenticated) as
+ * getIntegrationAdminSessionFactsV1. It does not exist yet, and nothing
+ * here stands in for it: the browser lane is the unsigned crm_user_id
+ * cookie, which proves nobody, and the database admits a manager event only
+ * from a signed session holding the capability. Until then every write is
+ * refused here, whatever the cookie or the role says; the screens stay
+ * readable.
  *
- * Wiring it is this function alone: return the verified session's principal,
- * a label for the history, the session id, when it authenticated, and the
- * capabilities the session itself holds.
+ * The capability binding is ready in Fleet (cashStaffAuthorityFromAdminSessionV1,
+ * tested), so the wiring is this one function, with managerSession() still
+ * the UI gate in front of it:
+ *
+ *     const authority = cashStaffAuthorityFromAdminSessionV1(await getIntegrationAdminSessionFactsV1())
+ *     return authority === null ? { ok: false, refusal: 'staff_session_unavailable' } : { ok: true, authority }
  */
 export async function resolveCashStaffAuthorityV1(): Promise<
     | { ok: true; authority: CashStaffAuthorityV1 }

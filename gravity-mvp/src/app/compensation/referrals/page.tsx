@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { cashReferralManagerEnabledV1 } from '@/modules/fleet-operations/public/v1'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 import { managerSession } from '../manager-data'
 import ReferralManager from './ReferralManager'
@@ -12,7 +13,9 @@ export const dynamic = 'force-dynamic'
 export default async function CompensationReferralsPage() {
     const session = await managerSession()
     const enabled = cashReferralManagerEnabledV1()
-    const writesAvailable = session.ok && enabled && (await resolveCashStaffAuthorityV1()).ok
+    // Finding people asks Contacts' ContactLookup.v1, answered only to the verified integration-admin principal.
+    const lookupAvailable = session.ok && enabled && (await getIntegrationAdminPrincipal()) !== null
+    const writesAvailable = lookupAvailable && (await resolveCashStaffAuthorityV1()).ok
 
     return (
         <div className="p-6 max-w-3xl">
@@ -23,7 +26,13 @@ export default async function CompensationReferralsPage() {
             </p>
             {!session.ok && <p className="text-sm text-muted">{refusalText(session.refusal)}</p>}
             {session.ok && !enabled && <p className="text-sm text-muted">{refusalText('disabled')}</p>}
-            {session.ok && enabled && <ReferralManager writesAvailable={writesAvailable} />}
+            {session.ok && enabled && !lookupAvailable && (
+                <p className="rounded-xl border border-border bg-surface p-4 text-[15px] text-foreground" data-testid="admin-session-required">
+                    {refusalText('admin_session_required')}{' '}
+                    <a href="/settings/integrations/access?next=%2Fcompensation%2Freferrals" className="font-medium text-primary">Войти</a>
+                </p>
+            )}
+            {lookupAvailable && <ReferralManager writesAvailable={writesAvailable} />}
         </div>
     )
 }
