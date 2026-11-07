@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 739,
+    "total_entries": 741,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 88,
-    "active_operational": 515,
+    "active_operational": 517,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -5074,6 +5074,15 @@
       "functional_owner": "architecture_recovery"
     },
     {
+      "path": "tools/architecture/check-contact-person-card-read-model-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the ContactPersonCardQuery.v1 read model behind the standalone person page; approved path is a bounded read-only boundary control that pins the exact contract shape (an exact Contact id in, five declared states out, a redirect carrying only the canonical id), the handler protocol (principal, parse, access, one read), the single REPEATABLE READ Prisma reader over Contacts-owned models, the Identity Access authority binding, and the capability declarations, then runs the proofs. It owns no runtime write.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
       "path": "tools/architecture/check-contact-service-public-boundary.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -5269,6 +5278,15 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active operational surface classified in exact-set batch; functional owner architecture_recovery; approved path: bounded analyzer/enforcement capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-driver-profiles-for-contacts-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the Fleet Operations DriverProfilesForContactsQuery.v1 read model; approved path is a bounded read-only boundary control that pins the exact contract shape, the handler protocol (parse before any read), the single read-only Prisma reader over Fleet-owned Driver and Park rows, and the capability declarations, then runs the proofs. It owns no runtime write.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     },
     {

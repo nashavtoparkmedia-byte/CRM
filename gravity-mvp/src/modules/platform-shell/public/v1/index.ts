@@ -12,6 +12,13 @@ export {
     type YandexFleetContactMergeDependenciesV1,
 } from './yandex-fleet-reconciliation'
 export {
+    loadContactPersonCardV1,
+    type ContactPersonCardConversationV1,
+    type ContactPersonCardDriverProfileV1,
+    type ContactPersonCardLoadResultV1,
+    type ContactPersonCardViewV1,
+} from '../../application/contact-person-card-composition'
+export {
     prepareOutboundConversationV1,
     type OutboundConversationChannelV1,
     type OutboundConversationSnapshotV1,

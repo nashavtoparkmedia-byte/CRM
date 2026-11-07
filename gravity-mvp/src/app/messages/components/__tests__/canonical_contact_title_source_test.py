@@ -30,7 +30,10 @@ def test_backend_exposes_canonical_summary() -> None:
     assert_contains("currentMainDriverProfile", helper)
     assert_contains("providerIdentities", helper)
     assert_contains("channelCount", helper)
-    assert_match(r"activeDriver\?\.fullName[\s\S]*contact\?\.displayName[\s\S]*providerName[\s\S]*primaryPhone", helper)
+    # Canonical precedence, decided once in contactDisplayNameCandidates and read back in the summary:
+    # manual pin → confirmed person → contact name → phone → provider display name → stable provider id.
+    assert_match(r"manualCanonicalName[\s\S]*\|\| confirmedFleetName[\s\S]*\|\| normalContactName[\s\S]*\|\| primaryPhone[\s\S]*\|\| providerName[\s\S]*\|\| stableProviderId", helper)
+    assert_match(r"confirmedPersonName: hasConfirmedDriver \? \(activeDriver\?\.fullName \?\? null\) : null", helper)
     assert_match(r"isTechnicalProviderName[\s\S]*MAX", helper)
 
 
