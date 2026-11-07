@@ -337,7 +337,7 @@
       ],
       "current_inventory": {
         "path_count": 267,
-        "path_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        "path_sha256": "4ef9895ff704b40fb74d084d505ada0ea2af2d5e9814187c6677588f637039ce"
       }
     },
     {
@@ -3453,9 +3453,9 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "be0c6ea39c6f1759811b17594009fed7e9ca1ffa97edcf9a14094a814cda98b4",
+      "source_sha256": "88cc2b3276f158d3751d395826971ac8b3f079be0ffcc9a3a09f178b46ba6297",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
-      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders the referral programme screen after the same CRM manager session the compensation board requires, and says whether a signed staff session can write. It decides nothing, holds no credential and reaches no production capability."
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders the referral programme screen after the same CRM manager session the compensation board requires and the verified integration-admin principal its people search needs (offering the existing sign-in when it is absent), and says whether a signed staff session can write. It decides nothing, holds no credential and reaches no production capability."
     },
     {
       "path": "gravity-mvp/src/app/compensation/referrals/actions.ts",
@@ -3463,9 +3463,9 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "d6b3b643cd88dce3e8677f6e5263796a15f8cb2d3c947da43c1d1e710c132cd5",
+      "source_sha256": "9c98a6508e6fbe20a2cadff687358d91fbbc4a37d4f84b2d3cb0b0efbe72731b",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
-      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server actions of the referral screen: search, a person's card, recording and withdrawing an invitation, and granting and revoking Cash access. Each requires the CRM manager session, and each write also a signed staff session; the principal and capabilities never come from the browser. Every write goes through the fleet_operations public Cash referral capability; it holds no credential and decides no money."
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server actions of the referral screen: search, a person's card, recording and withdrawing an invitation, and granting and revoking Cash access. Each requires the CRM manager session; the search also the verified integration-admin principal, since Contacts' ContactLookup.v1 answers it; and each write also a signed staff session. The principal and capabilities never come from the browser. Every write goes through the fleet_operations public Cash referral capability; it holds no credential and decides no money."
     },
     {
       "path": "gravity-mvp/src/app/compensation/referrals/referral-data.ts",
@@ -3473,7 +3473,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "6519c822ed06c1c61973519eee5a550c38eec895c4f82987a430152ae007d3a8",
+      "source_sha256": "5331dd1d50a8c37251d1e3e3fbd0a424afc9c6d32126e17ee911912006d7dd28",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server-only composition of the referral screen: the one place a signed staff session will be resolved for a write (none exists yet, so it refuses every write) and the mapping of the fleet_operations answers to plain screen data. It holds no credential and decides nothing."
     },
@@ -3483,7 +3483,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "2a41565db189266c48db8572e9b69e173f65e99b614b4dbe5f9eaf8d0b67f6b4",
+      "source_sha256": "07713633cae98b2522f4f2f906d25f19055d3491a3465ea908d1b3e42e4c2968",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. Plain screen types and the words for every code the backend answers with, shared by the server and the browser. It decides nothing, reads nothing and holds no credential."
     },
