@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a"
+    "decision_registry_sha256": "d486bafcb318c225d2355838eff5ab95b2cba0bf222f755592456c3e31f3f265"
   },
   "amendments": [
     {
@@ -3262,6 +3262,105 @@
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
           "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the public re-export of the request-operator resolution."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-referral-manager-s4-main-dadef242-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "CASH_REFERRAL_MANAGER_S4_EXECUTOR_REVIEW_DADEF242",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_CASH_REFERRAL_S4_CONTINUE_TO_MAIN_READY_20261107",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain published on main at dadef242, whose tail is identity-access-br4-signed-mobile-operator-main-d46100e8-20261107, and leaves that amendment untouched; the compensation board rebind starts from the fingerprint that chain approved."
+      },
+      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main dadef242 and the one source fingerprint they move: 2,734 + 14 = 2,748 surfaces, context-owned 1,495 -> 1,502 and governed exclusions 1,239 -> 1,246. Seven new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; one Vitest suite sits beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records, unchanged in surfaces, assignments, rebinds and rationales other than the corrected description of the read adapter, the S4 amendment cash-referral-manager-s4-main-d46100e8-20261106 of PR #198 head 0aec4729, which main never published; the S4 product bytes are unchanged (git diff over gravity-mvp sha256 302f6be1a2b446411aaa80d486633148ede491c79864d2d6fcf08ed1322c5e2e against both d46100e8 and dadef242). Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main dadef242 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2734,
+        "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
+        "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2748,
+        "tracked_inventory_sha256": "d411f9bd5ba5dd1ab0eb2f881feed286bd1d1327bccb3d43b684b6aedd062b09",
+        "coverage_sha256": "32d6a9efaf590c3070aa5fb9feac99f2f2a0eed335aa4295c8499b7311bfda64"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/page.tsx",
+          "previous_source_sha256": "2c41673425346944579f3262dd639e1ec864c939cde8933482e8271d9317ce81",
+          "current_source_sha256": "82001f2cbd4972243bcaaaed637e397b2e4d036d620347dd07729392af10ca7a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The compensation board gains one link to the referral programme screen. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the Fleet Operations-owned table of manager-recorded invitations and widens the admitted kinds of the Fleet Operations-owned Cash access ledger; it names no other table."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/referral-screens.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The jsdom Vitest suite of the referral screen against mocked server actions; it opens no database connection and holds no credential. Like the neighbouring compensation screen suites it receives no explicit ownership assignment."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-manager-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The composition root of the Cash referral manager tools: search, a person's card, recorded invitations and manager grants and revokes, each behind YOKO_CASH_ACCESS_LEDGER=on and each write behind a signed staff session; it injects the Fleet stores and touches no money, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-switches.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the two referral switches (ledger mode never runs the automatic decision pass); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the manager tools against a store that keeps the database's rules (chains verify, one standing record per invitee, idempotent requests); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The manager tools over their port: people as canonical Contacts, invitations recorded and withdrawn, access granted and revoked through the ledger's manual kinds, every write admitted only for a signed staff session with its capability. It has no provider or database dependency of its own, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure test of the manager rules (search query, grouping people, self-invitation, one inviter per invitee, grant and revoke, capability); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure rules of the manager tools: the search query, people from profiles, whether an invitation may be recorded, the access view from the ledger fold, and grant and revoke decisions. It reads no database, environment or provider and changes no money rule, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Prisma reads of the manager screens: Fleet's own Driver rows by name, phone or licence, and Contacts only through its public lineage and confirmation reads. Park names reach the service from the park metadata capability, so no connection row is read here. It writes nothing, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         }
       ],
       "invariants": {
