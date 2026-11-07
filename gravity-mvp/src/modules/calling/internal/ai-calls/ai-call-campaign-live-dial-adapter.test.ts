@@ -72,6 +72,27 @@ vi.mock('@/lib/prisma', () => {
     }
 })
 
+const contacts = vi.hoisted(() => ({
+    permission: null as unknown as (query: unknown) => Promise<Record<string, unknown>>,
+}))
+
+function voicePermissionResult(decision: 'allow' | 'deny', reason: string, retryable = false) {
+    return {
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision,
+        retryable,
+        reason,
+        requestedContactId: 'contact-1',
+        communicationClass: 'voice',
+        canonicalContactId: 'contact-1',
+        policyVersion: 1,
+    }
+}
+
+vi.mock('@/modules/contacts/public/v1', () => ({
+    getContactCommunicationPermissionV1: (query: unknown) => contacts.permission(query),
+}))
+
 vi.mock('@/lib/freeswitch/EslClient', () => ({
     channelExistsV1: async () => null,
     STALE_CALL_RECONCILE_GRACE_MS_V1: 90_000,
@@ -122,8 +143,8 @@ function request(overrides: Partial<Record<string, unknown>> = {}) {
         launchId: LAUNCH_ID,
         campaignId: CAMPAIGN_ID,
         memberId: MEMBER_ID,
-        targetType: 'external',
-        targetRef: '+79990000000',
+        targetType: 'contact',
+        targetRef: 'contact-1',
         phoneE164: '+79990000000',
         scenarioRef: SCENARIO_REF,
         scenarioFingerprint: 'f'.repeat(64),
@@ -161,6 +182,7 @@ beforeEach(() => {
     store.attempts.clear()
     store.campaigns.clear()
     store.failNextCallUpdate = false
+    contacts.permission = vi.fn(async () => voicePermissionResult('allow', 'no_restriction'))
     store.attempts.set('attempt-1', { launchId: LAUNCH_ID, callId: null })
     store.campaigns.set(CAMPAIGN_ID, { identityKey: `ai-call-campaign:v1:u7:req-${CAMPAIGN_ID}` })
     clock = new Date('2026-09-26T10:00:00.000Z')
@@ -357,6 +379,121 @@ describe('crash recovery', () => {
         const result = await settled.port.reconcile(request())
         expect(result?.terminal.kind).toBe('success')
         expect(result?.terminal.outcomeCode).toBe('qualified')
+    })
+})
+
+// ── contact voice permission ──────────────────────────────────────────────────
+
+describe('contact voice permission', () => {
+    it("asks Contacts for the member Contact's voice permission before any Call exists, then dials", async () => {
+        const seen: Array<{ query: unknown; callsAtQuery: number }> = []
+        contacts.permission = vi.fn(async (query: unknown) => {
+            seen.push({ query, callsAtQuery: store.calls.size })
+            return voicePermissionResult('allow', 'no_restriction')
+        })
+        const { port, originate } = makePort()
+
+        expect(await port.dispatch(request())).toBeNull()
+
+        expect(seen).toEqual([{
+            query: {
+                contract: 'contacts.ContactCommunicationPermissionQuery.v1',
+                contactId: 'contact-1',
+                communicationClass: 'voice',
+            },
+            callsAtQuery: 0,
+        }])
+        expect(originate).toHaveBeenCalledTimes(1)
+    })
+
+    it('never dials a Contact whose voice is restricted, and creates no Call', async () => {
+        contacts.permission = vi.fn(async () => voicePermissionResult('deny', 'restricted_voice'))
+        const { port, originate } = makePort()
+
+        const result = await port.dispatch(request())
+
+        expect(originate).not.toHaveBeenCalled()
+        expect(store.calls.size).toBe(0)
+        expect(store.attempts.get('attempt-1')!.callId).toBeNull()
+        expect(result?.providerAccepted).toBe(false)
+        expect(result?.callId).toBeUndefined()
+        expect(result?.terminal.kind).toBe('permanent_failure')
+        expect(result?.terminal.failureCode).toBe('voice_restricted')
+    })
+
+    it('keeps a denial Contacts marks retryable retryable, without dialing', async () => {
+        contacts.permission = vi.fn(async () => voicePermissionResult('deny', 'policy_unavailable', true))
+        const { port, originate } = makePort()
+
+        const result = await port.dispatch(request())
+
+        expect(originate).not.toHaveBeenCalled()
+        expect(store.calls.size).toBe(0)
+        expect(result?.terminal.kind).toBe('retryable_failure')
+        expect(result?.terminal.failureCode).toBe('voice_permission_unavailable')
+    })
+
+    it('treats an unanswerable permission query as unavailable, never as allowed', async () => {
+        contacts.permission = vi.fn(async () => { throw new Error('contacts store down') })
+        const { port, originate } = makePort()
+
+        const result = await port.dispatch(request())
+
+        expect(originate).not.toHaveBeenCalled()
+        expect(store.calls.size).toBe(0)
+        expect(result?.terminal.kind).toBe('retryable_failure')
+        expect(result?.terminal.failureCode).toBe('voice_permission_unavailable')
+    })
+
+    it.each(['driver', 'external'])('refuses a %s target, whose permission cannot be checked', async (targetType) => {
+        const { port, originate } = makePort()
+
+        const result = await port.dispatch(request({ targetType, targetRef: 'ref-1' }))
+
+        expect(contacts.permission).not.toHaveBeenCalled()
+        expect(originate).not.toHaveBeenCalled()
+        expect(store.calls.size).toBe(0)
+        expect(result?.providerAccepted).toBe(false)
+        expect(result?.terminal.kind).toBe('permanent_failure')
+        expect(result?.terminal.failureCode).toBe('voice_permission_unverifiable')
+    })
+
+    it('re-reads permission when an earlier execution only prepared the Call, and sends nothing', async () => {
+        const { port: first } = makePort({ originate: async () => { throw new Error('crash before network') } })
+        await first.dispatch(request())
+        const { callId } = aiCallCampaignLiveDialIdentity(LAUNCH_ID)
+        const call = store.calls.get(callId)!
+        const journal = journalOf(callId)!
+        store.calls.set(callId, {
+            ...call,
+            metadata: { [AI_CALL_CAMPAIGN_LIVE_DIAL_METADATA_KEY]: { ...journal, effectState: 'prepared', dispatchStartedAt: null } },
+        })
+        contacts.permission = vi.fn(async () => voicePermissionResult('deny', 'restricted_all'))
+
+        const { port, originate } = makePort()
+        const result = await port.dispatch(request())
+
+        expect(originate).not.toHaveBeenCalled()
+        expect(journalOf(callId)!.effectState).toBe('prepared')
+        expect(result?.callId).toBe(callId)
+        expect(result?.providerAccepted).toBe(false)
+        expect(result?.terminal.failureCode).toBe('voice_restricted')
+    })
+
+    it('a restriction set after dispatch_started cannot unsend the effect: it reconciles instead', async () => {
+        const { port: first } = makePort({
+            originate: async () => { throw new EslOriginateOutcomeUnknownError('lost') },
+        })
+        await first.dispatch(request())
+        const { callId } = aiCallCampaignLiveDialIdentity(LAUNCH_ID)
+        contacts.permission = vi.fn(async () => voicePermissionResult('deny', 'restricted_voice'))
+
+        const { port, originate } = makePort()
+        const result = await port.dispatch(request())
+
+        expect(originate).not.toHaveBeenCalled()
+        expect(result).toBeNull()
+        expect(journalOf(callId)!.effectState).toBe('outcome_unknown')
     })
 })
 

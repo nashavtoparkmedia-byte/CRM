@@ -6,6 +6,11 @@ import {
     originateAiCall,
 } from '@/lib/ai-call/esl-originate'
 import { channelExistsV1 } from '@/lib/freeswitch/EslClient'
+import {
+    CONTACT_COMMUNICATION_PERMISSION_QUERY_V1,
+    type ContactCommunicationPermissionResultV1,
+} from '@/contracts/contacts/v1'
+import { getContactCommunicationPermissionV1 } from '@/modules/contacts/public/v1'
 import type { CallingTelephonyRuntimeConfiguration } from '../../application/calling-runtime-readiness'
 import {
     CAMPAIGN_EFFECT_HORIZON_MS,
@@ -40,6 +45,7 @@ import { controlledRealAiCallChannelVars } from './freeswitch-controlled-real-ai
  *
  * The ordering is the safety contract:
  *
+ *   P   read the member's Contacts voice permission, fresh; a refusal sends nothing
  *   T1  create-or-replay the exact Call, link the exact attempt, journal `prepared`
  *   T2  commit `prepared -> dispatch_started`        (durable, before any network write)
  *   N   originate for that exact fsUuid
@@ -69,6 +75,8 @@ interface CampaignLiveDialDependencies {
         recordingPath: string
     }) => Promise<string>
     channelExists?: (fsUuid: string) => Promise<boolean | null>
+    /** Contacts' voice permission for one Contact. Split out so tests never touch a store. */
+    voicePermission?: (contactId: string) => Promise<ContactCommunicationPermissionResultV1>
     now?: () => Date
 }
 
@@ -114,6 +122,36 @@ function terminal(
         outcomeCode,
         failureCode,
     }
+}
+
+/**
+ * The Contacts voice permission a campaign originate must hold, read fresh at
+ * dispatch time so a restriction set after the audience was frozen still stops the
+ * call. `null` means the member may be dialed.
+ *
+ * Only a Contact target can be checked: the permission is a Contacts decision about
+ * one Contact, and a driver or external target carries no Contact identity here.
+ * Such a target is refused rather than guessed, permanently, because retrying cannot
+ * make it checkable. A denial Contacts marks retryable (store or lineage not
+ * established) stays retryable; any other denial is permanent.
+ */
+async function campaignVoiceRefusal(
+    request: AiCallCampaignDialRequest,
+    voicePermission: (contactId: string) => Promise<ContactCommunicationPermissionResultV1>,
+): Promise<AiCallCampaignDialResult['terminal'] | null> {
+    if (request.targetType !== 'contact') {
+        return terminal(request.launchId, 'permanent_failure', { failureCode: 'voice_permission_unverifiable' })
+    }
+    let permission: ContactCommunicationPermissionResultV1
+    try {
+        permission = await voicePermission(request.targetRef)
+    } catch {
+        return terminal(request.launchId, 'retryable_failure', { failureCode: 'voice_permission_unavailable' })
+    }
+    if (permission.decision === 'allow') return null
+    return permission.retryable
+        ? terminal(request.launchId, 'retryable_failure', { failureCode: 'voice_permission_unavailable' })
+        : terminal(request.launchId, 'permanent_failure', { failureCode: 'voice_restricted' })
 }
 
 /**
@@ -218,6 +256,11 @@ export function createAiCallCampaignLiveDialPort(
 ): AiCallCampaignDialPort {
     const now = dependencies.now ?? (() => new Date())
     const channelExists = dependencies.channelExists ?? channelExistsV1
+    const voicePermission = dependencies.voicePermission ?? ((contactId: string) => getContactCommunicationPermissionV1({
+        contract: CONTACT_COMMUNICATION_PERMISSION_QUERY_V1,
+        contactId,
+        communicationClass: 'voice',
+    }))
     const originate = dependencies.originate ?? (async (input) => {
         await originateAiCall({
             connection: input.configuration.esl,
@@ -409,11 +452,31 @@ export function createAiCallCampaignLiveDialPort(
                     }),
                 }
             }
+            // Fresh Contacts voice permission, before the Call exists and before the
+            // point of no return. A refused launch with no Call creates none.
+            const refusal = await campaignVoiceRefusal(request, voicePermission)
+            if (refusal && !(await readCall(aiCallCampaignLiveDialIdentity(request.launchId).callId))) {
+                return {
+                    effectRef: `campaign-live-voice-refused:${request.launchId}`,
+                    providerAccepted: false,
+                    terminal: refusal,
+                }
+            }
             const prepared = await prepare(request)
             if (prepared.journal.effectState !== 'prepared') {
                 // A previous execution already passed the point of no return. This is
-                // reconciliation, never a second effect.
+                // reconciliation, never a second effect; a restriction cannot unsend it.
                 return settleFromEvidence(request, prepared.call, prepared.journal)
+            }
+            if (refusal) {
+                // The Call was prepared by an earlier execution that never reached
+                // dispatch_started: nothing was sent, and nothing will be.
+                return {
+                    effectRef: `campaign-live:${request.launchId}`,
+                    callId: prepared.call.id,
+                    providerAccepted: false,
+                    terminal: refusal,
+                }
             }
             const { fsUuid } = aiCallCampaignLiveDialIdentity(request.launchId)
             // T2 — durable before the network write.
