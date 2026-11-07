@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "5c4e2dc62de0a999d852d9dd8539bdf83cf6d379ea1ec0bed81773f88d392e95"
+    "decision_registry_sha256": "b7aa3afbb7903c7538cc3aa547793700b75b323d48bcc758b2d510d7484056ef"
   },
   "amendments": [
     {
@@ -3610,16 +3610,16 @@
         "immutable": true,
         "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain published on main at 7b7cc249, whose tail is contact-identity-person-card-main-d46100e8-cc1-20261107, and leaves that amendment untouched; the compensation board rebind starts from the fingerprint that chain approved."
       },
-      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main 7b7cc249 and the one source fingerprint they move: 2,778 + 15 = 2,793 surfaces, context-owned 1,531 -> 1,539 and governed exclusions 1,247 -> 1,254. Eight new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; one Vitest suite sits beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records the S4 amendment cash-referral-manager-s4-main-2046fb88-20261107 of PR #198 head 7304813f, which main never published, after the #201 tail, with one surface more and corrected rationales: the people search now asks Contacts' ContactLookup.v1 who a name or a phone belongs to and keeps in Fleet only the licence and the park profiles, the pure rules gained the Cash capability binding of verified integration-admin session facts, and an isolated-PostgreSQL proof of the manager scenario is the new surface. The five referral screen assignments carry their new source hashes. The S4 product diff over gravity-mvp against this base has sha256 ff908a82b758cf2442df1853f04fec0d0bc5600622f7cd41f269f838e70ffe99. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 7b7cc249 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main 7b7cc249 and the one source fingerprint they move: 2,778 + 16 = 2,794 surfaces, context-owned 1,531 -> 1,539 and governed exclusions 1,247 -> 1,255. Eight new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; two Vitest suites sit beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records the S4 amendment cash-referral-manager-s4-main-2046fb88-20261107 of PR #198 head 7304813f, which main never published, after the #201 tail, with two surfaces more and corrected rationales: the people search now asks Contacts' ContactLookup.v1 who a name or a phone belongs to and keeps in Fleet only the licence and the park profiles, the pure rules gained the Cash capability binding of verified integration-admin session facts, an isolated-PostgreSQL proof of the manager scenario is a new surface, and, after the Security review of PR #198, the person card asks for the verified integration-admin principal as the search does, a request id reused for another target is refused, and a suite of the server actions' refusals is the other new surface. The five referral screen assignments carry their new source hashes. The S4 product diff over gravity-mvp against this base has sha256 af3c27b997e6697aea6b431750784aced8a819d059dedf3244840ea969b7a89b. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 7b7cc249 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
       "predecessor": {
         "tracked_executable_surfaces": 2778,
         "tracked_inventory_sha256": "59a3c66309f698bfccef2fd5e49d964fdc068ff2d6b6b9cff55ef8d6ef6fc966",
         "coverage_sha256": "2f44a4c7fb4168f62c0b90b8bd4da65117e3b542f117fbc45483b372d7bf1506"
       },
       "current": {
-        "tracked_executable_surfaces": 2793,
-        "tracked_inventory_sha256": "69575b5db018d0caeccf52e199c5bcdbbf148a54f5cc75b6f7acac1993b6bb65",
-        "coverage_sha256": "91907fdb1bc223b106e9063bb4fd52214e0658ec61b2c0d1ab1525427df41f28"
+        "tracked_executable_surfaces": 2794,
+        "tracked_inventory_sha256": "bfbcdf8ba710134ba55e988f02c02af80a086b8c8c4914336ddc228f557f176b",
+        "coverage_sha256": "9818551c74a3d82f4d856e10b84310920b58242a5c841aa5e522525b9c79d95d"
       },
       "source_hash_rebinds": [
         {
@@ -3638,6 +3638,12 @@
           "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the Fleet Operations-owned table of manager-recorded invitations and widens the admitted kinds of the Fleet Operations-owned Cash access ledger; it names no other table."
         },
         {
+          "path": "gravity-mvp/src/app/compensation/referrals/referral-actions.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Vitest suite of the referral server actions against mocked identity, Fleet capabilities and resolver: every action refuses before any backend call without the CRM manager session, the search and the person card without the verified integration-admin principal, and every write without a signed staff session; a write carries the server-resolved authority, never one the browser sent. It opens no database connection and holds no credential. Like the neighbouring compensation screen suites it receives no explicit ownership assignment."
+        },
+        {
           "path": "gravity-mvp/src/app/compensation/referrals/referral-screens.test.tsx",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
@@ -3653,7 +3659,7 @@
           "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-manager-scenario.postgres.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The isolated-PostgreSQL proof of the manager scenario through the screens' composition and the real adapters (find two people through ContactLookup.v1 and a licence, record the invitation, grant access separately, read the history), gated behind YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF=1 and an isolated DATABASE_URL; it holds no credential and writes only to that disposable database, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The isolated-PostgreSQL proof of the manager scenario through the screens' composition and the real adapters (find two people through ContactLookup.v1 and a licence, record the invitation, grant access separately, read the history, see the Telegram Cash access decision open on the grant, revoke it and see it close; a reused request id writes nothing), gated behind YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF=1 and an isolated DATABASE_URL; it holds no credential and writes only to that disposable database, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
           "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-switches.test.ts",

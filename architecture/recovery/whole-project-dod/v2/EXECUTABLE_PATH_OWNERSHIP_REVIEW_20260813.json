@@ -3463,9 +3463,9 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "9c98a6508e6fbe20a2cadff687358d91fbbc4a37d4f84b2d3cb0b0efbe72731b",
+      "source_sha256": "72f0bff911757c0d4fe21cf33bebf310abd96dba5773f7e9a239b96b66488865",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
-      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server actions of the referral screen: search, a person's card, recording and withdrawing an invitation, and granting and revoking Cash access. Each requires the CRM manager session; the search also the verified integration-admin principal, since Contacts' ContactLookup.v1 answers it; and each write also a signed staff session. The principal and capabilities never come from the browser. Every write goes through the fleet_operations public Cash referral capability; it holds no credential and decides no money."
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server actions of the referral screen: search, a person's card, recording and withdrawing an invitation, and granting and revoking Cash access. Each requires the CRM manager session; the search and the person's card also the verified integration-admin principal, since Contacts' ContactLookup.v1 answers the search and the card is where it leads; and each write also a signed staff session. The principal and capabilities never come from the browser. Every write goes through the fleet_operations public Cash referral capability; it holds no credential and decides no money."
     },
     {
       "path": "gravity-mvp/src/app/compensation/referrals/referral-data.ts",
