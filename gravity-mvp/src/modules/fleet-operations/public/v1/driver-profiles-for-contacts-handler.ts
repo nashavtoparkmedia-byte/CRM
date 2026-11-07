@@ -83,6 +83,7 @@ export function projectDriverProfileForContactV1(
   return {
     driverId: row.id,
     linkBasis,
+    linkedContactId: text(row.contactId),
     externalParkId: text(row.externalParkId),
     externalDriverProfileId: text(row.externalDriverProfileId),
     parkName: text(row.parkName),

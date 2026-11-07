@@ -101,7 +101,7 @@ export default function MessagesShell({
             />
 
             {isProfileOpen && chatId && (
-                <ContactProfileDrawer chatId={chatId} />
+                <ContactProfileDrawer chatId={chatId} activeChannelTab={channelTab} />
             )}
         </>
     )

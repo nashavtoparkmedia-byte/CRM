@@ -17,6 +17,7 @@ import LinkContactModal from './LinkContactModal'
 import DriverPersonSearchModal from './DriverPersonSearchModal'
 import ContactEvidenceDetails from './ContactEvidenceDetails'
 import { resolveContactPersonCardLinkAction } from '../contact-card-link-actions'
+import { personCardLinkChatIdV1, selectDisplayedChatV1 } from '../hooks/displayed-chat'
 import {
     Dialog,
     DialogContent,
@@ -226,7 +227,7 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, cont
     )
 }
 
-export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' }: { chatId: string; activeChannelTab?: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId))
@@ -248,19 +249,24 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [showTagInput, setShowTagInput] = useState(false)
     const [showMoreMenu, setShowMoreMenu] = useState(false)
     // «Открыть в CRM» leads to the person page only for the exact persisted
-    // conversation Messaging resolves server-side (RCQ1); a grouped, ambiguous or
-    // unresolved conversation gets no link (BD-F2 1a/2a), never a guessed Contact.
+    // conversation that is actually shown — the same selectDisplayedChatV1 answer
+    // ChatWorkspace keys on — and only when Messaging resolves it server-side
+    // (RCQ1). A grouped «Все» row over several chats, a channel tab with no chat
+    // on it, an ambiguous or an unresolved conversation gets no link (BD-F2
+    // 1a/2a); a Contact is never guessed from the row.
+    const displayedChatId = personCardLinkChatIdV1(selectDisplayedChatV1({ chatId, activeChannelTab, chat }))
     const [personCardHref, setPersonCardHref] = useState<string | null>(null)
     useEffect(() => {
         let cancelled = false
         setPersonCardHref(null)
-        resolveContactPersonCardLinkAction(chatId)
+        if (!displayedChatId) return () => { cancelled = true }
+        resolveContactPersonCardLinkAction(displayedChatId)
             .then(result => {
                 if (!cancelled) setPersonCardHref(result.status === 'resolved' ? `/contacts/${encodeURIComponent(result.contactId)}` : null)
             })
             .catch(() => { if (!cancelled) setPersonCardHref(null) })
         return () => { cancelled = true }
-    }, [chatId])
+    }, [displayedChatId])
     const [showMergeDialog, setShowMergeDialog] = useState(false)
     const [mergeSearch, setMergeSearch] = useState("")
     const [mergeTarget, setMergeTarget] = useState<any>(null)

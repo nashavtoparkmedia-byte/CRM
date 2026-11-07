@@ -30,7 +30,7 @@ function card(overrides: Partial<ContactPersonCardV1> = {}): ContactPersonCardV1
 
 function profile(overrides: Partial<DriverProfileForContactV1> & { driverId: string }): DriverProfileForContactV1 {
   return {
-    linkBasis: 'contact_link', externalParkId: 'p', externalDriverProfileId: 'x', parkName: 'Парк', fullName: 'Иванов Иван',
+    linkBasis: 'contact_link', linkedContactId: 'c-1', externalParkId: 'p', externalDriverProfileId: 'x', parkName: 'Парк', fullName: 'Иванов Иван',
     personResolutionStatus: 'vu_clustered', personKeyType: 'normalized_vu', sourceFreshness: 'fresh', sourceState: 'current',
     lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null,
     ...overrides,

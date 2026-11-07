@@ -34,7 +34,7 @@ const CAPABILITY = 'DriverProfilesForContactsQuery.v1'
 const CONTROL = 'node tools/architecture/check-fleet-driver-profiles-for-contacts-boundary.mjs'
 const PROFILE_FIELDS = [
   'currentStatus', 'dismissedAt', 'driverId', 'externalDriverProfileId', 'externalParkId', 'fullName',
-  'lastObservedAt', 'legalRole', 'linkBasis', 'parkName', 'personKeyType', 'personResolutionStatus',
+  'lastObservedAt', 'legalRole', 'linkBasis', 'linkedContactId', 'parkName', 'personKeyType', 'personResolutionStatus',
   'segment', 'sourceFreshness', 'sourceState', 'workStatus',
 ]
 const PERSONAL_VOCABULARY = /\b(licenseNumber|externalPersonKey|normalizedVu|rawVu|phone|phones|sourcePhones|yandexDriverId)\b/u

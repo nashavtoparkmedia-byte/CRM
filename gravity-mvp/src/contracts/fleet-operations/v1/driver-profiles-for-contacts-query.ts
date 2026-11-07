@@ -46,6 +46,8 @@ export type DriverProfileLinkBasisV1 = 'contact_link' | 'legacy_yandex_link' | '
 export interface DriverProfileForContactV1 {
   driverId: string
   linkBasis: DriverProfileLinkBasisV1
+  /** The Contact the row's own stored link points at (Driver.contactId), or null. A legacy-link match whose row points elsewhere is a contradiction to show, not to resolve. */
+  linkedContactId: string | null
   externalParkId: string | null
   externalDriverProfileId: string | null
   parkName: string | null

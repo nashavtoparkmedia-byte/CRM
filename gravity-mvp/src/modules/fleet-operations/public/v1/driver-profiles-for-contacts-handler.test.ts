@@ -64,9 +64,16 @@ describe('readDriverProfilesForContactsV1', () => {
       subjects: [{ contactId: 'c1', legacyYandexDriverId: 'yd-1' }, { contactId: 'c2', legacyYandexDriverId: null }],
     })
     expect(seen).toEqual([{ contactIds: ['c1', 'c2'], yandexDriverIds: ['yd-1'] }])
-    expect(result.entries[0].profiles.map(profile => [profile.driverId, profile.linkBasis])).toEqual([
-      ['both', 'both'],
-      ['legacy', 'legacy_yandex_link'],
+    expect(result.entries[0].profiles.map(profile => [profile.driverId, profile.linkBasis, profile.linkedContactId])).toEqual([
+      ['both', 'both', 'c1'],
+      ['legacy', 'legacy_yandex_link', null],
+    ])
+    const elsewhere = await handlerWith([row({ id: 'moved', contactId: 'c-other', yandexDriverId: 'yd-1' })])({
+      contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V1,
+      subjects: [{ contactId: 'c1', legacyYandexDriverId: 'yd-1' }],
+    })
+    expect(elsewhere.entries[0].profiles.map(profile => [profile.driverId, profile.linkBasis, profile.linkedContactId])).toEqual([
+      ['moved', 'legacy_yandex_link', 'c-other'],
     ])
     expect(result.entries[1].profiles).toEqual([])
   })
