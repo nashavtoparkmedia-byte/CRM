@@ -10,6 +10,13 @@
         "gravity-mvp/prisma/schema.prisma:CashReferralAttribution"
       ],
       "reason": "Fleet Operations owns the Cash referral access ledger and the referral attribution workflow row. CashAccessEvent is one append-only, hash-chained list of events per canonical contact (referral codes as token digests, captures, qualification decisions, referral entitlements, manager sanctions, manual grants and denials, and dismissal readings), written only by the Fleet referral store; a row trigger refuses UPDATE and DELETE and a per-kind CHECK admits manager kinds only from a signed staff session holding the capability. CashReferralAttribution holds one captured invitation per invitee Telegram account and admits one qualified invitation per person-key digest. Contact ids are plain canonical ids at the event: there is no foreign key into Contacts, Telegram or any monetary table, and nothing here changes a C1 table, constraint or rule. Both are pending source state created by an expand-only migration and are intentionally not asserted as deployed production inventory."
+    },
+    {
+      "context": "fleet_operations",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:CashReferralManagerInvitation"
+      ],
+      "reason": "Fleet Operations owns the invitations a manager records for the Cash referral programme: one row per invitation naming the inviter and the invitee as canonical Contact ids, recorded or withdrawn, at most one standing record per invitee, written only by the Fleet referral store, whose record and withdrawal events go to the inviter's CashAccessEvent chain under a signed staff session. A record grants nothing; access stays the CashAccessEvent access kinds. There is no foreign key into Contacts, Telegram or any monetary table. It is pending source state created by an expand-only migration and is intentionally not asserted as deployed production inventory."
     }
   ]
 }

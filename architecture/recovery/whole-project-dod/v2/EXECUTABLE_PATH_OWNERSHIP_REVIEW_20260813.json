@@ -86,7 +86,7 @@
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
-      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability. The Manager CRM completion of that workflow admits exactly seven further surfaces under the same owner and the same exclusion: the budget panel, the board filters, the server-only manager data module, the money formatting helper, and the application detail page with its detail component and its evidence route. None owns a monetary decision, holds a credential or reaches a production capability; every monetary write still goes through the fleet_operations public compensation capability, and the evidence route serves stored bytes obtained through the Telegram channel without ever handling the bot token. The exact runtime inventory therefore moves from two hundred and fifty paths to two hundred and fifty-seven. The Contact Identity person card (Orchestrator V7 mandate, 2026-11-07) admits five further exact entrypoints — the «Люди» search page and its client, the «Карточка человека» page and its view, and the ContactLookup.v1 route — 257 -> 262 paths, each under the same finite legacy_gravity_runtime owner, each reading only through accepted public capabilities behind a verified server-side principal, none writing.",
+      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability. The Manager CRM completion of that workflow admits exactly seven further surfaces under the same owner and the same exclusion: the budget panel, the board filters, the server-only manager data module, the money formatting helper, and the application detail page with its detail component and its evidence route. None owns a monetary decision, holds a credential or reaches a production capability; every monetary write still goes through the fleet_operations public compensation capability, and the evidence route serves stored bytes obtained through the Telegram channel without ever handling the bot token. The exact runtime inventory therefore moves from two hundred and fifty paths to two hundred and fifty-seven. The Contact Identity person card (Orchestrator V7 mandate, 2026-11-07) admits five further exact entrypoints — the «Люди» search page and its client, the «Карточка человека» page and its view, and the ContactLookup.v1 route — 257 -> 262 paths, each under the same finite legacy_gravity_runtime owner, each reading only through accepted public capabilities behind a verified server-side principal, none writing. The Cash referral manager screen admits exactly five further surfaces under the same owner and the same exclusion: its page, its server actions, its server-only composition, its plain view module and its client component. None owns a monetary decision, holds a credential or reaches a production capability; every write goes through the fleet_operations public Cash referral capability and is refused unless a signed staff session holds the capability its kind needs. The exact runtime inventory therefore moves from 262 paths to 267.",
       "previous_inventory": {
         "path_count": 242,
         "path_sha256": "9865049dfe3569e41ef7e3669c820a185e7dc1582614ba6fdf13af88a90657b8"
@@ -336,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 262,
-        "path_sha256": "32c031524fc905f2da11d42924bb5e3afc61da82778596e672d4d570bbdb7118"
+        "path_count": 267,
+        "path_sha256": "4ef9895ff704b40fb74d084d505ada0ea2af2d5e9814187c6677588f637039ce"
       }
     },
     {
@@ -3446,6 +3446,56 @@
       "source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the read-only presentation of the person card view: park profiles, channel accounts, phones, lineage, conflicts and candidates as the read models decided them — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/referrals/page.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "88cc2b3276f158d3751d395826971ac8b3f079be0ffcc9a3a09f178b46ba6297",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. It renders the referral programme screen after the same CRM manager session the compensation board requires and the verified integration-admin principal its people search needs (offering the existing sign-in when it is absent), and says whether a signed staff session can write. It decides nothing, holds no credential and reaches no production capability."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/referrals/actions.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "9c98a6508e6fbe20a2cadff687358d91fbbc4a37d4f84b2d3cb0b0efbe72731b",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server actions of the referral screen: search, a person's card, recording and withdrawing an invitation, and granting and revoking Cash access. Each requires the CRM manager session; the search also the verified integration-admin principal, since Contacts' ContactLookup.v1 answers it; and each write also a signed staff session. The principal and capabilities never come from the browser. Every write goes through the fleet_operations public Cash referral capability; it holds no credential and decides no money."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/referrals/referral-data.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "5331dd1d50a8c37251d1e3e3fbd0a424afc9c6d32126e17ee911912006d7dd28",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The server-only composition of the referral screen: the one place a signed staff session will be resolved for a write (none exists yet, so it refuses every write) and the mapping of the fleet_operations answers to plain screen data. It holds no credential and decides nothing."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/referrals/view.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "07713633cae98b2522f4f2f906d25f19055d3491a3465ea908d1b3e42e4c2968",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. Plain screen types and the words for every code the backend answers with, shared by the server and the browser. It decides nothing, reads nothing and holds no credential."
+    },
+    {
+      "path": "gravity-mvp/src/app/compensation/referrals/ReferralManager.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "1436a179c7fa20120f483d433691c0e6c9e8e0e23be91ddd74763a80097b9424",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The client component of the referral screen: two people pickers and a person card, calling only the referral server actions and showing only what they answered. It picks nobody on the manager's behalf, decides nothing and holds no credential."
     }
   ]
 }

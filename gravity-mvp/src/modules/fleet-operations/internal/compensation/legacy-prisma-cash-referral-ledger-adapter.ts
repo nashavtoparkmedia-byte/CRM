@@ -11,6 +11,16 @@
  *
  * Each statement below is written out in full, so the analyzer reads it end
  * to end as a read or write of one named table.
+ *
+ * CashReferralManagerInvitation holds the invitations a manager records; its
+ * events go to the inviter's chain like every other referral event. A manager
+ * record refuses an invitee a qualified Telegram invitation counts, and a
+ * qualifying Telegram decision refuses an invitee a manager recorded, each in
+ * its own transaction. Two managers are kept apart by the database itself.
+ * The two paths are not serialised against each other: a manual record and an
+ * automatic qualification of one person committing in the same instant could
+ * both stand. The automatic path is off by the Owner's decision; turning it
+ * back on needs that serialisation first.
  */
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
@@ -23,12 +33,20 @@ import {
     type CashAccessEventV1,
     type CashAccessJsonV1,
 } from './compensation-referral-ledger'
+import type { CashReferralInvitationRowV1 } from './cash-referral-manager'
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
 export class CashAccessVersionConflictV1 extends Error {
     constructor(readonly chainContactId: string) {
         super('cash access chain moved on; retry')
+    }
+}
+
+/** A qualifying decision met an invitee a manager already recorded. */
+class CashReferralInviteeCountedV1 extends Error {
+    constructor() {
+        super('invitee already counted by a manager record')
     }
 }
 
@@ -214,6 +232,66 @@ function toAttribution(row: AttributionRow): CashReferralAttributionRowV1 {
         decidedAt: row.decidedAt === null ? null : new Date(row.decidedAt),
         version: Number(row.version),
     }
+}
+
+/** A manager event's actor: only a signed staff session can write one. */
+export type CashAccessStaffActorDraftV1 = Extract<CashAccessEventDraftV1['actor'], { kind: 'signed_staff_session' }>
+
+interface TelegramInvitationRow {
+    id: string
+    state: string
+    inviterContactId: string
+    inviteeContactId: string | null
+    capturedAt: Date
+    decidedAt: Date | null
+    version: number
+}
+
+interface ManagerInvitationRow {
+    id: string
+    state: string
+    inviterContactId: string
+    inviteeContactId: string
+    recordedAt: Date
+    withdrawnAt: Date | null
+    version: number
+}
+
+function fromTelegramV1(row: TelegramInvitationRow): CashReferralInvitationRowV1 {
+    return {
+        attributionId: String(row.id),
+        source: 'telegram',
+        state: String(row.state),
+        inviterContactId: String(row.inviterContactId),
+        inviteeContactId: row.inviteeContactId === null ? null : String(row.inviteeContactId),
+        capturedAt: new Date(row.capturedAt),
+        decidedAt: row.decidedAt === null ? null : new Date(row.decidedAt),
+        version: Number(row.version),
+    }
+}
+
+function fromManagerV1(row: ManagerInvitationRow): CashReferralInvitationRowV1 {
+    return {
+        attributionId: String(row.id),
+        source: 'manager',
+        state: String(row.state),
+        inviterContactId: String(row.inviterContactId),
+        inviteeContactId: String(row.inviteeContactId),
+        capturedAt: new Date(row.recordedAt),
+        decidedAt: new Date(row.recordedAt),
+        version: Number(row.version),
+    }
+}
+
+/** The row a request id already wrote, if any. */
+async function eventByKeyInV1(tx: Tx, idempotencyKey: string): Promise<CashAccessEventV1 | null> {
+    const rows = await tx.$queryRawUnsafe<EventRow[]>(
+        `SELECT "id","chainContactId","seq","kind","lineageDigest","codeHash","attributionId","payload","actorKind","actorId","actorCapability","actorSessionId","actorAuthenticatedAt","reason","idempotencyKey","occurredAt","prevHash","hash"
+         FROM "CashAccessEvent"
+         WHERE "idempotencyKey" = $1`,
+        idempotencyKey,
+    )
+    return rows.length === 0 ? null : toEvent(rows[0])
 }
 
 /** The decision a writer records for one attribution. */
@@ -436,6 +514,17 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
                 )
                 if (rows.length === 0) return 'version_conflict' as const
                 const attribution = toAttribution(rows[0])
+                // A person a manager has recorded as invited is counted already;
+                // the rollback leaves the attribution as it was.
+                if (write.state === 'qualified' && attribution.inviteeContactId !== null) {
+                    const recorded = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+                        `SELECT "id" FROM "CashReferralManagerInvitation"
+                         WHERE "inviteeContactId" = $1 AND "state" = 'recorded'
+                         LIMIT 1`,
+                        attribution.inviteeContactId,
+                    )
+                    if (recorded.length > 0) throw new CashReferralInviteeCountedV1()
+                }
                 const chain = { chainContactId: attribution.inviterContactId, lineageDigest: attribution.inviterLineageDigest }
                 for (const observed of write.observedDismissals) {
                     await appendInV1(tx, {
@@ -476,7 +565,174 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
             })
         } catch (error) {
             if (error instanceof CashAccessVersionConflictV1) return 'version_conflict'
-            if (isUniqueViolation(error)) return 'person_already_qualified'
+            if (error instanceof CashReferralInviteeCountedV1 || isUniqueViolation(error)) return 'person_already_qualified'
+            throw error
+        }
+    },
+
+    /** Every invitation, of either path, that one of these contacts made or received, newest first. */
+    async listInvitationsOfContacts(contactIds: readonly string[]): Promise<CashReferralInvitationRowV1[]> {
+        if (contactIds.length === 0) return []
+        const telegram = await prisma.$queryRawUnsafe<TelegramInvitationRow[]>(
+            `SELECT "id","state","inviterContactId","inviteeContactId","capturedAt","decidedAt","version"
+             FROM "CashReferralAttribution"
+             WHERE "inviterContactId" = ANY($1::text[]) OR "inviteeContactId" = ANY($1::text[])
+             ORDER BY "capturedAt" DESC
+             LIMIT 500`,
+            [...contactIds],
+        )
+        const manager = await prisma.$queryRawUnsafe<ManagerInvitationRow[]>(
+            `SELECT "id","state","inviterContactId","inviteeContactId","recordedAt","withdrawnAt","version"
+             FROM "CashReferralManagerInvitation"
+             WHERE "inviterContactId" = ANY($1::text[]) OR "inviteeContactId" = ANY($1::text[])
+             ORDER BY "recordedAt" DESC
+             LIMIT 500`,
+            [...contactIds],
+        )
+        return [...telegram.map(fromTelegramV1), ...manager.map(fromManagerV1)]
+            .sort((left, right) => right.capturedAt.getTime() - left.capturedAt.getTime())
+    },
+
+    /** One manager invitation; null when there is none. */
+    async findInvitation(invitationId: string): Promise<CashReferralInvitationRowV1 | null> {
+        const rows = await prisma.$queryRawUnsafe<ManagerInvitationRow[]>(
+            `SELECT "id","state","inviterContactId","inviteeContactId","recordedAt","withdrawnAt","version"
+             FROM "CashReferralManagerInvitation"
+             WHERE "id" = $1`,
+            invitationId,
+        )
+        return rows.length === 0 ? null : fromManagerV1(rows[0])
+    },
+
+    /** The record and withdrawal events of these manager invitations. */
+    async readInvitationLinkEvents(invitationIds: readonly string[]): Promise<CashAccessEventV1[]> {
+        if (invitationIds.length === 0) return []
+        const rows = await prisma.$queryRawUnsafe<EventRow[]>(
+            `SELECT "id","chainContactId","seq","kind","lineageDigest","codeHash","attributionId","payload","actorKind","actorId","actorCapability","actorSessionId","actorAuthenticatedAt","reason","idempotencyKey","occurredAt","prevHash","hash"
+             FROM "CashAccessEvent"
+             WHERE "kind" IN ('referral_link_recorded','referral_link_withdrawn') AND ("payload" ->> 'invitationId') = ANY($1::text[])
+             ORDER BY "occurredAt" ASC`,
+            [...invitationIds],
+        )
+        return rows.map(toEvent)
+    },
+
+    /**
+     * Records that a manager put one invitee to one inviter: the row and its
+     * event on the inviter's chain, together or not at all. A request already
+     * written answers with what it wrote. An invitee another record or a
+     * qualified Telegram invitation already counts is a conflict.
+     */
+    async recordManagerInvitation(input: {
+        inviterContactId: string
+        inviterLineageDigest: string
+        inviteeContactId: string
+        /** Every contact of the invitee's lineage: a count under any of them holds the person. */
+        inviteeLineage: readonly string[]
+        actor: CashAccessStaffActorDraftV1
+        reason: string
+        payload: { [key: string]: CashAccessJsonV1 }
+        idempotencyKey: string
+    }): Promise<{ outcome: 'recorded' | 'already_recorded'; attributionId: string } | { outcome: 'conflict' | 'busy' }> {
+        try {
+            return await prisma.$transaction(async (tx) => {
+                const replay = await eventByKeyInV1(tx, input.idempotencyKey)
+                const replayed = replay?.payload.invitationId
+                if (typeof replayed === 'string') return { outcome: 'already_recorded' as const, attributionId: replayed }
+                const lineage = [...new Set([input.inviteeContactId, ...input.inviteeLineage])]
+                const counted = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+                    `SELECT "id" FROM "CashReferralAttribution"
+                     WHERE "inviteeContactId" = ANY($1::text[]) AND "state" = 'qualified'
+                     LIMIT 1`,
+                    lineage,
+                )
+                if (counted.length > 0) return { outcome: 'conflict' as const }
+                const invitationId = randomUUID()
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO "CashReferralManagerInvitation"
+                       ("id","inviterContactId","inviterLineageDigest","inviteeContactId","state","recordedAt","updatedAt")
+                     VALUES ($1,$2,$3,$4,'recorded',date_trunc('milliseconds', now()),date_trunc('milliseconds', now()))`,
+                    invitationId,
+                    input.inviterContactId,
+                    input.inviterLineageDigest,
+                    input.inviteeContactId,
+                )
+                await appendInV1(tx, {
+                    chainContactId: input.inviterContactId,
+                    kind: 'referral_link_recorded',
+                    lineageDigest: input.inviterLineageDigest,
+                    codeHash: null,
+                    attributionId: null,
+                    payload: { ...input.payload, invitationId, inviteeContactId: input.inviteeContactId },
+                    actor: input.actor,
+                    reason: input.reason,
+                    idempotencyKey: input.idempotencyKey,
+                })
+                return { outcome: 'recorded' as const, attributionId: invitationId }
+            })
+        } catch (error) {
+            if (error instanceof CashAccessVersionConflictV1) return { outcome: 'busy' }
+            if (isUniqueViolation(error)) return { outcome: 'conflict' }
+            throw error
+        }
+    },
+
+    /** Withdraws one standing manager invitation, with its event on the inviter's chain. */
+    async withdrawManagerInvitation(input: {
+        attributionId: string
+        expectedVersion: number
+        actor: CashAccessStaffActorDraftV1
+        reason: string
+        payload: { [key: string]: CashAccessJsonV1 }
+        idempotencyKey: string
+    }): Promise<'withdrawn' | 'already_withdrawn' | 'version_conflict' | 'busy'> {
+        try {
+            return await prisma.$transaction(async (tx) => {
+                if (await eventByKeyInV1(tx, input.idempotencyKey) !== null) return 'already_withdrawn' as const
+                const rows = await tx.$queryRawUnsafe<Array<{ inviterContactId: string; inviterLineageDigest: string }>>(
+                    `UPDATE "CashReferralManagerInvitation"
+                     SET "state" = 'withdrawn', "withdrawnAt" = date_trunc('milliseconds', now()),
+                         "version" = "version" + 1, "updatedAt" = date_trunc('milliseconds', now())
+                     WHERE "id" = $1 AND "version" = $2 AND "state" = 'recorded'
+                     RETURNING "inviterContactId","inviterLineageDigest"`,
+                    input.attributionId,
+                    input.expectedVersion,
+                )
+                if (rows.length === 0) return 'version_conflict' as const
+                await appendInV1(tx, {
+                    chainContactId: String(rows[0].inviterContactId),
+                    kind: 'referral_link_withdrawn',
+                    lineageDigest: String(rows[0].inviterLineageDigest),
+                    codeHash: null,
+                    attributionId: null,
+                    payload: { ...input.payload, invitationId: input.attributionId },
+                    actor: input.actor,
+                    reason: input.reason,
+                    idempotencyKey: input.idempotencyKey,
+                })
+                return 'withdrawn' as const
+            })
+        } catch (error) {
+            if (error instanceof CashAccessVersionConflictV1) return 'busy'
+            throw error
+        }
+    },
+
+    /**
+     * Appends a manager's access events to one chain together: a grant, or a
+     * revoke of every standing grant. A request already written is not
+     * written again; a chain that moved meanwhile is reported as busy.
+     */
+    async appendManagerAccessEvents(drafts: readonly CashAccessEventDraftV1[]): Promise<'written' | 'already_written' | 'busy'> {
+        if (drafts.length === 0) return 'already_written'
+        try {
+            return await prisma.$transaction(async (tx) => {
+                if (await eventByKeyInV1(tx, drafts[0].idempotencyKey) !== null) return 'already_written' as const
+                for (const draft of drafts) await appendInV1(tx, draft)
+                return 'written' as const
+            })
+        } catch (error) {
+            if (error instanceof CashAccessVersionConflictV1) return 'busy'
             throw error
         }
     },
