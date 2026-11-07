@@ -79,7 +79,27 @@ export {
     resolveContactV1,
     setContactDisplayNameV1,
     getContactCommunicationPermissionV1,
+    createContactCardForConversationReaderV1,
+    type ContactCardConversationResolverV1,
+    readContactPersonCardV1,
+    searchContactsV1,
 } from '../../application/contact-operations'
+export { resolveContactIdentityConflictStateV1 } from './contact-identity-conflict-state'
+export type {
+    ContactIdentityConflictClassV1,
+    ContactIdentityConflictRecordV1,
+    ContactIdentityConflictScopeV1,
+    ContactIdentityConflictStateV1,
+} from './contact-identity-conflict-state'
+export {
+    CONTACT_LOOKUP_DEFAULT_LIMIT_V1,
+    CONTACT_LOOKUP_MAX_LIMIT_V1,
+    CONTACT_LOOKUP_MIN_PHONE_DIGITS_V1,
+    CONTACT_LOOKUP_MIN_TEXT_LENGTH_V1,
+    contactLookupCriteriaV1,
+    contactLookupLimitV1,
+} from './contact-lookup'
+export type { ContactLookupItemV1, ContactLookupResultV1 } from './contact-lookup'
 // ContactCommunicationPermissionQuery.v1 is the only communication-policy
 // surface other contexts may reach. The mutation (setContactCommunicationPolicyV1,
 // its handler factory and its ports) is deliberately NOT exported here: it is a

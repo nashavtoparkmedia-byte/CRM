@@ -267,12 +267,15 @@ const moduleTests = {
     command('check-contacts-reachability-boundary.mjs'),
     command('check-contact-conversation-api-boundary.mjs'),
     command('check-contact-communication-policy-boundary.mjs'),
+    command('check-contact-card-read-model-boundary.mjs'),
+    command('check-contact-person-card-read-model-boundary.mjs'),
   ],
   edge_delivery: [command('check-calling-client-ui-boundary.mjs')],
   fleet_operations: [
     command('check-fleet-driver-action-boundary.mjs'),
     command('check-fleet-monitoring-policy-boundary.mjs'),
     command('check-yandex-fleet-operations-boundary.mjs'),
+    command('check-fleet-driver-profiles-for-contacts-boundary.mjs'),
   ],
   identity_access: [
     command('check-identity-boundary.mjs'),

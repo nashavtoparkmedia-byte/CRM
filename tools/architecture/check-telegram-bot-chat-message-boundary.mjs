@@ -71,12 +71,17 @@ check(
     && adapter.includes('BigInt(input.telegramId)'),
   'telegram id drift',
 )
+// The Owner-approved auto-link (2026-10-28) is the one local link writer the
+// generic phone ingress may hold; check-telegram-driver-link-boundary (P12)
+// pins what it may write. No provider is ever asked from this path.
+const linkWriters = (source) => (source.match(/upsertDriverTelegramLinkV1\s*\(/gu) || []).length
 check(
   'generic phone ingress remains local only',
   !syncUser.includes('listYandexConnectionCredentialsV1')
     && !syncUser.includes('fleet-api.taxi.yandex.net')
     && !/\bfetch\s*\(/u.test(syncUser)
-    && !syncUser.includes('upsertDriverTelegramLinkV1')
+    && linkWriters(syncUser) <= 1
+    && linkWriters(webhook) === linkWriters(syncUser)
     && syncUser.includes("status: 'PENDING_MANAGER_LINK'"),
   'generic phone ingress provider boundary drift',
 )

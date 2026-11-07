@@ -38,7 +38,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
         // down, driver dropped from Yandex Fleet).
         prisma.driver.findFirst({
             where: { OR: [{ yandexDriverId: id }, { id }] },
-            select: { id: true, phone: true },
+            select: { id: true, phone: true, contactId: true, personResolutionStatus: true },
         }),
     ])
     const car = driver?.car_id ? await getCarById(driver.car_id, id) : null
@@ -91,6 +91,20 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                         <div className="grid grid-cols-[120px_1fr] gap-3 text-sm">
                                             <span className="text-muted-foreground font-medium">ФИО:</span>
                                             <span className="font-semibold text-foreground">{driverName}</span>
+
+                                            {prismaDriver?.contactId && (
+                                                <>
+                                                    <span className="text-muted-foreground font-medium">Человек:</span>
+                                                    <span className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                                                        <Link href={`/contacts/${encodeURIComponent(prismaDriver.contactId)}`} className="text-[#2AABEE] hover:underline">
+                                                            Карточка человека
+                                                        </Link>
+                                                        {prismaDriver.personResolutionStatus !== 'operator_confirmed' && (
+                                                            <Badge variant="secondary" className="text-xs">связь не подтверждена</Badge>
+                                                        )}
+                                                    </span>
+                                                </>
+                                            )}
 
                                             <span className="text-muted-foreground font-medium">Телефон:</span>
                                             <span className="font-semibold text-foreground flex items-center gap-[2px] flex-wrap">

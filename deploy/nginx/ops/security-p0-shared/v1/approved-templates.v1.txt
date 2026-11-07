@@ -1,0 +1,4 @@
+# Approved P0 crm.conf.template identities (normalized: Cash action-id map entries removed). Owner: Security.
+# <normalized-sha256> <label>
+0fc927a5b0f2d7e067fbb356636c77fe129cc33559bcf1f560efd5f1171ca070 production-P0-2026-10-25 template-sha256=64217e02fd68b35b3b73cc4627615b663b674ff79c80b81d29cbb25597097ed7
+c742cd92a23d6797c51f92a9fd3f2c4525c761b3b7236d6ff56751597e396d00 main-4f3b6c0a-security-pr-candidate template-sha256=c742cd92a23d6797c51f92a9fd3f2c4525c761b3b7236d6ff56751597e396d00

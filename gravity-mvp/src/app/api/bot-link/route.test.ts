@@ -9,7 +9,7 @@ import {
   upsertParkMatchedDriverV1,
 } from '@/modules/fleet-operations/public/v1'
 import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { saveManualDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { replaceDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 import { GET, POST } from './route'
 
@@ -41,7 +41,7 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
   hasIntegrationAdminAccess: vi.fn(),
 }))
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
-  saveManualDriverTelegramLinkV1: vi.fn(),
+  replaceDriverTelegramLinkV1: vi.fn(),
 }))
 
 const searchLocal = vi.mocked(searchLocalDriversV1)
@@ -51,7 +51,7 @@ const hasAdminAccess = vi.mocked(hasIntegrationAdminAccess)
 const findLink = vi.mocked(prisma.driverTelegram.findFirst)
 const findDriver = vi.mocked(prisma.driver.findUnique)
 const upsertParkDriver = vi.mocked(upsertParkMatchedDriverV1)
-const saveManualLink = vi.mocked(saveManualDriverTelegramLinkV1)
+const replaceLink = vi.mocked(replaceDriverTelegramLinkV1)
 
 function mutationHeaders(contentType = 'application/json', origin = 'https://crm.example') {
   return { 'content-type': contentType, host: 'crm.example', origin }
@@ -115,9 +115,9 @@ beforeEach(() => {
       : { status: 'invalid' as const, drivers: [] }
   ))
   searchYandex.mockResolvedValue({ checkedParks: 9, results: [], errors: [] })
-  saveManualLink.mockResolvedValue({
-    contract: 'telegram_channel.SaveManualDriverTelegramLinkResult.v1',
-    saved: true,
+  replaceLink.mockResolvedValue({
+    contract: 'telegram_channel.ReplaceDriverTelegramLinkResult.v1',
+    replaced: true,
   })
 })
 
@@ -398,30 +398,28 @@ describe('manual Telegram driver search', () => {
     expect(searchYandex).not.toHaveBeenCalled()
   })
 
-  it('links a local Driver only through the authority-enforcing owner command', async () => {
+  it('links a local Driver in one action through the owner replace command, with no Contact confirmation', async () => {
     findDriver.mockResolvedValue({ id: 'local-1', fullName: 'Иван Иванов' } as never)
 
     const response = await POST(rawLinkRequest({ telegramId: '42', driverId: 'local-1' }))
 
     expect(response.status).toBe(200)
-    expect(saveManualLink).toHaveBeenCalledWith({
-      contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+    expect(replaceLink).toHaveBeenCalledWith({
+      contract: 'telegram_channel.ReplaceDriverTelegramLinkCommand.v1',
       driverId: 'local-1',
       telegramId: 42n,
     })
     await expect(response.json()).resolves.toEqual({ success: true, driverName: 'Иван Иванов' })
   })
 
-  it('returns a conflict with no fallback mutation when owner authority is absent', async () => {
+  it('returns a conflict with no fallback mutation when the link cannot be saved', async () => {
     findDriver.mockResolvedValue({ id: 'local-1', fullName: 'Иван Иванов' } as never)
-    saveManualLink.mockRejectedValue(
-      new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'),
-    )
+    replaceLink.mockRejectedValue(new Error('connection lost'))
 
     const response = await POST(rawLinkRequest({ telegramId: '42', driverId: 'local-1' }))
 
     expect(response.status).toBe(409)
-    expect(saveManualLink).toHaveBeenCalledOnce()
+    expect(replaceLink).toHaveBeenCalledOnce()
     expect(upsertParkDriver).not.toHaveBeenCalled()
   })
 
@@ -447,7 +445,7 @@ describe('manual Telegram driver search', () => {
 
     expect(response.status).toBe(409)
     expect(upsertParkDriver).not.toHaveBeenCalled()
-    expect(saveManualLink).not.toHaveBeenCalled()
+    expect(replaceLink).not.toHaveBeenCalled()
   })
 
   it('links a provider-verified profile only when Fleet supplies the same existing local Driver', async () => {
@@ -483,8 +481,8 @@ describe('manual Telegram driver search', () => {
 
     expect(response.status).toBe(200)
     expect(upsertParkDriver).not.toHaveBeenCalled()
-    expect(saveManualLink).toHaveBeenCalledWith({
-      contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+    expect(replaceLink).toHaveBeenCalledWith({
+      contract: 'telegram_channel.ReplaceDriverTelegramLinkCommand.v1',
       driverId: 'local-1',
       telegramId: 42n,
     })
@@ -526,8 +524,8 @@ describe('Driver profile identity and person-confirmation state for a manual Tel
     } as never)
     const response = await POST(linkSelected())
     expect(response.status).toBe(200)
-    expect(saveManualLink).toHaveBeenCalledWith({
-      contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+    expect(replaceLink).toHaveBeenCalledWith({
+      contract: 'telegram_channel.ReplaceDriverTelegramLinkCommand.v1',
       driverId: 'local-2',
       telegramId: 42n,
     })
@@ -543,7 +541,7 @@ describe('Driver profile identity and person-confirmation state for a manual Tel
     } as never)
     const response = await POST(linkSelected())
     expect(response.status).toBe(200)
-    expect(saveManualLink).toHaveBeenCalledOnce()
+    expect(replaceLink).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -564,10 +562,10 @@ describe('Driver profile identity and person-confirmation state for a manual Tel
     // A pure identity mismatch must not be presented as a person decision.
     expect(JSON.stringify(body)).not.toContain('Confirm the driver person')
     expect(body.code).not.toBe('PERSON_CONFIRMATION_REQUIRED')
-    expect(saveManualLink).not.toHaveBeenCalled()
+    expect(replaceLink).not.toHaveBeenCalled()
   })
 
-  it('keeps the real person-confirmation gate once identity is proven, as a structured state', async () => {
+  it('links a proven profile in one action: no person confirmation is asked for', async () => {
     findDriver.mockResolvedValue({
       id: 'local-2',
       fullName: 'Анна Петрова',
@@ -575,25 +573,19 @@ describe('Driver profile identity and person-confirmation state for a manual Tel
       externalDriverProfileId: 'yandex-driver-2',
       externalParkId: 'park-1',
     } as never)
-    saveManualLink.mockRejectedValue(new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'))
     const response = await POST(linkSelected())
-    expect(response.status).toBe(409)
-    const body = await response.json()
-    expect(body.code).toBe('PERSON_CONFIRMATION_REQUIRED')
-    expect(body.error).toMatch(/подтвердите/)
-    expect(saveManualLink).toHaveBeenCalledOnce()
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ success: true, driverName: 'Анна Петрова', parkName: 'Парк 1' })
+    expect(replaceLink).toHaveBeenCalledOnce()
     expect(upsertParkDriver).not.toHaveBeenCalled()
   })
 
   it.each([
-    [new Error('DRIVER_TELEGRAM_EXACT_PRIVATE_CHAT_REQUIRED'), 'TELEGRAM_CHAT_REQUIRED'],
-    [new Error('DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH'), 'TELEGRAM_IDENTITY_UNVERIFIED'],
-    [Object.assign(new Error('The Driver or Telegram peer already has a different link'), { code: 'DRIVER_TELEGRAM_LINK_CONTRADICTION' }), 'TELEGRAM_LINK_CONFLICT'],
     [Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }), 'TELEGRAM_LINK_REJECTED'],
     [new Error('constructor'), 'TELEGRAM_LINK_REJECTED'],
-  ])('maps an owner refusal to an operator code (%s)', async (refusal, code) => {
+  ])('answers any failure to save the link with one plain conflict (%s)', async (refusal, code) => {
     findDriver.mockResolvedValue({ id: 'local-1', fullName: 'Иван Иванов' } as never)
-    saveManualLink.mockRejectedValue(refusal)
+    replaceLink.mockRejectedValue(refusal)
     const response = await POST(rawLinkRequest({ telegramId: '42', driverId: 'local-1' }))
     expect(response.status).toBe(409)
     const body = await response.json()

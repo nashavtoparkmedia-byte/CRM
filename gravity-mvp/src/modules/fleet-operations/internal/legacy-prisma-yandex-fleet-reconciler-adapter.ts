@@ -158,8 +158,8 @@ export function yandexFleetProfileObservationV1(
 
 /** A non-2xx Fleet answer; the message stays the one the nightly run has always logged. */
 export class YandexFleetHttpErrorV1 extends Error {
-  constructor(readonly status: number, readonly retryAfterMs: number | null) {
-    super(`Yandex Fleet HTTP ${status}`)
+  constructor(readonly status: number, readonly retryAfterMs: number | null, detail: string | null = null) {
+    super(detail ? `Yandex Fleet HTTP ${status} (${detail})` : `Yandex Fleet HTTP ${status}`)
     this.name = 'YandexFleetHttpErrorV1'
   }
 }
@@ -172,7 +172,31 @@ function retryAfterMs(header: string | null): number | null {
 /** One exact profile of the connection's park: a single page of at most one row. */
 type ProfileTargetV1 = { profileId: string; timeoutMs: number }
 
-async function fetchParkProfiles(
+/**
+ * How a bulk read of a park's profiles paces itself. Yandex answers a quick run
+ * of full pages with HTTP 429, and one throttled page used to cost the park its
+ * whole nightly read, so the two biggest parks went unread for weeks. A bulk
+ * read leaves a gap before every page after the first; on a 429 it honours
+ * Retry-After (or backs off exponentially without one), asks for the same page
+ * again and widens the gap for the rest of the park. Waiting is bounded per
+ * park: past the budget the read fails as before, its error names the
+ * throttling, and every stored value stays as it was. A targeted or searched
+ * read is interactive and still reports a 429 at once.
+ */
+const BULK_PROFILE_PAGING_V1 = Object.freeze({
+  PAGE_GAP_MS: 1_000,
+  MAX_PAGE_GAP_MS: 15_000,
+  /** The first wait after a 429 without Retry-After; doubled on each further 429 in a row. */
+  BACKOFF_MS: 5_000,
+  /** Every throttle wait of one park, together. */
+  PARK_WAIT_BUDGET_MS: 5 * 60_000,
+})
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => { setTimeout(resolve, ms) })
+}
+
+export async function fetchParkProfiles(
   connection: YandexConnectionCredentialsV1,
   query: string | null,
   target: ProfileTargetV1 | null = null,
@@ -181,7 +205,14 @@ async function fetchParkProfiles(
   let offset = 0
   const limit = target ? 1 : query ? 100 : 1000
   let total = Number.POSITIVE_INFINITY
+  const bulk = !target && !query
+  let pageGapMs: number = BULK_PROFILE_PAGING_V1.PAGE_GAP_MS
+  let gapDue = false
+  let throttledInARow = 0
+  let waitedMs = 0
   do {
+    if (gapDue) await sleep(pageGapMs)
+    gapDue = bulk
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), target?.timeoutMs ?? 20_000)
     try {
@@ -229,7 +260,24 @@ async function fetchParkProfiles(
           offset,
         }),
       })
+      if (bulk && response.status === 429) {
+        const retryAfter = retryAfterMs(response.headers?.get('retry-after') ?? null)
+        throttledInARow += 1
+        const wait = retryAfter ?? BULK_PROFILE_PAGING_V1.BACKOFF_MS * 2 ** (throttledInARow - 1)
+        if (waitedMs + wait > BULK_PROFILE_PAGING_V1.PARK_WAIT_BUDGET_MS) {
+          throw new YandexFleetHttpErrorV1(429, retryAfter, `throttled ${throttledInARow} times in a row at offset ${offset}; `
+            + `waited ${Math.round(waitedMs / 1000)} s of the ${BULK_PROFILE_PAGING_V1.PARK_WAIT_BUDGET_MS / 1000} s budget`)
+        }
+        waitedMs += wait
+        pageGapMs = Math.min(pageGapMs * 2, BULK_PROFILE_PAGING_V1.MAX_PAGE_GAP_MS)
+        clearTimeout(timeout)
+        await sleep(wait)
+        // The wait already spaced the retry; the same page is asked again.
+        gapDue = false
+        continue
+      }
       if (!response.ok) throw new YandexFleetHttpErrorV1(response.status, retryAfterMs(response.headers?.get('retry-after') ?? null))
+      throttledInARow = 0
       const body = await response.json() as { driver_profiles?: unknown[]; total?: number }
       const rows = Array.isArray(body.driver_profiles) ? body.driver_profiles : []
       total = Number.isFinite(Number(body.total)) ? Number(body.total) : offset + rows.length
@@ -844,4 +892,56 @@ export async function refreshYandexFleetDriverProfileV1(
     return { status: 'failed', code: 'persist_failed' }
   }
   return { status: 'refreshed' }
+}
+
+/** What one single-profile read states about a dismissal; nothing else is kept. */
+export type YandexFleetDriverDismissalReadV1 =
+  | { status: 'read'; workStatus: string | null; fireDate: string | null }
+  | { status: 'rate_limited'; retryAfterMs: number | null }
+  | { status: 'failed'; code: 'no_connection' | 'provider_error' | 'not_returned' }
+
+/**
+ * Reads one profile through the single-profile method, the only method that
+ * states a dismissal date (`profile.fire_date`, a date without a time), with
+ * `profile.work_status`. Only those two fields leave this function; the body
+ * is never logged or stored, and nothing is written.
+ */
+export async function readYandexFleetDriverDismissalV1(
+  target: YandexFleetDriverProfileTargetV1,
+): Promise<YandexFleetDriverDismissalReadV1> {
+  const connections = await listYandexConnectionCredentialsV1()
+  const connection = connections.find(row => row.parkId === target.externalParkId)
+  if (!connection) return { status: 'failed', code: 'no_connection' }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), YANDEX_FLEET_PROFILE_REFRESH_TIMEOUT_MS)
+  try {
+    const response = await fetch(
+      `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${encodeURIComponent(target.externalDriverProfileId)}`,
+      {
+        method: 'GET',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          'X-Client-ID': connection.clid,
+          'X-API-Key': connection.apiKey,
+          'X-Park-ID': connection.parkId,
+          'Accept-Language': 'ru',
+        },
+      },
+    )
+    if (response.status === 429) return { status: 'rate_limited', retryAfterMs: retryAfterMs(response.headers?.get('retry-after') ?? null) }
+    if (!response.ok) return { status: 'failed', code: 'provider_error' }
+    const body = await response.json() as { profile?: { work_status?: unknown; fire_date?: unknown } } | null
+    const profile = body?.profile
+    if (profile === null || typeof profile !== 'object') return { status: 'failed', code: 'not_returned' }
+    return {
+      status: 'read',
+      workStatus: typeof profile.work_status === 'string' ? profile.work_status : null,
+      fireDate: typeof profile.fire_date === 'string' ? profile.fire_date : null,
+    }
+  } catch {
+    return { status: 'failed', code: 'provider_error' }
+  } finally {
+    clearTimeout(timeout)
+  }
 }

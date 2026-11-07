@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
-import { appendConversationIdentityCollisionV1, attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, prepareOutboundConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
-import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { appendConversationIdentityCollisionV1, attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, applyMessageDeliveryEvidenceV1, patchMessageMetadataV1, prepareOutboundConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V2, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
@@ -570,6 +570,7 @@ const TELEGRAM_INGRESS_ERROR_CODES = new Set([
     'CONTACT_IDENTITY_LINK_STALE',
     'CONTACT_CONVERSATION_LINK_STALE',
     'CONVERSATION_IDENTITY_COLLISION_CHAT_NOT_FOUND',
+    'TELEGRAM_DELIVERY_EVIDENCE_REFUSED',
 ])
 const TELEGRAM_INGRESS_ERROR_DETAILS = new Set([
     'channel_mismatch',
@@ -585,6 +586,8 @@ const TELEGRAM_INGRESS_ERROR_DETAILS = new Set([
     'merge_cycle',
     'phone_evidence_blocked',
     'unknown_kind_limited',
+    'contention',
+    'provider_unsupported',
 ])
 const PRISMA_INGRESS_ERROR_CODES = new Set([
     'P1001', 'P1002', 'P1008', 'P1017', 'P2002', 'P2003', 'P2010', 'P2024', 'P2025', 'P2028', 'P2034',
@@ -708,7 +711,6 @@ type TelegramStoredMessageMatch =
     | { kind: 'duplicate'; messageId: string }
     | { kind: 'held_legacy' }
     | { kind: 'key_conflict' }
-    | { kind: 'reconcile_send'; messageId: string }
 
 type TelegramMessageOwner = { chatId: string; direction: 'inbound' | 'outbound' }
 
@@ -738,10 +740,10 @@ function logTelegramMessageKeyConflict(loggerPrefix: string, chatId: string): vo
  *   account, so it is never treated as this event's duplicate. When it is in
  *   the same chat, direction and content the event is held instead of written
  *   twice (held_legacy); different content proves a different message.
- * - Outbound only: a CRM send row that does not carry a provider id yet is
- *   reconciled by content and the existing window and then stamped with the
- *   exact key, so it cannot absorb a second event. The claim is not
- *   compare-and-set; concurrent identical sends remain an open dependency.
+ * - Outbound: a CRM send row that does not carry a provider id yet is not
+ *   matched here. The caller hands the event to Messaging's delivery evidence
+ *   command (observeTelegramOutboundEvidence), whose compare-and-set matcher
+ *   settles it.
  * An event without a provider id keeps the content+time window, restricted to
  * this account's local keys (and, outbound, to CRM send rows); that path is not
  * exact.
@@ -784,20 +786,6 @@ async function findStoredTelegramMessage(input: {
         ) {
             return { kind: 'held_legacy' }
         }
-        if (input.direction === 'outbound') {
-            const pendingSend = await prisma.message.findFirst({
-                where: {
-                    chatId: input.chatId,
-                    direction: 'outbound',
-                    content: input.content,
-                    externalId: null,
-                    sentAt,
-                },
-                orderBy: { createdAt: 'asc' },
-                select: { id: true },
-            })
-            if (pendingSend) return { kind: 'reconcile_send', messageId: pendingSend.id }
-        }
         return { kind: 'none' }
     }
     const fallback = await prisma.message.findFirst({
@@ -839,7 +827,7 @@ async function createTelegramMessageOrFindWinner(input: {
     metadata: Record<string, unknown>
 }): Promise<TelegramMessageCreateResult> {
     try {
-        const result = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: input.chatId, direction: input.direction, content: input.content, channel: 'telegram', type: input.type as any, sentAt: input.sentAt, status: 'delivered', externalId: input.externalId, metadata: input.metadata })
+        const result = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: input.chatId, direction: input.direction, content: input.content, channel: 'telegram', type: input.type as any, sentAt: input.sentAt, ...(input.direction === 'inbound' ? { status: 'delivered' as const } : {}), externalId: input.externalId, metadata: input.metadata })
         return { kind: 'created', message: result.message }
     } catch (error: unknown) {
         if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error
@@ -851,6 +839,71 @@ async function createTelegramMessageOrFindWinner(input: {
         if (!isOwnTelegramMessageRow(winner, input)) return { kind: 'key_conflict' }
         if (input.syntheticKey && winner.content !== input.content) return { kind: 'key_conflict' }
         return { kind: 'duplicate', messageId: winner.id }
+    }
+}
+
+// What this account's own message, observed at the provider, proves: the
+// live echo of a send, or its read-back by catch-up and history import. A
+// Telegram user account never learns that a recipient's device received a
+// message, so nothing here is ever 'delivered'.
+type TelegramOutboundEvidence = 'provider_echo' | 'history_readback'
+
+type TelegramOutboundSettlement =
+    | { kind: 'none' }
+    | { kind: 'duplicate'; messageId: string }
+    | { kind: 'reconciled'; messageId: string }
+    | { kind: 'key_conflict' }
+
+/**
+ * Hands an own outbound message with a provider id to Messaging's delivery
+ * evidence command (S2). It resolves the exact provider id first; for text,
+ * else the oldest unsettled CRM send of the same text in this conversation,
+ * claimed compare-and-set; evidence is applied only when stronger. Media is
+ * matched by its exact id only.
+ */
+async function observeTelegramOutboundEvidence(input: {
+    chatId: string
+    providerMessageId: string
+    evidence: TelegramOutboundEvidence
+    content: string | null
+    providerSentAt: Date
+}): Promise<TelegramOutboundSettlement> {
+    const settled = await applyMessageDeliveryEvidenceV1({
+        contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+        chatId: input.chatId,
+        channel: 'telegram',
+        providerMessageId: input.providerMessageId,
+        evidence: input.evidence,
+        ...(input.content === null ? {} : { content: input.content }),
+        providerSentAt: input.providerSentAt,
+    })
+    if ((settled.outcome === 'applied' || settled.outcome === 'unchanged') && settled.messageId) {
+        return settled.matchedBy === 'unresolved_content'
+            ? { kind: 'reconciled', messageId: settled.messageId }
+            : { kind: 'duplicate', messageId: settled.messageId }
+    }
+    if (settled.outcome === 'no_match') return { kind: 'none' }
+    // The id is held by a row that is not this conversation's own send.
+    if (settled.reason === 'provider_id_collision') return { kind: 'key_conflict' }
+    throw new Error(`TELEGRAM_DELIVERY_EVIDENCE_REFUSED:${settled.reason ?? 'unknown'}`)
+}
+
+/** The row this observation just wrote takes the provider's evidence; a miss heals on the next observation. */
+async function recordNewTelegramOutboundEvidence(input: {
+    chatId: string
+    messageId: string
+    providerMessageId: string
+    evidence: TelegramOutboundEvidence
+    providerSentAt: Date
+    loggerPrefix: string
+}): Promise<void> {
+    try {
+        const settled = await observeTelegramOutboundEvidence({ ...input, content: null })
+        if (settled.kind !== 'duplicate' || settled.messageId !== input.messageId) {
+            console.warn(`[${input.loggerPrefix}] evidence not recorded msg=${input.messageId} outcome=${settled.kind}`)
+        }
+    } catch (error: unknown) {
+        console.warn(`[${input.loggerPrefix}] evidence not recorded msg=${input.messageId} code=${telegramIngressErrorCode(error)}`)
     }
 }
 
@@ -1201,6 +1254,7 @@ async function processOutboundMirrorMessage(
     connectionId: string,
     providerAccountId: string,
     loggerPrefix = 'TG-MIRROR',
+    evidence: TelegramOutboundEvidence = 'provider_echo',
 ): Promise<TelegramIngressOutcome> {
     if (!message?.out) return 'skipped'
 
@@ -1272,13 +1326,31 @@ async function processOutboundMirrorMessage(
         logTelegramMessageKeyConflict(loggerPrefix, chat.id)
         return 'key_conflict'
     }
-    if (stored.kind === 'reconcile_send' || stored.kind === 'duplicate') {
-        if (stored.kind === 'reconcile_send' && externalMsgId) {
-            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
+    // S2: the provider's record of this message is evidence for the row that
+    // holds its exact id, or settles the CRM send it came from.
+    let existingId = stored.kind === 'duplicate' ? stored.messageId : null
+    let existingOutcome: TelegramIngressOutcome = 'duplicate'
+    if (externalMsgId) {
+        const settled = await observeTelegramOutboundEvidence({
+            chatId: chat.id,
+            providerMessageId: externalMsgId,
+            evidence,
+            content: msgType === 'text' ? text : null,
+            providerSentAt: sentAt,
+        })
+        if (settled.kind === 'key_conflict') {
+            logTelegramMessageKeyConflict(loggerPrefix, chat.id)
+            return 'key_conflict'
         }
-        await ensureOutboundTelegramAttachment(message, stored.messageId, msgType, loggerPrefix)
-        console.log(`[${loggerPrefix}] DEDUP: skipped existing=${stored.messageId}`)
-        return stored.kind === 'reconcile_send' ? 'reconciled_send' : 'duplicate'
+        if (settled.kind !== 'none') {
+            existingId = settled.messageId
+            existingOutcome = settled.kind === 'reconciled' ? 'reconciled_send' : 'duplicate'
+        }
+    }
+    if (existingId) {
+        await ensureOutboundTelegramAttachment(message, existingId, msgType, loggerPrefix)
+        console.log(`[${loggerPrefix}] DEDUP: skipped existing=${existingId}`)
+        return existingOutcome
     }
 
     // New outbound message sent from outside CRM — mirror it
@@ -1292,6 +1364,16 @@ async function processOutboundMirrorMessage(
         return 'duplicate'
     }
     const saved = savedResult.message as any
+    if (externalMsgId) {
+        await recordNewTelegramOutboundEvidence({
+            chatId: chat.id,
+            messageId: saved.id,
+            providerMessageId: externalMsgId,
+            evidence,
+            providerSentAt: sentAt,
+            loggerPrefix,
+        })
+    }
 
     await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
 
@@ -1365,6 +1447,7 @@ async function catchUpMissedMessages(
     let failedDialogs = 0
     let serviceDialogs = 0
     let fetched = 0
+    let readReceipts = 0
     let runError: string | null = null
     try {
         console.log(`[TG-CATCHUP] Fetching recent dialogs for connectionId=${connectionId}`)
@@ -1396,6 +1479,7 @@ async function catchUpMissedMessages(
                                 connectionId,
                                 providerAccountId,
                                 'TG-CATCHUP-OUT',
+                                'history_readback',
                             )
                             : await processInboundTelegramMessage(
                                 msg,
@@ -1419,6 +1503,8 @@ async function catchUpMissedMessages(
                         break
                     }
                 }
+                // A read marker missed while disconnected is in the dialog itself.
+                readReceipts += await applyTelegramDialogReadMarker(dialog, connectionId, providerAccountId)
             } catch (dialogError: unknown) {
                 failedDialogs++
                 console.warn(`[TG-CATCHUP] dialog failed conn=${connectionId} code=${telegramIngressErrorCode(dialogError)}`)
@@ -1428,8 +1514,88 @@ async function catchUpMissedMessages(
         runError = telegramIngressErrorCode(err)
         console.error(`[TG-CATCHUP] Error: code=${runError}`)
     }
-    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} keyConflicts=${counts.key_conflict} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs}${runError ? ` error=${runError}` : ''}`)
+    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} keyConflicts=${counts.key_conflict} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs} readReceipts=${readReceipts}${runError ? ` error=${runError}` : ''}`)
     if (!runError) console.log(`[TG-CATCHUP] Finished. Processed ${fetched} messages.`)
+}
+
+// The newest own messages of one dialog a read marker may address.
+const TELEGRAM_READ_RECEIPT_SCAN_LIMIT = 200
+
+/**
+ * Telegram's read marker for a private dialog: every message this account sent
+ * there up to maxId has been read. It is applied as read_receipt evidence (S2)
+ * to this account's own rows for that peer, the newest unread ones first.
+ * Rows stored under a bare id name no account and are never addressed.
+ */
+async function applyTelegramReadReceipts(input: {
+    providerAccountId: string
+    peerId: string
+    maxId: number
+}): Promise<number> {
+    const chat = await (prisma.chat as any).findUnique({
+        where: { externalChatId: `telegram:${input.peerId}` },
+        select: { id: true, channel: true },
+    })
+    if (!chat || chat.channel !== 'telegram') return 0
+    const rows = await prisma.message.findMany({
+        where: {
+            chatId: chat.id,
+            direction: 'outbound',
+            channel: 'telegram',
+            status: { not: 'read' },
+            externalId: { startsWith: `telegram:${input.providerAccountId}:${input.peerId}:` },
+        },
+        orderBy: { sentAt: 'desc' },
+        take: TELEGRAM_READ_RECEIPT_SCAN_LIMIT,
+        select: { externalId: true },
+    })
+    let promoted = 0
+    for (const row of rows) {
+        const externalId = row.externalId
+        const rawId = externalId ? exactTelegramProviderMessageId(externalId, input.providerAccountId, input.peerId) : null
+        const messageId = rawId ? Number(rawId) : Number.NaN
+        if (!externalId || !Number.isSafeInteger(messageId) || messageId > input.maxId) continue
+        const settled = await applyMessageDeliveryEvidenceV1({
+            contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+            chatId: chat.id,
+            channel: 'telegram',
+            providerMessageId: externalId,
+            evidence: 'read_receipt',
+        })
+        if (settled.outcome === 'applied') promoted++
+    }
+    return promoted
+}
+
+/** A read marker names one exact person this account writes to; anything else is ignored. */
+function telegramReadMarker(peerId: unknown, maxId: unknown, providerAccountId: string): { peerId: string, maxId: number } | null {
+    const peer = peerId === null || peerId === undefined ? null : String(peerId)
+    const max = Number(maxId)
+    if (!peer || !/^\d+$/.test(peer) || peer === '0' || peer === providerAccountId || isTelegramServicePeer(peer)) return null
+    if (!Number.isSafeInteger(max) || max <= 0) return null
+    return { peerId: peer, maxId: max }
+}
+
+async function processReadHistoryOutbox(update: any, connectionId: string, providerAccountId: string): Promise<void> {
+    const marker = telegramReadMarker(update?.peer?.userId, update?.maxId, providerAccountId)
+    if (!marker) return
+    try {
+        const promoted = await applyTelegramReadReceipts({ providerAccountId, ...marker })
+        if (promoted) console.log(`[TG-READ] read marker conn=${connectionId} promoted=${promoted}`)
+    } catch (error: unknown) {
+        console.warn(`[TG-READ] read marker failed conn=${connectionId} code=${telegramIngressErrorCode(error)}`)
+    }
+}
+
+async function applyTelegramDialogReadMarker(dialog: any, connectionId: string, providerAccountId: string): Promise<number> {
+    const marker = telegramReadMarker(dialog?.entity?.id, dialog?.dialog?.readOutboxMaxId, providerAccountId)
+    if (!marker) return 0
+    try {
+        return await applyTelegramReadReceipts({ providerAccountId, ...marker })
+    } catch (error: unknown) {
+        console.warn(`[TG-CATCHUP] read marker failed conn=${connectionId} code=${telegramIngressErrorCode(error)}`)
+        return 0
+    }
 }
 
 /**
@@ -1525,6 +1691,11 @@ function attachInboundListener(
     client.addEventHandler(
         (event: any) => processReactionUpdate(event, connectionId, providerAccountId),
         new Raw({ types: [Api.UpdateMessageReactions] })
+    )
+
+    client.addEventHandler(
+        (event: any) => processReadHistoryOutbox(event, connectionId, providerAccountId),
+        new Raw({ types: [Api.UpdateReadHistoryOutbox] })
     )
 
     initializedListeners.add(connectionId)
@@ -1795,6 +1966,23 @@ function telegramRpcErrorCode(error: unknown): number | null {
     return typeof code === 'number' ? code : null
 }
 
+// Telegram answered the send with a refusal: the request was rejected and no
+// message exists. RANDOM_ID_DUPLICATE means an earlier copy of this very
+// request (GramJS resends it after a reconnect) may have been sent, so it is
+// never a refusal. FLOOD_WAIT, 5xx, timeouts and dropped sockets carry no
+// proof either way and stay unknown.
+const TELEGRAM_SEND_REFUSAL_RPC_CODES: ReadonlySet<number> = new Set([400, 401, 403, 406])
+const TELEGRAM_SEND_MAY_EXIST_RPC_ERRORS: ReadonlySet<string> = new Set(['RANDOM_ID_DUPLICATE'])
+
+function telegramProviderRefusedSend(error: unknown): boolean {
+    const code = telegramRpcErrorCode(error)
+    const errorMessage = (error as { errorMessage?: unknown } | null)?.errorMessage
+    return code !== null
+        && TELEGRAM_SEND_REFUSAL_RPC_CODES.has(code)
+        && typeof errorMessage === 'string'
+        && !TELEGRAM_SEND_MAY_EXIST_RPC_ERRORS.has(errorMessage)
+}
+
 function withTelegramRpcErrorCode(message: string, error: unknown): Error {
     const code = telegramRpcErrorCode(error)
     return Object.assign(new Error(message), code === null ? {} : { code })
@@ -1807,7 +1995,10 @@ function withTelegramRpcErrorCode(message: string, error: unknown): Error {
  * the error goes on exactly as before.
  */
 function telegramSendFailure(error: unknown, dispatchStarted: boolean): Error {
-    if (dispatchStarted) return new Error(`Telegram delivery failed: ${(error as { message?: unknown } | null)?.message}`)
+    if (dispatchStarted) {
+        const failure = `Telegram delivery failed: ${(error as { message?: unknown } | null)?.message}`
+        return new Error(telegramProviderRefusedSend(error) ? `${failure} (${TELEGRAM_MTPROTO_REFUSED})` : failure)
+    }
     const detail = error instanceof Error ? error.message : String(error)
     if (S1_ADAPTER_OUTCOME_CODE.test(detail)) return new Error(`Telegram delivery failed: ${detail}`)
     const refused = TELEGRAM_SEND_REFUSAL_CODE.test(detail) || telegramRpcErrorCode(error) === 401
@@ -2170,12 +2361,16 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         // Messaging owns the already-created optimistic row and applies this
         // exact provider result. The transport must not migrate/create Chats
         // or grant DriverTelegram authority as a side effect of delivery.
+        // S2 C1: Telegram's answer carrying this message's id is provider_ack;
+        // without one only the client action is known. A user account never
+        // learns of device delivery, so no send is 'delivered' here.
         const rawExternalId = (result as any)?.id?.toString()
+        const providerMessageId = rawExternalId && exactPreparedTarget && exactProviderAccountId
+            ? telegramMessageExternalId(exactProviderAccountId, exactPreparedTarget, rawExternalId)
+            : null
         return {
-            success: true,
-            externalId: rawExternalId && exactPreparedTarget && exactProviderAccountId
-                ? telegramMessageExternalId(exactProviderAccountId, exactPreparedTarget, rawExternalId)
-                : undefined,
+            evidence: providerMessageId ? 'provider_ack' as const : 'client_action' as const,
+            providerMessageId,
         }
     } catch (err: any) {
         console.error('[TG-SEND] SEND ERROR:', err)
@@ -2459,14 +2654,29 @@ export async function importTelegramHistory(
                             logTelegramMessageKeyConflict('TG-IMPORT', unifiedChat.id)
                             continue
                         }
-                        if (stored.kind === 'reconcile_send') {
-                            if (externalMsgId) {
-                                await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: stored.messageId, externalId: externalMsgId, status: 'delivered' })
+                        let settledHist: TelegramOutboundSettlement = stored.kind === 'duplicate'
+                            ? { kind: 'duplicate', messageId: stored.messageId }
+                            : { kind: 'none' }
+                        if (isOutbound && externalMsgId) {
+                            const observed = await observeTelegramOutboundEvidence({
+                                chatId: unifiedChat.id,
+                                providerMessageId: externalMsgId,
+                                evidence: 'history_readback',
+                                content: histMsgType === 'text' ? msgText : null,
+                                providerSentAt: ts,
+                            })
+                            if (observed.kind === 'key_conflict') {
+                                keyConflictMessages++
+                                logTelegramMessageKeyConflict('TG-IMPORT', unifiedChat.id)
+                                continue
                             }
+                            if (observed.kind !== 'none') settledHist = observed
+                        }
+                        if (settledHist.kind === 'reconciled') {
                             reconciledSendMessages++
                             continue
                         }
-                        if (stored.kind === 'duplicate') {
+                        if (settledHist.kind === 'duplicate') {
                             existingMessages++
                             continue
                         }
@@ -2482,6 +2692,16 @@ export async function importTelegramHistory(
                             continue
                         }
                         const savedHistMsg = savedHistResult.message as any
+                        if (isOutbound && externalMsgId) {
+                            await recordNewTelegramOutboundEvidence({
+                                chatId: unifiedChat.id,
+                                messageId: savedHistMsg.id,
+                                providerMessageId: externalMsgId,
+                                evidence: 'history_readback',
+                                providerSentAt: ts,
+                                loggerPrefix: 'TG-IMPORT',
+                            })
+                        }
 
                         // Download media for history import
                         if (histMediaInfo && histMsgType !== 'text' && client) {

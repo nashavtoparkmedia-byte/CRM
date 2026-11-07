@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a"
+    "decision_registry_sha256": "c95528fb5e3f49028b69d1d9d22103a0a5dc70fd3407b91d5ad59e1668d7f083"
   },
   "amendments": [
     {
@@ -2632,91 +2632,959 @@
       }
     },
     {
-      "amendment_id": "calling-c3a-campaign-live-dial-main-f77279db-20261027",
-      "reviewed_at": "2026-10-27T00:00:00Z",
-      "reviewed_by": "CALLING_C3A_CAMPAIGN_LIVE_DIAL_MAIN_F77279DB_LOCAL_RECONCILIATION_EXECUTOR_REVIEW_20261027",
+      "amendment_id": "cash-release-safety-r1-r5-main-f77279db-20261026",
+      "reviewed_at": "2026-10-26T00:00:00Z",
+      "reviewed_by": "CASH_RELEASE_SAFETY_R1_R5_EXECUTOR_REVIEW_F77279DB",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "OWNER_DECISION_C3A_WSL_FIRST_LOCAL_RECONCILE_F77279DB_20261027",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_CASH_RELEASE_SAFETY_SOURCE_IMPLEMENTATION_20261026",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f77279db, whose tail is contact-communication-restrictions-b1-main-4f3b6c0a-20261025. It supersedes the earlier C3a amendment anchored on main effcbf6d (calling-c3a-campaign-live-dial-main-effcbf6d-20261009, carried by the unlanded candidates up to 553e3d38), which is deliberately not carried forward: its predecessor denominator (2,696) is no longer main's tail, so the same surfaces are reviewed again against the published chain rather than replayed. Prepared locally under the Owner's WSL-first decision; it lands only through the Calling Product Curator."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f77279db, whose tail is contact-communication-restrictions-b1-main-4f3b6c0a-20261025, and leaves that amendment untouched."
       },
-      "reason": "Records the tracked executable surfaces the Calling C3a Campaign Live Dial Foundation adds on top of main f77279db: 2,706 + 9 = 2,715 surfaces, context-owned 1,469 -> 1,478, governed exclusions unchanged at 1,237. All nine new paths live under gravity-mvp/src/modules/calling and are owned by the calling context through its manifest owned_paths: the campaign live-dial application capability, the Calling runtime readiness it shares with the controlled route, the campaign live-readiness projection, the provider-effect journal, the bridge scenario loader that serves a campaign's frozen scenario snapshot, the internal live-dial adapter, and the three Vitest suites beside them. None reaches a governed exclusion or an exact inventory, and none is relocated from another path, so no path retires. One reviewed exact-inventory assignment rewrites its bytes in the same movement: the bridge's session-resolution route resolves a campaign Call's frozen scenario snapshot through the Calling loader, so this amendment carries exactly one source-fingerprint rebind. The repository's own derivation over this tree reports no exact-inventory path without a reviewed assignment. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no surface or assignment belonging to T1, RCQ1, #41, Messaging S1 and S2, the contact-conversations query, MAX M1+M2, Cash, the entry gate, Call Alerts, the Contacts communication restrictions B1 or any other landed track is touched. The current triple is the repository's own derivation over this exact clean candidate (bb759e2d), read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization; no value is carried from an earlier C3a candidate.",
+      "reason": "Records the tracked executable surfaces the Cash nginx release-safety tooling adds on top of main f77279db: 2,706 + 8 = 2,714 surfaces, context-owned 1,469 -> 1,477 and governed exclusions 1,237 unchanged. Eight paths become tracked and none retires, all under deploy/nginx, which the edge_delivery context manifest owns, so the coverage derivation gives each of them a context owner and none reaches a governed exclusion or an exact inventory: the six Cash gate operator scripts with their shared helper, the offline harness, and the versioned copy of Security's shared P0 checker. The seven operational paths carry a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations), which is why this amendment's tracked inventory digest also carries those registered classifications; the harness stays an inferred TEST surface. No reviewed exact-inventory assignment changes its bytes, so there is no source-fingerprint rebind, and the repository's own derivation over this tree reports the historical exact-inventory transitions exactly as reviewed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree (preview-reviewed-current-denominator).",
       "predecessor": {
         "tracked_executable_surfaces": 2706,
         "tracked_inventory_sha256": "088e475870c213c8d6b6eb826f521048865ab001edaca050dc7aefbf5034b14f",
         "coverage_sha256": "a911197a3176df56eace4fecfedb4571c2520285e6245f591d62aaa475c53ddc"
       },
       "current": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "deploy/nginx/ops/cash-gate/apply-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script that installs a Cash action-map kit in an admitted slot only after the Security P0 shared checker passes the live state, the candidate template, its render and a map-only difference, and verifies P0 and the Cash routes after the reload; on failure it may put back only its own run's P0-keeping backup."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/lib.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Sourced helper of the Cash gate scripts: pins and verifies both digests of the Security checker package, runs a verified private copy under env -i, maps any non-zero answer to a stop, and probes the edge inside the nginx container. It writes nothing."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/manager-credentials.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script for Cash manager logins: the same hash line goes to the Cash and the staff user file named by the live template, in either credential layout; revoke removes the Cash line only; each change is checked with the Security checker. It never prints, passes or logs a secret."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/regen-gate-map.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Read-only for production: builds a Cash action-map kit for a new Gravity build only when the live template holds Security P0, the candidate passes the checker and differs only in map entries, and an offline nginx test with throwaway logins passes."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/rollback-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Operator script that restores one apply-gate backup in an admitted slot only if the Security checker passes that backup; a pre-P0 or quarantined backup is refused before any file is touched, and no second backup is ever tried."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/verify-gate.sh",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Read-only checks of the Cash gate under Security P0: anonymous edge answers, the Cash map and N1 denials, handler behaviour on the internal path, and an optional separate staff-login check from a 0600 file."
+        },
+        {
+          "path": "deploy/nginx/ops/cash-gate/tests/run-harness.sh",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory. Offline harness for the Cash gate scripts on the production nginx image with --network none, copies of the configuration and throwaway logins; production is only read."
+        },
+        {
+          "path": "deploy/nginx/ops/security-p0-shared/v1/p0-invariant.py",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under deploy/nginx, a path the edge_delivery bounded context owns in architecture/contexts/v1/manifests/edge_delivery.json owned_paths. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; its reviewed lifecycle classification (OPERATIONAL_SCRIPT, disposition ACTIVE, production capability CONFIRMED_MANUAL_OPERATOR, functional owner platform_operations) is recorded in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY, not here. Security's shared read-only P0 checker p0-invariant/v1, byte-identical to the Security release (SHA256SUMS) and versioned together with its approved-template list; Cash scripts pin both digests. Owner of its content is Security; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027",
+      "reviewed_at": "2026-10-27T00:00:00Z",
+      "reviewed_by": "ANDROID_ACCEPTANCE_TEST06_S2_REPAIR_EXECUTOR_REVIEW_20261027",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_AUTHORIZED_TEST06_BASELINE_REGRESSION_REPAIR_FINISH_TO_PR_20261027",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 5178f3e8, whose tail is cash-release-safety-r1-r5-main-f77279db-20261026, and reviews only the one surface the Android acceptance test06 repair adds."
+      },
+      "reason": "Records the one tracked executable surface the Android acceptance test06 repair adds on top of main 5178f3e8: android/tools/acceptance-max-transport.test.mjs, the node:test regression suite of the loopback MAX transport stand-in that the Android acceptance workflow uses. It pins the stand to the S2 delivery contract: the stand answers like the MAX scraper's accepted outcome (a provider_ack naming a real-shaped synthetic id) and its read-back check accepts only provider acceptance (status sent, provider_ack evidence) and refuses a false delivered, a client action, a second physical send and a second persisted row. 2,714 + 1 = 2,715 surfaces, context-owned 1,477 -> 1,478 and governed exclusions unchanged at 1,237. The surface is classified TEST by the tracked-surface inventory's own naming rule, as every other test surface is; it needs no lifecycle registry entry. The current triple is this repository's own derivation over this tree (preview on the clean commit 583b07df, which reported no required rebind and no exact-inventory path without a reviewed assignment). It sits under android, which the platform_shell manifest owns, so context ownership comes from the manifest and no explicit exact-inventory assignment applies. The other three repair files (the stand, the instrumentation test and its documentation) change bytes only; none carries a reviewed exact-inventory assignment or a registered source fingerprint, so no rebind is required and none is claimed. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2714,
+        "tracked_inventory_sha256": "1116aec3f196efab1d132579413e7f2bc81d7c6641961951434691507cea25b4",
+        "coverage_sha256": "b39d80b314c7ab66ab75ce3077d1a435ec7c016c990fd00c7ebc3272687b449f"
+      },
+      "current": {
         "tracked_executable_surfaces": 2715,
-        "tracked_inventory_sha256": "b7c9f16d118eb0db2bc5eaa5bd385665360dae18c1d74ff4332978a60bafe41d",
-        "coverage_sha256": "10082ba26e38e51e1833749ee3313854f7fec0f21698d0505c3b21ecbb9d20d4"
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "android/tools/acceptance-max-transport.test.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The node:test suite of the Android acceptance MAX transport stand-in. It imports only Node built-ins and the stand module, serves the stand on a loopback port chosen by the OS, opens no database connection, reaches no external host and holds no credential. Under android, a path the platform_shell context owns, so context ownership comes from the manifest."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "bot-driver-actions-multipark-person-row-main-e256d14b-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "BOT_DRIVER_ACTIONS_MULTIPARK_PERSON_ROW_EXECUTOR_REVIEW_E256D14B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_REGRESSION_01_MULTIPARK_DRIVER_ACTIONS_IMPLEMENTATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at aff9acac, whose tail is android-acceptance-test06-s2-provider-accepted-main-5178f3e8-20261027, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint bot-driver-action-profile-park-guard-main-5dc489cd-20261022 approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint: a driver action in a park other than the link row's own acts on the same person's own Driver row of that park, proven by the bot authority, the Contacts cluster confirmation and exactly one operator-confirmed row, and otherwise keeps the park guard. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
       },
       "source_hash_rebinds": [
         {
-          "path": "gravity-mvp/src/app/api/ai-calls/sessions/by-fs-uuid/[fsUuid]/route.ts",
-          "previous_source_sha256": "c07014074e14b5538cfc97b5ef329ec19333502c8b8a7a4199335f1256b49305",
-          "current_source_sha256": "6c665d1f5987e74b28347a7f31c5a171985bc9fac31fed332affb17ebf9e823b",
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "f540e346f0d9b5446427e5d9fc0633df5500219e446ec9d35e2c2cbec2440f87",
+          "current_source_sha256": "227d4227cdce7526d3cbceed88ce59da3ae76b5283ee2192f726d81b8f2cf98a",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "The bridge's session-resolution route now resolves the Call and its scenario through the Calling-owned bridge scenario loader. A Call that belongs to a campaign attempt executes the scenario snapshot the campaign froze, verified against the Call and its fingerprint, and a corrupt snapshot answers 409 instead of silently falling back to edited live data; every other Call resolves through the live scenario row exactly as before. The response shape the bridge consumes ({id, name, systemPrompt, questions, targetDurationSec}) is unchanged. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime functional owner, gravity_runtime_remainder exclusion, exact_runtime_inventory membership and reviewed rationale are unchanged; only the bytes move."
+          "review_rationale": "The driver-bot webhook keeps its single current-authority implementation, every authority check and the park guard in place. A private helper fixes, when an action starts, the Driver row it acts on: the link row in its own park, or in another selected park the same person's own row, only when the bot authority proves the Contact, the link row belongs to it, the Contacts public getConfirmedContactForDriverClusterV1 names that Contact alone for the link row's licence cluster, and exactly one non-dismissed operator-confirmed row of that cluster with a real Yandex profile id is in the park. The proof is re-proven, with the link row read again, before every provider change and scraper dispatch, and expires after 12 s. A car is bound only after the selected park's own car listing finds it. It reads more columns of the same Driver model and one Contacts public read, and adds no write, no credential and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "bot-park-switch-membership-fail-closed-main-e256d14b-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "BOT_PARK_SWITCH_MEMBERSHIP_FAIL_CLOSED_EXECUTOR_REVIEW_E256D14B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_AUTHORIZED_REGRESSION_01_MEMBERSHIP_FAIL_CLOSED_IMPLEMENTATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at aff9acac, whose tail is bot-driver-actions-multipark-person-row-main-e256d14b-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint bot-driver-actions-multipark-person-row-main-e256d14b-20261028 approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint: the driver bot's park switch enters a park other than the link row's own only on a definite Yandex membership answer and otherwise refuses with no write. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "227d4227cdce7526d3cbceed88ce59da3ae76b5283ee2192f726d81b8f2cf98a",
+          "current_source_sha256": "0e6e35047bb75482e5a0422d1e73ac11c1f12ea1bed14636da543b0a30ceb927",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook keeps its single current-authority implementation, every authority check, the park guard and the cross-park proof unchanged, and the pinned park-switch write is byte-identical. set_active_park enters the link row's own park, when the row is not dismissed, with no provider call. Any other park needs a 2xx Yandex profile list naming the driver's phone as an exact E.164 key, and, for a row with no recorded park, the row's own Yandex profile id. A definite absence answers NOT_IN_PARK; a timeout, an error, a non-2xx, a malformed body or a missing phone or profile answers PARK_MEMBERSHIP_UNKNOWN with no write, where before each of these switched the park. It reads two more columns of the same Driver model and adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "bot-order-actions-own-park-main-e256d14b-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "BOT_ORDER_ACTIONS_OWN_PARK_EXECUTOR_REVIEW_E256D14B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_AUTHORIZED_REGRESSION_01_QUICK_RESTORE_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at aff9acac, whose tail is bot-park-switch-membership-fail-closed-main-e256d14b-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint bot-park-switch-membership-fail-closed-main-e256d14b-20261028 approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint: completing or cancelling an order stays in the link row's own park, while the order card follows the selected park. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "0e6e35047bb75482e5a0422d1e73ac11c1f12ea1bed14636da543b0a30ceb927",
+          "current_source_sha256": "a28b7cc4397c3c28693d43f89c9097a1dc29932a4aafcf6294ba571ff6de7920",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-bot webhook keeps every authority check, the park guard, the cross-park proof, the bounded provider budget and the fail-closed park switch unchanged. Only the order card (GET_PRICE) resolves the same person's Driver row in another selected park; COMPLETE_ORDER and CANCEL_ORDER act only from the link row's own park, as on main, until they are guarded against repeating on another order. It adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "telegram-simple-link-authority-d0be23e8-20261028",
+      "reviewed_at": "2026-10-28T00:00:00Z",
+      "reviewed_by": "TELEGRAM_SIMPLE_LINK_AUTHORITY_EXECUTOR_REVIEW_D0BE23E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_SIMPLE_TELEGRAM_AUTHORIZATION_20261028",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain of the driver-actions quick restore at d0be23e8, whose tail is bot-order-actions-own-park-main-e256d14b-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move."
+      },
+      "reason": "Records the source fingerprints the simple Telegram authorization moves without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. 3 reviewed exact-inventory assignments move their bytes and are rebound from their approved fingerprints. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "a28b7cc4397c3c28693d43f89c9097a1dc29932a4aafcf6294ba571ff6de7920",
+          "current_source_sha256": "264bf9eb1db9afd336fb871ba13cdbb1fb9cf3abd96820736b04f32f1df53bca",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28 (simple Telegram authorization): every driver-bot action is authorized by the exact Telegram-to-Driver link, read again at each check, on the canonical Bot transport; a confirmed Contact is no longer required. sync_user links by itself only the single non-dismissed Driver profile that the driver's own verified number names exactly and that no Telegram holds, otherwise it pends the manager as before. In another selected park (D2, Owner GO of the same day) the action acts only on the single non-dismissed row of that park sharing the link row's licence key and exact number, with no person conflict, its own Yandex profile id, no contradicting Contact and Yandex listing that profile with that number in that park; a missing Contact never blocks, and the proof writes nothing. Cash keeps its own Contacts person rule. The park guard, the bounded provider budget, the fail-closed park switch and complete/cancel are unchanged. It adds no credential, no new import module and no new model."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "previous_source_sha256": "a495ab236e266ca26a72d69d0fccd4c3640a40ed2882d6738d5b9ecf7bc91bc2",
+          "current_source_sha256": "b115d4c3bc01d9f1c773e191e14e2a7ece8b431ed439ad3ead5b965908213514",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28: the manager's manual link is one action through the Telegram owner's existing atomic replace command, so a relink ends the previous link of that Driver or Telegram in the same transaction. The integration-admin, same-origin and exact-profile checks are unchanged. It adds no credential and no new model."
+        },
+        {
+          "path": "gravity-mvp/src/app/tg-bot-actions.ts",
+          "previous_source_sha256": "3420851428ea5e7c04112dc74c18f10f2ef0b2f1d3f6e5e76d9bc44f456b80d6",
+          "current_source_sha256": "96942cf023b2f3351896be870960197b107d4f3f384e222cc75b8c0a8d2391e6",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner decision of 2026-10-28: the settings-page manual link is one action through the Telegram owner's existing atomic replace command, and links only an existing Driver. Integration-admin access and outbound delivery are unchanged. It adds no credential and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "telegram-simple-link-authority-r1-strict-phone-5fbd9ed4-20261029",
+      "reviewed_at": "2026-10-29T00:00:00Z",
+      "reviewed_by": "TELEGRAM_SIMPLE_LINK_AUTHORITY_R1_EXECUTOR_REVIEW_5FBD9ED4",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_R1_STRICT_TELEGRAM_PHONE_20261029",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is telegram-simple-link-authority-d0be23e8-20261028, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint that amendment approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "264bf9eb1db9afd336fb871ba13cdbb1fb9cf3abd96820736b04f32f1df53bca",
+          "current_source_sha256": "1414e53f2ceea4231b5829d5ae1a1444ecff088fc6c6b17fdfb290d36de84407",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner GO of 2026-10-29 (R1, from the independent Telegram review): the sync_user auto-link reads the number a driver shared through Telegram only in its international Russian form, 11 digits beginning with 7, so a foreign number never links the Russian profile that shares its last ten digits. Stored CRM numbers, D2, the manual link and the rest of the authority are unchanged. It adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-auth-alignment-d2-integration-d5ed8cc1-20261029",
+      "reviewed_at": "2026-10-29T00:00:00Z",
+      "reviewed_by": "CASH_AUTH_ALIGNMENT_D2_INTEGRATION_EXECUTOR_REVIEW_D5ED8CC1",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_CASH_P2_D2_INTEGRATION_20261029",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is telegram-simple-link-authority-r1-strict-phone-5fbd9ed4-20261029, and leaves that amendment untouched. It is a rebind-only amendment: the reviewed triple does not move, and the rebind of the driver-bot webhook starts from the exact fingerprint that amendment approved."
+      },
+      "reason": "Records the source fingerprint the driver-bot webhook moves again without moving the reviewed denominator: 2,715 tracked executable surfaces are unchanged, no path becomes tracked and none retires. One reviewed exact-inventory assignment moves its bytes and is rebound from its approved fingerprint. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "1414e53f2ceea4231b5829d5ae1a1444ecff088fc6c6b17fdfb290d36de84407",
+          "current_source_sha256": "e7681bfab132af787388e27e2541e63b7e171831ed2ecb8b4b9dfe40c28f2b19",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner GO of 2026-10-29 (Cash P2 integration, Security verdict 2af5d521): the Cash proof of the driver-bot webhook no longer refuses a linked driver whose Telegram conversation authority is not proven; it passes contactId null and the Cash pilot decides the programme and refuses every claim without a proven person. Money still binds only to the Contact that prepareDriverTelegramConversationAuthorityV1 proves, called once inside proveCompensationTelegramPerson. The link authority, D2, the auto-link and the manual link are unchanged. It adds no write, no credential, no import and no new model."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-referral-access-delivery-main-999e289f-20261031",
+      "reviewed_at": "2026-10-31T00:00:00Z",
+      "reviewed_by": "CASH_REFERRAL_ACCESS_DELIVERY_EXECUTOR_REVIEW_999E289F",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_GO_YOKO_REFERRAL_ACCESS_FULL_AUTONOMOUS_DELIVERY_20261031",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is cash-auth-alignment-d2-integration-d5ed8cc1-20261029, and leaves that amendment untouched. The rebind of the driver-bot webhook starts from the exact fingerprint that amendment approved."
+      },
+      "reason": "Records the tracked executable surfaces Cash Referral Access adds on top of main 999e289f, and the one source fingerprint it moves: 2,715 + 15 = 2,730 surfaces, context-owned 1,478 -> 1,492 and governed exclusions 1,237 -> 1,238. Twelve new paths sit under gravity-mvp/src/modules/fleet-operations and two under tg-bot/src, owned through their context manifests; the expand-only migration falls under the gravity_schema governed exclusion. The driver-bot webhook keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. No assignment, exact-inventory transition, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree (preview-reviewed-current-denominator on the clean commit 19e9fe25). Its position, predecessor and current triple bind it to main 999e289f only and claim no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses, with the same surfaces and rebind.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2715,
+        "tracked_inventory_sha256": "1649b7edf4fee0f7d1518e1d1f950c654fadcae1c900915f3aad8ba672e30a2e",
+        "coverage_sha256": "e80fcadcf8f6b6853ca94c7986cfa71ebd4f6bf6db7f017a54798ee45d452cd3"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2730,
+        "tracked_inventory_sha256": "b117b03fce730946372c36e3f1a7b9302a8616c4097b1790a9570faa02e4452e",
+        "coverage_sha256": "5fb221a9daf64b6e707a5bc8a2a723ccbc28615221201003ed6825b4b380e1e2"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "e7681bfab132af787388e27e2541e63b7e171831ed2ecb8b4b9dfe40c28f2b19",
+          "current_source_sha256": "71bf4ea7892c405fda0ef1ee4ab6be2b02cebf5de417fbef729ced8fb03958f8",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner GO of 2026-10-31 (Cash Referral Access, Security implementation verdicts 451f6bd5 and 79597acd): the driver-bot webhook gains referral_issue, referral_status and referral_capture, each a no-op unless YOKO_CASH_REFERRAL_ACCESS=on. Issue and status take the same Cash person proof the compensation actions take; capture answers every caller the same and never logs the token; a proven link records the invitee Driver, best effort. Every existing action keeps the same authority gate, status codes and responses. It adds no credential and no model write of its own."
         }
       ],
       "unassigned_tracked_surfaces": [
         {
-          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-dial.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
+          "path": "gravity-mvp/prisma/migrations/20261101120000_add_cash_referral_access/migration.sql",
+          "lifecycle": "MIGRATION",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the two Fleet Operations-owned Cash referral access tables, their constraints and indexes and one append-only row guard; it names no existing table."
         },
         {
-          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-readiness.test.ts",
+          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The composition root of Cash referral access: code issue, the inviter's own counts, the uniform capture, the invitee Driver attach, the hourly decision pass and the report-only chain check, each behind YOKO_CASH_REFERRAL_ACCESS=on. It injects the Fleet stores and the bounded Yandex dismissal read and touches no money, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-access.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+          "review_rationale": "The in-memory test of the Cash access decision and the order catalogue (standard first month equal to the live rule, referral and manual windows, identity blockers, unknown facts); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
-          "path": "gravity-mvp/src/modules/calling/application/ai-call-campaign-live-readiness.ts",
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-access.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+          "review_rationale": "The pure Cash access decision: precedence of identity, manual denial, manual grant, referral entitlement and the standard first month, and the order windows and budget periods they open. It reads no database, environment or provider and changes no money rule, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
-          "path": "gravity-mvp/src/modules/calling/application/ai-call-provider-effect-journal.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
-        },
-        {
-          "path": "gravity-mvp/src/modules/calling/application/calling-runtime-readiness.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
-        },
-        {
-          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-bridge-scenario-loader.test.ts",
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.postgres.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+          "review_rationale": "The env-gated PostgreSQL proof of the referral migration and store (writer check, append-only row guard, unique code and qualified person, first touch, version conflicts, rotation); it runs only against an isolated database the caller provides, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
-          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-bridge-scenario-loader.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
-        },
-        {
-          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-live-dial-adapter.test.ts",
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+          "review_rationale": "The in-memory test of the Cash access ledger (writer rule, row hash over every column, chain verifier, access fold, sanctions and kept dismissal readings); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
-          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-live-dial-adapter.ts",
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-ledger.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+          "review_rationale": "The pure Cash access ledger: event kinds and writers, the canonical row hash, the chain verifier, the access fold and the domain-separated person-key digest. It reads no database, environment or provider, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-qualification.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the referral qualification decision (new and returning invitees, dismissal readings after the capture, shared phone, sanctions, duplicates); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-qualification.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure referral qualification decision and the reader of a Yandex dismissal reading (fired plus a valid fire date only). It reads no database, environment or provider, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-service.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The in-memory test of the referral decision pass and the chain check against port fakes; it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-referral-service.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The referral decision pass and the report-only chain check behind ports: an unknown or stale fact or a skipped read leaves the invitation pending, and a grant is written only with a qualified decision. It has no provider or database dependency of its own, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-decision-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Prisma decision port: Fleet's own Driver rows for the invitee facts, Contacts through the pilot port, and the rationed Yandex dismissal read (a cap per pass and a per-park cooldown). It writes nothing, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-ledger-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one raw-SQL store of CashAccessEvent and CashReferralAttribution: hashed appends on the database clock, token-digest codes, first-touch captures and version-checked decisions. It writes only Fleet Operations-owned referral state, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "tg-bot/src/handlers/referral.js",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The driver bot referral entry behind BOT_REFERRAL_ENTRY_ENABLED: the personal link, the inviter's own counts and the uniform capture reply; the token reaches only the CRM and never the log. It holds no Prisma or credential reference, under tg-bot/src, a path the telegram_channel context owns by prefix in architecture/contexts/v1/manifests/telegram_channel.json owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "tg-bot/src/security/referralEntryGate.test.js",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A node:test contract test of the referral entry release gate and the uniform capture with in-process fakes; it opens no database connection and holds no credential, placed under src/security so the authoritative tg-bot-security control runs it, under tg-bot/src, a path the telegram_channel context owns by prefix in architecture/contexts/v1/manifests/telegram_channel.json owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "identity-access-br4-signed-mobile-operator-main-d46100e8-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_BR4_SIGNED_MOBILE_OPERATOR_EXECUTOR_REVIEW_D46100E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at d46100e8, whose tail is cash-referral-access-delivery-main-999e289f-20261031, and leaves that amendment untouched. It reviews only the 4 surfaces the BR-4 signed mobile operator change adds and the 6 exact-inventory paths whose bytes it changes."
+      },
+      "reason": "Records the tracked executable surfaces the BR-4 signed mobile operator change adds on top of main d46100e8: 2,730 + 4 = 2,734 surfaces, context-owned 1,492 -> 1,495 and governed exclusions 1,238 -> 1,239. Three new paths are Identity Access runtime modules owned by identity_access through its manifest owned_paths: the read side of the existing Mobile Push v1 logout barrier (internal/), the request-operator composition (application/) and its public re-export (public/v1). The fourth is a test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix (no exact inventory). Six existing paths in the reviewed gravity_runtime_remainder exact runtime inventory change bytes only, so this amendment carries their mechanical source-fingerprint rebinds: gravity-mvp/src/proxy.ts, gravity-mvp/src/app/api/chats/[id]/assign/route.ts and the four Fleet monitoring writes that record an author (gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts and gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts); their exclusion, lifecycle and functional owner are unchanged. Main did not change any of these six paths between aff9acac and d46100e8, so every previous_source_sha256 is both the fingerprint the published chain approved and the byte content of main d46100e8; every current_source_sha256 is the independently reviewed BR-4 product byte content (product diff sha256 8650ec8be8840efdfeb3eb5ab3c165a6c74bf5b071affc598114affdcab5347a over gravity-mvp, unchanged since PR #185 HEAD ba3c85a5). The other changed paths are context-owned and in no reviewed exact inventory; the frozen legacy authority gravity-mvp/src/lib/users/user-service.ts is unchanged. Its predecessor is the published tail's current triple, and its current triple differs from the predecessor by exactly these 4 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 42. It re-records, unchanged in surfaces, rebinds and rationales, the BR-4 amendment identity-access-br4-signed-mobile-operator-main-aff9acac-20261028 published on PR #185 HEAD ba3c85a5 as amendment 35 over main aff9acac but never landed: main moved to d46100e8 through the Cash, Telegram and CI amendments 35-41, so this one follows the published tail and takes its predecessor triple. Reconciled under the Orchestrator V7 Contact Identity full conditional delivery mandate of 2026-11-07, which withdrew the earlier requirement to wait for AI Calling C3a and SendToContact.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2730,
+        "tracked_inventory_sha256": "b117b03fce730946372c36e3f1a7b9302a8616c4097b1790a9570faa02e4452e",
+        "coverage_sha256": "5fb221a9daf64b6e707a5bc8a2a723ccbc28615221201003ed6825b4b380e1e2"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2734,
+        "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
+        "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/chats/[id]/assign/route.ts",
+          "previous_source_sha256": "f7dc14d8cc1981331351e98341921bbb6c74406c5361d116b243cfbc5b5dd855",
+          "current_source_sha256": "6f636f5bc1e3a0faa828a07d3435713e0a9a4f62244d536ed28fcb7d79481415",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The chat assign route keeps its single implementation and its ConversationWorkflowService call. Under a mobile session it now resolves the signed operator through the Identity Access public resolveRequestOperatorV1 and assigns only to that operator: a different client-supplied userId is refused with 403 and nothing is assigned, and a session cookie that grants nothing is refused with 401. Without a mobile session cookie the browser lane behaves exactly as before. Exclusion, lifecycle and functional owner are unchanged; this is a byte-only rebind (BR-4)."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts",
+          "previous_source_sha256": "5e0efc91990f2a8a5876f7783d20d4f370b6269719ed7265a02be891e2bd3d24",
+          "current_source_sha256": "95cf99fac958ffa706797a2cac3564f0b4a18ebde030a842f1e31979bfc14437",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-attention resolution route keeps its single implementation, its fleet_operations.UpdateDriverStateCommand.v1 call and its HTTP semantics (400 for a status other than resolved, 404, 409). Under a mobile session the recorded resolvedBy is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body resolvedBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts",
+          "previous_source_sha256": "a46ce59c35b316485bf3a3ecc14fcbe607dafa1d67b6cd579f356fb40dd75221",
+          "current_source_sha256": "5cd32ec00c18ddc5c7066f47b4fbf72c8701f00d864571430379a36ad5a35764",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The mark-attention route keeps its single implementation, validation and transaction. Under a mobile session the createdBy of the DriverAttention and of its attention_marked event is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
+          "previous_source_sha256": "ff74a6d247a131d2b13ac20305e96a7529cc770a9d8205cd465149ffc1fcef58",
+          "current_source_sha256": "d74ebd7a13ccef63e2ac817c0dd21343cdd16dd008474957bb0faa1629c33032",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver event route keeps its single implementation and event-type whitelist. Under a mobile session the DriverEvent createdBy is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
+          "previous_source_sha256": "08faa77b040c2e96378118127b12ba31213ea9f0baf710708126e8ce73ec8393",
+          "current_source_sha256": "81254ac5cd091d195173a95c2346b3e280695f2c0686c37f408f73f1a5e43c21",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The fleet-check route keeps its single implementation, row lock, idempotency, quota and scraper calls. Under a mobile session the createdBy of its fleet_check_requested event is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "e0d6cdbe7846edec5c5d22b4f94558bbd32bf1c0c2bbb651175effe58b9361ce",
+          "current_source_sha256": "06db7f7962c68fa983ef11a72b2fdd7c24a11886245d80baaa08ee43cfe19285",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The application request boundary keeps its single implementation, its matcher, the debug-database denial and the shell lane's fail-closed 401/303. For a request carrying a valid, not logged-out mobile session it now forwards the request with its Cookie header carrying exactly one crm_user_id equal to the signed operator, so every downstream reader of that request acts as the signed operator; a session cookie that grants nothing is forwarded with no crm_user_id. When the logout barrier cannot be read, the shell lane is answered 503 instead of 401/303, so a database outage does not send the shell to its login screen; no operator is forwarded. A browser request without a mobile session cookie is passed through untouched. Exclusion, lifecycle and functional owner are unchanged; this is a byte-only rebind (BR-4)."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/lib/security/mobile-signed-operator.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST: the BR-4 negative acceptance for the signed mobile operator."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-session-operator-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the request-operator composition."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-session-barrier.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the read side of the Mobile Push v1 logout barrier."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-session-operator.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the public re-export of the request-operator resolution."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "contact-identity-cc1-card-read-model-main-d46100e8-br4-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_CC1_CARD_READ_MODEL_EXECUTOR_REVIEW_D46100E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is identity-access-br4-signed-mobile-operator-main-d46100e8-20261107 (the BR-4 reconcile onto main d46100e8), and leaves that amendment untouched. It reviews only the 10 surfaces the CC-1 Contact Card read model adds; it rebinds no source fingerprint."
+      },
+      "reason": "Records the tracked executable surfaces the CC-1 Contact Card read model adds on top of the BR-4 reconcile of main d46100e8: 2,734 + 10 = 2,744 surfaces, context-owned 1,495 -> 1,504 and governed exclusions 1,239 -> 1,240. Nine new paths are owned by the contacts context through its manifest owned_paths: the contacts.ContactCardForConversationQuery.v1 contract and its test under gravity-mvp/src/contracts/contacts, and under gravity-mvp/src/modules/contacts/internal the handler, the single Prisma reader and the Identity Access authority binding with their tests. The tenth is a boundary control under tools/architecture, covered by the architecture_recovery governed exclusion as an OPERATIONAL_SCRIPT recorded in the lifecycle registry. No existing path changes bytes in any reviewed exact inventory, so this amendment carries no source-fingerprint rebind; the two context-owned files it edits (contact-operations.ts and the contacts public index) are in no exact inventory. Its predecessor is the current triple of the BR-4 amendment identity-access-br4-signed-mobile-operator-main-d46100e8-20261107, and its current triple differs from the predecessor by exactly these 10 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 43. It re-records, unchanged in surfaces and rationales, the CC-1 amendment contact-identity-cc1-card-read-model-main-e256d14b-20261027 published on PR #186 HEAD e5905000 as amendment 34 over main e256d14b but never landed: main moved to d46100e8 and BR-4 took amendment 42, so this one follows BR-4 and takes its predecessor triple, with the exact product bytes of e5905000 (CC1-L1 hardening included). The provisional engineering-map invariant I-CC1 is assigned its landing number I-63 in this reconcile. Reconciled under the Orchestrator V7 Contact Identity full conditional delivery mandate of 2026-11-07.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2734,
+        "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
+        "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2744,
+        "tracked_inventory_sha256": "599448af48b343cc07ef702c48c7db672a46bae34d57457cfb78cbd0f25b3c5b",
+        "coverage_sha256": "2fb18af75c9579ebd8573a1e078f9de3f1f60d62f5c08b8f02688bed5e93033a"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The contract test of contacts.ContactCardForConversationQuery.v1 (exact fields, exact Chat.id, versions); it opens no database connection and holds no credential, under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral contacts.ContactCardForConversationQuery.v1 contract: an exact Chat.id as the only input, the six answer states and the minimal card that only the confirmed answer carries. Under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.rcq1.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The card read model bound to the real Messaging RCQ1 handler over an in-memory store whose links and merges change mid-read; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The protocol and projection proofs of the card read model against recorded in-memory ports (authorization, cross-person, cross-fleet, races, no fallback, no data in any non-confirmed answer); it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The internal handler of the card read model: verified principal first, conversation access before RCQ1, Contact access before any Contact read, one read of exactly the Contact RCQ1 named and a second RCQ1 resolution that must name it again, plus the pure card projection over ContactDisplayPolicy and both Contacts conflict stores. It writes nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the card authority with Identity Access mocked, plus a source scan that it reads no client-held identity; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The production authority of the card read model: the principal is the Identity Access signed integration-admin principal (the declared contacts > identity_access.public dependency) and never crm_user_id, a cookie, a header or a mobile session; any other principal kind may read nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the card reader against a recording transaction double that throws on every write, raw query and foreign model; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one database reader of the card: Contact and ContactMerge read by exact id in one repeatable-read snapshot, no provider external id selected and no write. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "tools/architecture/check-contact-card-read-model-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the card read model answers only for an exact Chat.id through RCQ1, under a verified principal, reading exactly one Contact in one snapshot without writes, with its handler and bindings internal, and runs its proofs; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "contact-identity-person-card-main-d46100e8-cc1-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_PERSON_CARD_EXECUTOR_REVIEW_D46100E8",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is contact-identity-cc1-card-read-model-main-d46100e8-br4-20261107 (the CC-1 reconcile stacked on BR-4 over main d46100e8), and leaves that amendment untouched. It reviews the 27 context-owned surfaces the Contact Identity person card adds and the 2 exact-inventory paths whose bytes it changes; the 5 new exact-inventory entrypoints under gravity-mvp/src/app are recorded, as the manager CRM precedent did, in the historical decision registry itself, whose new hash this chain pins as base."
+      },
+      "reason": "Records the tracked executable surfaces the Contact Identity person card adds on top of the CC-1 reconcile (main d46100e8 + BR-4 + CC-1): 2,744 + 34 = 2,778 surfaces, context-owned 1,504 -> 1,531 and governed exclusions 1,240 -> 1,247. Twenty-seven new paths are owned by their contexts through manifest owned_paths: under contacts the ContactPersonCardQuery.v1 contract and test, the handler, the single Prisma reader and the Identity Access authority binding with their tests, the ported identity-conflict projection (M3A4 S1), ContactLookup.v1 builder and reader (M3A6A) and ContactSelector client (M3A6B) with their tests; under fleet_operations the DriverProfilesForContactsQuery.v1 contract, handler and reader with their tests; under platform_shell (application layer, as its outbound-conversation composition) the person-card composition and its test; under messaging the server action that resolves the drawer link through RCQ1 and the shared displayed-chat rule (selectDisplayedChatV1) with its test, which ChatWorkspace and the drawer both consult so the link follows only the exactly shown Chat.id (BD-F2 1a/2a). Two new paths are boundary controls under tools/architecture (architecture_recovery governed exclusion, OPERATIONAL_SCRIPT, recorded in the lifecycle registry). Five new paths are APPLICATION_RUNTIME entrypoints inside the exact runtime inventory of gravity_runtime_remainder — the «Люди» search page and client, the «Карточка человека» page and view, and the ContactLookup.v1 route — which an amendment may not carry, so, as the manager CRM precedent did (cash-compensation-manager-crm-main-9f87c947-20260922), their reviewed assignments and the exclusion's exact-inventory transition (257 -> 262 paths) are recorded in the historical decision registry itself and this chain pins its new hash as base. Two existing paths in that inventory change bytes only, so this amendment carries their mechanical source-fingerprint rebinds: gravity-mvp/src/config/navigation-domains.ts (one new domain «Люди») and gravity-mvp/src/config/sections.ts (the `people` section); their exclusion, lifecycle and functional owner are unchanged. Every other changed path (contact-operations.ts, the contacts and fleet public indexes and contract indexes, contact-display-policy.ts and contact-evidence-state.ts with the ported provider-neutral display and conflict predicates from epic/contact-identity 9fcc626b, fleet-operations.ts, the platform-shell public index, the Messaging conversation drawer's «Открыть в CRM» link, the Fleet driver page's person link, the enrich-context-manifests control catalog and its test) is context-owned and in no reviewed exact inventory. No merge policy, confirmation rule, lineage or recovery semantic changes: the card is a read model over existing Contacts evidence, Fleet persisted rows and Messaging conversation refs, answered only to the verified integration-admin principal (engineering gate of phase 1; Staff Session v1 is a separate design). Its predecessor is the current triple of amendment 43, and its current triple differs from the predecessor by exactly these 34 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes inside the amendment, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 44.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2744,
+        "tracked_inventory_sha256": "599448af48b343cc07ef702c48c7db672a46bae34d57457cfb78cbd0f25b3c5b",
+        "coverage_sha256": "2fb18af75c9579ebd8573a1e078f9de3f1f60d62f5c08b8f02688bed5e93033a"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2778,
+        "tracked_inventory_sha256": "59a3c66309f698bfccef2fd5e49d964fdc068ff2d6b6b9cff55ef8d6ef6fc966",
+        "coverage_sha256": "2f44a4c7fb4168f62c0b90b8bd4da65117e3b542f117fbc45483b372d7bf1506"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/config/navigation-domains.ts",
+          "previous_source_sha256": "2bb30eb4b7ba94b0ad1d68f6f972baf4445624b2e8a4fd8ee9dfabd3e2541154",
+          "current_source_sha256": "c0241237871466d19a417973576f56cfbb1a122c5d12006cf5441b7f741ea609",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V7 Contact Identity mandate (2026-11-07): the navigation gains one domain «Люди» with one item «Поиск человека» → /contacts; no existing domain, item or href changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/config/sections.ts",
+          "previous_source_sha256": "b08b541250c523cd1db058ec989b39a9515ceb5b46b1343e40b32ee4962b301e",
+          "current_source_sha256": "25b66c9ad2e763ea01d49527a569b1b0c36bbb5b46cc7fa75cf7c61718c8edc7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V7 Contact Identity mandate (2026-11-07): the section registry gains the `people` section (title «Люди», available, not a stub) that the new navigation item references; no existing section changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/messages/contact-card-link-actions.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the messaging bounded context owns (gravity-mvp/src/app/messages in its manifest owned_paths): the 'use server' action that asks Messaging's RCQ1 for the exact persisted Chat.id so the conversation drawer links to the person page only for a resolved conversation (BD-F2 1a/2a). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/app/messages/hooks/displayed-chat.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the messaging bounded context owns (gravity-mvp/src/app/messages in its manifest owned_paths): the one pure rule for which conversation the Messenger actually shows (selectDisplayedChatV1), shared by ChatWorkspace's remount key and by the conversation drawer's person-page link so that a grouped «Все» row or an empty channel tab never yields a link (BD-F2 1a/2a). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) after the independent review of #201; it holds no credential and opens no database connection."
+        },
+        {
+          "path": "gravity-mvp/src/app/messages/hooks/displayed-chat.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the messaging bounded context owns (gravity-mvp/src/app/messages in its manifest owned_paths): the one pure rule for which conversation the Messenger actually shows (selectDisplayedChatV1), shared by ChatWorkspace's remount key and by the conversation drawer's person-page link so that a grouped «Все» row or an empty channel tab never yields a link (BD-F2 1a/2a). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) after the independent review of #201; it holds no credential and opens no database connection."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-person-card-contracts.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/contracts/contacts in its manifest owned_paths): the contacts.ContactPersonCardQuery.v1 contract (an exact Contact id in; confirmed/redirected/missing/forbidden/refused out). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-person-card-contracts.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/contracts/contacts in its manifest owned_paths): the contacts.ContactPersonCardQuery.v1 contract (an exact Contact id in; confirmed/redirected/missing/forbidden/refused out). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/fleet-operations/v1/driver-profiles-for-contacts-query.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): the fleet_operations.DriverProfilesForContactsQuery.v1 read contract (persisted park profiles for the Contact ids a composition names). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/fleet-operations/v1/driver-profiles-for-contacts-query.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): the fleet_operations.DriverProfilesForContactsQuery.v1 read contract (persisted park profiles for the Contact ids a composition names). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-person-card.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the ContactPersonCardQuery.v1 handler, its single REPEATABLE READ Prisma reader and its Identity Access authority binding (integration-admin principal only). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-person-card.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the ContactPersonCardQuery.v1 handler, its single REPEATABLE READ Prisma reader and its Identity Access authority binding (integration-admin principal only). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-person-card-authority.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the ContactPersonCardQuery.v1 handler, its single REPEATABLE READ Prisma reader and its Identity Access authority binding (integration-admin principal only). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-person-card-source-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the ContactPersonCardQuery.v1 handler, its single REPEATABLE READ Prisma reader and its Identity Access authority binding (integration-admin principal only). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own beyond the single reader it is."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/ContactSelector.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/ContactSelector.tsx",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/http-contact-lookup-client.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/http-contact-lookup-client.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/use-contact-lookup.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/client-ui/use-contact-lookup.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned ContactSelector picker over ContactLookup.v1 with its lookup state hook and thin HTTP client, ported unchanged from epic/contact-identity 9fcc626b (M3A6B). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-identity-conflict-state.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned identity-conflict projection (M3A4 S1) and ContactLookup.v1 builder and Prisma reader (M3A6A), ported unchanged from epic/contact-identity 9fcc626b. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-identity-conflict-state.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned identity-conflict projection (M3A4 S1) and ContactLookup.v1 builder and Prisma reader (M3A6A), ported unchanged from epic/contact-identity 9fcc626b. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-lookup.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned identity-conflict projection (M3A4 S1) and ContactLookup.v1 builder and Prisma reader (M3A6A), ported unchanged from epic/contact-identity 9fcc626b. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-lookup.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned identity-conflict projection (M3A4 S1) and ContactLookup.v1 builder and Prisma reader (M3A6A), ported unchanged from epic/contact-identity 9fcc626b. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-lookup-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Contacts-owned identity-conflict projection (M3A4 S1) and ContactLookup.v1 builder and Prisma reader (M3A6A), ported unchanged from epic/contact-identity 9fcc626b. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own beyond the single reader it is."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-handler.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the DriverProfilesForContactsQuery.v1 handler and its single read-only Prisma reader over Fleet-owned Driver and Park rows (no park call, no write). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the DriverProfilesForContactsQuery.v1 handler and its single read-only Prisma reader over Fleet-owned Driver and Park rows (no park call, no write). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-profiles-for-contacts-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the DriverProfilesForContactsQuery.v1 handler and its single read-only Prisma reader over Fleet-owned Driver and Park rows (no park call, no write). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own beyond the single reader it is."
+        },
+        {
+          "path": "gravity-mvp/src/modules/platform-shell/application/contact-person-card-composition.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the platform_shell bounded context owns (gravity-mvp/src/modules/platform-shell in its manifest owned_paths): the person-card composition that lays the Contacts, Fleet and Messaging public answers side by side, reading Fleet and Messaging only after Contacts confirmed. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "gravity-mvp/src/modules/platform-shell/application/contact-person-card-composition.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under a path the platform_shell bounded context owns (gravity-mvp/src/modules/platform-shell in its manifest owned_paths): the person-card composition that lays the Contacts, Fleet and Messaging public answers side by side, reading Fleet and Messaging only after Contacts confirmed. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07); it holds no credential and opens no database connection of its own."
+        },
+        {
+          "path": "tools/architecture/check-contact-person-card-read-model-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the card read model answers only for an exact Chat.id through RCQ1, under a verified principal, reading exactly one Contact in one snapshot without writes, with its handler and bindings internal, and runs its proofs; it writes nothing."
+        },
+        {
+          "path": "tools/architecture/check-fleet-driver-profiles-for-contacts-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the card read model answers only for an exact Chat.id through RCQ1, under a verified principal, reading exactly one Contact in one snapshot without writes, with its handler and bindings internal, and runs its proofs; it writes nothing."
         }
       ],
       "invariants": {

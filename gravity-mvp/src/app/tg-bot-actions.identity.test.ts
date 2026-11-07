@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
     prepareOutbound: vi.fn(),
     sendBot: vi.fn(),
     requireAdmin: vi.fn(),
-    saveManualLink: vi.fn(),
+    replaceLink: vi.fn(),
+    driverFindUnique: vi.fn(),
     canonicalBotConnection: vi.fn(),
 }))
 
@@ -22,6 +23,7 @@ vi.mock('@/lib/prisma', () => ({
             findUnique: vi.fn(),
             upsert: vi.fn(),
         },
+        driver: { findUnique: mocks.driverFindUnique },
     },
 }))
 
@@ -36,7 +38,7 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
     requireIntegrationAdminAccess: mocks.requireAdmin,
 }))
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
-    saveManualDriverTelegramLinkV1: mocks.saveManualLink,
+    replaceDriverTelegramLinkV1: mocks.replaceLink,
     canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
 }))
 
@@ -90,7 +92,8 @@ describe('sendTelegramBotMessage exact outbound identity boundary', () => {
         })
         mocks.botMessageCreate.mockResolvedValue({ id: 'legacy-message-1' })
         mocks.requireAdmin.mockResolvedValue(undefined)
-        mocks.saveManualLink.mockResolvedValue({ saved: true })
+        mocks.replaceLink.mockResolvedValue({ replaced: true })
+        mocks.driverFindUnique.mockResolvedValue({ id: 'driver-1' })
         vi.spyOn(console, 'log').mockImplementation(() => {})
         vi.spyOn(console, 'error').mockImplementation(() => {})
     })
@@ -237,19 +240,28 @@ describe('linkTelegramUserToDriver authority boundary', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         mocks.requireAdmin.mockResolvedValue(undefined)
-        mocks.saveManualLink.mockResolvedValue({ saved: true })
+        mocks.replaceLink.mockResolvedValue({ replaced: true })
+        mocks.driverFindUnique.mockResolvedValue({ id: 'driver-1' })
         vi.spyOn(console, 'error').mockImplementation(() => {})
     })
 
-    test('delegates only to the authority-enforcing Telegram owner command', async () => {
+    test('links in one action through the Telegram owner replace command', async () => {
         await expect(linkTelegramUserToDriver('42', 'driver-1'))
             .resolves.toEqual({ success: true })
         expect(mocks.requireAdmin).toHaveBeenCalledOnce()
-        expect(mocks.saveManualLink).toHaveBeenCalledWith({
-            contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+        expect(mocks.replaceLink).toHaveBeenCalledWith({
+            contract: 'telegram_channel.ReplaceDriverTelegramLinkCommand.v1',
             driverId: 'driver-1',
             telegramId: 42n,
         })
+    })
+
+    test('links nothing to a Driver that does not exist', async () => {
+        mocks.driverFindUnique.mockResolvedValue(null)
+
+        await expect(linkTelegramUserToDriver('42', 'driver-missing'))
+            .resolves.toMatchObject({ success: false })
+        expect(mocks.replaceLink).not.toHaveBeenCalled()
     })
 
     test('performs zero owner mutation when integration-admin auth fails', async () => {
@@ -257,12 +269,12 @@ describe('linkTelegramUserToDriver authority boundary', () => {
 
         await expect(linkTelegramUserToDriver('42', 'driver-1'))
             .resolves.toMatchObject({ success: false })
-        expect(mocks.saveManualLink).not.toHaveBeenCalled()
+        expect(mocks.replaceLink).not.toHaveBeenCalled()
     })
 
     test('contains no direct DriverTelegram upsert or manufactured phone verification', () => {
         const source = readFileSync(`${process.cwd()}/src/app/tg-bot-actions.ts`, 'utf8')
         expect(source).not.toMatch(/driverTelegram\.upsert|phoneVerified\s*:/)
-        expect(source).toContain('saveManualDriverTelegramLinkV1')
+        expect(source).toContain('replaceDriverTelegramLinkV1')
     })
 })

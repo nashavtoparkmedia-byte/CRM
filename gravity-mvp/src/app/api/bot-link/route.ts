@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import {
   canonicalDriverNameKeyV1,
@@ -9,7 +9,7 @@ import {
   searchLocalDriversV1,
   searchYandexParksByDriverQueryV1,
 } from '@/modules/fleet-operations/public/v1'
-import { saveManualDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { replaceDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 type DriverSearchRow = {
   id: string
@@ -28,40 +28,13 @@ type DriverSearchRow = {
   personReviewRequired: boolean
 }
 
-// Owner refusals from the Telegram link authority, mapped to operator-facing
-// codes. The authority itself is unchanged; only its presentation is.
-const LINK_REFUSALS: Record<string, { code: string; error: string }> = {
-  DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED: {
-    code: 'PERSON_CONFIRMATION_REQUIRED',
-    error: 'Сначала подтвердите, что этот профиль водителя относится к этому человеку.',
-  },
-  DRIVER_TELEGRAM_EXACT_PRIVATE_CHAT_REQUIRED: {
-    code: 'TELEGRAM_CHAT_REQUIRED',
-    error: 'Нет личного чата с этим пользователем. Попросите водителя написать боту.',
-  },
-  DRIVER_TELEGRAM_IDENTITY_BINDING_MISMATCH: {
-    code: 'TELEGRAM_IDENTITY_UNVERIFIED',
-    error: 'Telegram-профиль пользователя не подтверждён в CRM. Нужна сверка контакта.',
-  },
-  DRIVER_TELEGRAM_LINK_CONTRADICTION: {
-    code: 'TELEGRAM_LINK_CONFLICT',
-    error: 'Этот Telegram или водитель уже привязаны к другой записи.',
-  },
-}
 const LINK_REJECTED = {
   code: 'TELEGRAM_LINK_REJECTED',
-  error: 'Не удалось привязать Telegram: проверка не пройдена.',
+  error: 'Не удалось привязать Telegram. Повторите попытку.',
 }
 const DRIVER_PROFILE_UNVERIFIED = {
   code: 'DRIVER_PROFILE_UNVERIFIED',
   error: 'Профиль Яндекса не совпадает с водителем в CRM. Повторите поиск.',
-}
-
-function linkRefusal(error: unknown) {
-  const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined
-  if (typeof code === 'string' && Object.hasOwn(LINK_REFUSALS, code)) return LINK_REFUSALS[code]
-  const message = error instanceof Error ? error.message : ''
-  return Object.hasOwn(LINK_REFUSALS, message) ? LINK_REFUSALS[message] : LINK_REJECTED
 }
 
 const DRIVER_ID_MAX_LENGTH = 200
@@ -103,16 +76,20 @@ function normalizedTelegramId(value: unknown): string | null {
     : null
 }
 
+// The manager's choice is the link: one action, with no Contact confirmation.
+// It replaces any link this Driver or this Telegram had, in one transaction,
+// so relinking to a new Telegram ends the old link at once.
 async function saveConfirmedTelegramLink(driverId: string, telegramId: string) {
   try {
-    await saveManualDriverTelegramLinkV1({
-      contract: SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+    await replaceDriverTelegramLinkV1({
+      contract: REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1,
       driverId,
       telegramId: BigInt(telegramId),
     })
     return null
   } catch (error) {
-    return NextResponse.json(linkRefusal(error), { status: 409 })
+    console.error('[bot-link] link not saved:', error instanceof Error ? error.message : String(error))
+    return NextResponse.json(LINK_REJECTED, { status: 409 })
   }
 }
 
@@ -273,9 +250,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Yandex driver could not be verified in the selected park' }, { status: 404 })
       }
 
-      // A provider search result is not a Contact-owned person decision. Only
-      // an already-existing local Driver can match Contact.mainDriverId; do not
-      // create a Driver merely to make a manual Telegram link possible.
+      // A provider search result is only a search result: the link names an
+      // already-existing local Driver, and no Driver is created merely to make
+      // a manual Telegram link possible.
       const driver = await prisma.driver.findUnique({
         where: { id: driverId },
         select: {

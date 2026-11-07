@@ -5,6 +5,13 @@ Partial update 2026-10-22: §2.7, F-22, F-23 and I-31a describe the on-demand ca
 own change on top of main `5dc489cd`; the rest of the map is as verified above.
 Partial update 2026-10-24: F-09, I-54..I-57 and R-28..R-32 describe the Telegram MTProto outbound send (TG2R: exact
 person, proven reply target, typed pre-dispatch outcome), verified against its own change on top of main `bbc350a1`.
+Partial update 2026-10-26: F-04, F-09, F-12, F-33, I-52, I-56, I-59..I-61, R-25 and R-33..R-36 describe Telegram
+delivery evidence (TG3R: typed send result, own-message evidence, read markers), verified against its own change on
+top of main `7e14fbbf`.
+Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing row, I-62 and R-20 describe the signed
+mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
+change on top of main `e256d14b`.
+Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
 
 # YOKO CRM — Engineering Map
 
@@ -251,6 +258,16 @@ Each entry lists what the code actually does.
     ports live in
     `G/modules/contacts/internal/legacy-prisma-contact-communication-policy-adapter.ts`
     and the mutation is deliberately not exported from `public/v1/index.ts`.
+  - `G/contracts/contacts/v1/contact-card-for-conversation-contracts.ts` —
+    `ContactCardForConversationQuery.v1` (CC-1): the read-only card for one exact
+    Chat.id (`confirmed` | `unresolved` | `conflict` | `refused` | `missing` |
+    `forbidden`; only `confirmed` carries data). The handler, its single
+    repeatable-read reader and the Identity Access authority binding live in
+    `G/modules/contacts/internal/` (`contact-card-for-conversation.ts`,
+    `legacy-prisma-contact-card-source-adapter.ts`,
+    `identity-access-contact-card-authority.ts`); only the bound reader
+    `createContactCardForConversationReaderV1(resolver)` is public, and it has no
+    consumer yet.
   - `G/infrastructure/contact-merge-composition.ts`,
     `G/infrastructure/automatic-contact-merge.ts`; facade `G/lib/ContactMergeService.ts`.
   - `G/lib/ReachabilityService.ts`.
@@ -465,15 +482,19 @@ Each entry lists what the code actually does.
 - **Key paths**: `G/lib/users/user-service.ts`, `G/lib/users/auth-helpers.js`,
   `G/data/users.json`; `G/modules/identity-access/public/v1/`
   (`identity-actions.ts`, `integration-admin-auth.ts`, `mobile-session-auth.ts`,
-  `mobile-push-registration-handler.ts`,
+  `mobile-session-operator.ts`, `mobile-push-registration-handler.ts`,
   `prisma-mobile-device-registration-adapter.ts`);
+  `G/modules/identity-access/application/mobile-session-operator-operations.ts`,
+  `G/modules/identity-access/internal/mobile-session-barrier.ts`,
   `G/modules/identity-access/internal/mobile-delivery/`; `G/proxy.ts`;
   `G/app/login/`, `G/app/users/`, `G/app/api/mobile/push-registration/route.ts`.
 - **Owns**: `CrmUser` (task assignees — **not** the login store) and
   `MobileDeviceRegistration` (via amendment). Operators themselves live in
   `G/data/users.json`.
 - **Tests**: `G/lib/security/*.test.ts`, `G/lib/users/__tests__/*.test.js`,
-  `npm run test:security-boundaries`; `check-identity-*-boundary.mjs`,
+  `npm run test:security-boundaries`, `npx vitest run src/lib/security` (the BR-4
+  suite `mobile-signed-operator.test.ts` is not in the security subset);
+  `check-identity-*-boundary.mjs`,
   `check-mobile-delivery-provider-boundary.mjs`.
 
 ### 2.9 Work management (`work_management`)
@@ -725,7 +746,8 @@ exact service-peer guard (I-50) → `processInboundTelegramMessage` →
 An admission that cannot prove attribution is classified by the caller and the
 event is held (I-51). Mirror, catch-up and history import follow the same
 admission and dedupe; catch-up and import isolate each message and dialog
-(I-53).
+(I-53). An own outbound message is then delivery evidence, and read markers
+arrive as `UpdateReadHistoryOutbox` (F-33).
 
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
@@ -808,8 +830,11 @@ Telegram leg: `sendTelegramMessage` (`G/app/tg-actions.ts`) re-runs the outbound
 preparer and the live account proof on the sending socket, resolves the exact
 `Api.User` (one bounded 200-dialog sweep on a cache miss, I-54, I-57), proves a
 requested quote (I-55; `retrySend` carries it on redelivery, DEP-Q) and types every
-failure before `client.sendMessage` with one S1 token (I-56); after dispatch its
-error is untyped, as before.
+failure before `client.sendMessage` with one S1 token (I-56). It answers a typed
+result: `provider_ack` with this account's exact id, else `client_action`, never
+`delivered` (I-59). After dispatch only Telegram's own refusal is typed
+(`TELEGRAM_MTPROTO_REFUSED`); anything that may mean the message exists stays
+`unknown` (I-56).
 
 **F-10 Routing / "send to contact"**
 There is no channel router: the channel is `Chat.channel`, and a channel override
@@ -837,6 +862,19 @@ capability first and persist afterwards, with direct Prisma writes.
   oldest unsettled same-text send in the chat from 10 min before `providerSentAt`
   (+60 s tolerance); it only strengthens a row, settles it by compare-and-set, and
   revokes an in-flight `retryLeaseId` so that attempt's answer never overwrites it.
+  Telegram feeds it the echo of an own message, catch-up and history-import
+  read-back, and read markers (F-33).
+
+**F-33 Telegram delivery evidence**
+Own outbound `NewMessage` → `processOutboundMirrorMessage` (admission, exact-key-first
+dedupe, I-52) → `observeTelegramOutboundEvidence` → `applyMessageDeliveryEvidenceV1`
+(`provider_echo`; catch-up and history import `history_readback`): the row holding the
+exact id, or for text the oldest unsettled CRM send of the same text, claimed
+compare-and-set; a send made outside the CRM is written `sent` and given the same
+evidence (I-60). `Raw(UpdateReadHistoryOutbox)` → `processReadHistoryOutbox`, and
+catch-up's dialog `readOutboxMaxId` → `applyTelegramReadReceipts` → `read_receipt` on
+this account's own rows to that person up to `max_id` (I-61). Telegram never yields
+`delivered` (I-59).
 
 **F-13 Realtime**
 `G/lib/messageStreamBus.ts` (in-process map) →
@@ -964,7 +1002,7 @@ Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
 | Lane | Mechanism | Where enforced |
 |---|---|---|
 | Browser operator | Cookie `crm_user_id` chosen on `/login` from `G/data/users.json`; unsigned, no password. `canLogin` only stops a Менеджер from switching identity. The code calls this "not a real authentication primitive" | `G/lib/users/user-service.ts`. `G/proxy.ts` does not check it |
-| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch) from shared `MOBILE_ACCESS_USER/PASS` | `G/proxy.ts`, `mobile-session-auth.ts` |
+| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch, credential subject, device id, session instance id) from shared `MOBILE_ACCESS_USER/PASS`. The proxy resolves it once per request (`resolveCookieOperatorV1`). Valid and not logged out: forwarded with exactly one `crm_user_id`, the signed operator, so a client copy never wins; GET/HEAD re-syncs the browser copy. Logged out (the Mobile Push v1 logout barrier), unbarrable (no session instance id, `ephemeral-device`), tampered, expired, epoch bumped or credential rotated: no operator; page 303 to `/login/mobile`, API 401. Barrier unreadable: no operator; 503 with no Location (`mobile_session_unverifiable` for the API), so the shell keeps its session. A session cookie sent without the shell User-Agent is resolved the same way and refused sessions get no operator; without a session cookie the browser lane is unchanged. Under a session no operator switch (`authenticateUserV1` refuses, mobile login answers `session_active`); logout writes the barrier (I-62) | `G/proxy.ts`, `mobile-session-operator-operations.ts`, `mobile-session-auth.ts`, `legacy-user-service-adapter.ts` |
 | Integration admin | `ADMIN_USER/ADMIN_PASS` → HMAC cookie `yoko_integration_admin_session` (8 h) | `requireIntegrationAdminAccess` in settings pages/actions and selected API routes |
 | Machine callers | Shared secrets per caller (below) | The individual route |
 
@@ -1063,6 +1101,7 @@ report row; it repairs nothing.
 | Phone normalisation | contacts | `G/modules/contacts/public/v1/phone-identity.ts` | `normalizePhoneE164` | `phone-identity.test.ts` | The ad-hoc normalisers listed in C-19 (do not add another) |
 | Contact merge | contacts | `G/modules/contacts/public/v1/contact-merge-handler.ts`, `G/infrastructure/contact-merge-composition.ts` | `mergeContactsV1`; per-owner `legacy-prisma-contact-merge-adapter.ts` | `contact-merge-handler.test.ts`, `contact-automation-policy.test.ts` | Other contexts' tables except through their merge adapters |
 | Contact card UI | contacts / messaging UI | `G/app/messages/components/ContactProfileDrawer.tsx`, `G/app/api/contacts/[id]/route.ts` | — | route tests; manual UI check | — |
+| Contact card read model | contacts (resolution: messaging RCQ1) | `G/modules/contacts/internal/contact-card-for-conversation.ts` | `createContactCardForConversationReaderV1` bound exactly to `resolveConversationContactV1` on the exact Chat.id, from an allowlisted composition only (none yet) | `check-contact-card-read-model-boundary.mjs`, `G/modules/contacts/internal/contact-card-for-conversation*.test.ts` | A second resolver; a phone, name, username or provider-id lookup; `crm_user_id` as authority |
 | Outbound text send | messaging | `G/lib/MessageService.ts` (`send`, `retrySend`) | `SendIntentV1` + delivery port in `channel-delivery-runtime.ts` | `G/lib/MessageService.provider-account.test.ts`, `operator-delivery-retry.test.ts` | Provider SDKs; a new send option must also enter `assertSameSendIntent` |
 | Media / reaction / delete send | messaging | `G/app/api/messages/{send-media,reaction,delete}/route.ts` | channel delivery capability methods | route tests | — |
 | Inbound persistence | messaging | `G/modules/messaging/application/messaging-operations.ts` | `createChannelMessageV1`, `upsertExternalMessageV1`, `receiveMessageV1` | `tools/architecture/test-messaging-*.mjs`, module tests | `prisma.message.*` from channel code |
@@ -1084,7 +1123,7 @@ report row; it repairs nothing.
 | Cash-order ingestion | fleet_operations | `COMP/cash-order-ingestion-runtime.ts` | `CashOrderIngestionPortsV1` | ingestion tests in `COMP/` | — |
 | Compensation manager UI | fleet_operations | `G/app/compensation/` | `compensationManagerActionV1` | `G/app/compensation/manager-actions.test.ts`, `check-compensation-edge-perimeter-boundary.mjs` | nginx gate without the perimeter doc |
 | Android / push | platform_shell (app), identity_access (server) | `android/app/src/main/java/ru/yokoone/crm/shell/`, `G/modules/identity-access/internal/mobile-delivery/` | `PushPayload` kinds; FCM transport | Gradle unit tasks; `check-mobile-delivery-provider-boundary.mjs` | — |
-| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1` | `npm run test:security-boundaries` | — |
+| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1`; `resolveRequestOperatorV1` for an actor under a mobile session | `npm run test:security-boundaries`; `npx vitest run src/lib/security` (BR-4 suite) | — |
 | Yandex Fleet sync | fleet_operations | `G/lib/yandexSync.ts`, reconciler adapter | `registerYandexFleetReconciliationRunnerV1` | `yandex-sync-lease.test.ts`, reconciler tests | `Contact*` (use contacts contracts) |
 | Scraper checks | fleet_operations | `G/app/api/monitoring/**`, `yandex-fleet-scraper/src/` | new job branch in `worker.ts` | `yandex-fleet-scraper` `npm test` | — |
 | Tasks | work_management | `G/app/tasks/actions.ts`, `G/lib/tasks/` | `createIdempotentTaskV1` for other contexts | module tests | `Task` writes from other contexts |
@@ -1233,6 +1272,34 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `contact-communication-policy.test.ts`,
   `contact-communication-policy.postgres.test.ts`,
   `check-contact-communication-policy-boundary.mjs`.
+- **I-62 The effective mobile-shell operator is the verified signed Mobile Session
+  operator.** Under a valid, not-logged-out session every downstream reader — route
+  handlers, server components, Server Actions, `getCurrentUser` — sees exactly that
+  operator; a client `crm_user_id`, a body actor or a client `x-middleware-*` header
+  cannot override it. Chat assign assigns only to it (a foreign `userId` is 403) and
+  the Fleet monitoring writes (`api/monitoring/drivers/[id]/{event,attention,fleet-check}`,
+  `api/monitoring/attention/[id]`) record it as the author. A refused session grants no
+  operator in either lane and is 401 at those writes before anything is written; an
+  unreadable barrier is 503 for the shell, never a logout. — `resolveCookieOperatorV1`,
+  `G/proxy.ts`, `legacy-user-service-adapter.ts` — `G/lib/security/mobile-signed-operator.test.ts`,
+  `mobile-shell-lane.test.ts`. Exceptions: the browser lane without a session is unchanged
+  and unauthenticated (R-01); `G/app/messages/open/route.ts` still re-syncs the UI cookie
+  from a signature-only check (an open follow-up, no operator effect).
+- **I-63 A Contact card is shown
+  only for the exact Chat.id that RCQ1 resolves, stable across the whole read,
+  and only to a verified principal.** The reader asks Identity Access for the
+  principal first (today only the signed integration-admin session;
+  `crm_user_id`, a cookie or the mobile session are never authority), checks
+  conversation access before RCQ1 and Contact access before any Contact read,
+  reads exactly the Contact RCQ1 named in one repeatable-read snapshot and asks
+  RCQ1 again; a changed association, an ambiguous resolution or an inexact
+  answer returns no data, and no Contact is chosen by phone, name, username or
+  provider id. A consumer outside Contacts must be allowlisted and must bind the
+  reader exactly to `resolveConversationContactV1` on the exact Chat.id; none is
+  allowlisted yet. — `createContactCardForConversationHandlerV1`,
+  `identityAccessContactCardAuthorityV1`, the allowlisted composition binding —
+  `contact-card-for-conversation.test.ts`, `contact-card-for-conversation.rcq1.test.ts`,
+  `check-contact-card-read-model-boundary.mjs`. Known exception: none.
 
 ### Messaging
 
@@ -1359,11 +1426,11 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `key_conflict` and the insert wrote nothing. A pre-2026-09-02 row keyed by the bare id records
   no provider account, so it is never this event's duplicate; with the same chat,
   direction and content the event is held as `held_legacy` instead of written twice.
-  Outbound only, a CRM send row without a provider id is reconciled by content and
-  the existing window and stamped with the exact id; that claim is not
-  compare-and-set. An event without a provider id keeps the content window against
-  this account's local keys only and is not exact. Not exactly-once: concurrent
-  reconciliation of identical sends and held events are open. —
+  Outbound, an event that matches no exact row is handed to Messaging's
+  delivery-evidence command (I-60), which settles the oldest unsettled CRM send of
+  the same text compare-and-set; nothing here stamps a row directly. An event
+  without a provider id keeps the content window against this account's local keys
+  only and is not exact. Not exactly-once: held events are open. —
   `findStoredTelegramMessage`, `isOwnTelegramMessageRow`,
   `createTelegramMessageOrFindWinner` — `tg-actions.identity.test.ts` (dedupe and
   F1/F2 blocks).
@@ -1397,15 +1464,43 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   for the conversation gate, the account proof, an unresolved person, an
   unaddressable or unproven quote, or a dead session (RPC 401);
   `TELEGRAM_MTPROTO_NOT_DISPATCHED` for everything else. An outcome another owner
-  already stated passes through; after dispatch starts the error is untyped (I-10).
-  A failed credential read stays untyped. — `telegramSendFailure` —
-  `tg-actions.identity.test.ts` (TG2R block).
+  already stated passes through. After dispatch starts, only Telegram's own refusal
+  (RPC 400/401/403/406 with its error name) is `TELEGRAM_MTPROTO_REFUSED`;
+  `RANDOM_ID_DUPLICATE` (an earlier copy of the request may have been sent),
+  FLOOD_WAIT, 5xx, timeouts, dropped sockets and an unusable id stay untyped
+  (`unknown`, I-10). A failed credential read stays untyped. — `telegramSendFailure`,
+  `telegramProviderRefusedSend` — `tg-actions.identity.test.ts` (TG2R and TG3R blocks).
 - **I-57 The outbound peer sweep is bounded and silent.** `getDialogs({limit: 200})`,
   single-flight per client object, waited at most 15 s, released after 60 s if it
   never answers, started at most once per 60 s per connection, with FLOOD_WAIT
   honoured per connection. It fetches no history, admits nothing, writes nothing
   and logs only a bounded code. — `telegramPeerSweep`, `waitForTelegramPeerSweep` —
   `tg-actions.identity.test.ts` (TG2R block).
+- **I-59 Telegram never yields `delivered`.** A user account receives no
+  device-delivery signal: a text send answers `provider_ack` (this account's exact
+  id) or `client_action`; an own message seen at the provider is `provider_echo` or
+  `history_readback`; only Telegram's read marker makes a row `read`. `device_receipt`
+  is never claimed (S2 also refuses it for Telegram). — `sendTelegramMessage`,
+  `observeTelegramOutboundEvidence`, `applyTelegramReadReceipts` —
+  `tg-actions.identity.test.ts` (TG3R blocks).
+- **I-60 An own Telegram message is delivery evidence, never a direct stamp.** The
+  live echo, catch-up read-back and the history import's outbound direction go
+  through `applyMessageDeliveryEvidenceV1` after admission and exact-key-first dedupe:
+  the exact id first; for text, the oldest unsettled CRM send of the same text,
+  claimed compare-and-set; media by its exact id only; an id held by another
+  conversation's row is a `key_conflict`. A send made outside the CRM is written
+  `sent` and given the evidence, healed on the next observation if that step fails.
+  Inbound rows stay `delivered`. — `processOutboundMirrorMessage`,
+  `observeTelegramOutboundEvidence`, `recordNewTelegramOutboundEvidence`,
+  `importTelegramHistory` — `tg-actions.identity.test.ts` (TG3R block).
+- **I-61 A Telegram read marker reads only this account's own messages to that
+  person.** `UpdateReadHistoryOutbox` and catch-up's dialog `readOutboxMaxId` apply
+  `read_receipt` to rows keyed `telegram:<account>:<peer>:<id>` with an id up to
+  `max_id`, the 200 newest unread first. Legacy bare-id and synthetic local keys, the
+  account itself, `777000` and non-user peers are never addressed; a failure is
+  logged with a bounded code and never escapes. — `telegramReadMarker`,
+  `applyTelegramReadReceipts`, `processReadHistoryOutbox`,
+  `applyTelegramDialogReadMarker` — `tg-actions.identity.test.ts` (TG3R block).
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.
@@ -1586,12 +1681,12 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-17 | Runtime-rewritten files inside the image: `G/data/users.json`, `G/data/dictionaries.json` | `user-service.ts`, `task-dictionary-store.ts` | HIGH for the write; persistence across deploys unknown |
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
-| R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback) | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
+| R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
 | R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
-| R-25 | CRM send reconciliation in the MTProto mirror/import is not compare-and-set; concurrent identical sends can cross-assign provider ids until a later fetch | `findStoredTelegramMessage` (outbound branch); no conditional claim in the messaging port | LOW |
+| R-25 | Telegram mirror and import reconciliation goes through S2's compare-and-set matcher (I-60): two identical-text CRM sends are each claimed exactly once, but which provider id lands on which of them is arbitrary; an outbound event without a provider id still uses the content window | `observeTelegramOutboundEvidence`; `findStoredTelegramMessage` (no-id branch) | LOW |
 | R-26 | MTProto recovery is bounded (catch-up 30 dialogs × 20–50 messages, import 100 × 200): a held or missed event is recovered only if fetched again; no durable per-event hold record exists | `G/app/tg-actions.ts` `catchUpMissedMessages`, `importTelegramHistory` | HIGH until a replay design exists |
 | R-27 | A `key_conflict` event is refused, not stored: an exact key already on another Chat, direction or channel needs investigation, and a second distinct id-less event in the same second shares the synthetic `local-<ms>` key, so it is counted and logged but never persisted | `G/app/tg-actions.ts` `findStoredTelegramMessage`, `createTelegramMessageOrFindWinner` | MEDIUM |
 | R-28 | Telegram outbound person resolution is bounded (I-54, I-57): a person outside the 200 most recent dialogs (archived included) whose access hash this process has not learned is refused `TELEGRAM_PEER_UNRESOLVED`, and a miss inside the 60 s sweep window is `NOT_DISPATCHED` | `G/app/tg-actions.ts` `resolveExactTelegramUserEntity`, `telegramPeerSweep` | HIGH |
@@ -1599,6 +1694,10 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-30 | Telegram's reconnect path re-attests a fresh client and does not compare provider-account provenance with the conversation (deferred on main), so after the account behind a connection changes, sends leave from the new account; only a connected cached client fails closed (I-16) | `G/app/tg-actions.ts` `getTelegramClient` reconnect branch | MEDIUM |
 | R-31 | An operator retry skips the retry back-off; a retry inside the 60 s sweep window spends one of the three attempts on `NOT_DISPATCHED` | `G/lib/MessageService.ts` `retrySend`; `telegramPeerSweep` | MEDIUM |
 | R-32 | GramJS's `getDialogs` logs a whole message object when one fails to initialise; catch-up (30 dialogs) and the outbound sweep (200) share this exposure (R-24 class) | `telegram/client/dialogs.js`; `catchUpMissedMessages`, `telegramPeerSweep` | MEDIUM |
+| R-33 | A Telegram read marker scans the 200 newest unread own rows of the conversation: older unread rows stay unread until a later marker, and legacy bare-id rows never become `read` (I-61) | `G/app/tg-actions.ts` `applyTelegramReadReceipts` | HIGH |
+| R-34 | Catch-up, started on every client fetch (R-12), now also runs a read-marker lookup per dialog and one evidence-command lookup per own outbound message it re-reads; database load grows with send frequency | `catchUpMissedMessages`, `applyTelegramDialogReadMarker`, `observeTelegramOutboundEvidence` | MEDIUM |
+| R-35 | After dispatch, FLOOD_WAIT, 5xx, a timeout, a dropped socket or `RANDOM_ID_DUPLICATE` leave a Telegram send `unknown`: it is never resent automatically, because an earlier copy of the request may exist; the operator decides | `telegramSendFailure`, `telegramProviderRefusedSend` | HIGH |
+| R-36 | An own Telegram message seen without a provider id is written `sent` with no evidence and shows `send_requested` | `processOutboundMirrorMessage` (synthetic local key) | MEDIUM |
 
 ## 10. Cleanup candidates
 
