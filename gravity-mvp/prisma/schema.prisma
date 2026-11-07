@@ -1271,6 +1271,7 @@ model Chat {
   driver            Driver?           @relation(fields: [driverId], references: [id])
   GroupVisibility   GroupVisibility[]
   messages          Message[]
+  heldMessages      HeldChannelMessage[]
 
   @@index([driverId])
   @@index([contactId])
@@ -1304,6 +1305,32 @@ model Message {
   @@index([chatId, sentAt(sort: Desc)])
   @@index([externalId])
   @@index([aiStatus])
+}
+
+/// Messaging-owned durable hold (R-21): a provider event whose sender did not
+/// prove its conversation's person binding. No conversation view, inbox, AI
+/// context or workflow reads this table; a guarded release moves an event into
+/// Message once the binding is proven. Written only by the Messaging guarded
+/// append adapter; a deleted conversation takes its held events with it.
+model HeldChannelMessage {
+  id                String           @id @default(cuid())
+  chatId            String
+  channel           ChatChannel
+  direction         MessageDirection
+  type              MessageType      @default(text)
+  content           String
+  externalId        String           @unique
+  sentAt            DateTime
+  metadata          Json             @default("{}")
+  holdReason        String
+  holdEvidence      Json             @default("{}")
+  heldAt            DateTime         @default(now())
+  releasedAt        DateTime?
+  releasedMessageId String?          @unique
+  chat              Chat             @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, releasedAt, sentAt])
+  @@index([releasedAt, holdReason])
 }
 
 model MessageAttachment {
