@@ -8,6 +8,9 @@ person, proven reply target, typed pre-dispatch outcome), verified against its o
 Partial update 2026-10-26: F-04, F-09, F-12, F-33, I-52, I-56, I-59..I-61, R-25 and R-33..R-36 describe Telegram
 delivery evidence (TG3R: typed send result, own-message evidence, read markers), verified against its own change on
 top of main `7e14fbbf`.
+Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing row, I-62 and R-20 describe the signed
+mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
+change on top of main `e256d14b`.
 
 # YOKO CRM — Engineering Map
 
@@ -466,15 +469,19 @@ Each entry lists what the code actually does.
 - **Key paths**: `G/lib/users/user-service.ts`, `G/lib/users/auth-helpers.js`,
   `G/data/users.json`; `G/modules/identity-access/public/v1/`
   (`identity-actions.ts`, `integration-admin-auth.ts`, `mobile-session-auth.ts`,
-  `mobile-push-registration-handler.ts`,
+  `mobile-session-operator.ts`, `mobile-push-registration-handler.ts`,
   `prisma-mobile-device-registration-adapter.ts`);
+  `G/modules/identity-access/application/mobile-session-operator-operations.ts`,
+  `G/modules/identity-access/internal/mobile-session-barrier.ts`,
   `G/modules/identity-access/internal/mobile-delivery/`; `G/proxy.ts`;
   `G/app/login/`, `G/app/users/`, `G/app/api/mobile/push-registration/route.ts`.
 - **Owns**: `CrmUser` (task assignees — **not** the login store) and
   `MobileDeviceRegistration` (via amendment). Operators themselves live in
   `G/data/users.json`.
 - **Tests**: `G/lib/security/*.test.ts`, `G/lib/users/__tests__/*.test.js`,
-  `npm run test:security-boundaries`; `check-identity-*-boundary.mjs`,
+  `npm run test:security-boundaries`, `npx vitest run src/lib/security` (the BR-4
+  suite `mobile-signed-operator.test.ts` is not in the security subset);
+  `check-identity-*-boundary.mjs`,
   `check-mobile-delivery-provider-boundary.mjs`.
 
 ### 2.9 Work management (`work_management`)
@@ -960,7 +967,7 @@ Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
 | Lane | Mechanism | Where enforced |
 |---|---|---|
 | Browser operator | Cookie `crm_user_id` chosen on `/login` from `G/data/users.json`; unsigned, no password. `canLogin` only stops a Менеджер from switching identity. The code calls this "not a real authentication primitive" | `G/lib/users/user-service.ts`. `G/proxy.ts` does not check it |
-| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch) from shared `MOBILE_ACCESS_USER/PASS` | `G/proxy.ts`, `mobile-session-auth.ts` |
+| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch, credential subject, device id, session instance id) from shared `MOBILE_ACCESS_USER/PASS`. The proxy resolves it once per request (`resolveCookieOperatorV1`). Valid and not logged out: forwarded with exactly one `crm_user_id`, the signed operator, so a client copy never wins; GET/HEAD re-syncs the browser copy. Logged out (the Mobile Push v1 logout barrier), unbarrable (no session instance id, `ephemeral-device`), tampered, expired, epoch bumped or credential rotated: no operator; page 303 to `/login/mobile`, API 401. Barrier unreadable: no operator; 503 with no Location (`mobile_session_unverifiable` for the API), so the shell keeps its session. A session cookie sent without the shell User-Agent is resolved the same way and refused sessions get no operator; without a session cookie the browser lane is unchanged. Under a session no operator switch (`authenticateUserV1` refuses, mobile login answers `session_active`); logout writes the barrier (I-62) | `G/proxy.ts`, `mobile-session-operator-operations.ts`, `mobile-session-auth.ts`, `legacy-user-service-adapter.ts` |
 | Integration admin | `ADMIN_USER/ADMIN_PASS` → HMAC cookie `yoko_integration_admin_session` (8 h) | `requireIntegrationAdminAccess` in settings pages/actions and selected API routes |
 | Machine callers | Shared secrets per caller (below) | The individual route |
 
@@ -1080,7 +1087,7 @@ report row; it repairs nothing.
 | Cash-order ingestion | fleet_operations | `COMP/cash-order-ingestion-runtime.ts` | `CashOrderIngestionPortsV1` | ingestion tests in `COMP/` | — |
 | Compensation manager UI | fleet_operations | `G/app/compensation/` | `compensationManagerActionV1` | `G/app/compensation/manager-actions.test.ts`, `check-compensation-edge-perimeter-boundary.mjs` | nginx gate without the perimeter doc |
 | Android / push | platform_shell (app), identity_access (server) | `android/app/src/main/java/ru/yokoone/crm/shell/`, `G/modules/identity-access/internal/mobile-delivery/` | `PushPayload` kinds; FCM transport | Gradle unit tasks; `check-mobile-delivery-provider-boundary.mjs` | — |
-| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1` | `npm run test:security-boundaries` | — |
+| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1`; `resolveRequestOperatorV1` for an actor under a mobile session | `npm run test:security-boundaries`; `npx vitest run src/lib/security` (BR-4 suite) | — |
 | Yandex Fleet sync | fleet_operations | `G/lib/yandexSync.ts`, reconciler adapter | `registerYandexFleetReconciliationRunnerV1` | `yandex-sync-lease.test.ts`, reconciler tests | `Contact*` (use contacts contracts) |
 | Scraper checks | fleet_operations | `G/app/api/monitoring/**`, `yandex-fleet-scraper/src/` | new job branch in `worker.ts` | `yandex-fleet-scraper` `npm test` | — |
 | Tasks | work_management | `G/app/tasks/actions.ts`, `G/lib/tasks/` | `createIdempotentTaskV1` for other contexts | module tests | `Task` writes from other contexts |
@@ -1229,6 +1236,19 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `contact-communication-policy.test.ts`,
   `contact-communication-policy.postgres.test.ts`,
   `check-contact-communication-policy-boundary.mjs`.
+- **I-62 The effective mobile-shell operator is the verified signed Mobile Session
+  operator.** Under a valid, not-logged-out session every downstream reader — route
+  handlers, server components, Server Actions, `getCurrentUser` — sees exactly that
+  operator; a client `crm_user_id`, a body actor or a client `x-middleware-*` header
+  cannot override it. Chat assign assigns only to it (a foreign `userId` is 403) and
+  the Fleet monitoring writes (`api/monitoring/drivers/[id]/{event,attention,fleet-check}`,
+  `api/monitoring/attention/[id]`) record it as the author. A refused session grants no
+  operator in either lane and is 401 at those writes before anything is written; an
+  unreadable barrier is 503 for the shell, never a logout. — `resolveCookieOperatorV1`,
+  `G/proxy.ts`, `legacy-user-service-adapter.ts` — `G/lib/security/mobile-signed-operator.test.ts`,
+  `mobile-shell-lane.test.ts`. Exceptions: the browser lane without a session is unchanged
+  and unauthenticated (R-01); `G/app/messages/open/route.ts` still re-syncs the UI cookie
+  from a signature-only check (an open follow-up, no operator effect).
 
 ### Messaging
 
@@ -1610,7 +1630,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-17 | Runtime-rewritten files inside the image: `G/data/users.json`, `G/data/dictionaries.json` | `user-service.ts`, `task-dictionary-store.ts` | HIGH for the write; persistence across deploys unknown |
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
-| R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback) | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
+| R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
 | R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
