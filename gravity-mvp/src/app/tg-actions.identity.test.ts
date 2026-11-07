@@ -1155,6 +1155,197 @@ describe('GramJS private conversation identity admission', () => {
             })
         })
 
+        // R-21/R-22 seam. The personal account and the Driver Bot share one Chat
+        // per Telegram person (`telegram:<peer>`). While that Chat carries another
+        // person's attribution every MTProto event of it is HELD; the Chat is
+        // repaired by its owner (Messaging, R-22), never by this lane, and the next
+        // observation then recovers each held message exactly once. A refusal from
+        // the Messaging-owned guarded append is safe before this lane classifies it.
+        describe('R-21/R-22 seam: held conversations and their repair', () => {
+            type StoredMessage = { id: string; chatId: string; direction: string; channel: string; content: string }
+
+            /** A unique-externalId message store behind the persistence mocks. */
+            function useMessageStore() {
+                const rows = new Map<string, StoredMessage>()
+                mocks.createMessage.mockImplementation(async (command: Record<string, any>) => {
+                    if (rows.has(command.externalId)) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' })
+                    const row = {
+                        id: `message:${command.externalId}`,
+                        chatId: command.chatId,
+                        direction: command.direction,
+                        channel: command.channel,
+                        content: command.content,
+                    }
+                    rows.set(command.externalId, row)
+                    return { message: row }
+                })
+                mocks.messageFindUnique.mockImplementation(async (query: { where: { externalId?: string } }) =>
+                    query.where.externalId ? rows.get(query.where.externalId) ?? null : null)
+                return rows
+            }
+
+            /** The conversation carries another person's Driver until `repair()`. */
+            function attributedToAnotherPerson() {
+                let repaired = false
+                mocks.ensureContactLink.mockImplementation(async () => {
+                    if (!repaired) throw new Error('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+                    return { completed: true }
+                })
+                return { repair: () => { repaired = true } }
+            }
+
+            // A reconnect is a fresh client: catch-up runs on every client it creates.
+            async function catchUpOn(connectionId: string, dialogs: unknown[], providerAccountId: string) {
+                mocks.providerAccountId = providerAccountId
+                mocks.telegramConnectionFindMany.mockResolvedValue([connection(connectionId)])
+                mocks.getDialogs.mockResolvedValue(dialogs)
+                await initTelegramListeners()
+                const marker = `[TG-CATCHUP] summary conn=${connectionId} `
+                await vi.waitFor(() => expect(logs()).toContain(marker))
+                return logs().split('\n').find(line => line.includes(marker))!
+            }
+
+            let jobSequence = 0
+            async function importOn(connectionId: string, dialogs: unknown[]) {
+                mocks.telegramConnectionFindUnique.mockResolvedValue(connection(connectionId))
+                // The cached client's own catch-up asks first and sees no dialog.
+                mocks.getDialogs.mockResolvedValue([]).mockResolvedValueOnce([]).mockResolvedValueOnce(dialogs)
+                mocks.patchImportJob.mockClear()
+                await importTelegramHistory(`job-seam-${connectionSequence}-${++jobSequence}`, 'available_history', undefined, connectionId)
+                return mocks.patchImportJob.mock.calls
+                    .map(call => call[0] as { patch: Record<string, any> })
+                    .filter(command => command.patch.status === 'completed' || command.patch.status === 'failed')
+                    .at(-1)!.patch
+            }
+
+            const keys = (rows: Map<string, StoredMessage>) => [...rows.keys()].sort()
+
+            test('a dialog held for another person is recovered exactly once by the next catch-up after its owner repairs it', async () => {
+                const rows = useMessageStore()
+                const chat = attributedToAnotherPerson()
+                messagesByPeer({ '42': [53, 52, 51].map(id => privateMessage({ peer: '42', id, text: `seam body ${id}` })) })
+                const base = `telegram-seam-catchup-${connectionSequence}`
+
+                const before = await catchUpOn(`${base}-before`, [userDialog('42')], '7520')
+
+                expect(before).toContain('saved=0')
+                expect(before).toContain('held=3')
+                expect(rows.size).toBe(0)
+                expectNothingPersistedOrPublished()
+
+                chat.repair()
+                const after = await catchUpOn(`${base}-after`, [userDialog('42')], '7520')
+
+                expect(after).toContain('saved=3 duplicates=0')
+                expect(after).toContain('held=0')
+                expect(keys(rows)).toEqual(['telegram:7520:42:51', 'telegram:7520:42:52', 'telegram:7520:42:53'])
+                expect(mocks.emitMessage).toHaveBeenCalledTimes(3)
+                expect(mocks.inboundWorkflow).toHaveBeenCalledTimes(3)
+
+                const imported = await importOn(`${base}-after`, [userDialog('42')])
+
+                expect(imported.detailsJson.newMessages).toBe(0)
+                expect(imported.detailsJson.existingMessages).toBe(3)
+                expect(mocks.createMessage).toHaveBeenCalledTimes(3)
+                expect(mocks.emitMessage).toHaveBeenCalledTimes(3)
+                expect(logs()).not.toContain('seam body')
+            })
+
+            test('history import recovers live messages held for another person exactly once after the repair', async () => {
+                const rows = useMessageStore()
+                const chat = attributedToAnotherPerson()
+                const connectionId = `telegram-seam-import-${connectionSequence}`
+                const handler = await initializeListener(connectionId, '7521')
+                const held = [61, 62, 63].map(id => privateMessage({ peer: '42', id, text: `seam body ${id}` }))
+
+                for (const message of held) await handler({ message })
+
+                expect(rows.size).toBe(0)
+                expectNothingPersistedOrPublished()
+                expect(logs().match(/held code=CONTACT_CONVERSATION_DRIVER_MISMATCH/g)).toHaveLength(3)
+
+                chat.repair()
+                messagesByPeer({ '42': [...held].reverse() })
+                const recovered = await importOn(connectionId, [userDialog('42')])
+
+                expect(recovered.detailsJson.newMessages).toBe(3)
+                expect(recovered.detailsJson.completeness.heldDialogs).toBe(0)
+                expect(keys(rows)).toEqual(['telegram:7521:42:61', 'telegram:7521:42:62', 'telegram:7521:42:63'])
+
+                await handler({ message: held[1] })
+                const again = await importOn(connectionId, [userDialog('42')])
+
+                expect(mocks.createMessage).toHaveBeenCalledTimes(3)
+                expect(again.detailsJson.newMessages).toBe(0)
+                expect(again.detailsJson.existingMessages).toBe(3)
+                expect(logs()).not.toContain('seam body')
+            })
+
+            test.each([
+                ['an identity of another person', { id: 'identity:43', channel: 'telegram', externalId: '43' }],
+                ['an identity of another channel', { id: 'identity:wa', channel: 'whatsapp', externalId: '42' }],
+                ['no identity', null],
+            ])('a Contacts answer naming %s is contradictory and holds the event before any link', async (_label, identity) => {
+                const handler = await initializeListener(`telegram-seam-contradiction-${connectionSequence}`, '7522')
+                mocks.resolveContact.mockResolvedValueOnce({
+                    status: 'resolved',
+                    contact: { id: 'contact:43', displayName: 'Another Person' },
+                    identity,
+                    isNew: false,
+                    warnings: [],
+                })
+
+                await handler({ message: privateMessage({ peer: '42', id: 71, text: 'seam body contradiction' }) })
+
+                expect(mocks.ensureContactLink).not.toHaveBeenCalled()
+                expect(mocks.recordReachability).not.toHaveBeenCalled()
+                expect(mocks.messageFindUnique).not.toHaveBeenCalled()
+                expectNothingPersistedOrPublished()
+                expect(logs()).toContain('held code=CONTACT_RESOLUTION_BLOCKED')
+                expect(logs()).not.toContain('seam body')
+                expect(logs()).not.toContain('Another Person')
+            })
+
+            // Until Telegram adds the guard's code to its HOLD set, a refusal at
+            // append time is a bounded failure: nothing after it runs, nothing is
+            // counted as saved, and its text never reaches a log.
+            const appendRefusal = () => new Error('MESSAGING_APPEND_GUARD_REFUSED: attribution changed for "seam body guarded"')
+
+            test('a live append refusal this lane does not classify yet writes nothing after it', async () => {
+                const handler = await initializeListener(`telegram-seam-append-live-${connectionSequence}`, '7523')
+                mocks.createMessage.mockRejectedValueOnce(appendRefusal())
+
+                await handler({ message: privateMessage({ peer: '42', id: 81, text: 'seam body guarded' }) })
+
+                expect(mocks.createMessage).toHaveBeenCalledOnce()
+                expect(mocks.attachMessageMedia).not.toHaveBeenCalled()
+                expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+                expect(logs()).toContain('failed code=UNCLASSIFIED')
+                expect(logs()).not.toContain('seam body')
+                expect(logs()).not.toContain('attribution changed')
+            })
+
+            test('an imported append refusal this lane does not classify yet costs only that message', async () => {
+                mocks.createMessage
+                    .mockRejectedValueOnce(appendRefusal())
+                    .mockImplementation(async (command: { externalId: string }) => ({ message: { ...command, id: `message:${command.externalId}` } }))
+                messagesByPeer({ '43': [92, 91].map(id => privateMessage({ peer: '43', id, text: `seam body ${id}` })) })
+
+                const patch = await runImport([userDialog('43')])
+
+                expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([
+                    'telegram:7600:43:92',
+                    'telegram:7600:43:91',
+                ])
+                expect(patch.detailsJson.newMessages).toBe(1)
+                expect(patch.detailsJson.completeness.failedMessages).toBe(1)
+                expect(patch.resultType).toBe('partial')
+                expect(logs()).toContain('code=UNCLASSIFIED')
+                expect(logs()).not.toContain('seam body')
+            })
+        })
+
         describe('exact-key-first deduplication', () => {
             test('two provider messages with identical text one second apart are both persisted live', async () => {
                 const handler = await initializeListener(`telegram-dedupe-live-${connectionSequence}`, '7200')
@@ -1686,8 +1877,11 @@ describe('GramJS private conversation identity admission', () => {
             })
             let rowSequence = 0
 
-            /** A message store with a unique externalId, wired to the persistence mocks and the real S2 handler. */
-            function useEvidenceStore() {
+            /**
+             * A message store with a unique externalId, wired to the persistence mocks and the real S2 handler.
+             * `contentScanIgnoresProviderId` widens the content scan so that only the handler's own guard decides.
+             */
+            function useEvidenceStore(options: { contentScanIgnoresProviderId?: boolean } = {}) {
                 const rows = new Map<string, StoredRow>()
                 const byExternalId = (externalId: string) => [...rows.values()].find(row => row.externalId === externalId) ?? null
                 const put = (input: Partial<StoredRow> & { id?: string }) => {
@@ -1751,7 +1945,8 @@ describe('GramJS private conversation identity admission', () => {
                         return [...rows.values()]
                             .filter(row => row.chatId === input.chatId && row.channel === input.channel
                                 && row.direction === 'outbound' && row.type === 'text' && row.content === input.content
-                                && row.externalId === null && row.sentAt >= input.sentFrom && row.sentAt <= input.sentTo)
+                                && (options.contentScanIgnoresProviderId || row.externalId === null)
+                                && row.sentAt >= input.sentFrom && row.sentAt <= input.sentTo)
                             .sort((a, b) => a.sentAt.getTime() - b.sentAt.getTime())
                     },
                     async apply(row, write) {
@@ -2066,6 +2261,67 @@ describe('GramJS private conversation identity admission', () => {
                 test('the adapter never claims that a recipient\'s device received a message', () => {
                     const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
                     expect(source).not.toContain('device_receipt')
+                })
+            })
+
+            // R-21/R-22 seam: the Driver Bot writes into the same Chat as this
+            // account. Its rows carry the Bot's own key (webhook route:
+            // telegram:<bot>:<peer>:update%3A<n>) and are never this account's.
+            describe('R-21/R-22 seam: a conversation the Bot writes to as well', () => {
+                const BOT = '8100200300'
+                const botKey = (update: number) => `telegram:${BOT}:${PEER}:update%3A${update}`
+
+                test.each([
+                    ['delivered', 'delivered'],
+                    ['still unproven', 'sent'],
+                ])('the echo of a phone send never claims a Bot row of the same text that is %s', async (_label, status) => {
+                    const { rows, put, byExternalId } = useEvidenceStore({ contentScanIgnoresProviderId: true })
+                    const handler = await initializeListener(`tg3r-seam-bot-echo-${connectionSequence}`, ACCOUNT)
+                    const bot = put({ content: 'ok', status, externalId: botKey(1), sentAt: new Date(Date.now() - 2_000) })
+                    const botBefore = { ...bot }
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8901, text: 'ok', out: true }) })
+
+                    expect(rows.get(bot.id)).toEqual(botBefore)
+                    const mirrored = byExternalId(key(8901))
+                    expect(mirrored).toMatchObject({ chatId: CHAT, direction: 'outbound', status: 'sent' })
+                    expect(evidenceOf(mirrored)).toBe('provider_echo')
+                    expect(rows.size).toBe(2)
+                })
+
+                test('the echo of a CRM send settles that send, never the Bot row beside it', async () => {
+                    const { rows, put, byExternalId } = useEvidenceStore({ contentScanIgnoresProviderId: true })
+                    const handler = await initializeListener(`tg3r-seam-bot-crm-${connectionSequence}`, ACCOUNT)
+                    const bot = put({ content: 'ok', status: 'sent', externalId: botKey(2), sentAt: new Date(Date.now() - 3_000) })
+                    const botBefore = { ...bot }
+                    const crm = put({ content: 'ok', sentAt: new Date(Date.now() - 2_000) })
+
+                    await handler({ message: privateMessage({ peer: PEER, id: 8902, text: 'ok', out: true }) })
+
+                    expect(byExternalId(key(8902))?.id).toBe(crm.id)
+                    expect(evidenceOf(rows.get(crm.id))).toBe('provider_echo')
+                    expect(rows.get(bot.id)).toEqual(botBefore)
+                    expect(rows.size).toBe(2)
+                    expect(mocks.createMessage).not.toHaveBeenCalled()
+                })
+
+                test('a read marker promotes only this account\'s rows, even from a scan that returned a Bot row', async () => {
+                    const { rows, put } = useEvidenceStore()
+                    await initializeListener(`tg3r-seam-bot-read-${connectionSequence}`, ACCOUNT)
+                    const client = mocks.clients.at(-1) as unknown as { handlers: Array<(event: unknown) => Promise<void>>, builders: Array<{ input?: { types?: unknown[] } }> }
+                    const readHandler = client.handlers[client.builders.findIndex(builder => builder?.input?.types?.[0] === Api.UpdateReadHistoryOutbox)]
+                    const own = put({ externalId: key(9701), sentAt: new Date(Date.now() - 20_000) })
+                    const bots = [botKey(3), `telegram:${BOT}:${PEER}:3`].map((externalId, index) =>
+                        put({ externalId, status: 'sent', sentAt: new Date(Date.now() - 10_000 + index) }))
+                    const botsBefore = bots.map(row => ({ ...row }))
+                    // Defence in depth: the account prefix of the scan is not the only guard.
+                    mocks.messageFindMany.mockResolvedValueOnce([...bots, own].map(row => ({ externalId: row.externalId })))
+
+                    await readHandler({ peer: { userId: BigInt(PEER) }, maxId: 9702 })
+
+                    expect(state(rows.get(own.id))).toBe('read')
+                    expect(bots.map(row => rows.get(row.id))).toEqual(botsBefore)
+                    expect(mocks.applyEvidence.mock.calls.map(([command]) => command.providerMessageId)).toEqual([own.externalId])
                 })
             })
         })
@@ -2713,6 +2969,60 @@ describe('TG2R exact peer, reply proof and pre-dispatch outcome', () => {
             const service = readFileSync(`${process.cwd()}/src/lib/MessageService.ts`, 'utf8')
             const retryLeg = service.slice(service.lastIndexOf("case 'telegram': {"))
             expect(retryLeg.slice(0, 900)).toContain('quotedMsgId: nonEmptyString(meta.quotedMsgId)')
+        })
+    })
+
+    // R-21/R-22 seam: a conversation the inbox shows merged with another
+    // person's (R-22), or whose Chat carries another person's identity (R-21),
+    // sends to nobody but its own exact peer; nothing is looked up or swept.
+    describe('R-21/R-22 seam: a merged or contaminated conversation', () => {
+        test('a send naming another person than its conversation is refused before any lookup', async () => {
+            const { connectionId, chat } = setup()
+            knowPeerEverywhere()
+
+            expectOutcome(
+                await failure(sendTelegramMessage(OTHER_PEER, 'tg2r text', connectionId, { chatId: chat.id })),
+                'TELEGRAM_MTPROTO_REFUSED',
+                'CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH',
+            )
+            expect(mocks.getEntity).not.toHaveBeenCalled()
+            expect(sweeps()).toHaveLength(0)
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test.each([
+            ['identity', { identityTarget: OTHER_PEER, target: PEER }],
+            ['conversation key', { identityTarget: PEER, target: OTHER_PEER }],
+        ])('a conversation whose %s names another person is refused before any lookup', async (_label, binding) => {
+            const { connectionId, chat, send } = setup()
+            knowPeerEverywhere()
+            mocks.prepareOutbound.mockResolvedValue({
+                chatId: chat.id,
+                channel: 'telegram',
+                contactId: chat.contactId,
+                contactIdentityId: chat.contactIdentityId,
+                providerAccountId: ACCOUNT,
+                connectionId,
+                isMaxPersonal: false,
+                ...binding,
+            })
+
+            expectOutcome(await failure(send()), 'TELEGRAM_MTPROTO_REFUSED', 'CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+            expect(mocks.getEntity).not.toHaveBeenCalled()
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
+        })
+
+        test('a quote of the Bot\'s message in the shared conversation is not addressable and is never sent unquoted', async () => {
+            const { send } = setup()
+            knowPeerEverywhere()
+
+            expectOutcome(
+                await failure(send(`telegram:8100200300:${PEER}:update%3A812345`)),
+                'TELEGRAM_MTPROTO_REFUSED',
+                'TELEGRAM_REPLY_TARGET_NOT_ADDRESSABLE',
+            )
+            expect(mocks.getMessages).not.toHaveBeenCalled()
+            expect(mocks.sendMessage).not.toHaveBeenCalled()
         })
     })
 
