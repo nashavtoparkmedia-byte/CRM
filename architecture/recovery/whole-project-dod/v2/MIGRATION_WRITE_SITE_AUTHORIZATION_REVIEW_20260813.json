@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "f23ae1613b50f21ca0e4340a7ca9267d5c7619fb54e591f80ca56244885ef38b",
+    "source_sha256": "c8db5916ae007b5d7d091696de5af44ce999b74e69f7358a15e738048fc3abe1",
     "reviewed_path_count": 26,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 945,
-    "sorted_site_signatures_sha256": "9b0e599d16a7b92c2212dd9f90f0b1b93fb47a4fe91ed17b471f0671fc84a856"
+    "sorted_site_signatures_sha256": "501b34cf9a1f130554ea744fd00f63f2024416be8d5ac51a5908a6d7d5e06711"
   },
   "authorizations": [
     {
@@ -1737,6 +1737,45 @@
         "canonical_ordinal": 13,
         "artifact_sha256": "425e5536e973708c07efbd914b94e478364f49124e0e2ab4bad56eff9dd5db51",
         "repository_capture": "gravity-mvp/prisma/migrations/20260413000000_add_scenario_fields/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.0dc29c1b0c88d333",
+      "site_signature": "0dc29c1b0c88d333f270dbca139ca01e21a999ec2a5706ea74d4dd6cb46bb6ca",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 53,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashReferralManagerInvitation",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:0dc29c1b0c88d333f270dbca139ca01e21a999ec2a5706ea74d4dd6cb46bb6ca",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:53:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -3589,6 +3628,45 @@
         "canonical_ordinal": 47,
         "artifact_sha256": "880b6add9c6c4cc567dc0a68ad9736770fc8a71097f5f480583ac2aec4398ade",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726162043_add_max_raw_transport_journal/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.18e83856bb10a259",
+      "site_signature": "18e83856bb10a259c92b99bf1432032fa2f40f09ca3ee7de9caf67fb5f05051d",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 38,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashReferralManagerInvitation",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:18e83856bb10a259c92b99bf1432032fa2f40f09ca3ee7de9caf67fb5f05051d",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:38:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -7073,45 +7151,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.30d7fab32a8ea2ef",
-      "site_signature": "30d7fab32a8ea2efba50b32e92da138fb003c3c12c3253a7e0d9350eaf374ab0",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 53,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashReferralManagerInvitation",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:30d7fab32a8ea2efba50b32e92da138fb003c3c12c3253a7e0d9350eaf374ab0",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:53:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.31340cf99ddba28f",
       "site_signature": "31340cf99ddba28facf6f7f6afd37868666dfadffe538826cd19389d659e1034",
       "status": "APPROVED",
@@ -9069,45 +9108,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.3fa826f200766532",
-      "site_signature": "3fa826f20076653200f629a242bfc8276326ca08a560424ed5a51a7ef824b635",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 40,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashReferralManagerInvitation",
-            "operation": "ALTER_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:3fa826f20076653200f629a242bfc8276326ca08a560424ed5a51a7ef824b635",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:40:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.fleet_operations.3fc14f3611703954",
       "site_signature": "3fc14f361170395453b02383960540079b411f67fffe674132bcbdf488de063f",
       "status": "APPROVED",
@@ -10494,45 +10494,6 @@
         "canonical_ordinal": 4,
         "artifact_sha256": "0a1274ba95a261922f9fc450ae9b5d095d2b577399eb9d60ef7335528bc3d9c6",
         "repository_capture": "gravity-mvp/prisma/migrations/20260329000000_add_ai_status/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.4b38069184a9775c",
-      "site_signature": "4b38069184a9775c40eee331061cdb8ea89aeeed90148580b16d4f32ae35125f",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 38,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashReferralManagerInvitation",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:4b38069184a9775c40eee331061cdb8ea89aeeed90148580b16d4f32ae35125f",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:38:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -15905,45 +15866,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.75b49d22e16acc82",
-      "site_signature": "75b49d22e16acc823c3f26035aae0287ae889cd846d82ddf5f52e6ab6abf928b",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 19,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashReferralManagerInvitation",
-            "operation": "CREATE_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:75b49d22e16acc823c3f26035aae0287ae889cd846d82ddf5f52e6ab6abf928b",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:19:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.75e80659786d44bb",
       "site_signature": "75e80659786d44bb2953251d29a4b017d21c7ec30460e5ed11a79835946b42f6",
       "status": "APPROVED",
@@ -17930,45 +17852,6 @@
         "canonical_ordinal": 17,
         "artifact_sha256": "466fb7545f0793cb3261244cfff052937735fd473d80ecd40fccaddcc0c1ac8f",
         "repository_capture": "gravity-mvp/prisma/migrations/20260426000000_add_avito_module/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.8355d1e0323ff881",
-      "site_signature": "8355d1e0323ff88140d70b0ae6e053585c822315a10b1be711222e1fbc6c4fb8",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 35,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashReferralManagerInvitation",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:8355d1e0323ff88140d70b0ae6e053585c822315a10b1be711222e1fbc6c4fb8",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:35:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -20750,45 +20633,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.96a50541556088f4",
-      "site_signature": "96a50541556088f431a9a2579089da665f2d868ca2e7507d8fbb204789bf7ccd",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-        "source_sha256": "98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-        "line": 63,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "CashAccessEvent",
-            "operation": "ALTER_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashAccessEvent. It creates or constrains only Fleet Operations-owned referral objects, widens the admitted ledger kinds and writers without removing any, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:98327a1e4d5021a3bdc98eb08dc194b8a94fc6416ed6d6d673ec79940ac90b10",
-          "site_signature:96a50541556088f431a9a2579089da665f2d868ca2e7507d8fbb204789bf7ccd",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:63:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.96c468f6c6aaf576",
       "site_signature": "96c468f6c6aaf576d38bbfc9a62e6ecd0f8e367312308b8672c66cd589cff90e",
       "status": "APPROVED",
@@ -21428,6 +21272,45 @@
         "canonical_ordinal": 15,
         "artifact_sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
         "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.9b8f332a7ef894fd",
+      "site_signature": "9b8f332a7ef894fd6dfa165b06bbbf2b636fe999d295039824e519a68e8a7872",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 63,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashAccessEvent",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashAccessEvent. It creates or constrains only Fleet Operations-owned referral objects, widens the admitted ledger kinds and writers without removing any, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:9b8f332a7ef894fd6dfa165b06bbbf2b636fe999d295039824e519a68e8a7872",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:63:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -24665,6 +24548,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.b311822d732748d5",
+      "site_signature": "b311822d732748d5731bc47ecdaba9b2159c954c5fd2550603785cc537807bbf",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 40,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashReferralManagerInvitation",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:b311822d732748d5731bc47ecdaba9b2159c954c5fd2550603785cc537807bbf",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:40:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.messaging.b37ce9b5ea619ba6",
       "site_signature": "b37ce9b5ea619ba68122f91b284a37bce900dbd3ed9a4256b5a133f20462eba4",
       "status": "APPROVED",
@@ -27732,6 +27654,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.ce9815eb42d72dc6",
+      "site_signature": "ce9815eb42d72dc64e2838f31824b712aaacddf7e3f563a56cce342e654763f7",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 19,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashReferralManagerInvitation",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_TABLE on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:ce9815eb42d72dc64e2838f31824b712aaacddf7e3f563a56cce342e654763f7",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:19:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.cea5ca425a028e67",
       "site_signature": "cea5ca425a028e678ecf8b98b8a6c9ee0c02790ddb0944beaed65718c8639caf",
       "status": "APPROVED",
@@ -27799,6 +27760,45 @@
         "canonical_ordinal": 51,
         "artifact_sha256": "eea7bd6d591b60fe1ac71bd1a77e1e9c82a48d41b99f8b338efa55f65f561f26",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726225737_add_max_dispatch_ledger/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.cf521e4007d498b6",
+      "site_signature": "cf521e4007d498b642a081ffe08a52074f7ea4676da3c7b8eba9ccf243797cb2",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
+        "source_sha256": "5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+        "line": 35,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "CashReferralManagerInvitation",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Cash referral manager migration: CREATE_INDEX on CashReferralManagerInvitation. It creates or constrains only Fleet Operations-owned referral objects, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:5328b82be58278d38b6023b8d13a4abf76ed1acd5166b992ef3cfdbdaf74c183",
+          "site_signature:cf521e4007d498b642a081ffe08a52074f7ea4676da3c7b8eba9ccf243797cb2",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql:35:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
