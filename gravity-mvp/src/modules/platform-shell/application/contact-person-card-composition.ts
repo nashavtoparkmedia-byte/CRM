@@ -35,7 +35,15 @@ export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV1 & {
   viaContactId: string
   /** Contacts' legacy main-driver projection names this row. */
   isMainDriver: boolean
+  /**
+   * The row's own stored link (Driver.contactId) points at a Contact outside
+   * this person's whole lineage: a recorded contradiction to show, decided here
+   * against the lineage Contacts answered with, never against one lineage id.
+   */
+  linkContradiction: boolean
 }
+
+const LINK_BASIS_PREFERENCE: Record<DriverProfileForContactV1['linkBasis'], number> = { both: 0, contact_link: 1, legacy_yandex_link: 2 }
 
 export type ContactPersonCardConversationV1 = {
   channel: string
@@ -91,15 +99,25 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
     ])
     const driverProfiles: ContactPersonCardDriverProfileV1[] = []
     if (profiles.ok) {
-      const seen = new Set<string>()
+      // The same Driver row can be reached through two lineage ids; it is one
+      // profile, kept through its strongest stored link (both > contact_link >
+      // legacy_yandex_link) so a legacy match never hides a direct one.
+      const byDriver = new Map<string, ContactPersonCardDriverProfileV1>()
       for (const entry of profiles.value.entries) {
         for (const profile of entry.profiles) {
-          // The same Driver row can be reached through two lineage ids; it is one profile.
-          if (seen.has(profile.driverId)) continue
-          seen.add(profile.driverId)
-          driverProfiles.push({ ...profile, viaContactId: entry.contactId, isMainDriver: profile.driverId === card.mainDriverId })
+          const candidate: ContactPersonCardDriverProfileV1 = {
+            ...profile,
+            viaContactId: entry.contactId,
+            isMainDriver: profile.driverId === card.mainDriverId,
+            linkContradiction: profile.linkedContactId !== null && !lineageIds.includes(profile.linkedContactId),
+          }
+          const existing = byDriver.get(profile.driverId)
+          if (existing === undefined || LINK_BASIS_PREFERENCE[candidate.linkBasis] < LINK_BASIS_PREFERENCE[existing.linkBasis]) {
+            byDriver.set(profile.driverId, candidate)
+          }
         }
       }
+      driverProfiles.push(...byDriver.values())
     }
     const byChannel = new Map<string, ContactPersonCardConversationV1>()
     if (conversations.ok) {

@@ -34,8 +34,11 @@ export function selectDisplayedChatV1(input: {
   }
   if (activeChannelTab !== 'all' && chat.channelMap) {
     const channel = normalizeChannelTabV1(activeChannelTab)
-    const channelChatId = chat.channelMap[channel]
-    return channelChatId ? { kind: 'single', chatId: channelChatId } : { kind: 'empty', channel }
+    // Own keys only: a URL tab such as `constructor` must read as an empty channel, never a prototype value.
+    const channelChatId = Object.hasOwn(chat.channelMap, channel) ? chat.channelMap[channel] : undefined
+    return typeof channelChatId === 'string' && channelChatId !== ''
+      ? { kind: 'single', chatId: channelChatId }
+      : { kind: 'empty', channel }
   }
   return { kind: 'single', chatId }
 }

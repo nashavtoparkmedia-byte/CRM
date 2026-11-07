@@ -35,6 +35,14 @@ describe('selectDisplayedChatV1 — the one «shown conversation» rule', () => 
     expect(personCardLinkChatIdV1(selection)).toBeNull()
   })
 
+  it('a tab name that is not an own key of the channel map is an empty channel, never a prototype value', () => {
+    for (const tab of ['constructor', '__proto__', 'toString']) {
+      const selection = selectDisplayedChatV1({ chatId: 'row-1', activeChannelTab: tab, chat: grouped })
+      expect(selection).toEqual({ kind: 'empty', channel: tab })
+      expect(personCardLinkChatIdV1(selection)).toBeNull()
+    }
+  })
+
   it('a single-chat row on «Все» is that chat', () => {
     const selection = selectDisplayedChatV1({ chatId: 'chat-tg', activeChannelTab: 'all', chat: single })
     expect(selection).toEqual({ kind: 'single', chatId: 'chat-tg' })

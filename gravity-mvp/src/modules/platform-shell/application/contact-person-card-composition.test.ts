@@ -70,14 +70,35 @@ describe('loadContactPersonCardV1', () => {
     expect(calls[0]).toBe('contacts')
     expect(result.status).toBe('confirmed')
     if (result.status !== 'confirmed') throw new Error('unreachable')
-    expect(result.view.driverProfiles.map(p => [p.driverId, p.viaContactId, p.isMainDriver])).toEqual([
-      ['d-1', 'c-1', true], ['d-2', 'c-1', false], ['d-3', 'c-old', false],
+    expect(result.view.driverProfiles.map(p => [p.driverId, p.viaContactId, p.isMainDriver, p.linkContradiction])).toEqual([
+      ['d-1', 'c-1', true, false], ['d-2', 'c-1', false, false], ['d-3', 'c-old', false, false],
     ])
     expect(result.view.conversations).toEqual([
       { channel: 'telegram', primaryConversationId: 'chat-tg-new', lastActivityAt: '2026-03-01T00:00:00.000Z', conversationCount: 2, truncated: true },
       { channel: 'whatsapp', primaryConversationId: 'chat-wa', lastActivityAt: null, conversationCount: 1, truncated: true },
     ])
     expect(result.view.partial).toEqual({ driverProfiles: false, conversations: false })
+  })
+
+  it('decides a link contradiction against the whole lineage and keeps the strongest link of a duplicated row', async () => {
+    const load = createContactPersonCardCompositionV1({
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readDriverProfilesForContacts() {
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [
+          // reached first through the canonical id by the legacy link, pointing at the merged-away lineage member: no contradiction
+          { contactId: 'c-1', profiles: [profile({ driverId: 'd-merged', linkBasis: 'legacy_yandex_link', linkedContactId: 'c-old' }), profile({ driverId: 'd-foreign', linkBasis: 'legacy_yandex_link', linkedContactId: 'c-stranger' })] },
+          // the same row again through its own Contact link: the direct link wins
+          { contactId: 'c-old', profiles: [profile({ driverId: 'd-merged', linkBasis: 'contact_link', linkedContactId: 'c-old' })] },
+        ] }
+      },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+    })
+    const result = await load('c-1')
+    if (result.status !== 'confirmed') throw new Error('unreachable')
+    expect(result.view.driverProfiles.map(p => [p.driverId, p.linkBasis, p.viaContactId, p.linkContradiction])).toEqual([
+      ['d-merged', 'contact_link', 'c-old', false],
+      ['d-foreign', 'legacy_yandex_link', 'c-1', true],
+    ])
   })
 
   it('passes through forbidden, missing, refused and redirected without reading Fleet or Messaging', async () => {

@@ -83,3 +83,7 @@ max-web-scraper/known_chats.json
 max-web-scraper/last_activity.json
 max-web-scraper/last_seen_dedupe.json
 max-web-scraper/last_qr*.png
+
+# Python bytecode from the source-text tests under gravity-mvp/src/**/__tests__
+__pycache__/
+*.pyc

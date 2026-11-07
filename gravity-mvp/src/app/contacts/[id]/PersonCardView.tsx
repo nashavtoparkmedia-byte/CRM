@@ -112,9 +112,7 @@ function DriverProfileRow({ profile }: { profile: ContactPersonCardDriverProfile
             {PROFILE_STATUS_LABELS[profile.personResolutionStatus]}
           </Badge>
           {profile.linkBasis === 'legacy_yandex_link' && <Badge tone="muted">по прежней связи</Badge>}
-          {profile.linkBasis === 'legacy_yandex_link' && profile.linkedContactId && profile.linkedContactId !== profile.viaContactId && (
-            <Badge tone="bad">профиль привязан к другому контакту</Badge>
-          )}
+          {profile.linkContradiction && <Badge tone="bad">профиль привязан к другому контакту</Badge>}
         </div>
         <div className="mt-0.5 text-[13px] text-[#64748B]">
           {profile.fullName}

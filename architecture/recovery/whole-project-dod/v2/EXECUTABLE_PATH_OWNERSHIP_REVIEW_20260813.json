@@ -3443,7 +3443,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "35843c85e5cd40d0c98238eeb2961bc80040861c9b1de72ba6e70cea9e09d633",
+      "source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the read-only presentation of the person card view: park profiles, channel accounts, phones, lineage, conflicts and candidates as the read models decided them — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
     }
