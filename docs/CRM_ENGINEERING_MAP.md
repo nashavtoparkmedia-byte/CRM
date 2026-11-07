@@ -397,7 +397,8 @@ Each entry lists what the code actually does.
   - `G/lib/ai-call/*` — scenarios, encrypted provider settings, `esl-originate.ts`.
   - `G/modules/calling/application/` — `ai-call-lifecycle.ts`,
     `ai-call-finalization*.ts`, `ai-call-campaign*.ts`,
-    `controlled-real-ai-call*.ts`, `call-alert-operations.ts`.
+    `controlled-real-ai-call*.ts`, `ai-call-provider-effect-journal.ts`,
+    `call-alert-operations.ts`.
   - `G/modules/calling/internal/` — `ai-calls/` adapters and
     `bridge-machine-auth.ts`, `call-alerts/`, `call-stream.ts`.
   - `G/modules/calling/public/v1/` — `sip-client-context.tsx` (JsSIP softphone),
@@ -412,8 +413,9 @@ Each entry lists what the code actually does.
   `AiCallAdmission*` models.
 - **Runtime**: FreeSWITCH (host network, ESL 8021), audio bridge (port 3030),
   Redis/BullMQ, S3/MinIO, OpenAI (Whisper, chat), Yandex SpeechKit, coturn.
-- **Extension points**: `AiCallCampaignDialPort`,
-  `ControlledRealAiCallProviderPort`, `callingOutboxPublishersV1`, bridge
+- **Extension points**: `AiCallCampaignDialPort` (simulated and live adapters;
+  `dispatch` may return `null` = linked pending, results carry `providerAccepted`;
+  see F-21), `ControlledRealAiCallProviderPort`, `callingOutboxPublishersV1`, bridge
   `stt-router.js` / `tts-router.js`, `registerCompletedCallTimelineProjectorV1`.
 - **Tests**: vitest under `G/modules/calling/**`; node:test in
   `tools/audio-bridge-day1/__tests__` and `G/lib/ai-call/__tests__`;
@@ -939,8 +941,36 @@ Timeline projection into the chat comes from Gravity's own ESL hangup handler
 **F-21 AI-call campaigns**
 `G/app/api/ai-calls/campaigns/**` → `aiCallCampaignManagementV1` → worker
 (`G/modules/calling/application/ai-call-campaign-runtime.ts`): claim launch →
-admission (global row lock) → dial port → attempt result. The only dial adapter
-on main is the simulated one; live mode does not start.
+admission (global row lock; capacity is durable occupancy: linked, dispatched,
+unsettled attempts plus unreleased leases) → dial port (`AiCallCampaignDialPort`)
+→ attempt result. Admission, fencing and retry-or-stop are campaign policy in the
+runtime and `G/modules/calling/internal/ai-calls/ai-call-campaign-prisma-adapter.ts`;
+a dial adapter only reports a terminal. `dispatch` may return `null` (linked
+pending: the effect started and its `Call` is durably linked but has not settled;
+the attempt is reconciled later), and a result carries `providerAccepted: false`
+when no provider effect was accepted.
+Dial adapters: simulated (`internal/ai-calls/ai-call-campaign-simulated-dial-adapter.ts`)
+and live (`internal/ai-calls/ai-call-campaign-live-dial-adapter.ts`,
+`createAiCallCampaignLiveDialPort`). The live adapter derives one deterministic
+`Call` id and fsUuid per launch (`aiCallCampaignLiveDialIdentity`,
+`application/ai-call-campaign-live-dial.ts`), originates through
+`G/lib/ai-call/esl-originate.ts` with `originate_timeout` pinned, and journals the
+effect in `Call.metadata.aiCallCampaignLiveDialV1` through the namespace-agnostic
+`application/ai-call-provider-effect-journal.ts`: `prepared → dispatch_started →
+accepted | rejected | outcome_unknown`, compare-and-set, `dispatch_started`
+committed before the originate. Past `prepared` a launch never originates again;
+recovery reads the deterministic fsUuid and the `Call`'s provider-written facts.
+Before `T1` the live adapter reads the member Contact's voice permission fresh
+through `contacts.ContactCommunicationPermissionQuery.v1`
+(`getContactCommunicationPermissionV1`, class `voice`): a refusal creates no `Call`
+and sends nothing (`voice_restricted` permanent, `voice_permission_unavailable`
+retryable), and a `driver` or `external` target, which carries no Contact identity,
+is refused permanently (`voice_permission_unverifiable`).
+The live port is not selected yet: `application/ai-call-campaign-runtime-startup.ts`
+wires only the simulated port, any other `AI_CALL_CAMPAIGN_RUNTIME_MODE` resolves
+to `unsupported_live`, and `inspectAiCallCampaignLiveReadiness` also requires
+`AI_CALL_LIVE_MODE=true`, `AI_CALL_CAMPAIGN_LIVE_DIAL_ENABLED=true` and a verified
+telephony/AI provider set.
 
 ### Cash compensation
 
