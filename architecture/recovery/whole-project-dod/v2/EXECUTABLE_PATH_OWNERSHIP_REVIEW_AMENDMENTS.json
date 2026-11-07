@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "d486bafcb318c225d2355838eff5ab95b2cba0bf222f755592456c3e31f3f265"
+    "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a"
   },
   "amendments": [
     {
@@ -3276,91 +3276,89 @@
       }
     },
     {
-      "amendment_id": "cash-referral-manager-s4-main-dadef242-20261107",
+      "amendment_id": "contact-identity-cc1-card-read-model-main-d46100e8-br4-20261107",
       "reviewed_at": "2026-11-07T00:00:00Z",
-      "reviewed_by": "CASH_REFERRAL_MANAGER_S4_EXECUTOR_REVIEW_DADEF242",
+      "reviewed_by": "CONTACT_IDENTITY_CC1_CARD_READ_MODEL_EXECUTOR_REVIEW_D46100E8",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "OWNER_GO_CASH_REFERRAL_S4_CONTINUE_TO_MAIN_READY_20261107",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain published on main at dadef242, whose tail is identity-access-br4-signed-mobile-operator-main-d46100e8-20261107, and leaves that amendment untouched; the compensation board rebind starts from the fingerprint that chain approved."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is identity-access-br4-signed-mobile-operator-main-d46100e8-20261107 (the BR-4 reconcile onto main d46100e8), and leaves that amendment untouched. It reviews only the 10 surfaces the CC-1 Contact Card read model adds; it rebinds no source fingerprint."
       },
-      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main dadef242 and the one source fingerprint they move: 2,734 + 14 = 2,748 surfaces, context-owned 1,495 -> 1,502 and governed exclusions 1,239 -> 1,246. Seven new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; one Vitest suite sits beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records, unchanged in surfaces, assignments, rebinds and rationales other than the corrected description of the read adapter, the S4 amendment cash-referral-manager-s4-main-d46100e8-20261106 of PR #198 head 0aec4729, which main never published; the S4 product bytes are unchanged (git diff over gravity-mvp sha256 302f6be1a2b446411aaa80d486633148ede491c79864d2d6fcf08ed1322c5e2e against both d46100e8 and dadef242). Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main dadef242 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces the CC-1 Contact Card read model adds on top of the BR-4 reconcile of main d46100e8: 2,734 + 10 = 2,744 surfaces, context-owned 1,495 -> 1,504 and governed exclusions 1,239 -> 1,240. Nine new paths are owned by the contacts context through its manifest owned_paths: the contacts.ContactCardForConversationQuery.v1 contract and its test under gravity-mvp/src/contracts/contacts, and under gravity-mvp/src/modules/contacts/internal the handler, the single Prisma reader and the Identity Access authority binding with their tests. The tenth is a boundary control under tools/architecture, covered by the architecture_recovery governed exclusion as an OPERATIONAL_SCRIPT recorded in the lifecycle registry. No existing path changes bytes in any reviewed exact inventory, so this amendment carries no source-fingerprint rebind; the two context-owned files it edits (contact-operations.ts and the contacts public index) are in no exact inventory. Its predecessor is the current triple of the BR-4 amendment identity-access-br4-signed-mobile-operator-main-d46100e8-20261107, and its current triple differs from the predecessor by exactly these 10 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 43. It re-records, unchanged in surfaces and rationales, the CC-1 amendment contact-identity-cc1-card-read-model-main-e256d14b-20261027 published on PR #186 HEAD e5905000 as amendment 34 over main e256d14b but never landed: main moved to d46100e8 and BR-4 took amendment 42, so this one follows BR-4 and takes its predecessor triple, with the exact product bytes of e5905000 (CC1-L1 hardening included). The provisional engineering-map invariant I-CC1 is assigned its landing number I-63 in this reconcile. Reconciled under the Orchestrator V7 Contact Identity full conditional delivery mandate of 2026-11-07.",
       "predecessor": {
         "tracked_executable_surfaces": 2734,
         "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
         "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
       },
       "current": {
-        "tracked_executable_surfaces": 2748,
-        "tracked_inventory_sha256": "d411f9bd5ba5dd1ab0eb2f881feed286bd1d1327bccb3d43b684b6aedd062b09",
-        "coverage_sha256": "32d6a9efaf590c3070aa5fb9feac99f2f2a0eed335aa4295c8499b7311bfda64"
+        "tracked_executable_surfaces": 2744,
+        "tracked_inventory_sha256": "599448af48b343cc07ef702c48c7db672a46bae34d57457cfb78cbd0f25b3c5b",
+        "coverage_sha256": "2fb18af75c9579ebd8573a1e078f9de3f1f60d62f5c08b8f02688bed5e93033a"
       },
-      "source_hash_rebinds": [
-        {
-          "path": "gravity-mvp/src/app/compensation/page.tsx",
-          "previous_source_sha256": "2c41673425346944579f3262dd639e1ec864c939cde8933482e8271d9317ce81",
-          "current_source_sha256": "82001f2cbd4972243bcaaaed637e397b2e4d036d620347dd07729392af10ca7a",
-          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "The compensation board gains one link to the referral programme screen. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
-        }
-      ],
+      "source_hash_rebinds": [],
       "unassigned_tracked_surfaces": [
         {
-          "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-          "lifecycle": "MIGRATION",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the Fleet Operations-owned table of manager-recorded invitations and widens the admitted kinds of the Fleet Operations-owned Cash access ledger; it names no other table."
-        },
-        {
-          "path": "gravity-mvp/src/app/compensation/referrals/referral-screens.test.tsx",
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The jsdom Vitest suite of the referral screen against mocked server actions; it opens no database connection and holds no credential. Like the neighbouring compensation screen suites it receives no explicit ownership assignment."
+          "review_rationale": "The contract test of contacts.ContactCardForConversationQuery.v1 (exact fields, exact Chat.id, versions); it opens no database connection and holds no credential, under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-manager-operations.ts",
+          "path": "gravity-mvp/src/contracts/contacts/v1/contact-card-for-conversation-contracts.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The composition root of the Cash referral manager tools: search, a person's card, recorded invitations and manager grants and revokes, each behind YOKO_CASH_ACCESS_LEDGER=on and each write behind a signed staff session; it injects the Fleet stores and touches no money, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The provider-neutral contacts.ContactCardForConversationQuery.v1 contract: an exact Chat.id as the only input, the six answer states and the minimal card that only the confirmed answer carries. Under gravity-mvp/src/contracts/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-switches.test.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.rcq1.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The in-memory test of the two referral switches (ledger mode never runs the automatic decision pass); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The card read model bound to the real Messaging RCQ1 handler over an in-memory store whose links and merges change mid-read; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.test.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The in-memory test of the manager tools against a store that keeps the database's rules (chains verify, one standing record per invitee, idempotent requests); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The protocol and projection proofs of the card read model against recorded in-memory ports (authorization, cross-person, cross-fleet, races, no fallback, no data in any non-confirmed answer); it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/contact-card-for-conversation.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The manager tools over their port: people as canonical Contacts, invitations recorded and withdrawn, access granted and revoked through the ledger's manual kinds, every write admitted only for a signed staff session with its capability. It has no provider or database dependency of its own, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The internal handler of the card read model: verified principal first, conversation access before RCQ1, Contact access before any Contact read, one read of exactly the Contact RCQ1 named and a second RCQ1 resolution that must name it again, plus the pure card projection over ContactDisplayPolicy and both Contacts conflict stores. It writes nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.test.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure test of the manager rules (search query, grouping people, self-invitation, one inviter per invitee, grant and revoke, capability); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The unit proof of the card authority with Identity Access mocked, plus a source scan that it reads no client-held identity; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-card-authority.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure rules of the manager tools: the search query, people from profiles, whether an invitation may be recorded, the access view from the ledger fold, and grant and revoke decisions. It reads no database, environment or provider and changes no money rule, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The production authority of the card read model: the principal is the Identity Access signed integration-admin principal (the declared contacts > identity_access.public dependency) and never crm_user_id, a cookie, a header or a mobile session; any other principal kind may read nothing. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts",
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the card reader against a recording transaction double that throws on every write, raw query and foreign model; it opens no database connection and holds no credential, under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-card-source-adapter.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The Prisma reads of the manager screens: Fleet's own Driver rows by name, phone or licence, and Contacts only through its public lineage and confirmation reads. Park names reach the service from the park metadata capability, so no connection row is read here. It writes nothing, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The one database reader of the card: Contact and ContactMerge read by exact id in one repeatable-read snapshot, no provider external id selected and no write. Under gravity-mvp/src/modules/contacts, a path the contacts context owns, so context ownership comes from the manifest."
+        },
+        {
+          "path": "tools/architecture/check-contact-card-read-model-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the card read model answers only for an exact Chat.id through RCQ1, under a verified principal, reading exactly one Contact in one snapshot without writes, with its handler and bindings internal, and runs its proofs; it writes nothing."
         }
       ],
       "invariants": {
