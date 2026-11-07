@@ -116,7 +116,12 @@ class MemoryStore {
                 && (event.kind === 'referral_link_recorded' || event.kind === 'referral_link_withdrawn')),
             recordManagerInvitation: async (input) => {
                 const replay = this.events.find((event) => event.idempotencyKey === input.idempotencyKey)
-                if (typeof replay?.payload.invitationId === 'string') return { outcome: 'already_recorded', attributionId: replay.payload.invitationId }
+                if (replay !== undefined) {
+                    // As the adapter: a retry answers with what it wrote; the id put to another pair is a mismatch.
+                    const sameRequest = typeof replay.payload.invitationId === 'string' && replay.kind === 'referral_link_recorded'
+                        && replay.chainContactId === input.inviterContactId && replay.payload.inviteeContactId === input.inviteeContactId
+                    return sameRequest ? { outcome: 'already_recorded', attributionId: replay.payload.invitationId as string } : { outcome: 'request_mismatch' }
+                }
                 if (this.injectBusy > 0) { this.injectBusy -= 1; return { outcome: 'busy' } }
                 if (this.injectConflicts > 0) {
                     this.injectConflicts -= 1
@@ -135,7 +140,10 @@ class MemoryStore {
                 return { outcome: 'recorded', attributionId }
             },
             withdrawManagerInvitation: async (input) => {
-                if (this.events.some((event) => event.idempotencyKey === input.idempotencyKey)) return 'already_withdrawn'
+                const replay = this.events.find((event) => event.idempotencyKey === input.idempotencyKey)
+                if (replay !== undefined) {
+                    return replay.kind === 'referral_link_withdrawn' && replay.payload.invitationId === input.attributionId ? 'already_withdrawn' : 'request_mismatch'
+                }
                 const row = this.rows.find((r) => r.attributionId === input.attributionId && r.version === input.expectedVersion && r.source === 'manager' && r.state === 'recorded')
                 if (!row) return 'version_conflict'
                 row.state = 'withdrawn'
@@ -144,7 +152,10 @@ class MemoryStore {
                 return 'withdrawn'
             },
             appendManagerAccessEvents: async (drafts) => {
-                if (this.events.some((event) => event.idempotencyKey === drafts[0].idempotencyKey)) return 'already_written'
+                const replay = this.events.find((event) => event.idempotencyKey === drafts[0].idempotencyKey)
+                if (replay !== undefined) {
+                    return replay.chainContactId === drafts[0].chainContactId && replay.kind === drafts[0].kind ? 'already_written' : 'request_mismatch'
+                }
                 if (this.injectBusy > 0) { this.injectBusy -= 1; return 'busy' }
                 for (const draft of drafts) this.append(draft)
                 return 'written'
@@ -409,5 +420,32 @@ describe('authority', () => {
             .toEqual({ status: 'refused', reason: 'invalid_request' })
         expect(store.events).toHaveLength(0)
         expect(store.rows).toHaveLength(0)
+    })
+
+    it('refuses a request id reused for another person, pair or invitation instead of answering with the old result', async () => {
+        const recordId = requestId()
+        expect(await record('contact-A', 'contact-B', recordId)).toEqual({ status: 'recorded', attributionId: 'att-1' })
+        expect(await record('contact-P', 'contact-N', recordId)).toEqual({ status: 'refused', reason: 'invalid_request' })
+
+        const grantId = requestId()
+        const grant = (contactId: string) => grantCashAccessV1(port, { contactId, basis: 'manager_decision', referralAttributionId: null, comment: 'Решение менеджера', requestId: grantId, authority: STAFF })
+        expect(await grant('contact-A')).toEqual({ status: 'granted' })
+        expect(await grant('contact-P')).toEqual({ status: 'refused', reason: 'invalid_request' })
+
+        const revokeId = requestId()
+        await grantCashAccessV1(port, { contactId: 'contact-N', basis: 'manager_decision', referralAttributionId: null, comment: 'Решение менеджера', requestId: requestId(), authority: STAFF })
+        expect(await revokeCashAccessV1(port, { contactId: 'contact-A', comment: null, requestId: revokeId, authority: STAFF })).toEqual({ status: 'revoked' })
+        expect(await revokeCashAccessV1(port, { contactId: 'contact-N', comment: null, requestId: revokeId, authority: STAFF })).toEqual({ status: 'refused', reason: 'invalid_request' })
+
+        expect(await record('contact-P', 'contact-N')).toMatchObject({ status: 'recorded' })
+        const withdrawId = requestId()
+        expect(await withdrawCashReferralInvitationV1(port, { attributionId: 'att-1', expectedVersion: 0, comment: null, requestId: withdrawId, authority: STAFF })).toEqual({ status: 'withdrawn' })
+        expect(await withdrawCashReferralInvitationV1(port, { attributionId: 'att-2', expectedVersion: 0, comment: null, requestId: withdrawId, authority: STAFF }))
+            .toEqual({ status: 'refused', reason: 'invalid_request' })
+
+        // Nothing was written for the reused ids: Петров has no grant, Н. keeps his, att-2 stands.
+        expect(store.chainOf('contact-P').filter((event) => event.kind === 'manual_granted')).toHaveLength(0)
+        expect(store.chainOf('contact-N').filter((event) => event.kind === 'manual_cleared')).toHaveLength(0)
+        expect(store.rows.find((row) => row.attributionId === 'att-2')?.state).toBe('recorded')
     })
 })

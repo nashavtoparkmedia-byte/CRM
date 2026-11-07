@@ -19,11 +19,12 @@ import type { ReferralPersonResponse, ReferralSearchResponse, ReferralWriteRespo
 /**
  * The referral screens' server actions.
  *
- * Reads need the same CRM manager session as the rest of /compensation.
- * The search also needs the verified integration-admin principal: its
- * answer comes from Contacts' ContactLookup.v1, which names people only to a
- * caller who may open the person card they lead to, and Cash does not hand
- * it to a weaker one. Writes need the manager session and a signed staff
+ * Reads need the same CRM manager session as the rest of /compensation,
+ * and the verified integration-admin principal besides: the search's answer
+ * comes from Contacts' ContactLookup.v1, which names people only to a caller
+ * who may open the person card they lead to, and the person card is where
+ * that search leads, so Cash hands neither to a weaker caller. Writes need
+ * the manager session and a signed staff
  * session besides; no action takes a principal, a role or a capability from
  * the browser. Every write answers with the backend's own code, never a
  * success it did not confirm.
@@ -43,6 +44,7 @@ export async function searchReferralPeople(query: string): Promise<ReferralSearc
 export async function loadReferralPerson(contactId: string): Promise<ReferralPersonResponse> {
     const session = await managerSession()
     if (!session.ok) return { status: 'refused', reason: session.refusal }
+    if (await getIntegrationAdminPrincipal() === null) return { status: 'refused', reason: 'admin_session_required' }
     const result = await cashReferralManagerPersonV1(contactId)
     if (result.status !== 'ok') return { status: 'refused', reason: result.status }
     return { status: 'ok', person: personView(result.card) }

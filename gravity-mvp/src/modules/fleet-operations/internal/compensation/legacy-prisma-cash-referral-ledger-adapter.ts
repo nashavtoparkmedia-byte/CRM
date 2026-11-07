@@ -620,7 +620,8 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
     /**
      * Records that a manager put one invitee to one inviter: the row and its
      * event on the inviter's chain, together or not at all. A request already
-     * written answers with what it wrote. An invitee another record or a
+     * written answers with what it wrote; its id put to another pair is not a
+     * retry and is answered as a mismatch. An invitee another record or a
      * qualified Telegram invitation already counts is a conflict.
      */
     async recordManagerInvitation(input: {
@@ -633,12 +634,20 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
         reason: string
         payload: { [key: string]: CashAccessJsonV1 }
         idempotencyKey: string
-    }): Promise<{ outcome: 'recorded' | 'already_recorded'; attributionId: string } | { outcome: 'conflict' | 'busy' }> {
+    }): Promise<{ outcome: 'recorded' | 'already_recorded'; attributionId: string } | { outcome: 'conflict' | 'busy' | 'request_mismatch' }> {
         try {
             return await prisma.$transaction(async (tx) => {
                 const replay = await eventByKeyInV1(tx, input.idempotencyKey)
-                const replayed = replay?.payload.invitationId
-                if (typeof replayed === 'string') return { outcome: 'already_recorded' as const, attributionId: replayed }
+                if (replay !== null) {
+                    const replayed = replay.payload.invitationId
+                    const sameRequest = typeof replayed === 'string'
+                        && replay.kind === 'referral_link_recorded'
+                        && replay.chainContactId === input.inviterContactId
+                        && replay.payload.inviteeContactId === input.inviteeContactId
+                    return sameRequest
+                        ? { outcome: 'already_recorded' as const, attributionId: replayed }
+                        : { outcome: 'request_mismatch' as const }
+                }
                 const lineage = [...new Set([input.inviteeContactId, ...input.inviteeLineage])]
                 const counted = await tx.$queryRawUnsafe<Array<{ id: string }>>(
                     `SELECT "id" FROM "CashReferralAttribution"
@@ -685,10 +694,15 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
         reason: string
         payload: { [key: string]: CashAccessJsonV1 }
         idempotencyKey: string
-    }): Promise<'withdrawn' | 'already_withdrawn' | 'version_conflict' | 'busy'> {
+    }): Promise<'withdrawn' | 'already_withdrawn' | 'version_conflict' | 'busy' | 'request_mismatch'> {
         try {
             return await prisma.$transaction(async (tx) => {
-                if (await eventByKeyInV1(tx, input.idempotencyKey) !== null) return 'already_withdrawn' as const
+                const replay = await eventByKeyInV1(tx, input.idempotencyKey)
+                if (replay !== null) {
+                    return replay.kind === 'referral_link_withdrawn' && replay.payload.invitationId === input.attributionId
+                        ? 'already_withdrawn' as const
+                        : 'request_mismatch' as const
+                }
                 const rows = await tx.$queryRawUnsafe<Array<{ inviterContactId: string; inviterLineageDigest: string }>>(
                     `UPDATE "CashReferralManagerInvitation"
                      SET "state" = 'withdrawn', "withdrawnAt" = date_trunc('milliseconds', now()),
@@ -721,13 +735,19 @@ export const legacyPrismaCashReferralLedgerStoreV1 = {
     /**
      * Appends a manager's access events to one chain together: a grant, or a
      * revoke of every standing grant. A request already written is not
-     * written again; a chain that moved meanwhile is reported as busy.
+     * written again, and its id put to another person or decision is a
+     * mismatch, not a retry; a chain that moved meanwhile is reported as busy.
      */
-    async appendManagerAccessEvents(drafts: readonly CashAccessEventDraftV1[]): Promise<'written' | 'already_written' | 'busy'> {
+    async appendManagerAccessEvents(drafts: readonly CashAccessEventDraftV1[]): Promise<'written' | 'already_written' | 'busy' | 'request_mismatch'> {
         if (drafts.length === 0) return 'already_written'
         try {
             return await prisma.$transaction(async (tx) => {
-                if (await eventByKeyInV1(tx, drafts[0].idempotencyKey) !== null) return 'already_written' as const
+                const replay = await eventByKeyInV1(tx, drafts[0].idempotencyKey)
+                if (replay !== null) {
+                    return replay.chainContactId === drafts[0].chainContactId && replay.kind === drafts[0].kind
+                        ? 'already_written' as const
+                        : 'request_mismatch' as const
+                }
                 for (const draft of drafts) await appendInV1(tx, draft)
                 return 'written' as const
             })

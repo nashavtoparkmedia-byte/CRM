@@ -73,7 +73,7 @@ export interface CashReferralManagerPortV1 {
         reason: string
         payload: { [key: string]: CashAccessJsonV1 }
         idempotencyKey: string
-    }): Promise<{ outcome: 'recorded' | 'already_recorded'; attributionId: string } | { outcome: 'conflict' | 'busy' }>
+    }): Promise<{ outcome: 'recorded' | 'already_recorded'; attributionId: string } | { outcome: 'conflict' | 'busy' | 'request_mismatch' }>
     withdrawManagerInvitation(input: {
         attributionId: string
         expectedVersion: number
@@ -81,8 +81,12 @@ export interface CashReferralManagerPortV1 {
         reason: string
         payload: { [key: string]: CashAccessJsonV1 }
         idempotencyKey: string
-    }): Promise<'withdrawn' | 'already_withdrawn' | 'version_conflict' | 'busy'>
-    appendManagerAccessEvents(drafts: readonly CashAccessEventDraftV1[]): Promise<'written' | 'already_written' | 'busy'>
+    }): Promise<'withdrawn' | 'already_withdrawn' | 'version_conflict' | 'busy' | 'request_mismatch'>
+    /**
+     * A request id already written for another person, pair or decision is
+     * answered as 'request_mismatch': it is not a retry, and nothing is written.
+     */
+    appendManagerAccessEvents(drafts: readonly CashAccessEventDraftV1[]): Promise<'written' | 'already_written' | 'busy' | 'request_mismatch'>
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +345,7 @@ export async function recordCashReferralInvitationV1(port: CashReferralManagerPo
         if (written.outcome === 'recorded' || written.outcome === 'already_recorded') {
             return { status: written.outcome, attributionId: written.attributionId }
         }
+        if (written.outcome === 'request_mismatch') return { status: 'refused', reason: 'invalid_request' }
         // A conflict or a moved chain: someone wrote meanwhile; decide again on what is there now.
     }
     return { status: 'refused', reason: 'busy' }
@@ -373,6 +378,7 @@ export async function withdrawCashReferralInvitationV1(port: CashReferralManager
     })
     if (written === 'withdrawn' || written === 'already_withdrawn') return { status: written }
     if (written === 'busy') return { status: 'refused', reason: 'busy' }
+    if (written === 'request_mismatch') return { status: 'refused', reason: 'invalid_request' }
     // The record moved since the screen read it: withdrawn already, or changed.
     return { status: 'refused', reason: row.state === 'recorded' ? 'person_changed' : 'not_withdrawable' }
 }
@@ -422,6 +428,7 @@ export async function grantCashAccessV1(port: CashReferralManagerPortV1, input: 
         }])
         if (written === 'written') return { status: 'granted' }
         if (written === 'already_written') return { status: 'already_granted' }
+        if (written === 'request_mismatch') return { status: 'refused', reason: 'invalid_request' }
     }
     return { status: 'refused', reason: 'busy' }
 }
@@ -472,6 +479,7 @@ export async function revokeCashAccessV1(port: CashReferralManagerPortV1, input:
         }
         const written = await port.appendManagerAccessEvents(drafts)
         if (written === 'written' || written === 'already_written') return { status: 'revoked' }
+        if (written === 'request_mismatch') return { status: 'refused', reason: 'invalid_request' }
     }
     return { status: 'refused', reason: 'busy' }
 }
