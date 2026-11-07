@@ -18,6 +18,8 @@ import { createRunApiLogRetentionHandlerV1, createRunDriverEventRetentionHandler
 import { legacyPrismaFleetEventRetentionPortV1 } from '../public/v1/legacy-prisma-event-retention-adapter'
 import { createFindDriverByExactPhoneHandlerV1 } from '../public/v1/find-driver-by-exact-phone-handler'
 import { legacyPrismaFindDriverByExactPhonePortV1 } from '../public/v1/legacy-prisma-find-driver-by-exact-phone-adapter'
+import { createDriverProfilesForContactsHandlerV1 } from '../public/v1/driver-profiles-for-contacts-handler'
+import { legacyPrismaDriverProfilesForContactsPortV1 } from '../public/v1/legacy-prisma-driver-profiles-for-contacts-adapter'
 import { createGetDriverCallablePhoneHandlerV1 } from '../public/v1/get-driver-callable-phone-handler'
 import { legacyPrismaGetDriverCallablePhonePortV1 } from '../public/v1/legacy-prisma-get-driver-callable-phone-adapter'
 import { createSearchLocalDriversHandlerV1, normalizeDriverSearchQueryV1 } from '../public/v1/search-local-drivers-handler'
@@ -56,6 +58,7 @@ const mirrorDriverActionResult = createMirrorDriverActionResultHandlerV1(legacyP
 const runDriverEventRetention = createRunDriverEventRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 const runApiLogRetention = createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 const findDriverByExactPhone = createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
+const readDriverProfilesForContacts = createDriverProfilesForContactsHandlerV1(legacyPrismaDriverProfilesForContactsPortV1)
 const getDriverCallablePhone = createGetDriverCallablePhoneHandlerV1(legacyPrismaGetDriverCallablePhonePortV1)
 const searchLocalDrivers = createSearchLocalDriversHandlerV1(legacyPrismaSearchLocalDriversPortV1)
 const reconcileDriverProfile = createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
@@ -78,6 +81,7 @@ export const mirrorDriverActionResultV1 = (...args: Parameters<typeof mirrorDriv
 export const runDriverEventRetentionV1 = (...args: Parameters<typeof runDriverEventRetention>) => runDriverEventRetention(...args)
 export const runApiLogRetentionV1 = (...args: Parameters<typeof runApiLogRetention>) => runApiLogRetention(...args)
 export const findDriverByExactPhoneV1 = (...args: Parameters<typeof findDriverByExactPhone>) => findDriverByExactPhone(...args)
+export const readDriverProfilesForContactsV1 = (...args: Parameters<typeof readDriverProfilesForContacts>) => readDriverProfilesForContacts(...args)
 export const getDriverCallablePhoneV1 = (...args: Parameters<typeof getDriverCallablePhone>) => getDriverCallablePhone(...args)
 export const searchLocalDriversV1 = (...args: Parameters<typeof searchLocalDrivers>) => searchLocalDrivers(...args)
 export async function searchYandexParksByDriverQueryV1(query: unknown): Promise<ParkDriverSearchResultV1> {

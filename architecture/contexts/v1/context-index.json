@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "268ba3986e92569cdf74f4fe32cfd78d912a2b37ff28ff07f0781f551d87b5c1"
+      "sha256": "ca6d921c3b53398baa1c8ef951588d32e6776891e9a47c0d2749cb3f0039c109"
     },
     {
       "context": "edge_delivery",
@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "7ee4a0cbdbe751ac340dac2607bb65a8542f6593add39ac54f84cc9af2399611"
+      "sha256": "ca98fcb95074abedf2bcea248149e937d0806e96a4c08fb7bfb5b0062bf054b5"
     },
     {
       "context": "identity_access",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "2003148c5443364a85fbdc6ad5f4a2bc0525571a42c9f6d3475785987e9a91e3"
+      "sha256": "e0f4823657f28aabbe781b29a3237e94b78c8376425e8ae460c9e2287df2fd58"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "31587aed196f5152ee8160ae42e792d88c15adfb12020811a5baba675b8ac099"
+      "sha256": "856bc80337af60e1b50f3f1bbb2a2032916a13b63124d744975d7d96e09a018c"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "d0d4a0bb26dd43b33f83fcee35cb30aa4a5dbef63089195036c2749477b51f5b"
+      "sha256": "bc4333107c083d4f2e268e1a3be10b1015083a10e6425196e0183df96bea4a29"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "6847b0411acd30217115078bb2f449ae60dd8277172bb224d3a3b765b98ae360"
+      "sha256": "4248c515a68a1b7d25ff0a3d1734286ede04fa76678dd7f8d5d1c0427cd792ea"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "a95cf6d1cc01839fda09d1a5e60d7173160c02cb87087f5578e45490079efb36"
+      "sha256": "d451be90b081c75be3e3adb50069655717254b7f0c7ef018a02ec809924cb25d"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "9ad2a826edea39c7af445fc80e9391a77c6c4aaeb3efd1e7df46e2b4128ed96f"
+      "sha256": "149744b630d8154cd94faa9648e36b4c43863985398b103bb0adb46221146025"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

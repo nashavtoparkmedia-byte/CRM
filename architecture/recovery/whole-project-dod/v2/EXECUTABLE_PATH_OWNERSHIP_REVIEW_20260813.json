@@ -86,7 +86,7 @@
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
-      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability. The Manager CRM completion of that workflow admits exactly seven further surfaces under the same owner and the same exclusion: the budget panel, the board filters, the server-only manager data module, the money formatting helper, and the application detail page with its detail component and its evidence route. None owns a monetary decision, holds a credential or reaches a production capability; every monetary write still goes through the fleet_operations public compensation capability, and the evidence route serves stored bytes obtained through the Telegram channel without ever handling the bot token. The exact runtime inventory therefore moves from two hundred and fifty paths to two hundred and fifty-seven.",
+      "review_rationale": "Internal executor review confirms the pre-existing exact legacy Gravity runtime remainder is unchanged and admits exactly five PR #81 composition entrypoints: three Contacts-owned API surfaces, one Fleet-check API surface, and one automatic-merge composition surface. Each remains under the same finite legacy_gravity_runtime owner used by neighboring root-level application routes while bounded-context business writes continue through accepted public owner capabilities. The integrated Telegram cash-compensation pilot further admits exactly three manager surfaces (the compensation page, its server actions and its application list component) under the same legacy_gravity_runtime owner; every monetary write they reach goes through the fleet_operations public compensation capability. The Manager CRM completion of that workflow admits exactly seven further surfaces under the same owner and the same exclusion: the budget panel, the board filters, the server-only manager data module, the money formatting helper, and the application detail page with its detail component and its evidence route. None owns a monetary decision, holds a credential or reaches a production capability; every monetary write still goes through the fleet_operations public compensation capability, and the evidence route serves stored bytes obtained through the Telegram channel without ever handling the bot token. The exact runtime inventory therefore moves from two hundred and fifty paths to two hundred and fifty-seven. The Contact Identity person card (Orchestrator V7 mandate, 2026-11-07) admits five further exact entrypoints — the «Люди» search page and its client, the «Карточка человека» page and its view, and the ContactLookup.v1 route — 257 -> 262 paths, each under the same finite legacy_gravity_runtime owner, each reading only through accepted public capabilities behind a verified server-side principal, none writing.",
       "previous_inventory": {
         "path_count": 242,
         "path_sha256": "9865049dfe3569e41ef7e3669c820a185e7dc1582614ba6fdf13af88a90657b8"
@@ -336,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 257,
-        "path_sha256": "349e5680f3462b4ea70a21f7c27589c0d47dfe3b80b049caab324f36bbc2bf95"
+        "path_count": 262,
+        "path_sha256": "32c031524fc905f2da11d42924bb5e3afc61da82778596e672d4d570bbdb7118"
       }
     },
     {
@@ -3396,6 +3396,56 @@
       "source_sha256": "3ef8a6e93ead15a2cf61f5cf1c92e883e9303e8329bcbcf5ef90b4c31b8a0e70",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current Gravity runtime path, application lifecycle, finite legacy runtime owner, governed exclusion, and source hash as one indivisible assignment; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/api/contacts/lookup/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "28d17e4297bc8af572e7b10e59cb7b7c875791c3be6a206dd07a7023305b8d90",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the GET /api/contacts/lookup transport of ContactLookup.v1 for the «Люди» search, answered only to the verified integration-admin principal — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/page.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "05b24b791a02f4c9dcffc11e0e59e5a068195ed40cf75ef0607c993cb8177227",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the «Люди» search page (server component) that renders the Contacts picker behind the verified integration-admin principal — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/ContactsSearchClient.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "7626d6a73d6ee7c49dafde6ab761cb49bdda87c0264c29c35e29db8afd154964",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the «Люди» search client that mounts the Contacts-owned ContactSelector and navigates to the chosen person page — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/[id]/page.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "2a750d31999233c7ea184909bf905aefeff51cdf4f17de3f75ed47c229a14b52",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the «Карточка человека» page (server component) that asks the platform-shell composition for the exact Contact id and renders only an explicit answer — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/[id]/PersonCardView.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the read-only presentation of the person card view: park profiles, channel accounts, phones, lineage, conflicts and candidates as the read models decided them — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
     }
   ]
 }

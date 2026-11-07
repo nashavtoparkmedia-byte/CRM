@@ -239,3 +239,254 @@ export function confirmedPersonNameV1(customFields: unknown): string | null {
 // the helper would let that boundary return silently. identityEvidenceState
 // still exposes providerAccountId as telemetry and future migration metadata.
 // See docs/design/provider-account-identity-v1.md.
+
+// ---------------------------------------------------------------------------
+// Identity-conflict predicates (ported from epic/contact-identity M3A4 S1, unchanged).
+// ---------------------------------------------------------------------------
+export type ChannelCollisionChannelV1 = 'telegram' | 'whatsapp' | 'max'
+
+export type PersonBlockingIdentityV1 = {
+  id: string
+  channel: string
+  externalId: string
+}
+
+/**
+ * Admission reasons that name a transport, connection or company-account fact
+ * and nothing about the person. Every revision of every channel ingress chain
+ * that ever wrote a `channel_identity_collision` is covered, including reasons
+ * the current callers no longer raise, so historical records classify too.
+ */
+const TRANSPORT_COLLISION_REASONS_V1: Readonly<Record<ChannelCollisionChannelV1, ReadonlySet<string>>> = Object.freeze({
+  telegram: new Set([
+    'transport_connection_mismatch',
+    'transport_connection_unproven',
+    'provider_account_mismatch',
+    'provider_account_unproven',
+  ]),
+  whatsapp: new Set(['transport_mismatch', 'transport_unbound']),
+  max: new Set(['provider_account_mismatch', 'provider_account_unproven']),
+})
+
+const COLLISION_CHAT_KINDS_V1 = new Set(['private', 'group', 'unknown'])
+
+function isCollisionChannel(value: unknown): value is ChannelCollisionChannelV1 {
+  return value === 'telegram' || value === 'whatsapp' || value === 'max'
+}
+
+function presentId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== ''
+}
+
+function absentId(value: unknown): boolean {
+  return value === null || value === undefined
+}
+
+/** The recorded values actually express this reason, not merely its label. */
+function recordsTransportReason(
+  details: Record<string, unknown>,
+  reason: string,
+  field: 'ProviderAccountId' | 'ConnectionId',
+): boolean {
+  const incoming = details[`incoming${field}`]
+  const existing = details[`existing${field}`]
+  if (reason.endsWith('_mismatch')) return presentId(incoming) && presentId(existing) && incoming !== existing
+  return presentId(incoming) && absentId(existing)
+}
+
+export function isTransportCollisionReasonV1(channel: unknown, reason: unknown): boolean {
+  return isCollisionChannel(channel)
+    && typeof reason === 'string'
+    && TRANSPORT_COLLISION_REASONS_V1[channel].has(reason)
+}
+
+/** Values the MAX admission chain treats as "no account", mirrored so the writer can refuse them itself. */
+const MAX_ACCOUNT_PLACEHOLDERS_V1: ReadonlySet<string> = new Set(['legacy', 'max-default'])
+
+function concreteMaxAccountId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized !== '' && !MAX_ACCOUNT_PLACEHOLDERS_V1.has(normalized) ? normalized : null
+}
+
+/**
+ * Whether a channel ingress collision, as recorded, contradicts the person, so
+ * that Contacts may record it as a person conflict.
+ *
+ * A transport, connection or company-account reason never does. On MAX the
+ * collision compares the event with facts stored on the conversation, and those
+ * facts are evidence about the peer only when the exact admission chain wrote
+ * them for the same company account that observed the event: a concrete stored
+ * account equal to the incoming one, and a stored `private` chat kind, which the
+ * chain writes together with the sender. Earlier writers never stored a chat
+ * kind, their sender is whoever wrote last (even the company account's own
+ * outbound echo), and their Contact link was re-pointed on every event. Another
+ * account's stored facts say nothing about this event either, because MAX chat
+ * ids are not proven to be account-independent. So, on MAX, only these are
+ * person evidence:
+ * - `sender_identity_mismatch`: two concrete, different senders against proven
+ *   private peer evidence, neither of them the company account itself;
+ * - `chat_kind_mismatch`: group traffic into a proven private conversation.
+ * Everything else is route or admission uncertainty and never reaches the person:
+ * `sender_identity_unproven` (absent proof is not a contradiction),
+ * `message_chat_mismatch` and `channel_mismatch` (global message or conversation
+ * key collisions), and any reason the chain does not raise. Messaging still
+ * fails the conversation closed and audits it. Other channels are unchanged.
+ */
+export function isPersonIdentityCollisionEvidenceV1(input: {
+  channel: unknown
+  reason: unknown
+  details: unknown
+}): boolean {
+  if (!isCollisionChannel(input.channel) || typeof input.reason !== 'string') return false
+  if (isTransportCollisionReasonV1(input.channel, input.reason)) return false
+  if (input.channel !== 'max') return true
+
+  const details = jsonRecord(input.details)
+  const account = concreteMaxAccountId(details.existingProviderAccountId)
+  const provenPrivateConversation = account !== null
+    && account === concreteMaxAccountId(details.incomingProviderAccountId)
+    && details.existingChatKind === 'private'
+  if (!provenPrivateConversation) return false
+
+  if (input.reason === 'sender_identity_mismatch') {
+    return presentId(details.existingSenderId)
+      && presentId(details.incomingSenderId)
+      && details.existingSenderId !== details.incomingSenderId
+      && details.existingSenderId.trim() !== account
+      && details.incomingSenderId.trim() !== account
+  }
+  if (input.reason === 'chat_kind_mismatch') return details.incomingChatKind === 'group'
+  return false
+}
+
+/**
+ * Proves, from a recorded collision alone, that it concerned only a transport.
+ *
+ * The reason label is not enough. In the Telegram MTProto and MAX admission
+ * chains the transport comparison runs BEFORE the peer or sender comparison, so
+ * a transport reason can hide a genuine "this conversation belongs to someone
+ * else" contradiction. A record is transport-only only when its own details show
+ * that every person or conversation-shape comparison that a transport reason can
+ * mask did not contradict. Anything that cannot be proven stays person-blocking.
+ */
+export function isProvenTransportOnlyChannelCollisionV1(input: {
+  channel: unknown
+  reason: unknown
+  details: unknown
+}): boolean {
+  if (!isTransportCollisionReasonV1(input.channel, input.reason)) return false
+  const channel = input.channel as ChannelCollisionChannelV1
+  const reason = input.reason as string
+  const details = jsonRecord(input.details)
+
+  if (channel === 'whatsapp') {
+    // The WhatsApp chain compares only the stored and incoming connection.
+    return recordsTransportReason(details, reason, 'ConnectionId')
+  }
+
+  const field = reason.startsWith('provider_account_') ? 'ProviderAccountId' : 'ConnectionId'
+  if (!recordsTransportReason(details, reason, field)) return false
+
+  if (channel === 'telegram') {
+    // Only the MTProto admission records peer ids. Its peer comparison and its
+    // chat-kind comparison both follow the transport arm, and the chat kind is
+    // never recorded, so an MTProto transport record cannot be proven clean.
+    if (Object.prototype.hasOwnProperty.call(details, 'incomingPeerId')) return false
+    // The Bot API chain checks the conversation key before the transport arm and
+    // has no peer comparison; only the chat kind follows, and it is recorded.
+    return presentId(details.incomingChatKind)
+      && (details.incomingChatKind === 'private' || details.incomingChatKind === 'group')
+      && details.existingChatKind === details.incomingChatKind
+  }
+
+  // MAX: chat kind and sender identity both follow the provider-account arm.
+  const incomingChatKind = details.incomingChatKind
+  const existingChatKind = details.existingChatKind
+  if (!COLLISION_CHAT_KINDS_V1.has(String(incomingChatKind)) || !COLLISION_CHAT_KINDS_V1.has(String(existingChatKind))) {
+    return false
+  }
+  const concreteKindMismatch = existingChatKind !== 'unknown'
+    && incomingChatKind !== 'unknown'
+    && existingChatKind !== incomingChatKind
+  if (concreteKindMismatch || incomingChatKind === 'group') return false
+  return presentId(details.incomingSenderId)
+    && presentId(details.existingSenderId)
+    && details.incomingSenderId === details.existingSenderId
+}
+
+/** A persisted conflict entry that is a proven transport-only ingress collision on this exact identity. */
+export function isProvenTransportOnlyIdentityConflictV1(
+  conflict: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const record = jsonRecord(conflict)
+  if (record.conflictType !== 'channel_identity_collision' || record.source !== 'channel-ingress') return false
+  if (record.identityId !== identity.id) return false
+  const details = jsonRecord(record.details)
+  if (details.channel !== identity.channel || details.externalUserId !== identity.externalId) return false
+  return isProvenTransportOnlyChannelCollisionV1({
+    channel: details.channel,
+    reason: details.reason,
+    details,
+  })
+}
+
+/**
+ * Whether ONE persisted conflict entry blocks person-level operations for this
+ * exact identity.
+ *
+ * This is the entry-level primitive the whole Contacts conflict semantic is
+ * built from, extracted so the aggregate below and any read projection evaluate
+ * the identical rule rather than two that can drift. An open conflict blocks
+ * except a proven transport-only ingress collision: a transport problem fails
+ * its own conversation closed and never disables the person. Unclassifiable
+ * historical entries keep blocking, and a status that is not exactly 'open'
+ * does not block — both asymmetries are deliberate and are what the runtime
+ * already does.
+ */
+export function isPersonBlockingIdentityConflictEntryV1(
+  conflict: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const record = jsonRecord(conflict)
+  return record.status === 'open'
+    && record.identityId === identity.id
+    && !isProvenTransportOnlyIdentityConflictV1(record, identity)
+}
+
+/**
+ * Whether an open conflict on this identity blocks person-level operations.
+ *
+ * The signature and the verdict are unchanged: reachability recording, contact
+ * conversation preparation and the Telegram driver link all call this exact
+ * shape, and one of those call sites is pinned byte-for-byte by
+ * check-contacts-reachability-boundary. Only the body is now expressed through
+ * the shared entry-level primitive.
+ */
+export function hasPersonBlockingIdentityConflictV1(
+  customFields: unknown,
+  identity: PersonBlockingIdentityV1,
+): boolean {
+  const conflicts = jsonRecord(customFields).identityConflicts
+  return Array.isArray(conflicts)
+    && conflicts.some(item => isPersonBlockingIdentityConflictEntryV1(item, identity))
+}
+
+/**
+ * Whether the Contact carries an open contradiction about WHICH person it is.
+ *
+ * Contact-scoped, not identity-scoped: neither writer records an identityId,
+ * because the contradiction is about the person cluster rather than one channel
+ * identity. The rule already existed inline in three places; this is the single
+ * definition they now share, with the verdict unchanged.
+ */
+export function hasOpenDriverPersonContradictionV1(customFields: unknown): boolean {
+  const conflicts = jsonRecord(customFields).identityConflicts
+  return Array.isArray(conflicts) && conflicts.some(item => {
+    const conflict = jsonRecord(item)
+    return conflict.status === 'open'
+      && typeof conflict.conflictType === 'string'
+      && CONFIRMED_PERSON_BLOCKING_CONFLICT_TYPES_V1.includes(conflict.conflictType)
+  })
+}
