@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "d486bafcb318c225d2355838eff5ab95b2cba0bf222f755592456c3e31f3f265"
+    "decision_registry_sha256": "f33bf3224e12dfaf0522b7fa1dce1baa97ff0ae04e53bc8ae7dbf4975c139f1a"
   },
   "amendments": [
     {
@@ -3172,91 +3172,96 @@
       }
     },
     {
-      "amendment_id": "cash-referral-manager-s4-main-d46100e8-20261106",
-      "reviewed_at": "2026-11-06T00:00:00Z",
-      "reviewed_by": "CASH_REFERRAL_MANAGER_S4_EXECUTOR_REVIEW_D46100E8",
+      "amendment_id": "identity-access-br4-signed-mobile-operator-main-d46100e8-20261107",
+      "reviewed_at": "2026-11-07T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_BR4_SIGNED_MOBILE_OPERATOR_EXECUTOR_REVIEW_D46100E8",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "OWNER_GO_CASH_REFERRAL_S4_FULL_AUTONOMOUS_ENGINEERING_20261106",
+      "authorization": "ORCHESTRATOR_V7_CONTACT_IDENTITY_FULL_CONDITIONAL_DELIVERY_MANDATE_20261107",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain whose tail is cash-referral-access-delivery-main-999e289f-20261031 and leaves it untouched; the compensation board rebind starts from the fingerprint that chain approved."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at d46100e8, whose tail is cash-referral-access-delivery-main-999e289f-20261031, and leaves that amendment untouched. It reviews only the 4 surfaces the BR-4 signed mobile operator change adds and the 6 exact-inventory paths whose bytes it changes."
       },
-      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main d46100e8 and the one source fingerprint they move: 2,730 + 14 = 2,744 surfaces. Seven new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; one Vitest suite sits beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. Its position, predecessor and current triple bind it to main d46100e8 only and claim no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces the BR-4 signed mobile operator change adds on top of main d46100e8: 2,730 + 4 = 2,734 surfaces, context-owned 1,492 -> 1,495 and governed exclusions 1,238 -> 1,239. Three new paths are Identity Access runtime modules owned by identity_access through its manifest owned_paths: the read side of the existing Mobile Push v1 logout barrier (internal/), the request-operator composition (application/) and its public re-export (public/v1). The fourth is a test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix (no exact inventory). Six existing paths in the reviewed gravity_runtime_remainder exact runtime inventory change bytes only, so this amendment carries their mechanical source-fingerprint rebinds: gravity-mvp/src/proxy.ts, gravity-mvp/src/app/api/chats/[id]/assign/route.ts and the four Fleet monitoring writes that record an author (gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts, gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts and gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts); their exclusion, lifecycle and functional owner are unchanged. Main did not change any of these six paths between aff9acac and d46100e8, so every previous_source_sha256 is both the fingerprint the published chain approved and the byte content of main d46100e8; every current_source_sha256 is the independently reviewed BR-4 product byte content (product diff sha256 8650ec8be8840efdfeb3eb5ab3c165a6c74bf5b071affc598114affdcab5347a over gravity-mvp, unchanged since PR #185 HEAD ba3c85a5). The other changed paths are context-owned and in no reviewed exact inventory; the frozen legacy authority gravity-mvp/src/lib/users/user-service.ts is unchanged. Its predecessor is the published tail's current triple, and its current triple differs from the predecessor by exactly these 4 surfaces. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes, and no ownership is claimed over any path this branch did not add. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing and shares its derivation with materialization. This is amendment 42. It re-records, unchanged in surfaces, rebinds and rationales, the BR-4 amendment identity-access-br4-signed-mobile-operator-main-aff9acac-20261028 published on PR #185 HEAD ba3c85a5 as amendment 35 over main aff9acac but never landed: main moved to d46100e8 through the Cash, Telegram and CI amendments 35-41, so this one follows the published tail and takes its predecessor triple. Reconciled under the Orchestrator V7 Contact Identity full conditional delivery mandate of 2026-11-07, which withdrew the earlier requirement to wait for AI Calling C3a and SendToContact.",
       "predecessor": {
         "tracked_executable_surfaces": 2730,
         "tracked_inventory_sha256": "b117b03fce730946372c36e3f1a7b9302a8616c4097b1790a9570faa02e4452e",
         "coverage_sha256": "5fb221a9daf64b6e707a5bc8a2a723ccbc28615221201003ed6825b4b380e1e2"
       },
       "current": {
-        "tracked_executable_surfaces": 2744,
-        "tracked_inventory_sha256": "d95deb6cb3a39bba79c61e93bfb28e892dc081c30a317f222744ffc1d4314353",
-        "coverage_sha256": "4494917926dd1aaaf2a82d83d6b24e40566ebfe83b0fec5203ccd77f46460952"
+        "tracked_executable_surfaces": 2734,
+        "tracked_inventory_sha256": "72310c0b1ad124ae73fefc1c03c39d270e471a2c403a50e996bdaf32fab0289d",
+        "coverage_sha256": "e57a9a3f4bfe8fa226986cf917be699dcc625281317e58d83b9a5afe04d46107"
       },
       "source_hash_rebinds": [
         {
-          "path": "gravity-mvp/src/app/compensation/page.tsx",
-          "previous_source_sha256": "2c41673425346944579f3262dd639e1ec864c939cde8933482e8271d9317ce81",
-          "current_source_sha256": "82001f2cbd4972243bcaaaed637e397b2e4d036d620347dd07729392af10ca7a",
+          "path": "gravity-mvp/src/app/api/chats/[id]/assign/route.ts",
+          "previous_source_sha256": "f7dc14d8cc1981331351e98341921bbb6c74406c5361d116b243cfbc5b5dd855",
+          "current_source_sha256": "6f636f5bc1e3a0faa828a07d3435713e0a9a4f62244d536ed28fcb7d79481415",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "The compensation board gains one link to the referral programme screen. Its APPLICATION_RUNTIME lifecycle, legacy_gravity_runtime owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+          "review_rationale": "The chat assign route keeps its single implementation and its ConversationWorkflowService call. Under a mobile session it now resolves the signed operator through the Identity Access public resolveRequestOperatorV1 and assigns only to that operator: a different client-supplied userId is refused with 403 and nothing is assigned, and a session cookie that grants nothing is refused with 401. Without a mobile session cookie the browser lane behaves exactly as before. Exclusion, lifecycle and functional owner are unchanged; this is a byte-only rebind (BR-4)."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts",
+          "previous_source_sha256": "5e0efc91990f2a8a5876f7783d20d4f370b6269719ed7265a02be891e2bd3d24",
+          "current_source_sha256": "95cf99fac958ffa706797a2cac3564f0b4a18ebde030a842f1e31979bfc14437",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver-attention resolution route keeps its single implementation, its fleet_operations.UpdateDriverStateCommand.v1 call and its HTTP semantics (400 for a status other than resolved, 404, 409). Under a mobile session the recorded resolvedBy is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body resolvedBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts",
+          "previous_source_sha256": "a46ce59c35b316485bf3a3ecc14fcbe607dafa1d67b6cd579f356fb40dd75221",
+          "current_source_sha256": "5cd32ec00c18ddc5c7066f47b4fbf72c8701f00d864571430379a36ad5a35764",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The mark-attention route keeps its single implementation, validation and transaction. Under a mobile session the createdBy of the DriverAttention and of its attention_marked event is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
+          "previous_source_sha256": "ff74a6d247a131d2b13ac20305e96a7529cc770a9d8205cd465149ffc1fcef58",
+          "current_source_sha256": "d74ebd7a13ccef63e2ac817c0dd21343cdd16dd008474957bb0faa1629c33032",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The driver event route keeps its single implementation and event-type whitelist. Under a mobile session the DriverEvent createdBy is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
+          "previous_source_sha256": "08faa77b040c2e96378118127b12ba31213ea9f0baf710708126e8ce73ec8393",
+          "current_source_sha256": "81254ac5cd091d195173a95c2346b3e280695f2c0686c37f408f73f1a5e43c21",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The fleet-check route keeps its single implementation, row lock, idempotency, quota and scraper calls. Under a mobile session the createdBy of its fleet_check_requested event is the signed operator from the Identity Access public resolveRequestOperatorV1 and a body createdBy is ignored; a session cookie that grants nothing is refused with 401 before anything is written. Without a mobile session cookie the browser lane behaves exactly as before. This is a byte-only rebind (BR-4). Exclusion, lifecycle and functional owner are unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "e0d6cdbe7846edec5c5d22b4f94558bbd32bf1c0c2bbb651175effe58b9361ce",
+          "current_source_sha256": "06db7f7962c68fa983ef11a72b2fdd7c24a11886245d80baaa08ee43cfe19285",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The application request boundary keeps its single implementation, its matcher, the debug-database denial and the shell lane's fail-closed 401/303. For a request carrying a valid, not logged-out mobile session it now forwards the request with its Cookie header carrying exactly one crm_user_id equal to the signed operator, so every downstream reader of that request acts as the signed operator; a session cookie that grants nothing is forwarded with no crm_user_id. When the logout barrier cannot be read, the shell lane is answered 503 instead of 401/303, so a database outage does not send the shell to its login screen; no operator is forwarded. A browser request without a mobile session cookie is passed through untouched. Exclusion, lifecycle and functional owner are unchanged; this is a byte-only rebind (BR-4)."
         }
       ],
       "unassigned_tracked_surfaces": [
         {
-          "path": "gravity-mvp/prisma/migrations/20261106210000_add_cash_referral_manager_links/migration.sql",
-          "lifecycle": "MIGRATION",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and fleet_operations functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the Fleet Operations-owned table of manager-recorded invitations and widens the admitted kinds of the Fleet Operations-owned Cash access ledger; it names no other table."
-        },
-        {
-          "path": "gravity-mvp/src/app/compensation/referrals/referral-screens.test.tsx",
+          "path": "gravity-mvp/src/lib/security/mobile-signed-operator.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The jsdom Vitest suite of the referral screen against mocked server actions; it opens no database connection and holds no credential. Like the neighbouring compensation screen suites it receives no explicit ownership assignment."
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST: the BR-4 negative acceptance for the signed mobile operator."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-manager-operations.ts",
+          "path": "gravity-mvp/src/modules/identity-access/application/mobile-session-operator-operations.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The composition root of the Cash referral manager tools: search, a person's card, recorded invitations and manager grants and revokes, each behind YOKO_CASH_ACCESS_LEDGER=on and each write behind a signed staff session; it injects the Fleet stores and touches no money, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the request-operator composition."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/application/cash-referral-switches.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The in-memory test of the two referral switches (ledger mode never runs the automatic decision pass); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The in-memory test of the manager tools against a store that keeps the database's rules (chains verify, one standing record per invitee, idempotent requests); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts",
+          "path": "gravity-mvp/src/modules/identity-access/internal/mobile-session-barrier.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The manager tools over their port: people as canonical Contacts, invitations recorded and withdrawn, access granted and revoked through the ledger's manual kinds, every write admitted only for a signed staff session with its capability. It has no provider or database dependency of its own, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the read side of the Mobile Push v1 logout barrier."
         },
         {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure test of the manager rules (search query, grouping people, self-invitation, one inviter per invitee, grant and revoke, capability); it opens no database connection and holds no credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/cash-referral-manager.ts",
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-session-operator.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure rules of the manager tools: the search query, people from profiles, whether an invitation may be recorded, the access view from the ledger fold, and grant and revoke decisions. It reads no database, environment or provider and changes no money rule, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The Prisma reads of the manager screens: Fleet's own Driver and ApiConnection rows by name, phone or licence, and Contacts only through its public lineage and confirmation reads. It writes nothing, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "Owned by the identity_access context through its manifest owned_paths (gravity-mvp/src/modules/identity-access), so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME: the public re-export of the request-operator resolution."
         }
       ],
       "invariants": {
