@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { formatContactPhone } from '@/modules/contacts/public/v1/contact-display-policy'
+import AiConversationPanel from '@/modules/calling/public/v1/client-ui/AiConversationPanel'
 import type {
   ContactPersonCardAccountV1,
   ContactPersonCardConflictV1,
@@ -246,6 +247,9 @@ export default function PersonCardView({ view }: { view: ContactPersonCardViewV1
           {card.lineage.mergedFromCount > 0 && <Badge tone="muted">объединено записей: {card.lineage.mergedFromCount}</Badge>}
         </div>
       </header>
+
+      {/* Calling's own block: the server decides who may be called and how; the card only hosts it. */}
+      <AiConversationPanel contactId={card.contactId} />
 
       <Section title="Профили водителя и парки" count={driverProfiles.length}>
         {partial.driverProfiles && <Empty>Данные парков сейчас недоступны. Показано только то, что известно Contacts.</Empty>}

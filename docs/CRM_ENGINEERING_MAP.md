@@ -972,6 +972,39 @@ to `unsupported_live`, and `inspectAiCallCampaignLiveReadiness` also requires
 `AI_CALL_LIVE_MODE=true`, `AI_CALL_CAMPAIGN_LIVE_DIAL_ENABLED=true` and a verified
 telephony/AI provider set.
 
+**F-34 Manual AI conversation from the person card (C4)**
+`G/app/contacts/[id]/PersonCardView.tsx` hosts Calling's
+`G/modules/calling/public/v1/client-ui/AiConversationPanel.tsx`. It calls the server
+actions in `public/v1/ai-conversation-actions.ts` and sends only a Contact id, an
+opaque requestId and, while simulated, a scenario variant. The actions use
+`application/ai-conversation-runtime.ts` and `application/ai-conversation.ts`
+(`calling.StartAiConversationCommand.v1`, `calling.AiConversationsForContactQuery.v1`,
+`G/contracts/calling/v1/ai-conversation.ts`).
+- **Runtime mode.** Simulated only, and only while Calling's existing Mock-режим
+  (`system/mockMode`) is on. Otherwise the runtime is `disabled`, which is the OFF
+  state; no live provider exists on this path.
+- **Admission order.**
+  1. the Identity Access integration-admin principal;
+  2. Contacts' `ContactPersonCardQuery.v1`: a confirmed, non-archived person with no
+     blocking conflict, reached through a current, undisputed phone;
+  3. `ContactCommunicationPermissionQuery.v1`, class `voice`.
+  Any other answer refuses fail-closed and creates nothing.
+- **The Call.** A deterministic `Call` id (`aiConversationId(contact, requestId)`)
+  makes a replayed requestId the same conversation. A per-Contact
+  `pg_advisory_xact_lock`, checked against durable occupancy, lets only one
+  conversation hold a person.
+- **The provider effect.** Voice permission is read again, fresh, right before it.
+  `dispatch_started` is committed before `originate`, and a lost reply becomes
+  `outcome_unknown`. That outcome is never re-originated and holds the person for
+  originate_timeout plus the answered cap. Record: `Call.metadata.aiConversationV1`.
+- **After acceptance.** The simulated provider
+  (`internal/ai-calls/ai-conversation-simulated-provider.ts`) plays the answer,
+  transcript and finalization into the existing Core: lifecycle journal, transcript
+  journal and `finalizeAiCall`. The rows are `isSimulation`, and a simulated call
+  never enqueues provider analysis. Reads advance due conversations, so a restarted
+  process resumes from durable state.
+- **Writes.** Nothing writes Contacts or Fleet facts, and no Task is created.
+
 ### Cash compensation
 
 **F-22 Cash-order ingestion**
