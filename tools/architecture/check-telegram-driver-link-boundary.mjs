@@ -37,6 +37,18 @@ const parkLinkStart = link.indexOf('if (yandexDriverId && parkId && driverName)'
 const parkLink = link.slice(parkLinkStart, localLinkStart)
 const syncUserStart = webhook.indexOf('async function handleSyncUser')
 const syncUser = webhook.slice(syncUserStart, webhook.indexOf('// Inject a system message', syncUserStart))
+const uniqueMatchStart = webhook.indexOf('async function uniqueUnlinkedDriverForPhone')
+const uniqueMatch = webhook.slice(uniqueMatchStart, webhook.indexOf('async function handleChangeLimit', uniqueMatchStart))
+const botAuthorityStart = webhook.indexOf('async function resolveCurrentBotDriverAuthority')
+const botAuthority = webhook.slice(botAuthorityStart, webhook.indexOf('async function requireCurrentBotDriverAuthority', botAuthorityStart))
+const telegramPhoneStart = webhook.indexOf('function telegramRussianPhone(')
+const telegramPhone = webhook.slice(telegramPhoneStart, webhook.indexOf('\n}\n', telegramPhoneStart) + 3)
+const cashProofStart = webhook.indexOf('async function proveCompensationTelegramPerson')
+const cashProof = webhook.slice(cashProofStart, webhook.indexOf('function compensationProofFields', cashProofStart))
+const linkPostStart = link.indexOf('export async function POST')
+const linkPost = link.slice(linkPostStart)
+const settingsLinkStart = botActions.indexOf('export async function linkTelegramUserToDriver')
+const settingsLink = botActions.slice(settingsLinkStart)
 
 check('contract neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(contract + manualContract), 'contract leak')
 check('handler neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(handler + manualHandler), 'handler leak')
@@ -94,10 +106,26 @@ check(
 )
 check(
   'active manual surfaces use owner command',
-  link.includes('saveManualDriverTelegramLinkV1')
-    && !/replaceDriverTelegramLinkV1|upsertDriverTelegramLinkV1|upsertParkMatchedDriverV1/.test(link)
-    && botActions.includes('saveManualDriverTelegramLinkV1')
+  // Owner decision 2026-10-28: the manager's choice is the link. Both manual
+  // surfaces relink in one action through the owner's atomic replace command.
+  link.includes('replaceDriverTelegramLinkV1')
+    && !/saveManualDriverTelegramLinkV1|upsertDriverTelegramLinkV1|upsertParkMatchedDriverV1/.test(link)
+    && botActions.includes('replaceDriverTelegramLinkV1')
+    && !/saveManualDriverTelegramLinkV1|upsertDriverTelegramLinkV1/.test(botActions)
     && !/driverTelegram\.upsert|phoneVerified\s*:/.test(botActions)
+    // With the Contacts gate gone, integration-admin, same-origin and the exact
+    // Yandex profile are the whole authority of a manual link.
+    && settingsLinkStart >= 0
+    && settingsLink.includes('await requireIntegrationAdminAccess()')
+    && settingsLink.indexOf('await requireIntegrationAdminAccess()') < settingsLink.indexOf('replaceDriverTelegramLinkV1(')
+    && linkPostStart >= 0
+    && linkPost.indexOf('if (!isSameOriginMutationRequest(req)) {') >= 0
+    && linkPost.indexOf('if (!isSameOriginMutationRequest(req)) {') < linkPost.indexOf("if (body.action === 'link') {")
+    && linkPost.indexOf('if (!(await hasIntegrationAdminAccess())) {') >= 0
+    && linkPost.indexOf('if (!(await hasIntegrationAdminAccess())) {') < linkPost.indexOf("if (body.action === 'link') {")
+    && parkLink.includes('if (!profile.driverId || profile.driverId !== driverId || !driver || !carriesExactProfile) {')
+    && parkLink.indexOf('!carriesExactProfile) {') < parkLink.indexOf('return NextResponse.json(DRIVER_PROFILE_UNVERIFIED, { status: 409 })')
+    && parkLink.indexOf('return NextResponse.json(DRIVER_PROFILE_UNVERIFIED, { status: 409 })') < parkLink.indexOf('saveConfirmedTelegramLink(driver.id')
     && (
       platformRoute.includes('getCurrentUserIdentityV1')
       || platformRoute.includes('getIntegrationAdminPrincipal')
@@ -105,12 +133,28 @@ check(
   'manual surface authority drift',
 )
 check(
-  'bot Driver mutations reauthorize current person and transport',
+  'bot Driver mutations reauthorize current link and transport',
   telegramWebhook.includes('prepareDriverTelegramConversationAuthorityV1')
     && (telegramWebhook.match(/requireCurrentDriverTelegramAuthority\(/g) || []).length >= 7
     && telegramWebhook.indexOf('requireCurrentDriverTelegramAuthority({') < telegramWebhook.indexOf('prisma.driverTelegram.update')
     && telegramWebhook.includes('canonicalTelegramBotConnectionIdV1()')
-    && webhook.includes('prepareDriverTelegramConversationAuthorityV1')
+    // Owner decision 2026-10-28: the exact Telegram -> Driver link, read again
+    // at every check, is the driver-bot authority; Contacts' person proof is
+    // asked only by Cash, which pays a person.
+    && botAuthorityStart >= 0
+    && botAuthority.includes('connectionId !== canonicalTelegramBotConnectionIdV1()')
+    && botAuthority.includes('prisma.driverTelegram.findUnique({')
+    && botAuthority.includes('where: { telegramId: input.telegramId }')
+    && botAuthority.includes('link.driverId !== input.driverId')
+    // One success, and only after the link row was read and compared.
+    && (botAuthority.match(/return \{ driverId: input\.driverId, target:/g) || []).length === 1
+    && (botAuthority.match(/return\s*\{/g) || []).length === 1
+    && botAuthority.indexOf('prisma.driverTelegram.findUnique({') < botAuthority.indexOf('link.driverId !== input.driverId')
+    && botAuthority.indexOf('link.driverId !== input.driverId') < botAuthority.indexOf('return { driverId: input.driverId, target:')
+    && !botAuthority.includes('prepareDriverTelegramConversationAuthorityV1')
+    && (webhook.match(/prepareDriverTelegramConversationAuthorityV1\(/g) || []).length === 1
+    && cashProofStart >= 0
+    && cashProof.includes('prepareDriverTelegramConversationAuthorityV1(')
     && webhook.includes("error: 'DRIVER_TELEGRAM_CURRENT_AUTHORITY_REQUIRED'")
     // The Bot runtime transport is proven against configuration. Comparing it to
     // the shared Chat's stored binding is the defect this boundary now forbids:
@@ -144,12 +188,40 @@ check(
   'car cache policy drift',
 )
 check(
-  'generic phone ingress cannot create a first-result link',
+  'generic phone ingress links only a unique verified local match',
+  // Owner decision 2026-10-28: the driver's own verified number may link the
+  // bot by itself, never by a first result: only the single unlinked local
+  // Driver profile it names exactly, and never a provider search.
   syncUserStart >= 0
-    && !syncUser.includes('upsertDriverTelegramLinkV1')
-    && !syncUser.includes('UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1')
-    && !syncUser.includes('listYandexConnectionCredentialsV1')
-    && !/\bfetch\s*\(/u.test(syncUser),
+    && uniqueMatchStart >= 0
+    && !/listYandexConnectionCredentialsV1|replaceDriverTelegramLinkV1|saveManualDriverTelegramLinkV1/.test(syncUser + uniqueMatch)
+    && !/\bfetch\s*\(/u.test(syncUser + uniqueMatch)
+    && (syncUser.match(/upsertDriverTelegramLinkV1\(/g) || []).length === 1
+    && syncUser.includes('if (existingLink?.driverId) {')
+    && syncUser.indexOf('if (existingLink?.driverId) {') < syncUser.indexOf('if (hasContactOwnershipEvidence) {')
+    && syncUser.indexOf('if (hasContactOwnershipEvidence) {') < syncUser.indexOf('uniqueUnlinkedDriverForPhone(')
+    && syncUser.indexOf('uniqueUnlinkedDriverForPhone(') < syncUser.indexOf('upsertDriverTelegramLinkV1(')
+    && syncUser.includes("const phone = typeof input.phone === 'string' ? input.phone.trim() : ''")
+    && (syncUser.match(/uniqueUnlinkedDriverForPhone\(/g) || []).length === 1
+    && syncUser.includes('const match = await uniqueUnlinkedDriverForPhone(phone)')
+    && syncUser.indexOf('upsertDriverTelegramLinkV1(') < syncUser.indexOf('recordPendingBotLinkRequestV1')
+    && uniqueMatch.includes('if (matches.length !== 1) return null')
+    && uniqueMatch.includes('where: { driverId: row.id }')
+    && uniqueMatch.includes("row.personResolutionStatus === 'conflict'")
+    // The shared number is read only in its international Russian form.
+    && telegramPhoneStart >= 0
+    && telegramPhone.includes("return digits.length === 11 && digits[0] === '7' ? digits : null")
+    && (telegramPhone.match(/return /g) || []).length === 1
+    && uniqueMatch.includes('const exact = telegramRussianPhone(phone)')
+    && uniqueMatch.includes('const matches = rows.filter(row => exactRussianPhone(row.phone) === exact)')
+    && uniqueMatch.includes('dismissedAt: null')
+    && uniqueMatch.includes('if (!parkId || !yandexContractorProfileId(row)')
+    && uniqueMatch.includes('return taken ? null :')
+    && !/\btake\s*:/.test(uniqueMatch)
+    // One link writer in the whole webhook, inside sync_user.
+    && (webhook.match(/upsertDriverTelegramLinkV1\(/g) || []).length === 1
+    && webhook.indexOf('upsertDriverTelegramLinkV1(') > syncUserStart
+    && webhook.indexOf('upsertDriverTelegramLinkV1(') < syncUserStart + syncUser.length,
   'generic phone ingress link boundary drift',
 )
 check(

@@ -84,6 +84,8 @@ function createFakeCrm() {
             fake.dayKinds = {};
             // A refusal the section answers with before anything else (identity, eligibility).
             fake.reason = null;
+            // A refusal every later action answers with, as when the person changed after the list was shown.
+            fake.laterRefusal = null;
             fake.applications = [];
             fake.remainingBudgetKopecks = 500_000;
         },
@@ -99,9 +101,10 @@ function createFakeCrm() {
                 error.status = failure;
                 throw error;
             }
-            const refusal = !fake.selectedPark ? 'park_not_selected'
+            const parkRefusal = !fake.selectedPark ? 'park_not_selected'
                 : fake.selectedPark !== fake.provenPark ? 'selected_park_profile_unproven'
                     : null;
+            const refusal = action === 'compensation_section' ? parkRefusal : fake.laterRefusal || parkRefusal;
             switch (action) {
                 case 'compensation_section': {
                     if (fake.reason) return { available: false, reason: fake.reason, applications: fake.applications };
@@ -289,7 +292,8 @@ test('tells a park without a catalogue apart from an empty list, and shows parti
     crm.catalogueStatus = 'disabled';
     let harness = createBot();
     await press(harness);
-    assert.match(harness.last().text, /Причина: ваш профиль не соответствует действующим условиям программы\./);
+    assert.equal(harness.last().text, TECHNICAL_FAILURE_TEXT);
+    assert.deepEqual(harness.buttons(), []);
 
     crm.reset();
     crm.orders = [];
@@ -610,7 +614,7 @@ test('tells no orders, still checking, Yandex unavailable and a day out of reach
     await open(harness);
 
     await harness.tap('comp_day:2026-09-17');
-    assert.equal(harness.last().text, 'За выбранную дату подходящие заказы не найдены. Проверьте дату поездки или выберите другой день.');
+    assert.equal(harness.last().text, 'За выбранную дату подходящих наличных заказов не найдено. Выберите другую дату.');
 
     await harness.tap('comp_day:2026-09-16');
     assert.match(harness.last().text, /Проверяем заказы за 16\.09/);
@@ -669,7 +673,16 @@ const RESTRICTED_LINES = [
     '4. Отправьте заявку и дождитесь решения менеджера.',
     'Сейчас подать заявку нельзя.',
 ];
-const NOT_ELIGIBLE_TEXT = /Причина: ваш профиль не соответствует действующим условиям программы\.\nЧто делать: сейчас компенсация доступна новым водителям, подключённым как парковые самозанятые, за заказы первого месяца работы\.$/;
+// Owner-approved sentences. Each programme condition names itself.
+const CONDITION_TEXT = {
+    not_self_employed: 'По данным парка, вы подключены не как парковый самозанятый. Программа компенсации доступна только парковым самозанятым. Если данные неверны, напишите менеджеру.',
+    outside_first_calendar_month: 'Компенсация доступна за заказы первого календарного месяца после подключения к парку, а заявки по ним принимаются до 72 часов после окончания этого месяца. Срок подачи заявок для вашего периода завершился. Если дата подключения указана неверно, напишите менеджеру.',
+};
+const NOT_LINKED_TEXT = 'Чтобы воспользоваться компенсацией, привяжите Telegram к своему профилю водителя: откройте «🚘 Мой автомобиль» и поделитесь номером телефона. Если автоматически привязать не получится, напишите менеджеру — он привяжет профиль вручную.';
+const PERSON_UNCONFIRMED_TEXT = 'Подать заявку пока нельзя: профиль для выплаты ещё не подтверждён в CRM. Напишите менеджеру — после подтверждения откройте этот раздел снова.';
+const TECHNICAL_FAILURE_TEXT = 'Не удалось проверить данные. Попробуйте ещё раз чуть позже 🔄';
+// A sentence that says itself why applying is closed replaces the banner's own line.
+const SENTENCE_LINES = RESTRICTED_LINES.filter((line) => line !== 'Сейчас подать заявку нельзя.');
 
 function assertLines(text, lines) {
     for (const line of lines) assert.ok(text.split('\n').includes(line), `missing line: ${line}`);
@@ -709,9 +722,9 @@ test('a confirmed driver outside the programme conditions sees the restricted ba
         const harness = createBot();
         await press(harness);
         const text = harness.last().text;
-        assertLines(text, RESTRICTED_LINES);
-        assert.match(text, NOT_ELIGIBLE_TEXT);
-        assert.doesNotMatch(text, /Если Яндекс отказал в компенсации/);
+        assertLines(text, SENTENCE_LINES);
+        assert.ok(text.endsWith(`\n\n${CONDITION_TEXT[reason]}`), text);
+        assert.doesNotMatch(text, /Если Яндекс отказал в компенсации|не соответствует действующим условиям|Причина:/);
         assert.deepEqual(harness.buttons(), []);
 
         // The scene is closed: an apply tap is answered as stale and asks the CRM nothing.
@@ -726,8 +739,8 @@ test('an unknown Telegram user is asked to link and never reaches a claim', asyn
     const harness = createBot();
     await press(harness);
     const text = harness.last().text;
-    assertLines(text, RESTRICTED_LINES);
-    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: откройте «🚘 Мой автомобиль», поделитесь номером телефона и обратитесь к менеджеру для подтверждения привязки\.$/);
+    assertLines(text, SENTENCE_LINES);
+    assert.ok(text.endsWith(`\n\n${NOT_LINKED_TEXT}`), text);
     assert.doesNotMatch(text, /не соответствует действующим условиям/);
 
     await harness.tap('comp_apply');
@@ -737,30 +750,41 @@ test('an unknown Telegram user is asked to link and never reaches a claim', asyn
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
 });
 
-test('a conflicting identity is sent to a manager, and the bot links nothing', async () => {
+test('a linked driver the programme admits, with no person for the money yet, sees the programme but no apply button', async () => {
+    crm.reason = 'cash_person_unconfirmed';
+    const harness = createBot();
+    await press(harness);
+    const text = harness.last().text;
+    assertLines(text, ELIGIBLE_LINES);
+    assert.ok(text.endsWith(`\n\n${PERSON_UNCONFIRMED_TEXT}`), text);
+    assert.doesNotMatch(text, /поделитесь номером|Мой автомобиль|не соответствует действующим условиям|Причина:/);
+    assert.deepEqual(harness.buttons(), []);
+
+    // The scene is closed: an apply tap is answered as stale and asks the CRM nothing.
+    await harness.tap('comp_apply');
+    assert.match(harness.last().text, /Этот список устарел/);
+    assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
+});
+
+test('a CRM that still decides the person first sends the person sentence, never "not linked"', async () => {
     crm.reason = 'identity_needs_review';
     const harness = createBot();
     await press(harness);
     const text = harness.last().text;
-    assert.match(text, /Причина: бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO\.\nЧто делать: напишите менеджеру: ваш профиль нужно проверить\.$/);
+    assertLines(text, SENTENCE_LINES);
+    assert.ok(text.endsWith(`\n\n${PERSON_UNCONFIRMED_TEXT}`), text);
     assert.doesNotMatch(text, /поделитесь номером|не соответствует действующим условиям/);
     // The fake CRM throws on any action it does not know, so this is every call.
     assert.deepEqual(crm.calls.map((call) => call.action), ['compensation_section']);
 });
 
-test('a fact the CRM could not read asks for verification, never says the driver is not eligible', async () => {
-    for (const [reason, why] of [
-        ['self_employment_unknown', 'не удалось проверить ваш налоговый статус.'],
-        ['hire_date_unknown', 'не удалось проверить дату вашего подключения.'],
-    ]) {
-        crm.reset();
-        crm.reason = reason;
-        const harness = createBot();
-        await press(harness);
-        const text = harness.last().text;
-        assert.ok(text.endsWith(`Причина: ${why}\nЧто делать: напишите менеджеру — он проверит данные вашего профиля.`), text);
-        assert.doesNotMatch(text, /не соответствует действующим условиям/);
-    }
+test('a claim the CRM refuses for want of a person is told so, and nothing is sent again', async () => {
+    crm.laterRefusal = 'cash_person_unconfirmed';
+    const harness = createBot();
+    await open(harness);
+    await harness.tap(orderData(O1));
+    assert.equal(harness.last().text, PERSON_UNCONFIRMED_TEXT);
+    assert.equal(crm.of('compensation_submit').length, 0);
 });
 
 test('a CRM that cannot answer is not a verdict on the driver', async () => {
@@ -768,6 +792,11 @@ test('a CRM that cannot answer is not a verdict on the driver', async () => {
         () => { crm.failures.compensation_section = [503]; },
         () => { crm.failures.compensation_section = [504]; },
         () => { crm.reason = 'identity_busy'; },
+        // A fact the CRM could not state and its own park setup are CRM problems,
+        // never a verdict on the driver and never shown as one.
+        () => { crm.reason = 'self_employment_unknown'; },
+        () => { crm.reason = 'hire_date_unknown'; },
+        () => { crm.reason = 'catalogue_disabled'; },
         () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
     ]) {
         crm.reset();
@@ -775,7 +804,7 @@ test('a CRM that cannot answer is not a verdict on the driver', async () => {
         const harness = createBot();
         await press(harness);
         const text = harness.last().text;
-        assert.match(text, /^(Система недоступна, попробуйте позже\.|Профиль сейчас обновляется\. Попробуйте через минуту\.)$/);
+        assert.equal(text, TECHNICAL_FAILURE_TEXT, crm.reason);
         assert.doesNotMatch(text, /Сейчас подать заявку нельзя|не соответствует|поделитесь номером/);
         assert.deepEqual(harness.buttons(), []);
     }
@@ -818,6 +847,7 @@ test('applications sent with an unproven or unreliable identity never reach the 
     for (const setup of [
         () => { crm.reason = 'identity_not_proven'; },
         () => { crm.reason = 'identity_needs_review'; },
+        () => { crm.reason = 'cash_person_unconfirmed'; },
         () => { crm.reason = 'identity_busy'; },
         () => { crm.reason = 'a_refusal_this_bot_does_not_know'; },
     ]) {

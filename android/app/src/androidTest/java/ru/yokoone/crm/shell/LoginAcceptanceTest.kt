@@ -11,6 +11,7 @@ import androidx.test.uiautomator.Until
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.FixMethodOrder
@@ -254,11 +255,18 @@ class LoginAcceptanceTest {
      *
      * The send goes through the CRM's own send path to the only MAX transport
      * the stand has, a loopback stand-in (android/tools/acceptance-max-transport.mjs)
-     * that holds its answer for four seconds and then returns a confirmed
-     * delivery proof. So the sending state is on screen long enough to see, and
-     * the delivered state can only come from the CRM persisting that proof.
-     * The workflow step after the scenarios checks the other side: one physical
-     * send, one persisted Message, the same clientMessageId.
+     * that holds its answer for four seconds and then answers the way the MAX
+     * scraper answers a send MAX accepted: a provider_ack naming a real-shaped
+     * provider message id. So the sending state is on screen long enough to see,
+     * and the settled state can only come from the CRM persisting that proof.
+     *
+     * Under the S2 delivery contract a provider_ack is provider acceptance, shown
+     * as «Отправлено». It is never «Доставлено» at send time - that needs a
+     * device receipt, which MAX does not produce - and never «Ожидает
+     * подтверждения», which is what a bare client action without a provider id
+     * would show. The workflow step after the scenarios checks the other side:
+     * one physical send, one persisted Message, the same clientMessageId, status
+     * 'sent' with provider_ack evidence and the provider id the stand answered.
      *
      * The text is typed as real key events. The composer is a React-controlled
      * textarea, and only input the page receives as typing reaches its state.
@@ -295,11 +303,14 @@ class LoginAcceptanceTest {
         )
         screenshot("06a-sending")
         assertTrue(
-            "the message never settled as delivered; on screen: ${visibleText()}; tree: ${treeShape(300)}",
-            waitUntil(MESSENGER_TIMEOUT) { labelled(DELIVERED) != null && labelled(SENDING) == null },
+            "the message never settled as accepted by the provider («$PROVIDER_ACCEPTED»); " +
+                "on screen: ${visibleText()}; tree: ${treeShape(300)}",
+            waitUntil(MESSENGER_TIMEOUT) { labelled(PROVIDER_ACCEPTED) != null && labelled(SENDING) == null },
         )
+        assertNull("a send must never be shown as «$DELIVERED» at send time; tree: ${treeShape(300)}", labelled(DELIVERED))
+        assertNull("a provider_ack must not be shown as «$AWAITING_CONFIRMATION»; tree: ${treeShape(300)}", labelled(AWAITING_CONFIRMATION))
         assertEquals("one send must show exactly one message", 1, sentBubbles())
-        screenshot("06b-delivered")
+        screenshot("06b-provider-accepted")
 
         // Leave and come back: what the conversation shows now is the persisted row.
         val back = backControl()
@@ -314,9 +325,11 @@ class LoginAcceptanceTest {
         SystemClock.sleep(SETTLE_MS)
         assertEquals("the persisted conversation must hold exactly one sent message", 1, sentBubbles())
         assertNotNull(
-            "the persisted message is not shown as delivered; tree: ${treeShape(300)}",
-            labelled(DELIVERED),
+            "the persisted message is not shown as accepted by the provider («$PROVIDER_ACCEPTED»); tree: ${treeShape(300)}",
+            labelled(PROVIDER_ACCEPTED),
         )
+        assertNull("the persisted message must not claim «$DELIVERED»; tree: ${treeShape(300)}", labelled(DELIVERED))
+        assertNull("the persisted message must not fall back to «$AWAITING_CONFIRMATION»; tree: ${treeShape(300)}", labelled(AWAITING_CONFIRMATION))
         screenshot("06c-persisted")
     }
 
@@ -554,6 +567,11 @@ class LoginAcceptanceTest {
         const val SEND_TEXT = "YOKO acceptance reply 06"
         const val SEND = "Отправить"
         const val SENDING = "Отправляется"
+        /** The S2 label of provider_accepted (deliveryStateLabelV1): what a provider_ack settles to. */
+        const val PROVIDER_ACCEPTED = "Отправлено"
+        /** The S2 label of send_requested: a bare client action, never the outcome of a provider_ack. */
+        const val AWAITING_CONFIRMATION = "Ожидает подтверждения"
+        /** The S2 label of delivered: needs a device receipt, so a send never shows it at send time. */
         const val DELIVERED = "Доставлено"
     }
 }

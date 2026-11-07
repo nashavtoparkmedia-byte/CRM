@@ -1043,9 +1043,21 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
 
         expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_not_proven' })
         const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, ingestion, NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_not_proven' })
+        expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
         expect(await count('CompensationPerson')).toBe(0)
         expect(await count('CompensationPersonBinding')).toBe(0)
+    })
+
+    it('opens the programme to a linked driver without a Contact, and binds no money to anyone', async () => {
+        await seedPerson()
+        const linkOnly = { ...PROOF, contactId: null }
+        expect(await compensationSectionViewV1(linkOnly, port, ingestion, NOW))
+            .toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        const outcome = await submitPilotApplicationV1({ ...submitInput(randomUUID(), 'a'.repeat(32)), contactId: null }, port, ingestion, NOW)
+        expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+        for (const table of ['CompensationPerson', 'CompensationPersonBinding', 'CompensationApplication', 'CompensationOrderClaim']) {
+            expect(await count(table)).toBe(0)
+        }
     })
 
     it('refuses a person whose lineage carries a merged contact instead of binding both', async () => {
@@ -1063,7 +1075,7 @@ proof('telegram pilot port proves the person through Contacts on real PostgreSQL
 
         expect(await resolvePilotIdentityV1(PROOF, port)).toEqual({ proven: false, refusal: 'identity_needs_review' })
         const outcome = await submitPilotApplicationV1(submitInput(randomUUID(), 'a'.repeat(32)), port, ingestion, NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_needs_review' })
+        expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
         expect(await count('CompensationPersonBinding')).toBe(0)
         expect(await count('CompensationApplication')).toBe(0)
     })

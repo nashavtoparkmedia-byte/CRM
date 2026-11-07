@@ -130,11 +130,32 @@ export {
   compensationManagerPeriodKeyV1,
   resolveCompensationManagerPrincipalV1,
 } from '../../application/compensation-manager-operations'
-export { ensureCompensationBudgetPeriodV1 } from '../../application/compensation-budget-period-operations'
+export {
+  cashReferralAccessEnabledV1,
+  cashReferralAttachInviteeV1,
+  cashReferralCaptureV1,
+  cashReferralDecisionScheduleV1,
+  cashReferralIssueV1,
+  cashReferralStatusV1,
+  runScheduledCashAccessChainCheckV1,
+  runScheduledCashReferralDecisionsV1,
+} from '../../application/cash-referral-operations'
+export type {
+  CashReferralDecisionScheduleV1,
+  CashReferralInviterStatusV1,
+  CashReferralIssueResultV1,
+} from '../../application/cash-referral-operations'
+export {
+  compensationBudgetProvisioningScheduleV1,
+  ensureCompensationBudgetPeriodV1,
+  runScheduledCompensationBudgetProvisioningV1,
+} from '../../application/compensation-budget-period-operations'
 export type {
   CompensationBudgetPeriodOutcomeV1,
   CompensationBudgetPeriodRefusalV1,
   CompensationBudgetPeriodResultV1,
   CompensationBudgetPeriodViewV1,
+  CompensationBudgetProvisioningRunV1,
+  CompensationBudgetProvisioningScheduleV1,
   EnsureCompensationBudgetPeriodInputV1,
 } from '../../application/compensation-budget-period-operations'

@@ -11,7 +11,9 @@ import {
     compensationBudgetPeriodIdV1,
     compensationBudgetPeriodViewV1,
     compensationBudgetPeriodWindowV1,
+    compensationBudgetProvisioningPeriodKeysV1,
     isCompensationBudgetLimitV1,
+    parseCompensationMonthlyBudgetLimitV1,
     planCompensationBudgetPeriodV1,
     type CompensationBudgetPeriodRowV1,
 } from './compensation-budget-period'
@@ -149,5 +151,83 @@ describe('the month as an operator reads it', () => {
             periodStartsAt: window.periodStartsAt,
             submissionClosesAt: window.submissionClosesAt,
         })
+    })
+})
+
+describe('create-only, the scheduler\'s mode', () => {
+    it('opens a month that does not exist, exactly as an operator would', () => {
+        expect(planCompensationBudgetPeriodV1({ periodKey: '2026-11', limitKopecks: 500_000, createOnly: true }, null))
+            .toEqual(planCompensationBudgetPeriodV1({ periodKey: '2026-11', limitKopecks: 500_000 }, null))
+    })
+
+    it('never raises a stored limit', () => {
+        expect(planCompensationBudgetPeriodV1(
+            { periodKey: '2026-09', limitKopecks: 900_000, createOnly: true },
+            row({ limitKopecks: 300_000 }),
+        )).toEqual({ action: 'none' })
+    })
+
+    it('leaves a month above the configured limit as it is, without refusing', () => {
+        expect(planCompensationBudgetPeriodV1(
+            { periodKey: '2026-09', limitKopecks: 500_000, createOnly: true },
+            row({ limitKopecks: 700_000 }),
+        )).toEqual({ action: 'none' })
+    })
+
+    it('leaves a closed month closed', () => {
+        expect(planCompensationBudgetPeriodV1(
+            { periodKey: '2026-09', limitKopecks: 500_000, createOnly: true },
+            row({ state: 'closed' }),
+        )).toEqual({ action: 'none' })
+    })
+
+    it('still refuses an unusable key or limit', () => {
+        expect(planCompensationBudgetPeriodV1({ periodKey: '2026-13', limitKopecks: 500_000, createOnly: true }, null))
+            .toEqual({ refusal: 'invalid_period_key' })
+        expect(planCompensationBudgetPeriodV1({ periodKey: '2026-11', limitKopecks: 0, createOnly: true }, null))
+            .toEqual({ refusal: 'invalid_limit' })
+    })
+})
+
+describe('the months the scheduler keeps open', () => {
+    it('is the business month of the instant and the next one, on the Yekaterinburg calendar', () => {
+        // 2026-10-31 23:59:59.999 in Yekaterinburg is still October.
+        expect(compensationBudgetProvisioningPeriodKeysV1(new Date('2026-10-31T18:59:59.999Z'))).toEqual(['2026-10', '2026-11'])
+        // Its midnight is 19:00 UTC: November starts, and December is prepared.
+        expect(compensationBudgetProvisioningPeriodKeysV1(new Date('2026-10-31T19:00:00.000Z'))).toEqual(['2026-11', '2026-12'])
+    })
+
+    it('rolls over the year', () => {
+        expect(compensationBudgetProvisioningPeriodKeysV1(new Date('2026-12-15T10:00:00Z'))).toEqual(['2026-12', '2027-01'])
+        expect(compensationBudgetProvisioningPeriodKeysV1(new Date('2026-12-31T19:00:00Z'))).toEqual(['2027-01', '2027-02'])
+    })
+
+    it('never names October again once November has started, so its 72-hour grace is left to the stored month', () => {
+        const insideGrace = new Date('2026-11-02T10:00:00Z')
+        expect(insideGrace.getTime()).toBeLessThan(compensationBudgetPeriodWindowV1('2026-10')!.submissionClosesAt.getTime())
+        expect(compensationBudgetProvisioningPeriodKeysV1(insideGrace)).toEqual(['2026-11', '2026-12'])
+    })
+
+    it('names keys the period parser accepts', () => {
+        for (const instant of ['2026-01-01T00:00:00Z', '2026-06-30T19:00:00Z', '2027-02-28T18:59:59Z']) {
+            for (const key of compensationBudgetProvisioningPeriodKeysV1(new Date(instant))) {
+                expect(compensationBudgetPeriodWindowV1(key)).not.toBeNull()
+            }
+        }
+    })
+})
+
+describe('the configured monthly limit', () => {
+    it('reads whole kopecks', () => {
+        expect(parseCompensationMonthlyBudgetLimitV1('500000')).toBe(500_000)
+        expect(parseCompensationMonthlyBudgetLimitV1(String(COMPENSATION_BUDGET_LIMIT_MAX_KOPECKS_V1)))
+            .toBe(COMPENSATION_BUDGET_LIMIT_MAX_KOPECKS_V1)
+    })
+
+    it('treats anything else, unset included, as no limit, never as a default', () => {
+        for (const raw of [undefined, null, '', ' 500000', '500000 ', '5000.00', '5 000', '-1', '0', '0500000', '1e6',
+            '2147483648', '99999999999', 'abc', 500_000]) {
+            expect(parseCompensationMonthlyBudgetLimitV1(raw)).toBeNull()
+        }
     })
 })

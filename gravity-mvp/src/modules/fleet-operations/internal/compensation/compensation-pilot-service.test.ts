@@ -19,6 +19,8 @@ import {
 } from './compensation-pilot-service'
 import { pilotScopeKeyV1 } from './compensation-pilot-selection'
 import { compensationSubmissionWindowV1 } from './compensation-submission-window'
+import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
+import type { CashAccessEventV1 } from './compensation-referral-ledger'
 
 const NOW = new Date('2026-09-20T09:00:00.000Z')
 const PARK = 'park-1'
@@ -119,12 +121,13 @@ describe('the compensation section a driver sees', () => {
         expect(view.available && view.orders).toHaveLength(1)
     })
 
-    it('tells an unproven person it is unlinked rather than showing an empty list', async () => {
+    it('gives a linked driver without a proven person the verdict, but no list and no applications', async () => {
         const p = port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) })
         const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
-        expect(view).toEqual({ available: false, reason: 'identity_not_proven', applications: [] })
-        expect(p.findDriverFacts).not.toHaveBeenCalled()
+        expect(view).toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        expect(p.findDriverFacts).toHaveBeenCalledWith(DRIVER)
         expect(p.findDriverApplications).not.toHaveBeenCalled()
+        expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
     })
 
     it('names the eligibility reason when the driver is not park-SMZ', async () => {
@@ -191,11 +194,16 @@ describe('submitting from the bot', () => {
     })
 
     it('never reaches C1 when the person cannot be proven', async () => {
-        const p = port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) })
-        const outcome = await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_not_proven' })
-        expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
-        expect(p.submitApplication).not.toHaveBeenCalled()
+        for (const [proof, overrides] of [
+            [SUBMIT, { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }],
+            [{ ...SUBMIT, contactId: null }, {}],
+        ] as const) {
+            const p = port(overrides)
+            const outcome = await submitPilotApplicationV1(proof, p, ingestion(), NOW)
+            expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+            expect(p.findClaimedOrderIds).not.toHaveBeenCalled()
+            expect(p.submitApplication).not.toHaveBeenCalled()
+        }
     })
 
     it('rejects above the monetary core\'s request bound without touching C1', async () => {
@@ -289,7 +297,7 @@ describe('proving the canonical person from the Telegram proof', () => {
             })),
         })
         const outcome = await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)
-        expect(outcome).toEqual({ submitted: false, refusal: 'identity_needs_review' })
+        expect(outcome).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
         expect(p.findDriverApplications).not.toHaveBeenCalled()
         expect(p.submitApplication).not.toHaveBeenCalled()
     })
@@ -715,8 +723,33 @@ describe('the first month\'s orders after the month has ended: the month-end gra
             ...LAST_DAY_ORDER, id: 'row-october', externalOrderId: 'e'.repeat(32), endedAt: new Date('2026-10-01T05:00:00.000Z'),
         }
         const p = port({ findCashOrders: vi.fn(async () => [october]) })
+        // The first month still takes claims, so the section is open; the
+        // October order is simply not in it.
         expect(await compensationSectionViewV1(PROOF, p, ingestion(), GRACE_NOW))
-            .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+            .toMatchObject({ available: true, firstMonthKey: '2026-09', orders: [] })
+    })
+
+    it('on demand, opens the date picker through the grace with nothing stored, and closes it by the clock', async () => {
+        // Nothing stored is the normal on-demand state: orders are stored only
+        // for days a driver has already asked for.
+        const fetchDriverDay = vi.fn(async () => ({ state: 'complete' as const, code: null }))
+        const onDemandAt = (dbNow: Date) => ingestion({
+            readCatalogueFacts: vi.fn(async () => ({ ...READY_FACTS, mode: 'on_demand', dbNow })),
+            fetchDriverDay,
+        })
+        const p = port({ findCashOrders: vi.fn(async () => []) })
+        for (const now of [GRACE_NOW, new Date(GRACE_DEADLINE.getTime() - 1)]) {
+            expect(await compensationSectionViewV1(PROOF, p, onDemandAt(now), now))
+                .toMatchObject({ available: true, catalogueStatus: 'on_demand', firstMonthKey: '2026-09', orders: [] })
+        }
+        // A first-month day picked inside the grace is asked of the provider.
+        const day = await compensationSectionViewV1(PROOF, p, onDemandAt(GRACE_NOW), GRACE_NOW, { search: '2026-09-30' })
+        expect(day.available && day.search).toMatchObject({ query: '2026-09-30', kind: 'date' })
+        expect(fetchDriverDay).toHaveBeenCalledWith({ externalParkId: PARK, externalDriverProfileId: PROFILE, dayKey: '2026-09-30' })
+        for (const now of [GRACE_DEADLINE, new Date(GRACE_DEADLINE.getTime() + 1)]) {
+            expect(await compensationSectionViewV1(PROOF, p, onDemandAt(now), now))
+                .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        }
     })
 
     it('still demands a fresh provider observation before a last-day claim reaches C1', async () => {
@@ -825,7 +858,7 @@ describe('on demand: the driver picks a day and only that driver\'s day is asked
         expect(await compensationSectionViewV1(PROOF, port({ findDriverFacts: vi.fn(async () => PARK_EMPLOYEE) }), i, NOW, { search: '2026-09-12' }))
             .toMatchObject({ available: false, reason: 'not_self_employed' })
         expect(await compensationSectionViewV1(PROOF, port({ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }), i, NOW, { search: '2026-09-12' }))
-            .toMatchObject({ available: false, reason: 'identity_not_proven' })
+            .toMatchObject({ available: false, reason: 'cash_person_unconfirmed' })
         expect(await compensationSectionViewV1({ ...PROOF, selectedExternalParkId: 'park-2' }, port(), i, NOW, { search: '2026-09-12' }))
             .toMatchObject({ available: false, reason: 'selected_park_profile_unproven' })
         expect(i.fetchDriverDay).not.toHaveBeenCalled()
@@ -1001,16 +1034,19 @@ describe('driver facts refreshed on demand, without the nightly park sync', () =
         expect(other.ensureDriverFactsFresh).not.toHaveBeenCalledWith(expect.objectContaining({ externalParkId: PARK }))
     })
 
-    it('never asks the provider for a person who is not proven', async () => {
-        for (const overrides of [
-            { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) },
-            { confirmMainDriver: vi.fn(async () => 'busy' as const) },
-            { resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-2'] })) },
-        ]) {
+    it('asks the provider about the linked row\'s own profile only, with or without a proven person', async () => {
+        for (const [overrides, reason] of [
+            [{ confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) }, 'cash_person_unconfirmed'],
+            [{ confirmMainDriver: vi.fn(async () => 'busy' as const) }, 'identity_busy'],
+            [{ resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-2'] })) }, 'cash_person_unconfirmed'],
+        ] as const) {
             const { p, ensureDriverFactsFresh } = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER })
             const unproven = { ...p, ...overrides }
-            expect(await compensationSectionViewV1(PROOF, unproven, ingestion(), NOW)).toMatchObject({ available: false })
-            expect(ensureDriverFactsFresh).not.toHaveBeenCalled()
+            expect(await compensationSectionViewV1(PROOF, unproven, ingestion(), NOW)).toMatchObject({ available: false, reason })
+            expect(ensureDriverFactsFresh).toHaveBeenCalledTimes(1)
+            expect(ensureDriverFactsFresh).toHaveBeenCalledWith(expect.objectContaining({
+                driverId: DRIVER, externalParkId: PARK, externalDriverProfileId: PROFILE,
+            }))
         }
         const noProfile = world({ stored: NEVER_STATED, provider: SMZ_HIRED_IN_SEPTEMBER, row: { externalParkId: PARK, externalDriverProfileId: '' } })
         await compensationSectionViewV1(PROOF, noProfile.p, ingestion(), NOW)
@@ -1184,5 +1220,222 @@ describe('what reaches the provider when a driver taps', () => {
         missing.advance(10_000)
         expect(await missing.refresher.ensureFresh(target(), true)).toBe('unavailable')
         expect(missing.refresh).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('the Telegram link opens Cash; a claim needs the person Contacts proved', () => {
+    const LINK_ONLY: PilotTelegramPersonProofV1 = { ...PROOF, contactId: null }
+
+    it('decides the programme for a linked driver without a Contact, and asks Contacts nothing', async () => {
+        const p = port()
+        expect(await compensationSectionViewV1(LINK_ONLY, p, ingestion(), NOW))
+            .toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+        expect(p.confirmMainDriver).not.toHaveBeenCalled()
+        expect(p.resolveContactLineage).not.toHaveBeenCalled()
+        expect(p.findDriverApplications).not.toHaveBeenCalled()
+    })
+
+    it('gives a linked driver without a Contact the real programme refusal first', async () => {
+        const notSmz = port({
+            findDriverFacts: vi.fn(async () => ({ ...ELIGIBLE_DRIVER, facts: { ...ELIGIBLE_DRIVER.facts, isSelfEmployed: false, employmentType: 'park_employee' } })),
+        })
+        expect(await compensationSectionViewV1(LINK_ONLY, notSmz, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'not_self_employed' })
+        const hiredInJuly = port({
+            findDriverFacts: vi.fn(async () => ({ ...ELIGIBLE_DRIVER, facts: { ...ELIGIBLE_DRIVER.facts, parkHireDate: new Date('2026-07-15T06:00:00.000Z') } })),
+        })
+        expect(await compensationSectionViewV1(LINK_ONLY, hiredInJuly, ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'outside_first_calendar_month' })
+        expect(await compensationSectionViewV1({ ...LINK_ONLY, selectedExternalParkId: 'park-2' }, port(), ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'selected_park_profile_unproven' })
+        expect(await compensationSectionViewV1({ ...LINK_ONLY, driverId: '' }, port(), ingestion(), NOW))
+            .toMatchObject({ available: false, reason: 'identity_not_proven' })
+    })
+
+    it('refuses an order check without a person before any provider confirmation is asked for', async () => {
+        const i = ingestion()
+        const p = port({ findCashOrders: vi.fn(async () => [{ ...ORDER, observedAt: new Date(DB_NOW.getTime() - 61 * MINUTE) }]) })
+        expect(await checkPilotOrderV1({ ...LINK_ONLY, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, i, NOW))
+            .toEqual({ state: 'refused', order: null, refusal: 'cash_person_unconfirmed' })
+        expect(i.readOrderConfirmation).not.toHaveBeenCalled()
+        expect(i.requestOrderConfirmation).not.toHaveBeenCalled()
+    })
+
+    it('lets a linked driver without a person refresh the park list, which binds nothing', async () => {
+        const i = ingestion()
+        expect(await requestPilotRefreshV1(LINK_ONLY, port(), i, NOW)).toEqual({ status: 'scheduled', refusal: null })
+        expect(i.requestHotRefresh).toHaveBeenCalledWith(PARK)
+    })
+
+    it('asks Contacts whether the Contact confirms exactly the Driver the link names', async () => {
+        const p = port({
+            confirmMainDriver: vi.fn(async (_contactId: string, driverId: string) => (driverId === 'driver-other' ? 'confirmed' as const : 'not_confirmed' as const)),
+        })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+        expect(p.confirmMainDriver).toHaveBeenCalledWith(CONTACT, DRIVER)
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('binds a claim to the proven person and the link\'s own Telegram account, never to the Driver', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toMatchObject({ submitted: true, status: 'created' })
+        expect(p.submitApplication).toHaveBeenCalledWith(expect.objectContaining({
+            canonicalContactId: CONTACT, lineage: [CONTACT], telegramUserId: '777', idempotencyKey: SUBMIT.idempotencyKey,
+        }))
+        expect(p.findClaimedOrderIds).toHaveBeenCalledWith([CONTACT])
+    })
+
+    it('answers a relink or a park switch after the list as stale, and reaches C1 with neither', async () => {
+        const p = port()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, driverId: 'driver-relinked' }, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'stale_context' })
+        expect(await checkPilotOrderV1({ ...PROOF, driverId: 'driver-relinked', externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, ingestion(), NOW))
+            .toEqual({ state: 'stale_context', order: null, refusal: null })
+        expect(await submitPilotApplicationV1({ ...SUBMIT, selectedExternalParkId: 'park-2' }, p, ingestion(), NOW))
+            .toEqual({ submitted: false, refusal: 'selected_park_profile_unproven' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('treats a Contacts lock on the person as a retry at every step', async () => {
+        const p = port({ confirmMainDriver: vi.fn(async () => 'busy' as const) })
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toMatchObject({ available: false, reason: 'identity_busy' })
+        expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'identity_busy' })
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+})
+
+describe('referral and manual access from the person\'s ledger', () => {
+    const LINEAGE = compensationLineageDigestV1([CONTACT])
+    const OLD_NON_SMZ: PilotDriverFactsV1 = {
+        ...ELIGIBLE_DRIVER,
+        facts: { isSelfEmployed: false, employmentType: 'park_employee', parkHireDate: new Date('2024-02-01T06:00:00.000Z') },
+    }
+    const event = (seq: number, kind: CashAccessEventV1['kind'], occurredAt: string, overrides: Partial<CashAccessEventV1> = {}): CashAccessEventV1 => {
+        const staff = kind.startsWith('manual_') || kind === 'referral_entitlement_revoked'
+        return {
+            id: `row-${seq}`,
+            chainContactId: CONTACT,
+            seq,
+            kind,
+            lineageDigest: LINEAGE,
+            codeHash: null,
+            attributionId: kind.startsWith('referral_') ? 'attr-1' : null,
+            payload: {},
+            actorKind: staff ? 'signed_staff_session' : 'system',
+            actorId: staff ? 'staff:manager-1' : 'system:cash-referral',
+            actorCapability: staff ? 'cash.access.manage' : null,
+            actorSessionId: staff ? 'session-1' : null,
+            actorAuthenticatedAt: staff ? new Date('2026-09-01T00:00:00.000Z') : null,
+            reason: staff ? 'checked the park documents' : null,
+            idempotencyKey: `key-${seq}`,
+            occurredAt: new Date(occurredAt),
+            prevHash: null,
+            hash: 'f'.repeat(64),
+            ...overrides,
+        }
+    }
+    const withLedger = (rows: CashAccessEventV1[], overrides: Partial<CompensationPilotPortV1> = {}) =>
+        port({ readCashAccessChain: vi.fn(async () => rows), ...overrides })
+
+    it('lists a referral inviter\'s orders although the standard programme refuses them', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z')], { findDriverFacts: vi.fn(async () => OLD_NON_SMZ) })
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        expect(view.available && view.orders.map((order) => order.externalOrderId)).toEqual([ORDER.externalOrderId])
+        expect(p.readCashAccessChain).toHaveBeenCalledWith(CONTACT)
+
+        const standardOnly = await compensationSectionViewV1(PROOF, port({ findDriverFacts: vi.fn(async () => OLD_NON_SMZ) }), ingestion(), NOW)
+        expect(standardOnly).toMatchObject({ available: false, reason: 'not_self_employed' })
+    })
+
+    it('never lists an order completed before the grant', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-15T00:00:00.000Z')], { findDriverFacts: vi.fn(async () => OLD_NON_SMZ) })
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true })
+        expect(view.available && view.orders).toEqual([])
+    })
+
+    it('lets a general denial close the standard first month and every grant', async () => {
+        const p = withLedger([
+            event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z'),
+            event(2, 'manual_denied', '2026-09-05T00:00:00.000Z'),
+        ])
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: false, reason: 'manual_deny' })
+    })
+
+    it('keeps the standard first month when only the referral grant is revoked', async () => {
+        const p = withLedger([
+            event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z'),
+            event(2, 'referral_entitlement_revoked', '2026-09-05T00:00:00.000Z'),
+        ])
+        const view = await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+    })
+
+    it('sends a person merged since an access event to a manager', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z', { lineageDigest: 'lineage:before-merge' })])
+        expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW)).toEqual({ available: false, reason: 'identity_needs_review', applications: [] })
+    })
+
+    it('reads no ledger for a link without a proven person', async () => {
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z')], {
+            confirmMainDriver: vi.fn(async () => 'not_confirmed' as const),
+        })
+        await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
+        expect(p.readCashAccessChain).not.toHaveBeenCalled()
+    })
+
+    it('checks each claim in the grace days against its own month\'s budget, not the first claimable one', async () => {
+        const graceNow = new Date('2026-10-02T06:00:00.000Z')
+        const graceDbNow = new Date('2026-10-02T05:59:00.000Z')
+        const graceFacts: PilotCatalogueFactsV1 = {
+            ...READY_FACTS,
+            dbNow: graceDbNow,
+            lastHotSuccessAt: new Date(graceDbNow.getTime() - 2 * MINUTE),
+            reconciliationPassStartedAt: new Date(graceDbNow.getTime() - 60 * MINUTE),
+            lastReconciliationCompletedAt: new Date(graceDbNow.getTime() - 30 * MINUTE),
+        }
+        const september: PilotCatalogueOrderV1 = {
+            ...ORDER,
+            id: 'row-sep',
+            externalOrderId: 'c'.repeat(32),
+            endedAt: new Date('2026-09-28T10:00:00.000Z'),
+            observedAt: new Date(graceDbNow.getTime() - 5 * MINUTE),
+            providerBookedAt: new Date('2026-09-28T09:30:00.000Z'),
+        }
+        const october: PilotCatalogueOrderV1 = {
+            ...september,
+            id: 'row-oct',
+            externalOrderId: 'd'.repeat(32),
+            endedAt: new Date('2026-10-01T10:00:00.000Z'),
+            providerBookedAt: new Date('2026-10-01T09:30:00.000Z'),
+        }
+        // September is spent; October has its whole limit.
+        const findBudgetPeriod = vi.fn(async (periodKey: string) => ({
+            limitKopecks: 500_000,
+            reservedKopecks: periodKey === '2026-09' ? 500_000 : 0,
+            settledKopecks: 0,
+        }))
+        const inviter = () => withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z')], {
+            findDriverFacts: vi.fn(async () => OLD_NON_SMZ),
+            findCashOrders: vi.fn(async () => [october, september]),
+            findBudgetPeriod,
+        })
+        const facts = () => ingestion({ readCatalogueFacts: vi.fn(async () => graceFacts) })
+
+        const view = await compensationSectionViewV1(PROOF, inviter(), facts(), graceNow)
+        expect(view).toMatchObject({ available: true, firstMonthKey: '2026-09' })
+        expect(view.available && view.orders.map((order) => order.externalOrderId)).toEqual([october.externalOrderId, september.externalOrderId])
+
+        const forOctober = inviter()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, externalOrderId: october.externalOrderId }, forOctober, facts(), graceNow))
+            .toMatchObject({ submitted: true })
+        expect(forOctober.submitApplication).toHaveBeenCalledWith(expect.objectContaining({ order: expect.objectContaining({ externalOrderId: october.externalOrderId }) }))
+
+        const forSeptember = inviter()
+        expect(await submitPilotApplicationV1({ ...SUBMIT, externalOrderId: september.externalOrderId }, forSeptember, facts(), graceNow))
+            .toEqual({ submitted: false, refusal: 'budget_exhausted' })
+        expect(forSeptember.submitApplication).not.toHaveBeenCalled()
     })
 })

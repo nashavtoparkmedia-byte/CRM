@@ -46,20 +46,40 @@ const STATUS_TEXT = {
     rejected: 'отклонена',
 };
 
+// The CRM or Yandex did not answer in time, the CRM could not state a fact it
+// needs (the SMZ flag, the hire date) or its own park setup, or it gave a code
+// this bot does not know: nothing was decided about the driver, so they retry
+// and see no CRM internals.
+const TECHNICAL_FAILURE_TEXT = 'Не удалось проверить данные. Попробуйте ещё раз чуть позже 🔄';
+
+// Owner-approved sentences for what the CRM decided, the same on entry and at
+// any later step.
+const NOT_LINKED_TEXT = 'Чтобы воспользоваться компенсацией, привяжите Telegram к своему профилю водителя: откройте «🚘 Мой автомобиль» и поделитесь номером телефона. Если автоматически привязать не получится, напишите менеджеру — он привяжет профиль вручную.';
+const NOT_SMZ_TEXT = 'По данным парка, вы подключены не как парковый самозанятый. Программа компенсации доступна только парковым самозанятым. Если данные неверны, напишите менеджеру.';
+// Since the 72-hour rule closes the month by the clock, this is said only once
+// the month's submission window has closed.
+const PERIOD_ENDED_TEXT = 'Компенсация доступна за заказы первого календарного месяца после подключения к парку, а заявки по ним принимаются до 72 часов после окончания этого месяца. Срок подачи заявок для вашего периода завершился. Если дата подключения указана неверно, напишите менеджеру.';
+// The programme admits the linked driver, but the CRM has no person proven to
+// bind a claim to. Money is bound only to such a person.
+const PERSON_UNCONFIRMED_TEXT = 'Подать заявку пока нельзя: профиль для выплаты ещё не подтверждён в CRM. Напишите менеджеру — после подтверждения откройте этот раздел снова.';
+
 // Refusals arrive as codes. A driver needs a sentence, and a sentence that
 // tells them what to do next rather than what the system checked.
 const REFUSAL_TEXT = {
-    identity_not_proven: 'Профиль не привязан. Откройте «Мой автомобиль» и поделитесь номером.',
-    identity_needs_review: 'Ваш профиль нужно проверить. Напишите менеджеру.',
-    identity_busy: 'Профиль сейчас обновляется. Попробуйте через минуту.',
+    // Mid-claim the bot does not ask why; the section, opened again, says it.
+    identity_not_proven: 'Не удалось подтвердить привязку Telegram к профилю водителя. Откройте «💰 Компенсация наличных» заново.',
+    // Sent by a CRM that still decides the person before the programme.
+    identity_needs_review: PERSON_UNCONFIRMED_TEXT,
+    cash_person_unconfirmed: PERSON_UNCONFIRMED_TEXT,
+    identity_busy: TECHNICAL_FAILURE_TEXT,
     park_not_selected: 'Сначала выберите парк.',
     selected_park_profile_unproven: 'В выбранном парке компенсация пока недоступна для вашего подтверждённого профиля. Переключите парк или напишите менеджеру.',
     driver_not_in_park: 'Не вижу вас в парке. Напишите менеджеру.',
-    catalogue_disabled: 'В этом парке компенсация наличных пока не подключена.',
-    not_self_employed: 'Компенсация доступна только самозанятым водителям парка.',
-    self_employment_unknown: 'Пока не вижу ваш налоговый статус. Напишите менеджеру.',
-    hire_date_unknown: 'Пока не вижу дату подключения. Напишите менеджеру.',
-    outside_first_calendar_month: 'Компенсация действует только в первый календарный месяц после подключения.',
+    catalogue_disabled: TECHNICAL_FAILURE_TEXT,
+    not_self_employed: NOT_SMZ_TEXT,
+    self_employment_unknown: TECHNICAL_FAILURE_TEXT,
+    hire_date_unknown: TECHNICAL_FAILURE_TEXT,
+    outside_first_calendar_month: PERIOD_ENDED_TEXT,
     support_not_confirmed: 'Сначала подтвердите, что обращались в поддержку Яндекса.',
     attachment_missing: 'Нужен ответ поддержки Яндекса — пришлите фото или файл.',
     claim_not_whole_rubles: 'Введите сумму целым числом рублей.',
@@ -124,25 +144,16 @@ const RESTRICTED_BANNER = [
 ].join('\n');
 
 const VERIFY_REASON = 'бот не смог подтвердить связь вашего Telegram с профилем водителя YOKO.';
-const NOT_ELIGIBLE = {
-    reason: 'ваш профиль не соответствует действующим условиям программы.',
-    action: 'сейчас компенсация доступна новым водителям, подключённым как парковые самозанятые, за заказы первого месяца работы.',
-};
-const FACTS_UNVERIFIED_ACTION = 'напишите менеджеру — он проверит данные вашего профиля.';
 
 // Why the section is closed to this driver, per refusal the CRM returned. A
-// link to confirm, a park to choose and a fact the CRM could not read all ask
-// for verification; only a rule the CRM decided is a programme condition. A
-// refusal missing here (identity_busy among them) is not a verdict on the
-// driver and gets the neutral sentence instead.
+// link to make and a park to choose ask the driver to act; only a rule the CRM
+// decided is a programme condition. A refusal missing here (identity_busy, the
+// two unknown facts and catalogue_disabled among them) is not a verdict on the
+// driver and gets the retry sentence instead.
 const ACCESS_RESTRICTIONS = {
-    identity_not_proven: {
-        reason: VERIFY_REASON,
-        action: 'откройте «🚘 Мой автомобиль», поделитесь номером телефона и обратитесь к менеджеру для подтверждения привязки.',
-    },
-    // Linked, but the CRM cannot bind the chat to one person: only a manager can
-    // resolve that, and sharing the number again would change nothing.
-    identity_needs_review: { reason: VERIFY_REASON, action: 'напишите менеджеру: ваш профиль нужно проверить.' },
+    // In-band, this comes only for a Telegram with no driver link at all.
+    identity_not_proven: { text: NOT_LINKED_TEXT },
+    identity_needs_review: { text: PERSON_UNCONFIRMED_TEXT },
     park_not_selected: { reason: 'в боте не выбран парк.', action: 'выберите парк кнопкой ниже.', choosePark: true },
     selected_park_profile_unproven: {
         reason: 'в выбранном парке не найден ваш подтверждённый профиль водителя.',
@@ -150,17 +161,14 @@ const ACCESS_RESTRICTIONS = {
         choosePark: true,
     },
     driver_not_in_park: { reason: 'бот не нашёл ваш профиль в парке.', action: 'напишите менеджеру.' },
-    // The CRM could not read the fact, which says nothing about the driver.
-    self_employment_unknown: { reason: 'не удалось проверить ваш налоговый статус.', action: FACTS_UNVERIFIED_ACTION },
-    hire_date_unknown: { reason: 'не удалось проверить дату вашего подключения.', action: FACTS_UNVERIFIED_ACTION },
-    not_self_employed: NOT_ELIGIBLE,
-    outside_first_calendar_month: NOT_ELIGIBLE,
-    catalogue_disabled: NOT_ELIGIBLE,
+    not_self_employed: { text: NOT_SMZ_TEXT },
+    outside_first_calendar_month: { text: PERIOD_ENDED_TEXT },
 };
-// Refusals the CRM gives only after it proved the person, so the applications
-// it sends with them are this driver's own. Any other answer may come for a
-// chat that is not, or not provably, the driver's: its applications are
-// never shown, whatever the answer carries.
+// Refusals the CRM gives only after it read the linked driver; it reads
+// applications only for a person Contacts proved, so any it sends with them are
+// this driver's own. Any other answer may come for a chat that is not, or not
+// provably, the driver's: its applications are never shown, whatever the
+// answer carries.
 const PROVEN_PERSON_REFUSALS = new Set([
     'park_not_selected',
     'selected_park_profile_unproven',
@@ -177,7 +185,7 @@ const AUTHORITY_RESTRICTION = {
     action: 'попробуйте позже или напишите менеджеру, чтобы он подтвердил привязку. Номер телефона повторно отправлять не нужно.',
 };
 
-const NO_ORDERS_TEXT = 'За выбранную дату подходящие заказы не найдены. Проверьте дату поездки или выберите другой день.';
+const NO_ORDERS_TEXT = 'За выбранную дату подходящих наличных заказов не найдено. Выберите другую дату.';
 const DATE_NOT_ALLOWED_TEXT = 'За выбранную дату компенсация недоступна. Выберите другую дату, если у вас есть неоплаченные наличные заказы за подходящий период.';
 
 // An order check that ends the claim, as the refusal it amounts to.
@@ -213,7 +221,7 @@ const rubles = (kopecks) => (kopecks % 100 === 0 ? String(kopecks / 100) : (kope
 function crmFailureText(error) {
     return error && error.status === 409
         ? AUTHORITY_REFUSED_TEXT
-        : 'Система недоступна, попробуйте позже.';
+        : TECHNICAL_FAILURE_TEXT;
 }
 
 function refusalText(code) {
@@ -221,6 +229,8 @@ function refusalText(code) {
 }
 
 function restrictedText(restriction) {
+    // A sentence that says itself why applying is closed replaces the template.
+    if (restriction.text) return `${RESTRICTED_BANNER}\n\n${restriction.text}`;
     return `${RESTRICTED_BANNER}\n\nСейчас подать заявку нельзя.\nПричина: ${restriction.reason}\nЧто делать: ${restriction.action}`;
 }
 
@@ -288,9 +298,16 @@ async function loadSection(ctx, search) {
     if (!view || view.available !== true) {
         const reason = view && view.reason;
         const summary = PROVEN_PERSON_REFUSALS.has(reason) ? applicationsSummary(view.applications) : '';
+        if (reason === 'cash_person_unconfirmed') {
+            // The CRM decided the programme admits this driver: the banner and
+            // its steps are true, only the apply button waits for the person.
+            await ctx.reply(`${ELIGIBLE_BANNER}\n\n${PERSON_UNCONFIRMED_TEXT}`);
+            await ctx.scene.leave();
+            return null;
+        }
         const restriction = ACCESS_RESTRICTIONS[reason];
         if (!restriction) {
-            await ctx.reply(reason === 'identity_busy' ? REFUSAL_TEXT.identity_busy : crmFailureText(null));
+            await ctx.reply(TECHNICAL_FAILURE_TEXT);
             await ctx.scene.leave();
             return null;
         }

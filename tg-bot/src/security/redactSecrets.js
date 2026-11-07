@@ -33,4 +33,26 @@ function sanitizeLogValue(value, seen = new WeakSet()) {
     return clean;
 }
 
-module.exports = { redactText, sanitizeLogValue };
+/**
+ * What may be recorded about a /start deep-link payload: only that there was
+ * one. A payload can carry a referral token, so neither the payload nor a
+ * digest of it reaches a log line or the action record: a digest would match
+ * the referral ledger's code hash and link the Telegram account to the
+ * inviter for anyone who can read both.
+ */
+function startPayloadEvidence(payload) {
+    if (typeof payload !== 'string' || payload === '') return null;
+    return { present: true };
+}
+
+/**
+ * A /start command as it may leave the bot: the command without its deep-link
+ * payload. Every other text, and a bare /start, is returned unchanged.
+ */
+function redactStartCommandText(text) {
+    if (typeof text !== 'string') return text;
+    const command = /^(\/start(?:@[A-Za-z0-9_]+)?)\s+\S/.exec(text);
+    return command ? command[1] : text;
+}
+
+module.exports = { redactText, sanitizeLogValue, startPayloadEvidence, redactStartCommandText };
