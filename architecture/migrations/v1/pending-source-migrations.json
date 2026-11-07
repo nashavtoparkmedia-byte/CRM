@@ -9,15 +9,16 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "0e2a2b0a88c81eb9f6e28a7b5a2e6e542a23b262c5b0822378830e87b3d44223",
-    "size": 171861,
+    "sha256": "de49d75ee58fcb6b884659c83cb5bc46e21363542b44d1da927d16a189994c2a",
+    "size": 173065,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
     "contacts",
     "fleet_operations",
-    "identity_access"
+    "identity_access",
+    "messaging"
   ],
   "migrations": [
     {
@@ -196,6 +197,23 @@
         "tables": [
           "CashAccessEvent",
           "CashReferralAttribution"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261108120000_add_messaging_held_channel_message",
+      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+      "sha256": "dd0639d7d39e9ecc97d4ef38068e34233b4a1b35a13df36557f6cd238e6f1be0",
+      "size": 2722,
+      "owner_context": "messaging",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "HeldChannelMessage"
         ],
         "columns": [],
         "forbidden_indexes": []
