@@ -119,25 +119,30 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
       }
       driverProfiles.push(...byDriver.values())
     }
-    const byChannel = new Map<string, ContactPersonCardConversationV1>()
+    // Messaging answers a merged-away lineage id with its own conversations AND
+    // those of the canonical survivor, so one Chat.id can arrive under two
+    // entries. A conversation is counted once, by its exact id; the channel's
+    // primary conversation is the most recent one across the whole lineage.
+    const byChannel = new Map<string, { view: ContactPersonCardConversationV1; conversationIds: Set<string> }>()
     if (conversations.ok) {
       for (const entry of conversations.value.contacts) {
         if (entry.status !== 'found') continue
         for (const channel of entry.channels) {
           const latest = channel.conversations[0]?.lastActivityAt ?? null
-          const existing = byChannel.get(channel.channel)
-          if (existing === undefined || (latest ?? '') > (existing.lastActivityAt ?? '')) {
-            byChannel.set(channel.channel, {
-              channel: channel.channel,
-              primaryConversationId: channel.primaryConversationId,
-              lastActivityAt: latest,
-              conversationCount: (existing?.conversationCount ?? 0) + channel.conversations.length,
-              truncated: (existing?.truncated ?? false) || entry.truncated,
-            })
-          } else {
-            existing.conversationCount += channel.conversations.length
-            existing.truncated = existing.truncated || entry.truncated
+          let accumulated = byChannel.get(channel.channel)
+          if (accumulated === undefined) {
+            accumulated = {
+              view: { channel: channel.channel, primaryConversationId: channel.primaryConversationId, lastActivityAt: latest, conversationCount: 0, truncated: false },
+              conversationIds: new Set<string>(),
+            }
+            byChannel.set(channel.channel, accumulated)
+          } else if ((latest ?? '') > (accumulated.view.lastActivityAt ?? '')) {
+            accumulated.view.primaryConversationId = channel.primaryConversationId
+            accumulated.view.lastActivityAt = latest
           }
+          for (const conversation of channel.conversations) accumulated.conversationIds.add(conversation.conversationId)
+          accumulated.view.conversationCount = accumulated.conversationIds.size
+          accumulated.view.truncated = accumulated.view.truncated || entry.truncated
         }
       }
     }
@@ -146,7 +151,8 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
       view: {
         card,
         driverProfiles,
-        conversations: [...byChannel.values()].sort((left, right) => (left.channel < right.channel ? -1 : left.channel > right.channel ? 1 : 0)),
+        conversations: [...byChannel.values()].map(accumulated => accumulated.view)
+          .sort((left, right) => (left.channel < right.channel ? -1 : left.channel > right.channel ? 1 : 0)),
         partial: { driverProfiles: !profiles.ok, conversations: !conversations.ok },
       },
     }
