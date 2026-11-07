@@ -19,6 +19,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 type Row = Record<string, any>
 
 const mocks = vi.hoisted(() => ({
+    // The Contacts message permission the outbound gate reads: allowed unless a test says otherwise.
+    contactPermission: vi.fn(async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }) as Record<string, unknown>),
     chatFindUnique: vi.fn(),
     chatUpdate: vi.fn(),
     waSendText: vi.fn(),
@@ -162,6 +173,7 @@ vi.mock('@/modules/contacts/public/v1/contact-display-policy', () => ({ buildCan
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
     contactReachabilityV1: { recordExactProviderReachability: mocks.recordReachability },
 }))
+vi.mock('@/modules/contacts/public/v1', () => ({ getContactCommunicationPermissionV1: mocks.contactPermission }))
 vi.mock('@/lib/messageStreamBus', () => ({ broadcastChatMessage: mocks.broadcast }))
 vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async importOriginal => ({
     ...await importOriginal<Record<string, unknown>>(),
