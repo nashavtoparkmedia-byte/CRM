@@ -12,6 +12,8 @@ Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing ro
 mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
 change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
+Partial update 2026-11-08: §2.4 (tests), F-08 and I-09 describe WhatsApp message admission by provider key (W2), verified
+against its own change on top of main `3ac5ce07`.
 
 # YOKO CRM — Engineering Map
 
@@ -341,7 +343,7 @@ Each entry lists what the code actually does.
 - **Extension points**: `WhatsAppChannelDeliveryV1`; message-type mapping
   functions in `WhatsAppService.ts` (repeated across live, sync and import paths).
 - **Tests**: `G/lib/whatsapp/WhatsAppService.connection-binding.test.ts`,
-  `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
+  `WhatsAppService.message-identity.test.ts`, `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
   `check-messaging-whatsapp-*-boundary.mjs`.
 
 ### 2.5 MAX channel (`max_channel`)
@@ -807,9 +809,11 @@ collision checks → `createExternalConversationV1` / `patchExternalConversation
 checks → `assertPrivateWhatsAppConversationConnectionV1` →
 `prisma.whatsAppChat.upsert` → `upsertChannelConversationV1` → F-01 (with
 `canonicalWhatsAppIdentityExternalIdV1`) → `DriverMatchService.linkChatToDriver` →
-`prisma.whatsAppMessage.upsert` → `createChannelMessageV1`
+`prisma.whatsAppMessage.upsert` → `admitWhatsAppProviderMessageV1` (by provider key,
+per-conversation lock; I-09) → `createChannelMessageV1`
 (`externalId = msg.id._serialized`) → `attachMessageMediaV1` → workflow →
-`publishPersistedMessageV1`.
+`publishPersistedMessageV1`. Background sync and history import admit through the
+same helper.
 
 **F-09 Operator outbound text**
 `G/app/messages/hooks/useMessages.ts` (generates `clientMessageId`) →
@@ -1315,7 +1319,17 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   Exception: `send-media` has no such lookup (R-04).
 - **I-09 Inbound dedupe on `Message.externalId` (unique).** — receive and
   external-message adapters. Exception: `createChannelMessageV1` leaves dedupe to
-  the caller; Telegram and WhatsApp add a same-content time-window dedupe.
+  the caller; Telegram adds a same-content time-window dedupe. WhatsApp (W2) admits
+  live, sync and import messages by provider key only (`_serialized`, else `$1`,
+  else the key rebuilt from its parts), so two keys are two messages whatever they
+  say. A taken key is never copied or moved, and a lost create race (P2002) counts
+  as already stored. The one content match is the outbound echo: a `fromMe` message
+  may claim one outbound row in the same conversation that has no provider id yet
+  and is not `failed` with outcome `safe_to_redeliver`/`terminal`; the window is
+  ±10 s live and ±2 s for history. A live message without a provider key is not
+  stored (`wa_message_provider_id_missing`). — `admitWhatsAppProviderMessageV1` in
+  `G/lib/whatsapp/WhatsAppService.ts` — `WhatsAppService.message-identity.test.ts`,
+  `check-messaging-whatsapp-message-boundary.mjs`.
 - **I-10 Redelivery only when the failure is classified `safe_to_redeliver`
   under taxonomy v2.** — `classifyDeliveryOutcome`, `isSafeToRedeliver`
   (`retrySend`), the retry SQL selector — `delivery-recovery-operations.test.ts`,

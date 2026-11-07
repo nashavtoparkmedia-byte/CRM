@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     chatFindUnique: vi.fn(),
     messageFindFirst: vi.fn(),
     messageFindUnique: vi.fn(),
+    messageFindMany: vi.fn(),
     whatsAppChatFindUnique: vi.fn(),
     whatsAppChatUpsert: vi.fn(),
     whatsAppChatUpdate: vi.fn(),
@@ -128,6 +129,7 @@ vi.mock('@/lib/prisma', () => ({
         message: {
             findFirst: mocks.messageFindFirst,
             findUnique: mocks.messageFindUnique,
+            findMany: mocks.messageFindMany,
         },
         whatsAppChat: {
             findUnique: mocks.whatsAppChatFindUnique,
@@ -402,6 +404,7 @@ describe('WhatsApp private conversation connection ownership', () => {
         mocks.whatsAppMessageUpsert.mockResolvedValue({})
         mocks.messageFindUnique.mockResolvedValue(null)
         mocks.messageFindFirst.mockResolvedValue(null)
+        mocks.messageFindMany.mockResolvedValue([])
         vi.spyOn(console, 'log').mockImplementation(() => {})
         vi.spyOn(console, 'warn').mockImplementation(() => {})
         vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -824,7 +827,8 @@ describe('WhatsApp private conversation connection ownership', () => {
     test('reconciles a matched optimistic outbound Message with the provider id, delivered state and provider send time', async () => {
         await initializeClient(INCOMING_CONNECTION_ID)
         const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
-        mocks.messageFindFirst.mockResolvedValue({ id: 'optimistic-1', externalId: null })
+        // The CRM send has no provider id yet, so it is the echo candidate.
+        mocks.messageFindMany.mockResolvedValue([{ id: 'optimistic-1', status: 'sent', metadata: {} }])
         const providerSeconds = Math.floor(Date.now() / 1000) - 30
 
         await handler?.({
@@ -850,7 +854,7 @@ describe('WhatsApp private conversation connection ownership', () => {
     test('never lets a corrupt provider timestamp rewrite the optimistic send time', async () => {
         await initializeClient(INCOMING_CONNECTION_ID)
         const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
-        mocks.messageFindFirst.mockResolvedValue({ id: 'optimistic-2', externalId: null })
+        mocks.messageFindMany.mockResolvedValue([{ id: 'optimistic-2', status: 'sent', metadata: {} }])
 
         await handler?.({
             id: { _serialized: 'wa-outbound-corrupt-ts' },
