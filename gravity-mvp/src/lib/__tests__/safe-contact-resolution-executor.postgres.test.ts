@@ -21,6 +21,7 @@ import { MERGE_CONTACTS_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { makeMessagingContactMergeRepositories } from '@/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter'
 import {
   createMergeContactsHandlerV1,
+  manageContactPhoneEvidenceV1,
   type ContactMergeTransactionalRepositoriesV1,
 } from '@/modules/contacts/public/v1'
 import {
@@ -169,6 +170,26 @@ async function phone(id: string, contactId: string, normalizedPhone = PHONE): Pr
     where: { id: contactId },
     data: { primaryPhoneId: id },
   })
+}
+
+/**
+ * A phone the current Contacts policy may match automatically must carry
+ * `current / manually_verified / fresh / unique` evidence. The legacy `phone()`
+ * row above deliberately stays ineligible (trust `unknown`), and only the
+ * production evidence command can grant trust (`set_state` cannot raise it), so
+ * the races prepare their eligible owner through that command. Returns the
+ * persisted ContactPhone id.
+ */
+async function verifiedPhone(contactId: string, normalizedPhone = PHONE): Promise<string> {
+  const { phoneId } = await manageContactPhoneEvidenceV1({
+    operation: 'add_or_verify',
+    contactId,
+    rawPhone: normalizedPhone,
+    actor: 'n1-race-fixture',
+    basis: 'race fixture: operator-verified owner of the phone',
+    makePrimary: true,
+  })
+  return phoneId
 }
 
 async function persistBackendAmbiguity(): Promise<ListedConversation> {
@@ -436,7 +457,7 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
   test('Race A: a 1→2 owner writer cannot commit after revalidation but before identity mutation', async () => {
     await contact('A')
     await contact('B')
-    await phone('phone-A', 'A')
+    await verifiedPhone('A')
 
     const race = await stageRace('n1-race-owner', () => ContactService.addPhoneToContact('B', PHONE))
 
@@ -462,7 +483,14 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
   test('Race B: accepted A→B merge cannot leave an identity on archived A', async () => {
     await contact('A')
     await contact('B')
-    await phone('phone-A', 'A')
+    const phoneA = await verifiedPhone('A')
+    // The survivor is chosen by the Contacts policy, not by the caller's
+    // direction (evaluateContactSurvivorV1: pin, substance, history, age). B is
+    // the operator-pinned canonical card, so the accepted merge archives A into B.
+    await prisma.contact.update({
+      where: { id: 'B' },
+      data: { customFields: { canonicalPinnedAt: new Date().toISOString(), canonicalPinnedBy: 'n1-race-fixture' } },
+    })
     const mergeContacts = createWriterMerge()
 
     const race = await stageRace('n1-race-merge', () => mergeContacts({
@@ -486,7 +514,7 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
         },
       },
     })).resolves.toMatchObject({ contactId: 'B' })
-    await expect(prisma.contactPhone.findUnique({ where: { id: 'phone-A' } }))
+    await expect(prisma.contactPhone.findUnique({ where: { id: phoneA } }))
       .resolves.toMatchObject({ contactId: 'B' })
     await expect(prisma.contact.findUnique({ where: { id: 'A' } }))
       .resolves.toMatchObject({ isArchived: true })
@@ -498,7 +526,7 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
     await contact('A', true)
     await contact('B')
     await contact('C')
-    await phone('phone-C', 'C')
+    const phoneC = await verifiedPhone('C')
     await prisma.contactMerge.create({
       data: {
         id: 'merge-A-C', survivorId: 'C', mergedId: 'A', reason: 'manual', snapshotBefore: {},
@@ -525,7 +553,7 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
         },
       },
     })).resolves.toMatchObject({ contactId: 'C' })
-    await expect(prisma.contactPhone.findUnique({ where: { id: 'phone-C' } }))
+    await expect(prisma.contactPhone.findUnique({ where: { id: phoneC } }))
       .resolves.toMatchObject({ contactId: 'C' })
 
     const repeated = await SafeContactResolutionExecutor.fromPrisma()
@@ -535,6 +563,23 @@ describeWithDatabase.sequential('SafeContactResolutionExecutor PostgreSQL races'
       where: { contactId: 'C', phone: PHONE, isActive: true },
     })).resolves.toBe(1)
   }, 20_000)
+
+  test('a legacy phone claim without trusted evidence never resolves automatically', async () => {
+    await contact('A')
+    await phone('phone-A', 'A')
+
+    // The inbound assertion is trusted, but the persisted claim is a legacy row
+    // (trust `unknown`): the policy must refuse to match and must write nothing.
+    const result = await SafeContactResolutionExecutor.fromPrisma().execute(input('n1-legacy-claim'))
+
+    expect(result.status).toBe('phone_evidence_blocked')
+    if (result.status !== 'phone_evidence_blocked') throw new Error('unreachable')
+    expect(result.warnings).toEqual(expect.arrayContaining(['phone_trust_ineligible', 'phone_stale']))
+    await expect(prisma.contactIdentity.count()).resolves.toBe(0)
+    await expect(prisma.contact.count()).resolves.toBe(1)
+    await expect(prisma.contactPhone.findMany({ where: { phone: PHONE } }))
+      .resolves.toMatchObject([{ id: 'phone-A', contactId: 'A', isActive: true }])
+  })
 
   test('Race D: resolver, writer and observer use independent PostgreSQL backends', async () => {
     const [resolverPid, writerPid, observerPid] = await Promise.all([
