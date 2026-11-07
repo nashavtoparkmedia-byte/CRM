@@ -342,8 +342,8 @@ Each entry lists what the code actually does.
   boot warm-up and a 60 s watchdog in `G/instrumentation.ts`.
 - **Extension points**: `WhatsAppChannelDeliveryV1`; message-type mapping
   functions in `WhatsAppService.ts` (repeated across live, sync and import paths).
-- **Tests**: `G/lib/whatsapp/WhatsAppService.connection-binding.test.ts`,
-  `WhatsAppService.message-identity.test.ts`, `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
+- **Tests**: `G/lib/whatsapp/WhatsAppService.connection-binding.test.ts` (incl. the
+  W2 message-identity suite), `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
   `check-messaging-whatsapp-*-boundary.mjs`.
 
 ### 2.5 MAX channel (`max_channel`)
@@ -1328,7 +1328,8 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   and is not `failed` with outcome `safe_to_redeliver`/`terminal`; the window is
   ±10 s live and ±2 s for history. A live message without a provider key is not
   stored (`wa_message_provider_id_missing`). — `admitWhatsAppProviderMessageV1` in
-  `G/lib/whatsapp/WhatsAppService.ts` — `WhatsAppService.message-identity.test.ts`,
+  `G/lib/whatsapp/WhatsAppService.ts` — `WhatsAppService.connection-binding.test.ts`
+  (W2 suite),
   `check-messaging-whatsapp-message-boundary.mjs`.
 - **I-10 Redelivery only when the failure is classified `safe_to_redeliver`
   under taxonomy v2.** — `classifyDeliveryOutcome`, `isSafeToRedeliver`
