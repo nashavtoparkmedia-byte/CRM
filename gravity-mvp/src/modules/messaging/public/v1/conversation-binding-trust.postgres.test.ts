@@ -56,6 +56,7 @@ describeWithDatabase('R-22 conversation binding trust (PostgreSQL)', () => {
       await prisma.contactIdentity.create({ data: { id: id(`tg_${person}`), contactId: id(`contact_${person}`), channel: 'telegram', externalId: PEER[person] } })
     }
     await prisma.contactIdentity.create({ data: { id: id('wa_a'), contactId: id('contact_a'), channel: 'whatsapp', externalId: '79990000001' } })
+    await prisma.contactIdentity.create({ data: { id: id('wa_c'), contactId: id('contact_c'), channel: 'whatsapp', externalId: '79990000003' } })
     const chat = (name: string, data: Record<string, unknown>, minutesAgo: number) => prisma.chat.create({
       data: { id: id(name), channel: 'telegram', chatType: 'private', unreadCount: 2, requiresResponse: true, lastMessageAt: new Date(base - minutesAgo * 60_000), ...data } as never,
     })
@@ -68,6 +69,11 @@ describeWithDatabase('R-22 conversation binding trust (PostgreSQL)', () => {
     await chat('c_as_a', { externalChatId: `telegram:${PEER.c}`, contactId: id('contact_a'), contactIdentityId: id('tg_a'), driverId: id('driver') }, 4)
     // Bound to A, linked to C's identity: the identity belongs to another contact.
     await chat('a_with_c_identity', { externalChatId: `telegram:${PEER.a}9`, contactId: id('contact_a'), contactIdentityId: id('tg_c') }, 5)
+    // Bound to A on WhatsApp through C's WhatsApp identity: only the identity's
+    // own contact contradicts it (no Telegram peer rule applies).
+    await chat('a_with_c_wa', { channel: 'whatsapp', externalChatId: '79990000003@c.us', contactId: id('contact_a'), contactIdentityId: id('wa_c') }, 7)
+    // A group conversation that names contact A: never part of A's private entry.
+    await chat('a_group', { externalChatId: `telegram:-100${RUN}`, chatType: 'group', contactId: id('contact_a') }, 8)
     // Legacy: a driver and no contact at all.
     await chat('legacy_driver', { channel: 'max', externalChatId: `max:${RUN}`, driverId: id('driver') }, 6)
   })
@@ -91,12 +97,13 @@ describeWithDatabase('R-22 conversation binding trust (PostgreSQL)', () => {
 
   it('a conversation provably of another person stands alone, without that person shown', async () => {
     const entries = await inbox()
-    for (const name of ['c_as_a', 'a_with_c_identity']) {
+    for (const name of ['c_as_a', 'a_with_c_identity', 'a_with_c_wa']) {
       const entry = entryOf(entries, id(name))
       expect(entry.allChatIds).toEqual([id(name)])
       expect(entry).toMatchObject({ personBinding: 'contradicted', contactId: null, driverId: null, contact: null, driver: null })
     }
     expect(entryOf(entries, id('a_tg')).allChatIds).not.toContain(id('c_as_a'))
+    expect(entryOf(entries, id('a_tg')).allChatIds).not.toContain(id('a_with_c_wa'))
   })
 
   it('a legacy driver-only conversation stands alone instead of joining the driver', async () => {
@@ -115,8 +122,25 @@ describeWithDatabase('R-22 conversation binding trust (PostgreSQL)', () => {
     // and so does B, who only shares the driver.
     expect(await chatState(id('c_as_a'))).toMatchObject({ unreadCount: 2, requiresResponse: true })
     expect(await chatState(id('a_with_c_identity'))).toMatchObject({ unreadCount: 2, requiresResponse: true })
+    expect(await chatState(id('a_with_c_wa'))).toMatchObject({ unreadCount: 2, requiresResponse: true })
     expect(await chatState(id('b_tg'))).toMatchObject({ unreadCount: 2, requiresResponse: true })
     expect(await chatState(id('legacy_driver'))).toMatchObject({ unreadCount: 2 })
+    // The group chat names contact A but is not part of A's private entry.
+    expect(await chatState(id('a_group'))).toMatchObject({ unreadCount: 2, requiresResponse: true })
+  })
+
+  it('a group chat that names a contact is read and resolved on its own', async () => {
+    await prisma.chat.updateMany({ where: { id: { startsWith: RUN } }, data: { unreadCount: 2, requiresResponse: true, status: 'open' } })
+    await ConversationWorkflowService.markRead(id('a_group'))
+    expect(await chatState(id('a_group'))).toMatchObject({ unreadCount: 0 })
+    expect(await chatState(id('a_tg'))).toMatchObject({ unreadCount: 2 })
+    expect(await chatState(id('a_wa'))).toMatchObject({ unreadCount: 2 })
+
+    await ConversationWorkflowService.resolveChat(id('a_tg'))
+    expect(await chatState(id('a_tg'))).toMatchObject({ status: 'resolved' })
+    expect(await chatState(id('a_wa'))).toMatchObject({ status: 'resolved' })
+    expect(await chatState(id('a_group'))).toMatchObject({ status: 'open' })
+    expect(await chatState(id('a_with_c_wa'))).toMatchObject({ status: 'open' })
   })
 
   it('a contradicted or driver-only conversation is read and assigned on its own', async () => {

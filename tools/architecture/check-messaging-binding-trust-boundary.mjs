@@ -72,8 +72,9 @@ function assertWorkflow(source) {
     if (!/WHERE id = ANY\(\$\d::text\[\]\)`,[\s\S]*?selector\.chatIds,\n\s+\)/u.test(group)) throw new Error(`${name} does not write an exact trusted id list`)
   }
   const selector = body(source, 'private static async _getGroupSelector(', '_getGroupSelector')
-  if (!/if \(!chat\.contactId \|\| !isConversationPersonTrustedV1\(bindingState\(chat\)\)\) return \{ chatIds: \[chatId\] \}/u.test(selector)) throw new Error('an untrusted conversation reaches a group')
-  if (!/siblings\.filter\(sibling => isConversationPersonTrustedV1\(bindingState\(sibling\)\)\)/u.test(selector)) throw new Error('a contradicted sibling is reached by a group write')
+  if (!/const key = personGroupKey\(chat\)\n\s+if \(!chat\.contactId \|\| key === null \|\| !isConversationPersonTrustedV1\(bindingState\(chat\)\)\) return \{ chatIds: \[chatId\] \}/u.test(selector)) throw new Error('an untrusted or group conversation reaches a group')
+  if (!/siblings\.filter\(sibling => personGroupKey\(sibling\) === key\)/u.test(selector)) throw new Error('a contradicted or group sibling is reached by a group write')
+  if (!/return conversationPersonGroupKeyV1\(bindingFacts\(row\)\)/u.test(source)) throw new Error('the workflow group key is not the inbox person key')
 }
 
 function assertContextBuilder(source) {
@@ -118,8 +119,10 @@ rejectProbe(messageService, messageService.replace('                    chat.dri
 rejectProbe(messageService, messageService.replace('                    chat.contactId = null\n', ''), assertInbox)
 rejectProbe(workflow, workflow.replace('WHERE id = ANY($1::text[])', 'WHERE "contactId" = ANY($1::text[])'), assertWorkflow)
 rejectProbe(workflow, `${workflow}\nconst rogue = 'UPDATE "Chat" SET "unreadCount" = 0 WHERE "driverId" = $1'\n`, assertWorkflow)
-rejectProbe(workflow, workflow.replace('siblings.filter(sibling => isConversationPersonTrustedV1(bindingState(sibling)))', 'siblings'), assertWorkflow)
-rejectProbe(workflow, workflow.replace('if (!chat.contactId || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }', 'if (!chat.contactId) return { chatIds: [chatId] }'), assertWorkflow)
+rejectProbe(workflow, workflow.replace('siblings.filter(sibling => personGroupKey(sibling) === key)', 'siblings'), assertWorkflow)
+rejectProbe(workflow, workflow.replace('siblings.filter(sibling => personGroupKey(sibling) === key)', 'siblings.filter(sibling => isConversationPersonTrustedV1(bindingState(sibling)))'), assertWorkflow)
+rejectProbe(workflow, workflow.replace('if (!chat.contactId || key === null || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }', 'if (!chat.contactId) return { chatIds: [chatId] }'), assertWorkflow)
+rejectProbe(workflow, workflow.replace('return conversationPersonGroupKeyV1(bindingFacts(row))', "return row.contactId ? `c:${row.contactId}` : null"), assertWorkflow)
 rejectProbe(contextBuilder, contextBuilder.replace('      && await isContactConfirmedMainDriverV1(row.contactId, row.driverId),\n', ''), assertContextBuilder)
 rejectProbe(contextBuilder, contextBuilder.replace('driverId: driverProven ? row.driverId : null', 'driverId: row.driverId'), assertContextBuilder)
 rejectProbe(auditAdapter, `${auditAdapter}\nawait prisma.chat.update({ where: { id }, data: { contactId: null } })\n`, (changed) => assertReadOnlyAudit(changed, auditHandler))

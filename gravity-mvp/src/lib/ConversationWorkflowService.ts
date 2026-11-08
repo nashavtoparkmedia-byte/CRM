@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { conversationPersonBindingStateV1, isConversationPersonTrustedV1 } from '@/modules/messaging/public/v1/conversation-binding-trust-policy'
+import { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, isConversationPersonTrustedV1 } from '@/modules/messaging/public/v1/conversation-binding-trust-policy'
 
 /** The exact conversations one group operation writes: one person's trusted conversations, or just the one. */
 type ConversationGroupSelector = { chatIds: string[] }
@@ -22,15 +22,24 @@ type BindingFactsRow = {
   contactIdentity: { id: string; channel: string; externalId: string; contactId: string; isActive: boolean } | null
 }
 
-function bindingState(row: BindingFactsRow) {
-  return conversationPersonBindingStateV1({
+function bindingFacts(row: BindingFactsRow) {
+  return {
     channel: row.channel,
     chatType: row.chatType,
     externalChatId: row.externalChatId,
     contactId: row.contactId,
     contactIdentityId: row.contactIdentityId,
     linkedIdentity: row.contactIdentity,
-  })
+  }
+}
+
+function bindingState(row: BindingFactsRow) {
+  return conversationPersonBindingStateV1(bindingFacts(row))
+}
+
+/** The inbox's own person key: null for a group, an unbound or a contradicted conversation. */
+function personGroupKey(row: BindingFactsRow) {
+  return conversationPersonGroupKeyV1(bindingFacts(row))
 }
 
 /**
@@ -191,12 +200,16 @@ export class ConversationWorkflowService {
     // person is a trusted contact binding. A driverId alone is a projection, and
     // a binding that is provably another person's is neither the origin of a
     // group operation nor reached by one: it stays on its own conversation.
-    if (!chat.contactId || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }
+    // The group is exactly the inbox entry: one person key over private
+    // conversations only, so a group chat that names the contact is never
+    // reached through that person's private conversation (and vice versa).
+    const key = personGroupKey(chat)
+    if (!chat.contactId || key === null || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }
     const siblings = await prisma.chat.findMany({
       where: { contactId: chat.contactId },
       select: { id: true, ...BINDING_FACTS_SELECT },
     })
-    const chatIds = siblings.filter(sibling => isConversationPersonTrustedV1(bindingState(sibling))).map(sibling => sibling.id)
+    const chatIds = siblings.filter(sibling => personGroupKey(sibling) === key).map(sibling => sibling.id)
     return { chatIds: chatIds.includes(chatId) ? chatIds : [...chatIds, chatId] }
   }
 
