@@ -93,24 +93,40 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
             return new Set(rows.map((row) => row.userId))
         },
         async upsertVerifier({ userId, registryCreatedAt, verifier, actor, now }) {
-            const data = {
-                registryCreatedAt,
-                algo: verifier.algo,
-                scryptN: verifier.n,
-                scryptR: verifier.r,
-                scryptP: verifier.p,
-                maxmemBytes: verifier.maxmemBytes,
-                salt: verifier.salt,
-                hash: verifier.hash,
-                revokedAt: null,
-                updatedAt: now,
-                updatedBy: actor,
-            }
+            // The two payloads are written out field by field: nothing else,
+            // and no nested relation, can reach the credential row.
             const row = await tx.staffCredential.upsert({
                 where: { userId },
-                create: { userId, ...data, sessionEpoch: 0 },
+                create: {
+                    userId,
+                    registryCreatedAt,
+                    algo: verifier.algo,
+                    scryptN: verifier.n,
+                    scryptR: verifier.r,
+                    scryptP: verifier.p,
+                    maxmemBytes: verifier.maxmemBytes,
+                    salt: verifier.salt,
+                    hash: verifier.hash,
+                    sessionEpoch: 0,
+                    revokedAt: null,
+                    updatedAt: now,
+                    updatedBy: actor,
+                },
                 // Every new password ends every session issued before it.
-                update: { ...data, sessionEpoch: { increment: 1 } },
+                update: {
+                    registryCreatedAt,
+                    algo: verifier.algo,
+                    scryptN: verifier.n,
+                    scryptR: verifier.r,
+                    scryptP: verifier.p,
+                    maxmemBytes: verifier.maxmemBytes,
+                    salt: verifier.salt,
+                    hash: verifier.hash,
+                    sessionEpoch: { increment: 1 },
+                    revokedAt: null,
+                    updatedAt: now,
+                    updatedBy: actor,
+                },
             })
             return toRow(row)
         },

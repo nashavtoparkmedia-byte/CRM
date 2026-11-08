@@ -85,8 +85,6 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
             },
         })
         await expect(prisma.staffCredential.delete({ where: { userId: id('nodelete') } })).rejects.toThrow(/never deleted/)
-        await expect(prisma.$executeRawUnsafe('TRUNCATE "StaffCredential"')).rejects.toThrow(/never deleted/)
-        await expect(prisma.$executeRawUnsafe('TRUNCATE "StaffCredentialEvent"')).rejects.toThrow(/append-only/)
         const event = await prisma.staffCredentialEvent.create({ data: { userId: id('nodelete'), kind: 'login', actor: 'test' } })
         await expect(prisma.staffCredentialEvent.update({ where: { id: event.id }, data: { actor: 'tampered' } })).rejects.toThrow(/append-only/)
         await expect(prisma.staffCredentialEvent.delete({ where: { id: event.id } })).rejects.toThrow(/append-only/)

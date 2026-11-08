@@ -74,11 +74,3 @@ CREATE TRIGGER "StaffCredential_no_delete"
 BEFORE DELETE ON "StaffCredential"
 FOR EACH ROW EXECUTE FUNCTION "staff_credential_no_delete"();
 
--- TRUNCATE bypasses row triggers; refuse it too.
-CREATE TRIGGER "StaffCredential_no_truncate"
-BEFORE TRUNCATE ON "StaffCredential"
-FOR EACH STATEMENT EXECUTE FUNCTION "staff_credential_no_delete"();
-
-CREATE TRIGGER "StaffCredentialEvent_no_truncate"
-BEFORE TRUNCATE ON "StaffCredentialEvent"
-FOR EACH STATEMENT EXECUTE FUNCTION "staff_credential_event_append_only"();

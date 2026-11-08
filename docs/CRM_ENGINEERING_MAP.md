@@ -701,7 +701,7 @@ capabilities: ContactLookup.v1 (`searchContactsV1`), lineage and main-driver con
 | `CrmUser` (`crm_users`) | identity_access | `legacy-prisma-crm-user-seed-adapter.js` | `G/app/tasks/*`, `G/app/team-overview/actions.ts` | Not the login store; no link to `users.json` |
 | `MobileDeviceRegistration` | identity_access (amendment) | `prisma-mobile-device-registration-adapter.ts` | same | Unique `deviceId`, unique `fcmToken` |
 | `StaffCredential` | identity_access (amendment) | `internal/staff-credential-store.ts` (advisory-locked transactions) | same | PK registry `userId`; scrypt-v1 CHECK shape; never deleted (trigger), disable/delete set `revokedAt`; no name/role/status |
-| `StaffCredentialEvent` | identity_access (amendment) | `internal/staff-credential-store.ts` | same | Append-only (UPDATE/DELETE/TRUNCATE refused); no secret material |
+| `StaffCredentialEvent` | identity_access (amendment) | `internal/staff-credential-store.ts` | same | Append-only (UPDATE/DELETE refused); no secret material |
 | `Task`, `TaskEvent` | work_management | `G/app/tasks/{actions,excel-actions}.ts`, `G/lib/triggers.ts`, `G/lib/tasks/*`, work-management adapters | tasks, my-day, team-overview | — |
 | `ManagerTask` | work_management | `legacy-prisma-completion-adapter.ts` | `G/app/inbox/actions.ts` | No creator found in `G/` |
 | `scenario_field_settings`, `usage_events` | work_management | work-management adapter; `G/lib/tasks/usage.ts` (raw SQL) | — | — |
