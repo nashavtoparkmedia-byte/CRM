@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 63,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 21,
+    "RAW_BASELINE_AMBIGUOUS": 64,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 22,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,10 +26,10 @@
     "CONFIRMED_NON_WRITE": 42,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 42,
-    "OWNER_VALID_WRITE": 17,
+    "OWNER_VALID_WRITE": 18,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 63,
+    "RECONCILIATION_TOTAL": 64,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -3346,12 +3346,53 @@
       "ownership_classification": "OWNED_CONTEXT_READ",
       "final_ownership_classification": "OWNED_CONTEXT_READ",
       "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "895ed44cc86cc6be75c451f6ae1e180b6fafcf67300e25c80e55857d76227f9a",
+      "site_signature": "895ed44cc86cc6be75c451f6ae1e180b6fafcf67300e25c80e55857d76227f9a",
+      "source_sha256": "59a00efff595e2f749bab189cb2cc4154a1bab0af813b75ad5b13f81818ac117",
+      "file": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.ts",
+      "line": 58,
+      "column": 11,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "identity_access",
+      "source_technical_module": "identity_access.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions: the Identity Access staff-credential store takes its own transaction-scoped advisory lock (pg_advisory_xact_lock on a fixed identity_access key) inside the transaction that then writes only the Identity Access-owned StaffCredential and StaffCredentialEvent rows; the statement itself reads and writes no table.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 63,
+    "ambiguous_denominator": 64,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "7bfbac779a5c665a1e645d077ebe4a826bb6ab24c9a39222728c59deac3a5044",
+    "sorted_site_signatures_sha256": "d04ff9154082e59341b14c0f2ed0d6aa673c10c044c2825f06cad35521d07c62",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
