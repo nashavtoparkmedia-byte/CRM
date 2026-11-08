@@ -17,7 +17,7 @@
   ],
   "summary": {
     "RAW_BASELINE_AMBIGUOUS": 63,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 21,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 23,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,7 +26,7 @@
     "CONFIRMED_NON_WRITE": 42,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 42,
-    "OWNER_VALID_WRITE": 17,
+    "OWNER_VALID_WRITE": 19,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
     "RECONCILIATION_TOTAL": 63,
@@ -3346,12 +3346,104 @@
       "ownership_classification": "OWNED_CONTEXT_READ",
       "final_ownership_classification": "OWNED_CONTEXT_READ",
       "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "0bda6809bf207f4cf91515598341d4fc57521993f70ff454f7922c2db16a45c3",
+      "site_signature": "0bda6809bf207f4cf91515598341d4fc57521993f70ff454f7922c2db16a45c3",
+      "source_sha256": "661f287b5e45576d8c6ab4d69c6a225c951f340beca408e90810acacd08e1a66",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
+      "line": 93,
+      "column": 9,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [
+        "set_config"
+      ],
+      "sql_sha256": "5532fd4b9139650dbc6a4e9239119272ef96d4d74e459ba819cd86bb71ebe5df",
+      "sql_provenance_sha256": "1f447fc7f47d538a41f87b7be6f09cdd7234fc29ff737497abe99660e3f4e62b",
+      "source_context": "messaging",
+      "source_technical_module": "messaging.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Source inspection of the R-21 guarded append adapter: the statement is SELECT set_config('lock_timeout', $1, true) inside the guarded transaction; its only effect is the transaction-local lock timeout of the Messaging transaction that then row-locks its own Chat; no table is read or written.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "072d98d444005a3039014c7e729d6b91962263fd7bd0e4f22ba75a5450d47b68",
+      "site_signature": "072d98d444005a3039014c7e729d6b91962263fd7bd0e4f22ba75a5450d47b68",
+      "source_sha256": "661f287b5e45576d8c6ab4d69c6a225c951f340beca408e90810acacd08e1a66",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
+      "line": 109,
+      "column": 11,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "IS"
+      ],
+      "called_functions": [
+        "cast",
+        "hashtextextended",
+        "pg_advisory_xact_lock"
+      ],
+      "sql_sha256": "5c5e080d469d714e5aa58717b1928801ccd489f43f108b02804927ffb2370883",
+      "sql_provenance_sha256": "e14a2b435a09216cb2e33a8a6c188fc8fb20f317750aed7858d7107502a5d377",
+      "source_context": "messaging",
+      "source_technical_module": "messaging.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Source inspection of the R-21 guarded append adapter: the statement is SELECT pg_advisory_xact_lock(hashtextextended($1::text, 2121::bigint)) IS NULL inside the guarded transaction; its only effect is a transaction advisory lock on the provider-event key held by the Messaging guarded append and released at commit or rollback; no table is read or written.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 63,
+    "ambiguous_denominator": 65,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "7bfbac779a5c665a1e645d077ebe4a826bb6ab24c9a39222728c59deac3a5044",
+    "sorted_site_signatures_sha256": "316590e52958eae9f5fa5aa7c0235e1b7370fd0156e3e06ff36dc99cd3be1191",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
