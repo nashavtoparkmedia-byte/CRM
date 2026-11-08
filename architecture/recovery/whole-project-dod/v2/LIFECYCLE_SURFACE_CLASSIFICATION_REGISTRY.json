@@ -6764,7 +6764,7 @@
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
-      "rationale": "Active architecture control-plane surface for the Messaging R-21 guarded append; approved path is a bounded read-only boundary control that pins the single owner of the HeldChannelMessage store, the conversation row lock and sorted event-key locks before the binding is judged, the workflow projection and notification intent on the same transaction, the absence of any Contacts dependency or binding write, the pure decision policy, parse-first handlers, the held migration's checks and CASCADE, and the one-time composition, and rejects its negative probes. It writes no repository evidence, business data or provider state.",
+      "rationale": "Active architecture control-plane surface for the Messaging R-21 guarded append; approved path is a bounded read-only boundary control that pins the single owner of the HeldChannelMessage store, the conversation row lock and sorted event-key locks before the binding is judged, the workflow projection and notification intent on the same transaction, the absence of any Contacts dependency or binding write, the pure decision policy, parse-first handlers, the release proof and held-sender rules, the held migration's checks and CASCADE, and the one-time composition, and rejects its negative probes. It writes no repository evidence, business data or provider state.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     },
@@ -6773,10 +6773,10 @@
       "lifecycle": "MIGRATION",
       "disposition": "MIGRATION_ONLY",
       "production_capability": "CONTROLLED_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage: primary key, unique event key, unique released message id, two lookup indexes, direction, hold-reason and release-pair checks, and a foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
+      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage: primary key, unique event key, unique released message id, two lookup indexes, direction, hold-reason, release-pair and sender-evidence checks, and a foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "messaging",
-      "source_sha256": "dd0639d7d39e9ecc97d4ef38068e34233b4a1b35a13df36557f6cd238e6f1be0"
+      "source_sha256": "6c6e34f9e5772af12ba5f7de51b040b35f344f2f02f2f4010a1ff6c4b5de4c9a"
     }
   ]
 }

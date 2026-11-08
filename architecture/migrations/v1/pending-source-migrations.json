@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "de49d75ee58fcb6b884659c83cb5bc46e21363542b44d1da927d16a189994c2a",
-    "size": 173065,
+    "sha256": "bc1893213249775f98d8421b1535a74c473957e0f6dad9629c2825c9cf78299f",
+    "size": 173194,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -205,8 +205,8 @@
     {
       "name": "20261108120000_add_messaging_held_channel_message",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "sha256": "dd0639d7d39e9ecc97d4ef38068e34233b4a1b35a13df36557f6cd238e6f1be0",
-      "size": 2722,
+      "sha256": "6c6e34f9e5772af12ba5f7de51b040b35f344f2f02f2f4010a1ff6c4b5de4c9a",
+      "size": 3405,
       "owner_context": "messaging",
       "classification": "EXPAND_ONLY",
       "production_application": false,
