@@ -3698,18 +3698,76 @@
       }
     },
     {
-      "amendment_id": "cash-referral-manager-s4-main-3ac5ce07-20261107",
+      "amendment_id": "contact-identity-person-card-owner-preview-fixes-main-3ac5ce07-20261108",
+      "reviewed_at": "2026-11-08T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_OWNER_PREVIEW_EXECUTOR_REVIEW_3AC5CE07",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V8_MANDATE_01_CONTACT_IDENTITY_OWNER_PREVIEW_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is calling-c3a-campaign-live-dial-main-7b7cc249-20261107 (main 3ac5ce07), and leaves that amendment and the person-card amendment contact-identity-person-card-main-d46100e8-cc1-20261107 untouched. It adds no path and changes no assignment: it carries only the mechanical source-fingerprint rebinds of three exact-inventory paths whose bytes the Owner-preview fixes change."
+      },
+      "reason": "Records the byte changes of the Contact Identity Owner-preview fixes on main 3ac5ce07 (Orchestrator V8 mandate 01). No tracked executable surface is added or removed (2,787 -> 2,787). Three existing exact-inventory paths of gravity_runtime_remainder change bytes only and receive mechanical source-fingerprint rebinds: the «Карточка человека» view (desktop Messenger link, plurals, merge-reason labels), the «Люди» search client and the `people` section (both stop promising a username search that ContactLookup.v1 does not do). Every other changed path is context-owned through manifest owned_paths and needs no exact assignment: the platform-shell person-card composition and its test (a conversation reached through two lineage ids is counted once), and Identity Access's integration-admin return-path allowlist and its test (the sign-in started from a person page returns to /contacts or /contacts/<id>, still same-origin only and never a redirector).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2787,
+        "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",
+        "coverage_sha256": "221699478737604d9da40279b62baf5181d81186569c5b535d6839de30fc3641"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2787,
+        "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",
+        "coverage_sha256": "221699478737604d9da40279b62baf5181d81186569c5b535d6839de30fc3641"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/contacts/[id]/PersonCardView.tsx",
+          "previous_source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
+          "current_source_sha256": "7494dac890807f2a1b22f0c8c8cfbde608c44d42e081acb71c3a3e92c3e2f10a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): defects found while preparing the Owner preview on the local Preview of main af0cf3e3 (rebased onto main 3ac5ce07) are fixed in the read-only presentation only — the «Переписка» link now opens the desktop Messenger's own address for the exact persisted Chat.id (/messages?id=…&channel=…) instead of the Android shell's /messages/open gate, which requires a mobile session and sent a desktop operator to the mobile login; Russian plural forms for the conversation counter and the merged-records badge; merge reasons shown as words instead of the stored enum. No read, write, access decision or relationship inference is added. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/contacts/ContactsSearchClient.tsx",
+          "previous_source_sha256": "7626d6a73d6ee7c49dafde6ab761cb49bdda87c0264c29c35e29db8afd154964",
+          "current_source_sha256": "73dd84cdcbf038d8c9a1ee91d6ee2767a83a76cfebcd0e0f13e2f4bb1e765ec4",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): the search placeholder promised username search, which ContactLookup.v1 deliberately does not do (it searches the Contact name and phone digits and never reads a provider handle); the placeholder now says «ФИО или телефон». No behaviour changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/config/sections.ts",
+          "previous_source_sha256": "25b66c9ad2e763ea01d49527a569b1b0c36bbb5b46cc7fa75cf7c61718c8edc7",
+          "current_source_sha256": "bd310b537015a3da52247e0cc4dd36c0b48c5fa7058c84858c3fba57acf4a290",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): the `people` section description no longer promises username search (see ContactsSearchClient.tsx above); no other section changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-referral-manager-s4-main-a16489f5-20261107",
       "reviewed_at": "2026-11-07T00:00:00Z",
-      "reviewed_by": "CASH_REFERRAL_MANAGER_S4_EXECUTOR_REVIEW_3AC5CE07",
+      "reviewed_by": "CASH_REFERRAL_MANAGER_S4_EXECUTOR_REVIEW_A16489F5",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
       "authorization": "ORCHESTRATOR_V7_GO_CASH_REFERRAL_S4_20261107",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain published on main at 3ac5ce07, whose tail is calling-c3a-campaign-live-dial-main-7b7cc249-20261107, and leaves that amendment untouched; the compensation board rebind starts from the fingerprint that chain approved."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event; the five referral screen assignments and the gravity_runtime_remainder transition are recorded in that registry as precedent 2d7414c8 does, and base.decision_registry_sha256 is rebound to its bytes. This amendment extends the chain published on main at a16489f5, whose tail is contact-identity-person-card-owner-preview-fixes-main-3ac5ce07-20261108, and leaves that amendment untouched; the compensation board rebind starts from the fingerprint that chain approved."
       },
-      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main 3ac5ce07 and the one source fingerprint they move: 2,787 + 16 = 2,803 surfaces, context-owned 1,540 -> 1,548 and governed exclusions 1,247 -> 1,255. Eight new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; two Vitest suites sit beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records the S4 amendment of PR #198, which main never published (cash-referral-manager-s4-main-2046fb88-20261107 at head 7304813f, then cash-referral-manager-s4-main-7b7cc249-20261107 at head eb5b508a), after the #203 tail, with the surfaces and rationales of head eb5b508a: against the first recording, two surfaces more and corrected rationales: the people search now asks Contacts' ContactLookup.v1 who a name or a phone belongs to and keeps in Fleet only the licence and the park profiles, the pure rules gained the Cash capability binding of verified integration-admin session facts, an isolated-PostgreSQL proof of the manager scenario is a new surface, and, after the Security review of PR #198, the person card asks for the verified integration-admin principal as the search does, a request id reused for another target is refused, and a suite of the server actions' refusals is the other new surface. The five referral screen assignments carry their new source hashes. The S4 product diff over gravity-mvp against this base has sha256 af3c27b997e6697aea6b431750784aced8a819d059dedf3244840ea969b7a89b. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 3ac5ce07 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces the Cash referral manager tools add on top of main a16489f5 and the one source fingerprint they move: 2,787 + 16 = 2,803 surfaces, context-owned 1,540 -> 1,548 and governed exclusions 1,247 -> 1,255. Eight new paths sit under gravity-mvp/src/modules/fleet-operations, owned through its context manifest; two Vitest suites sit beside the compensation screen suites; the five referral screen runtime paths are assigned in the historical registry; the expand-only migration falls under the gravity_schema governed exclusion. The compensation board keeps its exact-runtime inventory membership, lifecycle and legacy_gravity_runtime owner; only its source hash moves. It re-records the S4 amendment of PR #198, which main never published (cash-referral-manager-s4-main-2046fb88-20261107 at head 7304813f, then cash-referral-manager-s4-main-7b7cc249-20261107 at head eb5b508a, then cash-referral-manager-s4-main-3ac5ce07-20261107 at head f7977796), after the #205 tail, with the surfaces and rationales of head eb5b508a: against the first recording, two surfaces more and corrected rationales: the people search now asks Contacts' ContactLookup.v1 who a name or a phone belongs to and keeps in Fleet only the licence and the park profiles, the pure rules gained the Cash capability binding of verified integration-admin session facts, an isolated-PostgreSQL proof of the manager scenario is a new surface, and, after the Security review of PR #198, the person card asks for the verified integration-admin principal as the search does, a request id reused for another target is refused, and a suite of the server actions' refusals is the other new surface. The five referral screen assignments carry their new source hashes. The S4 product diff over gravity-mvp against this base has sha256 af3c27b997e6697aea6b431750784aced8a819d059dedf3244840ea969b7a89b. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main a16489f5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
       "predecessor": {
         "tracked_executable_surfaces": 2787,
         "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",

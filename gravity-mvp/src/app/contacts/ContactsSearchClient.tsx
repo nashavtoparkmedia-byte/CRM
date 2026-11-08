@@ -21,7 +21,7 @@ export default function ContactsSearchClient() {
         label="Поиск человека"
         lookup={lookup}
         value={value}
-        placeholder="ФИО, телефон или username"
+        placeholder="ФИО или телефон"
         onChange={(item) => {
           setValue(item)
           if (item) router.push(`/contacts/${encodeURIComponent(item.contactId)}`)

@@ -156,6 +156,8 @@ export function normalizeIntegrationAdminReturnTo(value: unknown): string {
             || parsed.pathname === '/logs'
             || parsed.pathname === '/calls/campaigns'
             || parsed.pathname.startsWith('/calls/campaigns/')
+            || parsed.pathname === '/contacts'
+            || parsed.pathname.startsWith('/contacts/')
         return allowed ? `${parsed.pathname}${parsed.search}` : '/settings'
     } catch {
         return '/settings'

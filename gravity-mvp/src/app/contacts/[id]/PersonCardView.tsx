@@ -50,6 +50,13 @@ const CANDIDATE_BASIS_LABELS: Record<string, string> = {
   needs_reconciliation: 'ожидает сверки оператором',
   open_conflict: 'назван в открытом конфликте',
 }
+const MERGE_REASON_LABELS: Record<string, string> = {
+  phone_match: 'совпадение телефона',
+  identity_match: 'совпадение аккаунта связи',
+  yandex_link: 'связь с профилем Яндекса',
+  manual: 'вручную',
+  undo: 'отмена объединения',
+}
 const CONFLICT_CLASS_LABELS: Record<string, string> = {
   channel_identity_collision: 'коллизия аккаунта канала',
   provider_identity_alias_collision: 'коллизия алиаса провайдера',
@@ -90,6 +97,30 @@ function Row({ children }: { children: React.ReactNode }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="px-4 py-4 text-[13px] text-[#64748B]">{children}</div>
+}
+
+/** Russian plural form: 1 переписка, 2 переписки, 5 переписок. */
+function pluralRu(count: number, one: string, few: string, many: string): string {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few
+  return many
+}
+
+/** Stored channel → the desktop Messenger's channel tab (the same values /messages accepts). */
+const MESSENGER_CHANNEL_TABS: Record<string, string> = { telegram: 'tg', whatsapp: 'wa', max: 'max', avito: 'av', phone: 'phone' }
+
+/**
+ * The desktop Messenger's own address for one exact persisted conversation:
+ * `/messages?id=<Chat.id>` selects only an already admitted Chat and never
+ * creates or guesses one. `/messages/open` is the Android shell's notification
+ * gate and requires a mobile session, so a desktop operator must not be sent there.
+ */
+function messengerHref(conversation: ContactPersonCardConversationV1): string {
+  const params = new URLSearchParams({ id: conversation.primaryConversationId })
+  if (Object.hasOwn(MESSENGER_CHANNEL_TABS, conversation.channel)) params.set('channel', MESSENGER_CHANNEL_TABS[conversation.channel])
+  return `/messages?${params.toString()}`
 }
 
 function formatDate(value: string | null): string | null {
@@ -147,7 +178,7 @@ function AccountRow({ account, conversation }: { account: ContactPersonCardAccou
         </div>
       </div>
       {account.isActive && conversation && (
-        <a href={`/messages/open?chat=${encodeURIComponent(conversation.primaryConversationId)}`} className="text-[13px] font-medium text-[#2AABEE] whitespace-nowrap">
+        <a href={messengerHref(conversation)} className="text-[13px] font-medium text-[#2AABEE] whitespace-nowrap">
           Переписка
         </a>
       )}
@@ -212,7 +243,7 @@ export default function PersonCardView({ view }: { view: ContactPersonCardViewV1
           {card.hasPersonBlockingConflict && <Badge tone="bad">есть блокирующий конфликт</Badge>}
           {card.automation.doNotMerge && <Badge tone="muted">объединение запрещено</Badge>}
           {card.automation.canonicalPinned && <Badge tone="muted">имя закреплено вручную</Badge>}
-          {card.lineage.mergedFromCount > 0 && <Badge tone="muted">объединён из {card.lineage.mergedFromCount}</Badge>}
+          {card.lineage.mergedFromCount > 0 && <Badge tone="muted">объединено записей: {card.lineage.mergedFromCount}</Badge>}
         </div>
       </header>
 
@@ -234,7 +265,7 @@ export default function PersonCardView({ view }: { view: ContactPersonCardViewV1
               <div className="flex items-center justify-between px-4 h-[36px] bg-[#F1F5FD] text-[13px] font-medium text-[#64748B]">
                 <span>{channelLabel(channel.channel)}</span>
                 {conversation && (
-                  <span>{conversation.conversationCount} {conversation.conversationCount === 1 ? 'переписка' : 'переписок'}{conversation.truncated ? '+' : ''}</span>
+                  <span>{conversation.conversationCount}{conversation.truncated ? '+' : ''} {pluralRu(conversation.conversationCount, 'переписка', 'переписки', 'переписок')}</span>
                 )}
               </div>
               {active.length === 0 && <Empty>Активных аккаунтов нет.</Empty>}
@@ -284,7 +315,7 @@ export default function PersonCardView({ view }: { view: ContactPersonCardViewV1
               <Row key={event.mergeId}>
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] text-[#0F172A]">
-                    {event.action === 'merge' ? 'Объединение' : 'Разъединение'} · {event.reason}
+                    {event.action === 'merge' ? 'Объединение' : 'Разъединение'} · {Object.hasOwn(MERGE_REASON_LABELS, event.reason) ? MERGE_REASON_LABELS[event.reason] : event.reason}
                   </div>
                   <div className="mt-0.5 text-[13px] text-[#64748B]">
                     {formatDate(event.createdAt) ?? ''} · {event.mergedBy} · {event.mergedContactId} → {event.survivorContactId}
