@@ -126,6 +126,13 @@ async function findWithTransaction(tx: Prisma.TransactionClient, conversationId:
   return snapshotsOf([call], messages)[0] ?? null
 }
 
+const TRANSITION_ATTEMPTS = 4
+
+/** Prisma's P2034: the transaction lost a write conflict or a deadlock and may be retried. */
+function isSerializationFailure(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2034'
+}
+
 export const aiConversationPrismaStore: AiConversationStorePort = {
   async find(conversationId) {
     return findWithPrisma(conversationId)
@@ -194,35 +201,44 @@ export const aiConversationPrismaStore: AiConversationStorePort = {
   },
 
   async transition(conversationId, expectedRevision, next) {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.$queryRaw`SELECT "id" FROM "Call" WHERE "id" = ${conversationId} FOR UPDATE`
-      const call = await tx.call.findUnique({ where: { id: conversationId }, select: { id: true, metadata: true, endedAt: true } })
-      if (!call) return null
-      const current = readAiConversationRecord(call.metadata)
-      if (!current || current.revision !== expectedRevision || next.revision !== expectedRevision + 1) return null
-      const metadata = json({ ...(isRecord(call.metadata) ? call.metadata : {}), [AI_CONVERSATION_METADATA_KEY]: next })
-      const terminal = call.endedAt === null ? next.terminal : null
-      if (terminal === null) {
-        await tx.call.update({ where: { id: conversationId }, data: { metadata } })
-      } else if (terminal.state === 'outcome_unknown') {
-        // The effect may still be live: the Call is not ended, only its reason is recorded.
-        await tx.call.update({ where: { id: conversationId }, data: { metadata, aiOutcomeReason: 'outcome_unknown' } })
-      } else {
-        // A pre-answer terminal Calling decided itself; no Core finalization happened.
-        await tx.call.update({
-          where: { id: conversationId },
-          data: {
-            metadata,
-            status: terminal.state === 'refused' ? 'cancelled' : 'failed',
-            aiSessionStatus: 'failed',
-            endedAt: new Date(terminal.at),
-            aiOutcome: 'error',
-            aiOutcomeReason: terminal.failure ?? terminal.state,
-          },
-        })
+    // Compare-and-set on the record revision, merging only Calling's own metadata key. The
+    // Core's journals live in the same JSON column and are written by other transactions, so
+    // this runs in REPEATABLE READ: a concurrent committed write to the row makes this update
+    // fail with a serialization error instead of overwriting it, and the step re-reads.
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          const call = await tx.call.findUnique({ where: { id: conversationId }, select: { id: true, metadata: true, endedAt: true } })
+          if (!call) return null
+          const current = readAiConversationRecord(call.metadata)
+          if (!current || current.revision !== expectedRevision || next.revision !== expectedRevision + 1) return null
+          const metadata = json({ ...(isRecord(call.metadata) ? call.metadata : {}), [AI_CONVERSATION_METADATA_KEY]: next })
+          const terminal = call.endedAt === null ? next.terminal : null
+          if (terminal === null) {
+            await tx.call.update({ where: { id: conversationId }, data: { metadata } })
+          } else if (terminal.state === 'outcome_unknown') {
+            // The effect may still be live: the Call is not ended, only its reason is recorded.
+            await tx.call.update({ where: { id: conversationId }, data: { metadata, aiOutcomeReason: 'outcome_unknown' } })
+          } else {
+            // A pre-answer terminal Calling decided itself; no Core finalization happened.
+            await tx.call.update({
+              where: { id: conversationId },
+              data: {
+                metadata,
+                status: terminal.state === 'refused' ? 'cancelled' : 'failed',
+                aiSessionStatus: 'failed',
+                endedAt: new Date(terminal.at),
+                aiOutcome: 'error',
+                aiOutcomeReason: terminal.failure ?? terminal.state,
+              },
+            })
+          }
+          return findWithTransaction(tx, conversationId)
+        }, { isolationLevel: 'RepeatableRead' })
+      } catch (error) {
+        if (!isSerializationFailure(error) || attempt >= TRANSITION_ATTEMPTS) throw error
       }
-      return findWithTransaction(tx, conversationId)
-    })
+    }
   },
 
   async listForContact(contactId, limit) {

@@ -129,6 +129,28 @@ postgresProof('AI conversation on PostgreSQL (C4)', () => {
     expect(outcomes.filter(Boolean)).toHaveLength(1)
   })
 
+  it('never overwrites a concurrent Core journal write when it moves its own record', async () => {
+    const id = await contact()
+    const ops = operations()
+    const started = await start(ops, id, `${PREFIX}-merge-request-01`)
+    if (started.status !== 'accepted') throw new Error('not accepted')
+    const conversationId = started.conversation.conversationId
+    const snapshot = (await aiConversationPrismaStore.find(conversationId))!
+    const next = { ...snapshot.record, revision: snapshot.record.revision + 1, nextStepAt: new Date(clock + 1_000).toISOString() }
+    const [moved, appended] = await Promise.all([
+      aiConversationPrismaStore.transition(conversationId, snapshot.record.revision, next),
+      appendAiCallTranscriptMessage(conversationId, {
+        messageId: `${conversationId}:race:1`, ordinal: 1, segmentRevision: 1, role: 'assistant',
+        content: 'concurrent Core write', final: true, source: 'calling_mock',
+      }),
+    ])
+    expect(moved).not.toBeNull()
+    expect(appended.kind).toBe('applied')
+    const after = (await aiConversationPrismaStore.find(conversationId))!
+    expect(after.record.revision).toBe(snapshot.record.revision + 1)
+    expect(after.facts.transcript.map(line => line.text)).toEqual(['concurrent Core write'])
+  })
+
   it('plays a full simulated conversation through the Calling Core and keeps it after a restart', async () => {
     const id = await contact()
     const before = await prisma.contact.findUnique({ where: { id }, select: { updatedAt: true, customFields: true } })
