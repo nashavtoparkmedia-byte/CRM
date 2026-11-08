@@ -20,6 +20,13 @@ export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-ph
 export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
 export { createDriverProfilesForContactsHandlerV1, projectDriverProfileForContactV1 } from './driver-profiles-for-contacts-handler'
 export type { DriverProfileRowV1, DriverProfilesForContactsPersistencePortV1 } from './driver-profiles-for-contacts-handler'
+export {
+    CHURN_INACTIVITY_TRIGGER_KEY_V1,
+    CHURN_INACTIVITY_TRIGGER_VERSION_V1,
+    createChurnInactivityTriggerHandlerV1,
+    inactiveDaysV1,
+} from './churn-inactivity-trigger-handler'
+export type { ChurnInactivityEvaluationV1, ChurnInactivityMatchV1, ChurnInactivityPersistencePortV1 } from './churn-inactivity-trigger-handler'
 export { createGetDriverCallablePhoneHandlerV1 } from './get-driver-callable-phone-handler'
 export type { GetDriverCallablePhonePersistencePortV1 } from './get-driver-callable-phone-handler'
 export {
@@ -67,6 +74,7 @@ export {
     dispatchScheduledScraperChecksV1,
     findDriverByExactPhoneV1,
     readDriverProfilesForContactsV1,
+    evaluateChurnInactivityTriggerV1,
     getDriverCallablePhoneV1,
     searchLocalDriversV1,
     getParkLinkedDriverPhoneV1,

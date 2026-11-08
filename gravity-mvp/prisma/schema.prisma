@@ -1310,6 +1310,123 @@ model Message {
 /// sha256 of its semantic payload, permanently: insert-if-absent and read only, never
 /// updated or deleted. No message, outcome or route is stored here; the one Message the
 /// intent may admit carries clientMessageId "stc:" + requestId.
+/// Communication Workspace-owned. One host module's reviewed communication
+/// project: its Flow and its project policy. A Run freezes both when it starts,
+/// so a later project change never alters a Run already in progress.
+model CommunicationProject {
+  id          String   @id @db.VarChar(64)
+  key         String   @unique @db.VarChar(64)
+  title       String   @db.VarChar(200)
+  hostModule  String   @db.VarChar(64)
+  flowVersion Int
+  flow        Json
+  policy      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+/// Communication Workspace-owned. One execution of a project over one host
+/// audience snapshot. The same snapshot submitted again is the same Run
+/// (idempotencyKey), never a second one.
+model CommunicationRun {
+  id             String   @id @db.VarChar(64)
+  projectId      String   @db.VarChar(64)
+  idempotencyKey String   @unique @db.VarChar(400)
+  mode           String   @db.VarChar(16)
+  hostModule     String   @db.VarChar(64)
+  triggerKey     String   @db.VarChar(128)
+  triggerVersion Int
+  snapshotRef    String   @db.VarChar(200)
+  snapshotSha256 String   @db.Char(64)
+  criteria       Json
+  flowVersion    Int
+  flow           Json
+  policy         Json
+  sandbox        Json?
+  requestedBy    String   @db.VarChar(128)
+  evaluatedAt    DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([projectId, createdAt], map: "CommunicationRun_project_idx")
+}
+
+/// Communication Workspace-owned. The immutable audience snapshot of a Run: who
+/// the host named, why, and whether admission let them in (and if not, why not).
+model CommunicationAudienceMember {
+  id                 String   @id @db.VarChar(64)
+  runId              String   @db.VarChar(64)
+  requestedContactId String   @db.VarChar(255)
+  canonicalContactId String?  @db.VarChar(255)
+  reason             String   @db.VarChar(500)
+  sourceRef          String   @db.VarChar(200)
+  businessContext    Json
+  admission          String   @db.VarChar(16)
+  exclusionReason    String?  @db.VarChar(64)
+  createdAt          DateTime @default(now())
+
+  @@unique([runId, requestedContactId], map: "CommunicationAudienceMember_run_contact_key")
+  @@index([runId, admission], map: "CommunicationAudienceMember_run_admission_idx")
+}
+
+/// Communication Workspace-owned. One admitted Contact's execution of a Run's
+/// Flow. One per canonical Contact per Run; a worker owns it only under a lease
+/// and moves it only from the version it read.
+model CommunicationParticipantExecution {
+  id                 String    @id @db.VarChar(64)
+  runId              String    @db.VarChar(64)
+  audienceMemberId   String    @unique @db.VarChar(64)
+  canonicalContactId String    @db.VarChar(255)
+  state              String    @db.VarChar(32)
+  nextActionAt       DateTime?
+  version            Int       @default(0)
+  leaseOwner         String?   @db.VarChar(128)
+  leaseUntil         DateTime?
+  attempts           Int       @default(0)
+  messageRequestId   String?   @db.VarChar(128)
+  messageOutcome     String?   @db.VarChar(32)
+  messageAcceptedAt  DateTime?
+  callRequestId      String?   @db.VarChar(128)
+  callOutcome        String?   @db.VarChar(32)
+  outcome            String?   @db.VarChar(32)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  @@unique([runId, canonicalContactId], map: "CommunicationParticipantExecution_run_contact_key")
+  @@index([state, nextActionAt], map: "CommunicationParticipantExecution_due_idx")
+  @@index([runId, state], map: "CommunicationParticipantExecution_run_state_idx")
+}
+
+/// Communication Workspace-owned, append-only. The audit trail: every decision
+/// and effect request of a Run, once each (dedupeKey).
+model CommunicationExecutionEvent {
+  id            String   @id @db.VarChar(64)
+  seq           Int      @default(autoincrement())
+  runId         String   @db.VarChar(64)
+  participantId String?  @db.VarChar(64)
+  dedupeKey     String   @unique @db.VarChar(300)
+  kind          String   @db.VarChar(64)
+  detail        Json
+  occurredAt    DateTime
+
+  @@index([runId, seq], map: "CommunicationExecutionEvent_run_idx")
+  @@index([participantId, seq], map: "CommunicationExecutionEvent_participant_idx")
+}
+
+/// Communication Workspace-owned. Cross-project suppression: at most one active
+/// participation per canonical Contact and execution scope (sandbox / live),
+/// and the cooldown after it ends.
+model CommunicationContactGuard {
+  scope               String    @db.VarChar(16)
+  canonicalContactId  String    @db.VarChar(255)
+  activeParticipantId String?   @db.VarChar(64)
+  activeProjectId     String?   @db.VarChar(64)
+  lastProjectId       String?   @db.VarChar(64)
+  cooldownUntil       DateTime?
+  updatedAt           DateTime  @default(now()) @updatedAt
+
+  @@id([scope, canonicalContactId])
+}
+
 model MessagingSendIntent {
   requestId             String   @id @db.VarChar(128)
   semanticPayloadSha256 String   @db.Char(64)

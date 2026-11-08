@@ -473,15 +473,14 @@ export const SECTIONS: Record<string, SectionMeta> = {
   analytics_churn: {
     sectionKey: "analytics_churn",
     title: "Отток",
-    isStub: true,
-    badgeLabel: "Заглушка",
-    availability: "coming_soon",
+    isStub: false,
+    availability: "available",
     description: {
-      what: "Анализ причин и динамики ухода водителей.",
-      why: "Для разработки мер по удержанию.",
-      when: "При анализе падения маржинальности.",
-      actions: "Изучение причин разрыва договоров.",
-      result: "Приняты решения по сокращению оттока.",
+      what: "Триггер Оттока и сценарий возврата водителей через Communication Workspace.",
+      why: "Чтобы вернуть водителей, переставших выходить на заказы, и видеть результат по фактам.",
+      when: "Когда водитель не выполнял заказы заданное число дней.",
+      actions: "Проверка триггера, запуск сценария в Sandbox, отчёт и журнал по каждому контакту.",
+      result: "Видно, кто попал в сценарий, кому написали, кто ответил и кому звонили.",
     },
   },
   analytics_active_base: {
