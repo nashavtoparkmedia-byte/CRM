@@ -5,6 +5,10 @@ import {
     withLegacyUiIdentityCookieV1,
 } from '@/modules/identity-access/public/v1/mobile-session-credentials'
 import { resolveCookieOperatorV1 } from '@/modules/identity-access/public/v1/mobile-session-operator'
+import {
+    isStaffSessionEnforcedV1,
+    STAFF_SESSION_COOKIE,
+} from '@/modules/identity-access/public/v1/staff-session'
 
 /**
  * Request boundary for the application.
@@ -67,6 +71,18 @@ import { resolveCookieOperatorV1 } from '@/modules/identity-access/public/v1/mob
  * they gain nothing they did not have. An attacker who forges it only locks
  * themselves out. So the marker needs no integrity, and the shell sets it as a
  * User-Agent suffix, which survives cookie loss and process death.
+ *
+ * ## Staff Session v1: the browser lane joins the same rewrite
+ *
+ * A browser request with a staff session cookie acts as that session's
+ * verified employee exactly as the shell acts as its signed operator: the
+ * Cookie header goes downstream with exactly one `crm_user_id`, the employee,
+ * or none when the staff cookie grants nothing. When the credential store or
+ * the registry cannot be read the request is answered 503, never passed with
+ * a client-chosen identity (docs/design/staff-session-v1.md §4.5, R3). With
+ * YOKO_STAFF_SESSION_ENFORCE=on a browser request without any session has its
+ * `crm_user_id` removed, so the legacy free choice of identity ends. Without
+ * that flag and without a staff cookie, the browser lane is unchanged.
  */
 
 /** User-Agent fragment the Android shell appends to identify its lane. */
@@ -143,15 +159,36 @@ export async function proxy(request: NextRequest) {
 
     const shell = isShellRequest(request)
     const sessionCookie = request.cookies.get(MOBILE_SESSION_COOKIE)?.value
+    const staffCookie = shell ? undefined : request.cookies.get(STAFF_SESSION_COOKIE)?.value
+    const enforce = !shell && isStaffSessionEnforcedV1()
 
-    // The browser lane without a mobile session is deliberately unchanged.
-    if (!shell && sessionCookie === undefined) return NextResponse.next()
+    // The browser lane without any session and without enforcement is
+    // deliberately unchanged.
+    if (!shell && sessionCookie === undefined && staffCookie === undefined && !enforce) return NextResponse.next()
 
     const operator = await resolveCookieOperatorV1(
         sessionCookie,
         request.cookies.get(LEGACY_UI_IDENTITY_COOKIE_V1)?.value,
+        staffCookie,
     )
     if (operator.kind === 'mobile_session') return forwardWithOperator(request, operator.operatorId)
+
+    if (!shell) {
+        if (operator.kind === 'staff_session') return forwardWithOperator(request, operator.operatorId)
+        if (operator.kind === 'staff_session_refused' && operator.unverifiable) {
+            const headers = { 'retry-after': '5', 'cache-control': 'no-store' }
+            if (pathname.startsWith('/api/')) {
+                return NextResponse.json({ error: 'staff_session_unverifiable' }, { status: 503, headers })
+            }
+            return new NextResponse(SERVICE_UNAVAILABLE_PAGE, {
+                status: 503,
+                headers: { ...headers, 'content-type': 'text/html; charset=utf-8' },
+            })
+        }
+        // A refused or conflicting session, or enforcement without a
+        // session: no identity downstream, never one the client chose.
+        return forwardWithOperator(request, null)
+    }
 
     // From here the request has no signed operator: no session at all in the
     // shell lane, or a session cookie that grants nothing in either lane. It

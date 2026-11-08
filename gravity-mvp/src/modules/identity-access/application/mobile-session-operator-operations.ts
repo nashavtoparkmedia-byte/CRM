@@ -1,5 +1,7 @@
 import { cookies } from 'next/headers'
 import { prismaMobileSessionBarrierV1 } from '../internal/mobile-session-barrier'
+import { STAFF_SESSION_COOKIE } from '../internal/staff-session-credentials'
+import { verifyStaffSessionTokenV1 } from './staff-session-operations'
 import { UNSTABLE_DEVICE_ID_V1 } from '../public/v1/mobile-push-registration-handler'
 import {
     LEGACY_UI_IDENTITY_COOKIE_V1,
@@ -21,10 +23,19 @@ import {
  * that would otherwise end it should answer that the service is unavailable.
  * `legacy` is the browser lane without a session cookie, whose `crm_user_id`
  * semantics are unchanged.
+ *
+ * Staff Session v1 joins the same resolution, never beside it: `staff_session`
+ * is a verified employee session (docs/design/staff-session-v1.md §4.5) whose
+ * employee is the operator; `staff_session_refused` is a staff cookie that
+ * grants nothing, `unverifiable` when only the store or the registry could not
+ * be read. A request carrying both a mobile and a staff session has no
+ * operator (`mobile_session_refused`).
  */
 export type RequestOperatorV1 =
     | { kind: 'mobile_session', operatorId: string }
     | { kind: 'mobile_session_refused', unverifiable?: true }
+    | { kind: 'staff_session', operatorId: string }
+    | { kind: 'staff_session_refused', unverifiable?: true }
     | { kind: 'legacy', operatorId: string | null }
 
 /**
@@ -59,7 +70,19 @@ export async function isMobileSessionLoggedOutV1(principal: MobileSessionPrincip
 export async function resolveCookieOperatorV1(
     sessionCookie: string | undefined,
     legacyCookie: string | undefined,
+    staffCookie?: string | undefined,
 ): Promise<RequestOperatorV1> {
+    if (sessionCookie !== undefined && staffCookie !== undefined) {
+        console.warn('[auth] a mobile and a staff session in one request; no operator')
+        return { kind: 'mobile_session_refused' }
+    }
+    if (staffCookie !== undefined) {
+        const verified = await verifyStaffSessionTokenV1(staffCookie)
+        if (verified.kind === 'valid') return { kind: 'staff_session', operatorId: verified.principal.userId }
+        return verified.kind === 'unverifiable'
+            ? { kind: 'staff_session_refused', unverifiable: true }
+            : { kind: 'staff_session_refused' }
+    }
     const resolution = resolveEffectiveOperatorV1({ sessionCookie, legacyCookie })
     if (resolution.kind === 'legacy') return { kind: 'legacy', operatorId: resolution.operatorId }
     if (resolution.kind === 'mobile_session_refused') return { kind: 'mobile_session_refused' }
@@ -75,5 +98,6 @@ export async function resolveRequestOperatorV1(): Promise<RequestOperatorV1> {
     return resolveCookieOperatorV1(
         store.get(MOBILE_SESSION_COOKIE)?.value,
         store.get(LEGACY_UI_IDENTITY_COOKIE_V1)?.value,
+        store.get(STAFF_SESSION_COOKIE)?.value,
     )
 }
