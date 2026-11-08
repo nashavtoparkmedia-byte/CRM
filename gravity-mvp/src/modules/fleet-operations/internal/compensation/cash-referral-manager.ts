@@ -100,11 +100,12 @@ export function cashStaffAuthorityForV1(
 
 /**
  * The fields of Identity Access's `StaffSessionPrincipalV1` that Cash reads
- * (docs/design/staff-session-v1.md, v1.2 §4.2). Identity Access produces it
+ * (docs/design/staff-session-v1.md, v1.3 §4.2). Identity Access produces it
  * from `getStaffSessionPrincipalV1()` only after it has verified the
  * signature, the audience, the expiry, both revocation epochs and the
- * registry's durable authority copy; nothing in Cash produces, verifies or
- * stores a session. The contract is docs/design/cash-staff-authority-v2.md.
+ * registry record, whose role and status it reads at every verification;
+ * nothing in Cash produces, verifies or stores a session. The contract is
+ * docs/design/cash-staff-authority-v2.md.
  */
 export interface CashStaffSessionPrincipalV1 {
     kind: string
@@ -157,6 +158,9 @@ export function cashStaffSessionIdV1(sid: string): string {
     return `staff_session:${createHash('sha256').update(`${CASH_STAFF_SESSION_ID_LABEL_V1}${sid}`, 'utf8').digest('hex')}`
 }
 
+/** Identity Access's sid: a labelled sha256 of the token's instance id, as 64 hex digits. */
+const STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u
+
 function exactTextV1(value: unknown, max: number): string | null {
     if (typeof value !== 'string' || value === '' || value.length > max || value.trim() !== value) return null
     return value
@@ -168,7 +172,7 @@ function validDateV1(value: unknown): Date | null {
 
 /**
  * The Cash authority of a verified Staff Session principal. The binding is
- * Cash's own (Staff Session v1.2 §2): the person is the principal's userId,
+ * Cash's own (Staff Session v1.3 §2): the person is the principal's userId,
  * the session is its sid, the authentication time is when that session was
  * issued at login, and the two Cash capabilities follow from the role alone.
  * The label is the directory's name for that same userId; a client value
@@ -185,7 +189,8 @@ export function cashStaffAuthorityFromStaffSessionV1(
     if (principal.kind !== 'staff_session') return invalid
     // actorId is staff:<userId> in a 255-character column.
     const userId = exactTextV1(principal.userId, 200)
-    const sid = exactTextV1(principal.sid, 255)
+    // Anything but the contract's sid format is a contract mismatch, and binds nothing.
+    const sid = typeof principal.sid === 'string' && STAFF_SESSION_SID_PATTERN_V1.test(principal.sid) ? principal.sid : null
     const issuedAt = validDateV1(principal.issuedAt)
     const expiresAt = validDateV1(principal.expiresAt)
     const now = validDateV1(at)
@@ -232,7 +237,7 @@ export interface CashStaffSessionSourceV1 {
 /**
  * The authority a manager write is made by, or why there is none. No
  * session is `staff_session_unavailable`; so is a session Identity Access
- * cannot verify because its store does not answer (v1.2 R3): that is no
+ * cannot verify because its store does not answer (v1.3 R3): that is no
  * operator, never a fallback to another identity, and never a logout.
  */
 export async function resolveCashStaffAuthorityFromSessionV1(source: CashStaffSessionSourceV1): Promise<CashStaffAuthorityResolutionV1> {
