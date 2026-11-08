@@ -89,9 +89,9 @@ function attributionEvidence(attribution: GuardedSenderAttributionV1): GuardedAu
   return { status: 'not_applicable' }
 }
 
-async function lockConversation(db: GuardedDb, chatId: string, kind: GuardedConversationKindV1): Promise<LockedConversation> {
-  await db.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS "configured"`
-  const rows = await db.$queryRaw<LockedConversation[]>`
+async function lockConversation(transaction: GuardedDb, chatId: string, kind: GuardedConversationKindV1): Promise<LockedConversation> {
+  await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS "configured"`
+  const rows = await transaction.$queryRaw<LockedConversation[]>`
     SELECT "id", "channel"::text AS "channel", "chatType", "contactId", "contactIdentityId", "driverId"
     FROM "Chat"
     WHERE "id" = ${chatId}
@@ -104,9 +104,9 @@ async function lockConversation(db: GuardedDb, chatId: string, kind: GuardedConv
   return rows[0]
 }
 
-async function lockEventKeys(db: GuardedDb, keys: string[]): Promise<void> {
+async function lockEventKeys(transaction: GuardedDb, keys: string[]): Promise<void> {
   for (const key of [...new Set(keys)].sort()) {
-    await db.$queryRaw`
+    await transaction.$queryRaw`
       SELECT pg_advisory_xact_lock(hashtextextended(CAST(${key} AS text), CAST(${EVENT_KEY_LOCK_SEED} AS bigint))) IS NULL AS "locked"
     `
   }
@@ -121,10 +121,10 @@ function isOwnEvent(
 
 /** The settlement of an event whose key is already recorded, or null when the key is free. */
 async function recordedEvent(
-  db: Pick<GuardedDb, 'message' | 'heldChannelMessage'>,
+  transaction: Pick<GuardedDb, 'message' | 'heldChannelMessage'>,
   event: { chatId: string; direction: string; channel: string; externalId: string },
 ): Promise<GuardedAppendSettlementV1 | null> {
-  const visible = await db.message.findUnique({
+  const visible = await transaction.message.findUnique({
     where: { externalId: event.externalId },
     select: { id: true, chatId: true, direction: true, channel: true },
   })
@@ -133,7 +133,7 @@ async function recordedEvent(
       ? { outcome: 'duplicate', messageId: visible.id, heldMessageId: null, visible: true }
       : { outcome: 'key_conflict' }
   }
-  const held = await db.heldChannelMessage.findUnique({
+  const held = await transaction.heldChannelMessage.findUnique({
     where: { externalId: event.externalId },
     select: { id: true, chatId: true, direction: true, channel: true, releasedMessageId: true },
   })
@@ -146,7 +146,7 @@ async function recordedEvent(
 }
 
 /** Writes one visible Message with its workflow projection and, inbound, its notification intent. */
-async function writeVisible(db: GuardedDb, kind: GuardedConversationKindV1, event: GuardedEvent, audit: GuardedAudit): Promise<string> {
+async function writeVisible(transaction: GuardedDb, kind: GuardedConversationKindV1, event: GuardedEvent, audit: GuardedAudit): Promise<string> {
   const outbound = event.direction === 'outbound'
   const now = new Date()
   const metadata: Record<string, unknown> = {
@@ -155,7 +155,7 @@ async function writeVisible(db: GuardedDb, kind: GuardedConversationKindV1, even
     // S2: an own message observed at the provider proves provider acceptance, never device delivery.
     ...(outbound ? { delivery: newDeliveryEvidenceRecordV1('provider_echo', 'echo', now) } : {}),
   }
-  const message = await db.message.create({
+  const message = await transaction.message.create({
     data: {
       chatId: event.chatId,
       direction: event.direction,
@@ -171,7 +171,7 @@ async function writeVisible(db: GuardedDb, kind: GuardedConversationKindV1, even
   if (!outbound && persistsWithNotificationIntentV1({ direction: message.direction, type: message.type, channel: message.channel, metadata: message.metadata })) {
     const intent = inboundNotificationIntentV1(message, now)
     if (intent) {
-      await db.domainOutboxEvent.createMany({
+      await transaction.domainOutboxEvent.createMany({
         data: [{
           eventId: intent.eventId,
           eventType: intent.eventType,
@@ -188,23 +188,23 @@ async function writeVisible(db: GuardedDb, kind: GuardedConversationKindV1, even
     }
   }
   if (kind === 'group') {
-    if (!outbound) await ConversationWorkflowService.onGroupInboundMessage(event.chatId, event.sentAt, db)
+    if (!outbound) await ConversationWorkflowService.onGroupInboundMessage(event.chatId, event.sentAt, transaction)
   } else if (outbound) {
-    await ConversationWorkflowService.onOutboundMessage(event.chatId, event.sentAt, db)
+    await ConversationWorkflowService.onOutboundMessage(event.chatId, event.sentAt, transaction)
   } else {
-    await ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, db)
+    await ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, transaction)
   }
   return message.id
 }
 
 async function writeHeld(
-  db: GuardedDb,
+  transaction: GuardedDb,
   event: GuardedEvent,
   reason: HeldChannelMessageReasonV1,
   attribution: GuardedSenderAttributionV1,
   conversation: LockedConversation,
 ): Promise<string> {
-  const held = await db.heldChannelMessage.create({
+  const held = await transaction.heldChannelMessage.create({
     data: {
       chatId: event.chatId,
       channel: event.channel as Prisma.HeldChannelMessageCreateInput['channel'],
@@ -264,21 +264,21 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
   async append(input) {
     const event = guardedEvent(input)
     try {
-      return await prisma.$transaction(async db => {
-        const conversation = await lockConversation(db, event.chatId, input.conversationKind)
+      return await prisma.$transaction(async transaction => {
+        const conversation = await lockConversation(transaction, event.chatId, input.conversationKind)
         if (conversation.channel !== event.channel) {
           throw new GuardedChannelMessageError('CONVERSATION_CHANNEL_MISMATCH', 'The event channel is not the conversation channel')
         }
-        await lockEventKeys(db, [event.externalId])
-        const recorded = await recordedEvent(db, event)
+        await lockEventKeys(transaction, [event.externalId])
+        const recorded = await recordedEvent(transaction, event)
         if (recorded) return recorded
 
         const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, bindingOf(conversation))
         if (decision.visible) {
-          const messageId = await writeVisible(db, input.conversationKind, event, { v: 1, attribution: input.attribution.status })
+          const messageId = await writeVisible(transaction, input.conversationKind, event, { v: 1, attribution: input.attribution.status })
           return { outcome: 'appended', messageId } as const
         }
-        const heldMessageId = await writeHeld(db, event, decision.reason, input.attribution, conversation)
+        const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, conversation)
         return { outcome: 'held', heldMessageId, holdReason: decision.reason } as const
       }, TRANSACTION_OPTIONS)
     } catch (error: unknown) {
@@ -295,9 +295,9 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
 
   async release(input) {
     try {
-      return await prisma.$transaction(async db => {
-        const conversation = await lockConversation(db, input.chatId, input.conversationKind)
-        const pending = await db.heldChannelMessage.findMany({
+      return await prisma.$transaction(async transaction => {
+        const conversation = await lockConversation(transaction, input.chatId, input.conversationKind)
+        const pending = await transaction.heldChannelMessage.findMany({
           where: { chatId: input.chatId, releasedAt: null },
           orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
           take: input.limit,
@@ -306,11 +306,11 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
 
         const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, bindingOf(conversation))
         if (!decision.visible) {
-          const remaining = await db.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
+          const remaining = await transaction.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
           return { released: 0, remaining, keyConflicts: 0, holdReason: decision.reason }
         }
 
-        await lockEventKeys(db, pending.map(held => held.externalId))
+        await lockEventKeys(transaction, pending.map(held => held.externalId))
         const releasedAt = new Date()
         let released = 0
         let keyConflicts = 0
@@ -325,7 +325,7 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
             sentAt: held.sentAt,
             metadata: record(held.metadata),
           }
-          const visible = await db.message.findUnique({
+          const visible = await transaction.message.findUnique({
             where: { externalId: held.externalId },
             select: { id: true, chatId: true, direction: true, channel: true },
           })
@@ -338,7 +338,7 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
             // Already visible through another writer: only the hold is settled.
             messageId = visible.id
           } else {
-            messageId = await writeVisible(db, input.conversationKind, event, {
+            messageId = await writeVisible(transaction, input.conversationKind, event, {
               v: 1,
               attribution: input.attribution.status,
               releasedFrom: held.id,
@@ -346,13 +346,13 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
               holdReason: held.holdReason,
             })
           }
-          await db.heldChannelMessage.update({
+          await transaction.heldChannelMessage.update({
             where: { id: held.id },
             data: { releasedAt, releasedMessageId: messageId },
           })
           released += 1
         }
-        const remaining = await db.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
+        const remaining = await transaction.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
         return { released, remaining, keyConflicts, holdReason: null }
       }, TRANSACTION_OPTIONS)
     } catch (error: unknown) {

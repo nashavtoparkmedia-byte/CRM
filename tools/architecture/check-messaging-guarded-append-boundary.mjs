@@ -122,14 +122,14 @@ function assertAdapterLocksBeforeJudging(source) {
   const append = methodBody(source, 'append')
   inOrder(append, [
     'prisma.$transaction(',
-    'await lockConversation(db,',
+    'await lockConversation(transaction,',
     'CONVERSATION_CHANNEL_MISMATCH',
-    'await lockEventKeys(db,',
-    'await recordedEvent(db,',
+    'await lockEventKeys(transaction,',
+    'await recordedEvent(transaction,',
     'if (recorded) return recorded',
     'decideGuardedAppendV1(',
-    'await writeVisible(db,',
-    'await writeHeld(db,',
+    'await writeVisible(transaction,',
+    'await writeHeld(transaction,',
   ], 'append')
   if (!/if \(isUniqueViolation\(error\)\) \{\s+const winner = await recordedEvent\(prisma, event\)/u.test(append)) {
     throw new Error('append: a unique violation is not settled by the committed winner')
@@ -138,23 +138,23 @@ function assertAdapterLocksBeforeJudging(source) {
   const release = methodBody(source, 'release')
   inOrder(release, [
     'prisma.$transaction(',
-    'await lockConversation(db,',
-    'db.heldChannelMessage.findMany(',
+    'await lockConversation(transaction,',
+    'transaction.heldChannelMessage.findMany(',
     'decideGuardedAppendV1(',
     'if (!decision.visible)',
-    'await lockEventKeys(db,',
-    'await writeVisible(db,',
-    'db.heldChannelMessage.update(',
+    'await lockEventKeys(transaction,',
+    'await writeVisible(transaction,',
+    'transaction.heldChannelMessage.update(',
   ], 'release')
   if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(source)) throw new Error('held rows are deleted or bulk-rewritten by the adapter')
 
   const visible = functionBody(source, 'writeVisible')
   for (const projection of ['onGroupInboundMessage', 'onOutboundMessage', 'onInboundMessage']) {
-    if (!new RegExp(`ConversationWorkflowService\\.${projection}\\(event\\.chatId, event\\.sentAt, db\\)`, 'u').test(visible)) {
+    if (!new RegExp(`ConversationWorkflowService\\.${projection}\\(event\\.chatId, event\\.sentAt, transaction\\)`, 'u').test(visible)) {
       throw new Error(`workflow ${projection} does not run on the transaction client`)
     }
   }
-  if (!/db\.domainOutboxEvent\.createMany\(/u.test(visible)) throw new Error('notification intent is not written in the transaction')
+  if (!/transaction\.domainOutboxEvent\.createMany\(/u.test(visible)) throw new Error('notification intent is not written in the transaction')
   if (!/\?\s*\{ delivery: newDeliveryEvidenceRecordV1\('provider_echo', 'echo', now\) \}/u.test(visible)) throw new Error('outbound echo evidence drift')
   if (!/status: outbound \? 'sent' : 'delivered'/u.test(visible)) throw new Error('an outbound echo may be marked delivered')
 }
@@ -271,22 +271,22 @@ rejectProbe('', "await prisma.heldChannelMessage.findMany({ where: { chatId } })
 rejectProbe('', 'const rows = await prisma.$queryRaw`SELECT * FROM "HeldChannelMessage"`\n', (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ContextBuilder.ts', changed)))
 rejectProbe('', "import { legacyPrismaGuardedChannelMessagePortV1 } from '@/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter'\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/app/api/webhook/telegram/route.ts', changed)))
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
-rejectProbe(adapterSource, adapterSource.replace("await db.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("'ReadCommitted' as Prisma.TransactionIsolationLevel", "'ReadUncommitted' as Prisma.TransactionIsolationLevel"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("import type { Prisma } from '@prisma/client'", "import { Prisma } from '@prisma/client'"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('        if (recorded) return recorded\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace(
-  '        await lockEventKeys(db, [event.externalId])\n        const recorded = await recordedEvent(db, event)\n',
-  '        const recorded = await recordedEvent(db, event)\n        await lockEventKeys(db, [event.externalId])\n',
+  '        await lockEventKeys(transaction, [event.externalId])\n        const recorded = await recordedEvent(transaction, event)\n',
+  '        const recorded = await recordedEvent(transaction, event)\n        await lockEventKeys(transaction, [event.externalId])\n',
 ), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('const winner = await recordedEvent(prisma, event)', 'const winner = null'), assertAdapterLocksBeforeJudging)
-rejectProbe(adapterSource, adapterSource.replace('ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, db)', 'ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt)'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, transaction)', 'ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt)'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("status: outbound ? 'sent' : 'delivered'", "status: 'delivered'"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `${adapterSource}\nawait prisma.heldChannelMessage.deleteMany({ where: {} })\n`, assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `import { resolveChannelContactV1 } from '@/modules/contacts/public/v1'\n${adapterSource}`, assertAdapterWritesNoBinding)
-rejectProbe(adapterSource, `${adapterSource}\nawait db.chat.update({ where: { id }, data: { contactId } })\n`, assertAdapterWritesNoBinding)
-rejectProbe(adapterSource, `${adapterSource}\nawait db.$executeRawUnsafe('UPDATE "Chat" SET "driverId" = NULL')\n`, assertAdapterWritesNoBinding)
+rejectProbe(adapterSource, `${adapterSource}\nawait transaction.chat.update({ where: { id }, data: { contactId } })\n`, assertAdapterWritesNoBinding)
+rejectProbe(adapterSource, `${adapterSource}\nawait transaction.$executeRawUnsafe('UPDATE "Chat" SET "driverId" = NULL')\n`, assertAdapterWritesNoBinding)
 rejectProbe(policySource, `import { prisma } from '@/lib/prisma'\n${policySource}`, assertPurePolicy)
 rejectProbe(policySource, `${policySource}\nexport async function probe() { return await Promise.resolve(process.env.X) }\n`, assertPurePolicy)
 rejectProbe(handlerSource, handlerSource.replace(
