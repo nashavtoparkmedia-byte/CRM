@@ -9,15 +9,16 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "e5f8703d28f4e9253a05e3803587ac1bd4cd35acaf9f3e9c76e2ea1aa7f1a7dc",
-    "size": 172944,
+    "sha256": "336129821dc6f368d192c020ef51f7707b63031fe6462f16ceb065df9212daad",
+    "size": 173455,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
     "calling",
     "contacts",
     "fleet_operations",
-    "identity_access"
+    "identity_access",
+    "messaging"
   ],
   "migrations": [
     {
@@ -178,6 +179,23 @@
         "tables": [
           "ContactCommunicationPolicy",
           "ContactCommunicationPolicyEvent"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261027090000_add_messaging_send_intent",
+      "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+      "sha256": "6905a1112c50ae698877ee694003d046493b62d90e7d7fc91e377eaa0d01ffba",
+      "size": 1327,
+      "owner_context": "messaging",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/messaging/application/send-to-contact.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "MessagingSendIntent"
         ],
         "columns": [],
         "forbidden_indexes": []
