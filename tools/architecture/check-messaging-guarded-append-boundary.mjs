@@ -232,7 +232,9 @@ function assertMigration(sql) {
   if (!/CHECK \("holdReason" IN \('binding_absent', 'binding_mismatch', 'attribution_unproven', 'group_person_bound'\)\)/u.test(sql)) throw new Error('hold reason check drift')
   if (!/CHECK \(\("releasedAt" IS NULL\) = \("releasedMessageId" IS NULL\)\)/u.test(sql)) throw new Error('release pair check drift')
   if (!/CHECK \("direction" IN \('inbound', 'outbound'\)\)/u.test(sql)) throw new Error('direction check drift')
-  if (!/"senderContactIdentityId" = \("holdEvidence" #>> '\{attribution,contactIdentityId\}'\)\)/u.test(sql)) throw new Error('sender evidence check drift')
+  if (!/AND \("holdEvidence" #>> '\{attribution,status\}'\) IS NOT DISTINCT FROM 'proven'\s+AND "senderContactIdentityId" IS NOT DISTINCT FROM \("holdEvidence" #>> '\{attribution,contactIdentityId\}'\)\)/u.test(sql)) {
+    throw new Error('sender evidence check drift (it must be NULL-safe: a NULL comparison passes a CHECK)')
+  }
   if (!/CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"/u.test(sql)) throw new Error('held event key is not unique')
 }
 
@@ -310,7 +312,8 @@ rejectProbe(adapterSource, adapterSource.replace("if (input.conversationKind ===
 rejectProbe(adapterSource, adapterSource.replace("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },", 'where: unreleased,'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("senderContactIdentityId: attribution.status === 'proven' ? attribution.contactIdentityId : null,", 'senderContactIdentityId: null,'), assertAdapterLocksBeforeJudging)
 rejectProbe(contractSource, contractSource.replace("if (sender.status === 'unproven') invalid('a release needs a proven sender')", 'void sender'), assertContractReservations)
-rejectProbe(migrationSql, migrationSql.replace('AND "senderContactIdentityId" = ("holdEvidence" #>> \'{attribution,contactIdentityId}\'))', ')'), assertMigration)
+rejectProbe(migrationSql, migrationSql.replace('AND "senderContactIdentityId" IS NOT DISTINCT FROM ("holdEvidence" #>> \'{attribution,contactIdentityId}\'))', ')'), assertMigration)
+rejectProbe(migrationSql, migrationSql.replace("AND (\"holdEvidence\" #>> '{attribution,status}') IS NOT DISTINCT FROM 'proven'", "AND (\"holdEvidence\" #>> '{attribution,status}') = 'proven'"), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace('ON DELETE CASCADE', 'ON DELETE SET NULL'), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace("'group_person_bound')", "'group_person_bound', 'guessed')"), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'UPDATE "Message" SET "status" = \'read\';\n\nCOMMIT;'), assertMigration)

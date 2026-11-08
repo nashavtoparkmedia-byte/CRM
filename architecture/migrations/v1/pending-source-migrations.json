@@ -205,8 +205,8 @@
     {
       "name": "20261108120000_add_messaging_held_channel_message",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "sha256": "6c6e34f9e5772af12ba5f7de51b040b35f344f2f02f2f4010a1ff6c4b5de4c9a",
-      "size": 3405,
+      "sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
+      "size": 3443,
       "owner_context": "messaging",
       "classification": "EXPAND_ONLY",
       "production_application": false,

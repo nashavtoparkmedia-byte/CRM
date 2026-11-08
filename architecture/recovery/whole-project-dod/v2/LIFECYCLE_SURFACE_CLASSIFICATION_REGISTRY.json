@@ -6776,7 +6776,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage: primary key, unique event key, unique released message id, two lookup indexes, direction, hold-reason, release-pair and sender-evidence checks, and a foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "messaging",
-      "source_sha256": "6c6e34f9e5772af12ba5f7de51b040b35f344f2f02f2f4010a1ff6c4b5de4c9a"
+      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0"
     }
   ]
 }

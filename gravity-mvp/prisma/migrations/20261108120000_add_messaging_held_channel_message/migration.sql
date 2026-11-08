@@ -47,8 +47,8 @@ CREATE TABLE "HeldChannelMessage" (
         CHECK (
             ("senderContactIdentityId" IS NULL AND ("holdEvidence" #>> '{attribution,status}') IS DISTINCT FROM 'proven')
             OR ("senderContactIdentityId" IS NOT NULL
-                AND ("holdEvidence" #>> '{attribution,status}') = 'proven'
-                AND "senderContactIdentityId" = ("holdEvidence" #>> '{attribution,contactIdentityId}'))
+                AND ("holdEvidence" #>> '{attribution,status}') IS NOT DISTINCT FROM 'proven'
+                AND "senderContactIdentityId" IS NOT DISTINCT FROM ("holdEvidence" #>> '{attribution,contactIdentityId}'))
         )
 );
 
