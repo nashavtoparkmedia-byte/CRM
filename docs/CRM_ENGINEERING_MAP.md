@@ -12,6 +12,8 @@ Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing ro
 mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
 change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
+Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
+tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
 
 # YOKO CRM — Engineering Map
 
@@ -444,6 +446,16 @@ Each entry lists what the code actually does.
   - `G/modules/fleet-operations/application/{compensation-manager,compensation-pilot,compensation-budget-period,cash-order-ingestion}-operations.ts`.
   - UI: `G/app/compensation/`; bot scene: `tg-bot/src/handlers/compensation.js`;
     operator CLIs: `gravity-mvp/scripts/compensation-*.ts`.
+  - Referral and manual Cash access: `COMP/compensation-referral-ledger.ts` (the per-person
+    hash-chained `CashAccessEvent` chain and its fold), `COMP/compensation-access.ts`
+    (`decideCashAccessV1`), `COMP/legacy-prisma-cash-referral-ledger-adapter.ts`; manager tools
+    `COMP/cash-referral-manager.ts`, `cash-referral-manager-service.ts`,
+    `legacy-prisma-cash-referral-manager-adapter.ts`;
+    `G/modules/fleet-operations/application/{cash-referral,cash-referral-manager}-operations.ts`;
+    UI `G/app/compensation/referrals/`; bot entry `tg-bot/src/handlers/referral.js`.
+    Switches: `YOKO_CASH_ACCESS_LEDGER=on` (manager screens; Cash reads referral and manual
+    access from the ledger), `YOKO_CASH_REFERRAL_ACCESS=on` (the Telegram referral path),
+    `BOT_REFERRAL_ENTRY_ENABLED=true` (the bot menu entry). All three default off.
 - **Cash-order ingestion modes** (`YOKO_CASH_ORDER_INGESTION_MODE`, parsed in
   `COMP/cash-order-ingestion-config.ts`; parks in `YOKO_CASH_COMPENSATION_PARKS`):
   - `off` (default; also any unknown or retired value): no provider request, no write.
@@ -467,7 +479,7 @@ Each entry lists what the code actually does.
 - **Owns**: `Driver`, `DriverDaySummary`, `DriverEvent`, `DriverAttention`,
   `DriverAction`, `CommunicationEvent`, `ScoringThreshold`, `SyncStatus`,
   `ApiConnection`, `ApiLog`, `DailyParkStats`; the 13 `Compensation*` models (via
-  amendments); scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog`.
+  amendments); `CashReferralAttribution`, `CashAccessEvent`, `CashReferralManagerInvitation`; scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog`.
 - **Extension points**: handler + adapter under `public/v1`; compensation ports
   `CompensationPilotPortV1`, `CompensationManagerPortV1`, `CashOrderIngestionPortsV1`.
 - **Tests**: `G/modules/fleet-operations/**/*.test.ts` (most are compensation;
@@ -665,9 +677,12 @@ data is not knowable from the repository.
 | 10 compensation core models: `CompensationBudgetPeriod`, `CompensationPerson`, `CompensationPersonBinding`, `CompensationVerifiedOrder`, `CompensationOrderClaim`, `CompensationApplication`, `CompensationPayoutAuthorization`, `CompensationSettlement`, `CompensationReconciliationTask`, `CompensationAuditEvent` | `COMP/compensation-prisma-adapter.ts`; budget period also `legacy-prisma-compensation-budget-period-adapter.ts` | manager and pilot adapters | Owner `fleet_operations` via `architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json` |
 | `CompensationCashOrder`, `CompensationCashOrderIngestionCheckpoint`, `CompensationPilotSubmission` | ingestion adapter; pilot adapter | compensation | Owner via `…/compensation-pilot-v1/module-manifest-amendments.json` |
 | scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog` | `yandex-fleet-scraper/src/{api,worker}.ts` | same | `AuditLog` has no writer |
+| `CashReferralAttribution`, `CashAccessEvent` | `COMP/legacy-prisma-cash-referral-ledger-adapter.ts` | `compensation-pilot-operations.ts` (the bot's Cash access decision), the manager screens | S1 `20261101120000_add_cash_referral_access`. `CashAccessEvent` is append-only and hash-chained per person; its writer CHECK admits manager kinds only with `signed_staff_session`, the kind's capability, a session id, `authenticatedAt` and a reason |
+| `CashReferralManagerInvitation` | the same ledger adapter | the manager screens | S4 `20261106210000_add_cash_referral_manager_links`. One standing invitation per invitee; recording one grants nothing |
 
 Compensation reads `Contact`, `ContactPhone`, `ApiConnection`, `Driver` without
-owning them.
+owning them. The referral manager tools reach Contacts only through its public
+capabilities: ContactLookup.v1 (`searchContactsV1`), lineage and main-driver confirmation.
 
 ### 3.6 Identity, work, AI knowledge, operations, avito, shared
 
@@ -1000,6 +1015,19 @@ be fetched) → `compensationManagerActionV1` → `performManagerActionV1`
 (`COMP/compensation-manager-service.ts`) → start payout / finalize (settlement) /
 release / reject / resolve reconciliation in the adapter.
 Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
+
+**F-24a Referral manager tools (S4)**
+`G/app/compensation/referrals/actions.ts` → CRM manager session (`managerSession`) →
+the search and the person card also need the verified integration-admin principal
+(`getIntegrationAdminPrincipal`; ContactLookup.v1 answers only it) → every write also
+needs `resolveCashStaffAuthorityV1` (`referral-data.ts`; it refuses
+`staff_session_unavailable` until Identity Access hands over the signed session facts,
+`docs/design/cash-staff-authority-v1.md`) → `cashReferralManager*V1` /
+`cashAccessManager{Grant,Revoke}V1` (`application/cash-referral-manager-operations.ts`,
+behind `YOKO_CASH_ACCESS_LEDGER=on`) → `COMP/cash-referral-manager-service.ts` → the
+ledger adapter. Recording an invitation and granting access are separate writes; a grant
+is a manual grant from its decision time until revoked. The bot reads the same chain
+(`foldCashAccessLedgerV1` → `decideCashAccessV1`).
 
 ### Authentication and authorization
 
@@ -1384,8 +1412,8 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `check-messaging-binding-trust-boundary.mjs`.
 - **I-67 Person-scoped effects follow the same trust.** Workflow group writes
   (assign, unassign, resolve, mark read) write an exact id list of one contact's
-  trusted conversations; a contradicted or contact-less conversation is written
-  on its own, and no statement selects rows by `driverId`. The AI reply context
+  trusted private conversations, exactly the inbox entry; a group, contradicted
+  or contact-less conversation is written on its own, and no statement selects rows by `driverId`. The AI reply context
   carries a Driver only when the binding is trusted and Contacts'
   `isContactConfirmedMainDriverV1` confirms it. `auditConversationBindingsV1`
   (`messaging.ConversationBindingAuditQuery.v1`) counts stored Telegram bindings
@@ -1606,6 +1634,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `compensation-manager-principal.ts` — its test. Exception: the session itself is
   the unsigned browser cookie (F-25); the real gate on `/compensation` is nginx
   Basic Auth (`check-compensation-edge-perimeter-boundary.mjs`).
+- **I-31b A referral manager write needs a signed staff session and the kind's capability.**
+  No role, principal id or the unsigned `crm_user_id` cookie admits a write, and the
+  authority is resolved on the server, never taken from the browser:
+  `cash.referral.qualify` for invitations, `cash.access.manage` for grant and revoke. A
+  request id reused for another target is refused (`invalid_request`). Recording an
+  invitation grants nothing. — `cashStaffAuthorityAdmitsV1` in `COMP/cash-referral-manager.ts`,
+  the writer CHECKs of `20261106210000_add_cash_referral_manager_links` —
+  `cash-referral-manager*.test.ts`, `G/app/compensation/referrals/referral-actions.test.ts`,
+  `cash-referral-manager-scenario.postgres.test.ts`.
 - **I-31a On demand never reads a park.** In mode `on_demand` the only provider
   request is one proven driver's completed cash orders of one business day, made after
   eligibility and the day checks; a response that is not exactly that is not written. —
