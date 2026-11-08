@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "e5f8703d28f4e9253a05e3803587ac1bd4cd35acaf9f3e9c76e2ea1aa7f1a7dc",
-    "size": 172944,
+    "sha256": "b0acf8d3154b1c90b62e214d1b58a8c06e0eb5ebd4d970577f0abc76c12099a7",
+    "size": 174878,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -213,6 +213,24 @@
       "creates": {
         "tables": [
           "CashReferralManagerInvitation"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261108210000_add_staff_credential",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "sha256": "e718afec7fde9b03981af8d5d672d7d9eafe43fb5986c19f5c285f3bc6ab05d2",
+      "size": 3111,
+      "owner_context": "identity_access",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "StaffCredential",
+          "StaffCredentialEvent"
         ],
         "columns": [],
         "forbidden_indexes": []

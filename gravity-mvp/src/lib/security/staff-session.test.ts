@@ -5,6 +5,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
+// Real scrypt (64 MiB, ~100 ms each) runs many times per test; a loaded CI
+// runner must not turn that into a timeout.
+vi.setConfig({ testTimeout: 60_000 })
+
 /**
  * Staff Session v1 (docs/design/staff-session-v1.md v1.3): the credential
  * primitives, the composition against a real registry file and an in-memory

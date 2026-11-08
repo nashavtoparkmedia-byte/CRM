@@ -12,6 +12,7 @@ Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing ro
 mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
 change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
+Partial update 2026-11-08: §2.8, F-25 (browser operator row), the `StaffCredential` data rows, the Login / sessions / guards routing row, I-SS1 (number assigned at landing) and R-01 describe Staff Session v1 (`docs/design/staff-session-v1.md` v1.3), verified against its own change on top of main `7bf380c2`. It is dormant until `STAFF_SESSION_SECRET` is provisioned.
 Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
 tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
 
@@ -489,7 +490,8 @@ Each entry lists what the code actually does.
 
 ### 2.8 Identity and access (`identity_access`)
 
-- **Purpose**: operator identity, the three session mechanisms, integration-admin
+- **Purpose**: operator identity, the four session mechanisms (legacy browser
+  selector, Staff Session v1, mobile session, integration admin), integration-admin
   authorization, mobile device registration and the FCM transport.
 - **Key paths**: `G/lib/users/user-service.ts`, `G/lib/users/auth-helpers.js`,
   `G/data/users.json`; `G/modules/identity-access/public/v1/`
@@ -500,9 +502,17 @@ Each entry lists what the code actually does.
   `G/modules/identity-access/internal/mobile-session-barrier.ts`,
   `G/modules/identity-access/internal/mobile-delivery/`; `G/proxy.ts`;
   `G/app/login/`, `G/app/users/`, `G/app/api/mobile/push-registration/route.ts`.
-- **Owns**: `CrmUser` (task assignees — **not** the login store) and
-  `MobileDeviceRegistration` (via amendment). Operators themselves live in
-  `G/data/users.json`.
+  Staff Session v1: `public/v1/staff-session.ts` (`getStaffSessionPrincipalV1`, the
+  only employee authority for consumers), `application/staff-session-operations.ts`,
+  `internal/staff-session-credentials.ts`, `internal/staff-credential-store.ts`,
+  `internal/user-registry-file.ts` (registry path `YOKO_USER_REGISTRY_FILE`, atomic
+  writes).
+- **Owns**: `CrmUser` (task assignees — **not** the login store),
+  `MobileDeviceRegistration`, `StaffCredential` and `StaffCredentialEvent` (via
+  amendments). Operators themselves live in the registry `G/data/users.json` (or
+  `YOKO_USER_REGISTRY_FILE`), the only authority for who exists, their role and
+  status; `StaffCredential` holds only a password verifier, the record binding and a
+  revocation counter.
 - **Tests**: `G/lib/security/*.test.ts`, `G/lib/users/__tests__/*.test.js`,
   `npm run test:security-boundaries`, `npx vitest run src/lib/security` (the BR-4
   suite `mobile-signed-operator.test.ts` is not in the security subset);
@@ -690,6 +700,8 @@ capabilities: ContactLookup.v1 (`searchContactsV1`), lineage and main-driver con
 |---|---|---|---|---|
 | `CrmUser` (`crm_users`) | identity_access | `legacy-prisma-crm-user-seed-adapter.js` | `G/app/tasks/*`, `G/app/team-overview/actions.ts` | Not the login store; no link to `users.json` |
 | `MobileDeviceRegistration` | identity_access (amendment) | `prisma-mobile-device-registration-adapter.ts` | same | Unique `deviceId`, unique `fcmToken` |
+| `StaffCredential` | identity_access (amendment) | `internal/staff-credential-store.ts` (advisory-locked transactions) | same | PK registry `userId`; scrypt-v1 CHECK shape; never deleted (trigger), disable/delete set `revokedAt`; no name/role/status |
+| `StaffCredentialEvent` | identity_access (amendment) | `internal/staff-credential-store.ts` | same | Append-only (UPDATE/DELETE/TRUNCATE refused); no secret material |
 | `Task`, `TaskEvent` | work_management | `G/app/tasks/{actions,excel-actions}.ts`, `G/lib/triggers.ts`, `G/lib/tasks/*`, work-management adapters | tasks, my-day, team-overview | — |
 | `ManagerTask` | work_management | `legacy-prisma-completion-adapter.ts` | `G/app/inbox/actions.ts` | No creator found in `G/` |
 | `scenario_field_settings`, `usage_events` | work_management | work-management adapter; `G/lib/tasks/usage.ts` (raw SQL) | — | — |
@@ -1035,7 +1047,7 @@ is a manual grant from its decision time until revoked. The bot reads the same c
 
 | Lane | Mechanism | Where enforced |
 |---|---|---|
-| Browser operator | Cookie `crm_user_id` chosen on `/login` from `G/data/users.json`; unsigned, no password. `canLogin` only stops a Менеджер from switching identity. The code calls this "not a real authentication primitive" | `G/lib/users/user-service.ts`. `G/proxy.ts` does not check it |
+| Browser operator | Dormant default: cookie `crm_user_id` chosen on `/login` from the registry; unsigned, no password. `canLogin` only stops a Менеджер from switching identity. Staff Session v1 (when `STAFF_SESSION_SECRET` is valid and the registry is located): `/login` asks the employee's individual password (scrypt verifier in `StaffCredential`) and sets the signed `__Host-yoko_staff_session` (12 h, global and per-employee epoch, session instance id); the proxy resolves it with the same BR-4 resolver and forwards exactly one `crm_user_id`, the employee; refused → none; store or registry unreadable → 503; `YOKO_STAFF_SESSION_ENFORCE=on` removes `crm_user_id` from browser requests without a session. Logout bumps the employee's epoch. User CRUD is strict (Staff Session Администратор) once the secret is valid or any credential row exists | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/application/staff-session-operations.ts` |
 | Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch, credential subject, device id, session instance id) from shared `MOBILE_ACCESS_USER/PASS`. The proxy resolves it once per request (`resolveCookieOperatorV1`). Valid and not logged out: forwarded with exactly one `crm_user_id`, the signed operator, so a client copy never wins; GET/HEAD re-syncs the browser copy. Logged out (the Mobile Push v1 logout barrier), unbarrable (no session instance id, `ephemeral-device`), tampered, expired, epoch bumped or credential rotated: no operator; page 303 to `/login/mobile`, API 401. Barrier unreadable: no operator; 503 with no Location (`mobile_session_unverifiable` for the API), so the shell keeps its session. A session cookie sent without the shell User-Agent is resolved the same way and refused sessions get no operator; without a session cookie the browser lane is unchanged. Under a session no operator switch (`authenticateUserV1` refuses, mobile login answers `session_active`); logout writes the barrier (I-62) | `G/proxy.ts`, `mobile-session-operator-operations.ts`, `mobile-session-auth.ts`, `legacy-user-service-adapter.ts` |
 | Integration admin | `ADMIN_USER/ADMIN_PASS` → HMAC cookie `yoko_integration_admin_session` (8 h) | `requireIntegrationAdminAccess` in settings pages/actions and selected API routes |
 | Machine callers | Shared secrets per caller (below) | The individual route |
@@ -1157,7 +1169,7 @@ report row; it repairs nothing.
 | Cash-order ingestion | fleet_operations | `COMP/cash-order-ingestion-runtime.ts` | `CashOrderIngestionPortsV1` | ingestion tests in `COMP/` | — |
 | Compensation manager UI | fleet_operations | `G/app/compensation/` | `compensationManagerActionV1` | `G/app/compensation/manager-actions.test.ts`, `check-compensation-edge-perimeter-boundary.mjs` | nginx gate without the perimeter doc |
 | Android / push | platform_shell (app), identity_access (server) | `android/app/src/main/java/ru/yokoone/crm/shell/`, `G/modules/identity-access/internal/mobile-delivery/` | `PushPayload` kinds; FCM transport | Gradle unit tasks; `check-mobile-delivery-provider-boundary.mjs` | — |
-| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1`; `resolveRequestOperatorV1` for an actor under a mobile session | `npm run test:security-boundaries`; `npx vitest run src/lib/security` (BR-4 suite) | — |
+| Login / sessions / guards | identity_access | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/public/v1/` | `IdentityAccessPortV1`; `resolveRequestOperatorV1` for an actor under a mobile or staff session; `getStaffSessionPrincipalV1` for employee authority | `npm run test:security-boundaries`; `npx vitest run src/lib/security` (BR-4 and Staff Session suites); `staff-credential-store.postgres.test.ts` | Never take authority from `getCurrentUser()` or `crm_user_id` |
 | Yandex Fleet sync | fleet_operations | `G/lib/yandexSync.ts`, reconciler adapter | `registerYandexFleetReconciliationRunnerV1` | `yandex-sync-lease.test.ts`, reconciler tests | `Contact*` (use contacts contracts) |
 | Scraper checks | fleet_operations | `G/app/api/monitoring/**`, `yandex-fleet-scraper/src/` | new job branch in `worker.ts` | `yandex-fleet-scraper` `npm test` | — |
 | Tasks | work_management | `G/app/tasks/actions.ts`, `G/lib/tasks/` | `createIdempotentTaskV1` for other contexts | module tests | `Task` writes from other contexts |
@@ -1319,6 +1331,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `mobile-shell-lane.test.ts`. Exceptions: the browser lane without a session is unchanged
   and unauthenticated (R-01); `G/app/messages/open/route.ts` still re-syncs the UI cookie
   from a signature-only check (an open follow-up, no operator effect).
+- **I-SS1 (number assigned at landing) An employee's authority comes only from a
+  verified Staff Session, and role and status only from the registry.**
+  `getStaffSessionPrincipalV1()` answers only after the signed token, the
+  per-employee epoch, a live credential bound to the registry record's `createdAt`
+  and an `Активен` registry record all agree; the role is the registry's, read at
+  that moment. Disable and delete revoke the credential in PostgreSQL before the
+  registry write, so a lost or rolled-back registry write never restores sign-in.
+  A client-held value never selects the employee. `staff-session.test.ts`,
+  `staff-credential-store.postgres.test.ts`.
 - **I-63 A Contact card is shown
   only for the exact Chat.id that RCQ1 resolves, stable across the whole read,
   and only to a verified principal.** The reader asks Identity Access for the
@@ -1706,7 +1727,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 
 | ID | Observation | Evidence | Confidence |
 |---|---|---|---|
-| R-01 | Browser lane has no authentication in application code: identity is an unsigned, client-settable cookie picked from a list | `G/lib/users/user-service.ts` (`login`), `G/proxy.ts` | HIGH |
+| R-01 | Browser lane has no authentication in application code while Staff Session v1 is dormant: identity is an unsigned, client-settable cookie picked from a list. Closed by activation (`STAFF_SESSION_SECRET`, registry on persistent storage, bootstrap, then `YOKO_STAFF_SESSION_ENFORCE=on`); API routes that take an actor from the request body (R-20) still need their owners to adopt `staff_session` like `mobile_session` | `G/lib/users/user-service.ts` (`login`), `G/proxy.ts` | HIGH until activation |
 | R-02 | Eight of nine `/api/cron/*` routes contain no auth check; `sync-scraper` and `AVITO_WEBHOOK_TOKEN` accept everything when the secret is unset | route files; `verifyAuth` in `G/app/api/webhooks/avito/route.ts` | HIGH |
 | R-03 | AI auto-reply sends through the channel without persisting a `Message` | no message write site in `G/modules/messaging/internal/ai-reply-pipeline/` | HIGH |
 | R-04 | `send-media` dispatches before persisting and has no `clientMessageId` lookup; a repeated request re-sends | `G/app/api/messages/send-media/route.ts` | HIGH |
