@@ -219,6 +219,18 @@ export function contactPermissionRefusalV1(error: unknown): {
 }
 
 /**
+ * The "stc:" Message.clientMessageId namespace belongs to SendToContact alone
+ * (I-65). An entry that writes a caller's clientMessageId itself, rather than
+ * through MessageService.send (which reserves it), refuses one in that
+ * namespace before any read, gate or effect. The value is read the way such an
+ * entry stores it, `String(value)` when present, so a non-string spelling of
+ * the same id is refused too.
+ */
+export function isSendToContactReservedClientMessageIdV1(value: unknown): boolean {
+    return value !== undefined && value !== null && value !== '' && String(value).startsWith('stc:')
+}
+
+/**
  * The typed reading of an adapter's send result, or null for a legacy result.
  * A provider_ack or provider_echo that names no provider id proves nothing
  * about this message and is read as a client_action.

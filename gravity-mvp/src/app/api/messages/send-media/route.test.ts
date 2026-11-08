@@ -116,6 +116,30 @@ describe('POST /api/messages/send-media outbound identity preflight', () => {
         expect(mocks.messageCreate).not.toHaveBeenCalled()
     })
 
+    test("refuses a caller clientMessageId in SendToContact's stc: namespace before any read, gate, provider call or Message", async () => {
+        mocks.prepareOutbound.mockResolvedValue(prepared('telegram'))
+        for (const clientMessageId of ['stc:x', 'stc:a-future-request-id', ['stc:x']]) {
+            const response = await POST(request({ clientMessageId }))
+            expect(response.status).toBe(400)
+            expect(await response.json()).toMatchObject({ code: 'CLIENT_MESSAGE_ID_RESERVED' })
+        }
+        expect(mocks.chatFindUnique).not.toHaveBeenCalled()
+        expect(mocks.prepareOutbound).not.toHaveBeenCalled()
+        expect(mocks.maxSendMedia).not.toHaveBeenCalled()
+        expect(mocks.telegramSendMedia).not.toHaveBeenCalled()
+        expect(mocks.whatsAppSendMedia).not.toHaveBeenCalled()
+        expect(mocks.messageCreate).not.toHaveBeenCalled()
+        expect(mocks.attachmentCreate).not.toHaveBeenCalled()
+        expect(mocks.chatUpdate).not.toHaveBeenCalled()
+
+        // Any other caller id is still written exactly as the caller sent it.
+        const ordinary = await POST(request({ clientMessageId: 'cmid-1' }))
+        expect(ordinary.status).toBe(200)
+        expect(mocks.messageCreate).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ clientMessageId: 'cmid-1' }),
+        }))
+    })
+
     test('routes Telegram media only through the prepared peer and transport', async () => {
         mocks.prepareOutbound.mockResolvedValue(prepared('telegram'))
 

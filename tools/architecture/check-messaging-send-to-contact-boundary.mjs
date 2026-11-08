@@ -41,6 +41,20 @@ const portPath = 'gravity-mvp/src/modules/messaging/public/v1/outbound-conversat
 const intentAdapterPath = 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-send-to-contact-adapter.ts'
 const compositionPath = 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts'
 const deleteRoutePath = 'gravity-mvp/src/app/api/messages/delete/route.ts'
+const messagesRoutePath = 'gravity-mvp/src/app/api/messages/route.ts'
+const sendMediaRoutePath = 'gravity-mvp/src/app/api/messages/send-media/route.ts'
+const maxActionsPath = 'gravity-mvp/src/app/max-actions.ts'
+// I-65: every route or server action that takes a caller's clientMessageId keeps
+// SendToContact's stc: namespace reserved, each in one reviewed way:
+//   engine:        hands it only to MessageService.send, which reserves the namespace;
+//   guard:         writes the Message itself, so it refuses an stc: id before any read, gate or effect;
+//   provider_only: forwards it to a provider as a dedupe key and writes no Message.
+const callerClientMessageIdEntries = new Map([
+    [messagesRoutePath, 'engine'],
+    [sendMediaRoutePath, 'guard'],
+    [maxActionsPath, 'provider_only'],
+])
+const messageWrite = /\bprisma\.message\.(?:create|createMany|upsert|update|updateMany)\(|\bINSERT\s+INTO\s+"?Message"?[\s(]/u
 const conversationsContractPath = 'gravity-mvp/src/contracts/messaging/v1/contact-conversations-query.ts'
 const contractsIndexPath = 'gravity-mvp/src/contracts/messaging/v1/index.ts'
 const manifestPath = 'architecture/contexts/v1/manifests/messaging.json'
@@ -235,6 +249,36 @@ function assertSendToContactAdmission(files) {
     assert.deepEqual(admitters, [compositionPath], 'only the SendToContact composition admits a send in the stc: namespace')
 }
 
+/** Source with block and line comments removed, so a mention in prose is not a use. */
+function withoutComments(source) {
+    return source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/(^|[^:'"`\\])\/\/.*$/gmu, '$1')
+}
+
+/** `files` maps path → source for every runtime file. */
+function assertReservedNamespaceAtCallerEntries(files) {
+    const entries = [...files]
+        .filter(([file, source]) => file.startsWith(`${sourceRoot}/app/`)
+            && (/(?:^|\/)route\.[cm]?[jt]sx?$/u.test(file) || /^\s*['"]use server['"]/u.test(source))
+            && /\bclientMessageId\b/u.test(withoutComments(source)))
+        .map(([file]) => file)
+        .sort()
+    assert.deepEqual(entries, [...callerClientMessageIdEntries.keys()].sort(), 'every route or server action that takes a caller clientMessageId is classified for the stc: namespace')
+    for (const [file, kind] of callerClientMessageIdEntries) {
+        const source = files.get(file)
+        if (kind === 'guard') {
+            const post = functionBody(source, 'export async function POST(')
+            const guard = post.indexOf('if (isSendToContactReservedClientMessageIdV1(clientMessageId)) {')
+            assert.ok(guard >= 0, `${file}: refuses a caller clientMessageId in the stc: namespace`)
+            assert.match(post.slice(guard, guard + 400), /^if \(isSendToContactReservedClientMessageIdV1\(clientMessageId\)\) \{\s*return NextResponse\.json\(\{[^}]*code: 'CLIENT_MESSAGE_ID_RESERVED' \}, \{ status: 400 \}\)/u, `${file}: the stc: refusal is a 400 CLIENT_MESSAGE_ID_RESERVED`)
+            const firstAwait = post.search(/\bawait\b(?! req\.json\(\))/u)
+            assert.ok(firstAwait < 0 || guard < firstAwait, `${file}: the stc: refusal comes before any read, gate or effect`)
+        } else {
+            assert.doesNotMatch(source, messageWrite, `${file}: writes no Message itself`)
+            if (kind === 'engine') assert.match(source, /MessageService\.send\([^)]*\bclientMessageId\b/u, `${file}: hands the caller id to MessageService.send`)
+        }
+    }
+}
+
 function assertEngineSeam(messageServiceSource) {
     const send = functionBody(messageServiceSource, 'static async send(')
     assert.match(send, /assertSendToContactNamespaceV1\(clientMessageId, admission\)/u, `${messageServicePath}: send reserves the stc: namespace`)
@@ -264,6 +308,7 @@ assertProofOnlyCallers(runtimeFiles)
 assertIntentTableWriter(runtimeFiles)
 assertSendToContactAdmission(runtimeFiles)
 assertEngineSeam(read(messageServicePath))
+assertReservedNamespaceAtCallerEntries(runtimeFiles)
 if (!promoted) {
     assertNoOutsideImporter(importerCandidates)
     assertNotExported(read(contractsIndexPath))
@@ -429,9 +474,21 @@ rejectProbe(engineSource, engineSource.replace('        assertSendToContactNames
 rejectProbe(engineSource, engineSource.replace('if (!admission?.sendToContact) assertSameSendIntent(race.winner, intent, clientMessageId)', 'assertSameSendIntent(race.winner, intent, clientMessageId)'), assertEngineSeam)
 rejectProbe(engineSource, engineSource.replace('            await settleContactPermissionRefusalBeforeLease(message, meta, error)\n', ''), assertEngineSeam)
 rejectProbe(engineSource, engineSource.replace('const outboundBinding = assertSendToContactLineageV1(await prepareOutboundConversationV1(targetChat, profileId), admission)', 'const outboundBinding = await prepareOutboundConversationV1(targetChat, profileId)'), assertEngineSeam)
+const sendMediaSource = read(sendMediaRoutePath)
+const withEntry = (file, source) => new Map([...runtimeFiles, [file, source]])
+rejectProbe(sendMediaSource, sendMediaSource.replace('if (isSendToContactReservedClientMessageIdV1(clientMessageId)) {', 'if (false) {'), (changed) => assertReservedNamespaceAtCallerEntries(withEntry(sendMediaRoutePath, changed)))
+rejectProbe(sendMediaSource, sendMediaSource.replace("code: 'CLIENT_MESSAGE_ID_RESERVED' }, { status: 400 })", "code: 'CLIENT_MESSAGE_ID_RESERVED' }, { status: 200 })"), (changed) => assertReservedNamespaceAtCallerEntries(withEntry(sendMediaRoutePath, changed)))
+rejectProbe(sendMediaSource, sendMediaSource.replace('        if (isSendToContactReservedClientMessageIdV1(clientMessageId)) {', '        await prisma.chat.count()\n        if (isSendToContactReservedClientMessageIdV1(clientMessageId)) {'), (changed) => assertReservedNamespaceAtCallerEntries(withEntry(sendMediaRoutePath, changed)))
+rejectProbe('', 'export async function POST(req) {\n    const { chatId, clientMessageId } = await req.json()\n    await prisma.message.create({ data: { chatId, clientMessageId } })\n}\n', (changed) => assertReservedNamespaceAtCallerEntries(withEntry('gravity-mvp/src/app/api/messages/send-voice/route.ts', changed)))
+assert.doesNotThrow(() => assertReservedNamespaceAtCallerEntries(withEntry('gravity-mvp/src/app/api/messages/note/route.ts', '// same row, same clientMessageId\nexport async function POST() {}\n')))
+rejectProbe('', "'use server'\nexport async function resendAction(chatId, clientMessageId) { return forward(chatId, clientMessageId) }\n", (changed) => assertReservedNamespaceAtCallerEntries(withEntry('gravity-mvp/src/app/messages/resend-actions.ts', changed)))
+const messagesRouteSource = read(messagesRoutePath)
+rejectProbe(messagesRouteSource, `${messagesRouteSource}\nconst plant = (chatId, clientMessageId) => prisma.message.create({ data: { chatId, clientMessageId } })\n`, (changed) => assertReservedNamespaceAtCallerEntries(withEntry(messagesRoutePath, changed)))
+const maxActionsSource = read(maxActionsPath)
+rejectProbe(maxActionsSource, `${maxActionsSource}\nexport async function plantMaxMessage(chatId, clientMessageId) { await prisma.message.create({ data: { chatId, clientMessageId } }) }\n`, (changed) => assertReservedNamespaceAtCallerEntries(withEntry(maxActionsPath, changed)))
 const handlerSource = read(handlerPath)
 rejectProbe(handlerSource, `import { prisma } from '@/lib/prisma'\n${handlerSource}`, (changed) => assertClosedImports(handlerPath, changed))
 assert.equal(isPromoted('{"commands":["SendToContactCommand.v1"]}'), true)
 assert.equal(isPromoted(manifestSource.replace(/SendToContact/gu, 'Other')), false)
 
-process.stdout.write(`messaging send-to-contact boundary: PASS (${promoted ? 'declared: gate in the port, proof-only callers, insert-only intent, stc: admission' : 'pre-public: unreachable, unexported, no intent table'})\n`)
+process.stdout.write(`messaging send-to-contact boundary: PASS (${promoted ? 'declared: gate in the port, proof-only callers, insert-only intent, stc: admission, stc: reserved at every caller-id entry' : 'pre-public: unreachable, unexported, no intent table'})\n`)

@@ -1387,10 +1387,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   sha256(contract, contactId, content, sorted `allowedChannels` | null) on first
   arrival, refused or not, and is never updated or deleted; the Message is
   `clientMessageId = "stc:" + requestId`, a namespace only SendToContact admits and
-  mints; a SendToContact row replays unconditionally on lookup and on the unique
-  race; P1 and P2 must name the same canonical Contact. — `send-to-contact-*`,
-  `MessageService.send` — `send-to-contact-handler.test.ts`,
-  `send-to-contact.postgres.test.ts`, `check-messaging-send-to-contact-boundary.mjs`.
+  mints; every route or server action that takes a caller's `clientMessageId`
+  either hands it to `MessageService.send` (which reserves the namespace), or
+  writes the Message itself and refuses an `stc:` id first (`send-media`: 400
+  `CLIENT_MESSAGE_ID_RESERVED`), or writes no Message; a SendToContact row replays
+  unconditionally on lookup and on the unique race; P1 and P2 must name the same
+  canonical Contact. — `send-to-contact-*`, `MessageService.send`,
+  `isSendToContactReservedClientMessageIdV1` — `send-to-contact-handler.test.ts`,
+  `send-media/route.test.ts`, `send-to-contact.postgres.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
 - **I-08 One `clientMessageId` = one row and one dispatch; a different intent
   under the same key is rejected.** `MessageService.send` + unique
   `Message.clientMessageId` — `operator-delivery-retry.test.ts`.

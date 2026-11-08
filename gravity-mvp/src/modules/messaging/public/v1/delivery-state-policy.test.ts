@@ -6,6 +6,7 @@ import {
     deliveryStateLabelV1,
     deriveDeliveryStateV1,
     isDeliveryStateV1,
+    isSendToContactReservedClientMessageIdV1,
     isPhysicalRetryDueV1,
     isProviderAcceptedEvidenceV1,
     newDeliveryEvidenceRecordV1,
@@ -219,5 +220,14 @@ describe('contactPermissionRefusalV1', () => {
             null,
             'MESSAGING_CONTACT_PERMISSION_REFUSED',
         ]) expect(contactPermissionRefusalV1(other)).toBeNull()
+    })
+
+    it("recognises a caller id in SendToContact's stc: namespace the way an entry would store it", () => {
+        for (const reserved of ['stc:x', 'stc:', ['stc:x'], { toString: () => 'stc:x' }]) {
+            expect(isSendToContactReservedClientMessageIdV1(reserved)).toBe(true)
+        }
+        for (const free of [undefined, null, '', 'cmid-1', 'STC:x', ' stc:x', 'xstc:', 0, false]) {
+            expect(isSendToContactReservedClientMessageIdV1(free)).toBe(false)
+        }
     })
 })
