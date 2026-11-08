@@ -11,20 +11,22 @@ import {
 } from './compensation-referral-ledger'
 import {
     CASH_ACCESS_GRANT_CAPABILITY_V1,
-    CASH_ADMIN_OPERATOR_LABEL_V1,
     CASH_REFERRAL_LINK_CAPABILITY_V1,
+    CASH_STAFF_WRITE_ROLES_V1,
     cashAccessManagerViewV1,
     cashReferralContactLookupsV1,
     cashReferralRequestIdValidV1,
     cashStaffActorV1,
     cashStaffAuthorityAdmitsV1,
     cashStaffAuthorityForV1,
-    cashStaffAuthorityFromAdminSessionV1,
+    cashStaffAuthorityFromStaffSessionV1,
+    cashStaffSessionIdV1,
     decideCashAccessGrantV1,
     decideCashAccessRevokeV1,
     decideCashReferralLinkV1,
     groupCashReferralCandidatesV1,
     parseCashReferralManagerQueryV1,
+    resolveCashStaffAuthorityFromSessionV1,
     type CashReferralInvitationRowV1,
     type CashReferralManagerProfileV1,
 } from './cash-referral-manager'
@@ -208,42 +210,118 @@ describe('what Cash asks ContactLookup.v1', () => {
     })
 })
 
-describe('the Cash capabilities of the verified integration-admin session', () => {
-    const facts = {
-        principal: { id: 'identity-access:integration-admin-session', kind: 'integration_admin_session' },
-        sessionId: 'sid-binding-1',
-        authenticatedAt: new Date('2026-11-07T08:00:00.000Z'),
+describe('the Cash authority of a verified Staff Session', () => {
+    const at = new Date('2026-11-08T12:00:00.000Z')
+    const principal = {
+        kind: 'staff_session',
+        userId: 'u2',
+        role: 'Администратор',
+        sid: 'Qm9hcmQtc2Vzc2lvbi0x',
+        issuedAt: new Date('2026-11-08T09:00:00.000Z'),
+        expiresAt: new Date('2026-11-08T21:00:00.000Z'),
+    }
+    const entry = { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен' }
+    const other = { id: 'u3', firstName: 'Ольга', lastName: 'Петрова', role: 'Администратор', status: 'Активен' }
+    const bind = (p: unknown, e: unknown = entry, when: Date = at) => cashStaffAuthorityFromStaffSessionV1(p as never, e as never, when)
+    const refusal = (p: unknown, e: unknown = entry, when: Date = at) => {
+        const result = bind(p, e, when)
+        return result.bound ? 'bound' : result.refusal
     }
 
-    it('binds exactly the two Cash capabilities to the session, labelled as the CRM manager', () => {
-        const authority = cashStaffAuthorityFromAdminSessionV1(facts)
-        expect(authority).toEqual({
-            principalId: 'identity-access:integration-admin-session',
-            operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1,
-            sessionId: 'sid-binding-1',
-            authenticatedAt: facts.authenticatedAt,
+    it('binds a confirmed Администратор to exactly the two Cash capabilities, under their own name and session', () => {
+        const result = bind(principal)
+        expect(result.bound).toBe(true)
+        if (!result.bound) return
+        expect(result.authority).toEqual({
+            principalId: 'staff:u2',
+            operatorLabel: 'Александр Сидоров',
+            sessionId: cashStaffSessionIdV1(principal.sid),
+            authenticatedAt: principal.issuedAt,
             capabilities: [CASH_REFERRAL_LINK_CAPABILITY_V1, CASH_ACCESS_GRANT_CAPABILITY_V1],
         })
-        const at = new Date('2026-11-07T09:00:00.000Z')
-        expect(cashStaffAuthorityForV1(authority!, 'invitation', at)).toEqual({ admitted: true })
-        expect(cashStaffAuthorityForV1(authority!, 'access', at)).toEqual({ admitted: true })
-        expect(cashStaffActorV1(authority!, 'access')).toEqual({
+        expect(cashStaffAuthorityForV1(result.authority, 'invitation', at)).toEqual({ admitted: true })
+        expect(cashStaffAuthorityForV1(result.authority, 'access', at)).toEqual({ admitted: true })
+        expect(cashStaffActorV1(result.authority, 'invitation')).toEqual({
             kind: 'signed_staff_session',
-            id: 'identity-access:integration-admin-session',
-            capability: 'cash.access.manage',
-            sessionId: 'sid-binding-1',
-            authenticatedAt: facts.authenticatedAt,
+            id: 'staff:u2',
+            capability: 'cash.referral.qualify',
+            sessionId: cashStaffSessionIdV1(principal.sid),
+            authenticatedAt: principal.issuedAt,
         })
     })
 
-    it('binds nothing without well-formed facts of that principal kind', () => {
-        expect(cashStaffAuthorityFromAdminSessionV1(null)).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1(undefined)).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, principal: { ...facts.principal, kind: 'mobile_session' } })).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, principal: { ...facts.principal, id: ' ' } })).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, sessionId: '' })).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, authenticatedAt: new Date('not a date') })).toBeNull()
-        expect(cashStaffAuthorityFromAdminSessionV1({ ...facts, authenticatedAt: '2026-11-07T08:00:00.000Z' as unknown as Date })).toBeNull()
+    it('names a session by a labelled digest of its id, never the id itself', () => {
+        const name = cashStaffSessionIdV1(principal.sid)
+        expect(name).toMatch(/^staff_session:[0-9a-f]{64}$/u)
+        expect(name).not.toContain(principal.sid)
+        expect(cashStaffSessionIdV1(principal.sid)).toBe(name)
+        expect(cashStaffSessionIdV1('another-session')).not.toBe(name)
+    })
+
+    it('binds nothing without a session, or for any other principal kind', () => {
+        expect(refusal(null)).toBe('staff_session_invalid')
+        expect(refusal(undefined)).toBe('staff_session_invalid')
+        expect(refusal('staff_session')).toBe('staff_session_invalid')
+        for (const kind of ['integration_admin_session', 'mobile_session', 'Staff_Session', '', undefined]) {
+            expect(refusal({ ...principal, kind })).toBe('staff_session_invalid')
+        }
+        // What the unsigned cookie selects is not a principal at all.
+        expect(refusal({ id: 'u2', role: 'Администратор' })).toBe('staff_session_invalid')
+    })
+
+    it('binds nothing for a malformed session or one outside its lifetime', () => {
+        expect(refusal({ ...principal, userId: '' })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, userId: ' u2' })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, userId: 'u'.repeat(201) })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, sid: '' })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, sid: 42 })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, issuedAt: new Date('not a date') })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, issuedAt: '2026-11-08T09:00:00.000Z' })).toBe('staff_session_invalid')
+        // Expired, exactly at expiry, and issued after the write.
+        expect(refusal(principal, entry, new Date('2026-11-08T21:00:00.001Z'))).toBe('staff_session_invalid')
+        expect(refusal(principal, entry, principal.expiresAt)).toBe('staff_session_invalid')
+        expect(refusal(principal, entry, new Date('2026-11-08T08:59:59.999Z'))).toBe('staff_session_invalid')
+        expect(refusal(principal, entry, new Date('not a date'))).toBe('staff_session_invalid')
+    })
+
+    it('binds nothing unless the directory names this very principal as Identity Access verified it', () => {
+        expect(refusal(principal, null)).toBe('staff_identity_mismatch')
+        // Another employee's entry: what a changed crm_user_id would point at.
+        expect(refusal(principal, other)).toBe('staff_identity_mismatch')
+        expect(refusal(principal, { ...entry, role: 'Менеджер' })).toBe('staff_identity_mismatch')
+        expect(refusal(principal, { ...entry, status: 'Отключен' })).toBe('staff_identity_mismatch')
+        expect(refusal(principal, { ...entry, firstName: ' ', lastName: '' })).toBe('staff_identity_mismatch')
+    })
+
+    it('gives no Cash capability to a verified employee who is not a confirmed Администратор', () => {
+        expect(CASH_STAFF_WRITE_ROLES_V1).toEqual(['Администратор'])
+        for (const role of ['Менеджер', 'Руководитель', 'администратор', 'Администратор ', '']) {
+            expect(refusal({ ...principal, role }, { ...entry, role })).toBe('staff_role_not_allowed')
+        }
+    })
+
+    it('resolves from Identity Access\'s two reads, and refuses when either cannot answer', async () => {
+        const now = () => at
+        const directory = async () => [other, entry]
+        const resolved = await resolveCashStaffAuthorityFromSessionV1({ principal: async () => principal, directory, now })
+        expect(resolved).toMatchObject({ ok: true, authority: { principalId: 'staff:u2', operatorLabel: 'Александр Сидоров' } })
+
+        // No session, or one Identity Access refused (forged, expired, revoked by an epoch): no operator.
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => null, directory, now }))
+            .toEqual({ ok: false, refusal: 'staff_session_unavailable' })
+        // The session store or the directory does not answer: no operator, never another identity.
+        const down = async () => { throw new Error('session store unavailable') }
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: down, directory, now }))
+            .toEqual({ ok: false, refusal: 'staff_session_unavailable' })
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => principal, directory: down, now }))
+            .toEqual({ ok: false, refusal: 'staff_session_unavailable' })
+        // A directory that does not name the principal, or names its id twice.
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => principal, directory: async () => [other], now }))
+            .toEqual({ ok: false, refusal: 'staff_identity_mismatch' })
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => principal, directory: async () => [entry, { ...entry, firstName: 'Другой' }], now }))
+            .toEqual({ ok: false, refusal: 'staff_identity_mismatch' })
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => ({ ...principal, role: 'Менеджер' }), directory: async () => [{ ...entry, role: 'Менеджер' }], now }))
+            .toEqual({ ok: false, refusal: 'staff_role_not_allowed' })
     })
 })
 

@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import { cashAccessEventHashV1, foldCashAccessLedgerV1, verifyCashAccessChainV1, type CashAccessEventV1 } from './compensation-referral-ledger'
-import { cashReferralLicenceKeyV1, type CashReferralInvitationRowV1, type CashReferralManagerProfileV1, type CashStaffAuthorityV1 } from './cash-referral-manager'
+import {
+    cashReferralLicenceKeyV1,
+    cashStaffAuthorityFromStaffSessionV1,
+    cashStaffSessionIdV1,
+    type CashReferralInvitationRowV1,
+    type CashReferralManagerProfileV1,
+    type CashStaffAuthorityV1,
+} from './cash-referral-manager'
 import {
     cashReferralPersonCardV1,
     grantCashAccessV1,
@@ -447,5 +454,69 @@ describe('authority', () => {
         expect(store.chainOf('contact-P').filter((event) => event.kind === 'manual_granted')).toHaveLength(0)
         expect(store.chainOf('contact-N').filter((event) => event.kind === 'manual_cleared')).toHaveLength(0)
         expect(store.rows.find((row) => row.attributionId === 'att-2')?.state).toBe('recorded')
+    })
+})
+
+describe('a Staff Session\'s authority, end to end', () => {
+    const session = (userId: string, sid: string, role = 'Администратор') => ({
+        kind: 'staff_session', userId, role, sid,
+        issuedAt: new Date('2026-11-06T08:30:00.000Z'), expiresAt: new Date('2026-11-06T20:30:00.000Z'),
+    })
+    const directory = {
+        u2: { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен' },
+        u3: { id: 'u3', firstName: 'Ольга', lastName: 'Петрова', role: 'Администратор', status: 'Активен' },
+        u4: { id: 'u4', firstName: 'Игорь', lastName: 'Смирнов', role: 'Менеджер', status: 'Активен' },
+    }
+    const authorityOf = (userId: keyof typeof directory, sid: string, role?: string) => {
+        const binding = cashStaffAuthorityFromStaffSessionV1(session(userId, sid, role ?? directory[userId].role), directory[userId], NOW)
+        if (!binding.bound) throw new Error(binding.refusal)
+        return binding.authority
+    }
+
+    it('attributes every write and every history line to the employee and the session that made it', async () => {
+        const alexander = authorityOf('u2', 'sid-alexander')
+        const olga = authorityOf('u3', 'sid-olga')
+        expect(await recordCashReferralInvitationV1(port, { inviterContactId: 'contact-A', inviteeContactId: 'contact-B', comment: null, requestId: requestId(), authority: alexander }))
+            .toEqual({ status: 'recorded', attributionId: 'att-1' })
+        expect(await grantCashAccessV1(port, { contactId: 'contact-A', basis: 'referral_program', referralAttributionId: 'att-1', comment: null, requestId: requestId(), authority: alexander }))
+            .toEqual({ status: 'granted' })
+        expect(await revokeCashAccessV1(port, { contactId: 'contact-A', comment: null, requestId: requestId(), authority: olga }))
+            .toEqual({ status: 'revoked' })
+
+        const chain = store.chainOf('contact-A')
+        expect(verifyCashAccessChainV1(chain).ok).toBe(true)
+        expect(chain.map((event) => [event.kind, event.actorKind, event.actorId, event.actorCapability, event.actorSessionId, event.actorAuthenticatedAt?.toISOString()])).toEqual([
+            ['referral_link_recorded', 'signed_staff_session', 'staff:u2', 'cash.referral.qualify', cashStaffSessionIdV1('sid-alexander'), '2026-11-06T08:30:00.000Z'],
+            ['manual_granted', 'signed_staff_session', 'staff:u2', 'cash.access.manage', cashStaffSessionIdV1('sid-alexander'), '2026-11-06T08:30:00.000Z'],
+            ['manual_cleared', 'signed_staff_session', 'staff:u3', 'cash.access.manage', cashStaffSessionIdV1('sid-olga'), '2026-11-06T08:30:00.000Z'],
+        ])
+        // No raw session id is kept anywhere in the chain.
+        expect(JSON.stringify(chain)).not.toContain('sid-alexander')
+
+        const card = await cashReferralPersonCardV1(port, 'contact-A')
+        if (card.status !== 'ok') throw new Error('no card')
+        expect(card.card.invited).toEqual([expect.objectContaining({ recordedBy: 'Александр Сидоров' })])
+        expect(card.card.access.history.map((entry) => [entry.kind, entry.operatorLabel])).toEqual([
+            ['manual_cleared', 'Ольга Петрова'],
+            ['manual_granted', 'Александр Сидоров'],
+        ])
+    })
+
+    it('writes nothing twice for a repeated request, whoever repeats it', async () => {
+        const alexander = authorityOf('u2', 'sid-alexander')
+        const olga = authorityOf('u3', 'sid-olga')
+        const id = requestId()
+        const grant = (authority: CashStaffAuthorityV1, rid: string) =>
+            grantCashAccessV1(port, { contactId: 'contact-A', basis: 'manager_decision', referralAttributionId: null, comment: 'Решение Owner по пилоту', requestId: rid, authority })
+        expect(await grant(alexander, id)).toEqual({ status: 'granted' })
+        expect(await grant(alexander, id)).toEqual({ status: 'already_granted' })
+        expect(await grant(olga, requestId())).toEqual({ status: 'already_granted' })
+        expect(store.chainOf('contact-A').filter((event) => event.kind === 'manual_granted')).toHaveLength(1)
+    })
+
+    it('gives a verified Менеджер no authority to write with', async () => {
+        const binding = cashStaffAuthorityFromStaffSessionV1(session('u4', 'sid-igor', 'Менеджер'), directory.u4, NOW)
+        expect(binding).toEqual({ bound: false, refusal: 'staff_role_not_allowed' })
+        expect(store.events).toHaveLength(0)
     })
 })
