@@ -32,6 +32,10 @@ export { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 export type { ExternalConversationPersistencePortV1 } from './external-conversation-handler'
 export { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
 export type { ChannelMessagePersistencePortV1 } from './channel-message-handler'
+export { createConversationBindingAuditHandlerV1 } from './conversation-binding-audit-handler'
+export type { AuditedConversationV1, ConversationBindingAuditPortV1 } from './conversation-binding-audit-handler'
+export { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, isConversationPersonTrustedV1, telegramConversationPeerV1 } from './conversation-binding-trust-policy'
+export type { ConversationBindingFactsV1, ConversationLinkedIdentityFactsV1, ConversationPersonBindingStateV1 } from './conversation-binding-trust-policy'
 export { createApplyMessageDeliveryEvidenceHandlerV1 } from './message-delivery-evidence-handler'
 export type { DeliveryEvidenceRowV1, DeliveryEvidenceWriteV1, MessageDeliveryEvidencePortV1 } from './message-delivery-evidence-handler'
 export { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from './channel-conversation-handler'
@@ -122,6 +126,7 @@ export {
     replaceExternalMessageV1,
     resolveConversationContactV1,
     contactConversationsV1,
+    auditConversationBindingsV1,
     resolveConversationV1,
     sendMessageV1,
     syncCallTimelineV1,

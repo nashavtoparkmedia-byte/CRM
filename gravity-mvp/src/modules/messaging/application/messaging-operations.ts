@@ -34,6 +34,8 @@ import { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 import { legacyPrismaExternalConversationPortV1 } from '../public/v1/legacy-prisma-external-conversation-adapter'
 import { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from '../public/v1/channel-message-handler'
 import { legacyPrismaChannelMessagePortV1 } from '../public/v1/legacy-prisma-channel-message-adapter'
+import { createConversationBindingAuditHandlerV1 } from '../public/v1/conversation-binding-audit-handler'
+import { legacyPrismaConversationBindingAuditPortV1 } from '../public/v1/legacy-prisma-conversation-binding-audit-adapter'
 import { createApplyMessageDeliveryEvidenceHandlerV1 } from '../public/v1/message-delivery-evidence-handler'
 import { legacyPrismaMessageDeliveryEvidencePortV1 } from '../public/v1/legacy-prisma-message-delivery-evidence-adapter'
 import { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from '../public/v1/channel-conversation-handler'
@@ -104,6 +106,7 @@ const detachContactConversations = createDetachContactConversationsHandlerV1(leg
 const ensureConversationContactLink = createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)
 const resolveConversationContact = createResolveConversationContactHandlerV1(legacyPrismaResolveConversationContactPortV1)
 const contactConversations = createContactConversationsQueryHandlerV1(legacyPrismaContactConversationsQueryPortV1)
+const auditConversationBindings = createConversationBindingAuditHandlerV1(legacyPrismaConversationBindingAuditPortV1)
 const findAndBackfillContactConversation = createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const openFallbackContactConversation = createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const patchMessageMetadata = createPatchMessageMetadataHandlerV1(legacyPrismaPatchMessageMetadataPortV1)
@@ -156,6 +159,7 @@ export const detachContactConversationsV1 = (...args: Parameters<typeof detachCo
 export const ensureConversationContactLinkV1 = (...args: Parameters<typeof ensureConversationContactLink>) => ensureConversationContactLink(...args)
 export const resolveConversationContactV1 = (...args: Parameters<typeof resolveConversationContact>) => resolveConversationContact(...args)
 export const contactConversationsV1 = (...args: Parameters<typeof contactConversations>) => contactConversations(...args)
+export const auditConversationBindingsV1 = (...args: Parameters<typeof auditConversationBindings>) => auditConversationBindings(...args)
 export const findAndBackfillContactConversationV1 = (...args: Parameters<typeof findAndBackfillContactConversation>) => findAndBackfillContactConversation(...args)
 export const openFallbackContactConversationV1 = (...args: Parameters<typeof openFallbackContactConversation>) => openFallbackContactConversation(...args)
 export const patchMessageMetadataV1 = (...args: Parameters<typeof patchMessageMetadata>) => patchMessageMetadata(...args)

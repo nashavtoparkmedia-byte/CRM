@@ -1,9 +1,37 @@
 import { prisma } from '@/lib/prisma'
+import { conversationPersonBindingStateV1, isConversationPersonTrustedV1 } from '@/modules/messaging/public/v1/conversation-binding-trust-policy'
 
-type ConversationGroupSelector =
-  | { kind: 'contact'; value: string }
-  | { kind: 'driver'; value: string }
-  | { kind: 'chat'; value: string }
+/** The exact conversations one group operation writes: one person's trusted conversations, or just the one. */
+type ConversationGroupSelector = { chatIds: string[] }
+
+const BINDING_FACTS_SELECT = {
+  channel: true,
+  chatType: true,
+  externalChatId: true,
+  contactId: true,
+  contactIdentityId: true,
+  contactIdentity: { select: { id: true, channel: true, externalId: true, contactId: true, isActive: true } },
+} as const
+
+type BindingFactsRow = {
+  channel: string
+  chatType: string
+  externalChatId: string
+  contactId: string | null
+  contactIdentityId: string | null
+  contactIdentity: { id: string; channel: string; externalId: string; contactId: string; isActive: boolean } | null
+}
+
+function bindingState(row: BindingFactsRow) {
+  return conversationPersonBindingStateV1({
+    channel: row.channel,
+    chatType: row.chatType,
+    externalChatId: row.externalChatId,
+    contactId: row.contactId,
+    contactIdentityId: row.contactIdentityId,
+    linkedIdentity: row.contactIdentity,
+  })
+}
 
 /**
  * ConversationWorkflowService — единый источник правды для state transitions чата.
@@ -93,24 +121,17 @@ export class ConversationWorkflowService {
   }
 
   /**
-   * Assign chat to a user. Updates all chats sharing the same contactId/driverId.
+   * Assign chat to a user. Updates every conversation of the same trusted contact (R-22).
    * Transitions: new→open
    */
   static async assignChat(chatId: string, userId: string): Promise<void> {
-    const rows = await prisma.$queryRaw<Array<{ status: string; contactId: string | null; driverId: string | null }>>`
-      SELECT status, "contactId", "driverId" FROM "Chat" WHERE id = ${chatId}
+    const rows = await prisma.$queryRaw<Array<{ status: string }>>`
+      SELECT status FROM "Chat" WHERE id = ${chatId}
     `
     if (rows.length === 0) return
 
-    const chat = rows[0]
-    const newStatus = chat.status === 'new' ? 'open' : chat.status
-
-    const selector: ConversationGroupSelector = chat.contactId
-      ? { kind: 'contact', value: chat.contactId }
-      : chat.driverId
-        ? { kind: 'driver', value: chat.driverId }
-        : { kind: 'chat', value: chatId }
-
+    const newStatus = rows[0].status === 'new' ? 'open' : rows[0].status
+    const selector = await this._getGroupSelector(chatId)
     await this._assignGroup(selector, userId, newStatus)
   }
 
@@ -160,15 +181,23 @@ export class ConversationWorkflowService {
    * Resolve the semantic target for group operations (all chats of same person).
    */
   private static async _getGroupSelector(chatId: string): Promise<ConversationGroupSelector> {
-    const rows = await prisma.$queryRaw<Array<{ contactId: string | null; driverId: string | null }>>`
-      SELECT "contactId", "driverId" FROM "Chat" WHERE id = ${chatId}
-    `
-    if (rows.length === 0) return { kind: 'chat', value: chatId }
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId },
+      select: { id: true, ...BINDING_FACTS_SELECT },
+    })
+    if (!chat) return { chatIds: [chatId] }
 
-    const chat = rows[0]
-    if (chat.contactId) return { kind: 'contact', value: chat.contactId }
-    if (chat.driverId) return { kind: 'driver', value: chat.driverId }
-    return { kind: 'chat', value: chatId }
+    // R-22: a group operation reaches every conversation of one PERSON, and a
+    // person is a trusted contact binding. A driverId alone is a projection, and
+    // a binding that is provably another person's is neither the origin of a
+    // group operation nor reached by one: it stays on its own conversation.
+    if (!chat.contactId || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }
+    const siblings = await prisma.chat.findMany({
+      where: { contactId: chat.contactId },
+      select: { id: true, ...BINDING_FACTS_SELECT },
+    })
+    const chatIds = siblings.filter(sibling => isConversationPersonTrustedV1(bindingState(sibling))).map(sibling => sibling.id)
+    return { chatIds: chatIds.includes(chatId) ? chatIds : [...chatIds, chatId] }
   }
 
   private static async _assignGroup(
@@ -176,104 +205,30 @@ export class ConversationWorkflowService {
     userId: string,
     status: string,
   ): Promise<void> {
-    if (selector.kind === 'contact') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "assignedToUserId" = $1, status = $2, "updatedAt" = NOW()
-         WHERE "contactId" = $3`,
-        userId,
-        status,
-        selector.value,
-      )
-      return
-    }
-    if (selector.kind === 'driver') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "assignedToUserId" = $1, status = $2, "updatedAt" = NOW()
-         WHERE "driverId" = $3`,
-        userId,
-        status,
-        selector.value,
-      )
-      return
-    }
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Chat" SET "assignedToUserId" = $1, status = $2, "updatedAt" = NOW()
-       WHERE id = $3`,
-      userId,
-      status,
-      selector.value,
-    )
+    await prisma.$executeRaw`
+      UPDATE "Chat" SET "assignedToUserId" = ${userId}, status = ${status}, "updatedAt" = NOW()
+      WHERE id = ANY(${selector.chatIds})
+    `
   }
 
   private static async _unassignGroup(selector: ConversationGroupSelector): Promise<void> {
-    if (selector.kind === 'contact') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
-         WHERE "contactId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    if (selector.kind === 'driver') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
-         WHERE "driverId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
-       WHERE id = $1`,
-      selector.value,
-    )
+    await prisma.$executeRaw`
+      UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
+      WHERE id = ANY(${selector.chatIds})
+    `
   }
 
   private static async _resolveGroup(selector: ConversationGroupSelector): Promise<void> {
-    if (selector.kind === 'contact') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
-         WHERE "contactId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    if (selector.kind === 'driver') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
-         WHERE "driverId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
-       WHERE id = $1`,
-      selector.value,
-    )
+    await prisma.$executeRaw`
+      UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
+      WHERE id = ANY(${selector.chatIds})
+    `
   }
 
   private static async _markGroupRead(selector: ConversationGroupSelector): Promise<void> {
-    if (selector.kind === 'contact') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
-         WHERE "contactId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    if (selector.kind === 'driver') {
-      await prisma.$executeRawUnsafe(
-        `UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
-         WHERE "driverId" = $1`,
-        selector.value,
-      )
-      return
-    }
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
-       WHERE id = $1`,
-      selector.value,
-    )
+    await prisma.$executeRaw`
+      UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
+      WHERE id = ANY(${selector.chatIds})
+    `
   }
 }
