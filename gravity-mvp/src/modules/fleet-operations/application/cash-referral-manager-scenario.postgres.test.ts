@@ -11,11 +11,12 @@
  *
  * Who a name or a phone belongs to is answered by Contacts' ContactLookup.v1
  * over the Contact rows; the licence and the park profiles by Fleet's Driver
- * rows. The writes are made by the authority Cash binds to a verified
- * integration-admin session (docs/design/cash-staff-authority-v1.md); the
- * facts below stand in for the ones Identity Access will hand over, and the
- * database CHECK admits the events only because they carry that session and
- * the capability each kind needs. No money moves: recording grants nothing,
+ * rows. The writes are made by the authority Cash binds to a verified Staff
+ * Session of a confirmed Администратор (docs/design/cash-staff-authority-v2.md);
+ * the principal below stands in for the one Identity Access's
+ * getStaffSessionPrincipalV1() will hand over, and the database CHECK admits
+ * the events only because they carry that session and the capability each
+ * kind needs. No money moves: recording grants nothing,
  * and the grant is the ledger's manual grant only.
  *
  * Gated behind YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF=1 and an isolated
@@ -27,7 +28,7 @@ import { randomInt, randomUUID } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { CASH_ADMIN_OPERATOR_LABEL_V1 } from '../internal/compensation/cash-referral-manager'
+import { cashStaffSessionIdV1 } from '../internal/compensation/cash-referral-manager'
 import { cashAccessOrderClaimableV1, decideCashAccessV1 } from '../internal/compensation/compensation-access'
 import { compensationLineageDigestV1 } from '../internal/compensation/compensation-pilot-lineage'
 import { foldCashAccessLedgerV1, verifyCashAccessChainV1 } from '../internal/compensation/compensation-referral-ledger'
@@ -38,8 +39,9 @@ import {
     cashReferralManagerPersonV1,
     cashReferralManagerRecordInvitationV1,
     cashReferralManagerSearchV1,
-    cashStaffAuthorityFromAdminSessionV1,
+    resolveCashStaffAuthorityFromSessionV1,
     type CashReferralManagerCandidateV1,
+    type CashStaffAuthorityV1,
 } from './cash-referral-manager-operations'
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
@@ -50,11 +52,30 @@ const digits = (length: number) => Array.from({ length }, () => String(randomInt
 let database: PrismaClient
 const ledgerSwitch = process.env.YOKO_CASH_ACCESS_LEDGER
 
-/** The facts Identity Access will hand over for one verified integration-admin login. */
-const facts = {
-    principal: { id: 'identity-access:integration-admin-session', kind: 'integration_admin_session' },
-    sessionId: `sid-binding-${tag}`,
-    authenticatedAt: new Date(Date.now() - 60_000),
+/** One verified Staff Session of a confirmed Администратор, as Identity Access will hand it over. */
+const staff = {
+    principal: {
+        kind: 'staff_session',
+        userId: `u-${tag}`,
+        role: 'Администратор',
+        sid: `sid-${tag}`,
+        issuedAt: new Date(Date.now() - 60_000),
+        expiresAt: new Date(Date.now() + 12 * 3_600_000),
+    },
+    entry: { id: `u-${tag}`, firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен' },
+}
+const STAFF_LABEL = 'Александр Сидоров'
+const STAFF_ACTOR_ID = `staff:u-${tag}`
+const STAFF_SESSION_ID = cashStaffSessionIdV1(`sid-${tag}`)
+
+async function staffAuthority(): Promise<CashStaffAuthorityV1> {
+    const resolved = await resolveCashStaffAuthorityFromSessionV1({
+        principal: async () => staff.principal,
+        directory: async () => [staff.entry],
+        now: () => new Date(),
+    })
+    if (!resolved.ok) throw new Error(`no staff authority: ${resolved.refusal}`)
+    return resolved.authority
 }
 
 const people = {
@@ -137,9 +158,7 @@ proof('the manager referral scenario on real PostgreSQL', () => {
     })
 
     it('finds Иванов → finds Сидоров → records the invitation → grants Иванов access separately → shows the history → the section opens → revokes → it closes', async () => {
-        const authority = cashStaffAuthorityFromAdminSessionV1(facts)
-        expect(authority).not.toBeNull()
-        if (authority === null) return
+        const authority = await staffAuthority()
 
         // 1. Иванов by name: one person across two parks, apart from his namesake.
         const byName = await cashReferralManagerSearchV1('Иванов Иван')
@@ -239,18 +258,18 @@ proof('the manager referral scenario on real PostgreSQL', () => {
             state: 'recorded',
             otherContactId: people.sidorov.contactId,
             otherName: 'Сидоров Сергей Петрович',
-            recordedBy: CASH_ADMIN_OPERATOR_LABEL_V1,
+            recordedBy: STAFF_LABEL,
             // The ledger reason names the decision, then the manager's own words.
             reason: 'Приглашение закреплено менеджером: Сидоров пришёл по приглашению Иванова',
         })])
         expect(ivanovCard.card.access).toMatchObject({
             state: 'granted',
-            manualGrant: { basis: 'referral_program', referralAttributionId: recorded.attributionId, operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1 },
+            manualGrant: { basis: 'referral_program', referralAttributionId: recorded.attributionId, operatorLabel: STAFF_LABEL },
         })
         expect(ivanovCard.card.access.history).toEqual([expect.objectContaining({
             kind: 'manual_granted',
             actorKind: 'signed_staff_session',
-            operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1,
+            operatorLabel: STAFF_LABEL,
             basis: 'referral_program',
             referralAttributionId: recorded.attributionId,
             stale: false,
@@ -268,8 +287,8 @@ proof('the manager referral scenario on real PostgreSQL', () => {
             people.ivanov.contactId,
         )
         expect(rows).toEqual([
-            { kind: 'referral_link_recorded', actorKind: 'signed_staff_session', actorId: facts.principal.id, actorCapability: 'cash.referral.qualify', actorSessionId: facts.sessionId },
-            { kind: 'manual_granted', actorKind: 'signed_staff_session', actorId: facts.principal.id, actorCapability: 'cash.access.manage', actorSessionId: facts.sessionId },
+            { kind: 'referral_link_recorded', actorKind: 'signed_staff_session', actorId: STAFF_ACTOR_ID, actorCapability: 'cash.referral.qualify', actorSessionId: STAFF_SESSION_ID },
+            { kind: 'manual_granted', actorKind: 'signed_staff_session', actorId: STAFF_ACTOR_ID, actorCapability: 'cash.access.manage', actorSessionId: STAFF_SESSION_ID },
         ])
         expect(verifyCashAccessChainV1(await store.readChain(people.ivanov.contactId))).toEqual({ ok: true, length: 2 })
         expect(await database.$queryRawUnsafe<Array<{ n: number }>>(
@@ -312,13 +331,19 @@ proof('the manager referral scenario on real PostgreSQL', () => {
             `SELECT "kind", "actorCapability", "actorSessionId" FROM "CashAccessEvent" WHERE "chainContactId" = $1 ORDER BY "seq"`,
             people.ivanov.contactId,
         )
-        expect(revokedRows.at(-1)).toEqual({ kind: 'manual_cleared', actorCapability: 'cash.access.manage', actorSessionId: facts.sessionId })
+        expect(revokedRows.at(-1)).toEqual({ kind: 'manual_cleared', actorCapability: 'cash.access.manage', actorSessionId: STAFF_SESSION_ID })
         expect(verifyCashAccessChainV1(await store.readChain(people.ivanov.contactId))).toEqual({ ok: true, length: 3 })
     })
 
     it('writes nothing for a session that binds no Cash capability', async () => {
-        expect(cashStaffAuthorityFromAdminSessionV1(null)).toBeNull()
-        const withoutCapability = { ...cashStaffAuthorityFromAdminSessionV1(facts)!, capabilities: [] }
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => null, directory: async () => [staff.entry], now: () => new Date() }))
+            .toEqual({ ok: false, refusal: 'staff_session_unavailable' })
+        expect(await resolveCashStaffAuthorityFromSessionV1({
+            principal: async () => ({ ...staff.principal, role: 'Менеджер' }),
+            directory: async () => [{ ...staff.entry, role: 'Менеджер' }],
+            now: () => new Date(),
+        })).toEqual({ ok: false, refusal: 'staff_role_not_allowed' })
+        const withoutCapability = { ...(await staffAuthority()), capabilities: [] }
         const before = await database.$queryRawUnsafe<Array<{ n: number }>>(`SELECT count(*)::int AS n FROM "CashAccessEvent"`)
         expect(await cashAccessManagerGrantV1({
             contactId: people.namesake.contactId,

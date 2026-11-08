@@ -16,9 +16,10 @@
 import {
     cashAccessGrantBasisV1,
     cashReferralCommentV1,
-    cashStaffAuthorityFromAdminSessionV1 as bindAdminSessionV1,
-    type CashAdminSessionFactsV1,
+    resolveCashStaffAuthorityFromSessionV1 as resolveStaffSessionV1,
+    type CashStaffAuthorityResolutionV1,
     type CashStaffAuthorityV1,
+    type CashStaffSessionSourceV1,
 } from '../internal/compensation/cash-referral-manager'
 import {
     cashReferralPersonCardV1,
@@ -40,14 +41,17 @@ import { legacyPrismaCashReferralManagerReadsV1 } from '../internal/compensation
 import { listYandexConnectionMetadataV1 } from '../public/v1/yandex-connection-capability'
 
 export type {
-    CashAdminSessionFactsV1,
     CashAccessGrantBasisV1,
     CashAccessHistoryEntryV1,
     CashAccessManagerViewV1,
     CashReferralManagerCandidateV1,
     CashReferralManagerProfileV1,
     CashReferralMatchV1,
+    CashStaffAuthorityResolutionV1,
     CashStaffAuthorityV1,
+    CashStaffDirectoryEntryV1,
+    CashStaffSessionPrincipalV1,
+    CashStaffSessionSourceV1,
 } from '../internal/compensation/cash-referral-manager'
 export type {
     CashAccessGrantResultV1,
@@ -60,13 +64,13 @@ export type {
 } from '../internal/compensation/cash-referral-manager-service'
 
 /**
- * The Cash capabilities of a verified integration-admin session's facts, as
- * Identity Access will hand them over (docs/design/cash-staff-authority-v1.md,
- * part 3): the authority holding cash.referral.qualify and cash.access.manage,
- * or null for anything else.
+ * The authority a manager write is made by, from Identity Access's verified
+ * Staff Session principal and its directory (docs/design/cash-staff-authority-v2.md):
+ * cash.referral.qualify and cash.access.manage for a confirmed Администратор,
+ * or the reason there is none.
  */
-export function cashStaffAuthorityFromAdminSessionV1(facts: CashAdminSessionFactsV1 | null | undefined): CashStaffAuthorityV1 | null {
-    return bindAdminSessionV1(facts)
+export function resolveCashStaffAuthorityFromSessionV1(source: CashStaffSessionSourceV1): Promise<CashStaffAuthorityResolutionV1> {
+    return resolveStaffSessionV1(source)
 }
 
 /** The manager screens open only once the manager-links migration is applied. */
