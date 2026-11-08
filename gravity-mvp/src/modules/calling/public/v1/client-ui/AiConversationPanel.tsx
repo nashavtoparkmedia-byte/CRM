@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1,
   START_AI_CONVERSATION_COMMAND_V1,
@@ -45,12 +45,12 @@ const FAILURE_LABELS: Record<AiConversationFailureCodeV1, string> = {
 const REFUSAL_LABELS: Record<StartAiConversationRefusalV1, string> = {
   unauthenticated: 'Сессия истекла. Войдите снова, чтобы звонить.',
   disabled: 'AI-звонки выключены.',
-  contact_not_found: 'Контакт не найден.',
+  contact_changed: 'Карточка изменилась, обновите страницу.',
   identity_unconfirmed: 'Личность не подтверждена — AI-звонок недоступен.',
   identity_conflict: 'Есть конфликт личности — AI-звонок недоступен.',
   voice_restricted: 'Звонки этому человеку запрещены.',
-  voice_permission_unavailable: 'Сервис разрешений недоступен. Попробуйте позже.',
-  no_callable_phone: 'Нет текущего бесспорного номера для звонка.',
+  voice_permission_unavailable: 'Не удалось проверить разрешение на звонки. Попробуйте позже.',
+  no_primary_phone: 'Нет подтверждённого основного телефона.',
   busy: 'С этим человеком уже идёт AI-разговор.',
 }
 
@@ -154,10 +154,43 @@ function Details({ conversation }: { conversation: AiConversationViewV1 }) {
   )
 }
 
-export default function AiConversationPanel({ contactId }: { contactId: string }) {
+/** The card must never fail because of Calling: a render error here becomes one muted line. */
+class PanelBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch(error: unknown) { console.error('[ai-conversation] panel failed:', error instanceof Error ? error.message : error) }
+  render() {
+    if (this.state.failed) return <div className="rounded-xl border border-[#E4ECFC] bg-white px-4 py-3 text-[13px] text-[#64748B]">AI-звонки сейчас недоступны.</div>
+    return this.props.children
+  }
+}
+
+function ConversationRow({ conversation, open, onToggle }: { conversation: AiConversationViewV1; open: boolean; onToggle: () => void }) {
+  return (
+    <div className="border-t border-[#E4ECFC]" data-testid="ai-conversation-row">
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-3 px-4 min-h-[56px] py-2 text-left hover:bg-[#F1F5FD]">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={stateTone(conversation.state)}>{STATE_LABELS[conversation.state]}</Badge>
+            <span className="text-[15px] font-medium text-[#0F172A]">{conversation.destinationMasked}</span>
+            {conversation.mode === 'simulated' && <Badge tone="muted">симуляция</Badge>}
+          </div>
+          <div className="mt-0.5 text-[13px] text-[#64748B] truncate">
+            {conversation.outcome?.summary ?? (conversation.failure ? FAILURE_LABELS[conversation.failure] : `${conversation.transcript.length} реплик`)}
+          </div>
+        </div>
+        <span className="text-[12px] text-[#64748B] whitespace-nowrap">{formatTime(conversation.startedAt)}</span>
+      </button>
+      {open && <Details conversation={conversation} />}
+    </div>
+  )
+}
+
+function AiConversationPanelBody({ contactId }: { contactId: string }) {
   const [mode, setMode] = useState<AiConversationRuntimeModeV1 | null>(null)
   const [conversations, setConversations] = useState<AiConversationViewV1[]>([])
   const [unauthenticated, setUnauthenticated] = useState(false)
+  const [changed, setChanged] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -166,11 +199,19 @@ export default function AiConversationPanel({ contactId }: { contactId: string }
   const requestIdRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
-    const answer = await listAiConversationsForContactActionV1({ contract: AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1, contactId })
+    let answer
+    try {
+      answer = await listAiConversationsForContactActionV1({ contract: AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1, contactId })
+    } catch {
+      setLoadError(ACTION_ERROR_LABELS.unavailable)
+      return
+    }
     if (!answer.ok) { setLoadError(ACTION_ERROR_LABELS[answer.error] ?? answer.error); return }
     setLoadError(null)
     if (answer.result.status === 'unauthenticated') { setUnauthenticated(true); return }
+    if (answer.result.status === 'contact_changed') { setChanged(true); return }
     setUnauthenticated(false)
+    setChanged(false)
     setMode(answer.result.mode)
     setConversations(answer.result.conversations)
   }, [contactId])
@@ -179,10 +220,10 @@ export default function AiConversationPanel({ contactId }: { contactId: string }
 
   const active = conversations.some(conversation => !isTerminalAiConversationStateV1(conversation.state))
   useEffect(() => {
-    if (!active) return
+    if (!active || changed || unauthenticated) return
     const timer = setInterval(() => { void load() }, AI_CONVERSATION_POLL_MS)
     return () => clearInterval(timer)
-  }, [active, load])
+  }, [active, changed, unauthenticated, load])
 
   async function start() {
     if (pending) return
@@ -206,27 +247,28 @@ export default function AiConversationPanel({ contactId }: { contactId: string }
       const result = answer.result
       if (result.status === 'refused') {
         if (result.reason === 'unauthenticated') setUnauthenticated(true)
+        if (result.reason === 'contact_changed') setChanged(true)
         setNotice(REFUSAL_LABELS[result.reason])
-        if (result.activeConversationId) setExpanded(result.activeConversationId)
-      } else {
-        setExpanded(result.conversation.conversationId)
-        if (result.duplicate) setNotice('Этот звонок уже запущен.')
+      } else if (result.duplicate) {
+        setNotice('Этот звонок уже запущен.')
       }
       await load()
+    } catch {
+      setNotice(ACTION_ERROR_LABELS.unavailable)
     } finally {
       setPending(false)
     }
   }
 
-  const disabled = pending || mode !== 'simulated' || unauthenticated || active
+  // OFF state: nothing on the card. Unknown yet: nothing either, so the card never jumps.
+  if (!unauthenticated && !changed && !loadError && mode !== 'simulated') return null
+  if (loadError && mode === null) return <div className="rounded-xl border border-[#E4ECFC] bg-white px-4 py-3 text-[13px] text-[#64748B]">AI-звонки сейчас недоступны.</div>
+
+  const latest = conversations[0] ?? null
+  const disabled = pending || unauthenticated || changed || active
   return (
     <section className="rounded-xl border border-[#E4ECFC] bg-white" data-testid="ai-conversation-panel">
-      <header className="flex items-center justify-between px-4 h-[44px] border-b border-[#E4ECFC]">
-        <h2 className="text-[15px] font-semibold text-[#0F172A]">AI-звонки</h2>
-        <span className="text-[12px] text-[#64748B]">{conversations.length}</span>
-      </header>
-
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-[#E4ECFC]">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
         <button
           type="button"
           onClick={start}
@@ -237,64 +279,59 @@ export default function AiConversationPanel({ contactId }: { contactId: string }
           {pending ? 'Запуск…' : 'AI-звонок'}
         </button>
         {mode === 'simulated' && (
-          <label className="flex items-center gap-2 text-[13px] text-[#64748B]">
-            Сценарий
-            <select
-              value={variant}
-              onChange={event => setVariant(event.target.value as AiConversationSimulationVariantV1)}
-              data-testid="ai-conversation-variant"
-              className="h-[44px] rounded-lg border border-[#E4ECFC] bg-white px-2 text-[15px] text-[#0F172A] focus:border-[#2AABEE] focus:outline-none"
-            >
-              {(Object.keys(VARIANT_LABELS) as AiConversationSimulationVariantV1[]).map(key => (
-                <option key={key} value={key}>{VARIANT_LABELS[key]}</option>
-              ))}
-            </select>
-          </label>
+          <select
+            value={variant}
+            onChange={event => setVariant(event.target.value as AiConversationSimulationVariantV1)}
+            aria-label="Сценарий симуляции"
+            data-testid="ai-conversation-variant"
+            className="h-[44px] rounded-lg border border-[#E4ECFC] bg-white px-2 text-[15px] text-[#0F172A] focus:border-[#2AABEE] focus:outline-none"
+          >
+            {(Object.keys(VARIANT_LABELS) as AiConversationSimulationVariantV1[]).map(key => (
+              <option key={key} value={key}>{VARIANT_LABELS[key]}</option>
+            ))}
+          </select>
         )}
-        {mode === 'simulated' && <Badge tone="muted">Симуляция — реальный звонок не совершается</Badge>}
-        {mode === 'disabled' && !unauthenticated && (
-          <span className="text-[13px] text-[#64748B]">AI-звонки выключены. Для проверки включите Mock-режим: Настройки → AI-обзвон → API ключи.</span>
-        )}
-        {active && <span className="text-[13px] text-[#64748B]">Дождитесь завершения текущего разговора.</span>}
+        <div className="min-w-0 flex-1 text-[13px] text-[#64748B]" data-testid="ai-conversation-status">
+          {latest ? (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <Badge tone={stateTone(latest.state)}>{STATE_LABELS[latest.state]}</Badge>
+              <span className="truncate">
+                {latest.outcome?.summary ?? (latest.failure ? FAILURE_LABELS[latest.failure] : formatTime(latest.startedAt))}
+              </span>
+            </span>
+          ) : 'AI-звонков ещё не было. Симуляция — реальный звонок не совершается.'}
+        </div>
       </div>
 
       {unauthenticated && (
-        <div className="px-4 py-3 text-[13px] text-[#0F172A] border-b border-[#E4ECFC]" data-testid="ai-conversation-unauthenticated">
+        <div className="px-4 py-3 text-[13px] text-[#0F172A] border-t border-[#E4ECFC]" data-testid="ai-conversation-unauthenticated">
           Сессия истекла.{' '}
           <a href={`/settings/integrations/access?next=${encodeURIComponent(`/contacts/${contactId}`)}`} className="font-medium text-[#2AABEE]">Войти</a>
         </div>
       )}
-      {notice && <div className="px-4 py-3 text-[13px] text-[#0F172A] border-b border-[#E4ECFC]" role="status" data-testid="ai-conversation-notice">{notice}</div>}
-      {loadError && <div className="px-4 py-3 text-[13px] text-[#DC2626] border-b border-[#E4ECFC]">{loadError}</div>}
+      {changed && !notice && <div className="px-4 py-3 text-[13px] text-[#0F172A] border-t border-[#E4ECFC]" role="status">{REFUSAL_LABELS.contact_changed}</div>}
+      {notice && <div className="px-4 py-3 text-[13px] text-[#0F172A] border-t border-[#E4ECFC]" role="status" data-testid="ai-conversation-notice">{notice}</div>}
+      {loadError && <div className="px-4 py-3 text-[13px] text-[#64748B] border-t border-[#E4ECFC]">{loadError}</div>}
 
-      {mode === null && !unauthenticated && !loadError && <div className="m-4 h-[40px] rounded-lg bg-[#F1F5FD] animate-pulse" />}
-      {mode !== null && conversations.length === 0 && <div className="px-4 py-4 text-[13px] text-[#64748B]">AI-звонков этому человеку ещё не было.</div>}
-
-      {conversations.map(conversation => {
-        const open = expanded === conversation.conversationId || !isTerminalAiConversationStateV1(conversation.state)
-        return (
-          <div key={conversation.conversationId} className="border-b border-[#E4ECFC] last:border-b-0" data-testid="ai-conversation-row">
-            <button
-              type="button"
-              onClick={() => setExpanded(open && expanded === conversation.conversationId ? null : conversation.conversationId)}
-              className="flex w-full items-center gap-3 px-4 min-h-[56px] py-2 text-left hover:bg-[#F1F5FD]"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={stateTone(conversation.state)}>{STATE_LABELS[conversation.state]}</Badge>
-                  <span className="text-[15px] font-medium text-[#0F172A]">{conversation.destinationMasked}</span>
-                  {conversation.mode === 'simulated' && <Badge tone="muted">симуляция</Badge>}
-                </div>
-                <div className="mt-0.5 text-[13px] text-[#64748B] truncate">
-                  {conversation.outcome?.summary ?? (conversation.failure ? FAILURE_LABELS[conversation.failure] : `${conversation.transcript.length} реплик`)}
-                </div>
-              </div>
-              <span className="text-[12px] text-[#64748B] whitespace-nowrap">{formatTime(conversation.startedAt)}</span>
-            </button>
-            {open && <Details conversation={conversation} />}
-          </div>
-        )
-      })}
+      {conversations.length > 0 && (
+        <details className="border-t border-[#E4ECFC]" data-testid="ai-conversation-history">
+          <summary className="cursor-pointer px-4 h-[44px] flex items-center text-[13px] text-[#64748B] hover:bg-[#F1F5FD]">
+            История AI-звонков ({conversations.length})
+          </summary>
+          {conversations.map(conversation => (
+            <ConversationRow
+              key={conversation.conversationId}
+              conversation={conversation}
+              open={expanded === conversation.conversationId}
+              onToggle={() => setExpanded(expanded === conversation.conversationId ? null : conversation.conversationId)}
+            />
+          ))}
+        </details>
+      )}
     </section>
   )
+}
+
+export default function AiConversationPanel({ contactId }: { contactId: string }) {
+  return <PanelBoundary><AiConversationPanelBody contactId={contactId} /></PanelBoundary>
 }

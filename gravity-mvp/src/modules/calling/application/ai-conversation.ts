@@ -4,8 +4,10 @@
  * Safety ordering, each step durable before the next:
  *   A  the runtime mode is read; anything but `simulated` refuses (no live provider exists here);
  *   B  the verified server-side principal is read (the browser's identity is never trusted);
- *   C  Contacts answers who this person is (ContactPersonCardQuery.v1): only a confirmed,
- *      non-archived person without a blocking conflict, through a current, undisputed phone;
+ *   C  Contacts answers who this person is (ContactPersonCardQuery.v1) for exactly the canonical id
+ *      the card showed — a redirect, a missing or an unreadable answer refuses, it is never followed:
+ *      only a confirmed, non-archived person without a blocking conflict, through its PRIMARY phone
+ *      (current, active, unique; `unknown` resolution only while simulated), never another phone;
  *   D  Contacts answers voice permission (ContactCommunicationPermissionQuery.v1, `voice`);
  *   E  the Call is created under a deterministic identity (contact + requestId) while a
  *      per-person durable lock refuses a second occupying conversation;
@@ -23,6 +25,7 @@ import { createHash } from 'node:crypto'
 import {
   AI_CONVERSATIONS_FOR_CONTACT_RESULT_V1,
   AI_CONVERSATION_LIST_LIMIT_V1,
+  AiConversationRequestConflictError,
   START_AI_CONVERSATION_RESULT_V1,
   isTerminalAiConversationStateV1,
   parseAiConversationsForContactQueryV1,
@@ -42,14 +45,23 @@ import type { ContactPersonCardResultV1, ContactPersonCardV1 } from '@/contracts
 import type { ContactCommunicationPermissionResultV1 } from '@/contracts/contacts/v1'
 import { assertProviderEffectTransition, type ProviderEffectPhase } from './ai-call-provider-effect-journal'
 
-export const AI_CONVERSATION_METADATA_KEY = 'aiConversationV1' as const
 /** A queued conversation that has not reached its provider effect by then is abandoned, never dialled late. */
-export const AI_CONVERSATION_QUEUE_HORIZON_MS = 5 * 60_000
+const QUEUE_HORIZON_MS = 5 * 60_000
 /** The pre-answer ceiling of one originate (the same 60 s as C3a's originate_timeout). */
-export const AI_CONVERSATION_ORIGINATE_TIMEOUT_MS = 60_000
+const ORIGINATE_TIMEOUT_MS = 60_000
 /** The answered cap of C1b. With the originate ceiling it bounds how long an unknown effect may still be live. */
-export const AI_CONVERSATION_ANSWERED_CAP_MS = 600_000
-export const AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS = AI_CONVERSATION_ORIGINATE_TIMEOUT_MS + AI_CONVERSATION_ANSWERED_CAP_MS
+const ANSWERED_CAP_MS = 600_000
+const UNKNOWN_OCCUPANCY_MS = ORIGINATE_TIMEOUT_MS + ANSWERED_CAP_MS
+
+/** The derived timing policy, read by the store and the proofs (a function: this module exports no values). */
+export function aiConversationTimingPolicyV1() {
+  return {
+    queueHorizonMs: QUEUE_HORIZON_MS,
+    originateTimeoutMs: ORIGINATE_TIMEOUT_MS,
+    answeredCapMs: ANSWERED_CAP_MS,
+    unknownOccupancyMs: UNKNOWN_OCCUPANCY_MS,
+  } as const
+}
 
 const CALLABLE_E164 = /^\+[1-9][0-9]{7,14}$/u
 
@@ -63,7 +75,7 @@ export interface AiConversationPermissionCheckV1 {
   policyVersion: number | null
 }
 
-/** Calling's durable record of one conversation, in Call.metadata[AI_CONVERSATION_METADATA_KEY]. */
+/** Calling's durable record of one conversation, kept by the store in the Call's metadata (`aiConversationV1`). */
 export interface AiConversationRecordV1 {
   version: 1
   conversationId: string
@@ -156,13 +168,6 @@ export interface AiConversationDependencies {
   wake(conversationId: string, delayMs: number): void
 }
 
-export class AiConversationConflictError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AiConversationConflictError'
-  }
-}
-
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -181,23 +186,29 @@ export function maskAiConversationDestination(e164: string): string {
   return `+${'•'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`
 }
 
-/** Contacts' answer turned into Calling's admission decision. Exported for the tests. */
-export function aiConversationPersonEligibility(card: ContactPersonCardV1):
+/**
+ * Contacts' answer turned into Calling's admission decision. Exported for the tests.
+ * The destination is the person's primary phone or nothing. `unknown` resolution is the default
+ * of legacy rows that Contacts deliberately does not treat as the person's own, so it is accepted
+ * only by the simulated runtime; a live runtime needs Contacts' own ownership rule first.
+ */
+export function aiConversationPersonEligibility(card: ContactPersonCardV1, mode: AiConversationRuntimeModeV1):
   | { ok: true; destination: string }
-  | { ok: false; reason: Extract<StartAiConversationRefusalV1, 'contact_not_found' | 'identity_unconfirmed' | 'identity_conflict' | 'no_callable_phone'> } {
-  if (card.isArchived) return { ok: false, reason: 'contact_not_found' }
+  | { ok: false; reason: Extract<StartAiConversationRefusalV1, 'contact_changed' | 'identity_unconfirmed' | 'identity_conflict' | 'no_primary_phone'> } {
+  if (card.isArchived) return { ok: false, reason: 'contact_changed' }
   const confirmation = card.personConfirmation.state
   if (card.hasPersonBlockingConflict || confirmation === 'contradiction' || confirmation === 'needs_reconciliation') {
     return { ok: false, reason: 'identity_conflict' }
   }
   if (confirmation !== 'confirmed') return { ok: false, reason: 'identity_unconfirmed' }
-  const callable = card.phones
-    .filter(phone => phone.isActive && phone.lifecycle === 'current'
-      && (phone.resolutionState === 'unique' || phone.resolutionState === 'unknown')
-      && CALLABLE_E164.test(phone.phone))
-    .sort((left, right) => Number(right.isPrimary) - Number(left.isPrimary))
-  if (callable.length === 0) return { ok: false, reason: 'no_callable_phone' }
-  return { ok: true, destination: callable[0].phone }
+  const primary = card.phones.filter(phone => phone.isPrimary)
+  if (primary.length !== 1) return { ok: false, reason: 'no_primary_phone' }
+  const phone = primary[0]
+  const undisputed = phone.resolutionState === 'unique' || (mode === 'simulated' && phone.resolutionState === 'unknown')
+  if (!phone.isActive || phone.lifecycle !== 'current' || !undisputed || !CALLABLE_E164.test(phone.phone)) {
+    return { ok: false, reason: 'no_primary_phone' }
+  }
+  return { ok: true, destination: phone.phone }
 }
 
 type PermissionVerdict = { decision: 'allow' | 'deny' | 'unavailable'; reason: string; policyVersion: number | null; canonicalContactId: string | null }
@@ -241,7 +252,7 @@ export function deriveAiConversationState(snapshot: AiConversationSnapshotV1): {
 function occupiedUntil(record: AiConversationRecordV1): string | null {
   if (record.terminal?.state !== 'outcome_unknown') return null
   const from = Date.parse(record.effect.dispatchStartedAt ?? record.createdAt)
-  return new Date(from + AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS).toISOString()
+  return new Date(from + UNKNOWN_OCCUPANCY_MS).toISOString()
 }
 
 /**
@@ -311,9 +322,21 @@ function permissionCheck(phase: AiConversationPermissionCheckV1['phase'], at: Da
   return { phase, at: at.toISOString(), decision: verdict.decision, reason: verdict.reason, policyVersion: verdict.policyVersion }
 }
 
+/** Contacts' answer for exactly this canonical id, or why it cannot be acted on. */
+async function readExactPerson(deps: AiConversationDependencies, contactId: string): Promise<
+  | { ok: true; card: ContactPersonCardV1 }
+  | { ok: false; reason: 'unauthenticated' | 'contact_changed'; retryable: boolean }
+> {
+  const person = await deps.readPerson(contactId)
+  if (person.status === 'forbidden') return { ok: false, reason: 'unauthenticated', retryable: false }
+  if (person.status !== 'confirmed' || person.card.contactId !== contactId) return { ok: false, reason: 'contact_changed', retryable: false }
+  return { ok: true, card: person.card }
+}
+
 export function createAiConversationOperations(deps: AiConversationDependencies) {
   async function start(input: unknown): Promise<StartAiConversationResultV1> {
-    if (await deps.mode() !== 'simulated') return refused('disabled')
+    const mode = await deps.mode()
+    if (mode !== 'simulated') return refused('disabled')
     const principal = await deps.principal()
     if (principal === null) return refused('unauthenticated')
     const command = parseStartAiConversationCommandV1(input)
@@ -323,17 +346,14 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
     const fingerprint = aiConversationRequestFingerprint(command.contactId, command.requestId, variant)
     const replay = await deps.store.find(conversationId)
     if (replay) {
-      if (replay.record.requestFingerprint !== fingerprint) throw new AiConversationConflictError('requestId was reused for a different request')
+      if (replay.record.requestFingerprint !== fingerprint) throw new AiConversationRequestConflictError('requestId was reused for a different request')
       return accepted(replay, true)
     }
 
-    let person = await deps.readPerson(command.contactId)
-    if (person.status === 'redirected') person = await deps.readPerson(person.canonicalContactId)
-    if (person.status === 'forbidden') return refused('unauthenticated')
-    if (person.status === 'refused') return refused('identity_unconfirmed', true)
-    if (person.status !== 'confirmed') return refused('contact_not_found')
+    const person = await readExactPerson(deps, command.contactId)
+    if (!person.ok) return refused(person.reason, person.retryable)
     const card = person.card
-    const eligibility = aiConversationPersonEligibility(card)
+    const eligibility = aiConversationPersonEligibility(card, mode)
     if (!eligibility.ok) return refused(eligibility.reason)
 
     const now = deps.now()
@@ -365,7 +385,7 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
     const claim = await deps.store.claim(record, aiConversationOccupies)
     if (claim.kind === 'busy') return refused('busy', false, claim.activeConversationId)
     if (claim.kind === 'existing') {
-      if (claim.snapshot.record.requestFingerprint !== fingerprint) throw new AiConversationConflictError('requestId was reused for a different request')
+      if (claim.snapshot.record.requestFingerprint !== fingerprint) throw new AiConversationRequestConflictError('requestId was reused for a different request')
       return accepted(claim.snapshot, true)
     }
     deps.wake(conversationId, 0)
@@ -385,7 +405,7 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
     }
 
     if (record.step === 'queued') {
-      if (now.getTime() - Date.parse(record.createdAt) > AI_CONVERSATION_QUEUE_HORIZON_MS) {
+      if (now.getTime() - Date.parse(record.createdAt) > QUEUE_HORIZON_MS) {
         return deps.store.transition(conversationId, record.revision, withRevision(record, {
           step: 'terminal', terminal: { state: 'failed', failure: 'expired', at: now.toISOString() },
         }))
@@ -444,8 +464,8 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
       // Found mid-originate: either another driver is in it right now, or the process died
       // between G and the observation. Past the originate ceiling it is unknown, never retried.
       const since = Date.parse(record.effect.dispatchStartedAt ?? record.createdAt)
-      if (now.getTime() - since <= AI_CONVERSATION_ORIGINATE_TIMEOUT_MS) {
-        deps.wake(conversationId, AI_CONVERSATION_ORIGINATE_TIMEOUT_MS - (now.getTime() - since) + 1)
+      if (now.getTime() - since <= ORIGINATE_TIMEOUT_MS) {
+        deps.wake(conversationId, ORIGINATE_TIMEOUT_MS - (now.getTime() - since) + 1)
         return snapshot
       }
       return deps.store.transition(conversationId, record.revision, withRevision(record, {
@@ -468,6 +488,9 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
     const query = parseAiConversationsForContactQueryV1(input)
     if (await deps.principal() === null) return { contract: AI_CONVERSATIONS_FOR_CONTACT_RESULT_V1, status: 'unauthenticated' }
     const mode = await deps.mode()
+    // The history is shown on the card of exactly this person: Contacts answers for the same id.
+    const person = await readExactPerson(deps, query.contactId)
+    if (!person.ok) return { contract: AI_CONVERSATIONS_FOR_CONTACT_RESULT_V1, status: person.reason }
     let snapshots = await deps.store.listForContact(query.contactId, AI_CONVERSATION_LIST_LIMIT_V1)
     // Reads drive due work, so a restarted process resumes every conversation from its durable state.
     const now = deps.now()

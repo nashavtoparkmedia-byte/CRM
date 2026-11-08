@@ -11,14 +11,15 @@ import {
   readAiCallTranscriptJournal,
 } from '../../application/ai-call-transcript'
 import {
-  AI_CONVERSATION_METADATA_KEY,
-  AI_CONVERSATION_QUEUE_HORIZON_MS,
-  AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS,
+  aiConversationTimingPolicyV1,
   type AiConversationCallFactsV1,
   type AiConversationRecordV1,
   type AiConversationSnapshotV1,
   type AiConversationStorePort,
 } from '../../application/ai-conversation'
+
+/** Where Calling keeps its conversation record inside Call.metadata, beside the Core's journals. */
+export const AI_CONVERSATION_METADATA_KEY = 'aiConversationV1' as const
 
 /** The simulated caller id: never a real number, never dialled. */
 export const AI_CONVERSATION_SIMULATED_CALLER = '+70000000000'
@@ -135,7 +136,8 @@ export const aiConversationPrismaStore: AiConversationStorePort = {
       const existing = await findIn(tx, record.conversationId)
       if (existing) return { kind: 'existing' as const, snapshot: existing }
       const now = new Date(record.createdAt)
-      const horizon = new Date(now.getTime() - AI_CONVERSATION_QUEUE_HORIZON_MS - AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS)
+      const timing = aiConversationTimingPolicyV1()
+      const horizon = new Date(now.getTime() - timing.queueHorizonMs - timing.unknownOccupancyMs)
       const recent = await tx.call.findMany({
         where: {
           contactId: record.contactId,

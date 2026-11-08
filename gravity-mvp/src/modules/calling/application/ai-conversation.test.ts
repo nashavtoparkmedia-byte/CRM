@@ -3,15 +3,13 @@ import {
   AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1,
   START_AI_CONVERSATION_COMMAND_V1,
   AiConversationContractValidationError,
+  AiConversationRequestConflictError,
   type AiConversationRuntimeModeV1,
 } from '@/contracts/calling/v1/ai-conversation'
 import type { ContactCommunicationPermissionResultV1, ContactPersonCardResultV1, ContactPersonCardV1 } from '@/contracts/contacts/v1'
 import {
-  AI_CONVERSATION_ORIGINATE_TIMEOUT_MS,
-  AI_CONVERSATION_QUEUE_HORIZON_MS,
-  AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS,
-  AiConversationConflictError,
   aiConversationId,
+  aiConversationTimingPolicyV1,
   aiConversationPersonEligibility,
   createAiConversationOperations,
   maskAiConversationDestination,
@@ -22,6 +20,7 @@ import {
   type AiConversationStorePort,
 } from './ai-conversation'
 
+const TIMING = aiConversationTimingPolicyV1()
 const CONTACT = 'contact-allowed'
 const PHONE = '+79161234567'
 
@@ -198,11 +197,13 @@ describe('AI conversation admission', () => {
     ['pending reconciliation', card({ personConfirmation: { state: 'needs_reconciliation', confirmedPersonName: null, confirmedClusterKeyCount: 0, representativeDriverId: null } }), 'identity_conflict'],
     ['contradiction', card({ personConfirmation: { state: 'contradiction', confirmedPersonName: null, confirmedClusterKeyCount: 2, representativeDriverId: null } }), 'identity_conflict'],
     ['blocking conflict', card({ hasPersonBlockingConflict: true }), 'identity_conflict'],
-    ['archived contact', card({ isArchived: true }), 'contact_not_found'],
-    ['shared phone', card({ phones: [{ ...card().phones[0], resolutionState: 'shared' }] }), 'no_callable_phone'],
-    ['disputed phone', card({ phones: [{ ...card().phones[0], resolutionState: 'disputed' }] }), 'no_callable_phone'],
-    ['superseded phone', card({ phones: [{ ...card().phones[0], lifecycle: 'superseded' }] }), 'no_callable_phone'],
-    ['no phone', card({ phones: [] }), 'no_callable_phone'],
+    ['archived contact', card({ isArchived: true }), 'contact_changed'],
+    ['shared phone', card({ phones: [{ ...card().phones[0], resolutionState: 'shared' }] }), 'no_primary_phone'],
+    ['disputed phone', card({ phones: [{ ...card().phones[0], resolutionState: 'disputed' }] }), 'no_primary_phone'],
+    ['superseded phone', card({ phones: [{ ...card().phones[0], lifecycle: 'superseded' }] }), 'no_primary_phone'],
+    ['inactive phone', card({ phones: [{ ...card().phones[0], isActive: false }] }), 'no_primary_phone'],
+    ['only a secondary phone', card({ phones: [{ ...card().phones[0], isPrimary: false }] }), 'no_primary_phone'],
+    ['no phone', card({ phones: [] }), 'no_primary_phone'],
   ])('fails closed for %s', async (_name, value, reason) => {
     const { ops, store, voicePermission } = setup({ person: confirmed(value) })
     await expect(ops.start(command())).resolves.toMatchObject({ status: 'refused', reason })
@@ -211,22 +212,32 @@ describe('AI conversation admission', () => {
   })
 
   it.each([
-    ['missing', 'contact_not_found', false],
+    ['missing', 'contact_changed', false],
     ['forbidden', 'unauthenticated', false],
-    ['refused', 'identity_unconfirmed', true],
+    ['refused', 'contact_changed', false],
   ] as const)('maps a Contacts %s answer to %s', async (status, reason, retryable) => {
     const { ops, store } = setup({ person: { contract: 'contacts.ContactPersonCardResult.v1', status } as ContactPersonCardResultV1 })
     await expect(ops.start(command())).resolves.toMatchObject({ status: 'refused', reason, retryable })
     expect(store.rows.size).toBe(0)
   })
 
-  it('follows a merge redirect to the canonical person, once', async () => {
+  it('never follows a merge redirect: the card on screen is no longer the canonical person', async () => {
     const person = vi.fn((id: string) => id === 'contact-old'
       ? { contract: 'contacts.ContactPersonCardResult.v1', status: 'redirected', canonicalContactId: CONTACT } as ContactPersonCardResultV1
       : confirmed())
-    const { ops } = setup({ person })
-    const result = await ops.start({ ...command(), contactId: 'contact-old' })
-    expect(result).toMatchObject({ status: 'accepted', conversation: { contactId: CONTACT } })
+    const { ops, store, voicePermission } = setup({ person })
+    await expect(ops.start({ ...command(), contactId: 'contact-old' })).resolves.toMatchObject({ status: 'refused', reason: 'contact_changed' })
+    expect(person).toHaveBeenCalledTimes(1)
+    expect(voicePermission).not.toHaveBeenCalled()
+    expect(store.rows.size).toBe(0)
+    await expect(ops.listForContact({ contract: AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1, contactId: 'contact-old' }))
+      .resolves.toMatchObject({ status: 'contact_changed' })
+  })
+
+  it('refuses a confirmed answer that names another Contact than the one asked about', async () => {
+    const { ops, store } = setup({ person: confirmed(card({ contactId: 'contact-other' })) })
+    await expect(ops.start(command())).resolves.toMatchObject({ status: 'refused', reason: 'contact_changed' })
+    expect(store.rows.size).toBe(0)
   })
 
   it.each([
@@ -257,14 +268,18 @@ describe('AI conversation admission', () => {
     expect(maskAiConversationDestination('+12')).toBe('••••')
   })
 
-  it('prefers the primary current phone', () => {
-    const value = card({
-      phones: [
-        { ...card().phones[0], phoneId: 'secondary', phone: '+79990000001', isPrimary: false },
-        { ...card().phones[0], phoneId: 'primary', phone: '+79990000002', isPrimary: true },
-      ],
-    })
-    expect(aiConversationPersonEligibility(value)).toEqual({ ok: true, destination: '+79990000002' })
+  it('dials only the primary phone and never falls back to another phone of the card', () => {
+    const primary = { ...card().phones[0], phoneId: 'primary', phone: '+79990000002', isPrimary: true }
+    const secondary = { ...card().phones[0], phoneId: 'secondary', phone: '+79990000001', isPrimary: false }
+    expect(aiConversationPersonEligibility(card({ phones: [secondary, primary] }), 'simulated')).toEqual({ ok: true, destination: '+79990000002' })
+    expect(aiConversationPersonEligibility(card({ phones: [secondary, { ...primary, resolutionState: 'disputed' }] }), 'simulated'))
+      .toEqual({ ok: false, reason: 'no_primary_phone' })
+  })
+
+  it('accepts an unknown phone resolution only in the simulated runtime', () => {
+    const legacy = card({ phones: [{ ...card().phones[0], resolutionState: 'unknown' }] })
+    expect(aiConversationPersonEligibility(legacy, 'simulated')).toEqual({ ok: true, destination: PHONE })
+    expect(aiConversationPersonEligibility(legacy, 'disabled')).toEqual({ ok: false, reason: 'no_primary_phone' })
   })
 })
 
@@ -284,7 +299,7 @@ describe('AI conversation idempotency and concurrency', () => {
   it('refuses a reused requestId that carries a different request', async () => {
     const { ops } = setup()
     await ops.start(command())
-    await expect(ops.start(command(undefined, { simulationVariant: 'interrupted' }))).rejects.toBeInstanceOf(AiConversationConflictError)
+    await expect(ops.start(command(undefined, { simulationVariant: 'interrupted' }))).rejects.toBeInstanceOf(AiConversationRequestConflictError)
   })
 
   it('lets only one of two managers start a conversation with the same person', async () => {
@@ -366,7 +381,7 @@ describe('AI conversation provider effect', () => {
     await ops.listForContact({ contract: AI_CONVERSATIONS_FOR_CONTACT_QUERY_V1, contactId: CONTACT })
     expect(provider.originate).toHaveBeenCalledTimes(1)
     await expect(ops.start(command('request-0000000002'))).resolves.toMatchObject({ status: 'refused', reason: 'busy', activeConversationId: id })
-    tick(AI_CONVERSATION_UNKNOWN_OCCUPANCY_MS)
+    tick(TIMING.unknownOccupancyMs)
     await expect(ops.start(command('request-0000000003'))).resolves.toMatchObject({ status: 'accepted' })
   })
 
@@ -380,7 +395,7 @@ describe('AI conversation provider effect', () => {
     tick(1_000)
     await ops.advance(id)
     expect(store.rows.get(id)!.record.terminal).toBeNull()
-    tick(AI_CONVERSATION_ORIGINATE_TIMEOUT_MS)
+    tick(TIMING.originateTimeoutMs)
     const result = await ops.advance(id)
     expect(result?.record.terminal).toMatchObject({ state: 'outcome_unknown' })
     expect(result?.record.effect.phase).toBe('outcome_unknown')
@@ -390,7 +405,7 @@ describe('AI conversation provider effect', () => {
   it('abandons a conversation that never reached its provider effect in time, without dialling late', async () => {
     const { ops, provider, tick } = setup()
     await ops.start(command())
-    tick(AI_CONVERSATION_QUEUE_HORIZON_MS + 1)
+    tick(TIMING.queueHorizonMs + 1)
     const result = await ops.advance(aiConversationId(CONTACT, 'request-0000000001'))
     expect(result?.record.terminal).toMatchObject({ state: 'failed', failure: 'expired' })
     expect(provider.originate).not.toHaveBeenCalled()

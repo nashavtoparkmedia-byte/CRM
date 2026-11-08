@@ -7,10 +7,10 @@
  */
 import {
   AiConversationContractValidationError,
+  AiConversationRequestConflictError,
   type AiConversationsForContactResultV1,
   type StartAiConversationResultV1,
 } from '@/contracts/calling/v1/ai-conversation'
-import { AiConversationConflictError } from '../../application/ai-conversation'
 import { listAiConversationsForContact, startAiConversation } from '../../application/ai-conversation-runtime'
 
 export type AiConversationActionErrorV1 = 'invalid_request' | 'request_conflict' | 'unavailable'
@@ -21,7 +21,7 @@ export type AiConversationActionResultV1<T> =
 
 function failure(error: unknown): { ok: false; error: AiConversationActionErrorV1 } {
   if (error instanceof AiConversationContractValidationError) return { ok: false, error: 'invalid_request' }
-  if (error instanceof AiConversationConflictError) return { ok: false, error: 'request_conflict' }
+  if (error instanceof AiConversationRequestConflictError) return { ok: false, error: 'request_conflict' }
   console.error('[ai-conversation] action failed:', error instanceof Error ? error.message : error)
   return { ok: false, error: 'unavailable' }
 }

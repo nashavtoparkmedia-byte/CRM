@@ -7,7 +7,6 @@ import {
 } from '@/contracts/calling/v1/ai-conversation'
 import type { ContactCommunicationPermissionResultV1, ContactPersonCardResultV1 } from '@/contracts/contacts/v1'
 import {
-  AI_CONVERSATION_METADATA_KEY,
   aiConversationId,
   aiConversationOccupies,
   createAiConversationOperations,
@@ -16,7 +15,7 @@ import {
 import { readAiCallLifecycleJournal } from '../../application/ai-call-lifecycle'
 import { AiCallLifecycleConflictError } from '../../application/ai-call-lifecycle'
 import { appendAiCallTranscriptMessage, changeAiCallLifecycle } from '../../application/ai-call-callback-runtime'
-import { aiConversationPrismaStore } from './ai-conversation-prisma-adapter'
+import { AI_CONVERSATION_METADATA_KEY, aiConversationPrismaStore } from './ai-conversation-prisma-adapter'
 import { AI_CONVERSATION_SIMULATED_SCRIPT, aiConversationSimulatedProvider } from './ai-conversation-simulated-provider'
 
 const postgresProof = process.env.YOKO_AI_CALL_POSTGRES_PROOF === '1' ? describe : describe.skip

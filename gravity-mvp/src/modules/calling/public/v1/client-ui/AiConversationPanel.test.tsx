@@ -46,12 +46,27 @@ afterEach(() => {
 })
 
 describe('AiConversationPanel', () => {
-  it('shows the OFF state with a disabled button when the runtime is disabled', async () => {
+  it('renders nothing on the card when AI calls are OFF', async () => {
     actions.list.mockResolvedValue(listed([], 'disabled'))
+    const { container } = render(<AiConversationPanel contactId={CONTACT} />)
+    await waitFor(() => expect(actions.list).toHaveBeenCalledTimes(1))
+    await act(async () => { await Promise.resolve() })
+    expect(container.innerHTML).toBe('')
+    expect(screen.queryByTestId('ai-conversation-start')).toBeNull()
+  })
+
+  it('never breaks the card: a failing Calling read becomes one muted line', async () => {
+    actions.list.mockRejectedValue(new Error('server action unreachable'))
     render(<AiConversationPanel contactId={CONTACT} />)
-    expect(await screen.findByText(/AI-звонки выключены/u)).toBeTruthy()
+    expect(await screen.findByText('AI-звонки сейчас недоступны.')).toBeTruthy()
+    expect(screen.queryByTestId('ai-conversation-start')).toBeNull()
+  })
+
+  it('asks to reload when Contacts no longer confirms this exact person', async () => {
+    actions.list.mockResolvedValue({ ok: true, result: { contract: 'calling.AiConversationsForContactResult.v1', status: 'contact_changed' } })
+    render(<AiConversationPanel contactId={CONTACT} />)
+    expect(await screen.findByText('Карточка изменилась, обновите страницу.')).toBeTruthy()
     expect((screen.getByTestId('ai-conversation-start') as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.queryByTestId('ai-conversation-variant')).toBeNull()
   })
 
   it('starts one conversation per click with an opaque request id and the chosen simulation scenario', async () => {
@@ -98,13 +113,24 @@ describe('AiConversationPanel', () => {
       .mockResolvedValueOnce(listed([view({ state: 'in_conversation', endedAt: null, outcome: null })]))
       .mockResolvedValue(listed([view()]))
     render(<AiConversationPanel contactId={CONTACT} />)
-    expect(await screen.findByText('Идёт разговор')).toBeTruthy()
+    const status = await screen.findByTestId('ai-conversation-status')
+    await waitFor(() => expect(within(status).getByText('Идёт разговор')).toBeTruthy())
     expect((screen.getByTestId('ai-conversation-start') as HTMLButtonElement).disabled).toBe(true)
     await act(async () => { await vi.advanceTimersByTimeAsync(AI_CONVERSATION_POLL_MS + 10) })
-    expect(await screen.findByText('Завершён')).toBeTruthy()
+    await waitFor(() => expect(within(screen.getByTestId('ai-conversation-status')).getByText('Завершён')).toBeTruthy())
     const calls = actions.list.mock.calls.length
     await act(async () => { await vi.advanceTimersByTimeAsync(AI_CONVERSATION_POLL_MS * 3) })
     expect(actions.list.mock.calls.length).toBe(calls)
+  })
+
+  it('keeps the history collapsed and shows the latest call in one status line', async () => {
+    actions.list.mockResolvedValue(listed([view()]))
+    render(<AiConversationPanel contactId={CONTACT} />)
+    const status = await screen.findByTestId('ai-conversation-status')
+    expect(within(status).getByText('Завершён')).toBeTruthy()
+    expect(within(status).getByText('Кандидат подходит')).toBeTruthy()
+    expect((screen.getByTestId('ai-conversation-history') as HTMLDetailsElement).open).toBe(false)
+    expect(screen.queryByTestId('ai-conversation-transcript')).toBeNull()
   })
 
   it('shows the transcript, the structured outcome and failure reasons of the history', async () => {

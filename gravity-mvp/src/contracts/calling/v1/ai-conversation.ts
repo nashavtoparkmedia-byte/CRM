@@ -94,12 +94,14 @@ export type AiConversationViewV1 = {
 export type StartAiConversationRefusalV1 =
   | 'unauthenticated'
   | 'disabled'
-  | 'contact_not_found'
+  /** Contacts no longer answers `confirmed` for exactly this canonical id (merged, missing, unreadable): reload the card. */
+  | 'contact_changed'
   | 'identity_unconfirmed'
   | 'identity_conflict'
   | 'voice_restricted'
   | 'voice_permission_unavailable'
-  | 'no_callable_phone'
+  /** No primary phone that is current, active and undisputed. Another phone of the card is never used instead. */
+  | 'no_primary_phone'
   | 'busy'
 
 export type StartAiConversationResultV1 =
@@ -134,7 +136,8 @@ export type AiConversationsForContactResultV1 =
   }
   | {
     contract: typeof AI_CONVERSATIONS_FOR_CONTACT_RESULT_V1
-    status: 'unauthenticated'
+    /** unauthenticated: no verified principal. contact_changed: Contacts no longer confirms exactly this id. */
+    status: 'unauthenticated' | 'contact_changed'
   }
 
 export class AiConversationContractValidationError extends Error {
@@ -143,6 +146,14 @@ export class AiConversationContractValidationError extends Error {
     super(message)
     this.name = 'AiConversationContractValidationError'
     this.code = code
+  }
+}
+
+/** The same requestId was reused for a different request (another Contact or scenario). */
+export class AiConversationRequestConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AiConversationRequestConflictError'
   }
 }
 

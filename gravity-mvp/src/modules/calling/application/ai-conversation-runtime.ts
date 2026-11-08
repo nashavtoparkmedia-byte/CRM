@@ -11,7 +11,11 @@ import { getContactCommunicationPermissionV1, readContactPersonCardV1 } from '@/
 import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
-import type { AiConversationRuntimeModeV1 } from '@/contracts/calling/v1/ai-conversation'
+import type {
+  AiConversationRuntimeModeV1,
+  AiConversationsForContactResultV1,
+  StartAiConversationResultV1,
+} from '@/contracts/calling/v1/ai-conversation'
 import { aiConversationPrismaStore } from '../internal/ai-calls/ai-conversation-prisma-adapter'
 import { aiConversationSimulatedProvider } from '../internal/ai-calls/ai-conversation-simulated-provider'
 import { createAiConversationOperations } from './ai-conversation'
@@ -60,5 +64,10 @@ const operations = createAiConversationOperations({
   wake,
 })
 
-export const startAiConversation = operations.start
-export const listAiConversationsForContact = operations.listForContact
+export async function startAiConversation(input: unknown): Promise<StartAiConversationResultV1> {
+  return operations.start(input)
+}
+
+export async function listAiConversationsForContact(input: unknown): Promise<AiConversationsForContactResultV1> {
+  return operations.listForContact(input)
+}
