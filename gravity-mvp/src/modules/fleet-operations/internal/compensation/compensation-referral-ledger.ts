@@ -5,7 +5,9 @@
  *
  * The ledger is the only record of referral codes, captures, qualification
  * decisions, referral entitlements, manager sanctions, manual grants and
- * denials, and the dismissal readings an invitation was decided on. Nothing
+ * denials, the dismissal readings an invitation was decided on, and the
+ * invitations a manager recorded or withdrew. A recorded invitation is not an
+ * access kind: it is never folded into access, so it grants nothing. Nothing
  * here touches money: C1 keeps every monetary rule, and a grant only opens an
  * order window in compensation-access.
  *
@@ -44,6 +46,8 @@ export const CASH_ACCESS_EVENT_KINDS_V1 = [
     'manual_denied',
     'manual_cleared',
     'invitee_dismissal_observed',
+    'referral_link_recorded',
+    'referral_link_withdrawn',
 ] as const
 
 export type CashAccessEventKindV1 = typeof CASH_ACCESS_EVENT_KINDS_V1[number]
@@ -63,6 +67,8 @@ export const CASH_ACCESS_EVENT_WRITER_V1: Readonly<Record<
     manual_denied: { actorKind: 'signed_staff_session', capability: CASH_ACCESS_MANAGE_CAPABILITY_V1 },
     manual_cleared: { actorKind: 'signed_staff_session', capability: CASH_ACCESS_MANAGE_CAPABILITY_V1 },
     referral_sanctioned: { actorKind: 'signed_staff_session', capability: CASH_REFERRAL_QUALIFY_CAPABILITY_V1 },
+    referral_link_recorded: { actorKind: 'signed_staff_session', capability: CASH_REFERRAL_QUALIFY_CAPABILITY_V1 },
+    referral_link_withdrawn: { actorKind: 'signed_staff_session', capability: CASH_REFERRAL_QUALIFY_CAPABILITY_V1 },
 }
 
 /** A JSON value as the ledger stores it in `payload`. */

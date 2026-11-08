@@ -41,9 +41,12 @@ export default async function CompensationPage({
     return (
         <div className="p-6 max-w-5xl">
             <h1 className="text-lg font-semibold text-foreground mb-1">Компенсации наличными</h1>
-            <p className="text-sm text-muted mb-6">
+            <p className="text-sm text-muted mb-2">
                 Заявки водителей на компенсацию наличных заказов. Выплата ручная.
             </p>
+            <Link href="/compensation/referrals" className="mb-6 inline-block text-[13px] text-primary">
+                Реферальная программа и бессрочный доступ →
+            </Link>
 
             <CompensationBudgetPanel budget={board.budget} />
             <CompensationFilters
