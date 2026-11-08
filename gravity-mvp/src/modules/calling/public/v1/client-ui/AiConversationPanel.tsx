@@ -208,12 +208,16 @@ function AiConversationPanelBody({ contactId }: { contactId: string }) {
     }
     if (!answer.ok) { setLoadError(ACTION_ERROR_LABELS[answer.error] ?? answer.error); return }
     setLoadError(null)
-    if (answer.result.status === 'unauthenticated') { setUnauthenticated(true); return }
-    if (answer.result.status === 'contact_changed') { setChanged(true); return }
+    const result = answer.result
+    if (result.status !== 'ok') {
+      if (result.status === 'unauthenticated') setUnauthenticated(true)
+      else setChanged(true)
+      return
+    }
     setUnauthenticated(false)
     setChanged(false)
-    setMode(answer.result.mode)
-    setConversations(answer.result.conversations)
+    setMode(result.mode)
+    setConversations(result.conversations)
   }, [contactId])
 
   useEffect(() => { void load() }, [load])
