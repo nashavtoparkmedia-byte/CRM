@@ -305,7 +305,8 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     const holder = prisma.$transaction(async db => {
       await db.$queryRaw`SELECT "id" FROM "Chat" WHERE "id" = ${chatId} FOR UPDATE`
       holderLocked()
-      await sleep(3_000)
+      // Held well past the 2 s lock_timeout, so a slow start of the append cannot outlast the holder.
+      await sleep(6_000)
     }, { timeout: 15_000 })
 
     await locked
