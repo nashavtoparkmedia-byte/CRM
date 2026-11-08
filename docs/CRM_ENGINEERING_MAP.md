@@ -980,14 +980,20 @@ opaque requestId and, while simulated, a scenario variant. The actions use
 `application/ai-conversation-runtime.ts` and `application/ai-conversation.ts`
 (`calling.StartAiConversationCommand.v1`, `calling.AiConversationsForContactQuery.v1`,
 `G/contracts/calling/v1/ai-conversation.ts`).
-- **Runtime mode.** Simulated only, and only while Calling's existing Mock-режим
-  (`system/mockMode`) is on. Otherwise the runtime is `disabled`, which is the OFF
-  state; no live provider exists on this path.
+- **Runtime mode.** Simulated only, and only inside the loopback Local Preview
+  (`YOKO_PREVIEW=1`). Everywhere else, production included, the runtime is
+  `disabled`: the OFF state, and the card renders nothing. No live provider exists
+  on this path, and it reads no provider setting (the secret-bearing
+  provider-settings boundary is not joined).
 - **Admission order.**
   1. the Identity Access integration-admin principal;
-  2. Contacts' `ContactPersonCardQuery.v1`: a confirmed, non-archived person with no
-     blocking conflict, reached through a current, undisputed phone;
-  3. `ContactCommunicationPermissionQuery.v1`, class `voice`.
+  2. Contacts' `ContactPersonCardQuery.v1` for exactly the canonical id the card
+     showed (a redirect, a missing or a refused answer is `contact_changed`, never
+     followed): a confirmed, non-archived person with no blocking conflict, reached
+     through its primary phone only (current, active, `unique`; `unknown` only
+     while simulated);
+  3. `ContactCommunicationPermissionQuery.v1`, class `voice`. An allow counts only
+     when it was decided for exactly this canonical Contact.
   Any other answer refuses fail-closed and creates nothing.
 - **The Call.** A deterministic `Call` id (`aiConversationId(contact, requestId)`)
   makes a replayed requestId the same conversation. A per-Contact

@@ -2,15 +2,17 @@ import 'server-only'
 
 /**
  * Production composition of the C4 manual AI conversation. The only runtime that exists is
- * the simulator, selected exactly when Calling's existing Mock-режим (system/mockMode) is on;
- * every other state is `disabled`, so the OFF state is the default and no live provider can be
- * reached from here by configuration.
+ * the simulator, and it is selected only inside the loopback Local Preview (`YOKO_PREVIEW=1`,
+ * set by the Local Controller's preview runtime, which pins every integration to a closed
+ * loopback port). Everywhere else, production included, the runtime is `disabled`: the OFF
+ * state is the default, and no live provider can be reached from here by configuration.
+ * It deliberately reads no Calling provider setting: those live behind the reviewed
+ * secret-bearing provider-settings boundary, which this path does not join.
  */
 import { CONTACT_COMMUNICATION_PERMISSION_QUERY_V1, CONTACT_PERSON_CARD_QUERY_V1 } from '@/contracts/contacts/v1'
 import { getContactCommunicationPermissionV1, readContactPersonCardV1 } from '@/modules/contacts/public/v1'
 import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
 import type {
   AiConversationRuntimeModeV1,
   AiConversationsForContactResultV1,
@@ -21,11 +23,7 @@ import { aiConversationSimulatedProvider } from '../internal/ai-calls/ai-convers
 import { createAiConversationOperations } from './ai-conversation'
 
 export async function readAiConversationRuntimeMode(): Promise<AiConversationRuntimeModeV1> {
-  try {
-    return await isMockModeEnabled() ? 'simulated' : 'disabled'
-  } catch {
-    return 'disabled'
-  }
+  return process.env.YOKO_PREVIEW === '1' ? 'simulated' : 'disabled'
 }
 
 const timers = new Map<string, NodeJS.Timeout>()

@@ -254,6 +254,15 @@ describe('AI conversation admission', () => {
     expect(provider.originate).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['without a canonical Contact', permission('allow', 'no_restriction', false, null)],
+    ['for another requested Contact', { ...permission('allow'), requestedContactId: 'contact-other' }],
+  ])('refuses an allow decided %s', async (_name, answer) => {
+    const { ops, store } = setup({ permissions: [answer] })
+    await expect(ops.start(command())).resolves.toMatchObject({ status: 'refused', reason: 'identity_conflict' })
+    expect(store.rows.size).toBe(0)
+  })
+
   it('refuses when Contacts made the permission decision for a different canonical person', async () => {
     const { ops, store } = setup({ permissions: [permission('allow', 'no_restriction', false, 'contact-other')] })
     await expect(ops.start(command())).resolves.toMatchObject({ status: 'refused', reason: 'identity_conflict' })

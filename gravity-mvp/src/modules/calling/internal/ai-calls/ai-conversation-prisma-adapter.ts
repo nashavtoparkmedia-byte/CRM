@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma client can lag AI-call model generation */
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
   AI_CALL_LIFECYCLE_METADATA_KEY,
@@ -13,6 +13,7 @@ import {
 import {
   aiConversationTimingPolicyV1,
   type AiConversationCallFactsV1,
+  type AiConversationClaimResult,
   type AiConversationRecordV1,
   type AiConversationSnapshotV1,
   type AiConversationStorePort,
@@ -24,10 +25,24 @@ export const AI_CONVERSATION_METADATA_KEY = 'aiConversationV1' as const
 /** The simulated caller id: never a real number, never dialled. */
 export const AI_CONVERSATION_SIMULATED_CALLER = '+70000000000'
 
+/**
+ * Every query names its receiver (`prisma` or the transaction's `tx`), its model and literal
+ * select/data shapes at the call site, so the credential and write analyzers resolve exactly
+ * which Calling-owned models and fields are touched (Call, AiCallMessage). Helpers below only
+ * shape rows that were already read; none of them receives a database handle.
+ */
+/** The row shape every conversation read selects; each query spells it out literally (see above). */
 const CALL_SELECT = {
   id: true, status: true, aiSessionStatus: true, startedAt: true, answeredAt: true, endedAt: true, updatedAt: true,
   aiOutcome: true, aiSummary: true, qualificationScore: true, aiAnalysis: true, metadata: true,
 } as const
+
+type ConversationCallRow = Prisma.CallGetPayload<{ select: typeof CALL_SELECT }>
+type MessageRow = { id: string; content: string }
+
+function json(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -48,30 +63,19 @@ function iso(value: Date | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : null
 }
 
-async function transcriptLines(db: any, calls: Array<{ id: string; metadata: unknown }>): Promise<Map<string, AiConversationCallFactsV1['transcript']>> {
-  const ids = calls.map(call => call.id)
-  const rows: Array<{ id: string; content: string }> = ids.length === 0 ? [] : await db.aiCallMessage.findMany({
-    where: { callId: { in: ids } },
-    select: { id: true, content: true },
-  })
-  const content = new Map(rows.map(row => [row.id, row.content]))
-  const result = new Map<string, AiConversationCallFactsV1['transcript']>()
-  for (const call of calls) {
-    const journal = readAiCallTranscriptJournal(call.metadata)
-    const lines = (journal?.messages ?? [])
-      .filter(message => message.final && content.has(message.rowId))
-      .sort((left, right) => left.ordinal - right.ordinal)
-      .map(message => ({
-        ordinal: message.ordinal,
-        speaker: message.role === 'user' ? 'person' as const : 'assistant' as const,
-        text: content.get(message.rowId) ?? '',
-      }))
-    result.set(call.id, lines)
-  }
-  return result
+function transcriptOf(call: ConversationCallRow, content: Map<string, string>): AiConversationCallFactsV1['transcript'] {
+  const journal = readAiCallTranscriptJournal(call.metadata)
+  return (journal?.messages ?? [])
+    .filter(message => message.final && content.has(message.rowId))
+    .sort((left, right) => left.ordinal - right.ordinal)
+    .map(message => ({
+      ordinal: message.ordinal,
+      speaker: message.role === 'user' ? 'person' as const : 'assistant' as const,
+      text: content.get(message.rowId) ?? '',
+    }))
 }
 
-function snapshotOf(call: any, transcript: AiConversationCallFactsV1['transcript']): AiConversationSnapshotV1 | null {
+function snapshotOf(call: ConversationCallRow, content: Map<string, string>): AiConversationSnapshotV1 | null {
   const record = readAiConversationRecord(call.metadata)
   if (!record) return null
   const analysis = isRecord(call.aiAnalysis) ? call.aiAnalysis : null
@@ -92,49 +96,49 @@ function snapshotOf(call: any, transcript: AiConversationCallFactsV1['transcript
       aiSummary: call.aiSummary ?? null,
       qualificationScore: typeof call.qualificationScore === 'number' ? call.qualificationScore : null,
       qualification,
-      transcript,
+      transcript: transcriptOf(call, content),
     },
   }
 }
 
-async function readSnapshots(db: any, calls: any[]): Promise<AiConversationSnapshotV1[]> {
-  const lines = await transcriptLines(db, calls)
-  return calls.map(call => snapshotOf(call, lines.get(call.id) ?? [])).filter((value): value is AiConversationSnapshotV1 => value !== null)
+function snapshotsOf(calls: ConversationCallRow[], messages: MessageRow[]): AiConversationSnapshotV1[] {
+  const content = new Map(messages.map(row => [row.id, row.content]))
+  return calls.map(call => snapshotOf(call, content)).filter((value): value is AiConversationSnapshotV1 => value !== null)
 }
 
-async function findIn(db: any, conversationId: string): Promise<AiConversationSnapshotV1 | null> {
-  const call = await db.call.findUnique({ where: { id: conversationId }, select: CALL_SELECT })
+async function findWithPrisma(conversationId: string): Promise<AiConversationSnapshotV1 | null> {
+  const call = await prisma.call.findUnique({ where: { id: conversationId }, select: {
+          id: true, status: true, aiSessionStatus: true, startedAt: true, answeredAt: true, endedAt: true, updatedAt: true,
+          aiOutcome: true, aiSummary: true, qualificationScore: true, aiAnalysis: true, metadata: true,
+        } })
   if (!call) return null
-  return (await readSnapshots(db, [call]))[0] ?? null
+  const messages = await prisma.aiCallMessage.findMany({ where: { callId: conversationId }, select: { id: true, content: true } })
+  return snapshotsOf([call], messages)[0] ?? null
 }
 
-/** Call columns that mirror a pre-answer terminal Calling decided itself (no Core finalization happened). */
-function terminalColumns(record: AiConversationRecordV1): Record<string, unknown> {
-  const terminal = record.terminal
-  if (!terminal) return {}
-  if (terminal.state === 'outcome_unknown') return { aiOutcomeReason: 'outcome_unknown' }
-  return {
-    status: terminal.state === 'refused' ? 'cancelled' : 'failed',
-    aiSessionStatus: 'failed',
-    endedAt: new Date(terminal.at),
-    aiOutcome: 'error',
-    aiOutcomeReason: terminal.failure ?? terminal.state,
-  }
+async function findWithTransaction(tx: Prisma.TransactionClient, conversationId: string): Promise<AiConversationSnapshotV1 | null> {
+  const call = await tx.call.findUnique({ where: { id: conversationId }, select: {
+          id: true, status: true, aiSessionStatus: true, startedAt: true, answeredAt: true, endedAt: true, updatedAt: true,
+          aiOutcome: true, aiSummary: true, qualificationScore: true, aiAnalysis: true, metadata: true,
+        } })
+  if (!call) return null
+  const messages = await tx.aiCallMessage.findMany({ where: { callId: conversationId }, select: { id: true, content: true } })
+  return snapshotsOf([call], messages)[0] ?? null
 }
 
 export const aiConversationPrismaStore: AiConversationStorePort = {
   async find(conversationId) {
-    return findIn(prisma as any, conversationId)
+    return findWithPrisma(conversationId)
   },
 
   async claim(record, occupies) {
-    return (prisma as any).$transaction(async (tx: any) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient): Promise<AiConversationClaimResult> => {
       // One durable writer per person: concurrent starts for the same Contact serialise here,
       // and the loser sees the winner's committed Call below.
       const lockKey = `calling.ai-conversation.contact:${record.contactId}`
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
-      const existing = await findIn(tx, record.conversationId)
-      if (existing) return { kind: 'existing' as const, snapshot: existing }
+      const existing = await findWithTransaction(tx, record.conversationId)
+      if (existing) return { kind: 'existing', snapshot: existing }
       const now = new Date(record.createdAt)
       const timing = aiConversationTimingPolicyV1()
       const horizon = new Date(now.getTime() - timing.queueHorizonMs - timing.unknownOccupancyMs)
@@ -145,12 +149,19 @@ export const aiConversationPrismaStore: AiConversationStorePort = {
           startedAt: { gte: horizon },
           metadata: { path: [AI_CONVERSATION_METADATA_KEY, 'version'], equals: 1 },
         },
-        select: CALL_SELECT,
+        select: {
+          id: true, status: true, aiSessionStatus: true, startedAt: true, answeredAt: true, endedAt: true, updatedAt: true,
+          aiOutcome: true, aiSummary: true, qualificationScore: true, aiAnalysis: true, metadata: true,
+        },
         orderBy: { startedAt: 'desc' },
         take: 50,
       })
-      for (const snapshot of await readSnapshots(tx, recent)) {
-        if (occupies(snapshot, now)) return { kind: 'busy' as const, activeConversationId: snapshot.record.conversationId }
+      const recentMessages = await tx.aiCallMessage.findMany({
+        where: { callId: { in: recent.map(call => call.id) } },
+        select: { id: true, content: true },
+      })
+      for (const snapshot of snapshotsOf(recent, recentMessages)) {
+        if (occupies(snapshot, now)) return { kind: 'busy', activeConversationId: snapshot.record.conversationId }
       }
       await tx.call.create({
         data: {
@@ -166,49 +177,75 @@ export const aiConversationPrismaStore: AiConversationStorePort = {
           isAi: true,
           isSimulation: true,
           aiSessionStatus: 'starting',
-          metadata: {
+          metadata: json({
             simulated: true,
             providerNetworkUsed: false,
             providerBillingIngested: false,
             [AI_CONVERSATION_METADATA_KEY]: record,
             [AI_CALL_LIFECYCLE_METADATA_KEY]: createAiCallLifecycleJournal(record.conversationId, 'starting', false),
             [AI_CALL_TRANSCRIPT_METADATA_KEY]: createAiCallTranscriptJournal(record.conversationId),
-          },
+          }),
         },
       })
-      const created = await findIn(tx, record.conversationId)
+      const created = await findWithTransaction(tx, record.conversationId)
       if (!created) throw new Error('AI_CONVERSATION_CREATE_NOT_VISIBLE')
-      return { kind: 'created' as const, snapshot: created }
+      return { kind: 'created', snapshot: created }
     })
   },
 
   async transition(conversationId, expectedRevision, next) {
-    return (prisma as any).$transaction(async (tx: any) => {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT "id" FROM "Call" WHERE "id" = ${conversationId} FOR UPDATE`
       const call = await tx.call.findUnique({ where: { id: conversationId }, select: { id: true, metadata: true, endedAt: true } })
-      const current = call ? readAiConversationRecord(call.metadata) : null
+      if (!call) return null
+      const current = readAiConversationRecord(call.metadata)
       if (!current || current.revision !== expectedRevision || next.revision !== expectedRevision + 1) return null
-      const metadata = { ...(isRecord(call.metadata) ? call.metadata : {}), [AI_CONVERSATION_METADATA_KEY]: next }
-      const columns = call.endedAt === null ? terminalColumns(next) : {}
-      await tx.call.update({ where: { id: conversationId }, data: { metadata, ...columns } })
-      return findIn(tx, conversationId)
+      const metadata = json({ ...(isRecord(call.metadata) ? call.metadata : {}), [AI_CONVERSATION_METADATA_KEY]: next })
+      const terminal = call.endedAt === null ? next.terminal : null
+      if (terminal === null) {
+        await tx.call.update({ where: { id: conversationId }, data: { metadata } })
+      } else if (terminal.state === 'outcome_unknown') {
+        // The effect may still be live: the Call is not ended, only its reason is recorded.
+        await tx.call.update({ where: { id: conversationId }, data: { metadata, aiOutcomeReason: 'outcome_unknown' } })
+      } else {
+        // A pre-answer terminal Calling decided itself; no Core finalization happened.
+        await tx.call.update({
+          where: { id: conversationId },
+          data: {
+            metadata,
+            status: terminal.state === 'refused' ? 'cancelled' : 'failed',
+            aiSessionStatus: 'failed',
+            endedAt: new Date(terminal.at),
+            aiOutcome: 'error',
+            aiOutcomeReason: terminal.failure ?? terminal.state,
+          },
+        })
+      }
+      return findWithTransaction(tx, conversationId)
     })
   },
 
   async listForContact(contactId, limit) {
-    const calls = await (prisma as any).call.findMany({
+    const calls = await prisma.call.findMany({
       where: { contactId, isAi: true, metadata: { path: [AI_CONVERSATION_METADATA_KEY, 'version'], equals: 1 } },
-      select: CALL_SELECT,
+      select: {
+          id: true, status: true, aiSessionStatus: true, startedAt: true, answeredAt: true, endedAt: true, updatedAt: true,
+          aiOutcome: true, aiSummary: true, qualificationScore: true, aiAnalysis: true, metadata: true,
+        },
       orderBy: { startedAt: 'desc' },
       take: limit,
     })
-    return readSnapshots(prisma as any, calls)
+    const messages = await prisma.aiCallMessage.findMany({
+      where: { callId: { in: calls.map(call => call.id) } },
+      select: { id: true, content: true },
+    })
+    return snapshotsOf(calls, messages)
   },
 }
 
 /** The simulated provider's answer signal: the callee picked up. Only the Call's own columns move. */
 export async function markAiConversationAnswered(conversationId: string, at: Date): Promise<void> {
-  await (prisma as any).call.updateMany({
+  await prisma.call.updateMany({
     where: { id: conversationId, answeredAt: null, endedAt: null, isSimulation: true },
     data: { answeredAt: at, status: 'active' },
   })

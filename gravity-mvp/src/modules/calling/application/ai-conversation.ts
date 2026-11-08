@@ -211,17 +211,31 @@ export function aiConversationPersonEligibility(card: ContactPersonCardV1, mode:
   return { ok: true, destination: phone.phone }
 }
 
-type PermissionVerdict = { decision: 'allow' | 'deny' | 'unavailable'; reason: string; policyVersion: number | null; canonicalContactId: string | null }
+type PermissionVerdict = {
+  decision: 'allow' | 'deny' | 'unavailable'
+  reason: string
+  policyVersion: number | null
+  canonicalContactId: string | null
+  requestedContactId: string | null
+}
+
+/** An allow licenses this person only when Contacts decided it for exactly this canonical Contact. */
+function allowsExactly(verdict: PermissionVerdict, contactId: string): boolean {
+  return verdict.decision === 'allow' && verdict.canonicalContactId === contactId && verdict.requestedContactId === contactId
+}
 
 async function readVoicePermission(deps: AiConversationDependencies, contactId: string): Promise<PermissionVerdict> {
   let answer: ContactCommunicationPermissionResultV1
   try {
     answer = await deps.voicePermission(contactId)
   } catch {
-    return { decision: 'unavailable', reason: 'permission_query_failed', policyVersion: null, canonicalContactId: null }
+    return { decision: 'unavailable', reason: 'permission_query_failed', policyVersion: null, canonicalContactId: null, requestedContactId: null }
   }
   if (answer?.decision === 'allow') {
-    return { decision: 'allow', reason: answer.reason, policyVersion: answer.policyVersion, canonicalContactId: answer.canonicalContactId }
+    return {
+      decision: 'allow', reason: answer.reason, policyVersion: answer.policyVersion,
+      canonicalContactId: answer.canonicalContactId ?? null, requestedContactId: answer.requestedContactId ?? null,
+    }
   }
   // Anything but an explicit allow is a deny: an unknown decision value never permits a call.
   return {
@@ -229,6 +243,7 @@ async function readVoicePermission(deps: AiConversationDependencies, contactId: 
     reason: typeof answer?.reason === 'string' ? answer.reason : 'unknown_decision',
     policyVersion: answer?.policyVersion ?? null,
     canonicalContactId: answer?.canonicalContactId ?? null,
+    requestedContactId: answer?.requestedContactId ?? null,
   }
 }
 
@@ -360,7 +375,7 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
     const admission = await readVoicePermission(deps, card.contactId)
     if (admission.decision === 'unavailable') return refused('voice_permission_unavailable', true)
     if (admission.decision === 'deny') return refused('voice_restricted')
-    if (admission.canonicalContactId !== null && admission.canonicalContactId !== card.contactId) return refused('identity_conflict')
+    if (!allowsExactly(admission, card.contactId)) return refused('identity_conflict')
 
     const record: AiConversationRecordV1 = {
       version: 1,
@@ -413,7 +428,7 @@ export function createAiConversationOperations(deps: AiConversationDependencies)
       // F: fresh permission immediately before the only physical effect.
       const verdict = await readVoicePermission(deps, record.contactId)
       const checks = [...record.permissionChecks, permissionCheck('pre_originate', now, verdict)]
-      if (verdict.decision !== 'allow' || (verdict.canonicalContactId !== null && verdict.canonicalContactId !== record.contactId)) {
+      if (!allowsExactly(verdict, record.contactId)) {
         return deps.store.transition(conversationId, record.revision, withRevision(record, {
           step: 'terminal',
           permissionChecks: checks,
