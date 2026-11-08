@@ -116,7 +116,8 @@ function assertAdapterLocksBeforeJudging(source) {
   if (!/FROM "Chat"\s+WHERE "id" = \$\{chatId\}\s+FOR UPDATE/u.test(lock)) throw new Error('conversation is not row-locked')
   if (!/pg_advisory_xact_lock\(hashtextextended/u.test(functionBody(source, 'lockEventKeys'))) throw new Error('event keys are not advisory-locked')
   if (!/\[\.\.\.new Set\(keys\)\]\.sort\(\)/u.test(functionBody(source, 'lockEventKeys'))) throw new Error('event keys are not locked in sorted order')
-  if (!/isolationLevel: Prisma\.TransactionIsolationLevel\.ReadCommitted/u.test(source)) throw new Error('isolation level drift')
+  if (!/isolationLevel: 'ReadCommitted' as Prisma\.TransactionIsolationLevel,/u.test(source)) throw new Error('isolation level drift')
+  if (!/^import type \{ Prisma \} from '@prisma\/client'$/mu.test(source)) throw new Error('the adapter imports a Prisma value')
 
   const append = methodBody(source, 'append')
   inOrder(append, [
@@ -272,7 +273,8 @@ rejectProbe('', "import { legacyPrismaGuardedChannelMessagePortV1 } from '@/modu
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("await db.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
-rejectProbe(adapterSource, adapterSource.replace('Prisma.TransactionIsolationLevel.ReadCommitted', 'Prisma.TransactionIsolationLevel.ReadUncommitted'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("'ReadCommitted' as Prisma.TransactionIsolationLevel", "'ReadUncommitted' as Prisma.TransactionIsolationLevel"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("import type { Prisma } from '@prisma/client'", "import { Prisma } from '@prisma/client'"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('        if (recorded) return recorded\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace(
   '        await lockEventKeys(db, [event.externalId])\n        const recorded = await recordedEvent(db, event)\n',

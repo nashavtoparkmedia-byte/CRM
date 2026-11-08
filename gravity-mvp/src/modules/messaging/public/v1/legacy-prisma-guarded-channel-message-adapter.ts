@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { OUTBOX_MAX_ATTEMPTS_V1 } from '@/infrastructure/outbox/v1'
@@ -40,7 +40,8 @@ const LOCK_TIMEOUT = '2000ms'
 /** Separates these single-key advisory locks from any other user of the one-bigint key space. */
 const EVENT_KEY_LOCK_SEED = 2121
 const TRANSACTION_OPTIONS = {
-  isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+  // The enum's own string value; the import above is type-only.
+  isolationLevel: 'ReadCommitted' as Prisma.TransactionIsolationLevel,
   maxWait: 2_000,
   timeout: 10_000,
 } as const

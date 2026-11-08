@@ -103,6 +103,11 @@
       "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts",
       "reason": "same transaction as the inbound Message create; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
+      "reason": "same transaction as the guarded inbound Message create or release; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
     }
   ],
   "manifest_amendments": [
