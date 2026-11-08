@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "8361748984fd7b1bd26bdd7277ce49ce32ebcf909c71d753de9e3331d4792bef"
+      "sha256": "596ef3746ac4a4d67da61b39022145f33eff4fd2f1b14cebd2b2ba6c4a6e13f7"
     },
     {
       "context": "operations_observability",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "e0f4823657f28aabbe781b29a3237e94b78c8376425e8ae460c9e2287df2fd58"
+      "sha256": "75f78582c60e24a26be287ad8edbfc306844402e47e542d66cfd573f8bfb0da9"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "856bc80337af60e1b50f3f1bbb2a2032916a13b63124d744975d7d96e09a018c"
+      "sha256": "b7e734b1cd0618ea7530d2ac1650c32c2a1ce66b23c98e337b77c7fa871ab9a1"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "fca7a00552e131040367ecb120bbf09a29d017e6c5aeb0308d52fc9740e2d755"
+      "sha256": "4db1587e9ba491e5df1f119dcfc1b291986ef68e18a72aac1ee7a8abd7730b80"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "90e9870dc51387a6aaa481d1327c87c318f296fcf8c01140d426a4a13844d21d"
+      "sha256": "805c7904f4befdb6914aa15e6505f930ba5838972350a131e6e0e233f694fe24"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "0715392d717e67673aae5523928c0c424197f4587e2e4d029f64211806644c4f"
+      "sha256": "d66ac2f70825952f95233fac4fa2f338444e34a0de9d6f6290f74ce97d17ea3d"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
