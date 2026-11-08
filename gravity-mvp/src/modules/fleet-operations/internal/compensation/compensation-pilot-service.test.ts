@@ -311,6 +311,22 @@ describe('proving the canonical person from the Telegram proof', () => {
         }))).toEqual({ proven: false, refusal: 'identity_needs_review' })
     })
 
+    it('answers needs-review only for a person Contacts confirmed as the main driver', async () => {
+        // The bot tells this refusal's driver that their Telegram link is
+        // confirmed, so an unconfirmed person with a merged lineage stays unproven.
+        for (const lineage of [
+            { status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-merged-away'] },
+            { status: 'unresolvable' as const },
+        ]) {
+            const p = port({
+                confirmMainDriver: vi.fn(async () => 'not_confirmed' as const),
+                resolveContactLineage: vi.fn(async () => lineage),
+            })
+            expect(await resolvePilotIdentityV1(PROOF, p)).toEqual({ proven: false, refusal: 'identity_not_proven' })
+            expect(p.resolveContactLineage).not.toHaveBeenCalled()
+        }
+    })
+
     it('refuses when the proven Driver row is gone', async () => {
         expect(await resolvePilotIdentityV1(PROOF, port({ findDriverFacts: vi.fn(async () => null) })))
             .toEqual({ proven: false, refusal: 'identity_not_proven' })
@@ -1384,6 +1400,36 @@ describe('referral and manual access from the person\'s ledger', () => {
         })
         await compensationSectionViewV1(PROOF, p, ingestion(), NOW)
         expect(p.readCashAccessChain).not.toHaveBeenCalled()
+    })
+
+    it('holds a person merged since an access event at every later step, and never reaches C1', async () => {
+        const i = ingestion()
+        const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z', { lineageDigest: 'lineage:before-merge' })])
+        expect(await checkPilotOrderV1({ ...PROOF, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, i, NOW))
+            .toEqual({ state: 'refused', order: null, refusal: 'identity_needs_review' })
+        expect(await requestPilotRefreshV1(PROOF, p, i, NOW)).toEqual({ status: 'refused', refusal: 'identity_needs_review' })
+        expect(await submitPilotApplicationV1(SUBMIT, p, i, NOW)).toEqual({ submitted: false, refusal: 'identity_needs_review' })
+        expect(i.requestHotRefresh).not.toHaveBeenCalled()
+        expect(p.submitApplication).not.toHaveBeenCalled()
+    })
+
+    it('never answers needs-review for a person Contacts did not prove, whatever the ledger holds', async () => {
+        // The bot names this refusal's link as confirmed, so it stays with the
+        // proven person; anyone else is the unconfirmed person at every step.
+        for (const overrides of [
+            { confirmMainDriver: vi.fn(async () => 'not_confirmed' as const) },
+            { resolveContactLineage: vi.fn(async () => ({ status: 'resolved' as const, canonicalContactId: CONTACT, contactIds: [CONTACT, 'contact-merged-away'] })) },
+            { resolveContactLineage: vi.fn(async () => ({ status: 'unresolvable' as const })) },
+        ]) {
+            const p = withLedger([event(1, 'referral_entitlement_granted', '2026-09-01T00:00:00.000Z', { lineageDigest: 'lineage:before-merge' })], overrides)
+            expect(await compensationSectionViewV1(PROOF, p, ingestion(), NOW))
+                .toEqual({ available: false, reason: 'cash_person_unconfirmed', applications: [] })
+            expect(await checkPilotOrderV1({ ...PROOF, externalOrderId: ORDER.externalOrderId, scopeKey: SCOPE_KEY, retry: false }, p, ingestion(), NOW))
+                .toEqual({ state: 'refused', order: null, refusal: 'cash_person_unconfirmed' })
+            expect(await submitPilotApplicationV1(SUBMIT, p, ingestion(), NOW)).toEqual({ submitted: false, refusal: 'cash_person_unconfirmed' })
+            expect(p.readCashAccessChain).not.toHaveBeenCalled()
+            expect(p.submitApplication).not.toHaveBeenCalled()
+        }
     })
 
     it('checks each claim in the grace days against its own month\'s budget, not the first claimable one', async () => {

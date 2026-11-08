@@ -62,14 +62,22 @@ const PERIOD_ENDED_TEXT = 'Компенсация доступна за зака
 // The programme admits the linked driver, but the CRM has no person proven to
 // bind a claim to. Money is bound only to such a person.
 const PERSON_UNCONFIRMED_TEXT = 'Подать заявку пока нельзя: профиль для выплаты ещё не подтверждён в CRM. Напишите менеджеру — после подтверждения откройте этот раздел снова.';
+// identity_needs_review comes only for a person the CRM has confirmed as the
+// linked driver's main driver: an access event of that person was recorded
+// under an earlier lineage, so the contact was merged since and a manager has
+// to look again (a CRM that still decides the person before the programme
+// sends it for a confirmed person whose contact carries a merge history). The
+// link is therefore named as confirmed, and nothing promises that sharing the
+// number again lifts it. Orchestrator-approved text, the same at every step.
+const MERGE_HISTORY_TEXT = 'Связь Telegram с вашим профилем водителя подтверждена. Однако для участия в программе компенсации требуется дополнительная проверка истории объединения учётных записей. Пока подать заявку нельзя. Обратитесь к менеджеру';
 
 // Refusals arrive as codes. A driver needs a sentence, and a sentence that
 // tells them what to do next rather than what the system checked.
 const REFUSAL_TEXT = {
     // Mid-claim the bot does not ask why; the section, opened again, says it.
     identity_not_proven: 'Не удалось подтвердить привязку Telegram к профилю водителя. Откройте «💰 Компенсация наличных» заново.',
-    // Sent by a CRM that still decides the person before the programme.
-    identity_needs_review: PERSON_UNCONFIRMED_TEXT,
+    // A confirmed person whose merge history the CRM will not bind money to.
+    identity_needs_review: MERGE_HISTORY_TEXT,
     cash_person_unconfirmed: PERSON_UNCONFIRMED_TEXT,
     identity_busy: TECHNICAL_FAILURE_TEXT,
     park_not_selected: 'Сначала выберите парк.',
@@ -153,7 +161,9 @@ const VERIFY_REASON = 'бот не смог подтвердить связь в
 const ACCESS_RESTRICTIONS = {
     // In-band, this comes only for a Telegram with no driver link at all.
     identity_not_proven: { text: NOT_LINKED_TEXT },
-    identity_needs_review: { text: PERSON_UNCONFIRMED_TEXT },
+    // Linked and confirmed, but held for a manager by a merge: its own
+    // sentence, neither the unlinked one nor the unconfirmed-person one.
+    identity_needs_review: { text: MERGE_HISTORY_TEXT },
     park_not_selected: { reason: 'в боте не выбран парк.', action: 'выберите парк кнопкой ниже.', choosePark: true },
     selected_park_profile_unproven: {
         reason: 'в выбранном парке не найден ваш подтверждённый профиль водителя.',
