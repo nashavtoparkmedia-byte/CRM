@@ -660,6 +660,12 @@ describe('user management', () => {
         // u1 is a Руководитель now; a Менеджер would be refused as before.
         writeRegistry([MANAGER, ADMIN, LEAD])
         await expect(userService.deleteUser('u3')).rejects.toThrow('forbidden')
+        // A deleted id is never handed out again (N2): new legacy ids are random.
+        asRequest({ crm_user_id: 'u2' })
+        await userService.deleteUser('u3')
+        const added = await userService.addUser({ firstName: 'Н', lastName: 'С', role: 'Менеджер', status: 'Активен' })
+        expect(added.id).toMatch(/^[0-9a-f-]{36}$/)
+        expect(readRegistry().map((user) => user.id)).not.toContain('u3')
     })
 })
 
