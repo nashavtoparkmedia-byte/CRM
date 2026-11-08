@@ -205,30 +205,36 @@ export class ConversationWorkflowService {
     userId: string,
     status: string,
   ): Promise<void> {
-    await prisma.$executeRaw`
-      UPDATE "Chat" SET "assignedToUserId" = ${userId}, status = ${status}, "updatedAt" = NOW()
-      WHERE id = ANY(${selector.chatIds})
-    `
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Chat" SET "assignedToUserId" = $1, status = $2, "updatedAt" = NOW()
+       WHERE id = ANY($3::text[])`,
+      userId,
+      status,
+      selector.chatIds,
+    )
   }
 
   private static async _unassignGroup(selector: ConversationGroupSelector): Promise<void> {
-    await prisma.$executeRaw`
-      UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
-      WHERE id = ANY(${selector.chatIds})
-    `
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Chat" SET "assignedToUserId" = NULL, "updatedAt" = NOW()
+       WHERE id = ANY($1::text[])`,
+      selector.chatIds,
+    )
   }
 
   private static async _resolveGroup(selector: ConversationGroupSelector): Promise<void> {
-    await prisma.$executeRaw`
-      UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
-      WHERE id = ANY(${selector.chatIds})
-    `
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Chat" SET status = 'resolved', "requiresResponse" = false, "updatedAt" = NOW()
+       WHERE id = ANY($1::text[])`,
+      selector.chatIds,
+    )
   }
 
   private static async _markGroupRead(selector: ConversationGroupSelector): Promise<void> {
-    await prisma.$executeRaw`
-      UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
-      WHERE id = ANY(${selector.chatIds})
-    `
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Chat" SET "unreadCount" = 0, "requiresResponse" = false, "updatedAt" = NOW()
+       WHERE id = ANY($1::text[])`,
+      selector.chatIds,
+    )
   }
 }

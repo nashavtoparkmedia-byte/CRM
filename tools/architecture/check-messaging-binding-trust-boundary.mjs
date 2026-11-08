@@ -69,7 +69,7 @@ function assertWorkflow(source) {
   if (/WHERE\s+"contactId"/u.test(source)) throw new Error('a workflow statement selects by contactId instead of trusted ids')
   for (const name of ['_assignGroup', '_unassignGroup', '_resolveGroup', '_markGroupRead']) {
     const group = body(source, `private static async ${name}(`, name)
-    if (!/WHERE id = ANY\(\$\{selector\.chatIds\}\)/u.test(group)) throw new Error(`${name} does not write an exact trusted id list`)
+    if (!/WHERE id = ANY\(\$\d::text\[\]\)`,[\s\S]*?selector\.chatIds,\n\s+\)/u.test(group)) throw new Error(`${name} does not write an exact trusted id list`)
   }
   const selector = body(source, 'private static async _getGroupSelector(', '_getGroupSelector')
   if (!/if \(!chat\.contactId \|\| !isConversationPersonTrustedV1\(bindingState\(chat\)\)\) return \{ chatIds: \[chatId\] \}/u.test(selector)) throw new Error('an untrusted conversation reaches a group')
@@ -116,7 +116,7 @@ rejectProbe(policy, policy.replace("return state === 'consistent' || state === '
 rejectProbe(messageService, messageService.replace('const keys = personGroupKey ? [personGroupKey] : []', 'const keys = [personGroupKey, chat.driverId ? `d:${chat.driverId}` : null].filter(Boolean) as string[]'), assertInbox)
 rejectProbe(messageService, messageService.replace('                    chat.driver = null\n', ''), assertInbox)
 rejectProbe(messageService, messageService.replace('                    chat.contactId = null\n', ''), assertInbox)
-rejectProbe(workflow, workflow.replace('WHERE id = ANY(${selector.chatIds})', 'WHERE "contactId" = ANY(${selector.chatIds})'), assertWorkflow)
+rejectProbe(workflow, workflow.replace('WHERE id = ANY($1::text[])', 'WHERE "contactId" = ANY($1::text[])'), assertWorkflow)
 rejectProbe(workflow, `${workflow}\nconst rogue = 'UPDATE "Chat" SET "unreadCount" = 0 WHERE "driverId" = $1'\n`, assertWorkflow)
 rejectProbe(workflow, workflow.replace('siblings.filter(sibling => isConversationPersonTrustedV1(bindingState(sibling)))', 'siblings'), assertWorkflow)
 rejectProbe(workflow, workflow.replace('if (!chat.contactId || !isConversationPersonTrustedV1(bindingState(chat))) return { chatIds: [chatId] }', 'if (!chat.contactId) return { chatIds: [chatId] }'), assertWorkflow)
