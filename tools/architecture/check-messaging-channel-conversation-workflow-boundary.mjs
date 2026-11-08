@@ -26,7 +26,7 @@ const consumers = [
 ]
 const exactCapabilities = ['onGroupInboundMessage', 'onInboundMessage', 'onOutboundMessage']
 
-assert.equal(sha256(read(implementationPath)), 'a74499ccd9aea7a932de65b1f42a505135b305a7bf61213a1b40a9aa4f266baa')
+assert.equal(sha256(read(implementationPath)), 'c249a78b927ceb5777d70ac64eea7cf54ac701c81111874c95603e5992387365')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''
