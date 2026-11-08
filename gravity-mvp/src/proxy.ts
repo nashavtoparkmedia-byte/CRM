@@ -6,8 +6,8 @@ import {
 } from '@/modules/identity-access/public/v1/mobile-session-credentials'
 import { resolveCookieOperatorV1 } from '@/modules/identity-access/public/v1/mobile-session-operator'
 import {
-    isStaffSessionEnforcedV1,
-    STAFF_SESSION_COOKIE,
+    isStaffSessionEnforcedForRequestV1,
+    staffSessionCookieNameForRequestV1,
 } from '@/modules/identity-access/public/v1/staff-session'
 
 /**
@@ -159,8 +159,8 @@ export async function proxy(request: NextRequest) {
 
     const shell = isShellRequest(request)
     const sessionCookie = request.cookies.get(MOBILE_SESSION_COOKIE)?.value
-    const staffCookie = shell ? undefined : request.cookies.get(STAFF_SESSION_COOKIE)?.value
-    const enforce = !shell && isStaffSessionEnforcedV1()
+    const staffCookie = shell ? undefined : request.cookies.get(staffSessionCookieNameForRequestV1())?.value
+    const enforce = !shell && isStaffSessionEnforcedForRequestV1()
 
     // The browser lane without any session and without enforcement is
     // deliberately unchanged.

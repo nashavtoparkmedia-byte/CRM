@@ -10,7 +10,7 @@ import type { UserIdentityV1 } from '../../../../contracts/identity-access/v1'
 import type { IdentityAccessPortV1 } from './identity-access-handler'
 import { MOBILE_SESSION_COOKIE } from './mobile-session-credentials'
 import { resolveRequestOperatorV1 } from './mobile-session-operator'
-import { STAFF_SESSION_COOKIE } from './staff-session'
+import { staffSessionCookieNameForRequestV1 } from './staff-session'
 
 function toUserIdentityV1(user: UserItem): UserIdentityV1 {
     return {
@@ -78,7 +78,7 @@ export const legacyUserServicePortV1: IdentityAccessPortV1 = {
             await clearMobileSessionV1()
             return
         }
-        if ((await cookies()).get(STAFF_SESSION_COOKIE) !== undefined) {
+        if ((await cookies()).get(staffSessionCookieNameForRequestV1()) !== undefined) {
             const { endStaffSessionV1 } = await import('./staff-session')
             await endStaffSessionV1()
             return

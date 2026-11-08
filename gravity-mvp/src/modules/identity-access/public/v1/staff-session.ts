@@ -1,6 +1,10 @@
 import { cookies, headers } from 'next/headers'
 import {
     endStaffSessionsV1,
+    isStaffSessionEnforcementOnV1,
+    staffSessionCookieNameV1,
+    staffSessionCookieSettingsV1,
+    staffSessionLifetimeSecondsV1,
     setStaffPasswordV1,
     staffCredentialStatesV1,
     staffLoginModeV1,
@@ -10,12 +14,6 @@ import {
     type StaffPasswordChangeRefusalV1,
     type StaffSessionPrincipalV1,
 } from '../../application/staff-session-operations'
-import {
-    isStaffSessionEnforcedV1,
-    STAFF_SESSION_COOKIE,
-    STAFF_SESSION_TTL_SECONDS,
-    staffSessionCookieOptionsV1,
-} from '../../internal/staff-session-credentials'
 import { getIntegrationAdminPrincipal } from './integration-admin-auth'
 import { LEGACY_UI_IDENTITY_COOKIE_V1, MOBILE_SESSION_COOKIE } from './mobile-session-credentials'
 
@@ -29,7 +27,16 @@ import { LEGACY_UI_IDENTITY_COOKIE_V1, MOBILE_SESSION_COOKIE } from './mobile-se
  */
 
 export type { StaffSessionPrincipalV1 } from '../../application/staff-session-operations'
-export { STAFF_SESSION_COOKIE, isStaffSessionEnforcedV1 }
+
+/** The staff session cookie's name, for the request boundary. */
+export function staffSessionCookieNameForRequestV1(): string {
+    return staffSessionCookieNameV1()
+}
+
+/** Whether browser-lane enforcement is on (YOKO_STAFF_SESSION_ENFORCE=on). */
+export function isStaffSessionEnforcedForRequestV1(): boolean {
+    return isStaffSessionEnforcementOnV1()
+}
 
 /**
  * The verified employee of this request, or null.
@@ -45,7 +52,7 @@ export { STAFF_SESSION_COOKIE, isStaffSessionEnforcedV1 }
 export async function getStaffSessionPrincipalV1(): Promise<StaffSessionPrincipalV1 | null> {
     const store = await cookies()
     if (store.get(MOBILE_SESSION_COOKIE) !== undefined) return null
-    const verified = await verifyStaffSessionTokenV1(store.get(STAFF_SESSION_COOKIE)?.value)
+    const verified = await verifyStaffSessionTokenV1(store.get(staffSessionCookieNameV1())?.value)
     return verified.kind === 'valid' ? verified.principal : null
 }
 
@@ -80,8 +87,8 @@ export async function establishStaffSessionV1(userId: unknown, password: unknown
     const source = requestHeaders.get('x-real-ip')?.trim().slice(0, 64) || null
     const result = await staffLoginV1({ userId, password, source })
     if (!result.ok) return result
-    store.set(STAFF_SESSION_COOKIE, result.token, staffSessionCookieOptionsV1(STAFF_SESSION_TTL_SECONDS))
-    store.set(LEGACY_UI_IDENTITY_COOKIE_V1, result.principal.userId, legacyUiCookieOptions(STAFF_SESSION_TTL_SECONDS))
+    store.set(staffSessionCookieNameV1(), result.token, staffSessionCookieSettingsV1())
+    store.set(LEGACY_UI_IDENTITY_COOKIE_V1, result.principal.userId, legacyUiCookieOptions(staffSessionLifetimeSecondsV1()))
     return { ok: true }
 }
 
@@ -91,15 +98,15 @@ export async function establishStaffSessionV1(userId: unknown, password: unknown
  */
 export async function endStaffSessionV1(): Promise<'ended' | 'no_session' | 'unverifiable'> {
     const store = await cookies()
-    const outcome = await staffLogoutV1(store.get(STAFF_SESSION_COOKIE)?.value).catch(() => 'unverifiable' as const)
-    store.set(STAFF_SESSION_COOKIE, '', staffSessionCookieOptionsV1(0))
+    const outcome = await staffLogoutV1(store.get(staffSessionCookieNameV1())?.value).catch(() => 'unverifiable' as const)
+    store.set(staffSessionCookieNameV1(), '', staffSessionCookieSettingsV1(true))
     store.set(LEGACY_UI_IDENTITY_COOKIE_V1, '', legacyUiCookieOptions(0))
     return outcome
 }
 
 /** Whether this request carries a staff cookie at all (verified or not). */
 export async function hasStaffSessionCookieV1(): Promise<boolean> {
-    return (await cookies()).get(STAFF_SESSION_COOKIE) !== undefined
+    return (await cookies()).get(staffSessionCookieNameV1()) !== undefined
 }
 
 /**

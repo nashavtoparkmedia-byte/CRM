@@ -9,7 +9,7 @@ import {
     strictAddUserV1,
     strictDeleteUserV1,
     strictUpdateUserV1,
-    StaffUserManagementError,
+    staffUserManagementErrorCodeV1,
     userManagementModeV1,
 } from '@/modules/identity-access/application/staff-session-operations'
 import {
@@ -53,9 +53,10 @@ async function writeUsers(file: string, users: UserItem[]): Promise<void> {
 }
 
 function rethrowStrict(error: unknown): never {
-    if (error instanceof StaffUserManagementError) {
-        console.warn(`[auth] rejected user-management reason=${error.code}`)
-        throw new Error(error.code)
+    const code = staffUserManagementErrorCodeV1(error)
+    if (code !== null) {
+        console.warn(`[auth] rejected user-management reason=${code}`)
+        throw new Error(code)
     }
     throw error
 }

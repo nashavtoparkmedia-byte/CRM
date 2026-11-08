@@ -5,7 +5,10 @@ import {
     isStaffSessionSecretValidV1,
     issueStaffSessionTokenV1,
     readStaffSessionTokenV1,
+    STAFF_SESSION_COOKIE,
+    STAFF_SESSION_TTL_SECONDS,
     staffPasswordRefusalV1,
+    staffSessionCookieOptionsV1,
     staffSessionIdV1,
     verifyStaffPasswordV1,
     type StaffPasswordRefusalV1,
@@ -52,6 +55,28 @@ export interface StaffSessionPrincipalV1 {
 }
 
 const store = prismaStaffCredentialStoreV1
+
+// ── Facade facts the public surface and the request boundary need ────────
+
+/** The staff session cookie's name (`__Host-` prefixed). */
+export function staffSessionCookieNameV1(): string {
+    return STAFF_SESSION_COOKIE
+}
+
+/** Whether browser-lane enforcement is on now (YOKO_STAFF_SESSION_ENFORCE=on). */
+export function isStaffSessionEnforcementOnV1(): boolean {
+    return isStaffSessionEnforcedV1()
+}
+
+/** The hardened cookie options for a session of the full lifetime, or a clearing cookie. */
+export function staffSessionCookieSettingsV1(clear = false) {
+    return staffSessionCookieOptionsV1(clear ? 0 : STAFF_SESSION_TTL_SECONDS)
+}
+
+/** The session lifetime, for the derived UI cookie. */
+export function staffSessionLifetimeSecondsV1(): number {
+    return STAFF_SESSION_TTL_SECONDS
+}
 
 // ── Lane state ───────────────────────────────────────────────────────────
 
@@ -407,20 +432,34 @@ export async function userManagementModeV1(): Promise<'legacy' | 'strict'> {
     }
 }
 
-export class StaffUserManagementError extends Error {
-    constructor(readonly code:
-        | 'forbidden'
-        | 'unavailable'
-        | 'invalid_role'
-        | 'invalid_status'
-        | 'invalid_field'
-        | 'not_found'
-        | 'last_privileged_demotion'
-        | 'last_privileged_deletion'
-        | 'last_credentialed_administrator') {
-        super(code)
-        this.name = 'StaffUserManagementError'
-    }
+export type StaffUserManagementErrorCodeV1 =
+    | 'forbidden'
+    | 'unavailable'
+    | 'invalid_role'
+    | 'invalid_status'
+    | 'invalid_field'
+    | 'not_found'
+    | 'last_privileged_demotion'
+    | 'last_privileged_deletion'
+    | 'last_credentialed_administrator'
+
+const MANAGEMENT_ERROR_NAME = 'StaffUserManagementError'
+const MANAGEMENT_ERROR_CODES: ReadonlySet<string> = new Set([
+    'forbidden', 'unavailable', 'invalid_role', 'invalid_status', 'invalid_field', 'not_found',
+    'last_privileged_demotion', 'last_privileged_deletion', 'last_credentialed_administrator',
+])
+
+function managementError(code: StaffUserManagementErrorCodeV1): Error {
+    const error = new Error(code)
+    error.name = MANAGEMENT_ERROR_NAME
+    return error
+}
+
+/** The refusal code of a strict user-management error, or null for any other error. */
+export function staffUserManagementErrorCodeV1(error: unknown): StaffUserManagementErrorCodeV1 | null {
+    return error instanceof Error && error.name === MANAGEMENT_ERROR_NAME && MANAGEMENT_ERROR_CODES.has(error.message)
+        ? error.message as StaffUserManagementErrorCodeV1
+        : null
 }
 
 const ROLES: ReadonlySet<string> = new Set(['Менеджер', 'Руководитель', 'Администратор'])
@@ -444,15 +483,15 @@ export function allowlistedUserPatchV1(patch: unknown): UserPatchV1 {
     for (const field of EDITABLE_TEXT_FIELDS) {
         const value = source[field]
         if (value === undefined) continue
-        if (typeof value !== 'string' || value.length > 256) throw new StaffUserManagementError('invalid_field')
+        if (typeof value !== 'string' || value.length > 256) throw managementError('invalid_field')
         result[field] = value
     }
     if (source.role !== undefined) {
-        if (typeof source.role !== 'string' || !ROLES.has(source.role)) throw new StaffUserManagementError('invalid_role')
+        if (typeof source.role !== 'string' || !ROLES.has(source.role)) throw managementError('invalid_role')
         result.role = source.role as StaffRoleV1
     }
     if (source.status !== undefined) {
-        if (typeof source.status !== 'string' || !STATUSES.has(source.status)) throw new StaffUserManagementError('invalid_status')
+        if (typeof source.status !== 'string' || !STATUSES.has(source.status)) throw managementError('invalid_status')
         result.status = source.status as 'Активен' | 'Отключен'
     }
     return result
@@ -471,7 +510,7 @@ function leavesNoCredentialedAdministrator(before: RegistryRecordV1[], after: Re
 
 async function strictActor(currentPrincipal: () => Promise<StaffSessionPrincipalV1 | null>): Promise<StaffSessionPrincipalV1> {
     const principal = await currentPrincipal()
-    if (principal === null) throw new StaffUserManagementError('forbidden')
+    if (principal === null) throw managementError('forbidden')
     return principal
 }
 
@@ -483,7 +522,7 @@ async function readyRegistry(): Promise<string> {
     const lane = await staffLaneStateV1().catch(() => ({ kind: 'refused', reason: 'lane_unreadable' } as const))
     if (lane.kind === 'ready') return lane.registryPath
     // Strict because rows exist but the lane is not configured: frozen (C-D4a).
-    throw new StaffUserManagementError(lane.kind === 'dormant' ? 'forbidden' : 'unavailable')
+    throw managementError(lane.kind === 'dormant' ? 'forbidden' : 'unavailable')
 }
 
 /** Strict add: an Администратор under a Staff Session; random immutable id. */
@@ -492,9 +531,9 @@ export async function strictAddUserV1(
     input: unknown,
 ): Promise<RegistryRecordV1> {
     const actor = await strictActor(currentPrincipal)
-    if (actor.role !== 'Администратор') throw new StaffUserManagementError('forbidden')
+    if (actor.role !== 'Администратор') throw managementError('forbidden')
     const patch = allowlistedUserPatchV1(input)
-    if (patch.role === undefined) throw new StaffUserManagementError('invalid_role')
+    if (patch.role === undefined) throw managementError('invalid_role')
     const file = await readyRegistry()
     return withRegistryWriteTurnV1(async () => {
         const stored = await readRegistryForWriteV1(file)
@@ -532,28 +571,28 @@ export async function strictUpdateUserV1(
         const stored = await readRegistryForWriteV1(file)
         const registry = stored.filter(isRegistryRecordV1)
         const storedIndex = stored.findIndex((entry) => isRegistryRecordV1(entry) && entry.id === targetUserId)
-        if (storedIndex === -1) throw new StaffUserManagementError('not_found')
+        if (storedIndex === -1) throw managementError('not_found')
         const before = stored[storedIndex] as RegistryRecordV1
         const changesRole = patch.role !== undefined && patch.role !== before.role
         const changesStatus = patch.status !== undefined && patch.status !== before.status
         const row = await prismaStaffCredentialStoreV1.find(targetUserId).catch(() => {
-            throw new StaffUserManagementError('unavailable')
+            throw managementError('unavailable')
         })
         const needsAdministrator = changesRole || changesStatus || row !== null
         if (needsAdministrator ? actor.role !== 'Администратор' : !PRIVILEGED.has(actor.role)) {
             audit('updateUser', actor, targetUserId, 'forbidden')
-            throw new StaffUserManagementError('forbidden')
+            throw managementError('forbidden')
         }
         const updated: RegistryRecordV1 = { ...before, ...patch, id: before.id, createdAt: before.createdAt }
         const after = registry.map((record) => (record === before ? updated : record))
-        if (leavesNoPrivileged(after)) throw new StaffUserManagementError('last_privileged_demotion')
+        if (leavesNoPrivileged(after)) throw managementError('last_privileged_demotion')
 
         const disabling = changesStatus && patch.status === 'Отключен'
         if (row !== null && (disabling || changesRole)) {
             // D2: the credential side first, in one transaction. Failure aborts.
             await prismaStaffCredentialStoreV1.locked(async (tx) => {
                 const live = await tx.liveUserIds()
-                if (leavesNoCredentialedAdministrator(registry, after, live)) throw new StaffUserManagementError('last_credentialed_administrator')
+                if (leavesNoCredentialedAdministrator(registry, after, live)) throw managementError('last_credentialed_administrator')
                 if (disabling) {
                     await tx.revoke(targetUserId, `staff:${actor.userId}`, new Date())
                     await tx.record({ userId: targetUserId, kind: 'revoked', actor: `staff:${actor.userId}` })
@@ -574,17 +613,17 @@ export async function strictDeleteUserV1(
     targetUserId: string,
 ): Promise<void> {
     const actor = await strictActor(currentPrincipal)
-    if (actor.role !== 'Администратор') throw new StaffUserManagementError('forbidden')
+    if (actor.role !== 'Администратор') throw managementError('forbidden')
     const file = await readyRegistry()
     await withRegistryWriteTurnV1(async () => {
         const stored = await readRegistryForWriteV1(file)
         const registry = stored.filter(isRegistryRecordV1)
-        if (!registry.some((record) => record.id === targetUserId)) throw new StaffUserManagementError('not_found')
+        if (!registry.some((record) => record.id === targetUserId)) throw managementError('not_found')
         const after = registry.filter((record) => record.id !== targetUserId)
-        if (leavesNoPrivileged(after)) throw new StaffUserManagementError('last_privileged_deletion')
+        if (leavesNoPrivileged(after)) throw managementError('last_privileged_deletion')
         await prismaStaffCredentialStoreV1.locked(async (tx) => {
             const live = await tx.liveUserIds()
-            if (leavesNoCredentialedAdministrator(registry, after, live)) throw new StaffUserManagementError('last_credentialed_administrator')
+            if (leavesNoCredentialedAdministrator(registry, after, live)) throw managementError('last_credentialed_administrator')
             const revoked = await tx.revoke(targetUserId, `staff:${actor.userId}`, new Date())
             if (revoked !== null) await tx.record({ userId: targetUserId, kind: 'revoked', actor: `staff:${actor.userId}` })
         })
