@@ -3696,6 +3696,64 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "contact-identity-person-card-owner-preview-fixes-main-3ac5ce07-20261108",
+      "reviewed_at": "2026-11-08T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_OWNER_PREVIEW_EXECUTOR_REVIEW_3AC5CE07",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V8_MANDATE_01_CONTACT_IDENTITY_OWNER_PREVIEW_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain whose tail is calling-c3a-campaign-live-dial-main-7b7cc249-20261107 (main 3ac5ce07), and leaves that amendment and the person-card amendment contact-identity-person-card-main-d46100e8-cc1-20261107 untouched. It adds no path and changes no assignment: it carries only the mechanical source-fingerprint rebinds of three exact-inventory paths whose bytes the Owner-preview fixes change."
+      },
+      "reason": "Records the byte changes of the Contact Identity Owner-preview fixes on main 3ac5ce07 (Orchestrator V8 mandate 01). No tracked executable surface is added or removed (2,787 -> 2,787). Three existing exact-inventory paths of gravity_runtime_remainder change bytes only and receive mechanical source-fingerprint rebinds: the «Карточка человека» view (desktop Messenger link, plurals, merge-reason labels), the «Люди» search client and the `people` section (both stop promising a username search that ContactLookup.v1 does not do). Every other changed path is context-owned through manifest owned_paths and needs no exact assignment: the platform-shell person-card composition and its test (a conversation reached through two lineage ids is counted once), and Identity Access's integration-admin return-path allowlist and its test (the sign-in started from a person page returns to /contacts or /contacts/<id>, still same-origin only and never a redirector).",
+      "predecessor": {
+        "tracked_executable_surfaces": 2787,
+        "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",
+        "coverage_sha256": "221699478737604d9da40279b62baf5181d81186569c5b535d6839de30fc3641"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2787,
+        "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",
+        "coverage_sha256": "221699478737604d9da40279b62baf5181d81186569c5b535d6839de30fc3641"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/contacts/[id]/PersonCardView.tsx",
+          "previous_source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
+          "current_source_sha256": "7494dac890807f2a1b22f0c8c8cfbde608c44d42e081acb71c3a3e92c3e2f10a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): defects found while preparing the Owner preview on the local Preview of main af0cf3e3 (rebased onto main 3ac5ce07) are fixed in the read-only presentation only — the «Переписка» link now opens the desktop Messenger's own address for the exact persisted Chat.id (/messages?id=…&channel=…) instead of the Android shell's /messages/open gate, which requires a mobile session and sent a desktop operator to the mobile login; Russian plural forms for the conversation counter and the merged-records badge; merge reasons shown as words instead of the stored enum. No read, write, access decision or relationship inference is added. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/contacts/ContactsSearchClient.tsx",
+          "previous_source_sha256": "7626d6a73d6ee7c49dafde6ab761cb49bdda87c0264c29c35e29db8afd154964",
+          "current_source_sha256": "73dd84cdcbf038d8c9a1ee91d6ee2767a83a76cfebcd0e0f13e2f4bb1e765ec4",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): the search placeholder promised username search, which ContactLookup.v1 deliberately does not do (it searches the Contact name and phone digits and never reads a provider handle); the placeholder now says «ФИО или телефон». No behaviour changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/config/sections.ts",
+          "previous_source_sha256": "25b66c9ad2e763ea01d49527a569b1b0c36bbb5b46cc7fa75cf7c61718c8edc7",
+          "current_source_sha256": "bd310b537015a3da52247e0cc4dd36c0b48c5fa7058c84858c3fba57acf4a290",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator V8 mandate 01 (Contact Identity Owner preview, 2026-11-08): the `people` section description no longer promises username search (see ContactsSearchClient.tsx above); no other section changes. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

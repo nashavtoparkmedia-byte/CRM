@@ -80,6 +80,36 @@ describe('loadContactPersonCardV1', () => {
     expect(result.view.partial).toEqual({ driverProfiles: false, conversations: false })
   })
 
+  it('counts a conversation once when Messaging answers a merged-away id with the survivor\'s conversations too', async () => {
+    const load = createContactPersonCardCompositionV1({
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readDriverProfilesForContacts() { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [] } },
+      async readContactConversations() {
+        // The real ContactConversationsQuery.v1: the canonical id gets its own chats, the
+        // merged-away id gets its own AND the canonical survivor's (linkedIds = [id, canonical]).
+        return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [
+          { contactId: 'c-1', status: 'found', canonicalContactId: 'c-1', channels: [
+            { channel: 'telegram', primaryConversationId: 'chat-tg-new', conversations: [{ conversationId: 'chat-tg-new', lastActivityAt: '2026-03-01T00:00:00.000Z' }] },
+            { channel: 'whatsapp', primaryConversationId: 'chat-wa', conversations: [{ conversationId: 'chat-wa', lastActivityAt: '2026-02-01T00:00:00.000Z' }] },
+          ], latestConversationId: 'chat-tg-new', truncated: false },
+          { contactId: 'c-old', status: 'found', canonicalContactId: 'c-1', channels: [
+            { channel: 'telegram', primaryConversationId: 'chat-tg-new', conversations: [
+              { conversationId: 'chat-tg-new', lastActivityAt: '2026-03-01T00:00:00.000Z' },
+              { conversationId: 'chat-tg-old', lastActivityAt: '2026-01-01T00:00:00.000Z' },
+            ] },
+            { channel: 'whatsapp', primaryConversationId: 'chat-wa', conversations: [{ conversationId: 'chat-wa', lastActivityAt: '2026-02-01T00:00:00.000Z' }] },
+          ], latestConversationId: 'chat-tg-new', truncated: false },
+        ] } as never
+      },
+    })
+    const result = await load('c-1')
+    if (result.status !== 'confirmed') throw new Error('unreachable')
+    expect(result.view.conversations).toEqual([
+      { channel: 'telegram', primaryConversationId: 'chat-tg-new', lastActivityAt: '2026-03-01T00:00:00.000Z', conversationCount: 2, truncated: false },
+      { channel: 'whatsapp', primaryConversationId: 'chat-wa', lastActivityAt: '2026-02-01T00:00:00.000Z', conversationCount: 1, truncated: false },
+    ])
+  })
+
   it('decides a link contradiction against the whole lineage and keeps the strongest link of a duplicated row', async () => {
     const load = createContactPersonCardCompositionV1({
       async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
