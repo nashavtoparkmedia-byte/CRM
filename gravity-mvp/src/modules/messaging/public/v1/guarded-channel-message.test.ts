@@ -115,6 +115,12 @@ describe('guarded append contract', () => {
       expect(() => parseReleaseHeldChannelMessagesCommandV1({ ...release, limit })).toThrow(GuardedChannelMessageCommandValidationError)
     }
     expect(() => parseReleaseHeldChannelMessagesCommandV1({ ...release, externalId: 'x' })).toThrow(GuardedChannelMessageCommandValidationError)
+    // No release without a proof: an unproven sender is refused before any persistence.
+    expect(() => parseReleaseHeldChannelMessagesCommandV1({ ...release, attribution: { status: 'unproven', reason: 'CONTACT_RESOLUTION_BLOCKED' } }))
+      .toThrow('a release needs a proven sender')
+    expect(() => parseReleaseHeldChannelMessagesCommandV1({ ...release, attribution: { status: 'not_applicable' } })).toThrow(GuardedChannelMessageCommandValidationError)
+    expect(parseReleaseHeldChannelMessagesCommandV1({ ...release, conversationKind: 'group', attribution: { status: 'not_applicable' } }).attribution)
+      .toEqual({ status: 'not_applicable' })
     expect(parseHeldChannelMessagesQueryV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1 })).toEqual({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1 })
     expect(parseHeldChannelMessagesQueryV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId: 'chat-1' }).chatId).toBe('chat-1')
     expect(() => parseHeldChannelMessagesQueryV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId: '' })).toThrow()
@@ -173,7 +179,7 @@ describe('guarded append policy', () => {
 function fakePort(overrides: Partial<GuardedChannelMessagePersistencePortV1> = {}): GuardedChannelMessagePersistencePortV1 {
   return {
     append: vi.fn(async () => ({ outcome: 'appended', messageId: 'message-1' } as const)),
-    release: vi.fn(async () => ({ released: 0, remaining: 0, keyConflicts: 0, holdReason: null })),
+    release: vi.fn(async () => ({ released: 0, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null })),
     countHeld: vi.fn(async () => ({})),
     ...overrides,
   }
@@ -223,10 +229,12 @@ describe('guarded append handlers', () => {
   it('derives the release outcome from what the port settled, with the default limit', async () => {
     const release = { contract: RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1, chatId: 'chat-1', conversationKind: 'private', attribution: PROVEN }
     const cases = [
-      [{ released: 2, remaining: 0, keyConflicts: 0, holdReason: null }, 'released'],
-      [{ released: 0, remaining: 0, keyConflicts: 0, holdReason: null }, 'nothing_held'],
-      [{ released: 0, remaining: 3, keyConflicts: 0, holdReason: 'binding_mismatch' }, 'still_held'],
-      [{ released: 0, remaining: 1, keyConflicts: 1, holdReason: null }, 'still_held'],
+      [{ released: 2, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null }, 'released'],
+      [{ released: 1, remaining: 2, keyConflicts: 0, senderMismatches: 2, holdReason: null }, 'released'],
+      [{ released: 0, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null }, 'nothing_held'],
+      [{ released: 0, remaining: 3, keyConflicts: 0, senderMismatches: 0, holdReason: 'binding_mismatch' }, 'still_held'],
+      [{ released: 0, remaining: 1, keyConflicts: 1, senderMismatches: 0, holdReason: null }, 'still_held'],
+      [{ released: 0, remaining: 1, keyConflicts: 0, senderMismatches: 1, holdReason: null }, 'still_held'],
     ] as const
     for (const [settled, outcome] of cases) {
       const port = fakePort({ release: vi.fn(async () => settled) })

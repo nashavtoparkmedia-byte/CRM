@@ -215,6 +215,7 @@ async function writeHeld(
       sentAt: event.sentAt,
       metadata: event.metadata as Prisma.InputJsonValue,
       holdReason: reason,
+      senderContactIdentityId: attribution.status === 'proven' ? attribution.contactIdentityId : null,
       holdEvidence: {
         v: 1,
         attribution: attributionEvidence(attribution),
@@ -297,18 +298,33 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
     try {
       return await prisma.$transaction(async transaction => {
         const conversation = await lockConversation(transaction, input.chatId, input.conversationKind)
+        const unreleased = { chatId: input.chatId, releasedAt: null }
+        const heldCount = await transaction.heldChannelMessage.count({ where: unreleased })
+        if (heldCount === 0) return { released: 0, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null }
+
+        // No release without a proof: a private conversation's events become
+        // visible only under a proven sender, whatever the binding is.
+        const proof = input.attribution
+        if (input.conversationKind === 'private' && proof.status !== 'proven') {
+          return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: 'attribution_unproven' }
+        }
+        const decision = decideGuardedAppendV1(input.conversationKind, proof, bindingOf(conversation))
+        if (!decision.visible) {
+          return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: decision.reason }
+        }
+
+        // An event held for another proven identity is another person's: it
+        // stays held, and is never a candidate, so it cannot starve the rest.
+        const sender = proof.status === 'proven' ? proof.contactIdentityId : null
+        const senderMismatches = await transaction.heldChannelMessage.count({
+          where: { ...unreleased, AND: [{ senderContactIdentityId: { not: null } }, ...(sender ? [{ senderContactIdentityId: { not: sender } }] : [])] },
+        })
         const pending = await transaction.heldChannelMessage.findMany({
-          where: { chatId: input.chatId, releasedAt: null },
+          where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },
           orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
           take: input.limit,
         })
-        if (pending.length === 0) return { released: 0, remaining: 0, keyConflicts: 0, holdReason: null }
-
-        const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, bindingOf(conversation))
-        if (!decision.visible) {
-          const remaining = await transaction.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
-          return { released: 0, remaining, keyConflicts: 0, holdReason: decision.reason }
-        }
+        if (pending.length === 0) return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches, holdReason: null }
 
         await lockEventKeys(transaction, pending.map(held => held.externalId))
         const releasedAt = new Date()
@@ -352,8 +368,8 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
           })
           released += 1
         }
-        const remaining = await transaction.heldChannelMessage.count({ where: { chatId: input.chatId, releasedAt: null } })
-        return { released, remaining, keyConflicts, holdReason: null }
+        const remaining = await transaction.heldChannelMessage.count({ where: unreleased })
+        return { released, remaining, keyConflicts, senderMismatches, holdReason: null }
       }, TRANSACTION_OPTIONS)
     } catch (error: unknown) {
       // A writer outside these locks took a released key mid-flight: nothing of

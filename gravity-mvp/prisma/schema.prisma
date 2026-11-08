@@ -1323,6 +1323,8 @@ model HeldChannelMessage {
   sentAt            DateTime
   metadata          Json             @default("{}")
   holdReason        String
+  /// The proven sender identity the event was held with; null when the sender was not proven.
+  senderContactIdentityId String?
   holdEvidence      Json             @default("{}")
   heldAt            DateTime         @default(now())
   releasedAt        DateTime?

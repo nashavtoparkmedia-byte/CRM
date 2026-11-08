@@ -139,13 +139,20 @@ function assertAdapterLocksBeforeJudging(source) {
   inOrder(release, [
     'prisma.$transaction(',
     'await lockConversation(transaction,',
-    'transaction.heldChannelMessage.findMany(',
+    "if (input.conversationKind === 'private' && proof.status !== 'proven') {",
     'decideGuardedAppendV1(',
     'if (!decision.visible)',
+    'transaction.heldChannelMessage.findMany(',
     'await lockEventKeys(transaction,',
     'await writeVisible(transaction,',
     'transaction.heldChannelMessage.update(',
   ], 'release')
+  if (!release.includes("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },")) {
+    throw new Error('release: an event held for another proven identity may be released')
+  }
+  if (!/senderContactIdentityId: attribution\.status === 'proven' \? attribution\.contactIdentityId : null,/u.test(functionBody(source, 'writeHeld'))) {
+    throw new Error('a held event does not record its proven sender')
+  }
   if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(source)) throw new Error('held rows are deleted or bulk-rewritten by the adapter')
 
   const visible = functionBody(source, 'writeVisible')
@@ -202,6 +209,7 @@ function assertContractReservations(source) {
   if (!/const UNPROVEN_REASON = \/\^\[A-Z\]\[A-Z0-9_\]\{0,63\}\(\?::\[A-Za-z0-9_\.-\]\{1,64\}\)\?\$\//u.test(source)) throw new Error('unproven reason is not a bounded code')
   if (!/if \(kind !== 'private'\) invalid\('a group conversation has no proven sender'\)/u.test(source)) throw new Error('a group may carry a proven sender')
   if (!/if \(kind !== 'group'\) invalid\('a private conversation needs a sender attribution'\)/u.test(source)) throw new Error('a private conversation may skip attribution')
+  if (!/if \(sender\.status === 'unproven'\) invalid\('a release needs a proven sender'\)/u.test(source)) throw new Error('a release may run without a proven sender')
 }
 
 function assertMigration(sql) {
@@ -224,6 +232,7 @@ function assertMigration(sql) {
   if (!/CHECK \("holdReason" IN \('binding_absent', 'binding_mismatch', 'attribution_unproven', 'group_person_bound'\)\)/u.test(sql)) throw new Error('hold reason check drift')
   if (!/CHECK \(\("releasedAt" IS NULL\) = \("releasedMessageId" IS NULL\)\)/u.test(sql)) throw new Error('release pair check drift')
   if (!/CHECK \("direction" IN \('inbound', 'outbound'\)\)/u.test(sql)) throw new Error('direction check drift')
+  if (!/"senderContactIdentityId" = \("holdEvidence" #>> '\{attribution,contactIdentityId\}'\)\)/u.test(sql)) throw new Error('sender evidence check drift')
   if (!/CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"/u.test(sql)) throw new Error('held event key is not unique')
 }
 
@@ -297,6 +306,11 @@ rejectProbe(handlerSource, `import { prisma } from '@/lib/prisma'\n${handlerSour
 rejectProbe(contractSource, contractSource.replace("new Set<string>(['delivery', 'guardedAppend'])", "new Set<string>(['guardedAppend'])"), assertContractReservations)
 rejectProbe(contractSource, contractSource.replace("if (kind !== 'private') invalid('a group conversation has no proven sender')", 'void kind'), assertContractReservations)
 rejectProbe(contractSource, contractSource.replace('const UNPROVEN_REASON = /^[A-Z][A-Z0-9_]{0,63}(?::[A-Za-z0-9_.-]{1,64})?$/', 'const UNPROVEN_REASON = /^.+$/'), assertContractReservations)
+rejectProbe(adapterSource, adapterSource.replace("if (input.conversationKind === 'private' && proof.status !== 'proven') {", 'if (false) {'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },", 'where: unreleased,'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("senderContactIdentityId: attribution.status === 'proven' ? attribution.contactIdentityId : null,", 'senderContactIdentityId: null,'), assertAdapterLocksBeforeJudging)
+rejectProbe(contractSource, contractSource.replace("if (sender.status === 'unproven') invalid('a release needs a proven sender')", 'void sender'), assertContractReservations)
+rejectProbe(migrationSql, migrationSql.replace('AND "senderContactIdentityId" = ("holdEvidence" #>> \'{attribution,contactIdentityId}\'))', ')'), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace('ON DELETE CASCADE', 'ON DELETE SET NULL'), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace("'group_person_bound')", "'group_person_bound', 'guessed')"), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'UPDATE "Message" SET "status" = \'read\';\n\nCOMMIT;'), assertMigration)

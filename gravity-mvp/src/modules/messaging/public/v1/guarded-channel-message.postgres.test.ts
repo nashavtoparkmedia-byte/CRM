@@ -23,6 +23,7 @@ import {
   type GuardedSenderAttributionV1,
 } from '../../../../contracts/messaging/v1'
 import { appendGuardedChannelMessageV1, heldChannelMessagesV1, releaseHeldChannelMessagesV1 } from './index'
+import { legacyPrismaGuardedChannelMessagePortV1 } from './legacy-prisma-guarded-channel-message-adapter'
 import { deriveDeliveryStateV1 } from './delivery-state-policy'
 import { persistsWithNotificationIntentV1 } from '../../internal/mobile-push/inbound-notification-intent'
 
@@ -81,7 +82,7 @@ function append(chatId: string, attribution: GuardedSenderAttributionV1, externa
   })
 }
 
-function release(chatId: string, attribution: GuardedSenderAttributionV1, limit?: number) {
+function release(chatId: string, attribution: GuardedSenderAttributionV1 | Record<string, unknown>, limit?: number) {
   return releaseHeldChannelMessagesV1({
     contract: RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1,
     chatId,
@@ -173,7 +174,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await visibleCount(chatId)).toBe(0)
     expect(await conversation(chatId)).toMatchObject({ unreadCount: 0, requiresResponse: false, contactId: ids.contactA, driverId: ids.driverA })
     const [held] = await heldRows(chatId)
-    expect(held).toMatchObject({ id: result.heldMessageId, externalId: key('other-person'), holdReason: 'binding_mismatch', releasedAt: null, releasedMessageId: null })
+    expect(held).toMatchObject({ id: result.heldMessageId, externalId: key('other-person'), holdReason: 'binding_mismatch', senderContactIdentityId: ids.identityB, releasedAt: null, releasedMessageId: null })
     expect(meta(held.holdEvidence)).toEqual({
       v: 1,
       attribution: { status: 'proven', contactId: ids.contactB, contactIdentityId: ids.identityB },
@@ -347,7 +348,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await heldRows(chatId)).toHaveLength(3)
 
     expect(await release(chatId, PROVEN_A)).toMatchObject({ outcome: 'still_held', released: 0, remaining: 3, holdReason: 'binding_mismatch' })
-    expect(await release(chatId, UNPROVEN)).toMatchObject({ outcome: 'still_held', holdReason: 'attribution_unproven' })
+    await expect(release(chatId, UNPROVEN)).rejects.toThrow('a release needs a proven sender')
     expect(await visibleCount(chatId)).toBe(0)
 
     // Contacts' own link repair rebinds the conversation; Messaging only reads the result.
@@ -367,6 +368,64 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
 
     expect(await append(chatId, PROVEN_A, key('release-1'))).toMatchObject({ outcome: 'duplicate', messageId: messages[1].id, visible: true })
     expect(await heldChannelMessagesV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId })).toMatchObject({ held: 0 })
+  })
+
+  it('an unproven sender never releases a held event, even in a conversation bound to nobody', async () => {
+    const chatId = await chat({ contactId: ids.contactB, contactIdentityId: ids.identityB })
+    expect(await append(chatId, UNPROVEN, key('unproven-held'))).toMatchObject({ outcome: 'held', holdReason: 'attribution_unproven' })
+    // The binding is removed; an unproven append would now be visible, but a release needs a proof.
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: null, contactIdentityId: null } })
+
+    await expect(release(chatId, UNPROVEN)).rejects.toThrow('a release needs a proven sender')
+    // The adapter refuses on its own too, below the contract parser.
+    expect(await legacyPrismaGuardedChannelMessagePortV1.release({ chatId, conversationKind: 'private', attribution: UNPROVEN as never, limit: 100 }))
+      .toEqual({ released: 0, remaining: 1, keyConflicts: 0, senderMismatches: 0, holdReason: 'attribution_unproven' })
+    expect(await visibleCount(chatId)).toBe(0)
+    expect((await heldRows(chatId))[0]).toMatchObject({ senderContactIdentityId: null, releasedAt: null })
+  })
+
+  it('a release never moves an event held for another proven identity, and that event cannot starve the rest', async () => {
+    const chatId = await chat()
+    const base = Date.now()
+    await append(chatId, PROVEN_B, key('sender-b'), { sentAt: new Date(base) })
+    await append(chatId, PROVEN_A, key('sender-a-1'), { sentAt: new Date(base + 1000) })
+    await append(chatId, PROVEN_A, key('sender-a-2'), { sentAt: new Date(base + 2000) })
+    expect((await heldRows(chatId)).map(row => [row.holdReason, row.senderContactIdentityId])).toEqual([
+      ['binding_absent', ids.identityB],
+      ['binding_absent', ids.identityA],
+      ['binding_absent', ids.identityA],
+    ])
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactA, contactIdentityId: ids.identityA } })
+
+    expect(await release(chatId, PROVEN_A, 1)).toMatchObject({ outcome: 'released', released: 1, remaining: 2, senderMismatches: 1 })
+    expect(await release(chatId, PROVEN_A, 1)).toMatchObject({ outcome: 'released', released: 1, remaining: 1, senderMismatches: 1 })
+    expect(await release(chatId, PROVEN_A)).toMatchObject({ outcome: 'still_held', released: 0, remaining: 1, keyConflicts: 0, senderMismatches: 1, holdReason: null })
+
+    const messages = await prisma.message.findMany({ where: { chatId }, orderBy: { sentAt: 'asc' } })
+    expect(messages.map(message => message.externalId)).toEqual([key('sender-a-1'), key('sender-a-2')])
+    expect((await heldRows(chatId)).filter(row => row.releasedAt === null).map(row => row.externalId)).toEqual([key('sender-b')])
+    expect((await conversation(chatId)).unreadCount).toBe(2)
+  })
+
+  it('an identity Contacts moved to another contact still releases its own held events', async () => {
+    const merged = { from: `${RUN}_cm1`, into: `${RUN}_cm2`, identity: `${RUN}_im` }
+    await prisma.contact.create({ data: { id: merged.from, displayName: 'Before merge' } })
+    await prisma.contact.create({ data: { id: merged.into, displayName: 'After merge' } })
+    await prisma.contactIdentity.create({ data: { id: merged.identity, contactId: merged.from, channel: 'telegram', externalId: `${RUN}_peer_m` } })
+    const chatId = await chat()
+    expect(await append(chatId, { status: 'proven', contactId: merged.from, contactIdentityId: merged.identity }, key('merged')))
+      .toMatchObject({ outcome: 'held', holdReason: 'binding_absent' })
+
+    // Contacts merges the person: the identity is the same, its contact changed.
+    await prisma.contactIdentity.update({ where: { id: merged.identity }, data: { contactId: merged.into } })
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: merged.into, contactIdentityId: merged.identity } })
+    expect(await release(chatId, { status: 'proven', contactId: merged.into, contactIdentityId: merged.identity }))
+      .toMatchObject({ outcome: 'released', released: 1, remaining: 0, senderMismatches: 0 })
+    expect(await visibleCount(chatId)).toBe(1)
+
+    await prisma.chat.delete({ where: { id: chatId } })
+    await prisma.contactIdentity.delete({ where: { id: merged.identity } })
+    await prisma.contact.deleteMany({ where: { id: { in: [merged.from, merged.into] } } })
   })
 
   it('a release never takes a key another conversation already shows', async () => {
@@ -395,6 +454,13 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('bad-reason'), holdReason: 'guessed' } })).rejects.toThrow()
     await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('half'), holdReason: 'binding_mismatch', releasedAt: new Date() } })).rejects.toThrow()
     await expect(prisma.heldChannelMessage.create({ data: { ...base, direction: 'system', externalId: key('system'), holdReason: 'binding_mismatch' } })).rejects.toThrow()
+    // The sender column always equals the proven sender of the hold evidence.
+    const proven = { v: 1, attribution: { status: 'proven', contactId: ids.contactA, contactIdentityId: ids.identityA } }
+    await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-no-evidence'), holdReason: 'binding_absent', senderContactIdentityId: ids.identityA } })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('evidence-no-sender'), holdReason: 'binding_absent', holdEvidence: proven } })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-other'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityB } })).rejects.toThrow()
+    await prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-ok'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityA } })
+    expect(await prisma.heldChannelMessage.count({ where: { chatId } })).toBe(1)
   })
 
   it('refuses a missing conversation, another channel or another kind without writing', async () => {

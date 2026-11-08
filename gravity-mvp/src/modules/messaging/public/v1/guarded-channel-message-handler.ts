@@ -26,6 +26,7 @@ export interface GuardedReleaseSettlementV1 {
   released: number
   remaining: number
   keyConflicts: number
+  senderMismatches: number
   holdReason: HeldChannelMessageReasonV1 | null
 }
 
@@ -70,7 +71,7 @@ export function createReleaseHeldChannelMessagesHandlerV1(port: GuardedChannelMe
     })
     const outcome = settled.released > 0
       ? 'released'
-      : settled.remaining === 0 && settled.keyConflicts === 0 && settled.holdReason === null
+      : settled.remaining === 0 && settled.keyConflicts === 0 && settled.senderMismatches === 0 && settled.holdReason === null
         ? 'nothing_held'
         : 'still_held'
     return { contract: RELEASE_HELD_CHANNEL_MESSAGES_RESULT_V1, outcome, ...settled }

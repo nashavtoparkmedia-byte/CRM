@@ -6,7 +6,9 @@
 -- existing object except the new foreign key's reference to "Chat".
 --
 -- One row is one provider event whose sender did not prove its conversation's
--- person binding. It is durable, so the event is not lost, and it lives outside
+-- person binding. senderContactIdentityId is the proven sender identity the
+-- event was held with (equal to holdEvidence by CHECK), so a release never
+-- moves another identity's event into the proven person's conversation. It is durable, so the event is not lost, and it lives outside
 -- "Message", so no conversation view, inbox, AI context or workflow can show it
 -- in another person's conversation. A guarded release under a fresh proof moves
 -- it into "Message" and stamps releasedAt/releasedMessageId; nothing else
@@ -28,6 +30,7 @@ CREATE TABLE "HeldChannelMessage" (
     "sentAt" TIMESTAMP(3) NOT NULL,
     "metadata" JSONB NOT NULL DEFAULT '{}',
     "holdReason" TEXT NOT NULL,
+    "senderContactIdentityId" TEXT,
     "holdEvidence" JSONB NOT NULL DEFAULT '{}',
     "heldAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "releasedAt" TIMESTAMP(3),
@@ -39,7 +42,14 @@ CREATE TABLE "HeldChannelMessage" (
     CONSTRAINT "HeldChannelMessage_holdReason_check"
         CHECK ("holdReason" IN ('binding_absent', 'binding_mismatch', 'attribution_unproven', 'group_person_bound')),
     CONSTRAINT "HeldChannelMessage_release_pair_check"
-        CHECK (("releasedAt" IS NULL) = ("releasedMessageId" IS NULL))
+        CHECK (("releasedAt" IS NULL) = ("releasedMessageId" IS NULL)),
+    CONSTRAINT "HeldChannelMessage_sender_evidence_check"
+        CHECK (
+            ("senderContactIdentityId" IS NULL AND ("holdEvidence" #>> '{attribution,status}') IS DISTINCT FROM 'proven')
+            OR ("senderContactIdentityId" IS NOT NULL
+                AND ("holdEvidence" #>> '{attribution,status}') = 'proven'
+                AND "senderContactIdentityId" = ("holdEvidence" #>> '{attribution,contactIdentityId}'))
+        )
 );
 
 CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key" ON "HeldChannelMessage"("externalId");

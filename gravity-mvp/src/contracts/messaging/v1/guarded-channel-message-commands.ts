@@ -128,20 +128,34 @@ export type AppendGuardedChannelMessageResultV1 =
     newlyRecorded: false
   }
 
+/**
+ * What a release must carry: a fresh Contacts proof of the conversation's
+ * person (private), or `not_applicable` for a group. An unproven sender never
+ * releases anything.
+ */
+export type GuardedReleaseAttributionV1 =
+  | { status: 'proven'; contactId: string; contactIdentityId: string }
+  | { status: 'not_applicable' }
+
 export interface ReleaseHeldChannelMessagesCommandV1 {
   contract: typeof RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1
   chatId: string
   conversationKind: GuardedConversationKindV1
-  /** A fresh proof, judged against the conversation's binding at release time. */
-  attribution: GuardedSenderAttributionV1
+  /**
+   * A fresh proof, judged against the conversation's binding at release time.
+   * Each held event is also judged against the sender it was held with: an
+   * event held for another proven identity stays held.
+   */
+  attribution: GuardedReleaseAttributionV1
   /** At most this many held events are released in this call (1..500, default 100). */
   limit?: number
 }
 
 /**
  * - released:     at least one held event became visible in this call;
- * - still_held:   the binding is still not proven (holdReason), or every
- *                 candidate's key is taken by another conversation;
+ * - still_held:   the binding is still not proven (holdReason), every
+ *                 candidate's key is taken by another conversation, or every
+ *                 remaining event was held for another proven identity;
  * - nothing_held: the conversation holds no event.
  */
 export interface ReleaseHeldChannelMessagesResultV1 {
@@ -151,6 +165,8 @@ export interface ReleaseHeldChannelMessagesResultV1 {
   /** Held events of this conversation that are still held after this call. */
   remaining: number
   keyConflicts: number
+  /** Held events whose recorded sender is another proven identity than this proof; they stay held. */
+  senderMismatches: number
   holdReason: HeldChannelMessageReasonV1 | null
 }
 
@@ -332,6 +348,7 @@ export function parseReleaseHeldChannelMessagesCommandV1(input: unknown): Releas
   const chatId = requiredId(value.chatId, 'chatId')
   const kind = conversationKind(value.conversationKind)
   const sender = attribution(value.attribution, kind)
+  if (sender.status === 'unproven') invalid('a release needs a proven sender')
   if (value.limit !== undefined) {
     if (typeof value.limit !== 'number' || !Number.isInteger(value.limit) || value.limit < 1 || value.limit > MAX_RELEASE_LIMIT) {
       invalid(`limit must be an integer from 1 to ${MAX_RELEASE_LIMIT}`)
