@@ -3878,16 +3878,16 @@
         "immutable": true,
         "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 3c0c6824, whose tail is cash-referral-manager-s4-main-a16489f5-20261107, and leaves that amendment untouched. It reviews only the seven surfaces the R-22 Messaging read-side binding trust adds on that tail; it carries no source-hash rebind. It replaces this PR's earlier amendments on main 3ac5ce07 and a16489f5 (messaging-r22-binding-trust-main-3ac5ce07-20261108, messaging-r22-binding-trust-main-a16489f5-20261108), which were never published, with the same surface decisions over the current tail. The parallel R-21 amendment extends the same tail on its own branch; whichever lands second is re-derived onto the other's published tail. It lands only through Orchestrator admission."
       },
-      "reason": "Records the tracked executable surfaces the R-22 Messaging read-side binding trust adds on top of main a16489f5: 2,787 + 7 = 2,794 surfaces, context-owned 1,540 -> 1,546, governed exclusions 1,247 -> 1,248 (the boundary control under architecture_controls, a prefix rule without exact inventory). Six new paths live under gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging and are owned by the messaging context through its manifest owned_paths. The changed MessageService, ConversationWorkflowService and ContextBuilder are context-owned and carry no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main a16489f5 itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "reason": "Records the tracked executable surfaces the R-22 Messaging read-side binding trust adds on top of main 3c0c6824: 2,803 + 7 = 2,810 surfaces, context-owned 1,548 -> 1,554, governed exclusions 1,255 -> 1,256 (the boundary control under architecture_controls, a prefix rule without exact inventory). Six new paths live under gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging and are owned by the messaging context through its manifest owned_paths. The changed MessageService, ConversationWorkflowService and ContextBuilder are context-owned and carry no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main 3c0c6824 itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
       "predecessor": {
         "tracked_executable_surfaces": 2803,
         "tracked_inventory_sha256": "8197c144fa9179e8c73bb3b93a1c6e4cdbf808ffface80662063e5e7bfd09a7d",
         "coverage_sha256": "23c4e9305d43048c0ffe6dbe85f9675d0fc4c9546074c6368012442608eb7d80"
       },
       "current": {
-        "tracked_executable_surfaces": 2794,
-        "tracked_inventory_sha256": "7b609de90bbfa39f98946ad0367b70c4354238595cfad873097e6dbfac83b539",
-        "coverage_sha256": "bd09dfb7190694d84a38571dda81d6a34201e9ced232ce46041a4101074503f5"
+        "tracked_executable_surfaces": 2810,
+        "tracked_inventory_sha256": "9a7346ac2b95008c26ead2b24ca190ee763a65ebbb97cefd52d4bd8590bb5163",
+        "coverage_sha256": "8adb75361b1126df30b3da47c3b1b0de2c526abd5bf27f1c70d0a0f09cd15dd9"
       },
       "source_hash_rebinds": [],
       "unassigned_tracked_surfaces": [
