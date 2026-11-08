@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "f90a0622d4a8683e4c316e74e0648b960840ad9350ef56e14dda101e2f026975"
+      "sha256": "948f75358630c03138d1b8a600ed42f21eca3cc250ee3141aabf2acea4582ed5"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
