@@ -3886,7 +3886,7 @@
       },
       "current": {
         "tracked_executable_surfaces": 2811,
-        "tracked_inventory_sha256": "980b01590788877ac481ad3f0248bc7f3382bf99e27f0195041ab862456548ba",
+        "tracked_inventory_sha256": "5617e739d34d3f0636fc398a57e942bb1a49be79d58c162538edc49cd2d04578",
         "coverage_sha256": "f6bec0bdd46db3d8e2124f1a6454d805d2c173e1013ddbed8ddfc05a187ba1fb"
       },
       "source_hash_rebinds": [
@@ -3903,7 +3903,7 @@
           "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
           "lifecycle": "MIGRATION",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and identity_access functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the two Identity Access-owned Staff Session tables (the individual password verifier with its revocation counter, and its append-only audit) with their CHECK constraints, one index and the no-delete, no-truncate and append-only triggers; it names no existing table."
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and identity_access functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the two Identity Access-owned Staff Session tables (the individual password verifier with its revocation counter, and its append-only audit) with their CHECK constraints, one index and the no-delete and append-only triggers; it names no existing table."
         },
         {
           "path": "gravity-mvp/src/lib/security/staff-session.test.ts",
@@ -3921,7 +3921,7 @@
           "path": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.postgres.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The isolated-PostgreSQL proof of the Staff Session store: the CHECK shape, the no-delete, no-truncate and append-only triggers, rollback of a revocation inside a failed locked transaction, and that the advisory-locked check-and-set serializes concurrent bootstraps and concurrent demotions of the last credentialed Администратор; gated behind STAFF_SESSION_TEST_DATABASE_URL equal to an isolated DATABASE_URL, it holds no real credential and writes only to that disposable database, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+          "review_rationale": "The isolated-PostgreSQL proof of the Staff Session store: the CHECK shape, the no-delete and append-only triggers, rollback of a revocation inside a failed locked transaction, and that the advisory-locked check-and-set serializes concurrent bootstraps and concurrent demotions of the last credentialed Администратор; gated behind STAFF_SESSION_TEST_DATABASE_URL equal to an isolated DATABASE_URL, it holds no real credential and writes only to that disposable database, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
         },
         {
           "path": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.ts",
