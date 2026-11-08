@@ -71,9 +71,9 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
             maxmemBytes: 67108864, salt: verifier.salt, hash: verifier.hash, updatedAt: new Date(), updatedBy: 'test',
         }
         for (const patch of [{ scryptN: 1024 }, { algo: 'md5' }, { salt: Buffer.alloc(4) }, { registryCreatedAt: '' }, { hash: Buffer.alloc(10) }]) {
-            await expect(prisma.staffCredential.create({ data: { ...base, ...patch } }), JSON.stringify(Object.keys(patch))).rejects.toThrow()
+            await expect(prisma.staffCredential.create({ data: { ...base, ...patch }, select: { userId: true } }), JSON.stringify(Object.keys(patch))).rejects.toThrow()
         }
-        await expect(prisma.staffCredential.create({ data: base })).resolves.toMatchObject({ userId: id('shape'), sessionEpoch: 0 })
+        await expect(prisma.staffCredential.create({ data: base, select: { userId: true, sessionEpoch: true } })).resolves.toMatchObject({ userId: id('shape'), sessionEpoch: 0 })
     })
 
     it('never deletes a credential row, and the audit is append-only', async () => {
@@ -83,12 +83,13 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
                 userId: id('nodelete'), registryCreatedAt: CREATED, algo: 'scrypt', scryptN: 32768, scryptR: 8, scryptP: 1,
                 maxmemBytes: 67108864, salt: verifier.salt, hash: verifier.hash, updatedAt: new Date(), updatedBy: 'test',
             },
+            select: { userId: true },
         })
-        await expect(prisma.staffCredential.delete({ where: { userId: id('nodelete') } })).rejects.toThrow(/never deleted/)
-        const event = await prisma.staffCredentialEvent.create({ data: { userId: id('nodelete'), kind: 'login', actor: 'test' } })
-        await expect(prisma.staffCredentialEvent.update({ where: { id: event.id }, data: { actor: 'tampered' } })).rejects.toThrow(/append-only/)
-        await expect(prisma.staffCredentialEvent.delete({ where: { id: event.id } })).rejects.toThrow(/append-only/)
-        await expect(prisma.staffCredentialEvent.create({ data: { userId: id('nodelete'), kind: 'whatever', actor: 'test' } })).rejects.toThrow()
+        await expect(prisma.staffCredential.delete({ where: { userId: id('nodelete') }, select: { userId: true } })).rejects.toThrow(/never deleted/)
+        const event = await prisma.staffCredentialEvent.create({ data: { userId: id('nodelete'), kind: 'login', actor: 'test' }, select: { id: true } })
+        await expect(prisma.staffCredentialEvent.update({ where: { id: event.id }, data: { actor: 'tampered' }, select: { id: true } })).rejects.toThrow(/append-only/)
+        await expect(prisma.staffCredentialEvent.delete({ where: { id: event.id }, select: { id: true } })).rejects.toThrow(/append-only/)
+        await expect(prisma.staffCredentialEvent.create({ data: { userId: id('nodelete'), kind: 'whatever', actor: 'test' }, select: { id: true } })).rejects.toThrow()
     })
 
     it('a work failure inside the locked transaction rolls the revocation back', async () => {
@@ -98,7 +99,7 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
             await tx.revoke(id('rollback'), 'test', new Date())
             throw new Error('abort after revoke')
         })).rejects.toThrow('abort after revoke')
-        const row = await prismaStaffCredentialStoreV1.find(id('rollback'))
+        const row = await prismaStaffCredentialStoreV1.findStatus(id('rollback'))
         expect(row).toMatchObject({ revokedAt: null, sessionEpoch: 0 })
     })
 
@@ -112,7 +113,7 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
         const succeeded = results.filter((result) => result.ok)
         expect(succeeded).toHaveLength(1)
         expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, reason: 'bootstrap_closed' }])
-        const live = (await prisma.staffCredential.findMany({ where: { userId: { in: [id('bootA'), id('bootB')] }, revokedAt: null } })).length
+        const live = (await prisma.staffCredential.findMany({ where: { userId: { in: [id('bootA'), id('bootB')] }, revokedAt: null }, select: { userId: true } })).length
         expect(live).toBe(1)
     })
 
@@ -136,7 +137,7 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
             strictUpdateUserV1(async () => a, id('lastB'), { status: 'Отключен' }),
             strictUpdateUserV1(async () => b, id('lastA'), { status: 'Отключен' }),
         ])
-        const live = await prisma.staffCredential.findMany({ where: { userId: { in: [id('lastA'), id('lastB')] }, revokedAt: null } })
+        const live = await prisma.staffCredential.findMany({ where: { userId: { in: [id('lastA'), id('lastB')] }, revokedAt: null }, select: { userId: true } })
         expect(live.length).toBeGreaterThanOrEqual(1)
         expect(outcomes.some((outcome) => outcome.status === 'rejected')).toBe(true)
     })

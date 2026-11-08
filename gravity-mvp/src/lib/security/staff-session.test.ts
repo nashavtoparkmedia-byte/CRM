@@ -68,7 +68,12 @@ const fake = vi.hoisted(() => {
         async record(event: { userId: string, kind: string, actor: string, sid?: string | null }) { check(); state.events.push(event) },
     }
     const store = {
-        find: view.find,
+        findStatus: view.find,
+        async findVerifier(userId: string) {
+            check()
+            const row = state.rows.get(userId)
+            return row === undefined ? null : { status: { ...row }, verifier: row.verifier }
+        },
         async anyRow() { check(); return state.rows.size > 0 },
         async states() { check(); return [...state.rows.values()].map((row) => ({ userId: row.userId, revoked: row.revokedAt !== null })) },
         record: view.record,

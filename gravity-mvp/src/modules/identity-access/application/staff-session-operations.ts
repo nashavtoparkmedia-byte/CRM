@@ -14,7 +14,7 @@ import {
 } from '../internal/staff-session-credentials'
 import {
     prismaStaffCredentialStoreV1,
-    type StaffCredentialRowV1,
+    type StaffCredentialStatusV1,
 } from '../internal/staff-credential-store'
 import {
     isRegistryRecordV1,
@@ -123,11 +123,11 @@ export async function staffLoginModeV1(): Promise<'password' | 'legacy' | 'unava
 // ── Verification ─────────────────────────────────────────────────────────
 
 export type StaffSessionVerificationV1 =
-    | { kind: 'valid', principal: StaffSessionPrincipalV1, credential: StaffCredentialRowV1 }
+    | { kind: 'valid', principal: StaffSessionPrincipalV1, credential: StaffCredentialStatusV1 }
     | { kind: 'refused' }
     | { kind: 'unverifiable' }
 
-function isEligible(record: RegistryRecordV1 | undefined, row: StaffCredentialRowV1 | null): record is RegistryRecordV1 {
+function isEligible(record: RegistryRecordV1 | undefined, row: StaffCredentialStatusV1 | null): record is RegistryRecordV1 {
     return record !== undefined
         && row !== null
         && row.revokedAt === null
@@ -149,10 +149,10 @@ export async function verifyStaffSessionTokenV1(token: string | undefined, nowMs
     if (lane.kind === 'refused') return { kind: 'unverifiable' }
     const claims = readStaffSessionTokenV1(token, undefined, nowMs)
     if (claims === null) return { kind: 'refused' }
-    let row: StaffCredentialRowV1 | null
+    let row: StaffCredentialStatusV1 | null
     let registry: RegistryRecordV1[]
     try {
-        row = await store.find(claims.userId)
+        row = await store.findStatus(claims.userId)
         registry = await readRegistryStrictV1(lane.registryPath)
     } catch (error) {
         console.error('[staff-session] verification store unreadable; refusing the session:', error instanceof Error ? error.name : 'unknown')
@@ -254,16 +254,17 @@ export async function staffLoginV1(input: { userId: unknown, password: unknown, 
     if (throttledUntil(keys, nowMs) > nowMs) return { ok: false, reason: 'throttled' }
 
     let record: RegistryRecordV1 | undefined
-    let row: StaffCredentialRowV1 | null = null
+    let credential: Awaited<ReturnType<typeof store.findVerifier>> = null
     try {
         const registry = await readRegistryStrictV1(lane.registryPath)
         record = registry.find((candidate) => candidate.id === userId)
-        row = userId === '' ? null : await store.find(userId)
+        credential = userId === '' ? null : await store.findVerifier(userId)
     } catch {
         return { ok: false, reason: 'unavailable' }
     }
+    const row = credential === null ? null : credential.status
     const eligible = isEligible(record, row)
-    const outcome = await withScryptSlot(() => verifyStaffPasswordV1(input.password, eligible ? row!.verifier : null))
+    const outcome = await withScryptSlot(() => verifyStaffPasswordV1(input.password, eligible ? credential!.verifier : null))
     if (outcome === 'busy') return { ok: false, reason: 'busy' }
     if (!eligible || !outcome) {
         recordFailure(keys, nowMs)
@@ -354,9 +355,10 @@ export async function setStaffPasswordV1(input: {
     // The employee's own change always proves the current password, an
     // Администратор included: a stolen session alone must not take the account.
     if (isSelf) {
-        const row = await store.find(targetUserId).catch(() => undefined)
-        if (row === undefined) return { ok: false, reason: 'unavailable' }
-        const current = await withScryptSlot(() => verifyStaffPasswordV1(input.currentPassword, isEligible(target, row) ? row!.verifier : null))
+        const credential = await store.findVerifier(targetUserId).catch(() => undefined)
+        if (credential === undefined) return { ok: false, reason: 'unavailable' }
+        const live = credential !== null && isEligible(target, credential.status)
+        const current = await withScryptSlot(() => verifyStaffPasswordV1(input.currentPassword, live ? credential!.verifier : null))
         if (current === 'busy') return { ok: false, reason: 'busy' }
         if (!current) return { ok: false, reason: 'current_password_refused' }
     }
@@ -415,7 +417,7 @@ export async function staffCredentialStatesV1(): Promise<Record<string, 'live' |
 export async function legacyLoginAllowedForV1(targetUserId: string): Promise<boolean> {
     if (isStaffSessionEnforcedV1()) return false
     try {
-        return (await store.find(targetUserId)) === null
+        return (await store.findStatus(targetUserId)) === null
     } catch {
         return !isStaffSessionSecretValidV1()
     }
@@ -580,7 +582,7 @@ export async function strictUpdateUserV1(
         const before = stored[storedIndex] as RegistryRecordV1
         const changesRole = patch.role !== undefined && patch.role !== before.role
         const changesStatus = patch.status !== undefined && patch.status !== before.status
-        const row = await prismaStaffCredentialStoreV1.find(targetUserId).catch(() => {
+        const row = await prismaStaffCredentialStoreV1.findStatus(targetUserId).catch(() => {
             throw managementError('unavailable')
         })
         const needsAdministrator = changesRole || changesStatus || row !== null
