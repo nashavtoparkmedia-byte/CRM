@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "8d77c4ee8bda075e6fbb5a13dccf0342305aa9327e6b8ab7926a7178e1eda6d1",
-    "reviewed_path_count": 26,
+    "source_sha256": "25a4d4d594d6f8072e9e9cea9060762aa11457026b93b9a4e5cf9f2f51e3bcaf",
+    "reviewed_path_count": 27,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 945,
-    "sorted_site_signatures_sha256": "e697083ac54f7cc64610b110235e7ca33c279e4bf4a7ec23064c67899a427269"
+    "non_test_migration_only_sites": 946,
+    "sorted_site_signatures_sha256": "b6c1a4c9899da0493516f3acacfb046a9cd73c05993651b3440c3764298dc753"
   },
   "authorizations": [
     {
@@ -27617,6 +27617,45 @@
           "source_sha256:71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
           "site_signature:cdc7e7a04e041477e9019375885600279501264e371360ad4b1876fce95d31dd",
           "source_coordinate:gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql:121:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.messaging.ce17c90989e4f67e",
+      "site_signature": "ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
+        "source_sha256": "f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
+        "line": 17,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging A2 held-store scrub migration: ALTER_TABLE on HeldChannelMessage. It constrains only the Messaging-owned held table, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
+          "site_signature:ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql:17:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]

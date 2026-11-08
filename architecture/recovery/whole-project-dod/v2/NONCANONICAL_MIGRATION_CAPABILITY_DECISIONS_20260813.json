@@ -425,6 +425,16 @@
         "7c9e3c944b3593ebaf73b22e7836c4e10ab5f19fbe5670e9cf897b4496678863",
         "ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration adds one CHECK constraint to the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage_released_scrubbed_check: a released row carries content '' and metadata '{}') inside one explicit transaction through controlled migration tooling; it creates no table or column, changes no existing row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority. Its one site is the exact ALTER TABLE that adds the constraint on HeldChannelMessage. The constraint is the database side of the A2 pre-adoption gate: the release path scrubs the held row's content and metadata, and the database refuses a released row that still carries either.",
+      "expected_site_signatures": [
+        "ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -3767,6 +3777,24 @@
         }
       ],
       "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: ALTER_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d",
+      "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
+      "source_sha256": "f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
+      "line": 17,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "HeldChannelMessage",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Messaging A2 held-store scrub migration: ALTER_TABLE on HeldChannelMessage. It constrains only the Messaging-owned held table, touches no existing row and stores no credential."
     }
   ]
 }
