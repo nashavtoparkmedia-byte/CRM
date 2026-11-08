@@ -133,8 +133,11 @@ describeWithDatabase('R-22 conversation binding trust (PostgreSQL)', () => {
     await prisma.chat.updateMany({ where: { id: { startsWith: RUN } }, data: { unreadCount: 2, requiresResponse: true, status: 'open' } })
     await ConversationWorkflowService.markRead(id('a_group'))
     expect(await chatState(id('a_group'))).toMatchObject({ unreadCount: 0 })
-    expect(await chatState(id('a_tg'))).toMatchObject({ unreadCount: 2 })
-    expect(await chatState(id('a_wa'))).toMatchObject({ unreadCount: 2 })
+    // Nothing else that names contact A is reached from the group: neither A's
+    // private entry nor a conversation that is provably another person's.
+    for (const other of ['a_tg', 'a_wa', 'c_as_a', 'a_with_c_identity', 'a_with_c_wa']) {
+      expect(await chatState(id(other))).toMatchObject({ unreadCount: 2 })
+    }
 
     await ConversationWorkflowService.resolveChat(id('a_tg'))
     expect(await chatState(id('a_tg'))).toMatchObject({ status: 'resolved' })
