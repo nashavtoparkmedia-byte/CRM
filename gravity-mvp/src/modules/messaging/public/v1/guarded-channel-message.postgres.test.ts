@@ -406,6 +406,21 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await heldRows(chatId)).toHaveLength(0)
   })
 
+  it('a proven sender is held when the conversation is bound to the same contact through another identity', async () => {
+    const otherIdentityOfA = `${RUN}_ia2`
+    await prisma.contactIdentity.create({ data: { id: otherIdentityOfA, contactId: ids.contactA, channel: 'telegram', externalId: `${RUN}_peer_a2` } })
+    const chatId = await chat({ contactId: ids.contactA, contactIdentityId: otherIdentityOfA })
+
+    expect(await append(chatId, PROVEN_A, key('same-contact-other-identity'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch' })
+    expect(await visibleCount(chatId)).toBe(0)
+
+    const unlinked = await chat({ contactId: ids.contactA })
+    expect(await append(unlinked, PROVEN_A, key('same-contact-no-identity'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch' })
+    expect(await visibleCount(unlinked)).toBe(0)
+    await prisma.chat.deleteMany({ where: { id: { in: [chatId, unlinked] } } })
+    await prisma.contactIdentity.delete({ where: { id: otherIdentityOfA } })
+  })
+
   it('held events never appear in a conversation read of Message', async () => {
     const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
     await append(chatId, PROVEN_A, key('mine'))
