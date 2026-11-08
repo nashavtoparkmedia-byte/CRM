@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { prismaMobileSessionBarrierV1 } from '../internal/mobile-session-barrier'
-import { STAFF_SESSION_COOKIE, verifyStaffSessionTokenV1 } from './staff-session-operations'
+import { staffSessionCookieNameV1, verifyStaffSessionTokenV1 } from './staff-session-operations'
 import { UNSTABLE_DEVICE_ID_V1 } from '../public/v1/mobile-push-registration-handler'
 import {
     LEGACY_UI_IDENTITY_COOKIE_V1,
@@ -97,6 +97,6 @@ export async function resolveRequestOperatorV1(): Promise<RequestOperatorV1> {
     return resolveCookieOperatorV1(
         store.get(MOBILE_SESSION_COOKIE)?.value,
         store.get(LEGACY_UI_IDENTITY_COOKIE_V1)?.value,
-        store.get(STAFF_SESSION_COOKIE)?.value,
+        store.get(staffSessionCookieNameV1())?.value,
     )
 }

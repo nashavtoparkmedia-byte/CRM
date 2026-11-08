@@ -61,7 +61,7 @@ const store = prismaStaffCredentialStoreV1
  * The staff session cookie. `__Host-` makes the browser refuse it unless it
  * is Secure, Path=/ and has no Domain, so a sibling host cannot plant one.
  */
-export const STAFF_SESSION_COOKIE = '__Host-yoko_staff_session'
+const STAFF_SESSION_COOKIE = '__Host-yoko_staff_session'
 
 /** The staff session cookie's name (`__Host-` prefixed). */
 export function staffSessionCookieNameV1(): string {
