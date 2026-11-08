@@ -10,7 +10,8 @@ import type { StaffPasswordVerifierV1 } from './staff-session-credentials'
  *
  * Only `findVerifier` selects the password verifier (salt and hash), and only
  * the password check calls it. Every other read and every write returns the
- * credential's status alone, so verifier material reaches nothing else.
+ * credential's status alone, so verifier material reaches nothing else. The
+ * projections are written out at each call so they stay statically exact.
  */
 
 const STAFF_CREDENTIAL_ADVISORY_CLASS_ID = 0x594f4b4f // "YOKO"
@@ -25,13 +26,6 @@ export interface StaffCredentialStatusV1 {
     sessionEpoch: number
     revokedAt: Date | null
 }
-
-const STATUS_SELECT = {
-    userId: true,
-    registryCreatedAt: true,
-    sessionEpoch: true,
-    revokedAt: true,
-} as const
 
 type Client = Prisma.TransactionClient | typeof prisma
 
@@ -66,7 +60,7 @@ export interface StaffCredentialTransactionV1 {
 function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransactionV1 {
     return {
         async find(userId) {
-            return tx.staffCredential.findUnique({ where: { userId }, select: STATUS_SELECT })
+            return tx.staffCredential.findUnique({ where: { userId }, select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true } })
         },
         async liveUserIds() {
             const rows = await tx.staffCredential.findMany({ where: { revokedAt: null }, select: { userId: true } })
@@ -107,7 +101,7 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
                     updatedAt: now,
                     updatedBy: actor,
                 },
-                select: STATUS_SELECT,
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
         },
         async bumpEpoch(userId, actor, now) {
@@ -116,7 +110,7 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
             return tx.staffCredential.update({
                 where: { userId },
                 data: { sessionEpoch: { increment: 1 }, updatedAt: now, updatedBy: actor },
-                select: STATUS_SELECT,
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
         },
         async revoke(userId, actor, now) {
@@ -130,7 +124,7 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
                     updatedAt: now,
                     updatedBy: actor,
                 },
-                select: STATUS_SELECT,
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
         },
         async record({ userId, kind, actor, sid }) {
@@ -142,7 +136,7 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
 export const prismaStaffCredentialStoreV1 = {
     /** One indexed read of the status; throws when the store is unreadable (callers treat that as unverifiable). */
     async findStatus(userId: string, client: Client = prisma): Promise<StaffCredentialStatusV1 | null> {
-        return client.staffCredential.findUnique({ where: { userId }, select: STATUS_SELECT })
+        return client.staffCredential.findUnique({ where: { userId }, select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true } })
     },
 
     /**
@@ -152,7 +146,7 @@ export const prismaStaffCredentialStoreV1 = {
     async findVerifier(userId: string): Promise<{ status: StaffCredentialStatusV1, verifier: StaffPasswordVerifierV1 } | null> {
         const row = await prisma.staffCredential.findUnique({
             where: { userId },
-            select: { ...STATUS_SELECT, algo: true, scryptN: true, scryptR: true, scryptP: true, maxmemBytes: true, salt: true, hash: true },
+            select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true, algo: true, scryptN: true, scryptR: true, scryptP: true, maxmemBytes: true, salt: true, hash: true },
         })
         if (row === null) return null
         return {
