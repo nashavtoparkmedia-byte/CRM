@@ -30,6 +30,21 @@ const handlerPath = 'gravity-mvp/src/modules/messaging/public/v1/guarded-channel
 const adapterPath = 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts'
 const compositionPath = 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts'
 const migrationPath = 'gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql'
+const scrubMigrationPath = 'gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql'
+const facadePath = 'gravity-mvp/src/modules/messaging/public/v1/index.ts'
+const retentionJobPath = 'gravity-mvp/src/lib/RetentionCleanup.ts'
+/**
+ * A1: the guarded write capabilities take a person proof as INPUT and trust it,
+ * so only server-side composition that derives that proof from Contacts may
+ * call them. The first ingress consumer is added here by name, with its review;
+ * no file under the app layer (routes, pages, server actions) and no file
+ * carrying a 'use server' directive may reach them.
+ */
+const GUARDED_WRITE_CAPABILITIES = ['appendGuardedChannelMessageV1', 'releaseHeldChannelMessagesV1']
+const APPROVED_GUARDED_WRITE_CALLERS = new Set([handlerPath, compositionPath, facadePath])
+const GUARDED_RETENTION_CAPABILITY = 'runHeldChannelMessageRetentionV1'
+const APPROVED_GUARDED_RETENTION_CALLERS = new Set([handlerPath, compositionPath, facadePath, retentionJobPath])
+const GUARDED_READ_CAPABILITY = 'heldChannelMessagesV1'
 const closedSet = [contractPath, policyPath, handlerPath, adapterPath]
 
 const RUNTIME_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'])
@@ -110,6 +125,33 @@ function assertHeldStoreOwner(files) {
   }
 }
 
+const APP_LAYER = /^gravity-mvp\/src\/app\//u
+const USE_SERVER = /^\s*['"]use server['"]\s*;?\s*$/mu
+const mentions = (source, name) => new RegExp(`\\b${name}\\b`, 'u').test(source)
+
+function assertServerSideCallersOnly(files) {
+  for (const [file, source] of files) {
+    const appLayer = APP_LAYER.test(file) || USE_SERVER.test(source)
+    for (const name of [...GUARDED_WRITE_CAPABILITIES, GUARDED_RETENTION_CAPABILITY, GUARDED_READ_CAPABILITY]) {
+      if (appLayer && mentions(source, name)) throw new Error(`${file}: the app layer or a server action reaches ${name}`)
+    }
+    for (const name of GUARDED_WRITE_CAPABILITIES) {
+      if (mentions(source, name) && !APPROVED_GUARDED_WRITE_CALLERS.has(file)) throw new Error(`${file}: calls ${name} without an approved server-side composition review`)
+    }
+    if (mentions(source, GUARDED_RETENTION_CAPABILITY) && !APPROVED_GUARDED_RETENTION_CALLERS.has(file)) {
+      throw new Error(`${file}: calls ${GUARDED_RETENTION_CAPABILITY} outside the retention job`)
+    }
+  }
+}
+
+function assertScrubMigration(sql) {
+  const statements = sql.replace(/--[^\n]*\n/gu, '\n').split(';').map(part => part.trim()).filter(Boolean)
+  if (statements.length !== 3 || statements[0] !== 'BEGIN' || statements[2] !== 'COMMIT') throw new Error('scrub migration is not one constraint in one explicit transaction')
+  if (!/^ALTER TABLE "HeldChannelMessage" ADD CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\s+CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)$/u.test(statements[1])) {
+    throw new Error('scrub migration constraint drift')
+  }
+}
+
 function assertAdapterLocksBeforeJudging(source) {
   const lock = functionBody(source, 'lockConversation')
   if (!/set_config\('lock_timeout', \$\{LOCK_TIMEOUT\}, true\)/u.test(lock)) throw new Error('conversation lock is not bounded by lock_timeout')
@@ -146,14 +188,19 @@ function assertAdapterLocksBeforeJudging(source) {
     'await lockEventKeys(transaction,',
     'await writeVisible(transaction,',
     'transaction.heldChannelMessage.update(',
+    "data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },",
   ], 'release')
+  const purge = methodBody(source, 'purgeHeld')
+  if (!/where: \{ id: \{ in: expired\.map\(row => row\.id\) \}, sentAt: \{ lt: input\.before \} \},/u.test(purge)) throw new Error('retention deletes a held row for anything but its own age')
+  if (!/if \(input\.dryRun \|\| expired\.length === 0\) return expired\.length/u.test(purge)) throw new Error('retention dry run deletes')
   if (!release.includes("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },")) {
     throw new Error('release: an event held for another proven identity may be released')
   }
   if (!/senderContactIdentityId: attribution\.status === 'proven' \? attribution\.contactIdentityId : null,/u.test(functionBody(source, 'writeHeld'))) {
     throw new Error('a held event does not record its proven sender')
   }
-  if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(source)) throw new Error('held rows are deleted or bulk-rewritten by the adapter')
+  const outsidePurge = source.replace(methodBody(source, 'purgeHeld'), '')
+  if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(outsidePurge)) throw new Error('held rows are deleted or bulk-rewritten outside retention')
 
   const visible = functionBody(source, 'writeVisible')
   for (const projection of ['onGroupInboundMessage', 'onOutboundMessage', 'onInboundMessage']) {
@@ -258,8 +305,11 @@ const handlerSource = files.get(handlerPath)
 const contractSource = files.get(contractPath)
 const compositionSource = files.get(compositionPath)
 const migrationSql = read(migrationPath)
+const scrubSql = read(scrubMigrationPath)
 
 assertHeldStoreOwner(files)
+assertServerSideCallersOnly(files)
+assertScrubMigration(scrubSql)
 assertAdapterLocksBeforeJudging(adapterSource)
 assertAdapterWritesNoBinding(adapterSource)
 assertPurePolicy(policySource)
@@ -281,6 +331,16 @@ const withFile = (file, source) => new Map([...files, [file, source]])
 rejectProbe('', "await prisma.heldChannelMessage.findMany({ where: { chatId } })\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/lib/MessageService.ts', `${files.get('gravity-mvp/src/lib/MessageService.ts')}${changed}`)))
 rejectProbe('', 'const rows = await prisma.$queryRaw`SELECT * FROM "HeldChannelMessage"`\n', (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ContextBuilder.ts', changed)))
 rejectProbe('', "import { legacyPrismaGuardedChannelMessagePortV1 } from '@/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter'\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/app/api/webhook/telegram/route.ts', changed)))
+rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\nexport async function POST() { return appendGuardedChannelMessageV1({} as never) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/app/api/messages/guarded/route.ts', changed)))
+rejectProbe('', "'use server'\nimport { releaseHeldChannelMessagesV1 } from '@/modules/messaging/public/v1'\nexport async function releaseAction(input: unknown) { return releaseHeldChannelMessagesV1(input) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/actions.ts', changed)))
+rejectProbe('', "'use server'\nimport { heldChannelMessagesV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/held-actions.ts', changed)))
+rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/infrastructure/telegram/ingress.ts', changed)))
+rejectProbe('', "import { runHeldChannelMessageRetentionV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/lib/SomeService.ts', changed)))
+rejectProbe(scrubSql, scrubSql.replace("\"content\" = '' AND ", ''), assertScrubMigration)
+rejectProbe(scrubSql, scrubSql.replace('COMMIT;', 'UPDATE "HeldChannelMessage" SET "content" = \'\';\n\nCOMMIT;'), assertScrubMigration)
+rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },', 'where: { id: { in: expired.map(row => row.id) } },'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('if (input.dryRun || expired.length === 0) return expired.length', 'if (expired.length === 0) return 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
@@ -321,4 +381,4 @@ rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'ALTER TABLE "Chat" AD
 rejectProbe(migrationSql, migrationSql.replace('CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"', 'CREATE INDEX "HeldChannelMessage_externalId_key"'), assertMigration)
 rejectProbe(compositionSource, `${compositionSource}\nconst rogue = createAppendGuardedChannelMessageHandlerV1(fakePort)\n`, assertComposition)
 
-process.stdout.write(`messaging guarded append boundary: PASS (one held-store owner, lock-then-judge, no binding writes, pure policy, parse-first handlers; ${probes} negative probes rejected)\n`)
+process.stdout.write(`messaging guarded append boundary: PASS (one held-store owner, server-side callers only, lock-then-judge, no binding writes, pure policy, parse-first handlers, scrubbed release; ${probes} negative probes rejected)\n`)

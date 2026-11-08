@@ -34,7 +34,7 @@ import { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 import { legacyPrismaExternalConversationPortV1 } from '../public/v1/legacy-prisma-external-conversation-adapter'
 import { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from '../public/v1/channel-message-handler'
 import { legacyPrismaChannelMessagePortV1 } from '../public/v1/legacy-prisma-channel-message-adapter'
-import { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from '../public/v1/guarded-channel-message-handler'
+import { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1, createRunHeldChannelMessageRetentionHandlerV1 } from '../public/v1/guarded-channel-message-handler'
 import { legacyPrismaGuardedChannelMessagePortV1 } from '../public/v1/legacy-prisma-guarded-channel-message-adapter'
 import { createApplyMessageDeliveryEvidenceHandlerV1 } from '../public/v1/message-delivery-evidence-handler'
 import { legacyPrismaMessageDeliveryEvidencePortV1 } from '../public/v1/legacy-prisma-message-delivery-evidence-adapter'
@@ -109,6 +109,7 @@ const contactConversations = createContactConversationsQueryHandlerV1(legacyPris
 const appendGuardedChannelMessage = createAppendGuardedChannelMessageHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const releaseHeldChannelMessages = createReleaseHeldChannelMessagesHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const heldChannelMessages = createHeldChannelMessagesQueryHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
+const runHeldChannelMessageRetention = createRunHeldChannelMessageRetentionHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const findAndBackfillContactConversation = createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const openFallbackContactConversation = createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const patchMessageMetadata = createPatchMessageMetadataHandlerV1(legacyPrismaPatchMessageMetadataPortV1)
@@ -164,6 +165,7 @@ export const contactConversationsV1 = (...args: Parameters<typeof contactConvers
 export const appendGuardedChannelMessageV1 = (...args: Parameters<typeof appendGuardedChannelMessage>) => appendGuardedChannelMessage(...args)
 export const releaseHeldChannelMessagesV1 = (...args: Parameters<typeof releaseHeldChannelMessages>) => releaseHeldChannelMessages(...args)
 export const heldChannelMessagesV1 = (...args: Parameters<typeof heldChannelMessages>) => heldChannelMessages(...args)
+export const runHeldChannelMessageRetentionV1 = (...args: Parameters<typeof runHeldChannelMessageRetention>) => runHeldChannelMessageRetention(...args)
 export const findAndBackfillContactConversationV1 = (...args: Parameters<typeof findAndBackfillContactConversation>) => findAndBackfillContactConversation(...args)
 export const openFallbackContactConversationV1 = (...args: Parameters<typeof openFallbackContactConversation>) => openFallbackContactConversation(...args)
 export const patchMessageMetadataV1 = (...args: Parameters<typeof patchMessageMetadata>) => patchMessageMetadata(...args)

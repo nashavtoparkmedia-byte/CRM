@@ -32,7 +32,7 @@ export { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 export type { ExternalConversationPersistencePortV1 } from './external-conversation-handler'
 export { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
 export type { ChannelMessagePersistencePortV1 } from './channel-message-handler'
-export { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from './guarded-channel-message-handler'
+export { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1, createRunHeldChannelMessageRetentionHandlerV1 } from './guarded-channel-message-handler'
 export type { GuardedAppendSettlementV1, GuardedChannelMessagePersistencePortV1, GuardedReleaseSettlementV1 } from './guarded-channel-message-handler'
 export { decideGuardedAppendV1, hasConversationPersonBindingV1 } from './guarded-append-policy'
 export type { ConversationPersonBindingV1, GuardedAppendDecisionV1 } from './guarded-append-policy'
@@ -128,6 +128,7 @@ export {
     contactConversationsV1,
     appendGuardedChannelMessageV1,
     heldChannelMessagesV1,
+    runHeldChannelMessageRetentionV1,
     releaseHeldChannelMessagesV1,
     resolveConversationV1,
     sendMessageV1,

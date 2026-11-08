@@ -11,12 +11,16 @@ import {
   parseAppendGuardedChannelMessageCommandV1,
   parseHeldChannelMessagesQueryV1,
   parseReleaseHeldChannelMessagesCommandV1,
+  parseRunHeldChannelMessageRetentionCommandV1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1,
 } from '../../../../contracts/messaging/v1'
 import { decideGuardedAppendV1, hasConversationPersonBindingV1, type ConversationPersonBindingV1 } from './guarded-append-policy'
 import {
   createAppendGuardedChannelMessageHandlerV1,
   createHeldChannelMessagesQueryHandlerV1,
   createReleaseHeldChannelMessagesHandlerV1,
+  createRunHeldChannelMessageRetentionHandlerV1,
   type GuardedChannelMessagePersistencePortV1,
 } from './guarded-channel-message-handler'
 
@@ -126,6 +130,15 @@ describe('guarded append contract', () => {
     expect(() => parseHeldChannelMessagesQueryV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId: '' })).toThrow()
   })
 
+  it('parses the held retention command strictly', () => {
+    const retention = { contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true }
+    expect(parseRunHeldChannelMessageRetentionCommandV1(retention)).toEqual(retention)
+    expect(parseRunHeldChannelMessageRetentionCommandV1({ ...retention, limit: 1000 }).limit).toBe(1000)
+    for (const bad of [{ ...retention, dryRun: 'yes' }, { contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 }, { ...retention, limit: 0 }, { ...retention, limit: 1001 }, { ...retention, chatId: 'x' }]) {
+      expect(() => parseRunHeldChannelMessageRetentionCommandV1(bad)).toThrow(GuardedChannelMessageCommandValidationError)
+    }
+  })
+
   it('reports only contention as retryable', () => {
     expect(new GuardedChannelMessageError('CONTENDED', 'x').retryable).toBe(true)
     for (const code of ['CONVERSATION_NOT_FOUND', 'CONVERSATION_CHANNEL_MISMATCH', 'CONVERSATION_KIND_MISMATCH'] as const) {
@@ -181,6 +194,7 @@ function fakePort(overrides: Partial<GuardedChannelMessagePersistencePortV1> = {
     append: vi.fn(async () => ({ outcome: 'appended', messageId: 'message-1' } as const)),
     release: vi.fn(async () => ({ released: 0, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null })),
     countHeld: vi.fn(async () => ({})),
+    purgeHeld: vi.fn(async () => 0),
     ...overrides,
   }
 }
@@ -242,6 +256,19 @@ describe('guarded append handlers', () => {
       expect(result).toEqual({ contract: RELEASE_HELD_CHANNEL_MESSAGES_RESULT_V1, outcome, ...settled })
       expect(port.release).toHaveBeenCalledWith({ chatId: 'chat-1', conversationKind: 'private', attribution: PROVEN, limit: 100 })
     }
+  })
+
+  it('runs held retention at exactly the 12-month boundary with the default limit', async () => {
+    const now = Date.UTC(2026, 10, 8, 12, 0, 0)
+    const port = fakePort({ purgeHeld: vi.fn(async () => 3) })
+    const run = createRunHeldChannelMessageRetentionHandlerV1(port, () => now)
+    expect(await run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true })).toEqual({
+      contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1, dryRun: true, selectedCount: 3,
+    })
+    expect(port.purgeHeld).toHaveBeenCalledWith({ before: new Date(now - 365 * 24 * 60 * 60 * 1000), limit: 200, dryRun: true })
+    await run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: false, limit: 50 })
+    expect(port.purgeHeld).toHaveBeenLastCalledWith({ before: new Date(now - 365 * 24 * 60 * 60 * 1000), limit: 50, dryRun: false })
+    await expect(run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 })).rejects.toThrow(GuardedChannelMessageCommandValidationError)
   })
 
   it('reports held counts for every reason, zero-filled, and nothing else', async () => {

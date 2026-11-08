@@ -364,7 +364,9 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
           }
           await transaction.heldChannelMessage.update({
             where: { id: held.id },
-            data: { releasedAt, releasedMessageId: messageId },
+            // A2: the visible Message is now the only copy of the event; the
+            // held row keeps its key, its stamp and the compared ids only.
+            data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },
           })
           released += 1
         }
@@ -388,5 +390,20 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
       _count: { _all: true },
     })
     return Object.fromEntries(rows.map(row => [row.holdReason, row._count._all])) as Partial<Record<HeldChannelMessageReasonV1, number>>
+  },
+
+  async purgeHeld(input) {
+    const expired = await prisma.heldChannelMessage.findMany({
+      where: { sentAt: { lt: input.before } },
+      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+      take: input.limit,
+      select: { id: true },
+    })
+    if (input.dryRun || expired.length === 0) return expired.length
+    // Re-checked in the statement itself, so a row is only ever deleted for its own age.
+    const deleted = await prisma.heldChannelMessage.deleteMany({
+      where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },
+    })
+    return deleted.count
   },
 }
