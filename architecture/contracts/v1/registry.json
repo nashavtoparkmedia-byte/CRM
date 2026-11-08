@@ -376,6 +376,7 @@
         "ChannelSyncOperations.v1",
         "CompletedCallTimelineProjector.v1",
         "ContactConversationsQuery.v1",
+        "ConversationBindingAuditQuery.v1",
         "ConversationView.v1",
         "DeliveryRecoveryOperations.v1",
         "DraftImprovement.v1",
