@@ -234,7 +234,10 @@ Each entry lists what the code actually does.
   `held`, `duplicate` or `key_conflict`; follow-up effects run only when
   `newlyRecorded`. Held events are released by `releaseHeldChannelMessagesV1`
   under a fresh proof and counted by `heldChannelMessagesV1`; see I-64, I-65.
-  Not yet wired into the Telegram bot webhook (Telegram Incident, T3).
+  The guarded write capabilities are reachable only from server-side callers
+  (I-68); a release scrubs the held row and the held store expires after 365
+  days (I-69). Not yet wired into the Telegram bot webhook (Telegram Incident,
+  T3).
 - **Delivery-truth extension points (S2)**: a channel adapter answers a text send
   with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
   `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
@@ -1406,6 +1409,26 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `sentAt` order with their workflow projection, stamps
   `releasedAt`/`releasedMessageId`, and never takes a key another conversation
   shows. Deleting the conversation deletes its held events. — same files.
+- **I-68 The guarded write capabilities are reachable only from server-side
+  callers.** `appendGuardedChannelMessageV1` and `releaseHeldChannelMessagesV1`
+  are referenced only by their handler, the Messaging composition and the public
+  facade; no file under `G/app/` and no `'use server'` module may reference them,
+  so no HTTP route, server action or operator API can hand the guard a
+  client-supplied `attribution`. The proof is the caller's server-side Contacts
+  outcome for the conversation's peer (the sender of an inbound event, the
+  recipient of an outbound one). — `check-messaging-guarded-append-boundary.mjs`
+  (static caller allowlist), `guarded-channel-message-commands.ts` (contract
+  wording).
+- **I-69 A released held row keeps no content, and the held store expires.**
+  A release writes the event into `Message` and leaves the `HeldChannelMessage`
+  row with `content ''` and `metadata '{}'`; the database refuses a released row
+  that still carries either (`HeldChannelMessage_released_scrubbed_check`,
+  migration `20261108180000`). Held rows older than 365 days are deleted by
+  `messaging.RunHeldChannelMessageRetentionCommand.v1` from `RetentionCleanup`
+  (step 2b, batched, oldest first, dry run supported); nothing else deletes them.
+  — `legacy-prisma-guarded-channel-message-adapter.ts`,
+  `guarded-channel-message-handler.ts`, `G/lib/RetentionCleanup.ts` —
+  `guarded-channel-message.postgres.test.ts`, `guarded-channel-message.test.ts`.
 
 ### Channels
 
@@ -1724,7 +1747,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
-| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-64, I-65: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged |
+| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-64, I-65: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged. The A1/A2 pre-adoption gates are in place (I-68 server-side callers only, I-69 scrubbed release and held-store retention) |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
