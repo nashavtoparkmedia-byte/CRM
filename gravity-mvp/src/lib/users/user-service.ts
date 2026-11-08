@@ -273,7 +273,11 @@ export async function addUser(item: Omit<UserItem, 'id' | 'createdAt'>): Promise
     const file = await registryFile()
     return withRegistryWriteTurnV1(async () => {
         const users = await getUsers()
-        const id = "u" + (users.length + 1)
+        // The next free "uN": after a delete, length + 1 could repeat an id.
+        const taken = new Set(users.map(u => u.id))
+        let next = users.length + 1
+        while (taken.has("u" + next)) next += 1
+        const id = "u" + next
         const newItem = { ...item, id, createdAt: new Date().toISOString() }
         users.push(newItem)
         await writeUsers(file, users)

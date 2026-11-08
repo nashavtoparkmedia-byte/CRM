@@ -153,7 +153,18 @@ export async function readRegistryStrictV1(file: string): Promise<RegistryRecord
     const raw = await fs.readFile(file, 'utf8')
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) throw new TypeError('registry is not an array')
-    return parsed.filter(isRecord)
+    return uniqueRegistryRecordsV1(parsed)
+}
+
+/**
+ * Well-formed records whose id occurs exactly once. A duplicated id is absent
+ * for authorization: neither record can be told apart from the other.
+ */
+export function uniqueRegistryRecordsV1(entries: readonly unknown[]): RegistryRecordV1[] {
+    const records = entries.filter(isRecord)
+    const counts = new Map<string, number>()
+    for (const record of records) counts.set(record.id, (counts.get(record.id) ?? 0) + 1)
+    return records.filter((record) => counts.get(record.id) === 1)
 }
 
 /**

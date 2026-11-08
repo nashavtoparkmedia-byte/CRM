@@ -19,6 +19,7 @@ import {
 import {
     isRegistryRecordV1,
     locateRegistryV1,
+    uniqueRegistryRecordsV1,
     readRegistryForWriteV1,
     readRegistryLenientV1,
     readRegistryStrictV1,
@@ -366,28 +367,45 @@ export async function setStaffPasswordV1(input: {
     const verifier = await withScryptSlot(() => createStaffPasswordVerifierV1(newPassword))
     if (verifier === 'busy') return { ok: false, reason: 'busy' }
     const actorId = actor.kind === 'staff' ? `staff:${actor.principal.userId}` : 'integration-admin'
-    const administratorIds = new Set(registry.filter((candidate) => candidate.role === 'Администратор').map((candidate) => candidate.id))
 
-    try {
-        return await store.locked(async (tx) => {
-            const existing = await tx.find(targetUserId)
-            if (actor.kind === 'integration_admin') {
-                // Check-and-set in one serialized transaction.
-                if (existing !== null) return { ok: false as const, reason: 'bootstrap_closed' as const }
-                const live = await tx.liveUserIds()
-                if ([...live].some((id) => administratorIds.has(id))) return { ok: false as const, reason: 'bootstrap_closed' as const }
-            }
-            if (isSelf && (existing === null || existing.revokedAt !== null)) {
-                return { ok: false as const, reason: 'current_password_refused' as const }
-            }
-            await tx.upsertVerifier({ userId: targetUserId, registryCreatedAt: target.createdAt, verifier, actor: actorId, now: new Date() })
-            await tx.record({ userId: targetUserId, kind: existing === null ? 'password_set' : 'password_reset', actor: actorId })
-            return { ok: true as const }
-        })
-    } catch (error) {
-        console.error('[staff-session] password change failed:', error instanceof Error ? error.name : 'unknown')
-        return { ok: false, reason: 'unavailable' }
-    }
+    // Inside the registry write turn the registry is read again, so a disable
+    // or delete running at the same moment is either fully before this change
+    // (the target is no longer Активен: refused) or fully after it (it revokes
+    // the new credential). A password can never revive a disabled employee.
+    return withRegistryWriteTurnV1(async () => {
+        let current: RegistryRecordV1[]
+        try {
+            current = await readRegistryStrictV1(lane.registryPath)
+        } catch {
+            return { ok: false as const, reason: 'unavailable' as const }
+        }
+        const latest = current.find((candidate) => candidate.id === targetUserId)
+        if (latest === undefined || latest.status !== 'Активен' || latest.createdAt !== target.createdAt || latest.role !== target.role) {
+            return { ok: false as const, reason: 'unknown_or_inactive_user' as const }
+        }
+        const administratorIds = new Set(current.filter((candidate) => candidate.role === 'Администратор').map((candidate) => candidate.id))
+
+        try {
+            return await store.locked(async (tx) => {
+                const existing = await tx.find(targetUserId)
+                if (actor.kind === 'integration_admin') {
+                    // Check-and-set in one serialized transaction.
+                    if (existing !== null) return { ok: false as const, reason: 'bootstrap_closed' as const }
+                    const live = await tx.liveUserIds()
+                    if ([...live].some((id) => administratorIds.has(id))) return { ok: false as const, reason: 'bootstrap_closed' as const }
+                }
+                if (isSelf && (existing === null || existing.revokedAt !== null)) {
+                    return { ok: false as const, reason: 'current_password_refused' as const }
+                }
+                await tx.upsertVerifier({ userId: targetUserId, registryCreatedAt: latest.createdAt, verifier, actor: actorId, now: new Date() })
+                await tx.record({ userId: targetUserId, kind: existing === null ? 'password_set' : 'password_reset', actor: actorId })
+                return { ok: true as const }
+            })
+        } catch (error) {
+            console.error('[staff-session] password change failed:', error instanceof Error ? error.name : 'unknown')
+            return { ok: false as const, reason: 'unavailable' as const }
+        }
+    })
 }
 
 /** «Завершить сеансы»: an Администратор (or the employee) ends every session of `targetUserId`. */
@@ -543,20 +561,20 @@ export async function strictAddUserV1(
     if (patch.role === undefined) throw managementError('invalid_role')
     const file = await readyRegistry()
     return withRegistryWriteTurnV1(async () => {
-        const stored = await readRegistryForWriteV1(file)
-        const record: RegistryRecordV1 = {
-            id: randomUUID(),
-            firstName: patch.firstName ?? '',
-            lastName: patch.lastName ?? '',
-            ...(patch.email === undefined ? {} : { email: patch.email }),
-            ...(patch.phone === undefined ? {} : { phone: patch.phone }),
-            role: patch.role!,
-            status: patch.status ?? 'Активен',
-            createdAt: new Date().toISOString(),
-        }
-        await writeRegistryAtomicV1(file, [...stored, record])
-        audit('addUser', actor, record.id, 'ok')
-        return record
+            const stored = await readRegistryForWriteV1(file)
+            const record: RegistryRecordV1 = {
+                id: randomUUID(),
+                firstName: patch.firstName ?? '',
+                lastName: patch.lastName ?? '',
+                ...(patch.email === undefined ? {} : { email: patch.email }),
+                ...(patch.phone === undefined ? {} : { phone: patch.phone }),
+                role: patch.role!,
+                status: patch.status ?? 'Активен',
+                createdAt: new Date().toISOString(),
+            }
+            await writeRegistryAtomicV1(file, [...stored, record])
+            audit('addUser', actor, record.id, 'ok')
+            return record
     })
 }
 
@@ -576,9 +594,9 @@ export async function strictUpdateUserV1(
     const file = await readyRegistry()
     await withRegistryWriteTurnV1(async () => {
         const stored = await readRegistryForWriteV1(file)
-        const registry = stored.filter(isRegistryRecordV1)
+        const registry = uniqueRegistryRecordsV1(stored)
+        if (!registry.some((record) => record.id === targetUserId)) throw managementError('not_found')
         const storedIndex = stored.findIndex((entry) => isRegistryRecordV1(entry) && entry.id === targetUserId)
-        if (storedIndex === -1) throw managementError('not_found')
         const before = stored[storedIndex] as RegistryRecordV1
         const changesRole = patch.role !== undefined && patch.role !== before.role
         const changesStatus = patch.status !== undefined && patch.status !== before.status
@@ -624,7 +642,7 @@ export async function strictDeleteUserV1(
     const file = await readyRegistry()
     await withRegistryWriteTurnV1(async () => {
         const stored = await readRegistryForWriteV1(file)
-        const registry = stored.filter(isRegistryRecordV1)
+        const registry = uniqueRegistryRecordsV1(stored)
         if (!registry.some((record) => record.id === targetUserId)) throw managementError('not_found')
         const after = registry.filter((record) => record.id !== targetUserId)
         if (leavesNoPrivileged(after)) throw managementError('last_privileged_deletion')
