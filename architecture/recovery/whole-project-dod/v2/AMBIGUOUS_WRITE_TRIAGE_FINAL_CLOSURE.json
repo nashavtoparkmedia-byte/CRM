@@ -3348,9 +3348,9 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "0bda6809bf207f4cf91515598341d4fc57521993f70ff454f7922c2db16a45c3",
-      "site_signature": "0bda6809bf207f4cf91515598341d4fc57521993f70ff454f7922c2db16a45c3",
-      "source_sha256": "661f287b5e45576d8c6ab4d69c6a225c951f340beca408e90810acacd08e1a66",
+      "record_id": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
+      "site_signature": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
+      "source_sha256": "afe1232e59e8616f5203a3cb00a5a52f2f9c1affd2e3182ef04ad58a8830581b",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
       "line": 93,
       "column": 9,
@@ -3368,7 +3368,7 @@
         "set_config"
       ],
       "sql_sha256": "5532fd4b9139650dbc6a4e9239119272ef96d4d74e459ba819cd86bb71ebe5df",
-      "sql_provenance_sha256": "1f447fc7f47d538a41f87b7be6f09cdd7234fc29ff737497abe99660e3f4e62b",
+      "sql_provenance_sha256": "e2ad36ebd9580349095caa31fd882a8319fbf251b796e5dc0a47035b6d114aad",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
@@ -3391,9 +3391,9 @@
       "semantic_state": "OWNER_VALID_WRITE"
     },
     {
-      "record_id": "072d98d444005a3039014c7e729d6b91962263fd7bd0e4f22ba75a5450d47b68",
-      "site_signature": "072d98d444005a3039014c7e729d6b91962263fd7bd0e4f22ba75a5450d47b68",
-      "source_sha256": "661f287b5e45576d8c6ab4d69c6a225c951f340beca408e90810acacd08e1a66",
+      "record_id": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
+      "site_signature": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
+      "source_sha256": "afe1232e59e8616f5203a3cb00a5a52f2f9c1affd2e3182ef04ad58a8830581b",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
       "line": 109,
       "column": 11,
@@ -3415,7 +3415,7 @@
         "pg_advisory_xact_lock"
       ],
       "sql_sha256": "5c5e080d469d714e5aa58717b1928801ccd489f43f108b02804927ffb2370883",
-      "sql_provenance_sha256": "e14a2b435a09216cb2e33a8a6c188fc8fb20f317750aed7858d7107502a5d377",
+      "sql_provenance_sha256": "ed498e41a7ba8ac5e43d5eb9510297cf25bcb2a2dcb7bc1e2831a709d67826b2",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
@@ -3443,7 +3443,7 @@
   "current_exact_review": {
     "ambiguous_denominator": 65,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "316590e52958eae9f5fa5aa7c0235e1b7370fd0156e3e06ff36dc99cd3be1191",
+    "sorted_site_signatures_sha256": "8cfe0849a5a1951e516fe2a17878d753cfc92ec97fa47d0ca0a1fd0e77ea00e8",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
