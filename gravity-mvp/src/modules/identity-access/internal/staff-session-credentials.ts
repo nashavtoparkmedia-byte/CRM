@@ -13,7 +13,6 @@ import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSa
  * registry at every verification (D1).
  */
 
-export const STAFF_SESSION_COOKIE = '__Host-yoko_staff_session'
 export const STAFF_SESSION_TTL_SECONDS = 12 * 60 * 60
 
 const SESSION_AUDIENCE = 'yoko-staff-session'

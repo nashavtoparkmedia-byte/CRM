@@ -5,7 +5,6 @@ import {
     isStaffSessionSecretValidV1,
     issueStaffSessionTokenV1,
     readStaffSessionTokenV1,
-    STAFF_SESSION_COOKIE,
     STAFF_SESSION_TTL_SECONDS,
     staffPasswordRefusalV1,
     staffSessionCookieOptionsV1,
@@ -57,6 +56,12 @@ export interface StaffSessionPrincipalV1 {
 const store = prismaStaffCredentialStoreV1
 
 // ── Facade facts the public surface and the request boundary need ────────
+
+/**
+ * The staff session cookie. `__Host-` makes the browser refuse it unless it
+ * is Secure, Path=/ and has no Domain, so a sibling host cannot plant one.
+ */
+export const STAFF_SESSION_COOKIE = '__Host-yoko_staff_session'
 
 /** The staff session cookie's name (`__Host-` prefixed). */
 export function staffSessionCookieNameV1(): string {

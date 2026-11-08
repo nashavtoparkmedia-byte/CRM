@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers'
 import { prismaMobileSessionBarrierV1 } from '../internal/mobile-session-barrier'
-import { STAFF_SESSION_COOKIE } from '../internal/staff-session-credentials'
-import { verifyStaffSessionTokenV1 } from './staff-session-operations'
+import { STAFF_SESSION_COOKIE, verifyStaffSessionTokenV1 } from './staff-session-operations'
 import { UNSTABLE_DEVICE_ID_V1 } from '../public/v1/mobile-push-registration-handler'
 import {
     LEGACY_UI_IDENTITY_COOKIE_V1,
