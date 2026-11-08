@@ -555,6 +555,20 @@ describe('user management', () => {
         expect(fake.state.rows.get('u1')!.revokedAt).not.toBeNull()
     })
 
+    test('strict writes keep registry entries they do not understand', async () => {
+        configureLane()
+        await seedCredential('u2', ADMIN_PASSWORD)
+        const admin = await principalOf('u2', ADMIN_PASSWORD)
+        const foreign = { id: 'legacy-x', firstName: 'Old', lastName: 'Entry', role: 'Стажёр', status: 'Архив', createdAt: '2020-01-01T00:00:00Z', note: 'kept' }
+        writeRegistry([MANAGER, ADMIN, LEAD, foreign])
+        await operations.strictUpdateUserV1(async () => admin, 'u1', { firstName: 'Мария' })
+        await operations.strictDeleteUserV1(async () => admin, 'u3')
+        await operations.strictAddUserV1(async () => admin, { firstName: 'Н', lastName: 'С', role: 'Менеджер' })
+        const after = readRegistry()
+        expect(after.find((user) => user.id === 'legacy-x')).toEqual(foreign)
+        expect(after.map((user) => user.id).slice(0, 3)).toEqual(['u1', 'u2', 'legacy-x'])
+    })
+
     test('strict add mints a random immutable id', async () => {
         configureLane()
         await seedCredential('u2', ADMIN_PASSWORD)

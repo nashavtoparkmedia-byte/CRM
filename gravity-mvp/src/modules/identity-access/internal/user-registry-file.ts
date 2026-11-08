@@ -156,6 +156,23 @@ export async function readRegistryStrictV1(file: string): Promise<RegistryRecord
     return parsed.filter(isRecord)
 }
 
+/**
+ * Read for a write: every record exactly as stored, malformed ones included,
+ * so a write never drops what it did not understand. Throws like the strict
+ * read on a missing file, an I/O error or non-array JSON.
+ */
+export async function readRegistryForWriteV1(file: string): Promise<unknown[]> {
+    const raw = await fs.readFile(file, 'utf8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) throw new TypeError('registry is not an array')
+    return parsed
+}
+
+/** Whether a stored entry is a well-formed registry record. */
+export function isRegistryRecordV1(value: unknown): value is RegistryRecordV1 {
+    return isRecord(value)
+}
+
 /** Read for display, as `getUsers()` always did: nothing on any error. */
 export async function readRegistryLenientV1(file: string): Promise<RegistryRecordV1[]> {
     try {

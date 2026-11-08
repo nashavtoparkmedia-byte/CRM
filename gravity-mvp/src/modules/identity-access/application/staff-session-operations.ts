@@ -15,7 +15,9 @@ import {
     type StaffCredentialRowV1,
 } from '../internal/staff-credential-store'
 import {
+    isRegistryRecordV1,
     locateRegistryV1,
+    readRegistryForWriteV1,
     readRegistryLenientV1,
     readRegistryStrictV1,
     withRegistryWriteTurnV1,
@@ -495,7 +497,7 @@ export async function strictAddUserV1(
     if (patch.role === undefined) throw new StaffUserManagementError('invalid_role')
     const file = await readyRegistry()
     return withRegistryWriteTurnV1(async () => {
-        const registry = await readRegistryStrictV1(file)
+        const stored = await readRegistryForWriteV1(file)
         const record: RegistryRecordV1 = {
             id: randomUUID(),
             firstName: patch.firstName ?? '',
@@ -506,7 +508,7 @@ export async function strictAddUserV1(
             status: patch.status ?? 'Активен',
             createdAt: new Date().toISOString(),
         }
-        await writeRegistryAtomicV1(file, [...registry, record])
+        await writeRegistryAtomicV1(file, [...stored, record])
         audit('addUser', actor, record.id, 'ok')
         return record
     })
@@ -527,10 +529,11 @@ export async function strictUpdateUserV1(
     const patch = allowlistedUserPatchV1(input)
     const file = await readyRegistry()
     await withRegistryWriteTurnV1(async () => {
-        const registry = await readRegistryStrictV1(file)
-        const index = registry.findIndex((record) => record.id === targetUserId)
-        if (index === -1) throw new StaffUserManagementError('not_found')
-        const before = registry[index]
+        const stored = await readRegistryForWriteV1(file)
+        const registry = stored.filter(isRegistryRecordV1)
+        const storedIndex = stored.findIndex((entry) => isRegistryRecordV1(entry) && entry.id === targetUserId)
+        if (storedIndex === -1) throw new StaffUserManagementError('not_found')
+        const before = stored[storedIndex] as RegistryRecordV1
         const changesRole = patch.role !== undefined && patch.role !== before.role
         const changesStatus = patch.status !== undefined && patch.status !== before.status
         const row = await prismaStaffCredentialStoreV1.find(targetUserId).catch(() => {
@@ -542,7 +545,7 @@ export async function strictUpdateUserV1(
             throw new StaffUserManagementError('forbidden')
         }
         const updated: RegistryRecordV1 = { ...before, ...patch, id: before.id, createdAt: before.createdAt }
-        const after = registry.map((record, position) => (position === index ? updated : record))
+        const after = registry.map((record) => (record === before ? updated : record))
         if (leavesNoPrivileged(after)) throw new StaffUserManagementError('last_privileged_demotion')
 
         const disabling = changesStatus && patch.status === 'Отключен'
@@ -560,7 +563,7 @@ export async function strictUpdateUserV1(
                 }
             })
         }
-        await writeRegistryAtomicV1(file, after)
+        await writeRegistryAtomicV1(file, stored.map((entry, position) => (position === storedIndex ? updated : entry)))
         audit('updateUser', actor, targetUserId, 'ok')
     })
 }
@@ -574,7 +577,8 @@ export async function strictDeleteUserV1(
     if (actor.role !== 'Администратор') throw new StaffUserManagementError('forbidden')
     const file = await readyRegistry()
     await withRegistryWriteTurnV1(async () => {
-        const registry = await readRegistryStrictV1(file)
+        const stored = await readRegistryForWriteV1(file)
+        const registry = stored.filter(isRegistryRecordV1)
         if (!registry.some((record) => record.id === targetUserId)) throw new StaffUserManagementError('not_found')
         const after = registry.filter((record) => record.id !== targetUserId)
         if (leavesNoPrivileged(after)) throw new StaffUserManagementError('last_privileged_deletion')
@@ -584,7 +588,7 @@ export async function strictDeleteUserV1(
             const revoked = await tx.revoke(targetUserId, `staff:${actor.userId}`, new Date())
             if (revoked !== null) await tx.record({ userId: targetUserId, kind: 'revoked', actor: `staff:${actor.userId}` })
         })
-        await writeRegistryAtomicV1(file, after)
+        await writeRegistryAtomicV1(file, stored.filter((entry) => !(isRegistryRecordV1(entry) && entry.id === targetUserId)))
         audit('deleteUser', actor, targetUserId, 'ok')
     })
 }
