@@ -1,6 +1,6 @@
 # Staff Session v1 — a verified browser identity for the CRM's existing employees
 
-**Status: DESIGN v1.3 (2026-11-08), identity_access owner: «YOKO CRM — Identity Access — PC» (Owner mandate, Orchestrator V8). v1.2 (beafd6d8) had the Security DESIGN PASS. v1.3 changes exactly three decisions, listed in §0; they need a Security DESIGN verdict of their own. Everything else is v1.2 unchanged. No code of this design has landed.**
+**Status: DESIGN v1.3 (2026-11-08), identity_access owner: «YOKO CRM — Identity Access — PC» (Owner mandate, Orchestrator V8). v1.2 (beafd6d8) had the Security DESIGN PASS. v1.3 changes exactly four decisions (D1–D4), listed in §0; they need a Security DESIGN verdict of their own. Everything else is v1.2 unchanged. No code of this design has landed.**
 Owner context: `identity_access`.
 
 ## 0. What v1.3 changes, and why
@@ -18,6 +18,10 @@ The Owner's clarification (2026-11-08): the CRM already has employees, roles and
 - **D1 — no authority copy.** Role and status are read from the registry at every verification, as v1.1 did. The credential row keeps only the record binding (`userId`, `registryCreatedAt`) that stops a reused id from inheriting a credential.
 - **D2 — revocation is carried by the credential, written first.** Disabling or deleting an employee first revokes their credential in PostgreSQL (one transaction), then writes the registry. The order is the mechanism: if the registry write fails, or a redeploy restores the old file, the employee is still `Активен` in the file but holds no credential and cannot sign in. Re-enabling requires an Администратор to set a new password. No step claims atomicity across the file and the database.
 - **D3 — the registry must be durable before enforcement is switched on.** The one gap D2 cannot close is a role change undone by a redeploy (for example an Администратор demoted, then restored by the image). That is the existing registry's storage problem — today a redeploy already loses every employee added through `/users` — so it is fixed at the root: the registry path becomes configurable (`YOKO_USER_REGISTRY_FILE`), the image's file is only the first-start seed, writes become atomic, and production activation (`YOKO_STAFF_SESSION_ENFORCE=on`) has the precondition "the registry is on persistent storage". No copy of the registry is kept anywhere.
+
+- **D4 — the user-management guard is dormant with the rest.** v1.2 made it active at merge, which would close `/users` for everyone until the first bootstrap — an access change in MAIN. Instead it is strict exactly when the staff lane is configured (`STAFF_SESSION_SECRET` valid): no Staff Session can exist without the secret, and the browser lane is then the legacy trusted-app model, where a role in `users.json` grants no verified authority. From the moment the secret is set (the first activation step, before any bootstrap), add, delete, role, status and credential writes require a Staff Session Администратор. Removing the secret later returns the whole browser lane to the legacy model.
+
+For consumers nothing changes from v1.2: `getStaffSessionPrincipalV1()` returns `StaffSessionPrincipalV1 { kind: 'staff_session', userId, role, sid, issuedAt, expiresAt }`, with `sid` a non-secret per-login id (a labelled sha256 of the token's random instance id) and `issuedAt` the password login time (there is no re-issue without a password).
 
 The Basic-auth question of the mandate is answered in §4.6; the narrow Cash contract ships separately (§8, PR-IA1).
 
@@ -75,7 +79,7 @@ No name, role or status column (D1). Every write to this table is one transactio
 | Payload | `{ v: 1, aud: 'yoko-staff-session', sub: userId, iat, exp, epoch, uepoch, sid }` — `epoch` = `STAFF_SESSION_REVOCATION_EPOCH`; `uepoch` = `StaffCredential.sessionEpoch` at issue; `sid` = 16 server-random bytes. No role in the token. |
 | TTL | 12 h. |
 | Verify | `getStaffSessionPrincipalV1()`: signature; `v`; `aud`; `exp`; global `epoch`; the credential row exists, is not revoked, its `sessionEpoch` equals `uepoch`; the registry record `sub` exists, is `Активен` and has `createdAt === registryCreatedAt`. The role is the registry's, read now. Any mismatch → `null`. **Unverifiable = refused (R3):** a store that cannot be read while a staff cookie is present gives no operator and a 503 on the browser lane, never a fallback to `crm_user_id`. |
-| Principal | `StaffSessionPrincipalV1 { kind: 'staff_session', userId, role, sessionId, authenticatedAt, expiresAt }`; `sessionId` is a labelled sha256 of `sid`, never a token digest. Consumers take authority only from `getStaffSessionPrincipalV1()`, never from `getCurrentUser()`. |
+| Principal | `StaffSessionPrincipalV1 { kind: 'staff_session', userId, role, sid, issuedAt, expiresAt }` (v1.2 field names); `sid` is a labelled sha256 of the token's instance id, never a token digest; `issuedAt` is the password login time. Consumers take authority only from `getStaffSessionPrincipalV1()`, never from `getCurrentUser()`. |
 
 ### 4.3 Login, logout, revocation
 
@@ -87,7 +91,7 @@ No name, role or status column (D1). Every write to this table is one transactio
 
 ### 4.4 User management (B2, B3, D2, D3)
 
-- `/users` stays the one place employees are managed. From the implementation PR on, `addUser`, `updateUser`, `deleteUser` and password administration require a **Staff Session**; add, delete, role and status changes, and any write to an employee who holds a credential, require role **Администратор**; Администратор is granted only by an Администратор. `updateUser` applies an explicit field allowlist (`firstName, lastName, email, phone, role, status`).
+- `/users` stays the one place employees are managed. While the staff lane is configured (D4), `addUser`, `updateUser`, `deleteUser` and password administration require a **Staff Session**; add, delete, role and status changes, and any write to an employee who holds a credential, require role **Администратор**; Администратор is granted only by an Администратор. `updateUser` applies an explicit field allowlist (`firstName, lastName, email, phone, role, status`).
 - **Order of writes (the D2 mechanism).** Each change touches at most two stores and never claims they change together:
   - disable or delete: (1) PostgreSQL: `revokedAt = now`, `sessionEpoch + 1`, event `revoked` — one transaction; (2) the registry write. (1) failing aborts the change. (2) failing leaves an employee who cannot sign in; the action reports the error and can be repeated.
   - role change: (1) `sessionEpoch + 1`; (2) the registry write. (2) failing leaves the old role in force and the old sessions ended: consistent.
@@ -118,9 +122,8 @@ Decision (edge_delivery change, proposed to its owner; not in the identity_acces
 ### 4.7 Consumer contracts (identity_access publishes; each owner adopts)
 
 - `getStaffSessionPrincipalV1()` — above; kind `staff_session`.
-- `getStaffSessionFactsV1()` — `{ principal, sessionId, authenticatedAt }`, the same shape as `IntegrationAdminSessionFacts.v1`, for consumers that record a session in a ledger (Cash).
 - Contacts: `identityAccessContactPersonCardAuthorityV1` and the lookup route admit `kind === 'staff_session'` beside `integration_admin_session` (one file, Contacts owner).
-- Cash: a Cash-owned binding of staff-session facts to `cash.referral.qualify` / `cash.access.manage` by the employee's role (Cash owner's decision; Cash rules unchanged).
+- Cash: consumes only `getStaffSessionPrincipalV1()`; its binding to `cash.referral.qualify` / `cash.access.manage` by role is Cash's own (docs/design/cash-staff-authority-v2.md, Cash owner).
 - Messaging needs no change: its readers see the verified operator through the BR-4 rewrite.
 
 ## 5. Invariants
@@ -147,7 +150,7 @@ Decision (edge_delivery change, proposed to its owner; not in the identity_acces
 | Unreadable credential store with a staff cookie | no operator, 503, no fallback |
 | Two sessions in one request | no operator |
 | CSRF | Server Actions under Next's Origin/Host check; same-origin checks on Route Handlers; no side-effecting GET under `staff_session` |
-| Repeated edge challenges | one realm, identical lines (§4.6); no weaker perimeter |
+| Repeated edge challenges | one realm, identical lines (§4.6); no weaker perimeter; the Android shell's realm rule (it answers only "YOKO CRM") is re-checked by Android before the edge change |
 | Accepted residual risk | an Администратор can reset a password and act as that employee (audited); in-memory backoff resets on restart; until D3 is met a redeploy can undo a role change |
 
 ## 7. Data and configuration
@@ -158,9 +161,9 @@ Decision (edge_delivery change, proposed to its owner; not in the identity_acces
 
 ## 8. Delivery and gates
 
-1. **PR-IA1, independent of this design:** `IntegrationAdminSessionFacts.v1` + `sid` for Cash S4 (`docs/design/cash-staff-authority-v1.md` parts 1, 2 and 4).
-2. **This document v1.3** → Security DESIGN verdict on D1–D3 and §4.6 only.
-3. **Implementation PR** (identity_access): migration, credential module, scrypt verifier with limiter and dummy path, `/login` password step, logout, `getStaffSessionPrincipalV1` / `getStaffSessionFactsV1`, resolver and proxy branch, user-management guards with the D2 write order and atomic registry writes, boundary control, Engineering Map, SECRETS.md. Dormant by default (no secret, enforcement off); the user-management guard is active immediately. Independent Security implementation review + hosted CI.
+1. ~~PR-IA1 (`IntegrationAdminSessionFacts.v1`)~~ — dropped: the Owner moved Cash to `getStaffSessionPrincipalV1()` (Cash consumer alignment, 2026-11-08).
+2. **This document v1.3** → Security DESIGN verdict on D1–D4 and §4.6 only.
+3. **Implementation PR** (identity_access): migration, credential module, scrypt verifier with limiter and dummy path, `/login` password step, logout, `getStaffSessionPrincipalV1` / `getStaffSessionFactsV1`, resolver and proxy branch, user-management guards with the D2 write order and atomic registry writes, boundary control, Engineering Map, SECRETS.md. Dormant by default (no secret, enforcement off), the user-management guard included (D4). Independent Security implementation review + hosted CI.
 4. **Consumer PRs** by their owners (Contacts, Cash), edge PR (§4.6) by edge_delivery.
 5. Activation (separate Owner GO): secrets rotated, registry on persistent storage, first credential bootstrapped, enforcement on.
 
