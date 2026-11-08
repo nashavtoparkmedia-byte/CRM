@@ -12,6 +12,7 @@ import LearnFromReplyBanner from "./LearnFromReplyBanner"
 import { learnFromOutboundAction } from "../learn-from-outbound-actions"
 import { retryFailedMessageAction } from "../message-retry-actions"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
+import { effectiveChatIdV1, selectDisplayedChatV1 } from "../hooks/displayed-chat"
 import { useMessages, Message } from "../hooks/useMessages"
 import { useProposedReply } from "../hooks/useProposedReply"
 import { WorkTaskCreateModalV1 as TaskCreateModal } from '@/modules/work-management/public/v1/task-view'
@@ -36,22 +37,12 @@ export default function ChatWorkspace({
     // Compute effective chatId — determines the remount boundary.
     // When effectiveChatId changes, ChatWorkspaceInner is fully remounted
     // via key={effectiveChatId}, ensuring clean state (no stale refs/data).
-    const effectiveChatId = useMemo(() => {
-        if (!chatId || !chat) return chatId
-
-        if (activeChannelTab === 'all' && chat.allChatIds && chat.allChatIds.length > 1) {
-            return chat.allChatIds.join(',')
-        }
-
-        if (activeChannelTab !== 'all' && chat.channelMap) {
-            const normalizedChannel = activeChannelTab === 'wa' ? 'whatsapp' : activeChannelTab === 'tg' ? 'telegram' : activeChannelTab
-            const channelChatId = chat.channelMap[normalizedChannel]
-            if (channelChatId) return channelChatId
-            return `empty:${normalizedChannel}`
-        }
-
-        return chatId
-    }, [chatId, chat, activeChannelTab])
+    // The rule itself lives in selectDisplayedChatV1, shared with the
+    // conversation drawer, so «which chat is shown» is decided once.
+    const effectiveChatId = useMemo(
+        () => effectiveChatIdV1(selectDisplayedChatV1({ chatId, activeChannelTab, chat }), chatId),
+        [chatId, chat, activeChannelTab],
+    )
 
     if (!chatId || !chat) {
         return (

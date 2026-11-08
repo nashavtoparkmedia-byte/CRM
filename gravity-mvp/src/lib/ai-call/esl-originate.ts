@@ -36,10 +36,26 @@ interface OriginateOpts {
     timeoutMs?: number
 }
 
+/** How much of a FreeSWITCH reply body is kept as a diagnostic cause. */
+export const ESL_ORIGINATE_REPLY_EXCERPT_LIMIT = 120
+
 export class EslOriginateRejectedError extends Error {
-    constructor() {
+    /**
+     * The reply body FreeSWITCH sent, bounded. It is the only place the cause
+     * lives: `-ERR NO_ANSWER` and `-ERR USER_BUSY` mean a call really was
+     * placed and not picked up, while a gateway error means nothing was dialed.
+     * A caller that cannot tell them apart must not decide retry policy.
+     *
+     * Optional and additive: the message and the class are unchanged, so every
+     * existing caller that checks the class keeps behaving identically.
+     */
+    readonly replyExcerpt: string | null
+    constructor(replyExcerpt?: string) {
         super('FreeSWITCH rejected the originate command')
         this.name = 'EslOriginateRejectedError'
+        this.replyExcerpt = typeof replyExcerpt === 'string' && replyExcerpt.trim() !== ''
+            ? replyExcerpt.trim().slice(0, ESL_ORIGINATE_REPLY_EXCERPT_LIMIT)
+            : null
     }
 }
 
@@ -60,7 +76,7 @@ export class EslOriginateOutcomeUnknownError extends Error {
 export function requireSuccessfulOriginateResponse(body: string): string {
     const response = body.trim()
     if (!response.startsWith('+OK')) {
-        throw new EslOriginateRejectedError()
+        throw new EslOriginateRejectedError(response)
     }
     return response
 }

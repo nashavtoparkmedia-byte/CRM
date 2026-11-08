@@ -16,6 +16,8 @@ import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner
 import LinkContactModal from './LinkContactModal'
 import DriverPersonSearchModal from './DriverPersonSearchModal'
 import ContactEvidenceDetails from './ContactEvidenceDetails'
+import { resolveContactPersonCardLinkAction } from '../contact-card-link-actions'
+import { personCardLinkChatIdV1, selectDisplayedChatV1 } from '../hooks/displayed-chat'
 import {
     Dialog,
     DialogContent,
@@ -225,7 +227,7 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, cont
     )
 }
 
-export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' }: { chatId: string; activeChannelTab?: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId))
@@ -246,6 +248,25 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [tagInput, setTagInput] = useState("")
     const [showTagInput, setShowTagInput] = useState(false)
     const [showMoreMenu, setShowMoreMenu] = useState(false)
+    // «Открыть в CRM» leads to the person page only for the exact persisted
+    // conversation that is actually shown — the same selectDisplayedChatV1 answer
+    // ChatWorkspace keys on — and only when Messaging resolves it server-side
+    // (RCQ1). A grouped «Все» row over several chats, a channel tab with no chat
+    // on it, an ambiguous or an unresolved conversation gets no link (BD-F2
+    // 1a/2a); a Contact is never guessed from the row.
+    const displayedChatId = personCardLinkChatIdV1(selectDisplayedChatV1({ chatId, activeChannelTab, chat }))
+    const [personCardHref, setPersonCardHref] = useState<string | null>(null)
+    useEffect(() => {
+        let cancelled = false
+        setPersonCardHref(null)
+        if (!displayedChatId) return () => { cancelled = true }
+        resolveContactPersonCardLinkAction(displayedChatId)
+            .then(result => {
+                if (!cancelled) setPersonCardHref(result.status === 'resolved' ? `/contacts/${encodeURIComponent(result.contactId)}` : null)
+            })
+            .catch(() => { if (!cancelled) setPersonCardHref(null) })
+        return () => { cancelled = true }
+    }, [displayedChatId])
     const [showMergeDialog, setShowMergeDialog] = useState(false)
     const [mergeSearch, setMergeSearch] = useState("")
     const [mergeTarget, setMergeTarget] = useState<any>(null)
@@ -740,9 +761,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         </button>
                         {showMoreMenu && (
                             <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-[#E0E0E0] py-1 min-w-[160px] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                                <button className="w-full px-3 h-[30px] flex items-center gap-[2px] text-[12px] text-[#111] hover:bg-gray-50">
-                                    <ExternalLink size={12} /> Открыть в CRM
-                                </button>
+                                {personCardHref && (
+                                    <a href={personCardHref} className="w-full px-3 h-[30px] flex items-center gap-[2px] text-[12px] text-[#111] hover:bg-gray-50">
+                                        <ExternalLink size={12} /> Открыть в CRM
+                                    </a>
+                                )}
                                 <button className="w-full px-3 h-[30px] flex items-center gap-[2px] text-[12px] text-[#111] hover:bg-gray-50">
                                     <Archive size={12} /> Архивировать
                                 </button>
