@@ -3754,6 +3754,85 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-r22-binding-trust-main-a16489f5-20261108",
+      "reviewed_at": "2026-11-08T00:00:00Z",
+      "reviewed_by": "MESSAGING_SHARED_RELIABILITY_R22_BINDING_TRUST_MAIN_A16489F5_EXECUTOR_REVIEW_20261108",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_V8_MANDATE_05_MESSAGING_R21_R22_OWNERSHIP_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at a16489f5, whose tail is contact-identity-person-card-owner-preview-fixes-main-3ac5ce07-20261108, and leaves that amendment untouched. It reviews only the seven surfaces the R-22 Messaging read-side binding trust adds on that tail; it carries no source-hash rebind. It replaces this PR's earlier amendment on main 3ac5ce07 (messaging-r22-binding-trust-main-3ac5ce07-20261108), which was never published, with the same surface decisions over the current tail. The parallel R-21 amendment extends the same tail on its own branch; whichever lands second is re-derived onto the other's published tail. It lands only through Orchestrator admission."
+      },
+      "reason": "Records the tracked executable surfaces the R-22 Messaging read-side binding trust adds on top of main a16489f5: 2,787 + 7 = 2,794 surfaces, context-owned 1,540 -> 1,546, governed exclusions 1,247 -> 1,248 (the boundary control under architecture_controls, a prefix rule without exact inventory). Six new paths live under gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging and are owned by the messaging context through its manifest owned_paths. The changed MessageService, ConversationWorkflowService and ContextBuilder are context-owned and carry no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main a16489f5 itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2787,
+        "tracked_inventory_sha256": "164eb65d746264ee2dc7d5e28658870e21cfe2f96f26ec83cd956fc077f44300",
+        "coverage_sha256": "221699478737604d9da40279b62baf5181d81186569c5b535d6839de30fc3641"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2794,
+        "tracked_inventory_sha256": "7b609de90bbfa39f98946ad0367b70c4354238595cfad873097e6dbfac83b539",
+        "coverage_sha256": "bd09dfb7190694d84a38571dda81d6a34201e9ced232ce46041a4101074503f5"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/conversation-binding-audit-query.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The R-22 read-only binding audit query contract and its strict parser. Under gravity-mvp/src/contracts/messaging, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-audit-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The R-22 binding audit handler over an injected port: counts states and Contacts' peer answers, ids only; no persistence of its own. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust-policy.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure R-22 binding trust policy: unbound, consistent, unverifiable or contradicted from facts a read already holds, and the one person key with no driver key; no IO. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Real-PostgreSQL proof of the R-22 read side: the inbox no longer merges two people by a shared driver, contradicted and driver-only conversations stand alone, workflow group writes reach only one person's trusted conversations, and the audit counts with Contacts' real query and writes nothing. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Policy and audit-handler unit tests of the R-22 binding trust. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-binding-audit-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The read-only Prisma adapter of the R-22 binding audit: one page of bound private Telegram conversations and Contacts' own ResolveInboundConversationPeerIdentity query; it writes nothing. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/architecture/check-messaging-binding-trust-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the binding policy is pure with no driver key, that the inbox groups by the policy key and strips the other person from a contradicted conversation, that workflow group writes take an exact trusted id list, that the AI context's driver is Contacts-confirmed, and that the audit is read-only, and rejects its negative probes; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
