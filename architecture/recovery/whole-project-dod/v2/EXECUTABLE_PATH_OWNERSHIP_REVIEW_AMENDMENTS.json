@@ -3893,7 +3893,7 @@
         {
           "path": "gravity-mvp/src/proxy.ts",
           "previous_source_sha256": "06db7f7962c68fa983ef11a72b2fdd7c24a11886245d80baaa08ee43cfe19285",
-          "current_source_sha256": "8953fe8c5d64a9ab6c578f60d87d06f2b0346cdf8db1d9a8c385c7d4f3df331e",
+          "current_source_sha256": "2c3dc7b64a0270583fb90d3bc3126afe9386d779f28fd51a3b1c0b486003455e",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
           "review_rationale": "The request boundary gains the Staff Session branch of the same BR-4 rewrite on the browser lane: a verified staff session sends exactly one crm_user_id, the employee, downstream; a refused one sends none; an unverifiable store answers 503; with YOKO_STAFF_SESSION_ENFORCE=on a browser request without a session loses crm_user_id. The shell lane and the browser lane without a staff cookie and without enforcement are unchanged. Its APPLICATION_RUNTIME lifecycle, functional owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
         }
