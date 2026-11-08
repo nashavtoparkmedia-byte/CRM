@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "25a4d4d594d6f8072e9e9cea9060762aa11457026b93b9a4e5cf9f2f51e3bcaf",
-    "reviewed_path_count": 27,
+    "source_sha256": "ae46b80f3c65dc19b564f84648a27b3d621867db79406006754633b06ea79e9a",
+    "reviewed_path_count": 26,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 946,
-    "sorted_site_signatures_sha256": "b6c1a4c9899da0493516f3acacfb046a9cd73c05993651b3440c3764298dc753"
+    "non_test_migration_only_sites": 945,
+    "sorted_site_signatures_sha256": "1867d8416a947af5e0229b60a15438eabdc7e713309d3c5842b8a30b95ccadd7"
   },
   "authorizations": [
     {
@@ -1527,6 +1527,45 @@
         "canonical_ordinal": 15,
         "artifact_sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
         "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.messaging.0ac1d642a32ebac9",
+      "site_signature": "0ac1d642a32ebac92d95d4aaedca13e346fcd9350e54d0a88766356c8ceccf2c",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 61,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:0ac1d642a32ebac92d95d4aaedca13e346fcd9350e54d0a88766356c8ceccf2c",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:61:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -5609,6 +5648,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.messaging.2601b8bab4f200f4",
+      "site_signature": "2601b8bab4f200f4d7c9cabf53be3cda730ef0eee45d5e7f5f404f7e7473744c",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 59,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:2601b8bab4f200f4d7c9cabf53be3cda730ef0eee45d5e7f5f404f7e7473744c",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:59:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.260bf818d0905034",
       "site_signature": "260bf818d09050347484598862511c68b74aea9a2bc63388c1049599f3f7d401",
       "status": "APPROVED",
@@ -9567,45 +9645,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.messaging.43bd71a768689db5",
-      "site_signature": "43bd71a768689db5d3f628995c1770edde1c12a4cc1a5f291b3b49b1cf773080",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 57,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:43bd71a768689db5d3f628995c1770edde1c12a4cc1a5f291b3b49b1cf773080",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:57:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.446158a30bdb9f57",
       "site_signature": "446158a30bdb9f57d79010930c6e898e02488e6fe435888c7aa47df4cab34a1c",
       "status": "APPROVED",
@@ -11306,6 +11345,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.messaging.51b66976c580775a",
+      "site_signature": "51b66976c580775aed316a0eb91cfa3724a06baada93b5e4973e3862a188336f",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 65,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:51b66976c580775aed316a0eb91cfa3724a06baada93b5e4973e3862a188336f",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:65:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.51ff2e2f0fa7f765",
       "site_signature": "51ff2e2f0fa7f7652ea995c3b545b085f52d4ea4a0a84d4d6d974edbd39f48f7",
       "status": "APPROVED",
@@ -11482,45 +11560,6 @@
         "canonical_ordinal": 53,
         "artifact_sha256": "b39a2f1478e6314fe8c9adeb38cb058b1590ace7310c85d561dfdeb2139af890",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727141925_add_max_shadow_semantic_comparison/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.messaging.53bf7effed587fa8",
-      "site_signature": "53bf7effed587fa8db98f50c1f066c714494b94c3831bf7557620d1ea91d9d9d",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 63,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "ALTER_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: ALTER_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:53bf7effed587fa8db98f50c1f066c714494b94c3831bf7557620d1ea91d9d9d",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:63:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -13536,45 +13575,6 @@
         "canonical_ordinal": 43,
         "artifact_sha256": "bedeb492b1d8bccdd4009bb8ad28c5c2235a07dc2f3370b289996f2c6ce80458",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260712000000_multi_park_driver_profiles/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.messaging.64193300f3a1aca3",
-      "site_signature": "64193300f3a1aca308af1c5b44872ec7dbcda02c788cf2aa492e21bbf9563cc0",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 55,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:64193300f3a1aca308af1c5b44872ec7dbcda02c788cf2aa492e21bbf9563cc0",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:55:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -16306,45 +16306,6 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.messaging.779cc3cba5a5aa80",
-      "site_signature": "779cc3cba5a5aa804ca325ad0e9802c3edeff553930ae12ccdd58a3538be2362",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 61,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:779cc3cba5a5aa804ca325ad0e9802c3edeff553930ae12ccdd58a3538be2362",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:61:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
       "capability_id": "mmc.migration-site.v1.contacts.77e9a1ad0c3e790f",
       "site_signature": "77e9a1ad0c3e790fd22c06f619dfcb7ad0270a644b99624c8a478a5a216cd060",
       "status": "APPROVED",
@@ -17070,45 +17031,6 @@
         "canonical_ordinal": 13,
         "artifact_sha256": "425e5536e973708c07efbd914b94e478364f49124e0e2ab4bad56eff9dd5db51",
         "repository_capture": "gravity-mvp/prisma/migrations/20260413000000_add_scenario_fields/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.messaging.7c9e3c944b3593eb",
-      "site_signature": "7c9e3c944b3593ebaf73b22e7836c4e10ab5f19fbe5670e9cf897b4496678863",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 59,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "CREATE_INDEX"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:7c9e3c944b3593ebaf73b22e7836c4e10ab5f19fbe5670e9cf897b4496678863",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:59:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {
@@ -22929,6 +22851,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.messaging.a51b3f7d743faa25",
+      "site_signature": "a51b3f7d743faa25ee91e9b7b8373d07c9b264e5220ffa709f50bed0e37e6cad",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 24,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:a51b3f7d743faa25ee91e9b7b8373d07c9b264e5220ffa709f50bed0e37e6cad",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:24:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.a53d5031a56f3dd6",
       "site_signature": "a53d5031a56f3dd69aa006d13606a2e533ddd5363bcd2e3fc3020983e9a52180",
       "status": "APPROVED",
@@ -26627,6 +26588,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.messaging.c3ff87e45789a7df",
+      "site_signature": "c3ff87e45789a7df18942b6f87757e34207a681d77a27d4a4ed64db0e6cd0416",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 67,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: ALTER_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:c3ff87e45789a7df18942b6f87757e34207a681d77a27d4a4ed64db0e6cd0416",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:67:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.c41e5879f5ab5487",
       "site_signature": "c41e5879f5ab5487a6699492bc9b78a52937c7b2ea17ffcfd5af016857a94d44",
       "status": "APPROVED",
@@ -26694,6 +26694,45 @@
         "canonical_ordinal": 2,
         "artifact_sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
         "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.messaging.c4f59d0037c5aac9",
+      "site_signature": "c4f59d0037c5aac929e7a70082ad382d2365c1c2b2a6468d1f8c0d92d38f6fd8",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+        "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+        "line": 63,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "messaging",
+      "target": {
+        "data_owner": "messaging",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "HeldChannelMessage",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
+        "evidence": [
+          "source_sha256:f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+          "site_signature:c4f59d0037c5aac929e7a70082ad382d2365c1c2b2a6468d1f8c0d92d38f6fd8",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:63:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -27617,45 +27656,6 @@
           "source_sha256:71705b19cfca26ae0681a8ed61181a31bc771e1650d6dd07a04ffa524c28aa6e",
           "site_signature:cdc7e7a04e041477e9019375885600279501264e371360ad4b1876fce95d31dd",
           "source_coordinate:gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql:121:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.messaging.ce17c90989e4f67e",
-      "site_signature": "ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
-        "source_sha256": "f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
-        "line": 17,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "ALTER_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging A2 held-store scrub migration: ALTER_TABLE on HeldChannelMessage. It constrains only the Messaging-owned held table, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
-          "site_signature:ce17c90989e4f67e6d9a8d13620eb413f45e6b5d401c6a82fcbf44edadea096d",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql:17:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]
@@ -29699,45 +29699,6 @@
         "canonical_ordinal": 1,
         "artifact_sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
         "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.messaging.ddbcd1ab44edc92d",
-      "site_signature": "ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-        "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-        "line": 22,
-        "column": 1,
-        "method": "sql-script"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONTROLLED_MIGRATION"
-      },
-      "functional_owner": "messaging",
-      "target": {
-        "data_owner": "messaging",
-        "writes": [
-          {
-            "kind": "TABLE",
-            "exact_name": "HeldChannelMessage",
-            "operation": "CREATE_TABLE"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential.",
-        "evidence": [
-          "source_sha256:cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-          "site_signature:ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7",
-          "source_coordinate:gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql:22:1",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
-        ]
       }
     },
     {

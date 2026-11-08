@@ -30,7 +30,6 @@ const handlerPath = 'gravity-mvp/src/modules/messaging/public/v1/guarded-channel
 const adapterPath = 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts'
 const compositionPath = 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts'
 const migrationPath = 'gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql'
-const scrubMigrationPath = 'gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql'
 const facadePath = 'gravity-mvp/src/modules/messaging/public/v1/index.ts'
 const retentionJobPath = 'gravity-mvp/src/lib/RetentionCleanup.ts'
 /**
@@ -141,14 +140,6 @@ function assertServerSideCallersOnly(files) {
     if (mentions(source, GUARDED_RETENTION_CAPABILITY) && !APPROVED_GUARDED_RETENTION_CALLERS.has(file)) {
       throw new Error(`${file}: calls ${GUARDED_RETENTION_CAPABILITY} outside the retention job`)
     }
-  }
-}
-
-function assertScrubMigration(sql) {
-  const statements = sql.replace(/--[^\n]*\n/gu, '\n').split(';').map(part => part.trim()).filter(Boolean)
-  if (statements.length !== 3 || statements[0] !== 'BEGIN' || statements[2] !== 'COMMIT') throw new Error('scrub migration is not one constraint in one explicit transaction')
-  if (!/^ALTER TABLE "HeldChannelMessage" ADD CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\s+CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)$/u.test(statements[1])) {
-    throw new Error('scrub migration constraint drift')
   }
 }
 
@@ -282,6 +273,10 @@ function assertMigration(sql) {
   if (!/AND \("holdEvidence" #>> '\{attribution,status\}'\) IS NOT DISTINCT FROM 'proven'\s+AND "senderContactIdentityId" IS NOT DISTINCT FROM \("holdEvidence" #>> '\{attribution,contactIdentityId\}'\)\)/u.test(sql)) {
     throw new Error('sender evidence check drift (it must be NULL-safe: a NULL comparison passes a CHECK)')
   }
+  // A2: the database, not only the adapter, keeps a released row without content or metadata.
+  if (!/CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\s+CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)/u.test(sql)) {
+    throw new Error('released-scrubbed check drift (a released row must carry no content and no metadata)')
+  }
   if (!/CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"/u.test(sql)) throw new Error('held event key is not unique')
 }
 
@@ -305,11 +300,9 @@ const handlerSource = files.get(handlerPath)
 const contractSource = files.get(contractPath)
 const compositionSource = files.get(compositionPath)
 const migrationSql = read(migrationPath)
-const scrubSql = read(scrubMigrationPath)
 
 assertHeldStoreOwner(files)
 assertServerSideCallersOnly(files)
-assertScrubMigration(scrubSql)
 assertAdapterLocksBeforeJudging(adapterSource)
 assertAdapterWritesNoBinding(adapterSource)
 assertPurePolicy(policySource)
@@ -336,8 +329,8 @@ rejectProbe('', "'use server'\nimport { releaseHeldChannelMessagesV1 } from '@/m
 rejectProbe('', "'use server'\nimport { heldChannelMessagesV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/held-actions.ts', changed)))
 rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/infrastructure/telegram/ingress.ts', changed)))
 rejectProbe('', "import { runHeldChannelMessageRetentionV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/lib/SomeService.ts', changed)))
-rejectProbe(scrubSql, scrubSql.replace("\"content\" = '' AND ", ''), assertScrubMigration)
-rejectProbe(scrubSql, scrubSql.replace('COMMIT;', 'UPDATE "HeldChannelMessage" SET "content" = \'\';\n\nCOMMIT;'), assertScrubMigration)
+rejectProbe(migrationSql, migrationSql.replace("\"content\" = '' AND ", ''), assertMigration)
+rejectProbe(migrationSql, migrationSql.replace(/,\n\s*CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\n\s*CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)/u, ''), assertMigration)
 rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },', 'where: { id: { in: expired.map(row => row.id) } },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('if (input.dryRun || expired.length === 0) return expired.length', 'if (expired.length === 0) return 0'), assertAdapterLocksBeforeJudging)

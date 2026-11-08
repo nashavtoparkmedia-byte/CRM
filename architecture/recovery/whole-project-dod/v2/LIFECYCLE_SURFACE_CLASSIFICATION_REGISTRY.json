@@ -4,10 +4,10 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 743,
+    "total_entries": 742,
     "test": 39,
     "dead_historical": 92,
-    "migration_only": 89,
+    "migration_only": 88,
     "active_operational": 518,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
@@ -6773,20 +6773,10 @@
       "lifecycle": "MIGRATION",
       "disposition": "MIGRATION_ONLY",
       "production_capability": "CONTROLLED_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage: primary key, unique event key, unique released message id, two lookup indexes, direction, hold-reason, release-pair and sender-evidence checks, and a foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
+      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage: primary key, unique event key, unique released message id, two lookup indexes, direction, hold-reason, release-pair, sender-evidence and released-scrubbed checks, and a foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "messaging",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0"
-    },
-    {
-      "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
-      "lifecycle": "MIGRATION",
-      "disposition": "MIGRATION_ONLY",
-      "production_capability": "CONTROLLED_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration adds one CHECK to the Messaging-owned held store of the R-21 guarded append (a released HeldChannelMessage row carries empty content and {} metadata, so the visible Message is the only copy of a released event) inside one explicit transaction through controlled migration tooling; it adds no table or column, changes no existing row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-      "functional_owner": "messaging",
-      "source_sha256": "f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd"
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43"
     }
   ]
 }

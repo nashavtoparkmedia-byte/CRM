@@ -1422,8 +1422,8 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 - **I-69 A released held row keeps no content, and the held store expires.**
   A release writes the event into `Message` and leaves the `HeldChannelMessage`
   row with `content ''` and `metadata '{}'`; the database refuses a released row
-  that still carries either (`HeldChannelMessage_released_scrubbed_check`,
-  migration `20261108180000`). Held rows older than 365 days are deleted by
+  that still carries either (`HeldChannelMessage_released_scrubbed_check` in the
+  held-store migration `20261108120000`, not applied anywhere). Held rows older than 365 days are deleted by
   `messaging.RunHeldChannelMessageRetentionCommand.v1` from `RetentionCleanup`
   (step 2b, batched, oldest first, dry run supported); nothing else deletes them.
   — `legacy-prisma-guarded-channel-message-adapter.ts`,

@@ -205,8 +205,8 @@
     {
       "name": "20261108120000_add_messaging_held_channel_message",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-      "size": 3443,
+      "sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+      "size": 3727,
       "owner_context": "messaging",
       "classification": "EXPAND_ONLY",
       "production_application": false,
@@ -215,21 +215,6 @@
         "tables": [
           "HeldChannelMessage"
         ],
-        "columns": [],
-        "forbidden_indexes": []
-      }
-    },
-    {
-      "name": "20261108180000_add_messaging_held_channel_message_release_scrub",
-      "path": "gravity-mvp/prisma/migrations/20261108180000_add_messaging_held_channel_message_release_scrub/migration.sql",
-      "sha256": "f7018bed967480c7c83f5562ff68439498583b2688cdd7c76ac784b041925fcd",
-      "size": 1019,
-      "owner_context": "messaging",
-      "classification": "EXPAND_ONLY",
-      "production_application": false,
-      "migration_test": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message.postgres.test.ts",
-      "creates": {
-        "tables": [],
         "columns": [],
         "forbidden_indexes": []
       }
