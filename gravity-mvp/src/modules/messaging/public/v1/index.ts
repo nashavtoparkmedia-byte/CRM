@@ -124,6 +124,7 @@ export {
     contactConversationsV1,
     resolveConversationV1,
     sendMessageV1,
+    sendToContactV1,
     syncCallTimelineV1,
     updateCommunicationTriggerV1,
     updateConversationV1,

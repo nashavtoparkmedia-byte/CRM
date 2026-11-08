@@ -18,7 +18,8 @@ vi.mock('@/lib/prisma', () => ({
 }))
 vi.mock('@/lib/messageStreamBus', () => ({ broadcastChatMessage: mocks.broadcast }))
 vi.mock('@/modules/messaging/public/v1/outbound-conversation-identity-runtime', () => ({
-    prepareOutboundConversationV1: mocks.prepareOutbound,
+    proveOutboundConversationRouteV1: mocks.prepareOutbound,
+    prepareOutboundConversationV1: () => { throw new Error('retraction must not cross the permission gate') },
 }))
 vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
     getMaxChannelDeliveryV1: () => ({ deleteMessage: mocks.maxDelete }),
