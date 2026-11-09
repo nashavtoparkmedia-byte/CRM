@@ -90,13 +90,20 @@ export class RetentionCleanup {
         result.deletedMessages += await this._cleanupOldMessages(365, 200, dryRun)
       }
 
-      // 2b. Held provider events (R-21 hold store) follow the same 12 months (A2)
+      // 2b. Held provider events (R-21 hold store) follow the same 12 months (A2).
+      // Isolated: the held store arrives with a source-only migration, so a
+      // database that has not applied it yet must not cost the remaining steps.
       if (!checkTimeout()) {
-        const held = await runHeldChannelMessageRetentionV1({
-          contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
-          dryRun,
-        })
-        result.deletedMessages += held.selectedCount
+        try {
+          const held = await runHeldChannelMessageRetentionV1({
+            contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+            dryRun,
+          })
+          result.deletedMessages += held.selectedCount
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err)
+          opsLog('error', 'retention_cleanup_held_store_error', { error: message, dryRun })
+        }
       }
 
       // 3. Purge retry metadata on old failed messages > 30 days
