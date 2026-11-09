@@ -379,6 +379,7 @@
         "ConversationView.v1",
         "DeliveryRecoveryOperations.v1",
         "DraftImprovement.v1",
+        "HeldChannelMessagesQuery.v1",
         "MessageStream.v1",
         "MessageView.v1",
         "PersistedMessageIngress.v1",
@@ -387,9 +388,11 @@
         "TransportRegistryLifecycle.v1"
       ],
       "commands": [
+        "AppendGuardedChannelMessageCommand.v1",
         "AttachMessageMediaCommand.v1",
         "ImportMessageHistoryCommand.v1",
         "ReceiveMessageCommand.v1",
+        "ReleaseHeldChannelMessagesCommand.v1",
         "SendMessageCommand.v1",
         "SendToContactCommand.v1"
       ],
@@ -580,58 +583,6 @@
         "gravity-mvp/src/contracts/work-management",
         "gravity-mvp/src/modules/work-management",
         "gravity-mvp/src/modules/work-management/internal"
-      ],
-      "status": "active",
-      "verification": [
-        "node tools/architecture/check-contract-boundaries.mjs",
-        "node tools/architecture/validate-contract-registry.mjs"
-      ]
-    },
-    {
-      "capabilities": [
-        "ChannelConversationWorkflow.v1",
-        "ChannelSyncClient.v1",
-        "ChannelSyncOperations.v1",
-        "CompletedCallTimelineProjector.v1",
-        "ContactConversationsQuery.v1",
-        "ConversationView.v1",
-        "DeliveryRecoveryOperations.v1",
-        "DraftImprovement.v1",
-        "HeldChannelMessagesQuery.v1",
-        "MessageStream.v1",
-        "MessageView.v1",
-        "PersistedMessageIngress.v1",
-        "ResolveConversationContactQuery.v1",
-        "TransportRegistryHealth.v1",
-        "TransportRegistryLifecycle.v1"
-      ],
-      "commands": [
-        "AppendGuardedChannelMessageCommand.v1",
-        "AttachMessageMediaCommand.v1",
-        "ImportMessageHistoryCommand.v1",
-        "ReceiveMessageCommand.v1",
-        "ReleaseHeldChannelMessagesCommand.v1",
-        "SendMessageCommand.v1"
-      ],
-      "consumer_contexts": [
-        "analytics_reporting",
-        "avito_acquisition",
-        "max_channel",
-        "platform_shell",
-        "telegram_channel",
-        "whatsapp_channel"
-      ],
-      "events": [
-        "ConversationChanged.v1",
-        "MessageReceived.v1",
-        "MessageSent.v1"
-      ],
-      "id": "messaging.public.v1",
-      "owner_context": "messaging",
-      "source_roots": [
-        "gravity-mvp/src/contracts/messaging",
-        "gravity-mvp/src/modules/messaging",
-        "gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline"
       ],
       "status": "active",
       "verification": [
