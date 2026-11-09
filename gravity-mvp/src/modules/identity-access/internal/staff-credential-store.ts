@@ -7,6 +7,11 @@ import type { StaffPasswordVerifierV1 } from './staff-session-credentials'
  * (identity_access). Every write is one transaction that first takes the
  * staff-credential advisory lock, so the set-level checks (the bootstrap
  * window, the last credentialed Администратор) cannot interleave.
+ *
+ * Only `findVerifier` selects the password verifier (salt and hash), and only
+ * the password check calls it. Every other read and every write returns the
+ * credential's status alone, so verifier material reaches nothing else. The
+ * projections are written out at each call so they stay statically exact.
  */
 
 const STAFF_CREDENTIAL_ADVISORY_CLASS_ID = 0x594f4b4f // "YOKO"
@@ -14,45 +19,15 @@ const STAFF_CREDENTIAL_ADVISORY_OBJECT_ID = 0x53544631 // "STF1"
 
 export type StaffCredentialEventKindV1 = 'password_set' | 'password_reset' | 'epoch_bump' | 'revoked' | 'login' | 'logout'
 
-export interface StaffCredentialRowV1 {
+/** What everything but the password check needs: no verifier material. */
+export interface StaffCredentialStatusV1 {
     userId: string
     registryCreatedAt: string
-    verifier: StaffPasswordVerifierV1
     sessionEpoch: number
     revokedAt: Date | null
 }
 
 type Client = Prisma.TransactionClient | typeof prisma
-
-function toRow(row: {
-    userId: string
-    registryCreatedAt: string
-    algo: string
-    scryptN: number
-    scryptR: number
-    scryptP: number
-    maxmemBytes: number
-    salt: Uint8Array
-    hash: Uint8Array
-    sessionEpoch: number
-    revokedAt: Date | null
-}): StaffCredentialRowV1 {
-    return {
-        userId: row.userId,
-        registryCreatedAt: row.registryCreatedAt,
-        verifier: {
-            algo: row.algo as 'scrypt',
-            n: row.scryptN,
-            r: row.scryptR,
-            p: row.scryptP,
-            maxmemBytes: row.maxmemBytes,
-            salt: Buffer.from(row.salt),
-            hash: Buffer.from(row.hash),
-        },
-        sessionEpoch: row.sessionEpoch,
-        revokedAt: row.revokedAt,
-    }
-}
 
 async function lock(transaction: Prisma.TransactionClient): Promise<void> {
     await transaction.$queryRaw(Prisma.sql`
@@ -67,7 +42,7 @@ async function lock(transaction: Prisma.TransactionClient): Promise<void> {
 
 /** The transaction-scoped view the staff operations decide and write through. */
 export interface StaffCredentialTransactionV1 {
-    find(userId: string): Promise<StaffCredentialRowV1 | null>
+    find(userId: string): Promise<StaffCredentialStatusV1 | null>
     /** Ids holding a live (not revoked) credential. */
     liveUserIds(): Promise<Set<string>>
     upsertVerifier(input: {
@@ -76,17 +51,16 @@ export interface StaffCredentialTransactionV1 {
         verifier: StaffPasswordVerifierV1
         actor: string
         now: Date
-    }): Promise<StaffCredentialRowV1>
-    bumpEpoch(userId: string, actor: string, now: Date): Promise<StaffCredentialRowV1 | null>
-    revoke(userId: string, actor: string, now: Date): Promise<StaffCredentialRowV1 | null>
+    }): Promise<StaffCredentialStatusV1>
+    bumpEpoch(userId: string, actor: string, now: Date): Promise<StaffCredentialStatusV1 | null>
+    revoke(userId: string, actor: string, now: Date): Promise<StaffCredentialStatusV1 | null>
     record(event: { userId: string, kind: StaffCredentialEventKindV1, actor: string, sid?: string | null }): Promise<void>
 }
 
 function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransactionV1 {
     return {
         async find(userId) {
-            const row = await tx.staffCredential.findUnique({ where: { userId } })
-            return row === null ? null : toRow(row)
+            return tx.staffCredential.findUnique({ where: { userId }, select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true } })
         },
         async liveUserIds() {
             const rows = await tx.staffCredential.findMany({ where: { revokedAt: null }, select: { userId: true } })
@@ -95,7 +69,7 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
         async upsertVerifier({ userId, registryCreatedAt, verifier, actor, now }) {
             // The two payloads are written out field by field: nothing else,
             // and no nested relation, can reach the credential row.
-            const row = await tx.staffCredential.upsert({
+            return tx.staffCredential.upsert({
                 where: { userId },
                 create: {
                     userId,
@@ -127,22 +101,22 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
                     updatedAt: now,
                     updatedBy: actor,
                 },
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
-            return toRow(row)
         },
         async bumpEpoch(userId, actor, now) {
             const existing = await tx.staffCredential.findUnique({ where: { userId }, select: { userId: true } })
             if (existing === null) return null
-            const row = await tx.staffCredential.update({
+            return tx.staffCredential.update({
                 where: { userId },
                 data: { sessionEpoch: { increment: 1 }, updatedAt: now, updatedBy: actor },
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
-            return toRow(row)
         },
         async revoke(userId, actor, now) {
             const existing = await tx.staffCredential.findUnique({ where: { userId }, select: { revokedAt: true } })
             if (existing === null) return null
-            const row = await tx.staffCredential.update({
+            return tx.staffCredential.update({
                 where: { userId },
                 data: {
                     revokedAt: existing.revokedAt ?? now,
@@ -150,20 +124,43 @@ function transactionView(tx: Prisma.TransactionClient): StaffCredentialTransacti
                     updatedAt: now,
                     updatedBy: actor,
                 },
+                select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true },
             })
-            return toRow(row)
         },
         async record({ userId, kind, actor, sid }) {
-            await tx.staffCredentialEvent.create({ data: { userId, kind, actor, sid: sid ?? null } })
+            await tx.staffCredentialEvent.create({ data: { userId, kind, actor, sid: sid ?? null }, select: { id: true } })
         },
     }
 }
 
 export const prismaStaffCredentialStoreV1 = {
-    /** One indexed read; throws when the store is unreadable (callers treat that as unverifiable). */
-    async find(userId: string, client: Client = prisma): Promise<StaffCredentialRowV1 | null> {
-        const row = await client.staffCredential.findUnique({ where: { userId } })
-        return row === null ? null : toRow(row)
+    /** One indexed read of the status; throws when the store is unreadable (callers treat that as unverifiable). */
+    async findStatus(userId: string, client: Client = prisma): Promise<StaffCredentialStatusV1 | null> {
+        return client.staffCredential.findUnique({ where: { userId }, select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true } })
+    },
+
+    /**
+     * The status and the password verifier, for the password check only
+     * (login and an employee's own password change). Never returned further.
+     */
+    async findVerifier(userId: string): Promise<{ status: StaffCredentialStatusV1, verifier: StaffPasswordVerifierV1 } | null> {
+        const row = await prisma.staffCredential.findUnique({
+            where: { userId },
+            select: { userId: true, registryCreatedAt: true, sessionEpoch: true, revokedAt: true, algo: true, scryptN: true, scryptR: true, scryptP: true, maxmemBytes: true, salt: true, hash: true },
+        })
+        if (row === null) return null
+        return {
+            status: { userId: row.userId, registryCreatedAt: row.registryCreatedAt, sessionEpoch: row.sessionEpoch, revokedAt: row.revokedAt },
+            verifier: {
+                algo: row.algo as 'scrypt',
+                n: row.scryptN,
+                r: row.scryptR,
+                p: row.scryptP,
+                maxmemBytes: row.maxmemBytes,
+                salt: Buffer.from(row.salt),
+                hash: Buffer.from(row.hash),
+            },
+        }
     },
 
     /** Whether any row exists, live or revoked (C-D4a, I-1). Throws when unreadable. */
@@ -172,7 +169,7 @@ export const prismaStaffCredentialStoreV1 = {
         return row !== null
     },
 
-    /** All credential states, for the Администратор view. Never returns verifier material. */
+    /** All credential states, for the Администратор view. Never verifier material. */
     async states(client: Client = prisma): Promise<Array<{ userId: string, revoked: boolean }>> {
         const rows = await client.staffCredential.findMany({ select: { userId: true, revokedAt: true } })
         return rows.map((row) => ({ userId: row.userId, revoked: row.revokedAt !== null }))
@@ -180,7 +177,10 @@ export const prismaStaffCredentialStoreV1 = {
 
     /** Append one audit event outside a credential change (login). */
     async record(event: { userId: string, kind: StaffCredentialEventKindV1, actor: string, sid?: string | null }): Promise<void> {
-        await prisma.staffCredentialEvent.create({ data: { userId: event.userId, kind: event.kind, actor: event.actor, sid: event.sid ?? null } })
+        await prisma.staffCredentialEvent.create({
+            data: { userId: event.userId, kind: event.kind, actor: event.actor, sid: event.sid ?? null },
+            select: { id: true },
+        })
     },
 
     /** Run `work` in one serialized transaction under the staff-credential advisory lock. */

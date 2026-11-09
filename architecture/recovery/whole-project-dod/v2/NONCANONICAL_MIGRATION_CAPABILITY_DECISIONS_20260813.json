@@ -433,13 +433,13 @@
       "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
       "rationale": "Byte-pinned source-only expand-only migration creates only Identity Access-owned Staff Session schema: StaffCredential (the scrypt verifier of one employee's individual password, the record binding and the session revocation counter, with a CHECK on the v1 shape) and StaffCredentialEvent (the append-only audit, with a kind CHECK and one index), plus the trigger functions that refuse DELETE of credential rows and UPDATE and DELETE of audit rows. It names no existing table, adds no column to an existing table, changes no existing row and carries no data statement or backfill; it stores no name, role, status, password, token or cookie; this review grants no application-runtime or production-application authority.",
       "expected_site_signatures": [
-        "006522db5555a1d7e232438ed118ebe72bc14fc335183a859a0284f1a42e896f",
-        "0e5e14dd4c9b737bfdb57dcc12401e191d7a41173c5d7bc2f33202aa02666eaa",
-        "2646e51df9cccbf4a0c56c969ba068119d1484cd104380d74943a06b39d2f912",
-        "332b2634c5c9faf3f439f1d9ce0d650f4060320b288cc66f673c71f8b6997b24",
-        "3c1de11edea06e8848f6237ccb866b105178e3f558db8a0df5bd2ede88783716",
-        "6075bc956e7d96b5669e9a5ab544f7572b72f6e18b347709f3514873b09e8ce7",
-        "facd5c6c2c0ceee3d07d7cee8d3d04f9b77c99cd6766975eba5c40985ec855ee"
+        "1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
+        "539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
+        "733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
+        "786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
+        "bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
+        "dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
+        "f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121"
       ]
     }
   ],
@@ -3785,10 +3785,10 @@
       "review_rationale": "Expand-only statement of the Cash referral manager migration: ALTER_TABLE on CashAccessEvent. It creates or constrains only Fleet Operations-owned referral objects, widens the admitted ledger kinds and writers without removing any, touches no existing row and stores no credential."
     },
     {
-      "site_signature": "facd5c6c2c0ceee3d07d7cee8d3d04f9b77c99cd6766975eba5c40985ec855ee",
+      "site_signature": "539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 7,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 9,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3803,10 +3803,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredential. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "0e5e14dd4c9b737bfdb57dcc12401e191d7a41173c5d7bc2f33202aa02666eaa",
+      "site_signature": "f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 35,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 37,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3821,10 +3821,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "6075bc956e7d96b5669e9a5ab544f7572b72f6e18b347709f3514873b09e8ce7",
+      "site_signature": "1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 50,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 52,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3839,10 +3839,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_INDEX on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "006522db5555a1d7e232438ed118ebe72bc14fc335183a859a0284f1a42e896f",
+      "site_signature": "733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 53,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 55,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3857,10 +3857,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_event_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "3c1de11edea06e8848f6237ccb866b105178e3f558db8a0df5bd2ede88783716",
+      "site_signature": "786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 60,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 62,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3875,10 +3875,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TRIGGER on StaffCredentialEvent_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "332b2634c5c9faf3f439f1d9ce0d650f4060320b288cc66f673c71f8b6997b24",
+      "site_signature": "bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 66,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 68,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",
@@ -3893,10 +3893,10 @@
       "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_no_delete. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     },
     {
-      "site_signature": "2646e51df9cccbf4a0c56c969ba068119d1484cd104380d74943a06b39d2f912",
+      "site_signature": "dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "line": 73,
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 75,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "identity_access",

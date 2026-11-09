@@ -1,5 +1,6 @@
 'use server'
 
+import { randomUUID } from 'node:crypto'
 import { cookies } from 'next/headers'
 import {
     allowlistedUserPatchV1,
@@ -273,7 +274,9 @@ export async function addUser(item: Omit<UserItem, 'id' | 'createdAt'>): Promise
     const file = await registryFile()
     return withRegistryWriteTurnV1(async () => {
         const users = await getUsers()
-        const id = "u" + (users.length + 1)
+        // A random id is never reused: a counter over the current file could
+        // hand a deleted employee's id, and everything bound to it, to a new one.
+        const id = randomUUID()
         const newItem = { ...item, id, createdAt: new Date().toISOString() }
         users.push(newItem)
         await writeUsers(file, users)

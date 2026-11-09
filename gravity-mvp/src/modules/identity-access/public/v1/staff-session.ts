@@ -15,6 +15,7 @@ import {
     type StaffSessionPrincipalV1,
 } from '../../application/staff-session-operations'
 import { getIntegrationAdminPrincipal } from './integration-admin-auth'
+import { MOBILE_SHELL_UA_TOKEN } from './mobile-session-auth'
 import { LEGACY_UI_IDENTITY_COOKIE_V1, MOBILE_SESSION_COOKIE } from './mobile-session-credentials'
 
 /**
@@ -45,13 +46,23 @@ export function isStaffSessionEnforcedForRequestV1(): boolean {
  * wrong audience or version, global or personal epoch moved, credential
  * revoked, registry record missing, disabled, re-created or a role the
  * registry no longer has); a request that also carries a mobile session; and
- * a store or registry that cannot be read (R3; the proxy answers those 503).
+ * a store or registry that cannot be read (R3; the proxy answers those 503);
+ * and any request of the Android shell lane, whose operator is the mobile session.
  * The role is the registry's, read now. Nothing client-held is an input:
  * crm_user_id, headers, bodies and query parameters never select or change it.
  */
+/**
+ * Whether this request is the Android shell lane, where only the mobile
+ * session is an operator. Forging the marker only locks the forger out.
+ */
+async function isShellLaneRequest(): Promise<boolean> {
+    return ((await headers()).get('user-agent') ?? '').includes(MOBILE_SHELL_UA_TOKEN)
+}
+
 export async function getStaffSessionPrincipalV1(): Promise<StaffSessionPrincipalV1 | null> {
     const store = await cookies()
     if (store.get(MOBILE_SESSION_COOKIE) !== undefined) return null
+    if (await isShellLaneRequest()) return null
     const verified = await verifyStaffSessionTokenV1(store.get(staffSessionCookieNameV1())?.value)
     return verified.kind === 'valid' ? verified.principal : null
 }
@@ -82,6 +93,7 @@ export type StaffLoginFailureV1 = 'refused' | 'throttled' | 'busy' | 'unavailabl
 export async function establishStaffSessionV1(userId: unknown, password: unknown): Promise<{ ok: true } | { ok: false, reason: StaffLoginFailureV1 }> {
     const store = await cookies()
     if (store.get(MOBILE_SESSION_COOKIE) !== undefined) return { ok: false, reason: 'session_active' }
+    if (await isShellLaneRequest()) return { ok: false, reason: 'unavailable' }
     const requestHeaders = await headers()
     // X-Real-IP is set by the nginx edge; without the edge there is no source key.
     const source = requestHeaders.get('x-real-ip')?.trim().slice(0, 64) || null

@@ -3,6 +3,8 @@
 -- no change to any existing table. No name, role or status is stored here; the
 -- employee registry stays the only authority for those (design v1.3, D1).
 
+BEGIN;
+
 -- CreateTable
 CREATE TABLE "StaffCredential" (
     "userId" VARCHAR(64) NOT NULL,
@@ -74,3 +76,4 @@ CREATE TRIGGER "StaffCredential_no_delete"
 BEFORE DELETE ON "StaffCredential"
 FOR EACH ROW EXECUTE FUNCTION "staff_credential_no_delete"();
 
+COMMIT;

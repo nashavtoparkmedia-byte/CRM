@@ -80,7 +80,7 @@ assertCheck(
 // legacy-login refusal (N-D2). Any further edit needs its own reviewed re-pin.
 assertCheck(
     'legacy Identity implementation is byte-identical',
-    sha256('gravity-mvp/src/lib/users/user-service.ts') === '5b050a7994ebe95a067e120768ff973c5cb81b7d723f5ed02764a49b65cf8458'
+    sha256('gravity-mvp/src/lib/users/user-service.ts') === 'cb0a4931b5b6c5ed0a4ce8be21aedd0a7bc9446a0f8487316f5404b1aa431f48'
         && sha256('gravity-mvp/src/lib/users/auth-helpers.js') === 'c935ead6eaa8e19be1b71124c6bf6fbe7d6053d77173fc446171f1a21b4af95a',
     'protected auth implementation changed during boundary migration',
 )

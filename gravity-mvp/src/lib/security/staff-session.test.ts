@@ -68,7 +68,12 @@ const fake = vi.hoisted(() => {
         async record(event: { userId: string, kind: string, actor: string, sid?: string | null }) { check(); state.events.push(event) },
     }
     const store = {
-        find: view.find,
+        findStatus: view.find,
+        async findVerifier(userId: string) {
+            check()
+            const row = state.rows.get(userId)
+            return row === undefined ? null : { status: { ...row }, verifier: row.verifier }
+        },
         async anyRow() { check(); return state.rows.size > 0 },
         async states() { check(); return [...state.rows.values()].map((row) => ({ userId: row.userId, revoked: row.revokedAt !== null })) },
         record: view.record,
@@ -87,7 +92,7 @@ vi.mock('@/modules/identity-access/internal/mobile-session-barrier', () => ({
 }))
 
 // ── The request: cookies and headers as next/headers would hand them over ─
-const request = vi.hoisted(() => ({ cookies: new Map<string, string>(), set: [] as Array<{ name: string, value: string, options: Record<string, unknown> }> }))
+const request = vi.hoisted(() => ({ cookies: new Map<string, string>(), headers: new Map<string, string>(), set: [] as Array<{ name: string, value: string, options: Record<string, unknown> }> }))
 vi.mock('next/headers', () => ({
     cookies: async () => ({
         get: (name: string) => (request.cookies.has(name) ? { name, value: request.cookies.get(name)! } : undefined),
@@ -98,7 +103,7 @@ vi.mock('next/headers', () => ({
         },
         delete: (name: string) => { request.cookies.delete(name) },
     }),
-    headers: async () => new Headers({ 'x-real-ip': '203.0.113.7' }),
+    headers: async () => new Headers({ 'x-real-ip': '203.0.113.7', ...Object.fromEntries(request.headers) }),
 }))
 
 const credentials = await import('@/modules/identity-access/internal/staff-session-credentials')
@@ -158,6 +163,7 @@ beforeEach(() => {
     fake.state.events.length = 0
     fake.state.unreadable = false
     request.cookies.clear()
+    request.headers.clear()
     request.set.length = 0
     operations.resetStaffLoginThrottleForTestsV1()
     for (const name of ['STAFF_SESSION_SECRET', 'YOKO_USER_REGISTRY_FILE', 'YOKO_USER_REGISTRY_SEED', 'YOKO_STAFF_SESSION_ENFORCE', 'STAFF_SESSION_REVOCATION_EPOCH', 'ADMIN_USER', 'ADMIN_PASS', 'MOBILE_ACCESS_USER', 'MOBILE_ACCESS_PASS', 'BOT_CRM_SECRET']) {
@@ -388,6 +394,28 @@ describe('login and verification', () => {
         expect(await publicSurface.getStaffSessionPrincipalV1()).toBeNull()
     })
 
+    test('the Android shell lane never yields a staff principal or a staff login (N3)', async () => {
+        configureLane()
+        await seedCredential('u1', MANAGER_PASSWORD)
+        const token = await loginToken('u1', MANAGER_PASSWORD)
+        asRequest({ '__Host-yoko_staff_session': token })
+        expect(await publicSurface.getStaffSessionPrincipalV1()).not.toBeNull()
+        request.headers.set('user-agent', 'Mozilla/5.0 (Linux; Android 14) YokoShell/1')
+        expect(await publicSurface.getStaffSessionPrincipalV1()).toBeNull()
+        asRequest({})
+        expect(await publicSurface.establishStaffSessionV1('u1', MANAGER_PASSWORD)).toEqual({ ok: false, reason: 'unavailable' })
+        expect(request.set.some((entry) => entry.name === '__Host-yoko_staff_session')).toBe(false)
+    })
+
+    test('a duplicated registry id is absent for verification and login (N2)', async () => {
+        configureLane()
+        await seedCredential('u1', MANAGER_PASSWORD)
+        const token = await loginToken('u1', MANAGER_PASSWORD)
+        writeRegistry([MANAGER, ADMIN, LEAD, { ...MANAGER, firstName: 'Двойник' }])
+        expect((await operations.verifyStaffSessionTokenV1(token)).kind).toBe('refused')
+        expect(await operations.staffLoginV1({ userId: 'u1', password: MANAGER_PASSWORD, source: null })).toEqual({ ok: false, reason: 'refused' })
+    })
+
     test('establishing a session sets the __Host- cookie hardened and derives crm_user_id', async () => {
         configureLane()
         await seedCredential('u1', MANAGER_PASSWORD)
@@ -443,6 +471,24 @@ describe('credential administration', () => {
         expect(await operations.setStaffPasswordV1({ actor: { kind: 'staff', principal: admin.principal }, targetUserId: 'u1', newPassword: 'reset by the admin 2026' })).toEqual({ ok: true })
         expect((await operations.verifyStaffSessionTokenV1(managerToken)).kind).toBe('refused')
         expect(fake.state.events.at(-1)).toMatchObject({ userId: 'u1', kind: 'password_reset', actor: 'staff:u2' })
+    })
+
+    test('a password change racing a disable cannot revive the employee (N1)', async () => {
+        configureLane()
+        await seedCredential('u2', ADMIN_PASSWORD)
+        await seedCredential('u1', MANAGER_PASSWORD)
+        const admin = await operations.verifyStaffSessionTokenV1(await loginToken('u2', ADMIN_PASSWORD))
+        if (admin.kind !== 'valid') throw new Error('setup')
+        const asAdmin = async () => admin.principal
+        // Both start together; whichever order the registry turn gives them,
+        // the end state is a disabled employee whose credential is revoked.
+        const [, changed] = await Promise.all([
+            operations.strictUpdateUserV1(asAdmin, 'u1', { status: 'Отключен' }),
+            operations.setStaffPasswordV1({ actor: { kind: 'staff', principal: admin.principal }, targetUserId: 'u1', newPassword: 'racing manager phrase' }),
+        ])
+        expect(readRegistry().find((user) => user.id === 'u1')!.status).toBe('Отключен')
+        expect(fake.state.rows.get('u1')!.revokedAt).not.toBeNull()
+        expect(changed).toEqual({ ok: false, reason: 'unknown_or_inactive_user' })
     })
 
     test('the employee\'s own change always needs the current password, an Администратор included', async () => {
@@ -569,6 +615,16 @@ describe('user management', () => {
         expect(after.map((user) => user.id).slice(0, 3)).toEqual(['u1', 'u2', 'legacy-x'])
     })
 
+    test('strict update and delete refuse a duplicated registry id (N2)', async () => {
+        configureLane()
+        await seedCredential('u2', ADMIN_PASSWORD)
+        const admin = await principalOf('u2', ADMIN_PASSWORD)
+        writeRegistry([MANAGER, ADMIN, LEAD, { ...MANAGER, firstName: 'Двойник' }])
+        await expect(operations.strictUpdateUserV1(async () => admin, 'u1', { role: 'Руководитель' })).rejects.toThrow('not_found')
+        await expect(operations.strictDeleteUserV1(async () => admin, 'u1')).rejects.toThrow('not_found')
+        expect(readRegistry().filter((user) => user.id === 'u1')).toHaveLength(2)
+    })
+
     test('strict add mints a random immutable id', async () => {
         configureLane()
         await seedCredential('u2', ADMIN_PASSWORD)
@@ -614,6 +670,12 @@ describe('user management', () => {
         // u1 is a Руководитель now; a Менеджер would be refused as before.
         writeRegistry([MANAGER, ADMIN, LEAD])
         await expect(userService.deleteUser('u3')).rejects.toThrow('forbidden')
+        // A deleted id is never handed out again (N2): new legacy ids are random.
+        asRequest({ crm_user_id: 'u2' })
+        await userService.deleteUser('u3')
+        const added = await userService.addUser({ firstName: 'Н', lastName: 'С', role: 'Менеджер', status: 'Активен' })
+        expect(added.id).toMatch(/^[0-9a-f-]{36}$/)
+        expect(readRegistry().map((user) => user.id)).not.toContain('u3')
     })
 })
 
@@ -653,12 +715,30 @@ describe('one operator resolution (BR-4) and the request boundary', () => {
         expect(down.status).toBe(503)
     })
 
-    test('browser lane without a session: unchanged while enforcement is off; crm_user_id removed when it is on', async () => {
+    test('browser lane without a session: unchanged while enforcement is off; crm_user_id removed when it is on (R1)', async () => {
         const untouched = await proxy(browser('/messages', 'crm_user_id=u2'))
         expect(untouched.headers.get('x-middleware-next')).toBe('1')
         expect(downstreamCookie(untouched)).toBeNull()
         vi.stubEnv('YOKO_STAFF_SESSION_ENFORCE', 'on')
         const enforced = await proxy(browser('/messages', 'crm_user_id=u2; theme=dark'))
-        expect(downstreamCookie(enforced) ?? '').not.toContain('crm_user_id')
+        // The request goes on, rewritten: every other cookie kept, crm_user_id gone.
+        expect(enforced.headers.get('x-middleware-next')).toBe('1')
+        expect(downstreamCookie(enforced)).toBe('theme=dark')
+        const onlyIdentity = await proxy(browser('/api/chats/1/assign', 'crm_user_id=u2', 'POST'))
+        expect(onlyIdentity.headers.get('x-middleware-next')).toBe('1')
+        // Only crm_user_id was sent, so the rewritten request carries no Cookie header at all.
+        expect(onlyIdentity.headers.get('x-middleware-override-headers')).not.toBeNull()
+        expect(onlyIdentity.headers.get('x-middleware-override-headers')).not.toContain('cookie')
+        expect(downstreamCookie(onlyIdentity)).toBeNull()
+    })
+
+    test('enforcement does not touch the shell lane', async () => {
+        vi.stubEnv('YOKO_STAFF_SESSION_ENFORCE', 'on')
+        const shell = new NextRequest(new URL('https://yokoone.ru/messages'), {
+            headers: new Headers({ 'user-agent': 'Mozilla/5.0 (Linux; Android 14) YokoShell/1', cookie: 'crm_user_id=u2' }),
+        })
+        const response = await proxy(shell)
+        expect(response.status).toBe(303)
+        expect(response.headers.get('location')).toContain('/login/mobile')
     })
 })
