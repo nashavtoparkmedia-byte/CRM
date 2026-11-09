@@ -1333,6 +1333,8 @@ model HeldChannelMessage {
 
   @@index([chatId, releasedAt, sentAt])
   @@index([releasedAt, holdReason])
+}
+
 /// Messaging-owned identity of one SendToContact intent. Binds a caller requestId to the
 /// sha256 of its semantic payload, permanently: insert-if-absent and read only, never
 /// updated or deleted. No message, outcome or route is stored here; the one Message the
