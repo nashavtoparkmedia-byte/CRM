@@ -583,7 +583,7 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
 | `CommunicationTrigger` | communication-trigger adapter | `G/app/settings/triggers/actions.ts` | — | No evaluator found (C-34) |
 | `GroupVisibility` | `G/app/api/groups/visibility/route.ts` | same route, `ChatList.tsx` | none | Writer is outside the module |
-| `HeldChannelMessage` (pending source) | `legacy-prisma-guarded-channel-message-adapter.ts` only (insert on hold; `releasedAt`/`releasedMessageId` on release) | the same adapter only (dedupe, release, counts) | `appendGuardedChannelMessageV1`, `releaseHeldChannelMessagesV1`, `heldChannelMessagesV1` | None; `check-messaging-guarded-append-boundary.mjs` pins the single owner |
+| `HeldChannelMessage` (pending source) | `legacy-prisma-guarded-channel-message-adapter.ts` only (insert on hold; `releasedAt`/`releasedMessageId` plus the scrub to `content ''`/`metadata '{}'` on release; delete after 365 days by `sentAt`) | the same adapter only (dedupe, release, counts, retention) | `appendGuardedChannelMessageV1`, `releaseHeldChannelMessagesV1`, `heldChannelMessagesV1`, `runHeldChannelMessageRetentionV1` | None; `check-messaging-guarded-append-boundary.mjs` pins the single owner |
 
 Duplicated sources of truth: `Chat.channel` vs `Message.channel`; three parallel
 person links on Chat (`driverId`, `contactId`, `contactIdentityId`); delivery
@@ -1416,16 +1416,27 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   so no HTTP route, server action or operator API can hand the guard a
   client-supplied `attribution`. The proof is the caller's server-side Contacts
   outcome for the conversation's peer (the sender of an inbound event, the
-  recipient of an outbound one). — `check-messaging-guarded-append-boundary.mjs`
+  recipient of an outbound one). The control is identifier-based: it scans every
+  source file the bundler can load (dot-prefixed files, `.mts`/`.cts` and
+  `gravity-mvp/scripts` included), forbids runtime imports of test paths, any
+  spelling of the adapter module outside the composition root, and namespace
+  imports or star re-exports of the Messaging facade or composition; a capability
+  name assembled from strings at runtime is beyond it. An ingress that adopts the
+  guard lives outside `G/app/` (the route delegates to it) and is added to the
+  allowlist by name with its review. — `check-messaging-guarded-append-boundary.mjs`
   (static caller allowlist), `guarded-channel-message-commands.ts` (contract
   wording).
 - **I-69 A released held row keeps no content, and the held store expires.**
   A release writes the event into `Message` and leaves the `HeldChannelMessage`
   row with `content ''` and `metadata '{}'`; the database refuses a released row
   that still carries either (`HeldChannelMessage_released_scrubbed_check` in the
-  held-store migration `20261108120000`, not applied anywhere). Held rows older than 365 days are deleted by
+  held-store migration `20261108120000`). Held rows whose provider `sentAt` is
+  older than 365 days are deleted by
   `messaging.RunHeldChannelMessageRetentionCommand.v1` from `RetentionCleanup`
-  (step 2b, batched, oldest first, dry run supported); nothing else deletes them.
+  (step 2b, isolated in its own try/catch, batched, oldest first, dry run
+  supported), released or not; nothing else deletes them. Age is the provider
+  time, as for `Message` retention, so an event imported with an old `sentAt`
+  expires on the next pass whether or not it was ever releasable.
   — `legacy-prisma-guarded-channel-message-adapter.ts`,
   `guarded-channel-message-handler.ts`, `G/lib/RetentionCleanup.ts` —
   `guarded-channel-message.postgres.test.ts`, `guarded-channel-message.test.ts`.

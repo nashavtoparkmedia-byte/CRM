@@ -473,6 +473,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await expect(prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: { k: 1 } } })).rejects.toThrow()
     const scrubbed = await prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: {} } })
     await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { content: 'restored' } })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { metadata: { k: 1 } } })).rejects.toThrow()
   })
 
   it('refuses a missing conversation, another channel or another kind without writing', async () => {
@@ -503,12 +504,16 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
     const day = 24 * 60 * 60 * 1000
     const old = new Date(Date.now() - 400 * day)
-    await append(chatId, PROVEN_B, key('old-held'), { sentAt: old })
-    await append(chatId, PROVEN_B, key('old-released'), { sentAt: new Date(old.getTime() + 1000) })
+    await append(chatId, PROVEN_B, key('old-released'), { sentAt: old })
+    await append(chatId, PROVEN_B, key('old-held'), { sentAt: new Date(old.getTime() + 1000) })
     await append(chatId, PROVEN_B, key('young-held'), { sentAt: new Date(Date.now() - 300 * day) })
     await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB } })
-    expect(await release(chatId, PROVEN_B, 2)).toMatchObject({ outcome: 'released', released: 2 })
+    // Only the oldest event is released: one old row leaves with its text still held, one old row leaves scrubbed.
+    expect(await release(chatId, PROVEN_B, 1)).toMatchObject({ outcome: 'released', released: 1 })
     expect(await heldRows(chatId)).toHaveLength(3)
+    const oldHeld = await prisma.heldChannelMessage.findUniqueOrThrow({ where: { externalId: key('old-held') }, select: { releasedAt: true, content: true } })
+    expect(oldHeld.releasedAt).toBeNull()
+    expect(oldHeld.content).not.toBe('')
 
     const dry = await runHeldChannelMessageRetentionV1({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true, limit: 1000 })
     expect(dry).toMatchObject({ dryRun: true })
@@ -524,7 +529,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(total).toBeGreaterThanOrEqual(2)
     expect((await heldRows(chatId)).map(row => row.externalId)).toEqual([key('young-held')])
     // The released Message itself is retention's own concern; it is untouched here.
-    expect(await visibleCount(chatId)).toBe(2)
+    expect(await visibleCount(chatId)).toBe(1)
   })
 
   it('held events never appear in a conversation read of Message', async () => {

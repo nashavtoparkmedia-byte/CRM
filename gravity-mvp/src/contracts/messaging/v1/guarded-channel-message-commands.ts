@@ -207,7 +207,7 @@ export interface RunHeldChannelMessageRetentionCommandV1 {
 export interface RunHeldChannelMessageRetentionResultV1 {
   contract: typeof RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1
   dryRun: boolean
-  /** Rows selected; deleted unless dryRun. */
+  /** Rows deleted; in a dry run, the rows that would have been deleted. */
   selectedCount: number
 }
 
