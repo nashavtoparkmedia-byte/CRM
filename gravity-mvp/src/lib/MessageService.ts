@@ -5,7 +5,7 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1, type TextDeliveryResultV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
-import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
+import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, physicalRetryAnchorMsV1, physicalRetryBackoffMsV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 function serialize(obj: any): any {
@@ -474,9 +474,9 @@ export class MessageService {
     /**
      * Sends a message through the appropriate channel.
      */
-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, quotedMsgId?: string) {
+    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, quotedMsgId?: string, admission?: SendAdmissionV1) {
         console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
-
+        assertSendToContactNamespaceV1(clientMessageId, admission)
         const chat = await (prisma.chat as any).findUnique({
             where: { id: chatId },
             select: { 
@@ -522,7 +522,7 @@ export class MessageService {
                 select: SEND_STATE_SELECT,
             })
             if (existing) {
-                assertSameSendIntent(existing, intent, clientMessageId)
+                if (!admission?.sendToContact) assertSameSendIntent(existing, intent, clientMessageId)
                 console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
                 return duplicateSendResult(existing, clientMessageId)
             }
@@ -539,7 +539,7 @@ export class MessageService {
 
         const channel = targetChat.channel
         const currentChatId = targetChatId
-        const outboundBinding = await prepareOutboundConversationV1(targetChat, profileId)
+        const outboundBinding = assertSendToContactLineageV1(await prepareOutboundConversationV1(targetChat, profileId), admission)
         // A bound conversation routes through its own transport. A legacy Telegram
         // row carries none, and the Telegram transport owner resolves the single
         // active carrier for it, or fails closed.
@@ -623,7 +623,7 @@ export class MessageService {
         })
         if (race.winner && clientMessageId) {
             // The row that won is only this request's answer if it is this intent.
-            assertSameSendIntent(race.winner, intent, clientMessageId)
+            if (!admission?.sendToContact) assertSameSendIntent(race.winner, intent, clientMessageId)
             console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} was created concurrently as ${race.winner.id}`)
             return duplicateSendResult(race.winner, clientMessageId)
         }
@@ -991,9 +991,9 @@ export class MessageService {
         const attempt = (meta.retryAttempt || 0) + 1
         if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
 
-        // Backoff check: skip if too soon. Delay = min(2^attempt * 30s, 10min)
-        const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
-        const lastFailed = meta.lastFailedAt ? new Date(meta.lastFailedAt).getTime() : 0
+        // Backoff check: skip if too soon. One rule with the retry job's selector (delivery-state-policy).
+        const backoffMs = physicalRetryBackoffMsV1(attempt)
+        const lastFailed = physicalRetryAnchorMsV1(meta.lastFailedAt)
         if (!options.operatorInitiated && Date.now() - lastFailed < backoffMs) {
             return { success: false, error: 'Backoff not elapsed' }
         }
@@ -1002,6 +1002,7 @@ export class MessageService {
         try {
             outboundBinding = await prepareOutboundConversationV1(message.chat)
         } catch (error: unknown) {
+            await settleContactPermissionRefusalBeforeLease(message, meta, error)
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Conversation identity binding is invalid',
@@ -1374,6 +1375,41 @@ function canonicalSendState(row: SendStateRow) {
  * second dispatch. Carries the row's current state so a client whose first
  * answer was lost can settle without waiting for a poll.
  */
+/**
+ * How a send was admitted. Only SendToContact passes `sendToContact`: its
+ * requestId was already bound to one semantic payload, so a Message carrying
+ * its "stc:" id can only be that intent's, and is answered as such whichever
+ * conversation it was routed to.
+ */
+type SendAdmissionV1 = {
+    sendToContact?: {
+        /** The canonical Contact SendToContact read its permission for (P1); the gate (P2) must name the same. */
+        expectedCanonicalContactId: string
+    }
+}
+
+/** The "stc:" clientMessageId namespace is SendToContact's alone, and SendToContact sends only in it. */
+function assertSendToContactNamespaceV1(clientMessageId: string | undefined, admission: SendAdmissionV1 | undefined): void {
+    const reserved = typeof clientMessageId === 'string' && clientMessageId.startsWith('stc:')
+    if (reserved !== Boolean(admission?.sendToContact)) throw new Error('MESSAGING_SEND_TO_CONTACT_NAMESPACE_RESERVED')
+}
+
+/**
+ * The permission the gate just read must be for the canonical Contact
+ * SendToContact evaluated. A merge in between means the evidence is stale: the
+ * send is refused before any row exists, and the caller may simply ask again.
+ */
+function assertSendToContactLineageV1<T extends { contactPermission: { canonicalContactId: string } }>(
+    binding: T,
+    admission: SendAdmissionV1 | undefined,
+): T {
+    const expected = admission?.sendToContact?.expectedCanonicalContactId
+    if (expected !== undefined && binding.contactPermission.canonicalContactId !== expected) {
+        throw new Error('MESSAGING_SEND_TO_CONTACT_LINEAGE_MOVED')
+    }
+    return binding
+}
+
 function duplicateSendResult(existing: SendStateRow, clientMessageId: string) {
     return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, clientMessageId, duplicate: true, ...canonicalSendState(existing) }
 }
@@ -1401,6 +1437,48 @@ function assertSameSendIntent(existing: SendStateRow, intent: SendIntentV1, clie
     if (!sameIntent) {
         opsLog('warn', 'client_message_id_intent_mismatch', { operation: 'send', chatId: intent.chatId, clientMessageId, messageId: existing.id })
         throw new Error('CLIENT_MESSAGE_ID_INTENT_MISMATCH')
+    }
+}
+
+/**
+ * A Contacts permission refusal met by a redelivery before its lease: no
+ * attempt is consumed and nothing is dispatched. A temporary refusal
+ * re-anchors the backoff (`lastFailedAt` = now), so the retry job's selector
+ * leaves the row alone until it is due again instead of spending a slot on it
+ * every tick; a standing refusal finalizes the row as terminal, so it leaves
+ * selection for good. Both are one compare-and-set on the exact failed row
+ * version; a row that moved meanwhile is left to whoever moved it.
+ */
+async function settleContactPermissionRefusalBeforeLease(
+    message: { id: string; updatedAt: unknown },
+    meta: Record<string, unknown>,
+    error: unknown,
+): Promise<void> {
+    const refusal = readChannelDeliveryErrorV1(error)
+    if (!(message.updatedAt instanceof Date) || !(error instanceof Error)) return
+    let metadata: Record<string, unknown>
+    if (refusal?.code === 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED') {
+        metadata = { ...meta, lastFailedAt: new Date().toISOString() }
+    } else if (refusal?.code === 'MESSAGING_CONTACT_PERMISSION_REFUSED') {
+        metadata = {
+            ...meta,
+            error: error.message,
+            errorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED',
+            retryable: false,
+            deliveryOutcome: 'terminal',
+        }
+    } else return
+    try {
+        await (prisma.message as any).updateMany({
+            where: { id: message.id, status: 'failed', updatedAt: message.updatedAt },
+            data: { metadata },
+        })
+    } catch (settleError: unknown) {
+        opsLog('warn', 'message_retry_permission_settle_failed', {
+            messageId: message.id,
+            errorCode: refusal?.code ?? null,
+            error: settleError instanceof Error ? settleError.message : String(settleError),
+        })
     }
 }
 

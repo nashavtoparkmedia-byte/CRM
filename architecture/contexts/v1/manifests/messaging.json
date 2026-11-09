@@ -29,7 +29,8 @@
     "ReceiveMessageCommand.v1",
     "SendMessageCommand.v1",
     "AttachMessageMediaCommand.v1",
-    "ImportMessageHistoryCommand.v1"
+    "ImportMessageHistoryCommand.v1",
+    "SendToContactCommand.v1"
   ],
   "compatibility_strategy": "Keep MessageService and stream buses as compatibility facades; provider-specific delivery moves behind versioned channel ports.",
   "context": {
@@ -268,7 +269,8 @@
       "node tools/architecture/check-messaging-message-stream-boundary.mjs",
       "node tools/architecture/check-messaging-transport-registry-boundary.mjs",
       "node tools/architecture/check-messaging-persisted-message-ingress-boundary.mjs",
-      "node tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs"
+      "node tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs",
+      "node tools/architecture/check-messaging-send-to-contact-boundary.mjs"
     ]
   },
   "version": 1
