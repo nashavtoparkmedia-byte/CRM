@@ -6777,7 +6777,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only Identity Access-owned Staff Session schema (StaffCredential, the verifier of one employee's individual password with its revocation counter, and StaffCredentialEvent, its append-only audit), with their CHECK constraints, one index and the no-delete and append-only triggers, inside one migration through controlled migration tooling; it names no existing table, adds no column to an existing table, changes no existing row and carries no data statement or backfill; it stores no name, role, status, password, token or cookie; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "identity_access",
-      "source_sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99"
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459"
     }
   ]
 }

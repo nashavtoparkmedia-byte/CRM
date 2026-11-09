@@ -221,8 +221,8 @@
     {
       "name": "20261108210000_add_staff_credential",
       "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
-      "sha256": "297ecd45231aeafeb1c5152d9056d828af070c8d87f47b1162a75ff2150eae99",
-      "size": 2742,
+      "sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "size": 2758,
       "owner_context": "identity_access",
       "classification": "EXPAND_ONLY",
       "production_application": false,
