@@ -615,6 +615,16 @@ describe('user management', () => {
         expect(after.map((user) => user.id).slice(0, 3)).toEqual(['u1', 'u2', 'legacy-x'])
     })
 
+    test('strict update and delete refuse a duplicated registry id (N2)', async () => {
+        configureLane()
+        await seedCredential('u2', ADMIN_PASSWORD)
+        const admin = await principalOf('u2', ADMIN_PASSWORD)
+        writeRegistry([MANAGER, ADMIN, LEAD, { ...MANAGER, firstName: 'Двойник' }])
+        await expect(operations.strictUpdateUserV1(async () => admin, 'u1', { role: 'Руководитель' })).rejects.toThrow('not_found')
+        await expect(operations.strictDeleteUserV1(async () => admin, 'u1')).rejects.toThrow('not_found')
+        expect(readRegistry().filter((user) => user.id === 'u1')).toHaveLength(2)
+    })
+
     test('strict add mints a random immutable id', async () => {
         configureLane()
         await seedCredential('u2', ADMIN_PASSWORD)
