@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-COMMUNICATION-WORKSPACE-SEND-TO-CONTACT",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:MessagingSendIntent"
+      ],
+      "reason": "Messaging owns the identity of one SendToContact intent: a caller requestId bound, permanently, to the sha256 of its semantic payload, so the same requestId with a changed payload is an idempotency conflict even after a refusal that created no Message. One row per requestId with exactly that hash and its creation time; it stores no message, outcome, route, conversation, Contact, provider identifier or transport, and the one Message the intent may admit is found by its derived clientMessageId \"stc:\" + requestId. It is written by exactly one Messaging adapter, insert-if-absent and read only, with no update or delete path. It is pending source state created by an expand-only migration and is intentionally not asserted as deployed production inventory."
+    }
+  ]
+}

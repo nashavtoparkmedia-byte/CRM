@@ -1333,6 +1333,14 @@ model HeldChannelMessage {
 
   @@index([chatId, releasedAt, sentAt])
   @@index([releasedAt, holdReason])
+/// Messaging-owned identity of one SendToContact intent. Binds a caller requestId to the
+/// sha256 of its semantic payload, permanently: insert-if-absent and read only, never
+/// updated or deleted. No message, outcome or route is stored here; the one Message the
+/// intent may admit carries clientMessageId "stc:" + requestId.
+model MessagingSendIntent {
+  requestId             String   @id @db.VarChar(128)
+  semanticPayloadSha256 String   @db.Char(64)
+  createdAt             DateTime @default(now())
 }
 
 model MessageAttachment {
@@ -3784,6 +3792,26 @@ model CashAccessEvent {
 /// One captured referral invitation and where its decision stands
 /// (fleet_operations). The first Telegram account to open a code owns the
 /// row; one person can hold one qualified invitation.
+/// Fleet Operations-owned. One invitation a manager recorded: who invited
+/// whom, both as canonical Contacts. It grants nothing; access is only the
+/// access kinds of CashAccessEvent. Its record and withdrawal events live in
+/// the inviter's CashAccessEvent chain, naming this row in their payload.
+model CashReferralManagerInvitation {
+  id                   String    @id
+  inviterContactId     String    @db.VarChar(255)
+  inviterLineageDigest String    @db.VarChar(128)
+  inviteeContactId     String    @db.VarChar(255)
+  state                String    @default("recorded") @db.VarChar(16)
+  recordedAt           DateTime  @db.Timestamptz(3)
+  withdrawnAt          DateTime? @db.Timestamptz(3)
+  version              Int       @default(0)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([inviterContactId, recordedAt], map: "CashReferralManagerInvitation_inviter_idx")
+  @@index([inviteeContactId, recordedAt], map: "CashReferralManagerInvitation_invitee_idx")
+}
+
 model CashReferralAttribution {
   id                    String            @id
   inviterContactId      String            @db.VarChar(255)

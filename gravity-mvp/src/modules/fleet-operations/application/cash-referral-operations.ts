@@ -3,9 +3,17 @@
  *
  * The Telegram surface reaches referral codes, captures and the inviter's
  * own status only through here, and the scheduler reaches the decision pass
- * only through here. Nothing runs, and nothing reads the referral tables,
- * unless YOKO_CASH_REFERRAL_ACCESS=on: the flag is set after the migration is
- * applied, so a database without the tables is never asked about them.
+ * only through here. Two switches, both off by default, each set only after
+ * the migrations its reads need are applied:
+ *
+ *   YOKO_CASH_ACCESS_LEDGER=on     Cash reads referral and manual access from
+ *                                  the ledger, the chain check runs, and the
+ *                                  manager screens open. No Telegram code, no
+ *                                  capture and no automatic decision.
+ *   YOKO_CASH_REFERRAL_ACCESS=on   the Telegram referral path on top: codes,
+ *                                  captures and the hourly decision pass,
+ *                                  which grants a qualified inviter by itself.
+ *                                  It implies the ledger read, as before.
  *
  * A code is issued only to a person proven the way a Cash claim is proven:
  * the Telegram link, Contacts' confirmation of the linked Driver, and an
@@ -31,9 +39,14 @@ import {
 import { legacyPrismaCompensationPilotPortV1 } from '../internal/compensation/legacy-prisma-compensation-pilot-adapter'
 import { readYandexFleetDriverDismissalV1 } from '../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
 
-/** The one switch for every referral read and write. */
+/** The Telegram referral path: codes, captures and the automatic decision pass. */
 export function cashReferralAccessEnabledV1(): boolean {
     return process.env.YOKO_CASH_REFERRAL_ACCESS === 'on'
+}
+
+/** Cash reads the access ledger: manual grants, denials and referral entitlements. */
+export function cashAccessLedgerEnabledV1(): boolean {
+    return process.env.YOKO_CASH_ACCESS_LEDGER === 'on' || cashReferralAccessEnabledV1()
 }
 
 /** The token shape a code is issued in: `r_` and 22 base64url characters (128 bits). */
@@ -139,9 +152,13 @@ export interface CashReferralDecisionScheduleV1 {
     intervalMs: number
 }
 
-/** The decision pass runs hourly, and only when referral access is on. */
+/**
+ * The hourly referral jobs run whenever the ledger is read: the chain check
+ * always, the decision pass only when the Telegram path is on (otherwise it
+ * answers skipped and reads nothing).
+ */
 export function cashReferralDecisionScheduleV1(): CashReferralDecisionScheduleV1 {
-    return { enabled: cashReferralAccessEnabledV1(), firstRunDelayMs: 3 * 60_000, intervalMs: 60 * 60_000 }
+    return { enabled: cashAccessLedgerEnabledV1(), firstRunDelayMs: 3 * 60_000, intervalMs: 60 * 60_000 }
 }
 
 /** One scheduled pass over the invitations not yet decided for good. */
@@ -156,7 +173,7 @@ export async function runScheduledCashReferralDecisionsV1(): Promise<CashReferra
  * health records an error and the existing failure detection raises it.
  */
 export async function runScheduledCashAccessChainCheckV1(): Promise<CashAccessChainCheckOutcomeV1 | { skipped: 'disabled' }> {
-    if (!cashReferralAccessEnabledV1()) return { skipped: 'disabled' }
+    if (!cashAccessLedgerEnabledV1()) return { skipped: 'disabled' }
     const outcome = await checkCashAccessChainsV1(legacyPrismaCashReferralLedgerStoreV1, 5_000)
     console.info(JSON.stringify({ event: 'cash_access_chain_check', checked: outcome.checked, broken: outcome.broken }))
     if (outcome.broken > 0) console.error(JSON.stringify({ event: 'cash_access_chain_broken', ...outcome }))

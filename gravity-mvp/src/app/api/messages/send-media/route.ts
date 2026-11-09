@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { contactPermissionRefusalV1, isSendToContactReservedClientMessageIdV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
@@ -30,6 +31,12 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
         const { chatId, base64, filename, mimeType, caption, profileId, clientMessageId } = body
+
+        // This route writes the caller's clientMessageId itself, so it reserves
+        // SendToContact's "stc:" namespace itself, before any read or effect.
+        if (isSendToContactReservedClientMessageIdV1(clientMessageId)) {
+            return NextResponse.json({ error: 'Недопустимый идентификатор сообщения', code: 'CLIENT_MESSAGE_ID_RESERVED' }, { status: 400 })
+        }
 
         if (!chatId || !base64 || !filename || !mimeType) {
             return NextResponse.json(
@@ -215,6 +222,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, messageId: message.id, externalId })
     } catch (err: any) {
         console.error('[send-media] Error:', err)
+        const refusal = contactPermissionRefusalV1(err)
+        if (refusal) return NextResponse.json({ error: refusal.label, code: refusal.code }, { status: refusal.retryable ? 503 : 403 })
         return NextResponse.json({ error: err.message }, { status: 500 })
     }
 }
