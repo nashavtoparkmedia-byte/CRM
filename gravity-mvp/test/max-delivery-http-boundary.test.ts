@@ -41,6 +41,17 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
 }))
 vi.mock('@/modules/contacts/public/v1', () => ({
     cleanupDanglingContactIdentitiesV1: vi.fn(),
+    // The Contacts message permission the shared outbound gate reads before every send: allowed here.
+    getContactCommunicationPermissionV1: async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }),
 }))
 vi.mock('@/modules/max-channel/public/v1/reaction-delivery', () => ({
     sendMaxReactionDeliveryV1: vi.fn(),
