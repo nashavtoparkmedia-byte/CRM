@@ -68,9 +68,9 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
         const verifier = await createStaffPasswordVerifierV1(ADMIN_PASSWORD)
         const base = {
             userId: id('shape'), registryCreatedAt: CREATED, algo: 'scrypt', scryptN: 32768, scryptR: 8, scryptP: 1,
-            maxmemBytes: 67108864, salt: verifier.salt, hash: verifier.hash, updatedAt: new Date(), updatedBy: 'test',
+            maxmemBytes: 67108864, salt: new Uint8Array(verifier.salt), hash: new Uint8Array(verifier.hash), updatedAt: new Date(), updatedBy: 'test',
         }
-        for (const patch of [{ scryptN: 1024 }, { algo: 'md5' }, { salt: Buffer.alloc(4) }, { registryCreatedAt: '' }, { hash: Buffer.alloc(10) }]) {
+        for (const patch of [{ scryptN: 1024 }, { algo: 'md5' }, { salt: new Uint8Array(4) }, { registryCreatedAt: '' }, { hash: new Uint8Array(10) }]) {
             await expect(prisma.staffCredential.create({ data: { ...base, ...patch }, select: { userId: true } }), JSON.stringify(Object.keys(patch))).rejects.toThrow()
         }
         await expect(prisma.staffCredential.create({ data: base, select: { userId: true, sessionEpoch: true } })).resolves.toMatchObject({ userId: id('shape'), sessionEpoch: 0 })
@@ -81,7 +81,7 @@ describeWithDatabase('Staff Session v1 credential store (PostgreSQL)', () => {
         await prisma.staffCredential.create({
             data: {
                 userId: id('nodelete'), registryCreatedAt: CREATED, algo: 'scrypt', scryptN: 32768, scryptR: 8, scryptP: 1,
-                maxmemBytes: 67108864, salt: verifier.salt, hash: verifier.hash, updatedAt: new Date(), updatedBy: 'test',
+                maxmemBytes: 67108864, salt: new Uint8Array(verifier.salt), hash: new Uint8Array(verifier.hash), updatedAt: new Date(), updatedBy: 'test',
             },
             select: { userId: true },
         })
