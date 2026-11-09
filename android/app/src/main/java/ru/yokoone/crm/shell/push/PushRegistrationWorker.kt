@@ -43,7 +43,7 @@ class PushRegistrationWorker(
 
         val outcome = withContext(Dispatchers.IO) {
             PushRegistrationWork.run(applicationContext, generation, token, runAttemptCount) {
-                PushRegistrar.register(it)
+                PushRegistrar.register(applicationContext, it)
             }
         }
 
@@ -51,6 +51,9 @@ class PushRegistrationWorker(
             PushRegistrationWork.Outcome.SUCCESS -> Result.success()
             PushRegistrationWork.Outcome.FAILURE -> Result.failure()
             PushRegistrationWork.Outcome.RETRY -> Result.retry()
+            // No decision was made and nothing may retry it on a timer: the
+            // next edge authentication, token commit or session re-drives it.
+            PushRegistrationWork.Outcome.DEFERRED -> Result.success()
         }
     }
 
