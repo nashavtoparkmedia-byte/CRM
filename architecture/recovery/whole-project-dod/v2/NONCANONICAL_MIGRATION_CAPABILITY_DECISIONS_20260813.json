@@ -435,6 +435,22 @@
       "expected_site_signatures": [
         "ada6230542b45f1ecd788ec22ba718bd71c5b2fca8c29644d27e84a5f52d69aa"
       ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Identity Access-owned Staff Session schema: StaffCredential (the scrypt verifier of one employee's individual password, the record binding and the session revocation counter, with a CHECK on the v1 shape) and StaffCredentialEvent (the append-only audit, with a kind CHECK and one index), plus the trigger functions that refuse DELETE of credential rows and UPDATE and DELETE of audit rows. It names no existing table, adds no column to an existing table, changes no existing row and carries no data statement or backfill; it stores no name, role, status, password, token or cookie; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
+        "539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
+        "733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
+        "786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
+        "bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
+        "dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
+        "f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121"
+      ]
     }
   ],
   "site_owner_overrides": {
@@ -3795,6 +3811,132 @@
         }
       ],
       "review_rationale": "Expand-only statement of the Messaging SendToContact intent migration: CREATE_TABLE on MessagingSendIntent. It creates only the Messaging-owned intent table with its primary key and shape checks, references no existing object, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 9,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "StaffCredential",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredential. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 37,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "StaffCredentialEvent",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 52,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "StaffCredentialEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_INDEX on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 55,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "staff_credential_event_append_only",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_event_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 62,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "StaffCredentialEvent_append_only",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TRIGGER on StaffCredentialEvent_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 68,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "FUNCTION",
+          "exact_name": "staff_credential_no_delete",
+          "operation": "CREATE_FUNCTION"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_no_delete. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
+    },
+    {
+      "site_signature": "dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "line": 75,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "identity_access",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TRIGGER",
+          "exact_name": "StaffCredential_no_delete",
+          "operation": "CREATE_TRIGGER"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Staff Session migration: CREATE_TRIGGER on StaffCredential_no_delete. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value."
     }
   ]
 }
