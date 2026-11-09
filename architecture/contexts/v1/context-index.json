@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "e1f60c4bcb7bceef6c593d0db4dbc3f61f57d70de2930fab4e8aca2d56c7e72e"
+      "sha256": "49cf2f4fc68fe42bd513d9acc0b981384451ddec43cbca03ac7d230194de37db"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
