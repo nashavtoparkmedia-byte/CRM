@@ -1,6 +1,7 @@
 package ru.yokoone.crm.shell
 
 import android.content.Context
+import ru.yokoone.crm.shell.push.TokenActor
 
 /**
  * Shipped implementation of the shell's test seam: it does nothing.
@@ -13,4 +14,7 @@ import android.content.Context
 object ShellTestHooks {
 
     fun onNotificationsReady(context: Context) = Unit
+
+    /** No test provider: the token actor uses Firebase when it is configured, otherwise nothing. */
+    fun tokenProviderOverride(context: Context): TokenActor.Provider? = null
 }

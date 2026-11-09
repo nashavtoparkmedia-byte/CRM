@@ -15,6 +15,17 @@ const TEST_DATABASE_URL = process.env.MESSAGING_EVIDENCE_TEST_DATABASE_URL
 const describeWithDatabase = TEST_DATABASE_URL ? describe : describe.skip
 
 const mocks = vi.hoisted(() => ({
+    // The Contacts message permission the outbound gate reads: allowed unless a test says otherwise.
+    contactPermission: vi.fn(async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }) as Record<string, unknown>),
     tgSendText: vi.fn(),
     opsLog: vi.fn(),
 }))
@@ -27,6 +38,7 @@ vi.mock('@/modules/contacts/public/v1/contact-display-policy', () => ({ buildCan
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
     contactReachabilityV1: { recordExactProviderReachability: vi.fn(async () => ({ outcome: 'updated' })) },
 }))
+vi.mock('@/modules/contacts/public/v1', () => ({ getContactCommunicationPermissionV1: mocks.contactPermission }))
 vi.mock('@/lib/messageStreamBus', () => ({ broadcastChatMessage: vi.fn() }))
 vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async importOriginal => ({
     ...await importOriginal<Record<string, unknown>>(),

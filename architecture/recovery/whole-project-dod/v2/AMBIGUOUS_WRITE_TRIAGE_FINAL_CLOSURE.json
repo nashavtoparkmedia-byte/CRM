@@ -1911,7 +1911,7 @@
     {
       "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
       "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
-      "source_sha256": "e040c5eaa410c5d385ac46c34fd38b074139f3b0a8bb0438b4d3c68838b9fa4b",
+      "source_sha256": "deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
       "file": "gravity-mvp/src/lib/MessageService.ts",
       "line": 103,
       "column": 65,
@@ -1935,7 +1935,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
-      "sql_provenance_sha256": "15c14feab002514b1de28ccb4f179b59e94c5b9d9c8ea20a2e57188aaf46c197",
+      "sql_provenance_sha256": "51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a",
       "source_context": "messaging",
       "source_technical_module": "messages",
       "owner_contexts": [],
@@ -3350,7 +3350,7 @@
     {
       "record_id": "895ed44cc86cc6be75c451f6ae1e180b6fafcf67300e25c80e55857d76227f9a",
       "site_signature": "895ed44cc86cc6be75c451f6ae1e180b6fafcf67300e25c80e55857d76227f9a",
-      "source_sha256": "f91c5f41934346cea6ba8b5e3f0e67c4bdfb134f34084f8d31ca8025530f0128",
+      "source_sha256": "3207d3f0c15a2f145d03ee8d343ee1909cc22d78b4de40bb4225eb1459f0b351",
       "file": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.ts",
       "line": 33,
       "column": 11,
@@ -4716,8 +4716,8 @@
         "line": 103,
         "column": 65,
         "method": "$queryRaw",
-        "source_sha256": "e040c5eaa410c5d385ac46c34fd38b074139f3b0a8bb0438b4d3c68838b9fa4b",
-        "sql_provenance_sha256": "15c14feab002514b1de28ccb4f179b59e94c5b9d9c8ea20a2e57188aaf46c197"
+        "source_sha256": "deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
+        "sql_provenance_sha256": "51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4739,8 +4739,8 @@
         "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
         "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e040c5eaa410c5d385ac46c34fd38b074139f3b0a8bb0438b4d3c68838b9fa4b",
-        "sql_provenance_sha256:15c14feab002514b1de28ccb4f179b59e94c5b9d9c8ea20a2e57188aaf46c197"
+        "source_sha256:deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
+        "sql_provenance_sha256:51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a"
       ]
     },
     {

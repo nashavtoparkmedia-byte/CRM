@@ -5,78 +5,75 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.Executors
 
 /**
  * The only place in the shell that knows Firebase exists, besides the service.
  *
- * Two paths deliver a token and the shell needs both. onNewToken fires when the
- * provider rotates one, which may be never; it says nothing about the token the
- * installation already has. A device that installed the app, was granted a
- * token, and then had its registration revoked server-side would wait for ever
- * on a rotation that is not coming. So the current token is also fetched
- * directly, once per process.
+ * Two paths tell the shell that the provider may hold a token, and the shell
+ * needs both. onNewToken fires when the provider rotates one, which may be
+ * never; it says nothing about the token the installation already has. So the
+ * current token is also read once per process start.
  *
- * Once per process is the whole scheduling policy. It covers a fresh install,
- * an app-data clear, and every process the system recreates in the background,
- * and it cannot become a poll: there is no timer, no retry and no second fetch.
- * A fetch that fails is left to the next process start, and rotation is still
- * covered by the callback.
+ * Revision 5.1 of the edge design changes what both paths do with a token: they
+ * no longer carry it anywhere. Each only signals the token actor, which reads
+ * the provider itself and commits under the reset epoch and the retired set
+ * (§5.7.2). The [Firebase] adapter below is the actor's provider and is never
+ * called from anywhere else.
  *
  * When Firebase is not configured — which is the state of every build made from
  * this repository, because no google-services.json is committed — there is no
  * default app, nothing is fetched, nothing throws, and no registration is ever
  * attempted. The deterministic build stays closed rather than half-open.
- *
- * PushRegistration is deliberately on the other side of this boundary: it takes
- * a String and imports nothing from the provider, so the state machine stays
- * provable on the JVM.
  */
 object FcmTokenProvider {
 
     private const val TAG = "YokoPush"
-
-    private val acquired = AtomicBoolean(false)
 
     /** Whether a default Firebase app exists, i.e. whether config was supplied. */
     fun isConfigured(context: Context): Boolean =
         runCatching { FirebaseApp.getApps(context).isNotEmpty() }.getOrDefault(false)
 
     /**
-     * Ask the provider for the token this installation already holds.
-     *
-     * Safe to call from Application.onCreate on every start; the second and
-     * later calls in one process do nothing.
+     * Process start: let the actor read the provider (ROTATE if a rotation is
+     * owed, otherwise one REFRESH). Safe on every start; later calls in one
+     * process do nothing.
      */
     fun acquireCurrentToken(context: Context) {
-        val application = context.applicationContext
-        if (!acquired.compareAndSet(false, true)) return
-        if (!isConfigured(application)) {
-            Log.i(TAG, "no firebase configuration in this build; push stays inactive")
-            return
+        if (!isConfigured(context.applicationContext)) {
+            Log.i(TAG, "no firebase configuration in this build; push uses only a test provider if one exists")
         }
-
-        runCatching {
-            FirebaseMessaging.getInstance().token
-                .addOnSuccessListener { token ->
-                    // The value itself is never logged: it is a bearer
-                    // credential for this device's notifications.
-                    if (token.isNullOrEmpty()) {
-                        Log.w(TAG, "provider returned an empty token")
-                    } else {
-                        PushRegistration.onNewToken(application, token)
-                    }
-                }
-                .addOnFailureListener { error ->
-                    Log.w(TAG, "current token unavailable: ${error.javaClass.simpleName}")
-                }
-        }.onFailure {
-            Log.w(TAG, "token acquisition refused: ${it.javaClass.simpleName}")
-        }
+        TokenActor.onMainProcessStart(context.applicationContext)
     }
 
     @VisibleForTesting
     fun forgetAcquisition() {
-        acquired.set(false)
+        TokenActor.resetForTest()
+    }
+
+    /**
+     * The actor's provider. Task listeners run on a dedicated thread so a
+     * caller blocked on the main thread can never hold up a completion. Token
+     * values are never logged: a token is a bearer credential for this
+     * device's notifications.
+     */
+    object Firebase : TokenActor.Provider {
+
+        private val listeners = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "yoko-fcm-listener").apply { isDaemon = true }
+        }
+
+        override fun getToken(listener: (String?) -> Unit) {
+            FirebaseMessaging.getInstance().token.addOnCompleteListener(listeners) { task ->
+                if (!task.isSuccessful) Log.w(TAG, "current token unavailable: ${task.exception?.javaClass?.simpleName}")
+                listener(if (task.isSuccessful) task.result else null)
+            }
+        }
+
+        override fun deleteToken(listener: (Boolean) -> Unit) {
+            FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener(listeners) { task ->
+                listener(task.isSuccessful)
+            }
+        }
     }
 }
