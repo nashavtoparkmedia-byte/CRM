@@ -10,6 +10,7 @@ import type { UserIdentityV1 } from '../../../../contracts/identity-access/v1'
 import type { IdentityAccessPortV1 } from './identity-access-handler'
 import { MOBILE_SESSION_COOKIE } from './mobile-session-credentials'
 import { resolveRequestOperatorV1 } from './mobile-session-operator'
+import { staffSessionCookieNameForRequestV1 } from './staff-session'
 
 function toUserIdentityV1(user: UserItem): UserIdentityV1 {
     return {
@@ -35,12 +36,16 @@ function toUserIdentityV1(user: UserItem): UserIdentityV1 {
  * refused (changing operator means a logout and a new mobile login), and ending
  * the session ends the mobile session itself. A session cookie that grants
  * nothing yields no user and no identity change.
+ *
+ * Staff Session v1 is the same rule for the browser lane: the verified
+ * employee is the current user, another identity cannot be chosen, and ending
+ * the session ends it server-side for every device of that employee.
  */
 export const legacyUserServicePortV1: IdentityAccessPortV1 = {
     async getCurrentUser() {
         const operator = await resolveRequestOperatorV1()
-        if (operator.kind === 'mobile_session_refused') return null
-        if (operator.kind === 'mobile_session') {
+        if (operator.kind === 'mobile_session_refused' || operator.kind === 'staff_session_refused') return null
+        if (operator.kind === 'mobile_session' || operator.kind === 'staff_session') {
             const user = (await getUsers()).find((candidate) => candidate.id === operator.operatorId)
             return user === undefined ? null : toUserIdentityV1(user)
         }
@@ -53,10 +58,12 @@ export const legacyUserServicePortV1: IdentityAccessPortV1 = {
     async authenticate(targetUserId) {
         const operator = await resolveRequestOperatorV1()
         if (operator.kind !== 'legacy') {
-            if (operator.kind === 'mobile_session' && operator.operatorId === targetUserId) return
+            const signed = operator.kind === 'mobile_session' || operator.kind === 'staff_session'
+            if (signed && operator.operatorId === targetUserId) return
             console.warn(
-                `[auth] blocked operator switch under a mobile session ` +
-                `current=${operator.kind === 'mobile_session' ? operator.operatorId : 'refused-session'} ` +
+                `[auth] blocked operator switch under a signed session ` +
+                `lane=${operator.kind} ` +
+                `current=${signed ? operator.operatorId : 'refused-session'} ` +
                 `target=${targetUserId}`,
             )
             throw new Error('forbidden')
@@ -69,6 +76,11 @@ export const legacyUserServicePortV1: IdentityAccessPortV1 = {
             // the mobile logout has always done.
             const { clearMobileSessionV1 } = await import('./mobile-session-auth')
             await clearMobileSessionV1()
+            return
+        }
+        if ((await cookies()).get(staffSessionCookieNameForRequestV1()) !== undefined) {
+            const { endStaffSessionV1 } = await import('./staff-session')
+            await endStaffSessionV1()
             return
         }
         await logout()

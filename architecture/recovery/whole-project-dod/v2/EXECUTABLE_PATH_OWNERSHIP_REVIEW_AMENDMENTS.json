@@ -4107,6 +4107,99 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "identity-access-staff-session-v1-main-d516698e-20261108",
+      "reviewed_at": "2026-11-08T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_STAFF_SESSION_V1_EXECUTOR_REVIEW_D516698E",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_ORCHESTRATOR_V8_IDENTITY_ACCESS_MASTER_PROMPT_3_0_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain published on main at d516698e, whose tail is messaging-r21-guarded-append-main-2c790ca0-20261109, and leaves that tail unchanged."
+      },
+      "reason": "Records the tracked executable surfaces Staff Session v1 (Identity Access, docs/design/staff-session-v1.md v1.3) adds on top of main d516698e and the one source fingerprint it moves: 2,825 + 8 = 2,833 surfaces, context-owned 1,565 -> 1,571 and governed exclusions 1,260 -> 1,262. Six new paths sit under gravity-mvp/src/modules/identity-access, owned through its context manifest; one Vitest suite sits beside the security suites; the expand-only migration falls under the gravity_schema governed exclusion. The request boundary gravity-mvp/src/proxy.ts keeps its exact-runtime inventory membership, lifecycle and owner; only its source hash moves. Every other changed path is context-owned through identity_access manifest owned_paths (/login, /users, lib/users, the identity-access public index, BR-4 operations and the user-service adapter) and needs no exact assignment. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main d516698e only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2825,
+        "tracked_inventory_sha256": "182f92698e82d063b6bf1aacdace3208f721847ce0bdcc3bcbbbbd7524c18bba",
+        "coverage_sha256": "b5e8217411fa58ad2a7afbc337aeacd2168afdc31b0576c2e990c68b3630ccef"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2833,
+        "tracked_inventory_sha256": "65c6697aebbf3b35cfafd3b586c644d12c815f1e1a6ab1ed4786de4960c61475",
+        "coverage_sha256": "3fd5220c8b2d97687ca27d9ce2a7ca63b7c30b8dac85c9d62122a3606c286705"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "06db7f7962c68fa983ef11a72b2fdd7c24a11886245d80baaa08ee43cfe19285",
+          "current_source_sha256": "2c3dc7b64a0270583fb90d3bc3126afe9386d779f28fd51a3b1c0b486003455e",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The request boundary gains the Staff Session branch of the same BR-4 rewrite on the browser lane: a verified staff session sends exactly one crm_user_id, the employee, downstream; a refused one sends none; an unverifiable store answers 503; with YOKO_STAFF_SESSION_ENFORCE=on a browser request without a session loses crm_user_id. The shell lane and the browser lane without a staff cookie and without enforcement are unchanged. Its APPLICATION_RUNTIME lifecycle, functional owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle, MIGRATION_ONLY disposition, CONTROLLED_MIGRATION reachability and identity_access functional owner are recorded in the lifecycle registry and the noncanonical migration decisions. The expand-only migration creates the two Identity Access-owned Staff Session tables (the individual password verifier with its revocation counter, and its append-only audit) with their CHECK constraints, one index and the no-delete and append-only triggers; it names no existing table."
+        },
+        {
+          "path": "gravity-mvp/src/lib/security/staff-session.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Vitest suite of Staff Session v1 against an in-memory credential store and a real temporary registry file: token, secret and password primitives, the dormant and refusing lane states, login, verification, logout, the R2 bootstrap, the user-management guard and write order, the BR-4 resolution and the proxy. It opens no database connection and holds no real credential. Like the neighbouring security suites it receives no explicit ownership assignment."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/application/staff-session-operations.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Staff Session v1 composition: lane state, verification of a staff token against the credential row and the registry record, password login with the dummy-scrypt path, limiter and backoff, logout, password administration and the R2 bootstrap, and the strict user-management operations that write PostgreSQL first and the registry second, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The isolated-PostgreSQL proof of the Staff Session store: the CHECK shape, the no-delete and append-only triggers, rollback of a revocation inside a failed locked transaction, and that the advisory-locked check-and-set serializes concurrent bootstraps and concurrent demotions of the last credentialed Администратор; gated behind STAFF_SESSION_TEST_DATABASE_URL equal to an isolated DATABASE_URL, it holds no real credential and writes only to that disposable database, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one reader and writer of StaffCredential and StaffCredentialEvent: every write is one transaction under the staff-credential advisory lock; it never returns verifier material to a caller outside Identity Access, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/staff-session-credentials.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure Staff Session primitives: the one secret-validity predicate, token issue and verification under a key derived from STAFF_SESSION_SECRET, the labelled session id, the cookie options, the password rules and the bounded scrypt verifier with its dummy path. It reads no database, cookie or registry, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/internal/user-registry-file.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Storage of the existing employee registry: the path from YOKO_USER_REGISTRY_FILE, the first-start seed rules, a strict read for authorization and a lenient read for display, and the serialized atomic write (temporary file, fsync, rename). The registry and its record shape are unchanged, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/staff-session.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The public Staff Session surface: getStaffSessionPrincipalV1 (the only employee authority consumers take), the login mode for /login, establishing and ending a session with its hardened cookie, and the request-actor wrappers for password administration, under gravity-mvp/src/modules/identity-access, a path the identity_access context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
