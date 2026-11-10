@@ -340,7 +340,8 @@ function assertRetentionJobIsolated(source) {
   const step = source.indexOf('runHeldChannelMessageRetentionV1({')
   if (step < 0) throw new Error('retention job does not run the held-store retention')
   if (!/try \{\s*const held = await $/u.test(source.slice(Math.max(0, step - 120), step))) throw new Error('held-store retention is not isolated in its own try block')
-  if (!/\} catch \(err: unknown\) \{[\s\S]{0,400}?retention_cleanup_held_store_error/u.test(source.slice(step, step + 900))) {
+  // The isolated catch has its own name so runAll keeps exactly one outer `err` catch (check-retention-event-boundary.mjs).
+  if (!/\} catch \(heldStoreError: unknown\) \{[\s\S]{0,400}?retention_cleanup_held_store_error/u.test(source.slice(step, step + 900))) {
     throw new Error('held-store retention failure is not caught and logged on its own')
   }
 }
@@ -398,6 +399,7 @@ rejectProbe('', "import { heldChannelMessagesV1 } from '@/modules/messaging/publ
 rejectProbe(handlerSource, `${handlerSource.replace('    const parsed = parseRunHeldChannelMessageRetentionCommandV1(command)\n', '')}\nconst late = parseRunHeldChannelMessageRetentionCommandV1(command)\n`, assertHandlersParseFirst)
 rejectProbe(compositionSource, compositionSource.replace('createRunHeldChannelMessageRetentionHandlerV1(legacyPrismaGuardedChannelMessagePortV1)', 'createRunHeldChannelMessageRetentionHandlerV1(otherPort)'), assertComposition)
 rejectProbe(retentionSource, retentionSource.replace('        try {\n          const held = await runHeldChannelMessageRetentionV1({', '          const held = await runHeldChannelMessageRetentionV1({'), assertRetentionJobIsolated)
+rejectProbe(retentionSource, retentionSource.replace('} catch (heldStoreError: unknown) {', '} catch (err: unknown) {'), assertRetentionJobIsolated)
 rejectProbe(migrationSql, migrationSql.replace("\"content\" = '' AND ", ''), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace(/,\n\s*CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\n\s*CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)/u, ''), assertMigration)
 rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)

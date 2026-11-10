@@ -100,8 +100,9 @@ export class RetentionCleanup {
             dryRun,
           })
           result.deletedMessages += held.selectedCount
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err)
+        } catch (heldStoreError: unknown) {
+          // Its own name: runAll keeps exactly one outer `err` catch (retention-event boundary).
+          const message = heldStoreError instanceof Error ? heldStoreError.message : String(heldStoreError)
           opsLog('error', 'retention_cleanup_held_store_error', { error: message, dryRun })
         }
       }
