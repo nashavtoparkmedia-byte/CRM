@@ -25,7 +25,11 @@
 //   - neither the actions nor the resolver read a cookie, a header, the
 //     crm_user_id lane or the current-user record;
 //   - the binder's write roles stay exactly the Owner's initial policy
-//     (Администратор) and its sid format stays Identity Access's 64 hex digits.
+//     (Администратор) and its sid format stays Identity Access's 64 hex digits;
+//   - outside fleet_operations, the whole Fleet module (a namespace import, a
+//     require, a dynamic import kept whole) is held only where it is today,
+//     the instrumentation's scheduler bootstrap, so no new handle can reach a
+//     write without naming it.
 //
 // Every rule is also run against a mutated copy of the tree, and each mutant
 // must be caught, so a rule that stops biting fails this control too. It reads
@@ -73,6 +77,14 @@ const ACTION_AUTHORITY_VALUES = new Set([
 ])
 const WRITE_ROLES = "export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']"
 const SID_FORMAT = 'const STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u'
+// The files outside fleet_operations that may hold the whole Fleet module.
+const WHOLE_MODULE_HOLDERS = ['gravity-mvp/src/instrumentation.ts']
+const FLEET_SPECIFIER = String.raw`['"](?:@/modules/|(?:\.\./)+(?:modules/)?)fleet-operations/(?:public|application|internal)[^'"]*['"]`
+const WHOLE_MODULE = [
+    new RegExp(String.raw`import\s*\*\s*as\s+\w+\s+from\s*${FLEET_SPECIFIER}`, 'u'),
+    new RegExp(String.raw`\brequire\s*\(\s*${FLEET_SPECIFIER}`, 'u'),
+    new RegExp(String.raw`(?<!\}\s*=\s*await\s+)\bimport\s*\(\s*${FLEET_SPECIFIER}`, 'u'),
+]
 const CAPABILITY_LITERAL = /['"`]cash\.(?:referral\.qualify|access\.manage)['"`]/u
 const BROWSER_AUTHORITY = [/\bcookies\s*\(/u, /\bheaders\s*\(/u, /crm_user_id/u, /\bgetCurrentUser\b/u, /\bqueryCurrentUserV1\b/u, /\bsearchParams\b/u]
 
@@ -168,7 +180,13 @@ export function evaluate(tree) {
         if (read.length > 0) fail('the actions and the resolver read no browser value', `${file}: ${read.join(', ')}`)
     }
 
-    // 5. The Owner's write policy and Identity Access's sid format stay pinned in the binder.
+    // 5. The whole Fleet module is held only where it is today.
+    for (const file of production) {
+        if (file.startsWith(FLEET) || WHOLE_MODULE_HOLDERS.includes(file)) continue
+        if (WHOLE_MODULE.some((pattern) => pattern.test(bodies.get(file)))) fail('the whole Fleet module is held only by the scheduler bootstrap', file)
+    }
+
+    // 6. The Owner's write policy and Identity Access's sid format stay pinned in the binder.
     if (!binder.includes(WRITE_ROLES)) fail('Cash writes stay with the Администратор role', `expected: ${WRITE_ROLES}`)
     if (!binder.includes(SID_FORMAT)) fail('the binder admits only Identity Access\'s sid format', `expected: ${SID_FORMAT}`)
     return failures
@@ -192,6 +210,8 @@ const MUTANTS = [
     ['the principal imported from elsewhere', (tree) => tree.set(DATA, replaceOnce(tree.get(DATA), "import { getStaffSessionPrincipalV1 } from '@/modules/identity-access/public/v1'", "import { getStaffSessionPrincipalV1 } from '@/lib/users/user-service'")), 'the principal and the directory come from Identity Access\'s public surface'],
     ['a Cash authority literal on the screen', (tree) => tree.set(`${REFERRALS}forged.ts`, "export const forged = { principalId: 'staff:x', capabilities: ['cash.access.manage'] }\n"), 'no Cash capability is named outside the binder and the ledger'],
     ['the resolver reading the cookie', (tree) => tree.set(DATA, `${tree.get(DATA)}\nexport const lane = () => cookies().get('crm_user_id')\n`), 'the actions and the resolver read no browser value'],
+    ['a namespace handle on the Fleet module', (tree) => tree.set(`${REFERRALS}rogue-namespace.ts`, "import * as fleet from '@/modules/fleet-operations/public/v1'\nexport const pick = (name) => fleet[name]\n"), 'the whole Fleet module is held only by the scheduler bootstrap'],
+    ['a whole dynamic import of the Fleet module', (tree) => tree.set(`${SOURCE_ROOT}app/rogue-dynamic.ts`, "export const load = () => import('@/modules/fleet-operations/public/v1').then((fleet) => fleet)\n"), 'the whole Fleet module is held only by the scheduler bootstrap'],
     ['a Менеджер admitted to write', (tree) => tree.set(BINDER, replaceOnce(tree.get(BINDER), "CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']", "CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор', 'Менеджер']")), 'Cash writes stay with the Администратор role'],
     ['any sid admitted', (tree) => tree.set(BINDER, replaceOnce(tree.get(BINDER), 'STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u', 'STAFF_SESSION_SID_PATTERN_V1 = /^.+$/u')), 'the binder admits only Identity Access\'s sid format'],
 ]
