@@ -61,6 +61,21 @@ describe('createHttpContactLookupClientV1', () => {
     }
   })
 
+  it('keeps a declared rank class and nothing else under `match`', async () => {
+    const lookup = createHttpContactLookupClientV1({
+      fetch: (async () => jsonResponse({
+        items: [{ ...ITEM_A, match: 'name_all_but_one_word' }, { ...ITEM_B, match: 'phone_exact' }],
+        total: 2,
+        truncated: false,
+      })) as unknown as typeof fetch,
+    })
+    await expect(lookup({ query: 'Ив' })).resolves.toEqual({
+      items: [{ ...ITEM_A, match: 'name_all_but_one_word' }, { ...ITEM_B, match: 'phone_exact' }],
+      total: 2,
+      truncated: false,
+    })
+  })
+
   it('turns every failure into one fixed error with no server text', async () => {
     const cases: Array<() => Promise<Response>> = [
       async () => jsonResponse({ error: 'PrismaClientKnownRequestError P2024' }, 500),
@@ -68,6 +83,9 @@ describe('createHttpContactLookupClientV1', () => {
       async () => jsonResponse({ results: [] }),
       async () => jsonResponse({ items: [{ contactId: 7 }] }),
       async () => jsonResponse({ items: [{ ...ITEM_A, primaryPhone: 79001234567 }] }),
+      async () => jsonResponse({ items: [{ ...ITEM_A, match: 'name_substring' }] }),
+      async () => jsonResponse({ items: [{ ...ITEM_A, match: 'constructor' }] }),
+      async () => jsonResponse({ items: [{ ...ITEM_A, match: null }] }),
       async () => { throw new TypeError('NetworkError: secret-host.internal unreachable') },
     ]
     for (const respond of cases) {

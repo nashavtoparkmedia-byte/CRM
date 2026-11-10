@@ -271,6 +271,11 @@ export default function ContactSelector({
             }`}
           >
             <span className="truncate text-[15px] font-medium text-[#0F172A]">{item.displayTitle}</span>
+            {item.match === 'name_all_but_one_word' && (
+              <span data-testid="contact-selector-partial" className="truncate text-[12px] text-[#64748B]">
+                Совпали не все слова
+              </span>
+            )}
             {Array.isArray(item.channels) && item.channels.length > 0 && (
               <span className="truncate text-[12px] text-[#64748B]">
                 {item.channels.map(channelLabel).join(' · ')}
