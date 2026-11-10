@@ -10,43 +10,28 @@
 // precedence to hold before truncation. Hydration is one bounded query for the
 // selected ids, so the projection is never N+1.
 //
-// A name class is one parameterized read of Contact only. The stored name gets
-// the same fold the query words got (contactLookupFoldV1): lower case, then the
-// Russian capitals and «ё» mapped explicitly, so the match does not depend on
-// the database's ctype locale. Every word is a bound parameter compared with
-// strpos, so no word can act as a LIKE wildcard.
-
-import { Prisma } from '@prisma/client'
+// A name class is one static, parameterized read of Contact only. The stored name
+// gets the same fold the query words got (contactLookupFoldV1): lower case, then
+// «ё» as «е». lower() folds Cyrillic under the UTF-8 locale every CRM database
+// image runs (en_US.utf8), the same assumption the earlier case-insensitive search
+// made; the PostgreSQL proof keeps a capitals-only name to catch a regression.
+// The SQL text is fixed: up to CONTACT_LOOKUP_MAX_WORDS_V1 words are bound into
+// fixed slots (unused slots are NULL and never match), and every word is compared
+// with strpos, so no word can act as a LIKE wildcard.
 
 import { prisma } from '@/lib/prisma'
 
-import type {
-  ContactLookupCriteriaV1,
-  ContactLookupPortV1,
-  ContactLookupRankClassV1,
-  ContactLookupSourceV1,
+import {
+  CONTACT_LOOKUP_MAX_WORDS_V1,
+  type ContactLookupPortV1,
+  type ContactLookupSourceV1,
 } from './contact-lookup'
 
 const LIVE_CONTACT = { isArchived: false } as const
 
-const RUSSIAN_CAPITALS = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
-/** translate() source and target: Russian capitals to small letters, «Ё»/«ё» to «е». */
-const FOLD_FROM = `${RUSSIAN_CAPITALS}ё`
-const FOLD_TO = `${RUSSIAN_CAPITALS.toLowerCase().replace(/ё/gu, 'е')}е`
-
-type NameCriteria = Extract<ContactLookupCriteriaV1, { kind: 'text' }>
-type NameRankClass = Extract<ContactLookupRankClassV1, `name_${string}`>
-
-/** The WHERE predicate over the folded name `s.n` for one name rank class. */
-function namePredicate(criteria: NameCriteria, rankClass: NameRankClass): Prisma.Sql {
-  const words = criteria.words
-  const hits = Prisma.join(
-    words.map(word => Prisma.sql`(CASE WHEN strpos(s.n, ${word}) > 0 THEN 1 ELSE 0 END)`),
-    ' + ',
-  )
-  if (rankClass === 'name_prefix') return Prisma.sql`strpos(s.n, ${words[0]}) = 1 AND (${hits}) = ${words.length}`
-  if (rankClass === 'name_all_words') return Prisma.sql`(${hits}) = ${words.length}`
-  return Prisma.sql`(${hits}) = ${words.length - 1}`
+/** The words in the fixed slots of the name query; unused slots are NULL. */
+function wordSlots(words: readonly string[]): Array<string | null> {
+  return Array.from({ length: CONTACT_LOOKUP_MAX_WORDS_V1 }, (_unused, index) => words[index] ?? null)
 }
 
 export const legacyPrismaContactLookupPortV1: ContactLookupPortV1 = {
@@ -70,18 +55,31 @@ export const legacyPrismaContactLookupPortV1: ContactLookupPortV1 = {
     }
 
     if (rankClass !== 'name_prefix' && rankClass !== 'name_all_words' && rankClass !== 'name_all_but_one_word') return []
-    if (criteria.words.length === 0) return []
-    if (rankClass === 'name_all_but_one_word' && criteria.words.length < 3) return []
-    const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    const words = criteria.words.slice(0, CONTACT_LOOKUP_MAX_WORDS_V1)
+    if (words.length === 0) return []
+    if (rankClass === 'name_all_but_one_word' && words.length < 3) return []
+    // name_prefix and name_all_words need every word; the last class all but one.
+    const requiredHits = rankClass === 'name_all_but_one_word' ? words.length - 1 : words.length
+    const prefixWord = rankClass === 'name_prefix' ? words[0] : null
+    const [w1, w2, w3, w4, w5, w6] = wordSlots(words)
+    const rows = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT s.id FROM (
-        SELECT c."id" AS id, translate(lower(c."displayName"), ${FOLD_FROM}, ${FOLD_TO}) AS n
+        SELECT c."id" AS id, replace(lower(c."displayName"), 'ё', 'е') AS n
         FROM "Contact" c
         WHERE c."isArchived" = false
       ) s
-      WHERE ${namePredicate(criteria, rankClass)}
+      WHERE (
+        (CASE WHEN strpos(s.n, ${w1}::text) > 0 THEN 1 ELSE 0 END)
+        + (CASE WHEN strpos(s.n, ${w2}::text) > 0 THEN 1 ELSE 0 END)
+        + (CASE WHEN strpos(s.n, ${w3}::text) > 0 THEN 1 ELSE 0 END)
+        + (CASE WHEN strpos(s.n, ${w4}::text) > 0 THEN 1 ELSE 0 END)
+        + (CASE WHEN strpos(s.n, ${w5}::text) > 0 THEN 1 ELSE 0 END)
+        + (CASE WHEN strpos(s.n, ${w6}::text) > 0 THEN 1 ELSE 0 END)
+      ) = ${requiredHits}::int
+        AND (${prefixWord}::text IS NULL OR strpos(s.n, ${prefixWord}::text) = 1)
       ORDER BY s.id ASC
-      LIMIT ${limit}
-    `)
+      LIMIT ${limit}::int
+    `
     return rows.map(row => row.id)
   },
 
