@@ -4200,6 +4200,78 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-staff-session-wiring-main-42caee7e-20261110",
+      "reviewed_at": "2026-11-10T00:00:00Z",
+      "reviewed_by": "CASH_REFERRAL_STAFF_SESSION_WIRING_EXECUTOR_REVIEW_42CAEE7E",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_ORCHESTRATOR_V8_CASH_S4_STAFF_SESSION_V1_2_CONSUMER_ALIGNMENT_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 42caee7e, whose tail is identity-access-staff-session-v1-main-d516698e-20261108, and leaves that tail unchanged. It changes no assignment: it records one new boundary control under the architecture_controls prefix exclusion and the mechanical source-fingerprint rebinds of four exact-inventory paths of the Cash referral screen whose bytes the Staff Session wiring changes."
+      },
+      "reason": "Records the Cash referral screen's Staff Session wiring on main 42caee7e (docs/design/cash-staff-authority-v2.md section 3) and its C2 boundary control: 2,833 + 1 = 2,834 tracked executable surfaces, context-owned unchanged at 1,571 and governed exclusions 1,262 -> 1,263. The one new surface is tools/architecture/check-cash-referral-staff-authority-boundary.mjs, a read-only boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix with no exact inventory, so it receives no explicit exact-inventory assignment and no exact-inventory transition moves; it carries a reviewed lifecycle classification in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY (OPERATIONAL_SCRIPT / ACTIVE / POSSIBLE, functional owner architecture_recovery), matching every other boundary control, which is why this amendment's tracked inventory digest also carries that registered classification. Four existing exact-inventory paths of gravity_runtime_remainder change bytes only and receive mechanical source-fingerprint rebinds: the server-only composition, which now resolves the writer from Identity Access's Staff Session through the fleet_operations binder, the page and client component, which say the server's refusal and link to the existing staff sign-in, and the words module. The binder change (a strict Identity Access sid format) and its tests sit under gravity-mvp/src/modules/fleet-operations, owned by the fleet_operations context through its manifest owned_paths, and the screen tests are not executable surfaces, so they need no exact assignment. The server actions (actions.ts) are unchanged. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2833,
+        "tracked_inventory_sha256": "65c6697aebbf3b35cfafd3b586c644d12c815f1e1a6ab1ed4786de4960c61475",
+        "coverage_sha256": "3fd5220c8b2d97687ca27d9ce2a7ca63b7c30b8dac85c9d62122a3606c286705"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2834,
+        "tracked_inventory_sha256": "d226f2f22ca1ecf0982fd1ab838faaa4a0a09fadc867720319ebfdef685cd20e",
+        "coverage_sha256": "74eac08eca994676b641248def93b7abe3858a0d60f146be98aa97dc12705b3b"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/page.tsx",
+          "previous_source_sha256": "88cc2b3276f158d3751d395826971ac8b3f079be0ffcc9a3a09f178b46ba6297",
+          "current_source_sha256": "e400d0835358443a75b3e8f87b1bf704abc155237a56910b70adda4e6b85f716",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved Staff Session v1.2 consumer alignment (Orchestrator V8, Cash S4, 2026-11-08), unblocked by Identity Access #212 in main 42caee7e (2026-11-10): the page passes on the refusal the server-side resolver answered (for example that only an administrator writes) instead of always the no-session text. It decides nothing, holds no credential and reaches no production capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/referral-data.ts",
+          "previous_source_sha256": "5331dd1d50a8c37251d1e3e3fbd0a424afc9c6d32126e17ee911912006d7dd28",
+          "current_source_sha256": "a8eb7c1790b85bb6bac46d3f121efa52fec18cb62d0395c44cbf0d083b59c409",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved Staff Session v1.2 consumer alignment (Orchestrator V8, Cash S4, 2026-11-08), unblocked by Identity Access #212 in main 42caee7e (2026-11-10): the server-only composition now resolves the writer of a referral or access write from Identity Access's published Staff Session (identity_access.public.v1 getStaffSessionPrincipalV1) and its published directory (UserIdentity.v1 listUserIdentitiesV1) through the fleet_operations public binder resolveCashStaffAuthorityFromSessionV1 with server time, instead of refusing every write because no session existed. It still reads no cookie, header or form field, holds no credential and decides nothing: the binder admits only a confirmed Администратор, and the database CHECK still refuses any other writer. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/ReferralManager.tsx",
+          "previous_source_sha256": "1436a179c7fa20120f483d433691c0e6c9e8e0e23be91ddd74763a80097b9424",
+          "current_source_sha256": "d9ed82cc7bba04ace69685e979e43b11c81a1dd2f5022f75b876246cc0f3740c",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved Staff Session v1.2 consumer alignment (Orchestrator V8, Cash S4, 2026-11-08), unblocked by Identity Access #212 in main 42caee7e (2026-11-10): the write-unavailable notice shows the refusal the page received and, unless the employee is verified but lacks the role, a plain link to the existing staff sign-in at /login. Write buttons stay disabled exactly as before; it calls only the referral server actions and holds no credential. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/view.ts",
+          "previous_source_sha256": "07713633cae98b2522f4f2f906d25f19055d3491a3465ea908d1b3e42e4c2968",
+          "current_source_sha256": "e7294efdb3cc718a1f488e8af9847fa0f0cefad8f4fb5f184cb3d8874aca1a45",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved Staff Session v1.2 consumer alignment (Orchestrator V8, Cash S4, 2026-11-08), unblocked by Identity Access #212 in main 42caee7e (2026-11-10): two words entries are added for the binder's refusals staff_identity_mismatch and staff_role_not_allowed. It decides nothing, reads nothing and holds no credential. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "tools/architecture/check-cash-referral-staff-authority-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It reads tracked gravity-mvp source and asserts the Cash referral staff authority allowlist (C2); it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

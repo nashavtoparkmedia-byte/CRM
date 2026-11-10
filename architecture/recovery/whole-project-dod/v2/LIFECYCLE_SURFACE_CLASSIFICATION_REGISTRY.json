@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 746,
+    "total_entries": 747,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 91,
-    "active_operational": 519,
+    "active_operational": 520,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6816,6 +6816,15 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "identity_access",
       "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459"
+    },
+    {
+      "path": "tools/architecture/check-cash-referral-staff-authority-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the Cash referral staff authority (C2 of docs/design/cash-staff-authority-v2.md); approved path is a bounded read-only boundary control that allowlists the four fleet_operations Cash manager writes to the referral screen's server actions with the server-resolved authority, the binder's single caller and its exact Identity Access inputs (getStaffSessionPrincipalV1, UserIdentity.v1 listUserIdentitiesV1, the server clock), the absence of any Cash authority literal or browser read outside the binder, the Администратор-only write roles and Identity Access's sid format, and rejects its negative probes. It writes no repository evidence, business data or provider state.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
     }
   ]
 }
