@@ -192,10 +192,17 @@ function assertAdapterLocksBeforeJudging(source) {
     'await lockEventKeys(transaction,',
     'await recordedEvent(transaction,',
     'if (recorded) return recorded',
-    'decideGuardedAppendV1(',
+    'const binding = await bindingOf(transaction, conversation)',
+    'decideGuardedAppendV1(input.conversationKind, input.attribution, binding)',
     'await writeVisible(transaction,',
     'await writeHeld(transaction,',
   ], 'append')
+  // (d) R-22 on the write side: the binding is judged with R-22's own policy.
+  const binding = functionBody(source, 'bindingOf')
+  if (!/conversationPersonBindingStateV1\(\{[\s\S]*?\}\) === 'contradicted'/u.test(binding) || !/^\s*contradicted,$/mu.test(binding)) {
+    throw new Error('the guarded binding is not judged with the R-22 trust policy')
+  }
+  if (!importSpecifiers(source).includes('./conversation-binding-trust-policy')) throw new Error('the guarded adapter does not use the R-22 trust policy')
   if (!/if \(isUniqueViolation\(error\)\) \{\s+const winner = await recordedEvent\(prisma, event\)/u.test(append)) {
     throw new Error('append: a unique violation is not settled by the committed winner')
   }
@@ -205,7 +212,7 @@ function assertAdapterLocksBeforeJudging(source) {
     'prisma.$transaction(',
     'await lockConversation(transaction,',
     "if (input.conversationKind === 'private' && proof.status !== 'proven') {",
-    'decideGuardedAppendV1(',
+    'decideGuardedAppendV1(input.conversationKind, proof, await bindingOf(transaction, conversation))',
     'if (!decision.visible)',
     'transaction.heldChannelMessage.findMany(',
     'await lockEventKeys(transaction,',
@@ -255,6 +262,10 @@ function assertPurePolicy(source) {
   if (specifiers.length !== 1 || specifiers[0] !== '../../../../contracts/messaging/v1') throw new Error('policy imports drift')
   if (!/^import type \{/mu.test(source)) throw new Error('policy imports values')
   if (/\bawait\b|\bprisma\b|\bfetch\(|process\.env/u.test(source)) throw new Error('policy performs IO')
+  // (d) a proof that equals a binding R-22 proves is another person's never shows an event.
+  if (!source.includes('if (!binding.contradicted && binding.contactId === attribution.contactId && binding.contactIdentityId === attribution.contactIdentityId) {')) {
+    throw new Error('policy shows a proven sender in a contradicted binding')
+  }
 }
 
 function assertHandlersParseFirst(source) {
@@ -411,6 +422,10 @@ rejectProbe(adapterSource, `${adapterSource}\nawait transaction.chat.update({ wh
 rejectProbe(adapterSource, `${adapterSource}\nawait transaction.$executeRawUnsafe('UPDATE "Chat" SET "driverId" = NULL')\n`, assertAdapterWritesNoBinding)
 rejectProbe(policySource, `import { prisma } from '@/lib/prisma'\n${policySource}`, assertPurePolicy)
 rejectProbe(policySource, `${policySource}\nexport async function probe() { return await Promise.resolve(process.env.X) }\n`, assertPurePolicy)
+rejectProbe(policySource, policySource.replace('if (!binding.contradicted && binding.contactId', 'if (binding.contactId'), assertPurePolicy)
+rejectProbe(adapterSource, adapterSource.replace("  }) === 'contradicted'\n", "  }) === 'never'\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('    contradicted,\n  }', '    contradicted: false,\n  }'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("import { conversationPersonBindingStateV1 } from './conversation-binding-trust-policy'\n", "const conversationPersonBindingStateV1 = (_facts: unknown) => 'unverifiable'\n"), assertAdapterLocksBeforeJudging)
 rejectProbe(handlerSource, handlerSource.replace(
   '    const { contract: _contract, ...input } = parseAppendGuardedChannelMessageCommandV1(command)\n    const settled = await port.append(input)\n',
   '    const settled = await port.append(command as never)\n    const { contract: _contract, ...input } = parseAppendGuardedChannelMessageCommandV1(command)\n',

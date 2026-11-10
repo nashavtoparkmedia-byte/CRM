@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "ed193c25b903d8fd95b254561dbf42137000f2f678fc8b3fd73e282eea49e7dc",
-    "size": 174788,
+    "sha256": "512a723b2b1973a4dd59863ec48bc1e079c97241ff1abda495b4738f3ab52b69",
+    "size": 176722,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -248,6 +248,24 @@
       "creates": {
         "tables": [
           "HeldChannelMessage"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261108210000_add_staff_credential",
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+      "size": 2758,
+      "owner_context": "identity_access",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/identity-access/internal/staff-credential-store.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "StaffCredential",
+          "StaffCredentialEvent"
         ],
         "columns": [],
         "forbidden_indexes": []

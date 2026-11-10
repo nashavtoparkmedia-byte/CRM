@@ -73,6 +73,17 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | `BOT_TOKEN` (`@yoko_park_bot` — алертный) | health-monitor.sh | **C** |
 | `ADMIN_PASS`, `ADMIN_USER` | Gravity integration-admin login and tg-bot server-side admin authentication | **C** |
 | `ADMIN_SESSION_SECRET` | подпись HttpOnly-сессии tg-bot frontend (при отсутствии сессия подписывается `ADMIN_PASS`) | **C** |
+| `STAFF_SESSION_SECRET` | Gravity Staff Session v1: подпись индивидуальной сессии сотрудника (`__Host-yoko_staff_session`). Не логин и не пароль; ≥ 32 байт, не placeholder, не равен `ADMIN_PASS` / `MOBILE_ACCESS_PASS` / `BOT_CRM_SECRET` — иначе lane не работает (fail closed). Пока не задан, Staff Session спит (docs/design/staff-session-v1.md) | **C** |
+| `STAFF_SESSION_REVOCATION_EPOCH` | Gravity: поднять значение → все staff-сессии завершаются сразу. Ротация `STAFF_SESSION_SECRET` = новый секрет + новый epoch | M |
+| `YOKO_STAFF_SESSION_ENFORCE` | Gravity: `on` — браузер без staff-сессии теряет `crm_user_id` (выбор пользователя без пароля закрыт). Включать отдельным Owner GO после bootstrap | M |
+| `YOKO_USER_REGISTRY_FILE` | Gravity: путь к реестру сотрудников (`users.json`). Перед выдачей `STAFF_SESSION_SECRET` в production — только на постоянном хранилище (C-D3b); при заданном секрете отсутствующий файл = отказ lane, не seed. `YOKO_USER_REGISTRY_SEED=once` разрешает однократный seed из образа, пока нет ни одной строки `StaffCredential`. Один писатель на инстанс | M |
+
+> **Staff Session — порядок активации (каждый шаг отдельный Owner GO):**
+> 1. `ADMIN_PASS` ротирован (копия на Beget считается раскрытой) — bootstrap идёт от integration-admin сессии;
+> 2. реестр на постоянном хранилище, `YOKO_USER_REGISTRY_FILE` указывает на него;
+> 3. миграция `20261108210000_add_staff_credential` применена вместе с кодом (непримененная таблица = /users заморожен, fail closed);
+> 4. `STAFF_SESSION_SECRET` выдан; первый пароль Администратора задаёт integration-admin (только пока ни у одного Администратора нет живого пароля), остальные — Администратор в /users;
+> 5. `YOKO_STAFF_SESSION_ENFORCE=on`.
 | `TELEGRAM_WEBHOOK_SECRET` | проверка заголовка `X-Telegram-Bot-Api-Secret-Token` для Telegram webhook | **C** |
 | `ADMIN_IDS` (список Telegram ID админов) | tg-bot | M — это не секрет, но не публикуем |
 | `BOT_CRM_SECRET` | tg-bot ↔ gravity-mvp (межсервисная авторизация) | **C** |

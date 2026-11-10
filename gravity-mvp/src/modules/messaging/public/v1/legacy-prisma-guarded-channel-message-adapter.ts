@@ -13,6 +13,7 @@ import {
 import { inboundNotificationIntentV1, persistsWithNotificationIntentV1 } from '../../internal/mobile-push/inbound-notification-intent'
 import { newDeliveryEvidenceRecordV1 } from './delivery-state-policy'
 import { decideGuardedAppendV1, type ConversationPersonBindingV1 } from './guarded-append-policy'
+import { conversationPersonBindingStateV1 } from './conversation-binding-trust-policy'
 import type { GuardedAppendSettlementV1, GuardedChannelMessagePersistencePortV1 } from './guarded-channel-message-handler'
 
 /**
@@ -73,11 +74,33 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-function bindingOf(conversation: LockedConversation): ConversationPersonBindingV1 {
+/**
+ * The binding the locked conversation carries, judged with R-22's own policy:
+ * the linked identity is read through the conversation (the same facts the
+ * inbox reads), so a binding R-22 proves is another person's is never one a
+ * proof can match. The conversation row is already locked by this transaction.
+ */
+async function bindingOf(transaction: GuardedDb, conversation: LockedConversation): Promise<ConversationPersonBindingV1> {
+  const facts = conversation.contactId === null ? null : await transaction.chat.findUnique({
+    where: { id: conversation.id },
+    select: {
+      externalChatId: true,
+      contactIdentity: { select: { id: true, channel: true, externalId: true, contactId: true, isActive: true } },
+    },
+  })
+  const contradicted = facts !== null && conversationPersonBindingStateV1({
+    channel: conversation.channel,
+    chatType: conversation.chatType,
+    externalChatId: facts.externalChatId,
+    contactId: conversation.contactId,
+    contactIdentityId: conversation.contactIdentityId,
+    linkedIdentity: facts.contactIdentity,
+  }) === 'contradicted'
   return {
     contactId: conversation.contactId,
     contactIdentityId: conversation.contactIdentityId,
     driverId: conversation.driverId,
+    contradicted,
   }
 }
 
@@ -202,7 +225,7 @@ async function writeHeld(
   event: GuardedEvent,
   reason: HeldChannelMessageReasonV1,
   attribution: GuardedSenderAttributionV1,
-  conversation: LockedConversation,
+  binding: ConversationPersonBindingV1,
 ): Promise<string> {
   const held = await transaction.heldChannelMessage.create({
     data: {
@@ -219,7 +242,7 @@ async function writeHeld(
       holdEvidence: {
         v: 1,
         attribution: attributionEvidence(attribution),
-        binding: { ...bindingOf(conversation) },
+        binding: { ...binding },
       } as Prisma.InputJsonValue,
     },
     select: { id: true },
@@ -274,12 +297,13 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
         const recorded = await recordedEvent(transaction, event)
         if (recorded) return recorded
 
-        const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, bindingOf(conversation))
+        const binding = await bindingOf(transaction, conversation)
+        const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, binding)
         if (decision.visible) {
           const messageId = await writeVisible(transaction, input.conversationKind, event, { v: 1, attribution: input.attribution.status })
           return { outcome: 'appended', messageId } as const
         }
-        const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, conversation)
+        const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, binding)
         return { outcome: 'held', heldMessageId, holdReason: decision.reason } as const
       }, TRANSACTION_OPTIONS)
     } catch (error: unknown) {
@@ -308,7 +332,7 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
         if (input.conversationKind === 'private' && proof.status !== 'proven') {
           return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: 'attribution_unproven' }
         }
-        const decision = decideGuardedAppendV1(input.conversationKind, proof, bindingOf(conversation))
+        const decision = decideGuardedAppendV1(input.conversationKind, proof, await bindingOf(transaction, conversation))
         if (!decision.visible) {
           return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: decision.reason }
         }

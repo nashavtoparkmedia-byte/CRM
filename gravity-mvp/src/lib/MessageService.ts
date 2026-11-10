@@ -7,6 +7,7 @@ import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/conta
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1, type TextDeliveryResultV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 import { deriveDeliveryStateV1, isProviderAcceptedEvidenceV1, newDeliveryEvidenceRecordV1, physicalRetryAnchorMsV1, physicalRetryBackoffMsV1, provenDeliveryRankV1, readChannelDeliveryErrorV1, readDeliveryEvidenceV1, readTextDeliveryResultV1, type DeliveryEvidenceRecordV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
+import { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, type ConversationBindingFactsV1 } from '@/modules/messaging/public/v1/conversation-binding-trust-policy'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
@@ -40,6 +41,11 @@ export class MessageService {
                     contactId: true,
                     contactIdentityId: true,
                     metadata: true,
+                    // R-22: the row contactIdentityId names, so the read can tell a
+                    // binding that is provably another person's from one it keeps.
+                    contactIdentity: {
+                        select: { id: true, channel: true, externalId: true, contactId: true, isActive: true },
+                    },
                     driver: {
                         select: {
                             id: true,
@@ -139,12 +145,36 @@ export class MessageService {
                 : []
             const driverByYandexId = new Map(contactDrivers.map((d: any) => [d.yandexDriverId, d]))
 
-            // 2. Group chats by contactId (priority) or driverId (fallback)
-            // This ensures chats created via Contact API (with contactId but no driverId)
-            // are grouped together with chats linked via Driver.
+            // 2. Group chats by their contact binding only (R-22). A driverId is a
+            // projection and never merges two conversations: two conversations of
+            // one person already share a contact, and two that share only a driver
+            // are how a stale projection merged different people. A conversation
+            // whose binding is provably another person's stands alone, without
+            // that person's contact or driver shown on it.
             const ungroupedChats: any[] = []
+            const personGroupKeys = new Map<string, string | null>()
+            for (const chat of chats) {
+                const facts: ConversationBindingFactsV1 = {
+                    channel: chat.channel,
+                    chatType: chat.chatType,
+                    externalChatId: chat.externalChatId,
+                    contactId: chat.contactId ?? null,
+                    contactIdentityId: chat.contactIdentityId ?? null,
+                    linkedIdentity: chat.contactIdentity ?? null,
+                }
+                chat.personBinding = conversationPersonBindingStateV1(facts)
+                personGroupKeys.set(chat.id, conversationPersonGroupKeyV1(facts))
+                if (chat.personBinding === 'contradicted') {
+                    chat.contact = null
+                    chat.contactId = null
+                    chat.contactIdentityId = null
+                    chat.driver = null
+                    chat.driverId = null
+                }
+                delete chat.contactIdentity
+            }
 
-            // Union-Find merge: chats sharing contactId OR driverId end up in the same group
+            // Union-Find merge over the one person key per chat (see above)
             const chatToGroup = new Map<string, string>() // chatId → groupKey
             const keyToGroup = new Map<string, string>()   // contactId/driverId → groupKey
             const groupChats = new Map<string, any[]>()    // groupKey → chats
@@ -154,10 +184,8 @@ export class MessageService {
                     ungroupedChats.push(chat)
                     continue
                 }
-                const keys = [
-                    chat.contactId ? `c:${chat.contactId}` : null,
-                    chat.driverId ? `d:${chat.driverId}` : null,
-                ].filter(Boolean) as string[]
+                const personGroupKey = personGroupKeys.get(chat.id) ?? null
+                const keys = personGroupKey ? [personGroupKey] : []
 
                 if (keys.length === 0) {
                     ungroupedChats.push(chat)

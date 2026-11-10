@@ -45,8 +45,8 @@ function appendCommand(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const UNBOUND: ConversationPersonBindingV1 = { contactId: null, contactIdentityId: null, driverId: null }
-const BOUND_A: ConversationPersonBindingV1 = { contactId: 'contact-a', contactIdentityId: 'identity-a', driverId: 'driver-a' }
+const UNBOUND: ConversationPersonBindingV1 = { contactId: null, contactIdentityId: null, driverId: null, contradicted: false }
+const BOUND_A: ConversationPersonBindingV1 = { contactId: 'contact-a', contactIdentityId: 'identity-a', driverId: 'driver-a', contradicted: false }
 
 describe('guarded append contract', () => {
   it('accepts the exact private proven command and returns a normalized copy', () => {
@@ -156,8 +156,14 @@ describe('guarded append policy', () => {
   it('holds a proven sender whose conversation is bound to another person', () => {
     expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contactId: 'contact-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
     expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contactIdentityId: 'identity-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
-    expect(decideGuardedAppendV1('private', PROVEN, { contactId: null, contactIdentityId: null, driverId: 'driver-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
-    expect(decideGuardedAppendV1('private', PROVEN, { contactId: 'contact-a', contactIdentityId: null, driverId: null })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', PROVEN, { ...UNBOUND, driverId: 'driver-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', PROVEN, { ...UNBOUND, contactId: 'contact-a' })).toEqual({ visible: false, reason: 'binding_mismatch' })
+  })
+
+  it('holds a proven sender whose proof equals a binding R-22 proves is another person\'s', () => {
+    expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', UNPROVEN, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'attribution_unproven' })
+    expect(decideGuardedAppendV1('group', { status: 'not_applicable' }, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'group_person_bound' })
   })
 
   it('holds a proven sender whose conversation was never linked', () => {
