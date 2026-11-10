@@ -33,7 +33,8 @@
       "atomic_writers": [
         "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-channel-message-adapter.ts",
         "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-external-message-adapter.ts",
-        "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts"
+        "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts",
+        "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts"
       ],
       "public_facade": "gravity-mvp/src/modules/messaging/public/v1/index.ts",
       "consumer": "gravity-mvp/src/modules/messaging/public/v1/mobile-push-outbox-consumers.ts",

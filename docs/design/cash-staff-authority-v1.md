@@ -1,6 +1,8 @@
 # Cash staff authority — the one contract the manager writes need (v1)
 
-**Status: CONTRACT AGREED; Cash side READY, Identity Access side NOT YET IMPLEMENTED.**
+**Status: SUPERSEDED on 2026-11-08 by [`cash-staff-authority-v2.md`](cash-staff-authority-v2.md).** The Owner approved Staff Session v1.2 (PR #200) as the employee identity; Cash consumes `getStaffSessionPrincipalV1()`. Parts 1 and 2 below (`getIntegrationAdminSessionFactsV1`, `sid` in the integration-admin session) will not be implemented, and the binding `cashStaffAuthorityFromAdminSessionV1` was removed. This text is kept as the record of the earlier decision.
+
+~~Status: CONTRACT AGREED; Cash side READY, Identity Access side NOT YET IMPLEMENTED.~~
 - Producer: Identity Access (`identity_access`). The Orchestrator V7 GO (2026-11-07) gave Identity Access this minimal extension of the existing HMAC-signed integration-admin session; Security Claude reviews it independently.
 - Consumer: the Cash referral manager tools (S4, PR #198).
 - Cash side, done in PR #198 and tested:

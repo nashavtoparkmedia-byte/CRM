@@ -156,10 +156,9 @@ export {
   cashReferralManagerRecordInvitationV1,
   cashReferralManagerSearchV1,
   cashReferralManagerWithdrawInvitationV1,
-  cashStaffAuthorityFromAdminSessionV1,
+  resolveCashStaffAuthorityFromSessionV1,
 } from '../../application/cash-referral-manager-operations'
 export type {
-  CashAdminSessionFactsV1,
   CashAccessGrantBasisV1,
   CashAccessGrantResultV1,
   CashAccessHistoryEntryV1,
@@ -173,7 +172,11 @@ export type {
   CashReferralPersonCardV1,
   CashReferralRecordResultV1,
   CashReferralWithdrawResultV1,
+  CashStaffAuthorityResolutionV1,
   CashStaffAuthorityV1,
+  CashStaffDirectoryEntryV1,
+  CashStaffSessionPrincipalV1,
+  CashStaffSessionSourceV1,
 } from '../../application/cash-referral-manager-operations'
 export {
   compensationBudgetProvisioningScheduleV1,

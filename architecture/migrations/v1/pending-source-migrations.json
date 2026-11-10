@@ -9,8 +9,8 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "742a1445609c02007d2a191197ef47892d9b29d17351b4d57c0394a5ce44aa73",
-    "size": 175389,
+    "sha256": "512a723b2b1973a4dd59863ec48bc1e079c97241ff1abda495b4738f3ab52b69",
+    "size": 176722,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
@@ -231,6 +231,23 @@
       "creates": {
         "tables": [
           "CashReferralManagerInvitation"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
+      }
+    },
+    {
+      "name": "20261108120000_add_messaging_held_channel_message",
+      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+      "sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
+      "size": 3443,
+      "owner_context": "messaging",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "HeldChannelMessage"
         ],
         "columns": [],
         "forbidden_indexes": []
