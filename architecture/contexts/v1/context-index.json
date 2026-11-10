@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "8361748984fd7b1bd26bdd7277ce49ce32ebcf909c71d753de9e3331d4792bef"
+      "sha256": "47ea4004ebfe281f62b2437fb14975f6d9fb3c5a380e7f12c7d9b9e5fc6dbb64"
     },
     {
       "context": "operations_observability",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "e0f4823657f28aabbe781b29a3237e94b78c8376425e8ae460c9e2287df2fd58"
+      "sha256": "49cf2f4fc68fe42bd513d9acc0b981384451ddec43cbca03ac7d230194de37db"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "856bc80337af60e1b50f3f1bbb2a2032916a13b63124d744975d7d96e09a018c"
+      "sha256": "6ed86ceab87a56772805149eb86e0203155e64ed275265bced709011790e3bc6"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "bc4333107c083d4f2e268e1a3be10b1015083a10e6425196e0183df96bea4a29"
+      "sha256": "7724200121c2dbb12141036554b0422ab090f4fa9723f649fe16934a080ef50c"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "2a164cfafa2ac668755fd688f167d4f3b9060c24361a0d5bc65dc46c3264fd31"
+      "sha256": "f508ea9bc546677b845c8642bca70679f227c6484ba482d2acb00f2c8bf68e45"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "5a92e579f38272f0527ffff820b67cd8c0c5dfeacae94b5c410acebf0a44254a"
+      "sha256": "457d7faa1fca2e351dc2d0e49139aec34869346bb75ecbf328b89ee89487d06a"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "37b2a4565838ae4cd0f1ed72abb53a841bdaa03f79c8d9a28f21d144020c9fae"
+      "sha256": "6b1129bc35325c980d8341219cf6688651495727a255378c25c06e8897621aa3"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

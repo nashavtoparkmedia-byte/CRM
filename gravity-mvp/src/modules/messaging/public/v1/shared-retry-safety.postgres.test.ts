@@ -15,6 +15,17 @@ const TEST_DATABASE_URL = process.env.MESSAGING_RETRY_TEST_DATABASE_URL
 const describeWithDatabase = TEST_DATABASE_URL ? describe : describe.skip
 
 const mocks = vi.hoisted(() => ({
+    // The Contacts message permission the outbound gate reads: allowed unless a test says otherwise.
+    contactPermission: vi.fn(async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }) as Record<string, unknown>),
     waSendText: vi.fn(),
     tgSendText: vi.fn(),
     maxSendText: vi.fn(),
@@ -29,8 +40,10 @@ vi.mock('@/modules/contacts/public/v1/contact-display-policy', () => ({ buildCan
 vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
     contactReachabilityV1: { recordExactProviderReachability: vi.fn(async () => ({ outcome: 'updated' })) },
 }))
+vi.mock('@/modules/contacts/public/v1', () => ({ getContactCommunicationPermissionV1: mocks.contactPermission }))
 vi.mock('@/lib/messageStreamBus', () => ({ broadcastChatMessage: vi.fn() }))
-vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
+vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async importOriginal => ({
+    ...await importOriginal<Record<string, unknown>>(),
     getWhatsAppChannelDeliveryV1: () => ({ sendText: mocks.waSendText }),
     getTelegramChannelDeliveryV1: () => ({ sendText: mocks.tgSendText }),
     getMaxChannelDeliveryV1: () => ({ assertTransportBinding: vi.fn(), sendText: mocks.maxSendText }),
@@ -41,6 +54,7 @@ import { MessageService, isSafeToRedeliver } from '@/lib/MessageService'
 import { registerOutboundConversationPreparerV1, type OutboundConversationSnapshotV1 } from './outbound-conversation-identity-runtime'
 import { recoverStuckMessagingDeliveriesV1, retryEligibleMessagingDeliveriesV1 } from './delivery-recovery-operations'
 import { retryFailedOutboundMessageV1 } from './operator-delivery-retry'
+import { deriveDeliveryStateV1 } from './delivery-state-policy'
 
 const RUN = `s1rs${Date.now().toString(36)}`
 const CHAT = {
@@ -123,6 +137,86 @@ describeWithDatabase('S1 shared retry safety (PostgreSQL)', () => {
         await prisma.message.deleteMany({ where: { chatId: { startsWith: RUN } } })
         await prisma.chat.deleteMany({ where: { id: { startsWith: RUN } } })
         await prisma.$disconnect()
+    })
+
+    describe('D4 — the Contacts permission at redelivery (P3)', () => {
+        const allowed = mocks.contactPermission.getMockImplementation()!
+        afterEach(() => { mocks.contactPermission.mockImplementation(allowed) })
+        const deny = (reason: string, retryable: boolean) => async (query: { contactId: string }) => ({
+            contract: 'contacts.ContactCommunicationPermissionResult.v1',
+            decision: 'deny', retryable, reason, requestedContactId: query.contactId,
+            communicationClass: 'message', canonicalContactId: null, policyVersion: null,
+        })
+        async function failedSafe(key: string, retryAttempt = 0) {
+            return prisma.message.create({
+                data: {
+                    id: `${RUN}_${key}`, chatId: CHAT.telegram, direction: 'outbound', channel: 'telegram', content: key,
+                    status: 'failed', sentAt: new Date(Date.now() - 60_000),
+                    metadata: { retryable: true, deliveryOutcome: 'safe_to_redeliver', errorSchemaVersion: 2, retryAttempt, maxRetries: 3, lastFailedAt: '2020-01-01T00:00:00.000Z' },
+                },
+            })
+        }
+
+        it('a temporary refusal re-anchors the real row, and the real job then leaves it alone until it is due', async () => {
+            const created = await failedSafe('p3_temp', 1)
+            mocks.contactPermission.mockImplementationOnce(deny('policy_unavailable', true))
+            const startedAt = Date.now()
+            expect((await MessageService.retrySend(created.id)).error).toBe('MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable')
+
+            const after = await row(created.id)
+            expect(after.status).toBe('failed')
+            expect(meta(after.metadata)).toMatchObject({ retryAttempt: 1, deliveryOutcome: 'safe_to_redeliver', retryable: true })
+            expect(Date.parse(meta(after.metadata).lastFailedAt)).toBeGreaterThanOrEqual(startedAt - 5)
+            expect(after.sentAt).toEqual(created.sentAt)
+
+            mocks.contactPermission.mockClear()
+            const job = await retryEligibleMessagingDeliveriesV1()
+            expect(job.candidatesFound).toBe(0)
+            expect(mocks.contactPermission).not.toHaveBeenCalled()
+            expect(sends()).toBe(0)
+        })
+
+        it('a standing refusal finalizes the real row as terminal; no path sends it again', async () => {
+            const created = await failedSafe('p3_terminal')
+            mocks.contactPermission.mockImplementation(deny('restricted_all', false))
+            await MessageService.retrySend(created.id)
+
+            const after = await row(created.id)
+            expect(meta(after.metadata)).toMatchObject({ retryable: false, deliveryOutcome: 'terminal', errorCode: 'MESSAGING_CONTACT_PERMISSION_REFUSED' })
+            expect(deriveDeliveryStateV1(after)).toBe('failed_not_safe_to_retry')
+            mocks.contactPermission.mockClear()
+            await everyRetryPath([created.id])
+            expect(sends()).toBe(0)
+            expect(mocks.contactPermission).not.toHaveBeenCalled()
+        })
+
+        it('the settle is a real compare-and-set: a row another writer moved is left as that writer left it', async () => {
+            const created = await failedSafe('p3_cas')
+            mocks.contactPermission.mockImplementationOnce(async (query: { contactId: string }) => {
+                await prisma.message.update({
+                    where: { id: created.id },
+                    data: { metadata: { ...meta(created.metadata), deliveryOutcome: 'unknown', retryable: false } },
+                })
+                return deny('restricted_all', false)(query)
+            })
+            await MessageService.retrySend(created.id)
+
+            const after = meta((await row(created.id)).metadata)
+            expect(after).toMatchObject({ deliveryOutcome: 'unknown', retryable: false })
+            expect(after.errorCode).toBeUndefined()
+            expect(sends()).toBe(0)
+        })
+
+        it('when Contacts recovers, the next due attempt takes exactly one lease and one provider call', async () => {
+            const created = await failedSafe('p3_recover', 1)
+            mocks.tgSendText.mockResolvedValue({ externalId: `${RUN}_tg_ok` })
+            mocks.contactPermission.mockImplementationOnce(deny('lineage_unsafe', true))
+            await MessageService.retrySend(created.id)
+            await MessageService.retrySend(created.id, { operatorInitiated: true })
+
+            expect(mocks.tgSendText).toHaveBeenCalledTimes(1)
+            expect(meta((await row(created.id)).metadata).retryAttempt).toBe(2)
+        })
     })
 
     it('a provider id another row owns raises the real P2002 on externalId', async () => {

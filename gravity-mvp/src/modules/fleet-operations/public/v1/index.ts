@@ -149,6 +149,36 @@ export type {
   CashReferralIssueResultV1,
 } from '../../application/cash-referral-operations'
 export {
+  cashAccessManagerGrantV1,
+  cashAccessManagerRevokeV1,
+  cashReferralManagerEnabledV1,
+  cashReferralManagerPersonV1,
+  cashReferralManagerRecordInvitationV1,
+  cashReferralManagerSearchV1,
+  cashReferralManagerWithdrawInvitationV1,
+  resolveCashStaffAuthorityFromSessionV1,
+} from '../../application/cash-referral-manager-operations'
+export type {
+  CashAccessGrantBasisV1,
+  CashAccessGrantResultV1,
+  CashAccessHistoryEntryV1,
+  CashAccessManagerViewV1,
+  CashAccessRevokeResultV1,
+  CashReferralInvitationEntryV1,
+  CashReferralManagerCandidateV1,
+  CashReferralManagerProfileV1,
+  CashReferralManagerSearchV1,
+  CashReferralMatchV1,
+  CashReferralPersonCardV1,
+  CashReferralRecordResultV1,
+  CashReferralWithdrawResultV1,
+  CashStaffAuthorityResolutionV1,
+  CashStaffAuthorityV1,
+  CashStaffDirectoryEntryV1,
+  CashStaffSessionPrincipalV1,
+  CashStaffSessionSourceV1,
+} from '../../application/cash-referral-manager-operations'
+export {
   compensationBudgetProvisioningScheduleV1,
   ensureCompensationBudgetPeriodV1,
   runScheduledCompensationBudgetProvisioningV1,

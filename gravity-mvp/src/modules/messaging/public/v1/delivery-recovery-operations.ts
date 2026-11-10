@@ -35,6 +35,14 @@ export async function retryEligibleMessagingDeliveriesV1(): Promise<RetryEligibl
                    THEN (metadata->>'errorSchemaVersion')::int ELSE 0 END >= 2
           AND COALESCE((metadata->>'retryAttempt')::int, 0) < COALESCE((metadata->>'maxRetries')::int, 3)
           AND "sentAt" > NOW() - INTERVAL '24 hours'
+          -- Due by backoff: the SQL mirror of isPhysicalRetryDueV1 (delivery-state-policy),
+          -- on the application clock retrySend uses. A missing or unreadable anchor is due.
+          AND CASE WHEN metadata->>'lastFailedAt' ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9][.][0-9]{3}Z$'
+                        AND pg_input_is_valid(metadata->>'lastFailedAt', 'timestamptz')
+                   THEN (metadata->>'lastFailedAt')::timestamptz
+                        + LEAST(POWER(2, COALESCE((metadata->>'retryAttempt')::int, 0) + 1) * 30, 600) * INTERVAL '1 second'
+                        <= ${new Date().toISOString()}::timestamptz
+                   ELSE TRUE END
         ORDER BY "sentAt" ASC
         LIMIT 10
     `

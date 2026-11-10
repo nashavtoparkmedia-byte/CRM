@@ -1,14 +1,19 @@
 /**
  * Isolated-PostgreSQL proof for the Cash referral ledger and its store.
  *
- * Runs against a disposable database that holds only the referral
- * migration: the two tables refer to nothing else. What has to be
+ * Runs against a disposable database that holds only the two referral
+ * migrations (20261101120000 and 20261106210000): the two tables refer to
+ * nothing else. What has to be
  * established is that the ledger is append-only, that only the writer each
  * kind admits can write it, that the first Telegram account owns an
  * invitation and one person holds one qualified invitation, that two
  * writers on one chain cannot both commit, that a repeated idempotency key
  * writes nothing new, and that the verifier finds a row changed behind the
- * trigger.
+ * trigger. For the invitations a manager records: that their events need a
+ * signed staff session with the referral capability and name their
+ * invitation, that nobody is recorded as their own invitee, that one invitee
+ * counts once across a manager record and a qualified Telegram invitation,
+ * and that a record and its withdrawal write their events together and once.
  *
  * Gated behind YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF=1 and an isolated
  * DATABASE_URL.
@@ -21,6 +26,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { cashReferralPersonKeyDigestV1, verifyCashAccessChainV1 } from './compensation-referral-ledger'
 import { CashAccessVersionConflictV1, legacyPrismaCashReferralLedgerStoreV1 as store } from './legacy-prisma-cash-referral-ledger-adapter'
+
+const staffActor = (capability: string) => ({
+    kind: 'signed_staff_session' as const,
+    id: 'staff:maria',
+    capability,
+    sessionId: 'session-1',
+    authenticatedAt: new Date('2026-11-06T09:00:00.000Z'),
+})
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
 
@@ -213,5 +226,135 @@ proof('Cash referral ledger on real PostgreSQL', () => {
             await database.$executeRawUnsafe(`ALTER TABLE "CashAccessEvent" ENABLE TRIGGER "CashAccessEvent_append_only_row"`)
         }
         expect(verifyCashAccessChainV1(await store.readChain(contact))).toEqual({ ok: false, problem: 'hash_mismatch', seq: 1 })
+    })
+
+    it('records a manager invitation with its event once, keeps one inviter per invitee, and withdraws it', async () => {
+        const inviter = unique('inviter')
+        const invitee = unique('invitee')
+        const request = (key: string, inviterContactId = inviter) => store.recordManagerInvitation({
+            inviterContactId,
+            inviterLineageDigest: 'lineage:1',
+            inviteeContactId: invitee,
+            inviteeLineage: [invitee],
+            actor: staffActor('cash.referral.qualify'),
+            reason: 'Приглашение закреплено менеджером',
+            payload: { operatorLabel: 'Мария Иванова' },
+            idempotencyKey: key,
+        })
+        const key = unique('manager:invitation')
+        const first = await request(key)
+        expect(first).toMatchObject({ outcome: 'recorded' })
+        const invitationId = (first as { attributionId: string }).attributionId
+        expect(await request(key)).toEqual({ outcome: 'already_recorded', attributionId: invitationId })
+        // Another inviter for the same invitee: the recorded-invitee index refuses it.
+        expect(await request(unique('manager:invitation'), unique('rival'))).toEqual({ outcome: 'conflict' })
+        expect(await store.findInvitation(invitationId)).toMatchObject({ source: 'manager', state: 'recorded', inviteeContactId: invitee, version: 0 })
+        const chain = await store.readChain(inviter)
+        expect(chain.map((event) => event.kind)).toEqual(['referral_link_recorded'])
+        expect(chain[0]).toMatchObject({ attributionId: null, payload: { invitationId, inviteeContactId: invitee } })
+        expect(verifyCashAccessChainV1(chain).ok).toBe(true)
+
+        const withdrawKey = unique('manager:withdraw')
+        const withdraw = () => store.withdrawManagerInvitation({
+            attributionId: invitationId, expectedVersion: 0, actor: staffActor('cash.referral.qualify'),
+            reason: 'Закрепление приглашения снято менеджером', payload: { operatorLabel: 'Мария Иванова' }, idempotencyKey: withdrawKey,
+        })
+        expect(await withdraw()).toBe('withdrawn')
+        expect(await withdraw()).toBe('already_withdrawn')
+        expect(await store.findInvitation(invitationId)).toMatchObject({ state: 'withdrawn', version: 1 })
+        expect((await store.readChain(inviter)).map((event) => event.kind)).toEqual(['referral_link_recorded', 'referral_link_withdrawn'])
+        expect((await store.readInvitationLinkEvents([invitationId])).map((event) => event.kind)).toEqual(['referral_link_recorded', 'referral_link_withdrawn'])
+        // Withdrawn, the invitee may be recorded for someone else.
+        expect(await request(unique('manager:invitation'), unique('next'))).toMatchObject({ outcome: 'recorded' })
+        expect((await store.listInvitationsOfContacts([invitee])).map((row) => row.state).sort()).toEqual(['recorded', 'withdrawn'])
+    })
+
+    it('admits a manager invitation row only as its rules allow', async () => {
+        const insert = (inviter: string, invitee: string, state: string, withdrawn: boolean) =>
+            database.$executeRawUnsafe(
+                `INSERT INTO "CashReferralManagerInvitation" ("id","inviterContactId","inviterLineageDigest","inviteeContactId","state","recordedAt","withdrawnAt","updatedAt")
+                 VALUES ($1,$2,'lineage:1',$3,$4,now(),CASE WHEN $5 THEN now() ELSE NULL END,now())`,
+                unique('inv'), inviter, invitee, state, withdrawn,
+            )
+        const self = unique('self')
+        await expect(insert(self, self, 'recorded', false)).rejects.toThrow(/not_self_check/)
+        await expect(insert(unique('i'), unique('c'), 'qualified', false)).rejects.toThrow(/state_check/)
+        await expect(insert(unique('i'), unique('c'), 'withdrawn', false)).rejects.toThrow(/withdrawn_check/)
+        await expect(insert(unique('i'), unique('c'), 'recorded', true)).rejects.toThrow(/withdrawn_check/)
+        const invitee = unique('c')
+        await expect(insert(unique('i'), invitee, 'recorded', false)).resolves.toBe(1)
+        // Prisma reports a unique violation by its SQLSTATE and key, not by the index name.
+        await expect(insert(unique('i'), invitee, 'recorded', false)).rejects.toThrow(/23505|already exists|recorded_invitee_key|duplicate key/)
+        await expect(insert(unique('i'), invitee, 'withdrawn', true)).resolves.toBe(1)
+    })
+
+    it('counts one invitee once across a qualified Telegram invitation and a manager record', async () => {
+        const inviter = unique('inviter')
+        const { token } = await store.issueCode({ inviterContactId: inviter, lineageDigest: 'lineage:1' })
+        expect(await store.capture({ token, inviteeTelegramUserId: unique('tg') })).toBe('captured')
+        const [attribution] = (await store.findUndecided(1000)).filter((row) => row.inviterContactId === inviter)
+        const invitee = unique('invitee-contact')
+        expect(await store.writeDecision({
+            attributionId: attribution.id, expectedVersion: attribution.version, state: 'qualified', reason: null,
+            inviteeContactId: invitee, inviteePersonKey: cashReferralPersonKeyDigestV1(unique('vu')), targetParkId: 'park-1',
+            factsSnapshot: {}, decision: { outcome: 'qualified' }, grant: false, observedDismissals: [], idempotencyKey: `decision:${attribution.id}:0`,
+        })).toBe('written')
+        const record = (inviteeContactId: string, inviteeLineage: string[]) => store.recordManagerInvitation({
+            inviterContactId: unique('manager-inviter'), inviterLineageDigest: 'lineage:1', inviteeContactId, inviteeLineage,
+            actor: staffActor('cash.referral.qualify'), reason: 'Приглашение закреплено менеджером', payload: {}, idempotencyKey: unique('manager:invitation'),
+        })
+        expect(await record(invitee, [invitee])).toEqual({ outcome: 'conflict' })
+        // Counted under another contact of the same lineage still holds the person.
+        expect(await record(unique('survivor'), [invitee])).toEqual({ outcome: 'conflict' })
+
+        // And the other way round: a manager record holds the invitee against the pass.
+        const recordedInvitee = unique('recorded-contact')
+        expect(await record(recordedInvitee, [recordedInvitee])).toMatchObject({ outcome: 'recorded' })
+        const other = unique('inviter')
+        const code = await store.issueCode({ inviterContactId: other, lineageDigest: 'lineage:1' })
+        expect(await store.capture({ token: code.token, inviteeTelegramUserId: unique('tg') })).toBe('captured')
+        const [second] = (await store.findUndecided(1000)).filter((row) => row.inviterContactId === other)
+        expect(await store.writeDecision({
+            attributionId: second.id, expectedVersion: second.version, state: 'qualified', reason: null,
+            inviteeContactId: recordedInvitee, inviteePersonKey: cashReferralPersonKeyDigestV1(unique('vu')), targetParkId: 'park-1',
+            factsSnapshot: {}, decision: { outcome: 'qualified' }, grant: true, observedDismissals: [], idempotencyKey: `decision:${second.id}:0`,
+        })).toBe('person_already_qualified')
+        expect(await store.findAttribution(second.id)).toMatchObject({ state: 'captured', version: second.version })
+        expect((await store.readChain(other)).map((event) => event.kind)).toEqual(['referral_code_issued', 'referral_captured'])
+    })
+
+    it('admits the invitation kinds only from a signed staff session with the referral capability, naming their invitation', async () => {
+        const insert = (kind: string, actorKind: string, capability: string | null, session: string | null, payload: string) =>
+            database.$executeRawUnsafe(
+                `INSERT INTO "CashAccessEvent" ("id","chainContactId","seq","kind","lineageDigest","payload","actorKind","actorId","actorCapability","actorSessionId","actorAuthenticatedAt","reason","idempotencyKey","occurredAt","prevHash","hash")
+                 VALUES ($1,$2,1,$3,'l',$4::jsonb,$5,'actor',$6,$7,$8::timestamptz,'Приглашение закреплено менеджером',$9,now(),NULL,$10)`,
+                unique('id'), unique('contact'), kind, payload, actorKind, capability, session, session === null ? null : new Date(), unique('key'), 'c'.repeat(64),
+            )
+        const named = JSON.stringify({ invitationId: unique('inv') })
+        await expect(insert('referral_link_recorded', 'system', null, null, named)).rejects.toThrow(/writer_check/)
+        await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.access.manage', 'session-1', named)).rejects.toThrow(/writer_check/)
+        await expect(insert('referral_link_withdrawn', 'signed_staff_session', 'cash.referral.qualify', 'session-1', '{}')).rejects.toThrow(/invitation_check/)
+        await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', '{}')).rejects.toThrow(/invitation_check/)
+        // The invitation must be a non-empty string, not a JSON null, a number or an empty string.
+        for (const payload of ['{"invitationId":null}', '{"invitationId":7}', '{"invitationId":""}']) {
+            await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', payload)).rejects.toThrow(/invitation_check/)
+        }
+        await expect(insert('referral_link_recorded', 'signed_staff_session', 'cash.referral.qualify', 'session-1', named)).resolves.toBe(1)
+    })
+
+    it('refuses a staff kind whose session names no capability: a CHECK must not admit unknown', async () => {
+        const insert = (kind: string, capability: string | null, payload: string) =>
+            database.$executeRawUnsafe(
+                `INSERT INTO "CashAccessEvent" ("id","chainContactId","seq","kind","lineageDigest","payload","actorKind","actorId","actorCapability","actorSessionId","actorAuthenticatedAt","reason","idempotencyKey","occurredAt","prevHash","hash")
+                 VALUES ($1,$2,1,$3,'l',$4::jsonb,'signed_staff_session','actor',$5,'session-1',now(),'Бессрочный доступ по решению менеджера',$6,now(),NULL,$7)`,
+                unique('id'), unique('contact'), kind, payload, capability, unique('key'), 'c'.repeat(64),
+            )
+        const named = JSON.stringify({ invitationId: unique('inv') })
+        for (const kind of ['manual_granted', 'manual_cleared', 'manual_denied']) {
+            await expect(insert(kind, null, '{}')).rejects.toThrow(/writer_check/)
+        }
+        await expect(insert('referral_link_recorded', null, named)).rejects.toThrow(/writer_check/)
+        await expect(insert('referral_link_withdrawn', null, named)).rejects.toThrow(/writer_check/)
+        await expect(insert('manual_granted', 'cash.access.manage', '{}')).resolves.toBe(1)
     })
 })
