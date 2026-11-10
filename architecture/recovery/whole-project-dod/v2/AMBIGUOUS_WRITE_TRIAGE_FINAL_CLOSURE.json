@@ -1911,7 +1911,7 @@
     {
       "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
       "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
-      "source_sha256": "deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
+      "source_sha256": "fc0df27d8bb69e39b4b9f61c93978623310a516694fe4ad08d8104728865a1f4",
       "file": "gravity-mvp/src/lib/MessageService.ts",
       "line": 109,
       "column": 65,
@@ -1935,7 +1935,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
-      "sql_provenance_sha256": "51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a",
+      "sql_provenance_sha256": "f8109b2512e36736dd8ee8e5998c1f9bd1795f9c88d84b661afee691bd7c0012",
       "source_context": "messaging",
       "source_technical_module": "messages",
       "owner_contexts": [],
@@ -3350,9 +3350,9 @@
     {
       "record_id": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
       "site_signature": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
-      "source_sha256": "b5c52b74ffc79bfc061d27976528a52ad31934467613e78020da4d14bb47ca67",
+      "source_sha256": "9349fc7d33cf9950b82cb967256641a73c8cf52bed77bb13c09e753ca0ec5b21",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
-      "line": 93,
+      "line": 116,
       "column": 9,
       "kind": "raw",
       "method": "$queryRaw",
@@ -3368,7 +3368,7 @@
         "set_config"
       ],
       "sql_sha256": "5532fd4b9139650dbc6a4e9239119272ef96d4d74e459ba819cd86bb71ebe5df",
-      "sql_provenance_sha256": "b7fbe52e8cd648cdb8d696adb0a548be00c4f70ecf8c62dc488781dd1860e5bf",
+      "sql_provenance_sha256": "d6bdf45de7fbe753dd4d9b0d84760afade1b1ca51074af199e3120c855e0486c",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
@@ -3393,9 +3393,9 @@
     {
       "record_id": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
       "site_signature": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
-      "source_sha256": "b5c52b74ffc79bfc061d27976528a52ad31934467613e78020da4d14bb47ca67",
+      "source_sha256": "9349fc7d33cf9950b82cb967256641a73c8cf52bed77bb13c09e753ca0ec5b21",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
-      "line": 109,
+      "line": 132,
       "column": 11,
       "kind": "raw",
       "method": "$queryRaw",
@@ -3415,7 +3415,7 @@
         "pg_advisory_xact_lock"
       ],
       "sql_sha256": "5c5e080d469d714e5aa58717b1928801ccd489f43f108b02804927ffb2370883",
-      "sql_provenance_sha256": "7320670a222a3ae8fdf0426be60e0172d2f19a893f31503f01f18e0dc96ee9a8",
+      "sql_provenance_sha256": "ca4c1729403292833bd9c3eb896ec2c7c44bdcb2ed3645476b8e2ff233c21073",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
@@ -4767,8 +4767,8 @@
         "line": 109,
         "column": 65,
         "method": "$queryRaw",
-        "source_sha256": "deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
-        "sql_provenance_sha256": "51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a"
+        "source_sha256": "fc0df27d8bb69e39b4b9f61c93978623310a516694fe4ad08d8104728865a1f4",
+        "sql_provenance_sha256": "f8109b2512e36736dd8ee8e5998c1f9bd1795f9c88d84b661afee691bd7c0012"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -4786,14 +4786,12 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
+        "gravity-mvp/src/lib/MessageService.ts:109:65",
         "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
         "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:deaf36d96ffac44d9beeb178d9a27f88b5d683b2c84755bca18beea23c2b9e33",
-        "sql_provenance_sha256:51e74f9e1c848b862d566b06e0550e40e4f6e96e42c311c12b432ea0dab3e43a",
-        "gravity-mvp/src/lib/MessageService.ts:109:65",
-        "source_sha256:efb53909a4ab84f7036291144963dc59579c1ffedc1be3e460a60010582739ac",
-        "sql_provenance_sha256:ea24063b9a5c88ad56008acbc7c19221dfc76851adc0cdbb764ec89c28e69520"
+        "source_sha256:fc0df27d8bb69e39b4b9f61c93978623310a516694fe4ad08d8104728865a1f4",
+        "sql_provenance_sha256:f8109b2512e36736dd8ee8e5998c1f9bd1795f9c88d84b661afee691bd7c0012"
       ]
     },
     {
