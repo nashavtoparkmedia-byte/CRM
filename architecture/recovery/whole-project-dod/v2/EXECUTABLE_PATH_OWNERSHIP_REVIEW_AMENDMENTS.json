@@ -4200,6 +4200,69 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "identity-access-mobile-logout-f1-main-42caee7e-20261110",
+      "reviewed_at": "2026-11-10T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_MOBILE_LOGOUT_F1_EXECUTOR_REVIEW_42CAEE7E",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_ORCHESTRATOR_V8_IDENTITY_ACCESS_MASTER_PROMPT_3_0_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain published on main at 42caee7e, whose tail is identity-access-staff-session-v1-main-d516698e-20261108, and leaves that tail unchanged."
+      },
+      "reason": "Records the tracked executable surfaces the F-1 native mobile logout (Identity Access, agreed with Android and Security) adds on top of main 42caee7e and the one source fingerprint it moves: 2,833 + 3 = 2,836 surfaces, context-owned 1,571 -> 1,573 and governed exclusions 1,262 -> 1,263. The route and its PostgreSQL test sit under identity_access manifest owned_paths; one Vitest suite sits beside the security suites under the gravity_root exclusion. The request boundary gravity-mvp/src/proxy.ts keeps its exact-runtime inventory membership, lifecycle and owner; only its source hash moves. The other changed paths (mobile-session-auth.ts, package.json, the engineering map) are context-owned or not executable surfaces and need no exact assignment. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 42caee7e only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2833,
+        "tracked_inventory_sha256": "65c6697aebbf3b35cfafd3b586c644d12c815f1e1a6ab1ed4786de4960c61475",
+        "coverage_sha256": "3fd5220c8b2d97687ca27d9ce2a7ca63b7c30b8dac85c9d62122a3606c286705"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2836,
+        "tracked_inventory_sha256": "dbaa18b026d58cf428d11d0526bec279bce99bd72796e5bb111eceb3f028f539",
+        "coverage_sha256": "b1372f229b29b28fe074b507f489dd8497fb8270777357b5e029ddae6824dc29"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "2c3dc7b64a0270583fb90d3bc3126afe9386d779f28fd51a3b1c0b486003455e",
+          "current_source_sha256": "93e66b42753368bc1a620db836d5f740b4b6af4d00e0591c8a8a60acf98a7699",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The request boundary lets the shell lane reach one exact path, /api/mobile/session/logout, without a live session, so the native logout answers a dead session with its own 204 instead of the boundary's 401; the request still carries no crm_user_id from that branch, every other shell path is gated as before, and the browser lane is unchanged. Its APPLICATION_RUNTIME lifecycle, functional owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/api/mobile/session/logout/route.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, the native mobile logout POST /api/mobile/session/logout (F-1): JSON only, the yoko_mobile_session cookie alone decides, the body is never read; it ends only a session the BR-4 boundary accepts and answers 204, or 503 when the logout barrier could not be read or written. It never authenticates, under a path the identity_access bounded context owns (gravity-mvp/src/app/api/mobile in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/lib/security/mobile-session-logout.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST: the F-1 native logout through the real request boundary and route, with the barrier and push revocation in memory; it opens no database connection and holds no real credential."
+        },
+        {
+          "path": "gravity-mvp/src/modules/identity-access/public/v1/mobile-session-logout.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test of the F-1 native logout on real PostgreSQL rows (the barrier entry is exactly the presented session's, tombstone, idempotent repeat, concurrent logouts, dead sessions write nothing); gated behind MOBILE_PUSH_TEST_DATABASE_URL equal to an isolated DATABASE_URL, it holds no real credential and writes only to that disposable database, under a path the identity_access bounded context owns (gravity-mvp/src/modules/identity-access in architecture/contexts/v1/manifests/identity_access.json owned_paths). Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

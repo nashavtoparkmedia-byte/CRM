@@ -112,6 +112,18 @@ const SHELL_PUBLIC_PREFIXES = [
     '/favicon.ico',
 ]
 
+/**
+ * Exact paths the shell may reach without a live session.
+ *
+ * The native logout (F-1) must answer 204 for a session that is already dead
+ * as well as for a live one, so the route decides, not this gate. It reads the
+ * session cookie alone, ends only a session this boundary accepts and never
+ * grants an identity; it still receives no `crm_user_id` from here.
+ */
+const SHELL_PUBLIC_PATHS = new Set([
+    '/api/mobile/session/logout',
+])
+
 const SERVICE_UNAVAILABLE_PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
     + '<meta name="viewport" content="width=device-width, initial-scale=1"><title>YOKO CRM</title></head>'
     + '<body style="font-family:system-ui,sans-serif;color:#0F172A;padding:24px">'
@@ -193,7 +205,7 @@ export async function proxy(request: NextRequest) {
     // From here the request has no signed operator: no session at all in the
     // shell lane, or a session cookie that grants nothing in either lane. It
     // never reaches anything with an identity it could choose itself.
-    if (!shell || SHELL_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    if (!shell || SHELL_PUBLIC_PATHS.has(pathname) || SHELL_PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
         return forwardWithOperator(request, null)
     }
 

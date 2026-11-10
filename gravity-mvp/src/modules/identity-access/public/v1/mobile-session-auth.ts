@@ -14,7 +14,7 @@ import {
     type MobileSessionPrincipalV1,
 } from './mobile-session-credentials'
 import { UNSTABLE_DEVICE_ID_V1 } from './mobile-push-registration-handler'
-import { resolveRequestOperatorV1 } from './mobile-session-operator'
+import { resolveCookieOperatorV1, resolveRequestOperatorV1 } from './mobile-session-operator'
 import { listUserIdentitiesV1 } from './user-directory'
 
 /**
@@ -178,30 +178,34 @@ export async function writeDerivedUiIdentityCookie(principal: MobileSessionPrinc
     })
 }
 
-/** Log out: drop the signed session and the value derived from it. */
-export async function clearMobileSessionV1(): Promise<void> {
-    // Mobile Push v1: a logged-out device must stop receiving push, so its
-    // registration is revoked (and its token released) while the session that
-    // proves which device it is still exists. The session that logs out is
-    // recorded in the device's durable barrier, so a registration request
-    // proven by this same session can never re-activate the device, however
-    // long it was in flight; a device that never registered gets a tombstone
-    // carrying that barrier. Logging out never depends on it: if revocation
-    // fails, the session is still cleared and the registration stays bounded
-    // by the session's own expiry.
-    const principal = await getMobileSessionPrincipalV1()
-    if (principal) {
-        try {
-            const { revokeMobilePushDeviceForLogoutV1 } = await import('../../application/mobile-push-registration-operations')
-            await revokeMobilePushDeviceForLogoutV1({
-                principal,
-                sessionBindingId: mobileSessionBindingIdV1(principal),
-                barrierEntry: mobileSessionBarrierEntryV1(principal),
-            })
-        } catch (error) {
-            console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')
-        }
+/**
+ * Revoke the device's push registration and record this session in the
+ * device's durable logout barrier. True when that write committed.
+ *
+ * Mobile Push v1: a logged-out device must stop receiving push, so its
+ * registration is revoked (and its token released) while the session that
+ * proves which device it is still exists. The session that logs out is
+ * recorded in the device's durable barrier, so a registration request proven
+ * by this same session can never re-activate the device, however long it was
+ * in flight; a device that never registered gets a tombstone carrying that
+ * barrier.
+ */
+async function recordMobileLogoutBarrier(principal: MobileSessionPrincipalV1): Promise<boolean> {
+    try {
+        const { revokeMobilePushDeviceForLogoutV1 } = await import('../../application/mobile-push-registration-operations')
+        await revokeMobilePushDeviceForLogoutV1({
+            principal,
+            sessionBindingId: mobileSessionBindingIdV1(principal),
+            barrierEntry: mobileSessionBarrierEntryV1(principal),
+        })
+        return true
+    } catch (error) {
+        console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')
+        return false
     }
+}
+
+async function clearMobileSessionCookies(): Promise<void> {
     const cookieStore = await cookies()
     cookieStore.set(MOBILE_SESSION_COOKIE, '', sessionCookieOptions(0))
     cookieStore.set(LEGACY_UI_IDENTITY_COOKIE, '', {
@@ -211,4 +215,54 @@ export async function clearMobileSessionV1(): Promise<void> {
         path: '/',
         maxAge: 0,
     })
+}
+
+/** Log out: drop the signed session and the value derived from it. */
+export async function clearMobileSessionV1(): Promise<void> {
+    // Logging out never depends on the barrier write: if it fails, the session
+    // is still cleared and the registration stays bounded by the session's own
+    // expiry.
+    const principal = await getMobileSessionPrincipalV1()
+    if (principal) await recordMobileLogoutBarrier(principal)
+    await clearMobileSessionCookies()
+}
+
+/**
+ * What a native logout request achieved (`POST /api/mobile/session/logout`).
+ *
+ * - `logged_out`: the presented session was live and its barrier entry is now
+ *   recorded; no later request can use it.
+ * - `no_session`: nothing to end — no session cookie, or one the boundary
+ *   already refuses for good (bad signature, expired, an older revocation
+ *   epoch, already logged out, or a session logout could never bar).
+ * - `unavailable`: the session may still be live — its barrier could not be
+ *   read, or the barrier write failed.
+ */
+export type MobileSessionLogoutOutcomeV1 = 'logged_out' | 'no_session' | 'unavailable'
+
+/**
+ * End the mobile session this request presents, for a caller that is not a
+ * page (the Android shell's reset). Identity Access decides everything from the
+ * `yoko_mobile_session` cookie alone: no body, header, `crm_user_id` or staff
+ * cookie selects anything, and this never authenticates — it sets no session,
+ * switches no operator and leaves a Staff Session cookie untouched.
+ *
+ * Only a session the request boundary itself would accept (BR-4) is ended, so
+ * the barrier entry written is exactly that session's. A session the boundary
+ * refuses, or a barrier that cannot be read, leaves everything as it was: no
+ * row is written and no cookie is set.
+ */
+export async function endMobileSessionForRequestV1(): Promise<MobileSessionLogoutOutcomeV1> {
+    const sessionCookie = (await cookies()).get(MOBILE_SESSION_COOKIE)?.value
+    if (sessionCookie === undefined) return 'no_session'
+    const principal = verifyMobileSession(sessionCookie)
+    if (!principal) return 'no_session'
+    // The boundary's own predicate over this cookie alone: a co-present staff
+    // cookie or crm_user_id must neither block nor redirect the logout.
+    const operator = await resolveCookieOperatorV1(sessionCookie, undefined)
+    if (operator.kind === 'mobile_session_refused') return operator.unverifiable ? 'unavailable' : 'no_session'
+    if (operator.kind !== 'mobile_session' || operator.operatorId !== principal.runtimeOperatorId) return 'no_session'
+    const recorded = await recordMobileLogoutBarrier(principal)
+    await clearMobileSessionCookies()
+    return recorded ? 'logged_out' : 'unavailable'
 }
