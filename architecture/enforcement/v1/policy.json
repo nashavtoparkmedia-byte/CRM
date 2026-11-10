@@ -175,6 +175,7 @@
     "architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/communication-policy-foundation-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/cash-referral-access-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/send-to-contact-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/guarded-append-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
