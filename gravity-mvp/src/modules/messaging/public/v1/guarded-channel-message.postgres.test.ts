@@ -488,6 +488,45 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await prisma.contactIdentity.delete({ where: { id: otherIdentityOfA } })
   })
 
+  // R-22 on the write side (d): a proof that merely equals a binding R-22 proves is
+  // another person's (for example one read back from the conversation) shows nothing
+  // and releases nothing.
+  it('a proof equal to a binding whose identity belongs to another contact is held and never releases', async () => {
+    const contaminated = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityB })
+    const readBack: GuardedSenderAttributionV1 = { status: 'proven', contactId: ids.contactA, contactIdentityId: ids.identityB }
+
+    expect(await append(contaminated, readBack, key('contradicted-foreign-identity'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch', newlyRecorded: true })
+    expect(await visibleCount(contaminated)).toBe(0)
+    expect(await conversation(contaminated)).toMatchObject({ unreadCount: 0, requiresResponse: false })
+    expect(await release(contaminated, readBack)).toMatchObject({ outcome: 'still_held', holdReason: 'binding_mismatch', released: 0 })
+    expect(await visibleCount(contaminated)).toBe(0)
+
+    // Contacts repairs the binding to the identity's own contact; the true proof releases.
+    await prisma.chat.update({ where: { id: contaminated }, data: { contactId: ids.contactB } })
+    expect(await release(contaminated, PROVEN_B)).toMatchObject({ outcome: 'released', released: 1, remaining: 0 })
+    expect(await visibleCount(contaminated)).toBe(1)
+    await prisma.chat.delete({ where: { id: contaminated } })
+  })
+
+  it('a proof equal to a binding whose numeric Telegram identity names another peer is held and never releases', async () => {
+    const digits = `${Date.now()}`.slice(-9)
+    const wrongPeerIdentity = `${RUN}_iwp`
+    await prisma.contactIdentity.create({ data: { id: wrongPeerIdentity, contactId: ids.contactA, channel: 'telegram', externalId: `1${digits}` } })
+    const chatId = `${RUN}_chat_peer`
+    createdChats.push(chatId)
+    await prisma.chat.create({ data: { id: chatId, channel: 'telegram', externalChatId: `telegram:2${digits}`, chatType: 'private', contactId: ids.contactA, contactIdentityId: wrongPeerIdentity } })
+    const readBack: GuardedSenderAttributionV1 = { status: 'proven', contactId: ids.contactA, contactIdentityId: wrongPeerIdentity }
+
+    expect(await append(chatId, readBack, key('contradicted-peer'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch' })
+    expect(await release(chatId, readBack)).toMatchObject({ outcome: 'still_held', holdReason: 'binding_mismatch', released: 0 })
+    expect(await visibleCount(chatId)).toBe(0)
+    const [held] = await heldRows(chatId)
+    expect(meta(held.holdEvidence).binding).toMatchObject({ contactId: ids.contactA, contactIdentityId: wrongPeerIdentity, contradicted: true })
+
+    await prisma.chat.delete({ where: { id: chatId } })
+    await prisma.contactIdentity.delete({ where: { id: wrongPeerIdentity } })
+  })
+
   it('held events never appear in a conversation read of Message', async () => {
     const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
     await append(chatId, PROVEN_A, key('mine'))
