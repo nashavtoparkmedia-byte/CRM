@@ -40,6 +40,7 @@ const CONTACTS: Array<{ key: string; displayName: string; isArchived?: boolean; 
   { key: 'solovyov', displayName: 'СОЛОВЬЕВ ЕГОР' },
   { key: 'archived', displayName: 'Иванов Пётр', isArchived: true, phones: [{ phone: '+79991000303' }] },
   { key: 'old-phone', displayName: 'Орлов Денис', phones: [{ phone: '+79991000404', isActive: false }] },
+  { key: 'six-words', displayName: 'Мария-Луиза Анна Сантос Перейра (демо)' },
 ]
 
 /** Our own rows only, in the order Contacts returned them, as [key, match]. */
@@ -95,6 +96,16 @@ proof('ContactLookup.v1 on PostgreSQL', () => {
       ['ivanov', 'name_all_but_one_word'],
     ])
     expect(await search('Иванов Алексей Сергеевич')).toEqual([['ivanov-namesake', 'name_prefix']])
+  })
+
+  it('binds up to six words into the fixed slots, with the one-missing class still honest', async () => {
+    // Six words: мария, луиза, анна, сантос, перейра, демо.
+    expect(await search('Мария Луиза Анна Сантос Перейра демо')).toEqual([['six-words', 'name_prefix']])
+    expect(await search('Перейра Сантос Анна Луиза Мария (демо)')).toEqual([['six-words', 'name_all_words']])
+    expect(await search('Мария Луиза Анна Сантос Перейра Гомес')).toEqual([['six-words', 'name_all_but_one_word']])
+    expect(await search('Мария Луиза Анна Гомес Перес Лопес')).toEqual([])
+    // A seventh word is never searched: the six-word cap keeps the first six.
+    expect(await search('Мария Луиза Анна Сантос Перейра демо Гомес')).toEqual([['six-words', 'name_prefix']])
   })
 
   it('does not relax a one- or two-word name', async () => {
