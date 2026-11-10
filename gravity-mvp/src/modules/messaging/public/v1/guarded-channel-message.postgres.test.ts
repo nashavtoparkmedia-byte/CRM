@@ -178,7 +178,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(meta(held.holdEvidence)).toEqual({
       v: 1,
       attribution: { status: 'proven', contactId: ids.contactB, contactIdentityId: ids.identityB },
-      binding: { contactId: ids.contactA, contactIdentityId: ids.identityA, driverId: ids.driverA },
+      binding: { contactId: ids.contactA, contactIdentityId: ids.identityA, driverId: ids.driverA, contradicted: false },
     })
 
     const again = await append(chatId, PROVEN_B, key('other-person'))
