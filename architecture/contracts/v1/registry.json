@@ -379,6 +379,7 @@
         "ConversationView.v1",
         "DeliveryRecoveryOperations.v1",
         "DraftImprovement.v1",
+        "HeldChannelMessagesQuery.v1",
         "MessageStream.v1",
         "MessageView.v1",
         "PersistedMessageIngress.v1",
@@ -387,10 +388,13 @@
         "TransportRegistryLifecycle.v1"
       ],
       "commands": [
+        "AppendGuardedChannelMessageCommand.v1",
         "AttachMessageMediaCommand.v1",
         "ImportMessageHistoryCommand.v1",
         "ReceiveMessageCommand.v1",
-        "SendMessageCommand.v1"
+        "ReleaseHeldChannelMessagesCommand.v1",
+        "SendMessageCommand.v1",
+        "SendToContactCommand.v1"
       ],
       "consumer_contexts": [
         "analytics_reporting",

@@ -12,6 +12,8 @@ Partial update 2026-10-27: §2.8, F-25, the Login / sessions / guards routing ro
 mobile operator authority (BR-4: request boundary, logout barrier, protected effects), verified against its own
 change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
+Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
+tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
 
 # YOKO CRM — Engineering Map
 
@@ -198,7 +200,7 @@ Each entry lists what the code actually does.
   - `G/contracts/messaging/v1` (and `v2` for attach-media).
   - UI: `G/app/messages/`; HTTP: `G/app/api/messages/**`, `G/app/api/chats/**`.
 - **Owns**: `Chat`, `Message`, `MessageAttachment`, `MessageEventLog`,
-  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`.
+  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`, `HeldChannelMessage`, `MessagingSendIntent`.
 - **Reads without owning**: `Contact*`, `Driver`, provider connection tables.
 - **Upstream**: contacts, identity_access, work_management, ai_knowledge, calling,
   fleet_operations. **Downstream**: the three channel contexts, platform_shell,
@@ -213,6 +215,33 @@ Each entry lists what the code actually does.
   partial, never proof of absence — `contactChannelConversationsV1` answers
   `unknown`). Replaces the legacy `/api/contacts/search` `hasChat` signal for
   NewChatPopover / ChatList (M3A6D); see I-45.
+- **Public command — send to a Contact**: `SendToContactCommand.v1` →
+  `SendToContactResult.v1` (`sendToContactV1` from `G/modules/messaging/public/v1`;
+  in-process only, no `app/api` route). The caller names a Contact, a text and an
+  optional `allowedChannels` narrowing, never a route. Order: parse → fingerprint →
+  claim the `requestId` in `MessagingSendIntent` (another payload ⇒
+  `idempotency_conflict`, forever) → its Message `stc:<requestId>` exists ⇒ replay →
+  Contacts permission (P1) → route discovery over Messaging's own
+  `ContactConversationsQuery.v1` with the proof-only seam (exactly one provable
+  existing conversation, else `route_unavailable` / `route_ambiguous` /
+  `route_evidence_incomplete`; no first contact, no ranking, no fallback) →
+  `MessageService.send` with the `sendToContact` admission (the shared gate is P2).
+  Result `admitted` (delivery state + failure class from the row), `refused`
+  (no Message, no effect) or `idempotency_conflict`. Files:
+  `G/contracts/messaging/v1/send-to-contact-command.ts`,
+  `G/modules/messaging/application/send-to-contact-{request,routing,handler}.ts`,
+  `public/v1/legacy-prisma-send-to-contact-adapter.ts`; see I-64, I-65.
+- **Contacts permission gate (D4)**: `prepareOutboundConversationV1` is the route
+  proof followed by a fresh `contacts.ContactCommunicationPermissionQuery.v1`
+  `message` read for the proof's Contact — every outbound effect (text, redelivery,
+  media, image, reaction, AI auto-reply, CRM bot sends, inside the Telegram
+  adapter) crosses it. `proveOutboundConversationRouteV1` (the proof alone) serves
+  only retraction (`delete/route.ts`) and SendToContact discovery. Refusals are
+  typed: `MESSAGING_CONTACT_PERMISSION_REFUSED` (terminal) /
+  `MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED` (safe to redeliver); operator routes
+  answer `CONTACT_COMMUNICATION_RESTRICTED` (403) /
+  `CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE` (503) via
+  `contactPermissionRefusalV1`; see I-64.
 - **Extension points**: delivery port interfaces in `channel-delivery-runtime.ts`;
   new persisted command = contract + handler + adapter + wiring in
   `messaging-operations.ts`; new outbox event = contract +
@@ -222,6 +251,18 @@ Each entry lists what the code actually does.
   `resolved` (the canonical Contact after Contacts' merge lineage), `unresolved`,
   `ambiguous` (the recorded `metadata.contactResolution.status`, whatever link the
   Chat carries) or `not_found`; no provider, account or transport detail crosses it.
+- **Guarded inbound append (R-21)**: an ingress that has a provider event and a
+  Contacts outcome for its sender appends through `appendGuardedChannelMessageV1`
+  (`messaging.AppendGuardedChannelMessageCommand.v1`, adapter
+  `legacy-prisma-guarded-channel-message-adapter.ts`, policy
+  `guarded-append-policy.ts`). The caller passes `attribution` `proven` (the
+  identity it resolved and linked with `ensureConversationContactLinkV1`),
+  `unproven` (a bounded refusal code) or, for groups, `not_applicable`; Messaging
+  only compares it with the conversation's current binding. Answers `appended`,
+  `held`, `duplicate` or `key_conflict`; follow-up effects run only when
+  `newlyRecorded`. Held events are released by `releaseHeldChannelMessagesV1`
+  under a fresh proof and counted by `heldChannelMessagesV1`; see I-66, I-67.
+  Not yet wired into the Telegram bot webhook (Telegram Incident, T3).
 - **Delivery-truth extension points (S2)**: a channel adapter answers a text send
   with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
   `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
@@ -444,6 +485,16 @@ Each entry lists what the code actually does.
   - `G/modules/fleet-operations/application/{compensation-manager,compensation-pilot,compensation-budget-period,cash-order-ingestion}-operations.ts`.
   - UI: `G/app/compensation/`; bot scene: `tg-bot/src/handlers/compensation.js`;
     operator CLIs: `gravity-mvp/scripts/compensation-*.ts`.
+  - Referral and manual Cash access: `COMP/compensation-referral-ledger.ts` (the per-person
+    hash-chained `CashAccessEvent` chain and its fold), `COMP/compensation-access.ts`
+    (`decideCashAccessV1`), `COMP/legacy-prisma-cash-referral-ledger-adapter.ts`; manager tools
+    `COMP/cash-referral-manager.ts`, `cash-referral-manager-service.ts`,
+    `legacy-prisma-cash-referral-manager-adapter.ts`;
+    `G/modules/fleet-operations/application/{cash-referral,cash-referral-manager}-operations.ts`;
+    UI `G/app/compensation/referrals/`; bot entry `tg-bot/src/handlers/referral.js`.
+    Switches: `YOKO_CASH_ACCESS_LEDGER=on` (manager screens; Cash reads referral and manual
+    access from the ledger), `YOKO_CASH_REFERRAL_ACCESS=on` (the Telegram referral path),
+    `BOT_REFERRAL_ENTRY_ENABLED=true` (the bot menu entry). All three default off.
 - **Cash-order ingestion modes** (`YOKO_CASH_ORDER_INGESTION_MODE`, parsed in
   `COMP/cash-order-ingestion-config.ts`; parks in `YOKO_CASH_COMPENSATION_PARKS`):
   - `off` (default; also any unknown or retired value): no provider request, no write.
@@ -467,7 +518,7 @@ Each entry lists what the code actually does.
 - **Owns**: `Driver`, `DriverDaySummary`, `DriverEvent`, `DriverAttention`,
   `DriverAction`, `CommunicationEvent`, `ScoringThreshold`, `SyncStatus`,
   `ApiConnection`, `ApiLog`, `DailyParkStats`; the 13 `Compensation*` models (via
-  amendments); scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog`.
+  amendments); `CashReferralAttribution`, `CashAccessEvent`, `CashReferralManagerInvitation`; scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog`.
 - **Extension points**: handler + adapter under `public/v1`; compensation ports
   `CompensationPilotPortV1`, `CompensationManagerPortV1`, `CashOrderIngestionPortsV1`.
 - **Tests**: `G/modules/fleet-operations/**/*.test.ts` (most are compensation;
@@ -567,6 +618,8 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
 | `CommunicationTrigger` | communication-trigger adapter | `G/app/settings/triggers/actions.ts` | — | No evaluator found (C-34) |
 | `GroupVisibility` | `G/app/api/groups/visibility/route.ts` | same route, `ChatList.tsx` | none | Writer is outside the module |
+| `HeldChannelMessage` (pending source) | `legacy-prisma-guarded-channel-message-adapter.ts` only (insert on hold; `releasedAt`/`releasedMessageId` on release) | the same adapter only (dedupe, release, counts) | `appendGuardedChannelMessageV1`, `releaseHeldChannelMessagesV1`, `heldChannelMessagesV1` | None; `check-messaging-guarded-append-boundary.mjs` pins the single owner |
+| `MessagingSendIntent` | `legacy-prisma-send-to-contact-adapter.ts` only (`createMany` skipDuplicates, i.e. insert-if-absent) | the same adapter | `sendToContactV1` (`SendToContactCommand.v1`) | — (pending source migration `20261027090000_add_messaging_send_intent`; never updated or deleted) |
 
 Duplicated sources of truth: `Chat.channel` vs `Message.channel`; three parallel
 person links on Chat (`driverId`, `contactId`, `contactIdentityId`); delivery
@@ -665,9 +718,12 @@ data is not knowable from the repository.
 | 10 compensation core models: `CompensationBudgetPeriod`, `CompensationPerson`, `CompensationPersonBinding`, `CompensationVerifiedOrder`, `CompensationOrderClaim`, `CompensationApplication`, `CompensationPayoutAuthorization`, `CompensationSettlement`, `CompensationReconciliationTask`, `CompensationAuditEvent` | `COMP/compensation-prisma-adapter.ts`; budget period also `legacy-prisma-compensation-budget-period-adapter.ts` | manager and pilot adapters | Owner `fleet_operations` via `architecture/isolation/fleet-operations/compensation-monetary-core-v1/module-manifest-amendments.json` |
 | `CompensationCashOrder`, `CompensationCashOrderIngestionCheckpoint`, `CompensationPilotSubmission` | ingestion adapter; pilot adapter | compensation | Owner via `…/compensation-pilot-v1/module-manifest-amendments.json` |
 | scraper SQLite `Account`, `Check`, `CheckResult`, `AuditLog` | `yandex-fleet-scraper/src/{api,worker}.ts` | same | `AuditLog` has no writer |
+| `CashReferralAttribution`, `CashAccessEvent` | `COMP/legacy-prisma-cash-referral-ledger-adapter.ts` | `compensation-pilot-operations.ts` (the bot's Cash access decision), the manager screens | S1 `20261101120000_add_cash_referral_access`. `CashAccessEvent` is append-only and hash-chained per person; its writer CHECK admits manager kinds only with `signed_staff_session`, the kind's capability, a session id, `authenticatedAt` and a reason |
+| `CashReferralManagerInvitation` | the same ledger adapter | the manager screens | S4 `20261106210000_add_cash_referral_manager_links`. One standing invitation per invitee; recording one grants nothing |
 
 Compensation reads `Contact`, `ContactPhone`, `ApiConnection`, `Driver` without
-owning them.
+owning them. The referral manager tools reach Contacts only through its public
+capabilities: ContactLookup.v1 (`searchContactsV1`), lineage and main-driver confirmation.
 
 ### 3.6 Identity, work, AI knowledge, operations, avito, shared
 
@@ -853,9 +909,16 @@ capability first and persist afterwards, with direct Prisma writes.
   `externalId` after 5 min become `failed`, outcome `unknown`.
 - every 2 min: `retryEligibleMessagingDeliveriesV1` → `MessageService.retrySend`.
   The selector admits only `failed` outbound rows recorded `safe_to_redeliver`
-  with `errorSchemaVersion` ≥ 2 (I-10); `retrySend` re-checks that gate, leases the
-  row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
-  lease holder may finalise it (I-11).
+  with `errorSchemaVersion` ≥ 2 (I-10) whose backoff has elapsed — the SQL mirror of
+  `isPhysicalRetryDueV1` (`delivery-state-policy.ts`), the same rule `retrySend`
+  takes its backoff and anchor from, so backoff-pending rows no longer hold the
+  oldest-first `LIMIT 10` window; `retrySend` re-checks that gate, reads the
+  Contacts permission through the port (a temporary refusal re-anchors
+  `lastFailedAt`, a standing one finalises the row as terminal, both before the
+  lease and without consuming an attempt), leases the row (compare-and-set on
+  `failed` + `updatedAt`, `retryLeaseId`), and only the lease holder may finalise
+  it (I-11). Rows whose route proof or binding fails before the lease still
+  occupy the window for up to 24 h (known, not addressed).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
 - late evidence: `applyMessageDeliveryEvidenceV1` matches the exact provider id
   (another chat's, direction's or channel's row holding it is refused), else the
@@ -1000,6 +1063,19 @@ be fetched) → `compensationManagerActionV1` → `performManagerActionV1`
 (`COMP/compensation-manager-service.ts`) → start payout / finalize (settlement) /
 release / reject / resolve reconciliation in the adapter.
 Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
+
+**F-24a Referral manager tools (S4)**
+`G/app/compensation/referrals/actions.ts` → CRM manager session (`managerSession`) →
+the search and the person card also need the verified integration-admin principal
+(`getIntegrationAdminPrincipal`; ContactLookup.v1 answers only it) → every write also
+needs `resolveCashStaffAuthorityV1` (`referral-data.ts`; it refuses
+`staff_session_unavailable` until Identity Access hands over the signed session facts,
+`docs/design/cash-staff-authority-v1.md`) → `cashReferralManager*V1` /
+`cashAccessManager{Grant,Revoke}V1` (`application/cash-referral-manager-operations.ts`,
+behind `YOKO_CASH_ACCESS_LEDGER=on`) → `COMP/cash-referral-manager-service.ts` → the
+ledger adapter. Recording an invitation and granting access are separate writes; a grant
+is a manual grant from its decision time until revoked. The bot reads the same chain
+(`foldCashAccessLedgerV1` → `decideCashAccessV1`).
 
 ### Authentication and authorization
 
@@ -1309,6 +1385,30 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 
 ### Messaging
 
+- **I-64 Every outbound effect reads the Contacts `message` permission fresh,
+  inside the shared port, after the route proof.** `prepareOutboundConversationV1`
+  denies with a typed error; Contacts' `retryable` alone decides standing
+  (`terminal`) vs temporary (`safe_to_redeliver`); an unreadable answer fails
+  closed; nothing is cached. Only retraction and SendToContact discovery use the
+  ungated `proveOutboundConversationRouteV1`. A redelivery's refusal settles before
+  the lease and consumes no attempt. — `outbound-conversation-identity-runtime.ts`,
+  `MessageService.retrySend` — `outbound-conversation-identity-runtime.test.ts`,
+  `shared-retry-safety{,.postgres}.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
+- **I-65 One SendToContact `requestId` names one semantic payload forever and
+  admits at most one Message.** `MessagingSendIntent` binds it to
+  sha256(contract, contactId, content, sorted `allowedChannels` | null) on first
+  arrival, refused or not, and is never updated or deleted; the Message is
+  `clientMessageId = "stc:" + requestId`, a namespace only SendToContact admits and
+  mints; every route or server action that takes a caller's `clientMessageId`
+  either hands it to `MessageService.send` (which reserves the namespace), or
+  writes the Message itself and refuses an `stc:` id first (`send-media`: 400
+  `CLIENT_MESSAGE_ID_RESERVED`), or writes no Message; a SendToContact row replays
+  unconditionally on lookup and on the unique race; P1 and P2 must name the same
+  canonical Contact. — `send-to-contact-*`, `MessageService.send`,
+  `isSendToContactReservedClientMessageIdV1` — `send-to-contact-handler.test.ts`,
+  `send-media/route.test.ts`, `send-to-contact.postgres.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
 - **I-08 One `clientMessageId` = one row and one dispatch; a different intent
   under the same key is rejected.** `MessageService.send` + unique
   `Message.clientMessageId` — `operator-delivery-retry.test.ts`.
@@ -1370,6 +1470,28 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   linked to other merged-away aliases of the person (not the requested id) are not
   looked for; merges move conversations to the survivor, so this matters only
   after a failed merge.
+- **I-66 A guarded append shows an event only in the conversation its sender
+  proves.** One transaction locks the `Chat` row (`FOR UPDATE`, `lock_timeout`
+  2 s), then the event key (advisory, sorted), then judges the binding it holds:
+  a proven sender is visible only where `contactId` and `contactIdentityId` equal
+  the proof; an unproven sender only where no contact, identity or driver is
+  bound; a group event only while the group is bound to nobody. Anything else is
+  held. A visible event commits with its workflow projection and inbound
+  notification intent; a failure anywhere rolls all of it back. One key is one
+  event: the same key in the same conversation, direction and channel is a
+  `duplicate` (visible or held), anywhere else a `key_conflict`; neither writes.
+  An own outbound echo is S2 `provider_echo` (`sent`), never `delivered`. The
+  guard resolves no person and writes no binding. — `guarded-append-policy.ts`,
+  `legacy-prisma-guarded-channel-message-adapter.ts` —
+  `guarded-channel-message.test.ts`, `guarded-channel-message.postgres.test.ts`,
+  `check-messaging-guarded-append-boundary.mjs`.
+- **I-67 A held event is durable, invisible and released only under proof.**
+  `HeldChannelMessage` is read and written only by the guarded adapter; no
+  conversation view, inbox, AI context or workflow reads it. A release re-judges
+  the current binding with a fresh attribution, moves events into `Message` in
+  `sentAt` order with their workflow projection, stamps
+  `releasedAt`/`releasedMessageId`, and never takes a key another conversation
+  shows. Deleting the conversation deletes its held events. — same files.
 
 ### Channels
 
@@ -1584,6 +1706,15 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `compensation-manager-principal.ts` — its test. Exception: the session itself is
   the unsigned browser cookie (F-25); the real gate on `/compensation` is nginx
   Basic Auth (`check-compensation-edge-perimeter-boundary.mjs`).
+- **I-31b A referral manager write needs a signed staff session and the kind's capability.**
+  No role, principal id or the unsigned `crm_user_id` cookie admits a write, and the
+  authority is resolved on the server, never taken from the browser:
+  `cash.referral.qualify` for invitations, `cash.access.manage` for grant and revoke. A
+  request id reused for another target is refused (`invalid_request`). Recording an
+  invitation grants nothing. — `cashStaffAuthorityAdmitsV1` in `COMP/cash-referral-manager.ts`,
+  the writer CHECKs of `20261106210000_add_cash_referral_manager_links` —
+  `cash-referral-manager*.test.ts`, `G/app/compensation/referrals/referral-actions.test.ts`,
+  `cash-referral-manager-scenario.postgres.test.ts`.
 - **I-31a On demand never reads a park.** In mode `on_demand` the only provider
   request is one proven driver's completed cash orders of one business day, made after
   eligibility and the day checks; a response that is not exactly that is not written. —
@@ -1688,7 +1819,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
-| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge |
+| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-66, I-67: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |

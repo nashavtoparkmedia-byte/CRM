@@ -98,6 +98,48 @@ describe('POST /api/messages/send-media outbound identity preflight', () => {
         expect(mocks.chatUpdate).not.toHaveBeenCalled()
     })
 
+    test('answers a Contacts permission refusal with a stable code, before any provider or database mutation', async () => {
+        const refusal = (code: string, outcome: string, message: string) =>
+            Object.assign(new Error(message), { name: 'ChannelDeliveryErrorV1', deliveryOutcome: outcome, deliveryErrorCode: code })
+        mocks.prepareOutbound.mockRejectedValueOnce(refusal('MESSAGING_CONTACT_PERMISSION_REFUSED', 'terminal', 'MESSAGING_CONTACT_PERMISSION_REFUSED:restricted_message'))
+        const restricted = await POST(request())
+        expect(restricted.status).toBe(403)
+        expect(await restricted.json()).toMatchObject({ code: 'CONTACT_COMMUNICATION_RESTRICTED', error: 'Связь с этим контактом ограничена: сообщение не отправлено' })
+
+        mocks.prepareOutbound.mockRejectedValueOnce(refusal('MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED', 'safe_to_redeliver', 'MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED:policy_unavailable'))
+        const unavailable = await POST(request())
+        expect(unavailable.status).toBe(503)
+        expect(await unavailable.json()).toMatchObject({ code: 'CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE' })
+        expect(mocks.maxSendMedia).not.toHaveBeenCalled()
+        expect(mocks.telegramSendMedia).not.toHaveBeenCalled()
+        expect(mocks.whatsAppSendMedia).not.toHaveBeenCalled()
+        expect(mocks.messageCreate).not.toHaveBeenCalled()
+    })
+
+    test("refuses a caller clientMessageId in SendToContact's stc: namespace before any read, gate, provider call or Message", async () => {
+        mocks.prepareOutbound.mockResolvedValue(prepared('telegram'))
+        for (const clientMessageId of ['stc:x', 'stc:a-future-request-id', ['stc:x']]) {
+            const response = await POST(request({ clientMessageId }))
+            expect(response.status).toBe(400)
+            expect(await response.json()).toMatchObject({ code: 'CLIENT_MESSAGE_ID_RESERVED' })
+        }
+        expect(mocks.chatFindUnique).not.toHaveBeenCalled()
+        expect(mocks.prepareOutbound).not.toHaveBeenCalled()
+        expect(mocks.maxSendMedia).not.toHaveBeenCalled()
+        expect(mocks.telegramSendMedia).not.toHaveBeenCalled()
+        expect(mocks.whatsAppSendMedia).not.toHaveBeenCalled()
+        expect(mocks.messageCreate).not.toHaveBeenCalled()
+        expect(mocks.attachmentCreate).not.toHaveBeenCalled()
+        expect(mocks.chatUpdate).not.toHaveBeenCalled()
+
+        // Any other caller id is still written exactly as the caller sent it.
+        const ordinary = await POST(request({ clientMessageId: 'cmid-1' }))
+        expect(ordinary.status).toBe(200)
+        expect(mocks.messageCreate).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({ clientMessageId: 'cmid-1' }),
+        }))
+    })
+
     test('routes Telegram media only through the prepared peer and transport', async () => {
         mocks.prepareOutbound.mockResolvedValue(prepared('telegram'))
 

@@ -34,6 +34,8 @@ import { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 import { legacyPrismaExternalConversationPortV1 } from '../public/v1/legacy-prisma-external-conversation-adapter'
 import { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from '../public/v1/channel-message-handler'
 import { legacyPrismaChannelMessagePortV1 } from '../public/v1/legacy-prisma-channel-message-adapter'
+import { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from '../public/v1/guarded-channel-message-handler'
+import { legacyPrismaGuardedChannelMessagePortV1 } from '../public/v1/legacy-prisma-guarded-channel-message-adapter'
 import { createApplyMessageDeliveryEvidenceHandlerV1 } from '../public/v1/message-delivery-evidence-handler'
 import { legacyPrismaMessageDeliveryEvidencePortV1 } from '../public/v1/legacy-prisma-message-delivery-evidence-adapter'
 import { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from '../public/v1/channel-conversation-handler'
@@ -60,7 +62,13 @@ import { createDeleteConversationsByChannelHandlerV1 } from '../public/v1/delete
 import { legacyPrismaDeleteConversationsByChannelPortV1 } from '../public/v1/legacy-prisma-delete-conversations-by-channel-adapter'
 import { createLinkMatchedDriverToConversationHandlerV1 } from '../public/v1/link-matched-driver-to-conversation-handler'
 import { legacyPrismaMatchedDriverConversationLinkPortV1 } from '../public/v1/legacy-prisma-matched-driver-conversation-link-adapter'
-import { LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { CONTACT_CONVERSATIONS_QUERY_V1, LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { CONTACT_COMMUNICATION_PERMISSION_QUERY_V1 } from '@/contracts/contacts/v1'
+import { getContactCommunicationPermissionV1 } from '@/modules/contacts/public/v1'
+import { MessageService } from '@/lib/MessageService'
+import { legacyPrismaSendToContactPortV1 } from '../public/v1/legacy-prisma-send-to-contact-adapter'
+import { proveOutboundConversationRouteV1 } from '../public/v1/outbound-conversation-identity-runtime'
+import { createSendToContactHandlerV1 } from './send-to-contact-handler'
 
 const attachMessageMedia = createAttachMessageMediaHandlerV1(legacyPrismaAttachMessageMediaPortV1)
 const deleteMessageMedia = createDeleteMessageMediaHandlerV1(legacyPrismaDeleteMessageMediaPortV1)
@@ -104,10 +112,40 @@ const detachContactConversations = createDetachContactConversationsHandlerV1(leg
 const ensureConversationContactLink = createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)
 const resolveConversationContact = createResolveConversationContactHandlerV1(legacyPrismaResolveConversationContactPortV1)
 const contactConversations = createContactConversationsQueryHandlerV1(legacyPrismaContactConversationsQueryPortV1)
+const appendGuardedChannelMessage = createAppendGuardedChannelMessageHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
+const releaseHeldChannelMessages = createReleaseHeldChannelMessagesHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
+const heldChannelMessages = createHeldChannelMessagesQueryHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const findAndBackfillContactConversation = createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const openFallbackContactConversation = createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 const patchMessageMetadata = createPatchMessageMetadataHandlerV1(legacyPrismaPatchMessageMetadataPortV1)
 const deleteConversationsByChannel = createDeleteConversationsByChannelHandlerV1(legacyPrismaDeleteConversationsByChannelPortV1)
+// SendToContact: Messaging's own reads and engine, the Contacts permission read
+// (P1) and the proof-only route seam for discovery. The engine is the shared
+// send, so the authoritative gate (P2) is the same one every effect crosses.
+const sendToContact = createSendToContactHandlerV1({
+    claimIntent: (requestId, semanticPayloadSha256) => legacyPrismaSendToContactPortV1.claimIntent(requestId, semanticPayloadSha256),
+    findAdmittedMessage: clientMessageId => legacyPrismaSendToContactPortV1.findAdmittedMessage(clientMessageId),
+    readContactPermission: contactId => getContactCommunicationPermissionV1({
+        contract: CONTACT_COMMUNICATION_PERMISSION_QUERY_V1,
+        contactId,
+        communicationClass: 'message',
+    }),
+    async readContactConversations(contactId) {
+        const result = await contactConversations({ contract: CONTACT_CONVERSATIONS_QUERY_V1, contactIds: [contactId] })
+        return result.contacts[0]
+    },
+    async proveRoute(candidate) {
+        const chat = await legacyPrismaSendToContactPortV1.readConversationSnapshot(candidate.conversationId)
+        if (!chat) throw new Error('SEND_TO_CONTACT_CONVERSATION_NOT_FOUND')
+        return proveOutboundConversationRouteV1(chat)
+    },
+    async admit({ conversationId, content, clientMessageId, expectedCanonicalContactId }) {
+        const result = await MessageService.send(conversationId, content, undefined, undefined, clientMessageId, undefined, {
+            sendToContact: { expectedCanonicalContactId },
+        })
+        return { replayed: (result as { duplicate?: unknown } | undefined)?.duplicate === true }
+    },
+})
 const linkMatchedDriverToConversationCommand = createLinkMatchedDriverToConversationHandlerV1(legacyPrismaMatchedDriverConversationLinkPortV1)
 
 export const attachMessageMediaV1 = (...args: Parameters<typeof attachMessageMedia>) => attachMessageMedia(...args)
@@ -156,10 +194,14 @@ export const detachContactConversationsV1 = (...args: Parameters<typeof detachCo
 export const ensureConversationContactLinkV1 = (...args: Parameters<typeof ensureConversationContactLink>) => ensureConversationContactLink(...args)
 export const resolveConversationContactV1 = (...args: Parameters<typeof resolveConversationContact>) => resolveConversationContact(...args)
 export const contactConversationsV1 = (...args: Parameters<typeof contactConversations>) => contactConversations(...args)
+export const appendGuardedChannelMessageV1 = (...args: Parameters<typeof appendGuardedChannelMessage>) => appendGuardedChannelMessage(...args)
+export const releaseHeldChannelMessagesV1 = (...args: Parameters<typeof releaseHeldChannelMessages>) => releaseHeldChannelMessages(...args)
+export const heldChannelMessagesV1 = (...args: Parameters<typeof heldChannelMessages>) => heldChannelMessages(...args)
 export const findAndBackfillContactConversationV1 = (...args: Parameters<typeof findAndBackfillContactConversation>) => findAndBackfillContactConversation(...args)
 export const openFallbackContactConversationV1 = (...args: Parameters<typeof openFallbackContactConversation>) => openFallbackContactConversation(...args)
 export const patchMessageMetadataV1 = (...args: Parameters<typeof patchMessageMetadata>) => patchMessageMetadata(...args)
 export const deleteConversationsByChannelV1 = (...args: Parameters<typeof deleteConversationsByChannel>) => deleteConversationsByChannel(...args)
+export const sendToContactV1 = (...args: Parameters<typeof sendToContact>) => sendToContact(...args)
 export async function linkMatchedDriverToConversationCapabilityV1(input: { chatId: string, driverId: string }) {
     return linkMatchedDriverToConversationCommand({ contract: LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1, ...input })
 }

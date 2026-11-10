@@ -54,13 +54,26 @@ vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
 
 vi.mock('@/modules/contacts/public/v1', () => ({
     prepareContactConversationIdentityV1: mocks.prepareIdentity,
+    // The Contacts message permission the shared outbound gate reads before every send: allowed here.
+    getContactCommunicationPermissionV1: async (query: { contactId: string }) => ({
+        contract: 'contacts.ContactCommunicationPermissionResult.v1',
+        decision: 'allow',
+        retryable: false,
+        reason: 'no_restriction',
+        requestedContactId: query.contactId,
+        communicationClass: 'message',
+        canonicalContactId: query.contactId,
+        policyVersion: 0,
+    }),
 }))
 
 vi.mock('@/lib/messageStreamBus', () => ({
     broadcastChatMessage: mocks.broadcastChatMessage,
 }))
 
-vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', () => ({
+vi.mock('@/modules/messaging/public/v1/channel-delivery-runtime', async (importOriginal) => ({
+    // The real typed delivery error, so a gate refusal is classified as the product classifies it.
+    channelDeliveryErrorV1: (await importOriginal<typeof import('@/modules/messaging/public/v1/channel-delivery-runtime')>()).channelDeliveryErrorV1,
     getMaxChannelDeliveryV1: () => ({
         assertTransportBinding: mocks.maxAssertTransportBinding,
         sendText: mocks.maxSendText,

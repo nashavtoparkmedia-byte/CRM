@@ -103,6 +103,11 @@
       "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts",
       "reason": "same transaction as the inbound Message create; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
+      "reason": "same transaction as the guarded inbound Message create or release; flow messaging.inbound-notification-intent in the CRM-ARCH-005 outbox manifest"
     }
   ],
   "manifest_amendments": [
@@ -169,7 +174,9 @@
     "architecture/isolation/identity-access/mobile-push-registration-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/mobile-push-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/communication-policy-foundation-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/cash-referral-access-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/cash-referral-access-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/send-to-contact-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/guarded-append-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",

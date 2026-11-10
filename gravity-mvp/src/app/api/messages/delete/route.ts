@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
-import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
+import { proveOutboundConversationRouteV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 export async function POST(req: NextRequest) {
     try {
@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
                     error: 'Provider deletion is unavailable for this message',
                 }, { status: 409 })
             }
-            const outbound = await prepareOutboundConversationV1(message.chat)
+            // Retraction of the CRM's own message is not gated by Contacts permission: it
+            // adds nothing to the conversation, and blocking it could trap a mistaken message.
+            const outbound = await proveOutboundConversationRouteV1(message.chat)
             if (outbound.chatId !== message.chatId || outbound.channel !== message.channel) {
                 throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
             }

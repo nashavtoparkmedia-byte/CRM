@@ -29,7 +29,10 @@
     "ReceiveMessageCommand.v1",
     "SendMessageCommand.v1",
     "AttachMessageMediaCommand.v1",
-    "ImportMessageHistoryCommand.v1"
+    "ImportMessageHistoryCommand.v1",
+    "SendToContactCommand.v1",
+    "AppendGuardedChannelMessageCommand.v1",
+    "ReleaseHeldChannelMessagesCommand.v1"
   ],
   "compatibility_strategy": "Keep MessageService and stream buses as compatibility facades; provider-specific delivery moves behind versioned channel ports.",
   "context": {
@@ -227,7 +230,8 @@
     "DeliveryRecoveryOperations.v1",
     "DraftImprovement.v1",
     "ResolveConversationContactQuery.v1",
-    "ContactConversationsQuery.v1"
+    "ContactConversationsQuery.v1",
+    "HeldChannelMessagesQuery.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers, history import state, and inbound AI reply/draft orchestration.",
   "schema": "yoko.crm.module-manifest.v1",
@@ -238,7 +242,8 @@
     "architecture_checks": [
       "node tools/architecture/validate-context-manifests.mjs",
       "node tools/architecture/enforce-architecture.mjs",
-      "node tools/architecture/test-architecture-enforcement.mjs"
+      "node tools/architecture/test-architecture-enforcement.mjs",
+      "node tools/architecture/check-messaging-guarded-append-boundary.mjs"
     ],
     "blast_radius": {
       "consumer_contexts": [
@@ -268,7 +273,8 @@
       "node tools/architecture/check-messaging-message-stream-boundary.mjs",
       "node tools/architecture/check-messaging-transport-registry-boundary.mjs",
       "node tools/architecture/check-messaging-persisted-message-ingress-boundary.mjs",
-      "node tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs"
+      "node tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs",
+      "node tools/architecture/check-messaging-send-to-contact-boundary.mjs"
     ]
   },
   "version": 1
