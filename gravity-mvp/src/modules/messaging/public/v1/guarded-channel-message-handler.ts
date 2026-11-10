@@ -2,10 +2,13 @@ import {
   APPEND_GUARDED_CHANNEL_MESSAGE_RESULT_V1,
   HELD_CHANNEL_MESSAGES_RESULT_V1,
   HELD_CHANNEL_MESSAGE_REASONS_V1,
+  HELD_CHANNEL_MESSAGE_RETENTION_DAYS_V1,
   RELEASE_HELD_CHANNEL_MESSAGES_RESULT_V1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1,
   parseAppendGuardedChannelMessageCommandV1,
   parseHeldChannelMessagesQueryV1,
   parseReleaseHeldChannelMessagesCommandV1,
+  parseRunHeldChannelMessageRetentionCommandV1,
   type AppendGuardedChannelMessageCommandV1,
   type AppendGuardedChannelMessageResultV1,
   type HeldChannelMessageReasonV1,
@@ -13,6 +16,8 @@ import {
   type HeldChannelMessagesResultV1,
   type ReleaseHeldChannelMessagesCommandV1,
   type ReleaseHeldChannelMessagesResultV1,
+  type RunHeldChannelMessageRetentionCommandV1,
+  type RunHeldChannelMessageRetentionResultV1,
 } from '../../../../contracts/messaging/v1'
 
 /** What the persistence side settled for one event, before the contract envelope. */
@@ -34,9 +39,13 @@ export interface GuardedChannelMessagePersistencePortV1 {
   append(input: Omit<AppendGuardedChannelMessageCommandV1, 'contract'>): Promise<GuardedAppendSettlementV1>
   release(input: Omit<ReleaseHeldChannelMessagesCommandV1, 'contract' | 'limit'> & { limit: number }): Promise<GuardedReleaseSettlementV1>
   countHeld(input: { chatId: string | null }): Promise<Partial<Record<HeldChannelMessageReasonV1, number>>>
+  /** Deletes (unless dryRun) at most `limit` held rows whose event is older than `before`, oldest first; returns how many were selected. */
+  purgeHeld(input: { before: Date; limit: number; dryRun: boolean }): Promise<number>
 }
 
 const DEFAULT_RELEASE_LIMIT = 100
+const DEFAULT_RETENTION_LIMIT = 200
+const DAY_MS = 24 * 60 * 60 * 1000
 
 export function createAppendGuardedChannelMessageHandlerV1(port: GuardedChannelMessagePersistencePortV1) {
   return async function appendGuardedChannelMessageV1(
@@ -89,5 +98,19 @@ export function createHeldChannelMessagesQueryHandlerV1(port: GuardedChannelMess
     ) as Record<HeldChannelMessageReasonV1, number>
     const held = Object.values(byReason).reduce((sum, count) => sum + count, 0)
     return { contract: HELD_CHANNEL_MESSAGES_RESULT_V1, held, byReason }
+  }
+}
+
+export function createRunHeldChannelMessageRetentionHandlerV1(port: GuardedChannelMessagePersistencePortV1, now: () => number = Date.now) {
+  return async function runHeldChannelMessageRetentionV1(
+    command: RunHeldChannelMessageRetentionCommandV1 | unknown,
+  ): Promise<RunHeldChannelMessageRetentionResultV1> {
+    const parsed = parseRunHeldChannelMessageRetentionCommandV1(command)
+    const selectedCount = await port.purgeHeld({
+      before: new Date(now() - HELD_CHANNEL_MESSAGE_RETENTION_DAYS_V1 * DAY_MS),
+      limit: parsed.limit ?? DEFAULT_RETENTION_LIMIT,
+      dryRun: parsed.dryRun,
+    })
+    return { contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1, dryRun: parsed.dryRun, selectedCount }
   }
 }

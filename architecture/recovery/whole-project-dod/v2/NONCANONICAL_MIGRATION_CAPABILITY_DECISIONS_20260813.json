@@ -441,14 +441,14 @@
       "functional_owner": "messaging",
       "production_reachability": "CONTROLLED_MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
-      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage with its primary key, direction, hold-reason and release-pair checks, one unique event key, one unique released message id, two lookup indexes and one foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority. Its six sites are the exact CREATE TABLE, the four CREATE INDEX statements and the one ALTER TABLE that adds the foreign key, all on HeldChannelMessage.",
+      "rationale": "Byte-pinned source-only expand-only migration creates only the Messaging-owned held store of the R-21 guarded append (HeldChannelMessage with its primary key, direction, hold-reason, release-pair, sender-evidence and released-scrubbed checks (a released row carries content '' and metadata '{}'), one unique event key, one unique released message id, two lookup indexes and one foreign key to Chat with ON DELETE CASCADE) inside one explicit transaction through controlled migration tooling; it changes no existing column or row and carries no data statement or backfill; it stores no credential; this review grants no application-runtime or production-application authority. Its six sites are the exact CREATE TABLE, the four CREATE INDEX statements and the one ALTER TABLE that adds the foreign key, all on HeldChannelMessage.",
       "expected_site_signatures": [
-        "43bd71a768689db5d3f628995c1770edde1c12a4cc1a5f291b3b49b1cf773080",
-        "53bf7effed587fa8db98f50c1f066c714494b94c3831bf7557620d1ea91d9d9d",
-        "64193300f3a1aca308af1c5b44872ec7dbcda02c788cf2aa492e21bbf9563cc0",
-        "779cc3cba5a5aa804ca325ad0e9802c3edeff553930ae12ccdd58a3538be2362",
-        "7c9e3c944b3593ebaf73b22e7836c4e10ab5f19fbe5670e9cf897b4496678863",
-        "ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7"
+        "0ac1d642a32ebac92d95d4aaedca13e346fcd9350e54d0a88766356c8ceccf2c",
+        "2601b8bab4f200f4d7c9cabf53be3cda730ef0eee45d5e7f5f404f7e7473744c",
+        "51b66976c580775aed316a0eb91cfa3724a06baada93b5e4973e3862a188336f",
+        "a51b3f7d743faa25ee91e9b7b8373d07c9b264e5220ffa709f50bed0e37e6cad",
+        "c3ff87e45789a7df18942b6f87757e34207a681d77a27d4a4ed64db0e6cd0416",
+        "c4f59d0037c5aac929e7a70082ad382d2365c1c2b2a6468d1f8c0d92d38f6fd8"
       ]
     },
     {
@@ -3828,10 +3828,10 @@
       "review_rationale": "Expand-only statement of the Messaging SendToContact intent migration: CREATE_TABLE on MessagingSendIntent. It creates only the Messaging-owned intent table with its primary key and shape checks, references no existing object, touches no existing row and stores no credential."
     },
     {
-      "site_signature": "ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7",
+      "site_signature": "a51b3f7d743faa25ee91e9b7b8373d07c9b264e5220ffa709f50bed0e37e6cad",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-      "line": 22,
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+      "line": 24,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "messaging",
@@ -3846,45 +3846,9 @@
       "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_TABLE on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
     },
     {
-      "site_signature": "64193300f3a1aca308af1c5b44872ec7dbcda02c788cf2aa492e21bbf9563cc0",
+      "site_signature": "2601b8bab4f200f4d7c9cabf53be3cda730ef0eee45d5e7f5f404f7e7473744c",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-      "line": 55,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "messaging",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "HeldChannelMessage",
-          "operation": "CREATE_INDEX"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
-    },
-    {
-      "site_signature": "43bd71a768689db5d3f628995c1770edde1c12a4cc1a5f291b3b49b1cf773080",
-      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
-      "line": 57,
-      "column": 1,
-      "method": "sql-script",
-      "functional_owner": "messaging",
-      "production_reachability": "CONTROLLED_MIGRATION",
-      "writes": [
-        {
-          "kind": "TABLE",
-          "exact_name": "HeldChannelMessage",
-          "operation": "CREATE_INDEX"
-        }
-      ],
-      "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
-    },
-    {
-      "site_signature": "7c9e3c944b3593ebaf73b22e7836c4e10ab5f19fbe5670e9cf897b4496678863",
-      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
       "line": 59,
       "column": 1,
       "method": "sql-script",
@@ -3900,9 +3864,9 @@
       "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
     },
     {
-      "site_signature": "779cc3cba5a5aa804ca325ad0e9802c3edeff553930ae12ccdd58a3538be2362",
+      "site_signature": "0ac1d642a32ebac92d95d4aaedca13e346fcd9350e54d0a88766356c8ceccf2c",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
       "line": 61,
       "column": 1,
       "method": "sql-script",
@@ -3918,10 +3882,46 @@
       "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
     },
     {
-      "site_signature": "53bf7effed587fa8db98f50c1f066c714494b94c3831bf7557620d1ea91d9d9d",
+      "site_signature": "c4f59d0037c5aac929e7a70082ad382d2365c1c2b2a6468d1f8c0d92d38f6fd8",
       "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
-      "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0",
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
       "line": 63,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "HeldChannelMessage",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "51b66976c580775aed316a0eb91cfa3724a06baada93b5e4973e3862a188336f",
+      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+      "line": 65,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "HeldChannelMessage",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Expand-only statement of the Messaging R-21 held-store migration: CREATE_INDEX on HeldChannelMessage. It creates or constrains only the Messaging-owned held table, references Chat only through the new CASCADE foreign key, touches no existing row and stores no credential."
+    },
+    {
+      "site_signature": "c3ff87e45789a7df18942b6f87757e34207a681d77a27d4a4ed64db0e6cd0416",
+      "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+      "source_sha256": "f44918776dd12c613e1e8a70861b3f25adf8a9aecca4c62ad4e1998419011f43",
+      "line": 67,
       "column": 1,
       "method": "sql-script",
       "functional_owner": "messaging",

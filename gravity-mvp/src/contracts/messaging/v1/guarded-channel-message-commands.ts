@@ -22,13 +22,21 @@ export const RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1 = 'messaging.ReleaseHeldCh
 export const RELEASE_HELD_CHANNEL_MESSAGES_RESULT_V1 = 'messaging.ReleaseHeldChannelMessagesResult.v1' as const
 export const HELD_CHANNEL_MESSAGES_QUERY_V1 = 'messaging.HeldChannelMessagesQuery.v1' as const
 export const HELD_CHANNEL_MESSAGES_RESULT_V1 = 'messaging.HeldChannelMessagesResult.v1' as const
+export const RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 = 'messaging.RunHeldChannelMessageRetentionCommand.v1' as const
+export const RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1 = 'messaging.RunHeldChannelMessageRetentionResult.v1' as const
+/** Held events follow the delivered-message retention: a held row whose event is older than this is deleted. */
+export const HELD_CHANNEL_MESSAGE_RETENTION_DAYS_V1 = 365
 
 export type GuardedConversationKindV1 = 'private' | 'group'
 export type GuardedChannelV1 = 'telegram' | 'whatsapp' | 'max'
 export type GuardedMessageTypeV1 = Exclude<ChannelMessageTypeV1, 'system' | 'call'>
 
 /**
- * What the caller proved about the sender of THIS event.
+ * What the caller proved about the conversation's peer for THIS event: the
+ * sender of an inbound event, the recipient of an outbound one (an own
+ * message or a bot reply carries the peer's proof, never the sending account).
+ * The caller derives it server-side from Contacts; it is never taken from a
+ * client, an operator form or any request body (A1).
  *   proven         — Contacts resolved the sender's provider identity and the
  *                    conversation link was ensured for exactly this identity;
  *   unproven       — Contacts could not attribute the sender (a bounded code,
@@ -181,6 +189,26 @@ export interface HeldChannelMessagesResultV1 {
   contract: typeof HELD_CHANNEL_MESSAGES_RESULT_V1
   held: number
   byReason: Record<HeldChannelMessageReasonV1, number>
+}
+
+/**
+ * One bounded retention pass over the held store (A2): held rows, released or
+ * not, whose event (`sentAt`) is older than HELD_CHANNEL_MESSAGE_RETENTION_DAYS_V1
+ * are deleted, oldest first. A released row already carries no content; this
+ * removes its key and stamp with the same policy as the visible message.
+ */
+export interface RunHeldChannelMessageRetentionCommandV1 {
+  contract: typeof RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1
+  dryRun: boolean
+  /** Rows in this pass (1..1000, default 200). */
+  limit?: number
+}
+
+export interface RunHeldChannelMessageRetentionResultV1 {
+  contract: typeof RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1
+  dryRun: boolean
+  /** Rows deleted; in a dry run, the rows that would have been deleted. */
+  selectedCount: number
 }
 
 export class GuardedChannelMessageCommandValidationError extends Error {
@@ -368,5 +396,27 @@ export function parseHeldChannelMessagesQueryV1(input: unknown): HeldChannelMess
   return {
     contract: HELD_CHANNEL_MESSAGES_QUERY_V1,
     ...(value.chatId !== undefined ? { chatId: requiredId(value.chatId, 'chatId') } : {}),
+  }
+}
+
+const MAX_RETENTION_LIMIT = 1000
+
+export function parseRunHeldChannelMessageRetentionCommandV1(input: unknown): RunHeldChannelMessageRetentionCommandV1 {
+  const value = envelope(
+    input,
+    RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+    'messaging.RunHeldChannelMessageRetentionCommand.',
+    ['contract', 'dryRun', 'limit'],
+  )
+  if (typeof value.dryRun !== 'boolean') invalid('dryRun must be a boolean')
+  if (value.limit !== undefined) {
+    if (typeof value.limit !== 'number' || !Number.isInteger(value.limit) || value.limit < 1 || value.limit > MAX_RETENTION_LIMIT) {
+      invalid(`limit must be an integer from 1 to ${MAX_RETENTION_LIMIT}`)
+    }
+  }
+  return {
+    contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+    dryRun: value.dryRun,
+    ...(value.limit !== undefined ? { limit: value.limit as number } : {}),
   }
 }

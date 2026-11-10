@@ -12,8 +12,10 @@
 -- "Message", so no conversation view, inbox, AI context or workflow can show it
 -- in another person's conversation. A guarded release under a fresh proof moves
 -- it into "Message" and stamps releasedAt/releasedMessageId; nothing else
--- updates it. Deleting the conversation deletes its held events (CASCADE), so a
--- hold never outlives conversation retention. The table stores no credential
+-- updates it, and a released row keeps no content and no metadata (the visible
+-- "Message" is its only copy; the released-scrubbed CHECK pins it). Deleting the
+-- conversation deletes its held events (CASCADE), so a hold never outlives
+-- conversation retention. The table stores no credential
 -- and no Contact or Driver row; holdEvidence carries only the identifiers that
 -- were compared and the bounded refusal code.
 
@@ -49,7 +51,9 @@ CREATE TABLE "HeldChannelMessage" (
             OR ("senderContactIdentityId" IS NOT NULL
                 AND ("holdEvidence" #>> '{attribution,status}') IS NOT DISTINCT FROM 'proven'
                 AND "senderContactIdentityId" IS NOT DISTINCT FROM ("holdEvidence" #>> '{attribution,contactIdentityId}'))
-        )
+        ),
+    CONSTRAINT "HeldChannelMessage_released_scrubbed_check"
+        CHECK ("releasedAt" IS NULL OR ("content" = '' AND "metadata" = '{}'::jsonb))
 );
 
 CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key" ON "HeldChannelMessage"("externalId");
