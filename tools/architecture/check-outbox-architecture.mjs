@@ -673,6 +673,7 @@ const MESSAGING_INTENT_WRITERS = [
     'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-channel-message-adapter.ts',
     'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-external-message-adapter.ts',
     'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-receive-message-adapter.ts',
+    'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts',
 ]
 const MESSAGING_FAN_OUT_WRITER = 'gravity-mvp/src/modules/messaging/internal/mobile-push/push-fan-out-prisma-adapter.ts'
 const APPROVED_OUTBOX_WRITERS = [

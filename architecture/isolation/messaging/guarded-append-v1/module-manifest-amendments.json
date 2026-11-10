@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-MESSAGING-SHARED-RELIABILITY-R21-GUARDED-APPEND",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:HeldChannelMessage"
+      ],
+      "reason": "Messaging owns the durable hold of the R-21 guarded append: one row per provider event whose sender did not prove its conversation's person binding, kept outside Message so no conversation view, inbox, AI context or workflow can show it in another person's conversation, and moved into Message only by the guarded release under a fresh proof of the current binding. It is written and read by exactly one Messaging adapter (insert on hold, releasedAt/releasedMessageId stamp on release, grouped counts), has no other update and no delete path, and is removed with its conversation by ON DELETE CASCADE. It stores the event content and provenance the conversation would have shown, the bounded hold reason and the identifiers that were compared; no credential, Contact or Driver row. It is pending source state created by an expand-only migration and is intentionally not asserted as deployed production inventory."
+    }
+  ]
+}
