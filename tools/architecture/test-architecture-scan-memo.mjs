@@ -14,9 +14,11 @@
 // * every other integrity, identity and input check falls through to the full
 //   scan, and a change to an input after the memo was written is never hidden;
 // * end to end, a control that rewrites the memo cannot change the scan a
-//   later control of the same run sees, the runner ignores inherited memo
-//   variables, the off switch works, and the memo directory is gone after the
-//   run.
+//   later control of the same run sees, the runner never hands inherited memo
+//   variables to a control (memo on, off, or after a failed precompute), the
+//   off switch works, and the memo directory is gone after the run;
+// * the reader parses the very buffer whose digest it checked (pinned in its
+//   source, since a race cannot be staged deterministically).
 //
 // Everything runs on a small temporary fixture tree: the real policy,
 // evidence, context index, manifests, amendments and legacy write supplement,
@@ -173,6 +175,20 @@ process.stdout.write(\`OD12_PROBE \${JSON.stringify({
   sentinel: scan.findings.some((finding) => finding.rule === ${JSON.stringify(SENTINEL_RULE)}),
   result_sha256: (await import('node:crypto')).createHash('sha256').update(JSON.stringify(scan)).digest('hex'),
   notes,
+})}\\n\`)
+`
+}
+
+// A control that only reports the memo variables it was given, for the run
+// whose precompute fails (and whose tree therefore cannot be scanned).
+function environmentControl(phase) {
+  return `process.stdout.write(\`OD12_PROBE \${JSON.stringify({
+  phase: ${JSON.stringify(phase)},
+  memo_file: process.env.${ARCHITECTURE_SCAN_MEMO_ENV} ?? null,
+  recorded: process.env.${ARCHITECTURE_SCAN_MEMO_SHA256_ENV} ?? null,
+  sentinel: false,
+  result_sha256: null,
+  notes: [],
 })}\\n\`)
 `
 }
@@ -365,6 +381,32 @@ export async function runArchitectureScanMemoRegression(repositoryRoot = process
     ))
     check('R1 runner: the memo directory is removed when the runner exits', !existsSync(path.dirname(before.memo_file)))
 
+    // With the memo on, inherited memo variables (here a forged sentinel memo
+    // with its own correct digest) never reach a control: every control gets
+    // the runner's own pointer and record.
+    const inheritedOn = runRunner(fixtureRoot, {
+      ...withoutMemoVariables(process.env),
+      [ARCHITECTURE_SCAN_MEMO_ENV]: sentinelFile,
+      [ARCHITECTURE_SCAN_MEMO_SHA256_ENV]: sentinelSha,
+    })
+    const inheritedOnPassed = inheritedOn.status === 0
+      && /^ARCHITECTURE_SCAN_MEMO on: ready in /mu.test(inheritedOn.stdout)
+      && inheritedOn.stdout.includes('OD12_FORGE rewritten')
+    if (!inheritedOnPassed) process.stderr.write(`${inheritedOn.stdout}${inheritedOn.stderr}`)
+    check('ON runner: the run passes with inherited memo variables set', inheritedOnPassed)
+    {
+      const { before: onBefore, after: onAfter } = inheritedOn.probes
+      check('ON runner: controls get the runner\'s own pointer and record, never the inherited ones', [onBefore, onAfter].every((probe) => (
+        probe?.memo_file && probe.memo_file !== sentinelFile
+        && /^[0-9a-f]{64}$/u.test(probe.recorded ?? '') && probe.recorded !== sentinelSha
+        && !probe.sentinel && probe.result_sha256 === freshSha
+      )) && onBefore.memo_file === onAfter.memo_file && onBefore.recorded === onAfter.recorded)
+      check('ON runner: the first control hits the runner memo, the next rejects the rewrite', (
+        onBefore.notes.length === 0
+        && JSON.stringify(onAfter.notes) === JSON.stringify([missNote(recordMismatch)])
+      ))
+    }
+
     // Inherited memo variables never reach a control, and the off switch
     // leaves every control to scan for itself.
     const inherited = runRunner(fixtureRoot, {
@@ -383,6 +425,45 @@ export async function runArchitectureScanMemoRegression(repositoryRoot = process
       return probe && probe.memo_file === null && probe.recorded === null
         && !probe.sentinel && probe.notes.length === 0 && probe.result_sha256 === freshSha
     }))
+
+    // When the precompute fails, the run goes on without a memo, and inherited
+    // memo variables still never reach a control. The writer fails here because
+    // the fixture policy is not JSON; the controls only report their variables.
+    const policyFile = path.join(fixtureRoot, 'architecture/enforcement/v1/policy.json')
+    const policyBytes = readFileSync(policyFile)
+    writeFileSync(policyFile, 'not json\n')
+    writeFileSync(path.join(controls, 'check-a-od12-before-boundary.mjs'), environmentControl('before'))
+    writeFileSync(path.join(controls, 'check-c-od12-after-boundary.mjs'), environmentControl('after'))
+    try {
+      const failed = runRunner(fixtureRoot, {
+        ...withoutMemoVariables(process.env),
+        [ARCHITECTURE_SCAN_MEMO_ENV]: sentinelFile,
+        [ARCHITECTURE_SCAN_MEMO_SHA256_ENV]: sentinelSha,
+      })
+      const failedPassed = failed.status === 0
+        && /^ARCHITECTURE_SCAN_MEMO off: precompute failed \(exit=1\)/mu.test(failed.stdout)
+        && failed.stdout.includes('OD12_FORGE no-pointer')
+      if (!failedPassed) process.stderr.write(`${failed.stdout}${failed.stderr}`)
+      check('FAILED precompute: the run goes on without a memo', failedPassed)
+      check('FAILED precompute: inherited memo variables never reach a control', ['before', 'after'].every((phase) => (
+        failed.probes[phase] && failed.probes[phase].memo_file === null && failed.probes[phase].recorded === null
+      )))
+    } finally {
+      writeFileSync(policyFile, policyBytes)
+    }
+
+    // The reader parses the very buffer whose digest it has just checked; a
+    // second read of the file could return other bytes. A race cannot be staged
+    // deterministically, so the reader's shape is pinned in its source.
+    const scannerSource = readFileSync(fileURLToPath(scannerUrl), 'utf8')
+    const reader = /\nfunction readArchitectureScanMemo\(root, inputs\) \{\n([\s\S]*?)\n\}\n/u.exec(scannerSource)?.[1] ?? ''
+    const readAt = reader.indexOf('const bytes = readFileSync(memoFile)')
+    const checkAt = reader.indexOf('if (sha256Hex(bytes) !== recordedSha256)')
+    const parseAt = reader.indexOf("const memo = JSON.parse(bytes.toString('utf8'))")
+    check('READ the reader reads the memo once and parses the buffer whose digest it checked', (
+      readAt >= 0 && readAt < checkAt && checkAt < parseAt
+      && (reader.match(/readFileSync\(|readFile\(|openSync\(|createReadStream\(/gu) ?? []).length === 1
+    ))
     return { cases: cases.length }
   } finally {
     rmSync(work, { recursive: true, force: true })
