@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { access, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -1230,7 +1231,7 @@ function resolveImport(root, source, specifier, fileSet) {
         base = path.join(root, 'gravity-mvp/src', specifier.slice(2))
     } else return { relationship: 'external', target: specifier }
 
-    if (path.extname(base) && existsSync(base)) {
+    if (path.extname(base) && probeExists(root, base)) {
         return { relationship: 'internal', target: path.relative(root, base).split(path.sep).join('/') }
     }
 
@@ -3098,6 +3099,141 @@ function publicClosureFindings({ root, files, fileSet, bodies, policy, providers
     return findings
 }
 
+// Single-run scan memo (OD-12). run-boundary-controls.mjs computes one scan
+// with writeArchitectureScanMemo() before its first control and passes the file
+// to every control it spawns through ARCHITECTURE_SCAN_MEMO_ENV. Only this
+// function's output is reused; each control still runs in its own process and
+// makes its own assertions. A control uses the memo only when its own scan has
+// just read exactly the inputs the writer read. scanArchitecture() hashes, at
+// the point where every input is in memory, the policy, the evidence, the
+// context index, the manifests, the amendments, the walked file list, every
+// file body and the legacy write supplement. That digest and the scanner's code
+// identity must match the memo, and so must every import-existence probe the
+// writer observed. Any other case falls through to the full scan: no memo, a
+// different root, a changed byte, a corrupt, partial or foreign file, or any
+// error. The memo never decides a verdict and never outlives the runner's
+// private temporary directory.
+export const ARCHITECTURE_SCAN_MEMO_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO'
+const ARCHITECTURE_SCAN_MEMO_SCHEMA = 'yoko.crm.architecture-scan-memo.v1'
+const scannerSourcePath = fileURLToPath(import.meta.url)
+const typescriptSourcePath = fileURLToPath(new URL('../../gravity-mvp/node_modules/typescript/lib/typescript.js', import.meta.url))
+let architectureScanMemoWriter = null
+let architectureScanCodeIdentity = null
+
+function probeExists(root, absolute) {
+    const present = existsSync(absolute)
+    architectureScanMemoWriter?.existenceProbes.set(path.relative(root, absolute).split(path.sep).join('/'), present)
+    return present
+}
+
+function sha256Hex(value) {
+    return createHash('sha256').update(value).digest('hex')
+}
+
+function scanCodeIdentity() {
+    architectureScanCodeIdentity ??= digest({
+        scanner_sha256: sha256Hex(readFileSync(scannerSourcePath)),
+        typescript_sha256: sha256Hex(readFileSync(typescriptSourcePath)),
+        typescript_version: ts.version,
+        node_versions: process.versions,
+        platform: process.platform,
+        arch: process.arch,
+        collator: new Intl.Collator().resolvedOptions(),
+    })
+    return architectureScanCodeIdentity
+}
+
+function scanInputDigest(root, inputs) {
+    const hash = createHash('sha256')
+    const frame = (value) => hash.update(`${JSON.stringify(value)}\n`)
+    frame({ schema: ARCHITECTURE_SCAN_MEMO_SCHEMA, root: realpathSync(root), code: scanCodeIdentity() })
+    frame(inputs.policy)
+    frame(inputs.moduleRules)
+    frame(inputs.providerEvidence)
+    frame(inputs.index)
+    frame(inputs.baseManifests)
+    frame(inputs.manifestIntegrityFindings)
+    frame(inputs.amendments)
+    frame(inputs.files)
+    for (const file of inputs.files) frame([file, inputs.bodies.get(file)])
+    frame(inputs.policy.legacy_write_supplement
+        ? readFileSync(path.join(root, inputs.policy.legacy_write_supplement), 'utf8')
+        : null)
+    return hash.digest('hex')
+}
+
+function readArchitectureScanMemo(root, inputs) {
+    const memoFile = process.env[ARCHITECTURE_SCAN_MEMO_ENV]
+    if (!memoFile) return null
+    const miss = (reason) => {
+        process.stderr.write(`architecture scan memo: not used (${reason}); running the full scan\n`)
+        return null
+    }
+    try {
+        const memo = JSON.parse(readFileSync(memoFile, 'utf8'))
+        if (memo?.schema !== ARCHITECTURE_SCAN_MEMO_SCHEMA) return miss('schema')
+        // A control that scans its own temporary fixture tree is not the
+        // runner's repository; it always scans, without a note.
+        if (memo.root !== realpathSync(root)) return null
+        if (memo.code !== scanCodeIdentity()) return miss('scanner code identity differs')
+        if (memo.input_sha256 !== scanInputDigest(root, inputs)) return miss('scan inputs differ')
+        if (!Array.isArray(memo.existence_probes)) return miss('existence probes missing')
+        for (const probe of memo.existence_probes) {
+            if (!Array.isArray(probe) || probe.length !== 2 || typeof probe[0] !== 'string' || typeof probe[1] !== 'boolean') {
+                return miss('existence probe malformed')
+            }
+            if (existsSync(path.join(root, probe[0])) !== probe[1]) return miss(`existence differs: ${probe[0]}`)
+        }
+        if (typeof memo.result_json !== 'string' || sha256Hex(memo.result_json) !== memo.result_sha256) {
+            return miss('result digest mismatch')
+        }
+        return JSON.parse(memo.result_json)
+    } catch (error) {
+        return miss(error?.code ?? error?.name ?? 'unreadable')
+    }
+}
+
+export async function writeArchitectureScanMemo(root, memoFile) {
+    if (architectureScanMemoWriter) throw new Error('architecture scan memo writer is already active')
+    const writer = { existenceProbes: new Map(), inputDigest: null }
+    architectureScanMemoWriter = writer
+    let result
+    try {
+        result = await scanArchitecture(root)
+    } finally {
+        architectureScanMemoWriter = null
+    }
+    if (typeof writer.inputDigest !== 'string') throw new Error('architecture scan memo: the scan recorded no input digest')
+    const resultJson = JSON.stringify(result)
+    if (!isDeepStrictEqual(JSON.parse(resultJson), result)) {
+        throw new Error('architecture scan memo: the scan result does not survive a JSON round trip')
+    }
+    const memo = {
+        schema: ARCHITECTURE_SCAN_MEMO_SCHEMA,
+        root: realpathSync(root),
+        code: scanCodeIdentity(),
+        input_sha256: writer.inputDigest,
+        existence_probes: [...writer.existenceProbes].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)),
+        result_sha256: sha256Hex(resultJson),
+        result_json: resultJson,
+    }
+    const temporary = `${memoFile}.${process.pid}.tmp`
+    try {
+        writeFileSync(temporary, JSON.stringify(memo), { flag: 'wx', mode: 0o600 })
+        renameSync(temporary, memoFile)
+    } catch (error) {
+        rmSync(temporary, { force: true })
+        throw error
+    }
+    return {
+        scanned_files: result.scanned_files,
+        findings: result.findings.length,
+        existence_probes: memo.existence_probes.length,
+        result_bytes: Buffer.byteLength(resultJson),
+        result_sha256: memo.result_sha256,
+    }
+}
+
 function makeFinding(input) {
     return {
         rule: input.rule,
@@ -3175,6 +3311,12 @@ export async function scanArchitecture(root = repositoryRoot) {
     const files = absoluteFiles.map((absolute) => path.relative(root, absolute).split(path.sep).join('/')).sort()
     const fileSet = new Set(files)
     const bodies = new Map(await Promise.all(files.map(async (file) => [file, await readFile(path.join(root, file), 'utf8')])))
+    const scanInputs = { policy, moduleRules, providerEvidence, index, baseManifests, manifestIntegrityFindings, amendments, files, bodies }
+    if (architectureScanMemoWriter) architectureScanMemoWriter.inputDigest = scanInputDigest(root, scanInputs)
+    else {
+        const memoized = readArchitectureScanMemo(root, scanInputs)
+        if (memoized) return memoized
+    }
     const findings = [...manifestIntegrityFindings, ...validateManifestPolicy(state.effectiveManifests, amendments)]
     const observedCrossContextImports = []
     const sensitiveEnvironment = new RegExp(policy.sensitive_environment_pattern, 'i')
