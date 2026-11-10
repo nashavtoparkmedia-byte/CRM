@@ -202,7 +202,7 @@ Each entry lists what the code actually does.
   - `G/contracts/messaging/v1` (and `v2` for attach-media).
   - UI: `G/app/messages/`; HTTP: `G/app/api/messages/**`, `G/app/api/chats/**`.
 - **Owns**: `Chat`, `Message`, `MessageAttachment`, `MessageEventLog`,
-  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`.
+  `HistoryImportJob`, `CommunicationTrigger`, `GroupVisibility`, `HeldChannelMessage`, `MessagingSendIntent`.
 - **Reads without owning**: `Contact*`, `Driver`, provider connection tables.
 - **Upstream**: contacts, identity_access, work_management, ai_knowledge, calling,
   fleet_operations. **Downstream**: the three channel contexts, platform_shell,
@@ -217,6 +217,33 @@ Each entry lists what the code actually does.
   partial, never proof of absence — `contactChannelConversationsV1` answers
   `unknown`). Replaces the legacy `/api/contacts/search` `hasChat` signal for
   NewChatPopover / ChatList (M3A6D); see I-45.
+- **Public command — send to a Contact**: `SendToContactCommand.v1` →
+  `SendToContactResult.v1` (`sendToContactV1` from `G/modules/messaging/public/v1`;
+  in-process only, no `app/api` route). The caller names a Contact, a text and an
+  optional `allowedChannels` narrowing, never a route. Order: parse → fingerprint →
+  claim the `requestId` in `MessagingSendIntent` (another payload ⇒
+  `idempotency_conflict`, forever) → its Message `stc:<requestId>` exists ⇒ replay →
+  Contacts permission (P1) → route discovery over Messaging's own
+  `ContactConversationsQuery.v1` with the proof-only seam (exactly one provable
+  existing conversation, else `route_unavailable` / `route_ambiguous` /
+  `route_evidence_incomplete`; no first contact, no ranking, no fallback) →
+  `MessageService.send` with the `sendToContact` admission (the shared gate is P2).
+  Result `admitted` (delivery state + failure class from the row), `refused`
+  (no Message, no effect) or `idempotency_conflict`. Files:
+  `G/contracts/messaging/v1/send-to-contact-command.ts`,
+  `G/modules/messaging/application/send-to-contact-{request,routing,handler}.ts`,
+  `public/v1/legacy-prisma-send-to-contact-adapter.ts`; see I-64, I-65.
+- **Contacts permission gate (D4)**: `prepareOutboundConversationV1` is the route
+  proof followed by a fresh `contacts.ContactCommunicationPermissionQuery.v1`
+  `message` read for the proof's Contact — every outbound effect (text, redelivery,
+  media, image, reaction, AI auto-reply, CRM bot sends, inside the Telegram
+  adapter) crosses it. `proveOutboundConversationRouteV1` (the proof alone) serves
+  only retraction (`delete/route.ts`) and SendToContact discovery. Refusals are
+  typed: `MESSAGING_CONTACT_PERMISSION_REFUSED` (terminal) /
+  `MESSAGING_CONTACT_PERMISSION_NOT_DISPATCHED` (safe to redeliver); operator routes
+  answer `CONTACT_COMMUNICATION_RESTRICTED` (403) /
+  `CONTACT_COMMUNICATION_PERMISSION_UNAVAILABLE` (503) via
+  `contactPermissionRefusalV1`; see I-64.
 - **Extension points**: delivery port interfaces in `channel-delivery-runtime.ts`;
   new persisted command = contract + handler + adapter + wiring in
   `messaging-operations.ts`; new outbox event = contract +
@@ -226,6 +253,18 @@ Each entry lists what the code actually does.
   `resolved` (the canonical Contact after Contacts' merge lineage), `unresolved`,
   `ambiguous` (the recorded `metadata.contactResolution.status`, whatever link the
   Chat carries) or `not_found`; no provider, account or transport detail crosses it.
+- **Guarded inbound append (R-21)**: an ingress that has a provider event and a
+  Contacts outcome for its sender appends through `appendGuardedChannelMessageV1`
+  (`messaging.AppendGuardedChannelMessageCommand.v1`, adapter
+  `legacy-prisma-guarded-channel-message-adapter.ts`, policy
+  `guarded-append-policy.ts`). The caller passes `attribution` `proven` (the
+  identity it resolved and linked with `ensureConversationContactLinkV1`),
+  `unproven` (a bounded refusal code) or, for groups, `not_applicable`; Messaging
+  only compares it with the conversation's current binding. Answers `appended`,
+  `held`, `duplicate` or `key_conflict`; follow-up effects run only when
+  `newlyRecorded`. Held events are released by `releaseHeldChannelMessagesV1`
+  under a fresh proof and counted by `heldChannelMessagesV1`; see I-66, I-67.
+  Not yet wired into the Telegram bot webhook (Telegram Incident, T3).
 - **Delivery-truth extension points (S2)**: a channel adapter answers a text send
   with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
   `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
@@ -581,6 +620,8 @@ amendments · **L** legacy / compatibility (table kept, no runtime code on main)
 | `HistoryImportJob` | history-import-job adapter (raw SQL) | `channel-sync-operations.ts` | `patchHistoryImportJobV1` | `G/app/api/import-jobs/[id]/route.ts` |
 | `CommunicationTrigger` | communication-trigger adapter | `G/app/settings/triggers/actions.ts` | — | No evaluator found (C-34) |
 | `GroupVisibility` | `G/app/api/groups/visibility/route.ts` | same route, `ChatList.tsx` | none | Writer is outside the module |
+| `HeldChannelMessage` (pending source) | `legacy-prisma-guarded-channel-message-adapter.ts` only (insert on hold; `releasedAt`/`releasedMessageId` on release) | the same adapter only (dedupe, release, counts) | `appendGuardedChannelMessageV1`, `releaseHeldChannelMessagesV1`, `heldChannelMessagesV1` | None; `check-messaging-guarded-append-boundary.mjs` pins the single owner |
+| `MessagingSendIntent` | `legacy-prisma-send-to-contact-adapter.ts` only (`createMany` skipDuplicates, i.e. insert-if-absent) | the same adapter | `sendToContactV1` (`SendToContactCommand.v1`) | — (pending source migration `20261027090000_add_messaging_send_intent`; never updated or deleted) |
 
 Duplicated sources of truth: `Chat.channel` vs `Message.channel`; three parallel
 person links on Chat (`driverId`, `contactId`, `contactIdentityId`); delivery
@@ -872,9 +913,16 @@ capability first and persist afterwards, with direct Prisma writes.
   `externalId` after 5 min become `failed`, outcome `unknown`.
 - every 2 min: `retryEligibleMessagingDeliveriesV1` → `MessageService.retrySend`.
   The selector admits only `failed` outbound rows recorded `safe_to_redeliver`
-  with `errorSchemaVersion` ≥ 2 (I-10); `retrySend` re-checks that gate, leases the
-  row (compare-and-set on `failed` + `updatedAt`, `retryLeaseId`), and only the
-  lease holder may finalise it (I-11).
+  with `errorSchemaVersion` ≥ 2 (I-10) whose backoff has elapsed — the SQL mirror of
+  `isPhysicalRetryDueV1` (`delivery-state-policy.ts`), the same rule `retrySend`
+  takes its backoff and anchor from, so backoff-pending rows no longer hold the
+  oldest-first `LIMIT 10` window; `retrySend` re-checks that gate, reads the
+  Contacts permission through the port (a temporary refusal re-anchors
+  `lastFailedAt`, a standing one finalises the row as terminal, both before the
+  lease and without consuming an attempt), leases the row (compare-and-set on
+  `failed` + `updatedAt`, `retryLeaseId`), and only the lease holder may finalise
+  it (I-11). Rows whose route proof or binding fails before the lease still
+  occupy the window for up to 24 h (known, not addressed).
 - operator: `G/app/messages/message-retry-actions.ts` → `retrySend({operatorInitiated})`.
 - late evidence: `applyMessageDeliveryEvidenceV1` matches the exact provider id
   (another chat's, direction's or channel's row holding it is refused), else the
@@ -1341,6 +1389,30 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 
 ### Messaging
 
+- **I-64 Every outbound effect reads the Contacts `message` permission fresh,
+  inside the shared port, after the route proof.** `prepareOutboundConversationV1`
+  denies with a typed error; Contacts' `retryable` alone decides standing
+  (`terminal`) vs temporary (`safe_to_redeliver`); an unreadable answer fails
+  closed; nothing is cached. Only retraction and SendToContact discovery use the
+  ungated `proveOutboundConversationRouteV1`. A redelivery's refusal settles before
+  the lease and consumes no attempt. — `outbound-conversation-identity-runtime.ts`,
+  `MessageService.retrySend` — `outbound-conversation-identity-runtime.test.ts`,
+  `shared-retry-safety{,.postgres}.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
+- **I-65 One SendToContact `requestId` names one semantic payload forever and
+  admits at most one Message.** `MessagingSendIntent` binds it to
+  sha256(contract, contactId, content, sorted `allowedChannels` | null) on first
+  arrival, refused or not, and is never updated or deleted; the Message is
+  `clientMessageId = "stc:" + requestId`, a namespace only SendToContact admits and
+  mints; every route or server action that takes a caller's `clientMessageId`
+  either hands it to `MessageService.send` (which reserves the namespace), or
+  writes the Message itself and refuses an `stc:` id first (`send-media`: 400
+  `CLIENT_MESSAGE_ID_RESERVED`), or writes no Message; a SendToContact row replays
+  unconditionally on lookup and on the unique race; P1 and P2 must name the same
+  canonical Contact. — `send-to-contact-*`, `MessageService.send`,
+  `isSendToContactReservedClientMessageIdV1` — `send-to-contact-handler.test.ts`,
+  `send-media/route.test.ts`, `send-to-contact.postgres.test.ts`,
+  `check-messaging-send-to-contact-boundary.mjs`.
 - **I-08 One `clientMessageId` = one row and one dispatch; a different intent
   under the same key is rejected.** `MessageService.send` + unique
   `Message.clientMessageId` — `operator-delivery-retry.test.ts`.
@@ -1413,6 +1485,28 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   linked to other merged-away aliases of the person (not the requested id) are not
   looked for; merges move conversations to the survivor, so this matters only
   after a failed merge.
+- **I-66 A guarded append shows an event only in the conversation its sender
+  proves.** One transaction locks the `Chat` row (`FOR UPDATE`, `lock_timeout`
+  2 s), then the event key (advisory, sorted), then judges the binding it holds:
+  a proven sender is visible only where `contactId` and `contactIdentityId` equal
+  the proof; an unproven sender only where no contact, identity or driver is
+  bound; a group event only while the group is bound to nobody. Anything else is
+  held. A visible event commits with its workflow projection and inbound
+  notification intent; a failure anywhere rolls all of it back. One key is one
+  event: the same key in the same conversation, direction and channel is a
+  `duplicate` (visible or held), anywhere else a `key_conflict`; neither writes.
+  An own outbound echo is S2 `provider_echo` (`sent`), never `delivered`. The
+  guard resolves no person and writes no binding. — `guarded-append-policy.ts`,
+  `legacy-prisma-guarded-channel-message-adapter.ts` —
+  `guarded-channel-message.test.ts`, `guarded-channel-message.postgres.test.ts`,
+  `check-messaging-guarded-append-boundary.mjs`.
+- **I-67 A held event is durable, invisible and released only under proof.**
+  `HeldChannelMessage` is read and written only by the guarded adapter; no
+  conversation view, inbox, AI context or workflow reads it. A release re-judges
+  the current binding with a fresh attribution, moves events into `Message` in
+  `sentAt` order with their workflow projection, stamps
+  `releasedAt`/`releasedMessageId`, and never takes a key another conversation
+  shows. Deleting the conversation deletes its held events. — same files.
 
 ### Channels
 
@@ -1740,7 +1834,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
-| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge |
+| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-66, I-67: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |

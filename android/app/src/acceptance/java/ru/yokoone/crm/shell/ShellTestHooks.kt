@@ -1,6 +1,8 @@
 package ru.yokoone.crm.shell
 
 import android.content.Context
+import ru.yokoone.crm.shell.push.AcceptanceTokenProvider
+import ru.yokoone.crm.shell.push.TokenActor
 
 /**
  * Acceptance implementation of the shell's only test seam.
@@ -21,4 +23,12 @@ object ShellTestHooks {
     fun onNotificationsReady(context: Context) {
         TestNotificationSeed.ensureDiagnosticsNotification(context)
     }
+
+    /**
+     * The token actor's provider in acceptance: the token the workflow seeded,
+     * standing in for Firebase, which deterministic acceptance may not use.
+     * The actor still reads it, serially, and commits it under the reset epoch
+     * and the retired set exactly as it would a Firebase token (R5.1 §5.7.2).
+     */
+    fun tokenProviderOverride(context: Context): TokenActor.Provider? = AcceptanceTokenProvider.forContext(context)
 }
