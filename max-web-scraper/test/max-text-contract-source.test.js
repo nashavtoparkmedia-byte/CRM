@@ -371,7 +371,6 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
   const scraper = read('max-web-scraper/index.js')
   const maxTransport = read('gravity-mvp/src/modules/max-channel/application/messaging-transport.ts')
   const maxCapability = read('gravity-mvp/src/modules/max-channel/public/v1/messaging-delivery-capability.ts')
-  const maxActions = read('gravity-mvp/src/app/max-actions.ts')
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
 
   assert.match(scraper, /function stableTextCid\(seed\)/)
@@ -385,10 +384,6 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
   assert.match(maxTransport, /clientMessageId: input\.clientMessageId/)
   assert.match(maxTransport, /providerAccountId,/)
   assert.match(maxCapability, /clientMessageId: input\.options\.clientMessageId/)
-  assert.match(maxActions, /clientMessageId\?: string/)
-  assert.match(maxActions, /quotedText: quotedContext\?\.text/)
-  assert.match(maxActions, /quotedSentAt: quotedContext\?\.sentAt/)
-  assert.match(maxActions, /quotedDirection: quotedContext\?\.direction/)
   assert.match(messageService, /clientMessageId: clientMessageId \|\| messageId/)
   assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
 })

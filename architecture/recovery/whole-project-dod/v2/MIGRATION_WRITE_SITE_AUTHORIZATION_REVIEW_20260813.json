@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "5d0d08ba1070c64a1b7253ab2f7168b8a8578bf8cd4b5e52d77f9502c4b8d5b0",
-    "reviewed_path_count": 28,
+    "source_sha256": "c026d3496da4166bb1280f8cf648fc453619a0e4b38e271aa0f1e3fe241a60d5",
+    "reviewed_path_count": 29,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 952,
-    "sorted_site_signatures_sha256": "f235866866ce64bd48734ce9c03948015076c6e721cc8a0a41eed44932800311"
+    "non_test_migration_only_sites": 959,
+    "sorted_site_signatures_sha256": "afc9ff3294848f3c11a5e52432465a5848a60edc86400b7e2c041d013a39c42b"
   },
   "authorizations": [
     {
@@ -3274,6 +3274,45 @@
         "canonical_ordinal": 53,
         "artifact_sha256": "b39a2f1478e6314fe8c9adeb38cb058b1590ace7310c85d561dfdeb2139af890",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727141925_add_max_shadow_semantic_comparison/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.identity_access.1757feb7704966e7",
+      "site_signature": "1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 52,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "StaffCredentialEvent",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_INDEX on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:1757feb7704966e74c58d1d0c9b06400aaa7c0ab4a143def11cdd1da3c09e546",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:52:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -11563,6 +11602,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.539e06ce09595f37",
+      "site_signature": "539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 9,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "StaffCredential",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredential. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:539e06ce09595f37c805bd5c9fd06b0779c41c52c9f210b79b20202130761aa0",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:9:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.messaging.53bf7effed587fa8",
       "site_signature": "53bf7effed587fa8db98f50c1f066c714494b94c3831bf7557620d1ea91d9d9d",
       "status": "APPROVED",
@@ -15633,6 +15711,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.733c3d450b27c9cb",
+      "site_signature": "733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 55,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "staff_credential_event_append_only",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_event_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:733c3d450b27c9cb017f40dc4b139620aae338f0d0a13532a5814e7b8dcdf750",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:55:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.7359e5fdaadda8e6",
       "site_signature": "7359e5fdaadda8e6afb7cc7a1d824b618a46b95efbb47cc76caeb23cc094693a",
       "status": "APPROVED",
@@ -16534,6 +16651,45 @@
           "source_sha256:524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
           "site_signature:781937cdaa7eb37d3a4a03c2a22ae42f7d9eec2386e5f4ed6bc105d7b27066ef",
           "source_coordinate:gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql:233:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.identity_access.786339aae3366d3d",
+      "site_signature": "786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 62,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "StaffCredentialEvent_append_only",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_TRIGGER on StaffCredentialEvent_append_only. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:786339aae3366d3db102dac35e8af8e36e909bed56d1d1f08f196e71fd21aa3a",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:62:1",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
         ]
@@ -26320,6 +26476,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.bec26d970be678ba",
+      "site_signature": "bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 68,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "FUNCTION",
+            "exact_name": "staff_credential_no_delete",
+            "operation": "CREATE_FUNCTION"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_FUNCTION on staff_credential_no_delete. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:bec26d970be678ba933d3f13f41a5ec60764092136a0856af5cae9361b251166",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:68:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.bf3595c5717d9ea1",
       "site_signature": "bf3595c5717d9ea1d8235c99e505d449b0588ce5c022eddabcdc413837a75ca6",
       "status": "APPROVED",
@@ -29936,6 +30131,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.identity_access.dd9001f118e583dc",
+      "site_signature": "dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 75,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TRIGGER",
+            "exact_name": "StaffCredential_no_delete",
+            "operation": "CREATE_TRIGGER"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_TRIGGER on StaffCredential_no_delete. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:dd9001f118e583dc167fa98bb6259e00c98afc064cebddfefb3dc44409d05081",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:75:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.messaging.ddbcd1ab44edc92d",
       "site_signature": "ddbcd1ab44edc92dbcdb5a59d478d9b23228178154eac06a6da27543632fd7e7",
       "status": "APPROVED",
@@ -32669,6 +32903,45 @@
         "canonical_ordinal": 8,
         "artifact_sha256": "430000665535bc3e467f95b4920044f75266e72209823843460c6fb2d78bebca",
         "repository_capture": "gravity-mvp/prisma/migrations/20260404000000_add_contact_model/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.identity_access.f48f6fde7cd264b4",
+      "site_signature": "f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+        "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+        "line": 37,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "identity_access",
+      "target": {
+        "data_owner": "identity_access",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "StaffCredentialEvent",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Expand-only statement of the Staff Session migration: CREATE_TABLE on StaffCredentialEvent. It creates or constrains only Identity Access-owned Staff Session objects, references no existing table, touches no existing row and stores no credential value.",
+        "evidence": [
+          "source_sha256:37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459",
+          "site_signature:f48f6fde7cd264b4d4e2f6253e43fd25d4a930ae35d73f84b7838546053e1121",
+          "source_coordinate:gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql:37:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
