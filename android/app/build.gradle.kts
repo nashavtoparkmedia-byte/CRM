@@ -55,6 +55,9 @@ android {
         // origin it is appended to: there is no setting, no intent extra and no
         // payload field that can point the registrar anywhere else.
         buildConfigField("String", "PUSH_REGISTRATION_PATH", "\"/api/mobile/push-registration\"")
+        // The second and last one: a context reset logs the CRM session out
+        // before it forgets the cookie (identity_access contract, ResetLogout).
+        buildConfigField("String", "MOBILE_LOGOUT_PATH", "\"/api/mobile/session/logout\"")
         // Edge Basic auth (design R5.1 §3.1): an accepted staff credential and
         // the CRM context riding on it end 12 h after the credential was typed.
         // Release pins 43 200 000 ms and a unit test asserts it.

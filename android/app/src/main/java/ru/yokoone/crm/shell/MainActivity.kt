@@ -129,7 +129,11 @@ class MainActivity : AppCompatActivity() {
     private var recordHandled = false
 
 
-    /** From reset step 0 on, nothing in-app may load or be requested. */
+    /**
+     * From reset step 0 on, nothing in-app may load or be requested. The only
+     * outbound request after step 0 is native: [ResetLogout]'s one logout to
+     * the pinned endpoint, which can only end the session it carries.
+     */
     @Volatile
     private var resetInProgress = false
 
@@ -914,7 +918,8 @@ class MainActivity : AppCompatActivity() {
 
             is ContinuityGuard.Precheck.Probe -> {
                 // Hold everything; the old cookies leave the device in no
-                // request until continuity is decided.
+                // request until continuity is decided (§5.8.3; a mismatch
+                // decided later allows at most the reset's one logout).
                 ContinuityGuard.state = ContinuityGuard.State.PENDING
                 recordFp = decision.recordFp
                 manager.setAcceptCookie(false)
@@ -1053,7 +1058,9 @@ class MainActivity : AppCompatActivity() {
         if (resetInProgress) return
         if (reason == EdgeContextReset.Reason.CONTINUITY_MISMATCH) {
             // Whatever happens next (reset or guard), the old session's
-            // cookies leave the device in no further request.
+            // cookies leave the device in at most one further request: the
+            // reset's logout to the pinned endpoint, and only when an
+            // accepted credential is held (§5.8.3 as amended, ResetLogout).
             ContinuityGuard.state = ContinuityGuard.State.MISMATCH
             CookieManager.getInstance().setAcceptCookie(false)
         }
@@ -1090,6 +1097,14 @@ class MainActivity : AppCompatActivity() {
         // 0. Durable intent first, one commit under PushTokenState.LOCK.
         PushTokenState.beginReset(this, reason, System.currentTimeMillis(), SystemClock.elapsedRealtime())
         ShellDiagnostics.write("edge-reset start reason=$reason")
+        // Reset logout is decided here, before step 1 forgets the credential:
+        // the cookie pair and the header are copied out now for its one request.
+        val logoutPlan = ResetLogout.plan(
+            reason,
+            PushRegistrar.sessionCookiePair(CookieManager.getInstance().getCookie(CrmOrigin.ORIGIN)),
+            EdgeCredentialHolder.authorizationHeaderOrNull(),
+            PushTokenState.edgeGate(this),
+        )
         // 1. In-memory.
         coordinator.clearForReset()
         edgeDialog.dismissAndClear()
@@ -1098,13 +1113,22 @@ class MainActivity : AppCompatActivity() {
         // 2. Stop traffic.
         stopTraffic(cancelWork = true)
         showPanel(getString(R.string.reset_in_progress), "", null, null, switchVisible = false)
+        // Reset logout runs alongside steps 3–5, bounded at 3 s, never blocking step 3.
+        val logoutStarted = SystemClock.elapsedRealtime()
+        val logoutDone = ResetLogout.start(logoutPlan)
         // 5a. Token deletion runs alongside, bounded at 5 s, never blocking step 3.
         val deleteStarted = SystemClock.elapsedRealtime()
         val deleteDone = TokenActor.requestResetDelete(this)
-        verifyThenEnd(reason, deleteStarted, deleteDone)
+        verifyThenEnd(reason, deleteStarted, deleteDone, logoutStarted, logoutDone)
     }
 
-    private fun verifyThenEnd(reason: String, deleteStarted: Long, deleteDone: java.util.concurrent.CountDownLatch) {
+    private fun verifyThenEnd(
+        reason: String,
+        deleteStarted: Long,
+        deleteDone: java.util.concurrent.CountDownLatch,
+        logoutStarted: Long,
+        logoutDone: java.util.concurrent.CountDownLatch,
+    ) {
         // 3. Cookies — verified, not timed.
         EdgeContextReset.verifyCookieRemoval(cookieJar, ::schedule, onResult = { verified ->
             if (!verified) {
@@ -1115,7 +1139,7 @@ class MainActivity : AppCompatActivity() {
                     getString(R.string.reset_incomplete_title),
                     getString(R.string.reset_incomplete_text),
                     getString(R.string.error_retry),
-                    { verifyThenEnd(reason, deleteStarted, deleteDone) },
+                    { verifyThenEnd(reason, deleteStarted, deleteDone, logoutStarted, logoutDone) },
                     switchVisible = false,
                 )
             } else {
@@ -1125,6 +1149,8 @@ class MainActivity : AppCompatActivity() {
                 Thread {
                     val remaining = EdgeContextReset.TOKEN_DELETE_WAIT_MS - (SystemClock.elapsedRealtime() - deleteStarted)
                     if (remaining > 0) deleteDone.await(remaining, TimeUnit.MILLISECONDS)
+                    val logoutRemaining = ResetLogout.WAIT_MS - (SystemClock.elapsedRealtime() - logoutStarted)
+                    if (logoutRemaining > 0) logoutDone.await(logoutRemaining, TimeUnit.MILLISECONDS)
                     main.post { endProcess(reason) }
                 }.start()
             }

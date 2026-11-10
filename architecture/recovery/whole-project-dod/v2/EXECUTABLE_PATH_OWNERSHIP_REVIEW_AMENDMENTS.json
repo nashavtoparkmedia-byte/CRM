@@ -4263,6 +4263,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "android-f1-reset-logout-acceptance-main-42caee7e-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "ANDROID_F1_RESET_LOGOUT_EXECUTOR_REVIEW_30BDCF05",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V8_MANDATE_08_ANDROID_V1_F1_RESET_LOGOUT_20261110",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the candidate chain of the identity_access endpoint PR #216 (HEAD 30bdcf05), whose tail is identity-access-mobile-logout-f1-main-42caee7e-20261110 anchored on main 42caee7e, and leaves that tail unchanged. The Android reset logout depends on that endpoint and is stacked on it."
+      },
+      "reason": "Records the tracked executable inventory transition the Android F-1 reset logout makes on top of the identity_access endpoint candidate 30bdcf05: dbaa18b0 -> ac79d6e3 with the denominator unchanged at 2,836 surfaces and the coverage digest unchanged at b1372f22. The change adds no tracked executable surface and retires none: its product and tests are Android Kotlin and a Gradle Kotlin script, none of whose extensions the inventory tracks, plus one Markdown record. The single input that moves is the reviewed lifecycle classification of .github/workflows/android-acceptance-e2e.yml, whose source_sha256 pin is rebound from b7b4468b to e52a56de because the change appends one acceptance step that runs the two reset logout device scenarios. registered_source_sha256 is an inventory identity input, which is why the inventory digest moves while every other field of the triple stands still. The two reviewed credential dispositions bound to those same workflow bytes are rebound in the same movement after a fresh credential inventory of this tree showed both sites unchanged at 161:39 and 165:33, the new step being appended after them; fresh credential verification passes with 0 new ambiguous and 0 new public risk. No ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no reviewed assignment's source fingerprint moves, so this amendment carries no rebind and records no unassigned surface. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to the endpoint candidate only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, after the endpoint, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2836,
+        "tracked_inventory_sha256": "dbaa18b026d58cf428d11d0526bec279bce99bd72796e5bb111eceb3f028f539",
+        "coverage_sha256": "b1372f229b29b28fe074b507f489dd8497fb8270777357b5e029ddae6824dc29"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2836,
+        "tracked_inventory_sha256": "ac79d6e38dfb8521a5ad4473e0a1535af8abdaf9b0218221e616a8115dde9195",
+        "coverage_sha256": "b1372f229b29b28fe074b507f489dd8497fb8270777357b5e029ddae6824dc29"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

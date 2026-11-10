@@ -16,7 +16,9 @@ import java.net.Proxy
 import java.net.URL
 
 /**
- * The shell's only outbound request, and the narrowest one that can do the job.
+ * One of the shell's two outbound requests, and the narrowest one that can do
+ * the job. The other is [ru.yokoone.crm.shell.ResetLogout], which follows the
+ * same wire rules on its own compile-time path.
  *
  * It speaks to exactly one URL, derived at compile time from the pinned origin,
  * with the session cookie the WebView already holds. There is no base-URL
