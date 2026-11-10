@@ -34,6 +34,8 @@ import { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 import { legacyPrismaExternalConversationPortV1 } from '../public/v1/legacy-prisma-external-conversation-adapter'
 import { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from '../public/v1/channel-message-handler'
 import { legacyPrismaChannelMessagePortV1 } from '../public/v1/legacy-prisma-channel-message-adapter'
+import { createConversationBindingAuditHandlerV1 } from '../public/v1/conversation-binding-audit-handler'
+import { legacyPrismaConversationBindingAuditPortV1 } from '../public/v1/legacy-prisma-conversation-binding-audit-adapter'
 import { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from '../public/v1/guarded-channel-message-handler'
 import { legacyPrismaGuardedChannelMessagePortV1 } from '../public/v1/legacy-prisma-guarded-channel-message-adapter'
 import { createApplyMessageDeliveryEvidenceHandlerV1 } from '../public/v1/message-delivery-evidence-handler'
@@ -112,6 +114,7 @@ const detachContactConversations = createDetachContactConversationsHandlerV1(leg
 const ensureConversationContactLink = createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)
 const resolveConversationContact = createResolveConversationContactHandlerV1(legacyPrismaResolveConversationContactPortV1)
 const contactConversations = createContactConversationsQueryHandlerV1(legacyPrismaContactConversationsQueryPortV1)
+const auditConversationBindings = createConversationBindingAuditHandlerV1(legacyPrismaConversationBindingAuditPortV1)
 const appendGuardedChannelMessage = createAppendGuardedChannelMessageHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const releaseHeldChannelMessages = createReleaseHeldChannelMessagesHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
 const heldChannelMessages = createHeldChannelMessagesQueryHandlerV1(legacyPrismaGuardedChannelMessagePortV1)
@@ -194,6 +197,7 @@ export const detachContactConversationsV1 = (...args: Parameters<typeof detachCo
 export const ensureConversationContactLinkV1 = (...args: Parameters<typeof ensureConversationContactLink>) => ensureConversationContactLink(...args)
 export const resolveConversationContactV1 = (...args: Parameters<typeof resolveConversationContact>) => resolveConversationContact(...args)
 export const contactConversationsV1 = (...args: Parameters<typeof contactConversations>) => contactConversations(...args)
+export const auditConversationBindingsV1 = (...args: Parameters<typeof auditConversationBindings>) => auditConversationBindings(...args)
 export const appendGuardedChannelMessageV1 = (...args: Parameters<typeof appendGuardedChannelMessage>) => appendGuardedChannelMessage(...args)
 export const releaseHeldChannelMessagesV1 = (...args: Parameters<typeof releaseHeldChannelMessages>) => releaseHeldChannelMessages(...args)
 export const heldChannelMessagesV1 = (...args: Parameters<typeof heldChannelMessages>) => heldChannelMessages(...args)

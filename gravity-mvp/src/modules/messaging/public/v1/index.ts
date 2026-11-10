@@ -32,6 +32,10 @@ export { createCreateExternalConversationHandlerV1, createPatchExternalConversat
 export type { ExternalConversationPersistencePortV1 } from './external-conversation-handler'
 export { createCreateChannelMessageHandlerV1, createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
 export type { ChannelMessagePersistencePortV1 } from './channel-message-handler'
+export { createConversationBindingAuditHandlerV1 } from './conversation-binding-audit-handler'
+export type { AuditedConversationV1, ConversationBindingAuditPortV1 } from './conversation-binding-audit-handler'
+export { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, isConversationPersonTrustedV1, telegramConversationPeerV1 } from './conversation-binding-trust-policy'
+export type { ConversationBindingFactsV1, ConversationLinkedIdentityFactsV1, ConversationPersonBindingStateV1 } from './conversation-binding-trust-policy'
 export { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from './guarded-channel-message-handler'
 export type { GuardedAppendSettlementV1, GuardedChannelMessagePersistencePortV1, GuardedReleaseSettlementV1 } from './guarded-channel-message-handler'
 export { decideGuardedAppendV1, hasConversationPersonBindingV1 } from './guarded-append-policy'
@@ -127,6 +131,7 @@ export {
     resolveConversationContactV1,
     contactConversationsV1,
     appendGuardedChannelMessageV1,
+    auditConversationBindingsV1,
     heldChannelMessagesV1,
     releaseHeldChannelMessagesV1,
     resolveConversationV1,
