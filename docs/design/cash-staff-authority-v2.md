@@ -68,8 +68,10 @@ Writes are wired (the wiring PR on MAIN `42caee7e`); the read guards follow once
   - The new refusals have their own texts (wired).
 - **C2 source control (wired):** `tools/architecture/check-cash-referral-staff-authority-boundary.mjs`, a boundary control every hosted CI run executes.
   - The four write functions are called only from `actions.ts`, once each, with the authority the server resolved.
-  - The actions take that authority only from `resolveCashStaffAuthorityV1()`, which only the actions and the page call.
-  - The binder's resolver is called only from `referral-data.ts`, with exactly `getStaffSessionPrincipalV1` (from `identity_access.public.v1`), `listUserIdentitiesV1` (UserIdentity.v1) and the server clock.
+  - Each write acts only on what `writer()` returned: `acting` is bound only by `const acting = await writer()` and read only as `.ok`, `.response` and `.authority`.
+  - `writer()` is pinned exactly: the manager gate, then `resolveCashStaffAuthorityV1()`, which only the actions and the page call.
+  - The body of `resolveCashStaffAuthorityV1()` is exactly one call of the binder's resolver, its only caller, with `getStaffSessionPrincipalV1` (from `identity_access.public.v1`), `listUserIdentitiesV1` (UserIdentity.v1) and the server clock.
+  - Production source is every tracked source file not named as a test (`.test.` / `.spec.`), so routes under a `/test/` directory are covered.
   - No `authority` object literal or Cash capability name appears outside the binder and the ledger's own definitions.
   - The actions and the resolver read no cookie, header, `crm_user_id` or current-user record.
   - The binder's write roles stay `['Администратор']` and its `sid` format stays Identity Access's.

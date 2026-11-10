@@ -13,10 +13,11 @@
 //   - the four manager writes of fleet_operations.public.v1 are called only by
 //     the referral screen's server actions, once each, and always with the
 //     authority the server resolved (never one built in the call);
-//   - the server actions take that authority only from the screen's
-//     resolveCashStaffAuthorityV1(), and only the actions and the page call it;
-//   - that resolver is the only caller of the binder's
-//     resolveCashStaffAuthorityFromSessionV1, and hands it exactly Identity
+//   - each write acts only on what the actions' writer() returned, and
+//     writer() is exactly the manager gate followed by the screen's
+//     resolveCashStaffAuthorityV1(), which only the actions and the page call;
+//   - that resolver's body is exactly one call of the binder's
+//     resolveCashStaffAuthorityFromSessionV1, its only caller, handing it Identity
 //     Access's published principal (identity_access.public.v1
 //     getStaffSessionPrincipalV1), its published directory (UserIdentity.v1
 //     listUserIdentitiesV1) and the server clock;
@@ -31,6 +32,8 @@
 //     the instrumentation's scheduler bootstrap, so no new handle can reach a
 //     write without naming it.
 //
+// Production source is every tracked source file except those named as tests
+// (.test. / .spec.): a route under a /test/ directory is production code.
 // Every rule is also run against a mutated copy of the tree, and each mutant
 // must be caught, so a rule that stops biting fails this control too. It reads
 // tracked source only and writes nothing.
@@ -75,6 +78,15 @@ const ACTION_AUTHORITY_VALUES = new Set([
     'staff.authority',
     "Parameters<typeof cashAccessManagerGrantV1>[0]['authority']",
 ])
+// The server actions' writer, exactly: the manager gate narrows, the screen resolver decides.
+const WRITER_SOURCE = `async function writer(): Promise<{ ok: true; authority: Parameters<typeof cashAccessManagerGrantV1>[0]['authority'] } | { ok: false; response: ReferralWriteResponse }> {
+    const session = await managerSession()
+    if (!session.ok) return { ok: false, response: { status: 'refused', reason: session.refusal } }
+    const staff = await resolveCashStaffAuthorityV1()
+    if (!staff.ok) return { ok: false, response: { status: 'refused', reason: staff.refusal } }
+    return { ok: true, authority: staff.authority }
+}`
+const ACTING_BINDING = 'const acting = await writer()'
 const WRITE_ROLES = "export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']"
 const SID_FORMAT = 'const STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u'
 // The files outside fleet_operations that may hold the whole Fleet module.
@@ -89,7 +101,7 @@ const CAPABILITY_LITERAL = /['"`]cash\.(?:referral\.qualify|access\.manage)['"`]
 const BROWSER_AUTHORITY = [/\bcookies\s*\(/u, /\bheaders\s*\(/u, /crm_user_id/u, /\bgetCurrentUser\b/u, /\bqueryCurrentUserV1\b/u, /\bsearchParams\b/u]
 
 const isSource = (file) => file.startsWith(SOURCE_ROOT) && /\.(?:[cm]?[jt]sx?)$/u.test(file)
-const isTest = (file) => /(?:\.test\.|\.spec\.|\/__tests__\/|\/test\/)/u.test(file)
+const isTest = (file) => /\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
 
 /** Comments removed, so a word in a doc comment is neither a call nor a literal. */
 function code(text) {
@@ -116,6 +128,22 @@ function callArguments(text, name) {
         found.push(text.slice(pattern.lastIndex, index - 1))
     }
     return found
+}
+
+/** The text of the function whose declaration starts with `header`, through its closing brace; null if absent. */
+function functionText(text, header) {
+    const start = text.indexOf(header)
+    if (start < 0 || text.indexOf(header, start + 1) >= 0) return null
+    const open = /\)\s*(?::[^]*?>)?\s*\{/u.exec(text.slice(start))
+    if (open === null) return null
+    let index = start + open.index + open[0].length
+    let depth = 1
+    while (index < text.length && depth > 0) {
+        if (text[index] === '{') depth += 1
+        else if (text[index] === '}') depth -= 1
+        index += 1
+    }
+    return depth === 0 ? text.slice(start, index) : null
 }
 
 /** Every rule over one tree (path -> source text); returns the failures. */
@@ -148,6 +176,16 @@ export function evaluate(tree) {
     if (count(actions, /const staff = await resolveCashStaffAuthorityV1\(\)/gu) !== 1) {
         fail('the server actions take the authority from the screen resolver', 'expected exactly one `const staff = await resolveCashStaffAuthorityV1()`')
     }
+    const writerText = functionText(actions, 'async function writer(')
+    if (writerText === null || squash(writerText) !== squash(WRITER_SOURCE) || count(actions, /\bwriter\b/gu) !== 1 + WRITERS.length) {
+        fail('writer() is exactly the manager gate and the screen resolver', writerText === null ? 'writer() not found once' : squash(writerText))
+    }
+    // `acting` is bound only by the four `const acting = await writer()` and read only as .ok, .response, .authority.
+    const bindings = actions.split(ACTING_BINDING).length - 1
+    const strayActing = [...actions.split(ACTING_BINDING).join('').matchAll(/\bacting\b(?!\.(?:ok|response|authority)\b)/gu)].length
+    if (bindings !== WRITERS.length || strayActing !== 0) {
+        fail('each write acts only on what writer() returned', `${bindings} bindings, ${strayActing} other uses of acting`)
+    }
 
     // 2. The screen resolver is the binder's only caller and hands it Identity Access's reads and the server clock.
     only('only the screen and its actions ask the screen resolver', SCREEN_RESOLVER, [DATA, ACTIONS, PAGE])
@@ -156,6 +194,11 @@ export function evaluate(tree) {
     const resolverCalls = callArguments(data, BINDER_RESOLVER)
     if (resolverCalls.length !== 1 || squash(resolverCalls[0]) !== RESOLVER_SOURCE) {
         fail('the binder gets exactly Identity Access\'s principal, its directory and the server clock', JSON.stringify(resolverCalls.map(squash)))
+    }
+    const resolverText = functionText(data, 'export async function resolveCashStaffAuthorityV1(')
+    const resolverBody = resolverText === null ? null : squash(resolverText.slice(resolverText.search(/\)\s*:[^]*?>\s*\{/u)).replace(/^[^]*?>\s*\{/u, '').replace(/\}$/u, ''))
+    if (resolverBody !== `return ${BINDER_RESOLVER}(${RESOLVER_SOURCE})`) {
+        fail('the screen resolver is exactly the binder call', JSON.stringify(resolverBody))
     }
     for (const line of RESOLVER_IMPORTS) {
         if (!data.includes(line)) fail('the principal and the directory come from Identity Access\'s public surface', `missing: ${line}`)
@@ -202,6 +245,12 @@ const MUTANTS = [
     ['a fifth caller of a write', (tree) => tree.set(`${REFERRALS}rogue.ts`, "import { cashAccessManagerGrantV1 } from '@/modules/fleet-operations/public/v1'\nexport const rogue = (input) => cashAccessManagerGrantV1(input)\n"), 'the four Cash writes are called only by the referral server actions'],
     ['a write with an authority built in the call', (tree) => tree.set(ACTIONS, replaceOnce(tree.get(ACTIONS), 'cashAccessManagerRevokeV1({ ...input, authority: acting.authority })', "cashAccessManagerRevokeV1({ ...input, authority: { ...acting.authority, principalId: 'crm_user:x' } })")), 'each write is called once, with the resolved authority'],
     ['an authority taken from elsewhere', (tree) => tree.set(ACTIONS, replaceOnce(tree.get(ACTIONS), 'return { ok: true, authority: staff.authority }', 'return { ok: true, authority: input.authority }')), 'the server actions pass only the resolved authority'],
+    ['a write acting on another writer', (tree) => tree.set(ACTIONS, tree.get(ACTIONS).replace(ACTING_BINDING, 'const acting = await rogueWriter()')), 'each write acts only on what writer() returned'],
+    ['a write acting on the request', (tree) => tree.set(ACTIONS, tree.get(ACTIONS).replace(ACTING_BINDING, 'const acting = JSON.parse(input.comment)')), 'each write acts only on what writer() returned'],
+    ['a write re-binding acting', (tree) => tree.set(ACTIONS, replaceOnce(tree.get(ACTIONS), 'const result = await cashAccessManagerRevokeV1({ ...input, authority: acting.authority })', 'const result = await ((acting) => cashAccessManagerRevokeV1({ ...input, authority: acting.authority }))(input)')), 'each write acts only on what writer() returned'],
+    ['a writer that skips the staff refusal', (tree) => tree.set(ACTIONS, replaceOnce(tree.get(ACTIONS), "    if (!staff.ok) return { ok: false, response: { status: 'refused', reason: staff.refusal } }\n", '')), 'writer() is exactly the manager gate and the screen resolver'],
+    ['an early return in the screen resolver', (tree) => tree.set(DATA, replaceOnce(tree.get(DATA), '    return resolveCashStaffAuthorityFromSessionV1({', '    if (process.env.CASH_DEMO_WRITER) return { ok: true, authority: demoAuthority() }\n    return resolveCashStaffAuthorityFromSessionV1({')), 'the screen resolver is exactly the binder call'],
+    ['a write called from a route under a test directory', (tree) => tree.set(`${SOURCE_ROOT}app/api/rogue/test/route.ts`, "import { cashAccessManagerGrantV1 } from '@/modules/fleet-operations/public/v1'\nexport async function POST(request) { return Response.json(await cashAccessManagerGrantV1(await request.json())) }\n"), 'the four Cash writes are called only by the referral server actions'],
     ['actions that skip the screen resolver', (tree) => tree.set(ACTIONS, replaceOnce(tree.get(ACTIONS), 'const staff = await resolveCashStaffAuthorityV1()', 'const staff = await otherAuthority()')), 'the server actions take the authority from the screen resolver'],
     ['a second caller of the binder', (tree) => tree.set(`${SOURCE_ROOT}app/rogue-binder.ts`, "import { resolveCashStaffAuthorityFromSessionV1 } from '@/modules/fleet-operations/public/v1'\nexport const rogue = (source) => resolveCashStaffAuthorityFromSessionV1(source)\n"), 'only the screen resolver calls the binder'],
     ['a principal that is not Identity Access\'s', (tree) => tree.set(DATA, replaceOnce(tree.get(DATA), 'principal: getStaffSessionPrincipalV1,', 'principal: async () => mobilePrincipal(),')), 'the binder gets exactly Identity Access\'s principal, its directory and the server clock'],
