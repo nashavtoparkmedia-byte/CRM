@@ -20,9 +20,10 @@ import {
   GuardedChannelMessageError,
   HELD_CHANNEL_MESSAGES_QUERY_V1,
   RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
   type GuardedSenderAttributionV1,
 } from '../../../../contracts/messaging/v1'
-import { appendGuardedChannelMessageV1, heldChannelMessagesV1, releaseHeldChannelMessagesV1 } from './index'
+import { appendGuardedChannelMessageV1, heldChannelMessagesV1, releaseHeldChannelMessagesV1, runHeldChannelMessageRetentionV1 } from './index'
 import { legacyPrismaGuardedChannelMessagePortV1 } from './legacy-prisma-guarded-channel-message-adapter'
 import { deriveDeliveryStateV1 } from './delivery-state-policy'
 import { persistsWithNotificationIntentV1 } from '../../internal/mobile-push/inbound-notification-intent'
@@ -366,6 +367,9 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     const held = await heldRows(chatId)
     expect(held.every(row => row.releasedAt !== null)).toBe(true)
     expect(held.map(row => row.releasedMessageId)).toEqual(messages.map(message => message.id))
+    // A2: the visible Message is the only copy; the released rows keep no text.
+    expect(held.every(row => row.content === '' && JSON.stringify(row.metadata) === '{}')).toBe(true)
+    expect(messages.map(message => message.content)).toEqual([key('release-0'), key('release-1'), key('release-2')].map(k => `text ${k}`))
 
     expect(await append(chatId, PROVEN_A, key('release-1'))).toMatchObject({ outcome: 'duplicate', messageId: messages[1].id, visible: true })
     expect(await heldChannelMessagesV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId })).toMatchObject({ held: 0 })
@@ -462,6 +466,14 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-other'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityB } })).rejects.toThrow()
     await prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-ok'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityA } })
     expect(await prisma.heldChannelMessage.count({ where: { chatId } })).toBe(1)
+    // A2: a released row may not carry content or metadata, and text cannot be restored to it.
+    const visible = await prisma.message.create({ data: { chatId, direction: 'inbound', channel: 'telegram', content: 'x', externalId: key('scrub-visible'), status: 'delivered' } })
+    const released = { ...base, externalId: key('scrub'), holdReason: 'binding_absent', releasedAt: new Date(), releasedMessageId: visible.id }
+    await expect(prisma.heldChannelMessage.create({ data: released })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: { k: 1 } } })).rejects.toThrow()
+    const scrubbed = await prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: {} } })
+    await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { content: 'restored' } })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { metadata: { k: 1 } } })).rejects.toThrow()
   })
 
   it('refuses a missing conversation, another channel or another kind without writing', async () => {
@@ -486,6 +498,38 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await visibleCount(unlinked)).toBe(0)
     await prisma.chat.deleteMany({ where: { id: { in: [chatId, unlinked] } } })
     await prisma.contactIdentity.delete({ where: { id: otherIdentityOfA } })
+  })
+
+  it('held events follow the 12-month retention: old rows go, released or not, young rows stay', async () => {
+    const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
+    const day = 24 * 60 * 60 * 1000
+    const old = new Date(Date.now() - 400 * day)
+    await append(chatId, PROVEN_B, key('old-released'), { sentAt: old })
+    await append(chatId, PROVEN_B, key('old-held'), { sentAt: new Date(old.getTime() + 1000) })
+    await append(chatId, PROVEN_B, key('young-held'), { sentAt: new Date(Date.now() - 300 * day) })
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB } })
+    // Only the oldest event is released: one old row leaves with its text still held, one old row leaves scrubbed.
+    expect(await release(chatId, PROVEN_B, 1)).toMatchObject({ outcome: 'released', released: 1 })
+    expect(await heldRows(chatId)).toHaveLength(3)
+    const oldHeld = await prisma.heldChannelMessage.findUniqueOrThrow({ where: { externalId: key('old-held') }, select: { releasedAt: true, content: true } })
+    expect(oldHeld.releasedAt).toBeNull()
+    expect(oldHeld.content).not.toBe('')
+
+    const dry = await runHeldChannelMessageRetentionV1({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true, limit: 1000 })
+    expect(dry).toMatchObject({ dryRun: true })
+    expect(dry.selectedCount).toBeGreaterThanOrEqual(2)
+    expect(await heldRows(chatId)).toHaveLength(3)
+
+    let total = 0
+    for (let pass = 0; pass < 10; pass += 1) {
+      const run = await runHeldChannelMessageRetentionV1({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: false, limit: 1000 })
+      total += run.selectedCount
+      if (run.selectedCount === 0) break
+    }
+    expect(total).toBeGreaterThanOrEqual(2)
+    expect((await heldRows(chatId)).map(row => row.externalId)).toEqual([key('young-held')])
+    // The released Message itself is retention's own concern; it is untouched here.
+    expect(await visibleCount(chatId)).toBe(1)
   })
 
   // R-22 on the write side (d): a proof that merely equals a binding R-22 proves is
