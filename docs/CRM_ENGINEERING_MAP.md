@@ -15,6 +15,9 @@ Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-
 Partial update 2026-11-08: §2.8, F-25 (browser operator row), the `StaffCredential` data rows, the Login / sessions / guards routing row, I-SS1 (number assigned at landing) and R-01 describe Staff Session v1 (`docs/design/staff-session-v1.md` v1.3), verified against its own change on top of main `7bf380c2`. It is dormant until `STAFF_SESSION_SECRET` is provisioned.
 Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
 tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
+Partial update 2026-11-10: §2.8, F-16, the mobile-shell row of Login / sessions / guards, I-62 and the Android routing
+row describe the native mobile logout `POST /api/mobile/session/logout` (F-1), verified against its own change on top
+of main `42caee7e`.
 
 # YOKO CRM — Engineering Map
 
@@ -540,8 +543,8 @@ Each entry lists what the code actually does.
   `G/modules/identity-access/application/mobile-session-operator-operations.ts`,
   `G/modules/identity-access/internal/mobile-session-barrier.ts`,
   `G/modules/identity-access/internal/mobile-delivery/`; `G/proxy.ts`;
-  `G/app/login/`, `G/app/users/`, `G/app/api/mobile/push-registration/route.ts`.
-  Staff Session v1: `public/v1/staff-session.ts` (`getStaffSessionPrincipalV1`, the
+  `G/app/login/`, `G/app/users/`, `G/app/api/mobile/push-registration/route.ts`,
+  `G/app/api/mobile/session/logout/route.ts` (native logout, F-1). Staff Session v1: `public/v1/staff-session.ts` (`getStaffSessionPrincipalV1`, the
   only employee authority for consumers), `application/staff-session-operations.ts`,
   `internal/staff-session-credentials.ts`, `internal/staff-credential-store.ts`,
   `internal/user-registry-file.ts` (registry path `YOKO_USER_REGISTRY_FILE`, atomic
@@ -979,6 +982,10 @@ Android `PushMessagingService` → `PushPayload.parse` → notification → deep
 `/messages/open`.
 Device registration: Android `PushRegistrar` →
 `POST /api/mobile/push-registration` → `registerMobilePushDeviceFromSessionV1`.
+Native logout (the shell's context reset, F-1): `POST /api/mobile/session/logout`
+(JSON, the `yoko_mobile_session` cookie alone) → `endMobileSessionForRequestV1` →
+push revocation + logout barrier for exactly the presented session; 204 also when
+there is nothing to end, 503 when the barrier could not be read or written.
 
 ### Calling
 
@@ -1096,7 +1103,7 @@ is a manual grant from its decision time until revoked. The bot reads the same c
 | Lane | Mechanism | Where enforced |
 |---|---|---|
 | Browser operator | Dormant default: cookie `crm_user_id` chosen on `/login` from the registry; unsigned, no password. `canLogin` only stops a Менеджер from switching identity. Staff Session v1 (when `STAFF_SESSION_SECRET` is valid and the registry is located): `/login` asks the employee's individual password (scrypt verifier in `StaffCredential`) and sets the signed `__Host-yoko_staff_session` (12 h, global and per-employee epoch, session instance id); the proxy resolves it with the same BR-4 resolver and forwards exactly one `crm_user_id`, the employee; refused → none; store or registry unreadable → 503; `YOKO_STAFF_SESSION_ENFORCE=on` removes `crm_user_id` from browser requests without a session. Logout bumps the employee's epoch. User CRUD is strict (Staff Session Администратор) once the secret is valid or any credential row exists | `G/lib/users/user-service.ts`, `G/proxy.ts`, `G/modules/identity-access/application/staff-session-operations.ts` |
-| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch, credential subject, device id, session instance id) from shared `MOBILE_ACCESS_USER/PASS`. The proxy resolves it once per request (`resolveCookieOperatorV1`). Valid and not logged out: forwarded with exactly one `crm_user_id`, the signed operator, so a client copy never wins; GET/HEAD re-syncs the browser copy. Logged out (the Mobile Push v1 logout barrier), unbarrable (no session instance id, `ephemeral-device`), tampered, expired, epoch bumped or credential rotated: no operator; page 303 to `/login/mobile`, API 401. Barrier unreadable: no operator; 503 with no Location (`mobile_session_unverifiable` for the API), so the shell keeps its session. A session cookie sent without the shell User-Agent is resolved the same way and refused sessions get no operator; without a session cookie the browser lane is unchanged. Under a session no operator switch (`authenticateUserV1` refuses, mobile login answers `session_active`); logout writes the barrier (I-62) | `G/proxy.ts`, `mobile-session-operator-operations.ts`, `mobile-session-auth.ts`, `legacy-user-service-adapter.ts` |
+| Mobile shell (User-Agent contains `YokoShell/`) | Signed `yoko_mobile_session` cookie (12 h, revocation epoch, credential subject, device id, session instance id) from shared `MOBILE_ACCESS_USER/PASS`. The proxy resolves it once per request (`resolveCookieOperatorV1`). Valid and not logged out: forwarded with exactly one `crm_user_id`, the signed operator, so a client copy never wins; GET/HEAD re-syncs the browser copy. Logged out (the Mobile Push v1 logout barrier), unbarrable (no session instance id, `ephemeral-device`), tampered, expired, epoch bumped or credential rotated: no operator; page 303 to `/login/mobile`, API 401. Barrier unreadable: no operator; 503 with no Location (`mobile_session_unverifiable` for the API), so the shell keeps its session. A session cookie sent without the shell User-Agent is resolved the same way and refused sessions get no operator; without a session cookie the browser lane is unchanged. Under a session no operator switch (`authenticateUserV1` refuses, mobile login answers `session_active`); logout writes the barrier (I-62), from the CRM's «Выйти» or natively from the shell's reset via `POST /api/mobile/session/logout`, the one API path the shell reaches without a live session (it ends only a session the boundary accepts: 204, or 503 when the barrier is unreadable or unwritten) | `G/proxy.ts`, `mobile-session-operator-operations.ts`, `mobile-session-auth.ts`, `legacy-user-service-adapter.ts` |
 | Integration admin | `ADMIN_USER/ADMIN_PASS` → HMAC cookie `yoko_integration_admin_session` (8 h) | `requireIntegrationAdminAccess` in settings pages/actions and selected API routes |
 | Machine callers | Shared secrets per caller (below) | The individual route |
 
@@ -1374,9 +1381,13 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   the Fleet monitoring writes (`api/monitoring/drivers/[id]/{event,attention,fleet-check}`,
   `api/monitoring/attention/[id]`) record it as the author. A refused session grants no
   operator in either lane and is 401 at those writes before anything is written; an
-  unreadable barrier is 503 for the shell, never a logout. — `resolveCookieOperatorV1`,
-  `G/proxy.ts`, `legacy-user-service-adapter.ts` — `G/lib/security/mobile-signed-operator.test.ts`,
-  `mobile-shell-lane.test.ts`. Exceptions: the browser lane without a session is unchanged
+  unreadable barrier is 503 for the shell, never a logout. The native logout
+  (`POST /api/mobile/session/logout`) bars only the session its own cookie presents and
+  only when the boundary would accept it; nothing in the body, a header, `crm_user_id` or
+  a staff cookie selects it, and it never sets a session. — `resolveCookieOperatorV1`,
+  `G/proxy.ts`, `legacy-user-service-adapter.ts`, `endMobileSessionForRequestV1` —
+  `G/lib/security/mobile-signed-operator.test.ts`, `mobile-shell-lane.test.ts`,
+  `mobile-session-logout.test.ts`, `mobile-session-logout.postgres.test.ts`. Exceptions: the browser lane without a session is unchanged
   and unauthenticated (R-01); `G/app/messages/open/route.ts` still re-syncs the UI cookie
   from a signature-only check (an open follow-up, no operator effect).
 - **I-SS1 (number assigned at landing) An employee's authority comes only from a
@@ -2117,7 +2128,7 @@ Not refactor requests. Each names the concrete way a future change goes wrong.
 - **Call alerts** → `G/modules/calling/internal/call-alerts/`,
   `G/modules/calling/application/call-alert-operations.ts`
 - **Android** → `android/app/src/main/java/ru/yokoone/crm/shell/`,
-  `G/app/api/mobile/push-registration/route.ts`,
+  `G/app/api/mobile/push-registration/route.ts`, `G/app/api/mobile/session/logout/route.ts`,
   `G/modules/identity-access/internal/mobile-delivery/`, `docs/mobile/`
 - **Cash** → `G/modules/fleet-operations/internal/compensation/`
   (`compensation-prisma-adapter.ts`, `compensation-policy.ts`),
