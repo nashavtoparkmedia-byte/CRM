@@ -1,5 +1,13 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, isConversationPersonTrustedV1 } from '@/modules/messaging/public/v1/conversation-binding-trust-policy'
+
+/**
+ * The client a workflow projection runs on. Omitted, it is the shared client;
+ * a Messaging transaction passes its own, so the projection commits or rolls
+ * back with the message it describes.
+ */
+export type ConversationWorkflowClient = Pick<Prisma.TransactionClient, '$queryRaw' | '$executeRawUnsafe'>
 
 /** The exact conversations one group operation writes: one person's trusted conversations, or just the one. */
 type ConversationGroupSelector = { chatIds: string[] }
@@ -55,8 +63,8 @@ export class ConversationWorkflowService {
   /**
    * Called by ALL inbound handlers (TG, MAX, WA) after saving the message.
    */
-  static async onInboundMessage(chatId: string, sentAt: Date): Promise<void> {
-    const rows = await prisma.$queryRaw<Array<{ status: string }>>`
+  static async onInboundMessage(chatId: string, sentAt: Date, db: ConversationWorkflowClient = prisma): Promise<void> {
+    const rows = await db.$queryRaw<Array<{ status: string }>>`
       SELECT status FROM "Chat" WHERE id = ${chatId}
     `
     if (rows.length === 0) return
@@ -67,7 +75,7 @@ export class ConversationWorkflowService {
       newStatus = 'open'
     }
 
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "Chat"
        SET "unreadCount" = "unreadCount" + 1,
            "requiresResponse" = true,
@@ -86,8 +94,8 @@ export class ConversationWorkflowService {
    * Only increments unreadCount and updates lastInboundAt.
    * Does NOT set requiresResponse, does NOT transition status.
    */
-  static async onGroupInboundMessage(chatId: string, sentAt: Date): Promise<void> {
-    await prisma.$executeRawUnsafe(
+  static async onGroupInboundMessage(chatId: string, sentAt: Date, db: ConversationWorkflowClient = prisma): Promise<void> {
+    await db.$executeRawUnsafe(
       `UPDATE "Chat"
        SET "unreadCount" = "unreadCount" + 1,
            "lastInboundAt" = $1,
@@ -101,8 +109,8 @@ export class ConversationWorkflowService {
   /**
    * Called by MessageService.send() after successful delivery.
    */
-  static async onOutboundMessage(chatId: string, sentAt: Date): Promise<void> {
-    const rows = await prisma.$queryRaw<Array<{ status: string }>>`
+  static async onOutboundMessage(chatId: string, sentAt: Date, db: ConversationWorkflowClient = prisma): Promise<void> {
+    const rows = await db.$queryRaw<Array<{ status: string }>>`
       SELECT status FROM "Chat" WHERE id = ${chatId}
     `
     if (rows.length === 0) return
@@ -116,7 +124,7 @@ export class ConversationWorkflowService {
     }
     const newStatus = transitions[currentStatus] || currentStatus
 
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE "Chat"
        SET "requiresResponse" = false,
            "lastOutboundAt" = $1,

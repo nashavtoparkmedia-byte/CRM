@@ -36,6 +36,10 @@ export { createConversationBindingAuditHandlerV1 } from './conversation-binding-
 export type { AuditedConversationV1, ConversationBindingAuditPortV1 } from './conversation-binding-audit-handler'
 export { conversationPersonBindingStateV1, conversationPersonGroupKeyV1, isConversationPersonTrustedV1, telegramConversationPeerV1 } from './conversation-binding-trust-policy'
 export type { ConversationBindingFactsV1, ConversationLinkedIdentityFactsV1, ConversationPersonBindingStateV1 } from './conversation-binding-trust-policy'
+export { createAppendGuardedChannelMessageHandlerV1, createHeldChannelMessagesQueryHandlerV1, createReleaseHeldChannelMessagesHandlerV1 } from './guarded-channel-message-handler'
+export type { GuardedAppendSettlementV1, GuardedChannelMessagePersistencePortV1, GuardedReleaseSettlementV1 } from './guarded-channel-message-handler'
+export { decideGuardedAppendV1, hasConversationPersonBindingV1 } from './guarded-append-policy'
+export type { ConversationPersonBindingV1, GuardedAppendDecisionV1 } from './guarded-append-policy'
 export { createApplyMessageDeliveryEvidenceHandlerV1 } from './message-delivery-evidence-handler'
 export type { DeliveryEvidenceRowV1, DeliveryEvidenceWriteV1, MessageDeliveryEvidencePortV1 } from './message-delivery-evidence-handler'
 export { createPatchChannelConversationHandlerV1, createUpsertChannelConversationHandlerV1 } from './channel-conversation-handler'
@@ -126,9 +130,13 @@ export {
     replaceExternalMessageV1,
     resolveConversationContactV1,
     contactConversationsV1,
+    appendGuardedChannelMessageV1,
     auditConversationBindingsV1,
+    heldChannelMessagesV1,
+    releaseHeldChannelMessagesV1,
     resolveConversationV1,
     sendMessageV1,
+    sendToContactV1,
     syncCallTimelineV1,
     updateCommunicationTriggerV1,
     updateConversationV1,

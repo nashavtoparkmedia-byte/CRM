@@ -26,11 +26,12 @@ const consumers = [
 ]
 const exactCapabilities = ['onGroupInboundMessage', 'onInboundMessage', 'onOutboundMessage']
 
-// Byte pin of the implementation. Re-pinned for R-22 N1: _getGroupSelector now
-// groups one person's conversations by the inbox person key
-// (conversationPersonGroupKeyV1); the three published capabilities, their
+// Byte pin of the implementation, re-pinned to the combined bytes of R-21 (the
+// workflow projections accept a Messaging transaction client) and R-22 N1
+// (_getGroupSelector groups one person's conversations by the inbox person key,
+// conversationPersonGroupKeyV1); the three published capabilities, their
 // consumers and the public facade are unchanged.
-assert.equal(sha256(read(implementationPath)), 'a4ee3012d0b2f705c51e88fe98109fe4bf2a0c0da1c4e0478c3447e50650d385')
+assert.equal(sha256(read(implementationPath)), '8382214b36fe6034aaf2a13b2cfcb4b4ae72b99e99772265b8e384b3977b5868')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''

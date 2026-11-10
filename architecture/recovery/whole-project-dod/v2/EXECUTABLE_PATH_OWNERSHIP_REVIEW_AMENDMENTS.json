@@ -3867,71 +3867,234 @@
       }
     },
     {
-      "amendment_id": "messaging-r22-binding-trust-main-7bf380c2-20261108",
+      "amendment_id": "messaging-send-to-contact-main-7bf380c2-20261108",
       "reviewed_at": "2026-11-08T00:00:00Z",
-      "reviewed_by": "MESSAGING_SHARED_RELIABILITY_R22_BINDING_TRUST_MAIN_A16489F5_EXECUTOR_REVIEW_20261108",
+      "reviewed_by": "MESSAGING_SEND_TO_CONTACT_EXECUTOR_REVIEW_7BF380C2",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "ORCH_V8_MANDATE_05_MESSAGING_R21_R22_OWNERSHIP_20261108",
+      "authorization": "PRODUCT_CURATOR_SEND_TO_CONTACT_PR183_CURRENT_MAIN_RECONCILE_7BF380C2_20261108",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 7bf380c2 (#206 adds a test file and no governance), whose tail is cash-referral-manager-s4-main-a16489f5-20261107, and leaves that amendment untouched. It reviews only the seven surfaces the R-22 Messaging read-side binding trust adds on that tail; it carries no source-hash rebind. It replaces this PR's earlier amendments on main 3ac5ce07 and a16489f5 (messaging-r22-binding-trust-main-3ac5ce07-20261108, messaging-r22-binding-trust-main-a16489f5-20261108), which were never published, with the same surface decisions over the current tail. The parallel R-21 amendment extends the same tail on its own branch; whichever lands second is re-derived onto the other's published tail. It lands only through Orchestrator admission."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 7bf380c2, whose tail is cash-referral-manager-s4-main-a16489f5-20261107 (PR #198), and leaves that amendment untouched. It reviews only the fourteen surfaces SendToContact and the shared Contacts permission gate add on that tail, plus five mechanical source-hash rebinds. It replaces the PR #183 amendment messaging-send-to-contact-main-f77279db-20261027 and its reconciles messaging-send-to-contact-main-dadef242-20261107 and messaging-send-to-contact-main-a16489f5-20261108, none of which was published on main, with the same surface decisions over the current tail."
       },
-      "reason": "Records the tracked executable surfaces the R-22 Messaging read-side binding trust adds on top of main 7bf380c2: 2,803 + 7 = 2,810 surfaces, context-owned 1,548 -> 1,554, governed exclusions 1,255 -> 1,256 (the boundary control under architecture_controls, a prefix rule without exact inventory). Six new paths live under gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging and are owned by the messaging context through its manifest owned_paths. The changed MessageService, ConversationWorkflowService and ContextBuilder are context-owned and carry no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main 7bf380c2 itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "reason": "Records Messaging's SendToContact capability (messaging.SendToContactCommand.v1) and the shared Contacts permission gate on top of main 7bf380c2. Fourteen tracked executable surfaces are added: eleven messaging-owned (the contract and its test under gravity-mvp/src/contracts/messaging; the request identity, route discovery and handler with their three proofs and the PostgreSQL proof under gravity-mvp/src/modules/messaging/application; the Prisma adapter and the retry-backoff PostgreSQL parity proof under gravity-mvp/src/modules/messaging/public/v1), the expand-only migration under gravity-mvp/prisma (gravity_schema governed exclusion), the operator text-send route test under gravity-mvp/src/app/api/messages (gravity_root governed exclusion) and the boundary control under tools/architecture (architecture_controls governed exclusion). 2,803 + 14 = 2,817 surfaces, context-owned 1,548 -> 1,559 and governed exclusions 1,255 -> 1,258. Five already assigned gravity_runtime_remainder routes under gravity-mvp/src/app/api/messages change bytes only and are rebound mechanically from main's fingerprints; the send-media route's current bytes also refuse the reserved stc: clientMessageId namespace (Security F1). The current triple is this repository's own derivation over this tree (preview on the clean commit bc8b864c, which reported exactly these five source-hash rebinds and no exact-inventory path without a reviewed assignment). Every new surface sits under a path its context manifest or a prefix governed exclusion already owns, so no explicit exact-inventory assignment applies. No assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes.",
       "predecessor": {
         "tracked_executable_surfaces": 2803,
         "tracked_inventory_sha256": "8197c144fa9179e8c73bb3b93a1c6e4cdbf808ffface80662063e5e7bfd09a7d",
         "coverage_sha256": "23c4e9305d43048c0ffe6dbe85f9675d0fc4c9546074c6368012442608eb7d80"
       },
       "current": {
-        "tracked_executable_surfaces": 2810,
-        "tracked_inventory_sha256": "9a7346ac2b95008c26ead2b24ca190ee763a65ebbb97cefd52d4bd8590bb5163",
-        "coverage_sha256": "8adb75361b1126df30b3da47c3b1b0de2c526abd5bf27f1c70d0a0f09cd15dd9"
+        "tracked_executable_surfaces": 2817,
+        "tracked_inventory_sha256": "1567d109e59dbba06e1202473339892f521f015c571dd6706e94ddc100646d73",
+        "coverage_sha256": "869b11b46afa10f43c0bec3464a7ab7409d5d7c266616f1c260e2d45d0d25f8b"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/messages/delete/route.ts",
+          "previous_source_sha256": "d6b593694e283829700057db9dd5a9e50eb27327e59935b7620d49437cbef935",
+          "current_source_sha256": "74779a83ad18b0682dec1ceab5cdac98c7f07212cf63854a84afa2b3837c914a",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The message-deletion route keeps every reviewed ownership field and its signed admin guard. It now obtains the conversation binding from the ungated proveOutboundConversationRouteV1 instead of the gated port: retraction of the CRM's own message is the one effect deliberately not subject to the Contacts permission. Its APPLICATION_RUNTIME lifecycle, owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/reaction/route.ts",
+          "previous_source_sha256": "a88e9e7ae2759309370653139bbcd46d92c3c71b58a9af2a62164215b6366cb2",
+          "current_source_sha256": "3a59cb0a4b7a2a4166ceaa050a9cf7defe0aa251704a78fed63100fedb0734f0",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The reaction route keeps every reviewed ownership field and its guard. Its error answer now names a Contacts permission refusal of the shared gate with a stable code (403 standing, 503 temporary) instead of a generic 500; every other path is unchanged. Its APPLICATION_RUNTIME lifecycle, owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/route.ts",
+          "previous_source_sha256": "202cce83c5b5052fcfa54a1f6df6eddfbbc405aa043207c43f090e3e8aa6ddea",
+          "current_source_sha256": "01843e9f01f07670af330266c1fd9c17ec2ff0af4ed2cf3648d2329301ae5a80",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The operator text-send route keeps every reviewed ownership field and its guard. Its error answer now names a Contacts permission refusal of the shared gate with a stable code (403 standing, 503 temporary) and refuses a clientMessageId in the reserved SendToContact namespace (400); every other failure answers exactly as before. Its APPLICATION_RUNTIME lifecycle, owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-image/route.ts",
+          "previous_source_sha256": "0d0c2ae49b1e876bd25c4456645c7b83f77edcf49fdfde3aa97c8d3dd0ed7c9c",
+          "current_source_sha256": "e478a4a67840e9ee10418b911a0b9eb5ffc1090ebfb3b1d63092726ed3efd4a9",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The image-send route keeps every reviewed ownership field and its guard. Its error answer now names a Contacts permission refusal of the shared gate with a stable code (403 standing, 503 temporary) instead of a generic 500; every other path is unchanged. Its APPLICATION_RUNTIME lifecycle, owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-media/route.ts",
+          "previous_source_sha256": "fd793a7d5d44316863df3475cb95495b90258f6016302ac2a9cf54d0a5641562",
+          "current_source_sha256": "72eb7fbd557af32b708f7b8355f833158d19af19caecb6c5effc800c73e6b628",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The media-send route keeps every reviewed ownership field and its guard. Its error answer now names a Contacts permission refusal of the shared gate with a stable code (403 standing, 503 temporary) instead of a generic 500, and it refuses a caller clientMessageId in SendToContact's \"stc:\" namespace with 400 CLIENT_MESSAGE_ID_RESERVED before any read, gate or effect; every other path is unchanged. Its APPLICATION_RUNTIME lifecycle, owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/prisma/migrations/20261027090000_add_messaging_send_intent/migration.sql",
+          "lifecycle": "MIGRATION",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle comes from the reviewed lifecycle surface registry entry and the reviewed noncanonical migration decisions. It is the expand-only source migration that creates the one Messaging-owned MessagingSendIntent table with its primary key and two shape checks inside one transaction."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test of the operator text-send route's answers to the Contacts permission refusal (403/503 with a stable code), to a clientMessageId in the reserved SendToContact namespace (400) and to every other failure (unchanged 500). It is a TEST under gravity-mvp/src that no context manifest owns and that the APPLICATION_RUNTIME-only gravity_runtime_remainder exact inventory does not admit, so the gravity_root prefix governed exclusion covers it; it receives no explicit exact-inventory assignment and moves no exact-inventory transition."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/send-to-contact-command.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The contract test of messaging.SendToContactCommand.v1: exact fields, version handling, every input bound and the refusal to normalise a channel narrowing. Under gravity-mvp/src/contracts/messaging/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/messaging/v1/send-to-contact-command.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The provider-neutral messaging.SendToContactCommand.v1 / SendToContactResult.v1 contract and parser: a closed field set naming a Contact, an exact text and an optional channel narrowing, never a route, and the admitted / refused / idempotency_conflict results. Under gravity-mvp/src/contracts/messaging/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-handler.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The sequencing and failure proof of the SendToContact handler over in-memory ports. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure SendToContact handler over injected ports: claim, conflict, replay, the Contacts permission read (P1), discovery and the shared engine, with the Message as the truth. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-request.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of the SendToContact request identity with independently pinned fingerprint vectors. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-request.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure SendToContact request identity: validation before any claim, the canonical semantic payload sha256 and the stc: clientMessageId. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-routing.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The unit proof of SendToContact route discovery over fake ports. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact-routing.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure SendToContact route discovery over injected reads: exactly one provable existing conversation, fail closed on incomplete evidence, no ranking, no proof handed on. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/application/send-to-contact.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The env-gated PostgreSQL proof of SendToContact end to end through the real composition (real intent table, Message unique index, ContactConversations query and Contacts permission); it runs only against an isolated database the caller provides. Under gravity-mvp/src/modules/messaging/application, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/delivery-retry-backoff.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The env-gated PostgreSQL parity proof that the retry job selector's backoff clause selects exactly the rows isPhysicalRetryDueV1 calls due; it creates its own minimal table in an empty schema the caller provides and refuses a populated one. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-send-to-contact-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The one Prisma adapter of SendToContact: the MessagingSendIntent insert-if-absent claim and read (no update or delete), the admitted Message read by clientMessageId and the conversation snapshot read for the route proof. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "tools/architecture/check-messaging-send-to-contact-boundary.mjs",
+          "lifecycle": "OPERATIONAL_SCRIPT",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that every outbound effect crosses the Contacts permission gate inside the Messaging port, that SendToContact stays pure, insert-only and namespace-bound, and that retry selection and redelivery share one backoff rule, and runs its proofs; it writes nothing."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "messaging-r21-guarded-append-main-2c790ca0-20261109",
+      "reviewed_at": "2026-11-09T00:00:00Z",
+      "reviewed_by": "MESSAGING_SHARED_RELIABILITY_R21_GUARDED_APPEND_MAIN_2C790CA0_EXECUTOR_REVIEW_20261108",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_V8_MANDATE_05_MESSAGING_R21_R22_OWNERSHIP_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 2c790ca0, whose tail is messaging-send-to-contact-main-7bf380c2-20261108, and leaves that amendment untouched. It reviews only the eight surfaces the R-21 Messaging guarded append adds on that tail; it carries no source-hash rebind. It replaces this branch's earlier amendment on main a16489f5 (messaging-r21-guarded-append-main-a16489f5-20261108), which was never published, with the same surface decisions over the current tail. The parallel R-22 amendment (PR #207) extends the same tail; whichever lands second is re-derived onto the other's published tail. It lands only through Orchestrator admission."
+      },
+      "reason": "Records the tracked executable surfaces the R-21 Messaging guarded atomic append adds on top of main 2c790ca0: 2,817 + 8 = 2,825 surfaces, context-owned 1,559 -> 1,565 governed exclusions 1,258 -> 1,260 (the migration under gravity_schema and the boundary control under architecture_controls, both prefix rules without exact inventory). Six new paths live under gravity-mvp/src/contracts/messaging and gravity-mvp/src/modules/messaging and are owned by the messaging context through its manifest owned_paths. The changed ConversationWorkflowService is context-owned and carries no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main 2c790ca0 itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing. The release hardening (proven sender required, held-sender evidence column and its NULL-safe CHECK) changes no surface decision; it re-pins the held migration's and the boundary control's lifecycle rows, so the tracked inventory digest is the hardened one.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2817,
+        "tracked_inventory_sha256": "1567d109e59dbba06e1202473339892f521f015c571dd6706e94ddc100646d73",
+        "coverage_sha256": "869b11b46afa10f43c0bec3464a7ab7409d5d7c266616f1c260e2d45d0d25f8b"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2825,
+        "tracked_inventory_sha256": "182f92698e82d063b6bf1aacdace3208f721847ce0bdcc3bcbbbbd7524c18bba",
+        "coverage_sha256": "b5e8217411fa58ad2a7afbc337aeacd2168afdc31b0576c2e990c68b3630ccef"
       },
       "source_hash_rebinds": [],
       "unassigned_tracked_surfaces": [
         {
-          "path": "gravity-mvp/src/contracts/messaging/v1/conversation-binding-audit-query.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
+          "path": "gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql",
+          "lifecycle": "MIGRATION",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The R-22 read-only binding audit query contract and its strict parser. Under gravity-mvp/src/contracts/messaging, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "A new tracked executable surface under gravity-mvp/prisma, which the existing gravity_schema governed exclusion covers by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment; its MIGRATION lifecycle comes from the reviewed lifecycle surface registry entry and the reviewed noncanonical migration decisions. It is the expand-only source migration that creates the one Messaging-owned HeldChannelMessage table with its indexes, checks and CASCADE foreign key to Chat inside one transaction."
         },
         {
-          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-audit-handler.ts",
+          "path": "gravity-mvp/src/contracts/messaging/v1/guarded-channel-message-commands.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The R-22 binding audit handler over an injected port: counts states and Contacts' peer answers, ids only; no persistence of its own. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "The R-21 guarded append, release and held-count contracts with their strict parsers and typed refusals. Under gravity-mvp/src/contracts/messaging, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
-          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust-policy.ts",
+          "path": "gravity-mvp/src/modules/messaging/public/v1/guarded-append-policy.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure R-22 binding trust policy: unbound, consistent, unverifiable or contradicted from facts a read already holds, and the one person key with no driver key; no IO. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "The pure R-21 decision: whether one event is visible or held, from the caller's attribution and the conversation's current binding; no IO. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
-          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust.postgres.test.ts",
+          "path": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The R-21 handlers over an injected port: parse, then persist, then the contract envelope; no persistence of its own. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+        },
+        {
+          "path": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message.postgres.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Real-PostgreSQL proof of the R-22 read side: the inbox no longer merges two people by a shared driver, contradicted and driver-only conversations stand alone, workflow group writes reach only one person's trusted conversations, and the audit counts with Contacts' real query and writes nothing. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "Real-PostgreSQL proof of the guarded append: duplicates, holds, key conflicts, rollback on a late failure, same-event and different-event races, rebinding during the append, lock timeout, a foreign writer's P2002, release, CASCADE and the table checks. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
-          "path": "gravity-mvp/src/modules/messaging/public/v1/conversation-binding-trust.test.ts",
+          "path": "gravity-mvp/src/modules/messaging/public/v1/guarded-channel-message.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Policy and audit-handler unit tests of the R-22 binding trust. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "Contract, policy and handler unit tests of the guarded append. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
-          "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-binding-audit-adapter.ts",
+          "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The read-only Prisma adapter of the R-22 binding audit: one page of bound private Telegram conversations and Contacts' own ResolveInboundConversationPeerIdentity query; it writes nothing. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
+          "review_rationale": "The one Prisma adapter of the R-21 guarded append: the Chat row lock, the event-key advisory locks, the Message or HeldChannelMessage insert with the workflow projection and notification intent on the same transaction, the release stamp and the grouped held counts; it writes no conversation binding. Under gravity-mvp/src/modules/messaging/public/v1, a path the messaging context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
         },
         {
-          "path": "tools/architecture/check-messaging-binding-trust-boundary.mjs",
+          "path": "tools/architecture/check-messaging-guarded-append-boundary.mjs",
           "lifecycle": "OPERATIONAL_SCRIPT",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the binding policy is pure with no driver key, that the inbox groups by the policy key and strips the other person from a contradicted conversation, that workflow group writes take an exact trusted id list, that the AI context's driver is Contacts-confirmed, and that the audit is read-only, and rejects its negative probes; it writes nothing."
+          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It asserts that the held store has one owner, that the adapter locks before it judges and writes only after, that the guard has no Contacts dependency and writes no binding, that the policy is pure and the handlers parse first, and that the migration keeps its checks and CASCADE, and rejects its negative probes; it writes nothing."
         }
       ],
       "invariants": {
