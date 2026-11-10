@@ -1552,6 +1552,28 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `sentAt` order with their workflow projection, stamps
   `releasedAt`/`releasedMessageId`, and never takes a key another conversation
   shows. Deleting the conversation deletes its held events. — same files.
+- **I-68 Conversations are one person's only through a trusted contact binding,
+  never through a driverId.** The inbox (`MessageService.listConversations`)
+  groups by the contact key of `conversation-binding-trust-policy.ts` and has no
+  driver key. A binding is `contradicted` only on hard evidence (the linked
+  identity belongs to another contact, or a numeric Telegram identity names a
+  different peer than the `telegram:<peer>` key); such a conversation stands
+  alone and the read model drops the other person's contact and driver from it.
+  A conversation without a contact stands alone, whatever driver it carries.
+  Bindings with nothing against them (`unverifiable`) behave as before. —
+  `conversation-binding-trust-policy.ts`, `MessageService.ts` —
+  `conversation-binding-trust.test.ts`, `conversation-binding-trust.postgres.test.ts`,
+  `check-messaging-binding-trust-boundary.mjs`.
+- **I-69 Person-scoped effects follow the same trust.** Workflow group writes
+  (assign, unassign, resolve, mark read) write an exact id list of one contact's
+  trusted private conversations, exactly the inbox entry; a group, contradicted
+  or contact-less conversation is written on its own, and no statement selects rows by `driverId`. The AI reply context
+  carries a Driver only when the binding is trusted and Contacts'
+  `isContactConfirmedMainDriverV1` confirms it. `auditConversationBindingsV1`
+  (`messaging.ConversationBindingAuditQuery.v1`) counts stored Telegram bindings
+  with Contacts' own `ResolveInboundConversationPeerIdentityQuery.v1`, read-only,
+  ids only. — `ConversationWorkflowService.ts`, `ContextBuilder.ts`,
+  `conversation-binding-audit-handler.ts` — same tests and control.
 
 ### Channels
 
@@ -1880,7 +1902,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
 | R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-66, I-67: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged |
-| R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH |
+| R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH. Messaging read side closed for new reads (I-68, I-69): no driver merge in the inbox, contradicted bindings stand alone, workflow and AI context follow the same trust, read-only audit count. Stored bindings are not changed; `G/app/api/messages/drivers/[id]/channels/route.ts` is read only by the importer-less `Messenger.tsx` (C-16) and is left for its retirement |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
 | R-25 | Telegram mirror and import reconciliation goes through S2's compare-and-set matcher (I-60): two identical-text CRM sends are each claimed exactly once, but which provider id lands on which of them is arbitrary; an outbound event without a provider id still uses the content window | `observeTelegramOutboundEvidence`; `findStoredTelegramMessage` (no-id branch) | LOW |
