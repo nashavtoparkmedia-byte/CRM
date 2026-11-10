@@ -4200,6 +4200,49 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "architecture-scan-memo-regression-od12b-main-42caee7e-20261110",
+      "reviewed_at": "2026-11-10T00:00:00Z",
+      "reviewed_by": "LOCAL_CONTROLLER_OD12B_SCAN_MEMO_REGRESSION_EXECUTOR_REVIEW_42CAEE7E",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_OD12B_SCAN_MEMO_REGRESSION_UNDER_OWNER_STANDING_ENGINEERING_DELEGATION_20261110",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain published on main at 42caee7e, whose tail is identity-access-staff-session-v1-main-d516698e-20261108, and leaves that tail unchanged. It reviews only the one test surface OD-12b adds; it carries no source-hash rebind."
+      },
+      "reason": "Records the one tracked executable surface the OD-12b scan memo regression adds on top of main 42caee7e: 2,833 + 1 = 2,834 surfaces, context-owned unchanged at 1,571 and governed exclusions 1,262 -> 1,263. The new path tools/architecture/test-architecture-scan-memo.mjs is a TEST surface under the architecture_controls governed exclusion, a prefix rule without exact inventory. The changed tools/architecture/test-boundary-control-lifecycle.mjs was already tracked, keeps its TEST lifecycle and carries no exact-inventory assignment, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own and equal on main 42caee7e itself. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing. Its position binds it to main 42caee7e only: if another amendment lands on main first, it is regenerated over the then-current main.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2833,
+        "tracked_inventory_sha256": "65c6697aebbf3b35cfafd3b586c644d12c815f1e1a6ab1ed4786de4960c61475",
+        "coverage_sha256": "3fd5220c8b2d97687ca27d9ce2a7ca63b7c30b8dac85c9d62122a3606c286705"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2834,
+        "tracked_inventory_sha256": "c21b08b30067fd4a95033fd78083fbef388669d7b195aa1f14be9ba60332f867",
+        "coverage_sha256": "ebede2fa9a9be9764a077fce0b956a14bf39eeb28d4dc558206625a607f0f30e"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "tools/architecture/test-architecture-scan-memo.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new regression test under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its TEST lifecycle follows from its name and needs no lifecycle registry row. It runs inside the boundary-control-lifecycle-negatives control: it builds a temporary fixture tree under the operating system's temporary directory, runs the architecture scan, the scan memo writer and the boundary-control runner against that tree only, and removes it; it writes nothing in the repository and reads no credential."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
