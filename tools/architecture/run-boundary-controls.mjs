@@ -7,10 +7,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Must equal ARCHITECTURE_SCAN_MEMO_ENV in enforce-architecture.mjs. The runner
-// does not import the scanner, so a scanner that cannot load still leaves the
-// runner and its fail-fast order intact.
+// Must equal ARCHITECTURE_SCAN_MEMO_ENV and ARCHITECTURE_SCAN_MEMO_SHA256_ENV in
+// enforce-architecture.mjs. The runner does not import the scanner, so a
+// scanner that cannot load still leaves the runner and its fail-fast order
+// intact.
 const ARCHITECTURE_SCAN_MEMO_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO'
+const ARCHITECTURE_SCAN_MEMO_SHA256_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO_SHA256'
 const ARCHITECTURE_SCAN_MEMO_DISABLE_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO_DISABLE'
 const WRITE_ARCHITECTURE_SCAN_MEMO = '--write-architecture-scan-memo'
 
@@ -56,10 +58,12 @@ export function boundaryControlInventory(root = process.cwd()) {
 // it, and each one checks it against the inputs its own scan has just read (see
 // enforce-architecture.mjs). If this step fails for any reason, no control gets
 // the memo, every control scans for itself, and failures surface exactly where
-// they did before.
+// they did before. The memo's sha256 comes from the writer's stdout (a pipe the
+// runner reads), never from the file, and every control gets it from the
+// runner's memory: a process that rewrites the file cannot also change it.
 export function prepareArchitectureScanMemo(root, environment) {
   if (environment[ARCHITECTURE_SCAN_MEMO_DISABLE_ENV] === '1') {
-    return { memoFile: null, note: `disabled by ${ARCHITECTURE_SCAN_MEMO_DISABLE_ENV}=1` }
+    return { memoFile: null, memoSha256: null, note: `disabled by ${ARCHITECTURE_SCAN_MEMO_DISABLE_ENV}=1` }
   }
   let directory = null
   try {
@@ -77,11 +81,16 @@ export function prepareArchitectureScanMemo(root, environment) {
     })
     if (result.status !== 0 || !existsSync(memoFile)) {
       const detail = `${result.stderr ?? ''}`.trim().split('\n').filter(Boolean).at(-1) ?? result.error?.message ?? ''
-      return { memoFile: null, note: `precompute failed (exit=${result.status ?? result.signal})${detail ? `: ${detail}` : ''}` }
+      return { memoFile: null, memoSha256: null, note: `precompute failed (exit=${result.status ?? result.signal})${detail ? `: ${detail}` : ''}` }
     }
-    return { memoFile, note: `ready in ${Math.round((Date.now() - started) / 1000)}s ${`${result.stdout}`.trim()}` }
+    const summaryLine = `${result.stdout}`.trim().split('\n').filter(Boolean).at(-1) ?? ''
+    const memoSha256 = JSON.parse(summaryLine).memo_sha256
+    if (typeof memoSha256 !== 'string' || !/^[0-9a-f]{64}$/u.test(memoSha256)) {
+      return { memoFile: null, memoSha256: null, note: 'precompute reported no memo digest' }
+    }
+    return { memoFile, memoSha256, note: `ready in ${Math.round((Date.now() - started) / 1000)}s ${summaryLine}` }
   } catch (error) {
-    return { memoFile: null, note: `precompute failed: ${error?.message ?? error}` }
+    return { memoFile: null, memoSha256: null, note: `precompute failed: ${error?.message ?? error}` }
   }
 }
 
@@ -97,8 +106,12 @@ function main() {
   const inventory = boundaryControlInventory(root)
   const controlEnvironment = { ...process.env }
   delete controlEnvironment[ARCHITECTURE_SCAN_MEMO_ENV]
+  delete controlEnvironment[ARCHITECTURE_SCAN_MEMO_SHA256_ENV]
   const memo = prepareArchitectureScanMemo(root, controlEnvironment)
-  if (memo.memoFile) controlEnvironment[ARCHITECTURE_SCAN_MEMO_ENV] = memo.memoFile
+  if (memo.memoFile) {
+    controlEnvironment[ARCHITECTURE_SCAN_MEMO_ENV] = memo.memoFile
+    controlEnvironment[ARCHITECTURE_SCAN_MEMO_SHA256_ENV] = memo.memoSha256
+  }
   process.stdout.write(`ARCHITECTURE_SCAN_MEMO ${memo.memoFile ? 'on' : 'off'}: ${memo.note}\n`)
   for (const control of inventory.active) {
     process.stdout.write(`BOUNDARY_CONTROL_START ${control}\n`)

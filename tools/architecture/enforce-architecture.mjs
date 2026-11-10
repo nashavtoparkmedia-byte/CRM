@@ -872,7 +872,7 @@ function extractRawPrismaWrites(text) {
     if (!text.includes('$executeRaw')) return []
     const fileName = 'architecture-scan.tsx'
     const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-    const options = { target: ts.ScriptTarget.Latest, jsx: ts.JsxEmit.Preserve, noResolve: true, noLib: true }
+    const options = { target: ts.ScriptTarget.Latest, jsx: ts.JsxEmit.Preserve, noResolve: true, noLib: true, types: [] }
     const host = ts.createCompilerHost(options)
     host.getSourceFile = (requested) => requested === fileName ? sourceFile : undefined
     host.fileExists = (requested) => requested === fileName
@@ -3113,7 +3113,16 @@ function publicClosureFindings({ root, files, fileSet, bodies, policy, providers
 // different root, a changed byte, a corrupt, partial or foreign file, or any
 // error. The memo never decides a verdict and never outlives the runner's
 // private temporary directory.
+//
+// The memo file sits where any process of the same user could rewrite it, and
+// its path is visible to everything a control spawns (tests included), so its
+// internal digests prove nothing on their own. The runner therefore takes the
+// sha256 of the exact bytes the writer wrote from the writer's own stdout, and
+// passes that digest to each control from its own memory through
+// ARCHITECTURE_SCAN_MEMO_SHA256_ENV. A control checks the file's bytes against
+// it before parsing anything, so a rewritten memo is a miss, never a hit.
 export const ARCHITECTURE_SCAN_MEMO_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO'
+export const ARCHITECTURE_SCAN_MEMO_SHA256_ENV = 'YOKO_ARCHITECTURE_SCAN_MEMO_SHA256'
 const ARCHITECTURE_SCAN_MEMO_SCHEMA = 'yoko.crm.architecture-scan-memo.v1'
 const scannerSourcePath = fileURLToPath(import.meta.url)
 const typescriptSourcePath = fileURLToPath(new URL('../../gravity-mvp/node_modules/typescript/lib/typescript.js', import.meta.url))
@@ -3170,7 +3179,11 @@ function readArchitectureScanMemo(root, inputs) {
         return null
     }
     try {
-        const memo = JSON.parse(readFileSync(memoFile, 'utf8'))
+        const recordedSha256 = process.env[ARCHITECTURE_SCAN_MEMO_SHA256_ENV] ?? ''
+        if (!/^[0-9a-f]{64}$/u.test(recordedSha256)) return miss("the runner's memo digest is missing or malformed")
+        const bytes = readFileSync(memoFile)
+        if (sha256Hex(bytes) !== recordedSha256) return miss("memo bytes differ from the runner's record")
+        const memo = JSON.parse(bytes.toString('utf8'))
         if (memo?.schema !== ARCHITECTURE_SCAN_MEMO_SCHEMA) return miss('schema')
         // A control that scans its own temporary fixture tree is not the
         // runner's repository; it always scans, without a note.
@@ -3217,15 +3230,17 @@ export async function writeArchitectureScanMemo(root, memoFile) {
         result_sha256: sha256Hex(resultJson),
         result_json: resultJson,
     }
+    const memoBytes = Buffer.from(JSON.stringify(memo), 'utf8')
     const temporary = `${memoFile}.${process.pid}.tmp`
     try {
-        writeFileSync(temporary, JSON.stringify(memo), { flag: 'wx', mode: 0o600 })
+        writeFileSync(temporary, memoBytes, { flag: 'wx', mode: 0o600 })
         renameSync(temporary, memoFile)
     } catch (error) {
         rmSync(temporary, { force: true })
         throw error
     }
     return {
+        memo_sha256: sha256Hex(memoBytes),
         scanned_files: result.scanned_files,
         findings: result.findings.length,
         existence_probes: memo.existence_probes.length,
