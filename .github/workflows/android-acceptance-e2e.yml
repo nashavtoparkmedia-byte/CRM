@@ -1221,6 +1221,118 @@ jobs:
           echo "call alert scenarios failed: $failed" | tee -a "$LOG"
           exit $failed
 
+      # Reset logout (F-1, docs/mobile/ANDROID_EDGE_R51_AMENDMENTS.md A1). Last,
+      # because it ends the session and the push registration it signs in with.
+      #
+      # test15 signs in, keeps the session cookie pair in the app's own
+      # no-backup directory (it never leaves the device and is never logged),
+      # and starts the «Выйти и сменить сотрудника» shortcut target. The reset
+      # ends the process and the instrumentation with it, so here "Process
+      # crashed" is the expected result and an assertion failure is not.
+      #
+      # The shell's log between the reset's start and its end-process is then
+      # held to the amended step-0 rule: exactly one native logout, answered
+      # 204, and no other request. Page requests in that window may be logged,
+      # but only as the shell's own refusal (403), never as an answer from the
+      # CRM.
+      #
+      # test16 presents the kept cookie, natively, and expects the logout
+      # barrier to refuse it. The logout endpoint answers 204 for an already
+      # dead session too, so its 204 alone would prove nothing.
+      - name: Prove a reset logs the CRM session out before it forgets it
+        timeout-minutes: 15
+        run: |
+          set -e
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          PKG=ru.yokoone.crm.shell.acceptance
+          RUNNER="$PKG.test/androidx.test.runner.AndroidJUnitRunner"
+          CLASS=ru.yokoone.crm.shell.ResetLogoutAcceptanceTest
+          LOGOUT_LINE="YOKO_NET done POST /api/mobile/session/logout status=204"
+
+          timeout 60 "$ADB" shell pm clear "$PKG"
+          timeout 60 "$ADB" shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS
+          timeout 30 "$ADB" reverse tcp:3002 tcp:3002
+          timeout 60 "$ADB" logcat -c
+
+          out="$RUNNER_TEMP/scenario-test15.log"
+          timeout 600 "$ADB" shell am instrument -w -r \
+            -e class "$CLASS#test15_signInThenSwitchOperatorFromTheShortcut" \
+            "$RUNNER" > "$out" 2>&1 || true
+          cat "$out"
+          SHELL_LOG="$RUNNER_TEMP/logcat-reset-logout.log"
+          timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E > "$SHELL_LOG" 2>/dev/null || true
+          cat "$SHELL_LOG" >> "$RUNNER_TEMP/logcat-shell-all.log"
+          timeout 60 "$ADB" logcat -d -v time >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null || true
+
+          if grep -qE "AssertionError|FAILURES!!!|INSTRUMENTATION_STATUS_CODE: -2" "$out"; then
+            grep -aE "AssertionError|Exception|Error:" "$out" | tail -4 | while IFS= read -r l; do
+              echo "::error::test15: $(printf '%s' "$l" | head -c 400)"
+            done
+            echo "::error::test15 failed before the reset ended its process"
+            exit 1
+          fi
+          grep -q "Process crashed" "$out" \
+            || { echo "::error::test15 was expected to end with its process, and it did not"; exit 1; }
+
+          # The last complete reset in the log: start to end-process.
+          WINDOW="$RUNNER_TEMP/reset-logout-window.log"
+          awk '
+            /edge-reset start reason=OPERATOR_SWITCH/ { buf = ""; on = 1 }
+            on { buf = buf $0 "\n" }
+            /edge-reset end-process reason=OPERATOR_SWITCH/ { if (on) { last = buf; on = 0 } }
+            END { printf "%s", last }
+          ' "$SHELL_LOG" > "$WINDOW"
+          [ -s "$WINDOW" ] || { echo "::error::the shell logged no complete operator-switch reset"; exit 1; }
+          grep -E "edge-reset|reset-logout|YOKO_NET (start|done) [A-Z]+ /" "$WINDOW" \
+            | sed -e 's/.*YokoShellDiag[^:]*: //' | head -40
+
+          if grep -q "edge-reset logout skipped" "$WINDOW"; then
+            echo "::error::the reset skipped its logout: $(grep -o 'logout skipped reason=[a-z-]*' "$WINDOW" | head -1)"
+            exit 1
+          fi
+          logouts=$(grep -cF "$LOGOUT_LINE" "$WINDOW" || true)
+          if [ "$logouts" != "1" ]; then
+            echo "::error::expected exactly one logout answered 204 inside the reset, saw $logouts"
+            grep -E "reset-logout|session/logout" "$WINDOW" | sed -e 's/.*YokoShellDiag[^:]*: //' | head -5 \
+              | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+          other=$(grep -E "YOKO_NET done [A-Z]+ /" "$WINDOW" | grep -vF "$LOGOUT_LINE" \
+            | grep -vE " status=403 [0-9]+ms" || true)
+          if [ -n "$other" ]; then
+            echo "::error::a request left the shell during the reset besides its logout"
+            printf '%s\n' "$other" | sed -e 's/.*YokoShellDiag[^:]*: //' | head -5 \
+              | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+          if grep -qE "push-registration (retryable|deferred EDGE_AUTH)" "$WINDOW"; then
+            echo "::error::a push registration was attempted during the reset"
+            exit 1
+          fi
+          refused=$(grep -cE "YOKO_NET done [A-Z]+ /[^ ]* status=403 [0-9]+ms" "$WINDOW" || true)
+          echo "::notice::reset logout: one native POST /api/mobile/session/logout answered 204 inside the reset; no other request; page requests refused by the shell: $refused"
+
+          timeout 60 "$ADB" logcat -c
+          out="$RUNNER_TEMP/scenario-test16.log"
+          timeout 600 "$ADB" shell am instrument -w -r \
+            -e class "$CLASS#test16_theOldSessionIsRefusedAfterTheResetLogout" \
+            "$RUNNER" > "$out" 2>&1 || true
+          cat "$out"
+          timeout 60 "$ADB" logcat -d -v time -s YokoShellDiag:E \
+            >> "$RUNNER_TEMP/logcat-shell-all.log" 2>/dev/null || true
+          timeout 60 "$ADB" logcat -d -v time >> "$RUNNER_TEMP/logcat-full-all.log" 2>/dev/null || true
+          timeout 60 "$ADB" shell run-as "$PKG" cat files/diagnostics.log \
+            >> "$RUNNER_TEMP/shell-diagnostics-all.log" 2>/dev/null || true
+          if ! grep -q "OK (1 test)" "$out"; then
+            grep -aE "INSTRUMENTATION_(STATUS|RESULT|CODE)|AssertionError|Exception|Error:|No tests found|shortMsg" "$out" \
+              | tail -6 | while IFS= read -r l; do
+                echo "::error::test16: $(printf '%s' "$l" | head -c 400)"
+              done
+            echo "::error::test16 did not report OK"
+            exit 1
+          fi
+          echo "::notice::reset logout: the old cookie is refused afterwards (native 401 MOBILE_SESSION_REVOKED, shell lane 401 mobile_session_required, page 303 to /login/mobile)"
+
       - name: Collect logcat, screenshots and the shell's own diagnostics
         if: always()
         timeout-minutes: 6
