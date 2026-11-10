@@ -24,6 +24,8 @@
  * exactly as before.
  */
 
+import { createHash } from 'node:crypto'
+
 import {
     cashAccessWriterAllowedV1,
     foldCashAccessLedgerV1,
@@ -97,41 +99,162 @@ export function cashStaffAuthorityForV1(
 }
 
 /**
- * The facts of a verified integration-admin session, as Identity Access
- * will hand them over (docs/design/cash-staff-authority-v1.md, part 1). The
- * shape is the contract's; nothing in Cash produces it.
+ * The fields of Identity Access's `StaffSessionPrincipalV1` that Cash reads
+ * (docs/design/staff-session-v1.md, v1.2 §4.2). Identity Access produces it
+ * from `getStaffSessionPrincipalV1()` only after it has verified the
+ * signature, the audience, the expiry, both revocation epochs and the
+ * registry's durable authority copy; nothing in Cash produces, verifies or
+ * stores a session. The contract is docs/design/cash-staff-authority-v2.md.
  */
-export interface CashAdminSessionFactsV1 {
-    principal: { id: string; kind: string }
-    sessionId: string
-    authenticatedAt: Date
+export interface CashStaffSessionPrincipalV1 {
+    kind: string
+    userId: string
+    role: string
+    sid: string
+    issuedAt: Date
+    expiresAt: Date
 }
 
-/** How the history names the one CRM manager: a label, never an identity. */
-export const CASH_ADMIN_OPERATOR_LABEL_V1 = 'Администратор CRM'
+/**
+ * The employee as Identity Access's directory names them
+ * (`UserIdentityV1`): the source of the history's label, never of identity.
+ */
+export interface CashStaffDirectoryEntryV1 {
+    id: string
+    firstName: string
+    lastName: string
+    role: string
+    status: string
+}
 
 /**
- * The Cash capabilities of a verified integration-admin session (part 3 of
- * the contract). The binding is Cash's own, as CC-1 binds the same principal
- * to Contact Card reads: the session already administers the whole CRM, so
- * the two capabilities widen nothing. Anything but well-formed facts of that
- * principal kind binds nothing.
+ * Who may write Cash referral and access decisions (Owner, 2026-11-08): a
+ * confirmed Администратор, and no other role. A Менеджер or Руководитель
+ * holds no Cash capability until the Owner decides otherwise.
  */
-export function cashStaffAuthorityFromAdminSessionV1(facts: CashAdminSessionFactsV1 | null | undefined): CashStaffAuthorityV1 | null {
-    if (facts === null || facts === undefined || typeof facts !== 'object') return null
-    const principal = facts.principal
-    if (principal === null || typeof principal !== 'object' || principal.kind !== 'integration_admin_session') return null
-    const principalId = typeof principal.id === 'string' ? principal.id.trim() : ''
-    const sessionId = typeof facts.sessionId === 'string' ? facts.sessionId.trim() : ''
-    const authenticatedAt = facts.authenticatedAt instanceof Date ? facts.authenticatedAt : null
-    if (principalId === '' || sessionId === '' || authenticatedAt === null || Number.isNaN(authenticatedAt.getTime())) return null
+export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']
+
+export type CashStaffSessionBindingRefusalV1 =
+    /** No session, another principal kind, a malformed one, or one outside its lifetime. */
+    | 'staff_session_invalid'
+    /** The directory does not name this principal as Identity Access verified it. */
+    | 'staff_identity_mismatch'
+    /** A verified employee whose role holds no Cash capability. */
+    | 'staff_role_not_allowed'
+
+export type CashStaffSessionBindingV1 =
+    | { bound: true; authority: CashStaffAuthorityV1 }
+    | { bound: false; refusal: CashStaffSessionBindingRefusalV1 }
+
+const CASH_STAFF_SESSION_ID_LABEL_V1 = 'yoko.cash.staff-session-id.v1:'
+
+/**
+ * The ledger's name for a Staff Session: a labelled digest of the session
+ * instance id, so Cash keeps no copy of it. One session gives one name, two
+ * sessions two names.
+ */
+export function cashStaffSessionIdV1(sid: string): string {
+    return `staff_session:${createHash('sha256').update(`${CASH_STAFF_SESSION_ID_LABEL_V1}${sid}`, 'utf8').digest('hex')}`
+}
+
+function exactTextV1(value: unknown, max: number): string | null {
+    if (typeof value !== 'string' || value === '' || value.length > max || value.trim() !== value) return null
+    return value
+}
+
+function validDateV1(value: unknown): Date | null {
+    return value instanceof Date && !Number.isNaN(value.getTime()) ? value : null
+}
+
+/**
+ * The Cash authority of a verified Staff Session principal. The binding is
+ * Cash's own (Staff Session v1.2 §2): the person is the principal's userId,
+ * the session is its sid, the authentication time is when that session was
+ * issued at login, and the two Cash capabilities follow from the role alone.
+ * The label is the directory's name for that same userId; a client value
+ * (crm_user_id, a header, a form field) is never read. Anything else binds
+ * nothing.
+ */
+export function cashStaffAuthorityFromStaffSessionV1(
+    principal: CashStaffSessionPrincipalV1 | null | undefined,
+    entry: CashStaffDirectoryEntryV1 | null | undefined,
+    at: Date,
+): CashStaffSessionBindingV1 {
+    const invalid: CashStaffSessionBindingV1 = { bound: false, refusal: 'staff_session_invalid' }
+    if (principal === null || principal === undefined || typeof principal !== 'object') return invalid
+    if (principal.kind !== 'staff_session') return invalid
+    // actorId is staff:<userId> in a 255-character column.
+    const userId = exactTextV1(principal.userId, 200)
+    const sid = exactTextV1(principal.sid, 255)
+    const issuedAt = validDateV1(principal.issuedAt)
+    const expiresAt = validDateV1(principal.expiresAt)
+    const now = validDateV1(at)
+    if (userId === null || sid === null || issuedAt === null || expiresAt === null || now === null) return invalid
+    if (issuedAt.getTime() > now.getTime() || expiresAt.getTime() <= now.getTime()) return invalid
+
+    const mismatch: CashStaffSessionBindingV1 = { bound: false, refusal: 'staff_identity_mismatch' }
+    if (entry === null || entry === undefined || typeof entry !== 'object') return mismatch
+    if (entry.id !== userId || entry.role !== principal.role || entry.status !== 'Активен') return mismatch
+    const operatorLabel = [entry.firstName, entry.lastName]
+        .map((part) => (typeof part === 'string' ? part.trim() : ''))
+        .filter((part) => part !== '')
+        .join(' ')
+    if (operatorLabel === '') return mismatch
+
+    if (!CASH_STAFF_WRITE_ROLES_V1.includes(principal.role)) return { bound: false, refusal: 'staff_role_not_allowed' }
+
     return {
-        principalId,
-        operatorLabel: CASH_ADMIN_OPERATOR_LABEL_V1,
-        sessionId,
-        authenticatedAt,
-        capabilities: [CASH_REFERRAL_LINK_CAPABILITY_V1, CASH_ACCESS_GRANT_CAPABILITY_V1],
+        bound: true,
+        authority: {
+            principalId: `staff:${userId}`,
+            operatorLabel,
+            sessionId: cashStaffSessionIdV1(sid),
+            authenticatedAt: new Date(issuedAt.getTime()),
+            capabilities: [CASH_REFERRAL_LINK_CAPABILITY_V1, CASH_ACCESS_GRANT_CAPABILITY_V1],
+        },
     }
+}
+
+export type CashStaffAuthorityResolutionV1 =
+    | { ok: true; authority: CashStaffAuthorityV1 }
+    | { ok: false; refusal: 'staff_session_unavailable' | CashStaffSessionBindingRefusalV1 }
+
+/**
+ * Identity Access's two public reads, as the referral screen composes them:
+ * the verified Staff Session principal, and the directory that names it.
+ */
+export interface CashStaffSessionSourceV1 {
+    principal(): Promise<CashStaffSessionPrincipalV1 | null>
+    directory(): Promise<readonly CashStaffDirectoryEntryV1[]>
+    now(): Date
+}
+
+/**
+ * The authority a manager write is made by, or why there is none. No
+ * session is `staff_session_unavailable`; so is a session Identity Access
+ * cannot verify because its store does not answer (v1.2 R3): that is no
+ * operator, never a fallback to another identity, and never a logout.
+ */
+export async function resolveCashStaffAuthorityFromSessionV1(source: CashStaffSessionSourceV1): Promise<CashStaffAuthorityResolutionV1> {
+    let principal: CashStaffSessionPrincipalV1 | null
+    try {
+        principal = await source.principal()
+    } catch {
+        return { ok: false, refusal: 'staff_session_unavailable' }
+    }
+    if (principal === null || principal === undefined) return { ok: false, refusal: 'staff_session_unavailable' }
+    let entries: readonly CashStaffDirectoryEntryV1[]
+    try {
+        entries = await source.directory()
+    } catch {
+        return { ok: false, refusal: 'staff_session_unavailable' }
+    }
+    const userId = typeof principal === 'object' ? principal.userId : undefined
+    const named = Array.isArray(entries) ? entries.filter((entry) => entry !== null && typeof entry === 'object' && entry.id === userId) : []
+    // A directory that names one id twice names nobody.
+    const entry = named.length === 1 ? named[0] : null
+    const binding = cashStaffAuthorityFromStaffSessionV1(principal, entry, source.now())
+    return binding.bound ? { ok: true, authority: binding.authority } : { ok: false, refusal: binding.refusal }
 }
 
 /** The ledger actor of an admitted staff session, for a write of this purpose. */
