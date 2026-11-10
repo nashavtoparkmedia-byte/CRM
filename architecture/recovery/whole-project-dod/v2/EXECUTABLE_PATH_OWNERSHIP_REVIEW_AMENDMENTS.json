@@ -4109,18 +4109,18 @@
       }
     },
     {
-      "amendment_id": "identity-access-staff-session-v1-main-118c0786-20261108",
+      "amendment_id": "identity-access-staff-session-v1-main-d516698e-20261108",
       "reviewed_at": "2026-11-08T00:00:00Z",
-      "reviewed_by": "IDENTITY_ACCESS_STAFF_SESSION_V1_EXECUTOR_REVIEW_118C0786",
+      "reviewed_by": "IDENTITY_ACCESS_STAFF_SESSION_V1_EXECUTOR_REVIEW_D516698E",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
       "authorization": "OWNER_MANDATE_ORCHESTRATOR_V8_IDENTITY_ACCESS_MASTER_PROMPT_3_0_20261108",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain published on main at 118c0786, whose tail is messaging-r21-guarded-append-main-2c790ca0-20261109, and leaves that tail unchanged."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain published on main at d516698e, whose tail is messaging-r21-guarded-append-main-2c790ca0-20261109, and leaves that tail unchanged."
       },
-      "reason": "Records the tracked executable surfaces Staff Session v1 (Identity Access, docs/design/staff-session-v1.md v1.3) adds on top of main 118c0786 and the one source fingerprint it moves: 2,825 + 8 = 2,833 surfaces, context-owned 1,565 -> 1,571 and governed exclusions 1,260 -> 1,262. Six new paths sit under gravity-mvp/src/modules/identity-access, owned through its context manifest; one Vitest suite sits beside the security suites; the expand-only migration falls under the gravity_schema governed exclusion. The request boundary gravity-mvp/src/proxy.ts keeps its exact-runtime inventory membership, lifecycle and owner; only its source hash moves. Every other changed path is context-owned through identity_access manifest owned_paths (/login, /users, lib/users, the identity-access public index, BR-4 operations and the user-service adapter) and needs no exact assignment. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 118c0786 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces Staff Session v1 (Identity Access, docs/design/staff-session-v1.md v1.3) adds on top of main d516698e and the one source fingerprint it moves: 2,825 + 8 = 2,833 surfaces, context-owned 1,565 -> 1,571 and governed exclusions 1,260 -> 1,262. Six new paths sit under gravity-mvp/src/modules/identity-access, owned through its context manifest; one Vitest suite sits beside the security suites; the expand-only migration falls under the gravity_schema governed exclusion. The request boundary gravity-mvp/src/proxy.ts keeps its exact-runtime inventory membership, lifecycle and owner; only its source hash moves. Every other changed path is context-owned through identity_access manifest owned_paths (/login, /users, lib/users, the identity-access public index, BR-4 operations and the user-service adapter) and needs no exact assignment. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main d516698e only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
       "predecessor": {
         "tracked_executable_surfaces": 2825,
         "tracked_inventory_sha256": "182f92698e82d063b6bf1aacdace3208f721847ce0bdcc3bcbbbbd7524c18bba",
