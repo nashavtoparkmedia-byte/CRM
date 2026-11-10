@@ -15,6 +15,8 @@ export {
     requireIntegrationAdminPageAccess,
 } from './integration-admin-auth'
 export type { IntegrationAdminPrincipalV1 } from './integration-admin-auth'
+export { getStaffSessionPrincipalV1 } from './staff-session'
+export type { StaffSessionPrincipalV1 } from './staff-session'
 export {
     isExactSameOriginMutationRequest,
     isJsonMutationRequest,

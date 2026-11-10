@@ -128,6 +128,25 @@ export const CREDENTIAL_ENTITY_POLICIES = Object.freeze([
     // outbox payload; only the send-time resolution reads it.
     sensitive_fields: ['fcmToken'],
   },
+  {
+    id: 'identity-access.staff-credential.v1',
+    entity: 'StaffCredential',
+    aliases: ['StaffCredential', 'staffCredential'],
+    owner_context: 'identity_access',
+    // Staff Session v1: the scrypt verifier of one employee's individual
+    // password. Only the password check reads it (internal/staff-credential-
+    // store.ts findVerifier); it is never returned, logged or exposed.
+    sensitive_fields: ['hash', 'salt'],
+  },
+  {
+    id: 'identity-access.staff-credential-event.v1',
+    entity: 'StaffCredentialEvent',
+    aliases: ['StaffCredentialEvent', 'staffCredentialEvent'],
+    owner_context: 'identity_access',
+    // The append-only audit of credential changes holds no secret material;
+    // the policy exists so its name is not read as an unregistered credential.
+    sensitive_fields: [],
+  },
 ])
 
 export function parsePrismaRelations(schemaText) {

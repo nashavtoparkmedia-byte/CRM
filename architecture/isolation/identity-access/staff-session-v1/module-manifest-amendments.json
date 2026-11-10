@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "STAFF-SESSION-V1",
+  "amendments": [
+    {
+      "context": "identity_access",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:StaffCredential",
+        "gravity-mvp/prisma/schema.prisma:StaffCredentialEvent"
+      ],
+      "add_commands": [
+        "AuthenticateStaffCommand.v1",
+        "EndStaffSessionCommand.v1",
+        "SetStaffPasswordCommand.v1"
+      ],
+      "add_public_surface": [
+        "StaffSessionPrincipal.v1"
+      ],
+      "reason": "Identity Access owns the individual staff credential because it owns the CRM's employee registry and authentication state (docs/design/staff-session-v1.md v1.3). StaffCredential holds only the scrypt verifier of one employee's password, the record binding (registry id and its createdAt, so a re-created id inherits nothing) and the employee's session revocation counter; it holds no name, role or status, which stay in the existing registry as the only authority. A row is never deleted: disable and delete revoke it, and a trigger refuses DELETE. StaffCredentialEvent is the append-only audit of password set/reset, revocation, epoch bumps, logins and logouts; it holds no password, hash, token or cookie. Every write is one transaction under the staff-credential advisory lock, written only by the identity-access credential store. Both are pending source state created by an expand-only migration and are intentionally not asserted as deployed production inventory; the lane is dormant until STAFF_SESSION_SECRET is provisioned."
+    }
+  ]
+}

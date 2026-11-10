@@ -4,10 +4,10 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 745,
+    "total_entries": 746,
     "test": 39,
     "dead_historical": 92,
-    "migration_only": 90,
+    "migration_only": 91,
     "active_operational": 519,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
@@ -6806,6 +6806,16 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "messaging",
       "source_sha256": "cb0f23ee4da4ece270b0f02a5161c0ba7e32187289b524bbdd30d5f49530b1b0"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20261108210000_add_staff_credential/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Identity Access-owned Staff Session schema (StaffCredential, the verifier of one employee's individual password with its revocation counter, and StaffCredentialEvent, its append-only audit), with their CHECK constraints, one index and the no-delete and append-only triggers, inside one explicit transaction through controlled migration tooling; it names no existing table, adds no column to an existing table, changes no existing row and carries no data statement or backfill; it stores no name, role, status, password, token or cookie; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "identity_access",
+      "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459"
     }
   ]
 }
