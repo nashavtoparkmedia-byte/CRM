@@ -453,7 +453,11 @@ export function PersonCard({ person, writesAvailable, onChanged }: {
     )
 }
 
-export default function ReferralManager({ writesAvailable }: { writesAvailable: boolean }) {
+export default function ReferralManager({ writesAvailable, writesRefusal = 'staff_session_unavailable' }: {
+    writesAvailable: boolean
+    /** Why the server refused to resolve a writer, as it answered; it decides nothing here. */
+    writesRefusal?: string
+}) {
     const [picked, setPicked] = useState<PickedPerson | null>(null)
     const [person, setPerson] = useState<ReferralPersonView | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -476,7 +480,10 @@ export default function ReferralManager({ writesAvailable }: { writesAvailable: 
         <>
             {!writesAvailable && (
                 <p className="mb-4 rounded-md border border-border bg-surface p-3 text-[13px] text-muted" data-testid="writes-unavailable">
-                    {refusalText('staff_session_unavailable')}
+                    {refusalText(writesRefusal)}
+                    {writesRefusal !== 'staff_role_not_allowed' && (
+                        <>{' '}<a href="/login" className="font-medium text-primary">Войти</a></>
+                    )}
                 </p>
             )}
             <RecordInvitation writesAvailable={writesAvailable} onRecorded={open} />

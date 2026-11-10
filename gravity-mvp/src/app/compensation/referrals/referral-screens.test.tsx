@@ -6,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * What has to hold: the manager picks both people themselves and nothing is
  * picked for them; recording says it changed no access; a write is offered
- * only when a signed staff session can make it; and the screen says only
- * what the backend answered.
+ * only when Identity Access's Staff Session of a confirmed Администратор can
+ * make it; and the screen says only what the backend answered, including why
+ * it may not write.
  */
 
 const searchReferralPeople = vi.fn()
@@ -125,9 +126,17 @@ describe('recording an invitation', () => {
         expect(await screen.findByText('Этот водитель уже закреплён за другим пригласившим. Пригласивший: Иванов Иван Иванович.')).toBeTruthy()
     })
 
-    it('offers no write while there is no signed staff session, and says why', () => {
+    it('offers no write while there is no signed staff session, says why, and leads to the staff sign-in', () => {
         render(<ReferralManager writesAvailable={false} />)
         expect(text(screen.getByTestId('writes-unavailable'))).toContain('нужен подписанный вход сотрудника')
+        expect(screen.getByRole('link', { name: 'Войти' }).getAttribute('href')).toBe('/login')
+        expect(disabled(screen.getByRole('button', { name: 'Закрепить приглашение' }))).toBe(true)
+    })
+
+    it('tells a verified employee without the Cash role that only an administrator writes, with no sign-in to offer', () => {
+        render(<ReferralManager writesAvailable={false} writesRefusal="staff_role_not_allowed" />)
+        expect(text(screen.getByTestId('writes-unavailable'))).toBe('Закреплять приглашения и выдавать доступ может только администратор.')
+        expect(screen.queryByRole('link', { name: 'Войти' })).toBeNull()
         expect(disabled(screen.getByRole('button', { name: 'Закрепить приглашение' }))).toBe(true)
     })
 })
