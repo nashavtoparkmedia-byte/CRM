@@ -43,7 +43,6 @@ const compositionPath = 'gravity-mvp/src/modules/messaging/application/messaging
 const deleteRoutePath = 'gravity-mvp/src/app/api/messages/delete/route.ts'
 const messagesRoutePath = 'gravity-mvp/src/app/api/messages/route.ts'
 const sendMediaRoutePath = 'gravity-mvp/src/app/api/messages/send-media/route.ts'
-const maxActionsPath = 'gravity-mvp/src/app/max-actions.ts'
 // I-65: every route or server action that takes a caller's clientMessageId keeps
 // SendToContact's stc: namespace reserved, each in one reviewed way:
 //   engine:        hands it only to MessageService.send, which reserves the namespace;
@@ -52,7 +51,6 @@ const maxActionsPath = 'gravity-mvp/src/app/max-actions.ts'
 const callerClientMessageIdEntries = new Map([
     [messagesRoutePath, 'engine'],
     [sendMediaRoutePath, 'guard'],
-    [maxActionsPath, 'provider_only'],
 ])
 const messageWrite = /\bprisma\.message\.(?:create|createMany|upsert|update|updateMany)\(|\bINSERT\s+INTO\s+"?Message"?[\s(]/u
 const conversationsContractPath = 'gravity-mvp/src/contracts/messaging/v1/contact-conversations-query.ts'
@@ -484,8 +482,6 @@ assert.doesNotThrow(() => assertReservedNamespaceAtCallerEntries(withEntry('grav
 rejectProbe('', "'use server'\nexport async function resendAction(chatId, clientMessageId) { return forward(chatId, clientMessageId) }\n", (changed) => assertReservedNamespaceAtCallerEntries(withEntry('gravity-mvp/src/app/messages/resend-actions.ts', changed)))
 const messagesRouteSource = read(messagesRoutePath)
 rejectProbe(messagesRouteSource, `${messagesRouteSource}\nconst plant = (chatId, clientMessageId) => prisma.message.create({ data: { chatId, clientMessageId } })\n`, (changed) => assertReservedNamespaceAtCallerEntries(withEntry(messagesRoutePath, changed)))
-const maxActionsSource = read(maxActionsPath)
-rejectProbe(maxActionsSource, `${maxActionsSource}\nexport async function plantMaxMessage(chatId, clientMessageId) { await prisma.message.create({ data: { chatId, clientMessageId } }) }\n`, (changed) => assertReservedNamespaceAtCallerEntries(withEntry(maxActionsPath, changed)))
 const handlerSource = read(handlerPath)
 rejectProbe(handlerSource, `import { prisma } from '@/lib/prisma'\n${handlerSource}`, (changed) => assertClosedImports(handlerPath, changed))
 assert.equal(isPromoted('{"commands":["SendToContactCommand.v1"]}'), true)

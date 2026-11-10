@@ -1771,6 +1771,47 @@ model MobileDeviceRegistration {
   @@index([revokedAt, sessionExpiresAt], map: "MobileDeviceRegistration_eligibility_idx")
 }
 
+/// Staff Session v1 (identity_access, docs/design/staff-session-v1.md v1.3).
+/// The verifier of ONE employee's individual password and that employee's
+/// session revocation counter. It is not an employee registry: no name, role
+/// or status lives here (D1); `userId` is the id of a record in the existing
+/// registry (src/data/users.json via getUsers), and `registryCreatedAt` binds
+/// the row to that exact record, so a re-created id inherits nothing. A row is
+/// never deleted: disable and delete set `revokedAt` (D2, C-D2b), and only an
+/// Администратор under a Staff Session clears it by setting a new password.
+/// `sessionEpoch` is bumped by logout, password set/reset, role change and
+/// revocation; a token issued under an older value is refused.
+model StaffCredential {
+  userId            String    @id @db.VarChar(64)
+  registryCreatedAt String    @db.VarChar(64)
+  algo              String    @db.VarChar(16)
+  scryptN           Int
+  scryptR           Int
+  scryptP           Int
+  maxmemBytes       Int
+  salt              Bytes
+  hash              Bytes
+  sessionEpoch      Int       @default(0)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @db.Timestamptz(3)
+  updatedBy         String    @db.VarChar(80)
+}
+
+/// Append-only audit of Staff Session credential changes and logins
+/// (identity_access). It never holds a password, hash, token or cookie; `sid`
+/// is the labelled sha256 session id consumers see, never the raw instance id.
+model StaffCredentialEvent {
+  id         String   @id @default(cuid())
+  userId     String   @db.VarChar(64)
+  kind       String   @db.VarChar(32)
+  actor      String   @db.VarChar(80)
+  sid        String?  @db.Char(64)
+  recordedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, recordedAt], map: "StaffCredentialEvent_user_recorded_idx")
+}
+
 /// SIP call session. Created by FreeSWITCH events via ESL.
 /// managerId is the CRM user id (string "u1"/"u2"/... from src/data/users.json),
 /// not a Prisma FK — CRM users live in JSON, not in the DB.

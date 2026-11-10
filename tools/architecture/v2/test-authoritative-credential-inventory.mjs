@@ -152,7 +152,7 @@ const reviewedCrossDomainAttempt = {
     approved_architecture_path: 'owner capability',
   }],
 }
-const fields = { records: Array.from({ length: 15 }, (_, index) => ({ id: index })) }
+const fields = { records: Array.from({ length: 17 }, (_, index) => ({ id: index })) }
 const inventory = {
   schema: 'yoko.crm.whole-repository-credential-database-access.v2',
   summary: {
@@ -1040,7 +1040,7 @@ const acceptanceFixtureRecord = {
 }
 const acceptanceCredentialEntities = [
   'Account', 'AiAgentConfig', 'AiProviderSetting', 'ApiConnection', 'Bot', 'MaxConnection',
-  'MessagingConnection', 'MobileDeviceRegistration', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
+  'MessagingConnection', 'MobileDeviceRegistration', 'StaffCredential', 'StaffCredentialEvent', 'TelegramConnection', 'WhatsAppConnection', 'avito_accounts',
   'avito_app_settings', 'avito_auth_sessions', 'avito_auth_users', 'cookies',
 ]
 const acceptanceFields = { records: acceptanceCredentialEntities.map((entity) => ({ entity, sensitive_fields: ['token'] })) }
