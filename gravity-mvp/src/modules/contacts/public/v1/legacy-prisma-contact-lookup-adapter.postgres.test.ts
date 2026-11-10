@@ -26,7 +26,9 @@ if (process.env.REQUIRE_CONTACT_RESOLUTION_DB_TESTS === '1' && !TEST_DATABASE_UR
 }
 const isolated = Boolean(TEST_DATABASE_URL) && process.env.DATABASE_URL === TEST_DATABASE_URL
 const proof = isolated ? describe : describe.skip
-const db = isolated ? new PrismaClient() : null
+// Constructed unconditionally, as the other Contacts proofs do: a client connects
+// only on its first query, and every query below runs inside the gated suite.
+const db = new PrismaClient()
 
 const RUN = randomUUID().replace(/-/gu, '').slice(0, 12)
 const id = (name: string) => `lookupproof-${RUN}-${name}`
@@ -52,20 +54,21 @@ async function search(query: string): Promise<Array<[string, string | undefined]
 proof('ContactLookup.v1 on PostgreSQL', () => {
   beforeAll(async () => {
     for (const contact of CONTACTS) {
-      await db!.contact.create({
-        data: {
-          id: id(contact.key),
-          displayName: contact.displayName,
-          isArchived: contact.isArchived ?? false,
-          phones: { create: (contact.phones ?? []).map(phone => ({ phone: phone.phone, isActive: phone.isActive ?? true })) },
-        },
+      await db.contact.create({
+        data: { id: id(contact.key), displayName: contact.displayName, isArchived: contact.isArchived ?? false },
       })
+      for (const phone of contact.phones ?? []) {
+        await db.contactPhone.create({
+          data: { contactId: id(contact.key), phone: phone.phone, isActive: phone.isActive ?? true },
+        })
+      }
     }
   })
 
   afterAll(async () => {
-    await db!.contact.deleteMany({ where: { id: { startsWith: id('') } } })
-    await db!.$disconnect()
+    // ContactPhone rows go with their Contact (onDelete: Cascade).
+    await db.contact.deleteMany({ where: { id: { startsWith: id('') } } })
+    await db.$disconnect()
   })
 
   it('treats «ё» and «е» as one letter in both directions, and ignores case', async () => {
