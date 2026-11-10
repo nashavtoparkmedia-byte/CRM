@@ -4313,6 +4313,117 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "calling-c4-manual-ai-conversation-main-f8a36b9f-20261110",
+      "reviewed_at": "2026-11-10T00:00:00Z",
+      "reviewed_by": "CALLING_C4_MANUAL_AI_CONVERSATION_MAIN_F8A36B9F_EXECUTOR_REVIEW_20261110",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_V8_AI_CALLING_C4_MANDATE_09_CONDITIONAL_OWNERSHIP_20261108",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f8a36b9f, whose tail is messaging-r21-a1a2-pre-adoption-after-r22-20261110, and leaves that amendment untouched. It lands only through the Orchestrator's ownership authority."
+      },
+      "reason": "Records the tracked executable surfaces the Calling C4 manual AI conversation adds on top of main f8a36b9f: 2,840 + 11 = 2,851 surfaces, context-owned 1,577 -> 1,588, governed exclusions unchanged at 1,263. Every new path lives under gravity-mvp/src/modules/calling or gravity-mvp/src/contracts/calling and is owned by the calling context through its manifest owned_paths. One reviewed exact-inventory assignment rewrites its bytes: the person card view now hosts Calling's public AI-conversation panel, so this amendment carries exactly one source-fingerprint rebind. Calling consumes, through its already allowed contacts.public dependency, exactly two Contacts capabilities on this path: ContactPersonCardQuery.v1 (who the person is, read for the exact canonical id the card showed) and ContactCommunicationPermissionQuery.v1 (voice, read at admission and again immediately before the provider effect); it writes no Contacts or Fleet data. The current triple is the repository's own derivation over this exact clean candidate (e367135c), read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "232ca7adc7807654c8051ebec48d7ac4f189b3f89202ecdd47c417299cae86cc",
+        "coverage_sha256": "727da669274a65a48f96852a3c0389527d7516e22f2711dc4b51d8c5a8378009"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2851,
+        "tracked_inventory_sha256": "eea1788a013790d882619af2e7c669b99f11a6d2a5cee0a1ddf320bafc63d69f",
+        "coverage_sha256": "4d548281295ca30f501087e12c6e4dea6ef7fa8492d027aedd3849c2a367e644"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/contacts/[id]/PersonCardView.tsx",
+          "previous_source_sha256": "7494dac890807f2a1b22f0c8c8cfbde608c44d42e081acb71c3a3e92c3e2f10a",
+          "current_source_sha256": "e3ed253b368581d5a316f4ab529b98aa19bc863643e2aa1df93e7e83cbeb0009",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The «Карточка человека» view renders Calling's public client component AiConversationPanel for the canonical Contact it already shows; the panel decides nothing itself, every admission (principal, Contacts identity, voice permission, destination) is Calling's on the server with Contacts' answers. The view still reads only the platform composition it was given. Its lifecycle, functional owner, exclusion, exact inventory membership and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/ai-conversation.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/ai-conversation.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation-simulated-provider.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/ai-conversation-actions.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/AiConversationPanel.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/AiConversationPanel.tsx",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
