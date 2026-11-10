@@ -4107,6 +4107,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-r21-a1a2-pre-adoption-after-r21-20261110",
+      "reviewed_at": "2026-11-10T00:00:00Z",
+      "reviewed_by": "MESSAGING_SHARED_RELIABILITY_R21_A1A2_PRE_ADOPTION_EXECUTOR_REVIEW_20261110",
+      "role": "SCOPED_GOVERNANCE_REBIND_EXECUTOR_REVIEW",
+      "authorization": "ORCH_MANDATE_13_MESSAGING_A1A2_PRE_ADOPTION_GATES_AND_DECISION_INBOX_ITEM_1_20261109",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. This amendment extends the chain published on main once #208 (R-21) has landed, whose tail is messaging-r21-guarded-append-main-2c790ca0-20261109, and reviews no surface: it only records the inventory digest moved by a registered lifecycle source hash."
+      },
+      "reason": "Records the tracked executable inventory digest moved by the Messaging A1/A2 pre-adoption gates. The held-store migration gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql gains the released-scrubbed CHECK inside its CREATE TABLE (Orchestrator decision: amend the migration, applied nowhere except dev/preview databases, production on HOLD), so its registered lifecycle source_sha256 in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY moves from cb0f23ee to f4491877, and that registered hash is part of each tracked surface projection. The surface keeps its reviewed MIGRATION / MIGRATION_ONLY / CONTROLLED_MIGRATION classification and messaging owner, and no path is added, removed or reassigned; the other A1/A2 changes are inside existing surfaces. The current triple is the repository's own derivation over the rebound tree: 2,825 surfaces unchanged, context-owned 1,565 and governed exclusions 1,260 unchanged, coverage digest unchanged; only tracked_inventory_sha256 moves.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2825,
+        "tracked_inventory_sha256": "182f92698e82d063b6bf1aacdace3208f721847ce0bdcc3bcbbbbd7524c18bba",
+        "coverage_sha256": "b5e8217411fa58ad2a7afbc337aeacd2168afdc31b0576c2e990c68b3630ccef"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2825,
+        "tracked_inventory_sha256": "b33662fc16f4755e59c9217f471578c7c4965732eab399671f833984c289302e",
+        "coverage_sha256": "b5e8217411fa58ad2a7afbc337aeacd2168afdc31b0576c2e990c68b3630ccef"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
