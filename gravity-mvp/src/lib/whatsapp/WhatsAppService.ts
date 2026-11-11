@@ -88,6 +88,42 @@ function clampMessageTs(rawSeconds: unknown): Date {
     return validateMessageTs(rawSeconds) ?? new Date()
 }
 
+function serializeWid(wid: unknown): string {
+    if (typeof wid === 'string') return wid
+    if (!wid || typeof wid !== 'object') return ''
+    const value = wid as Record<string, any>
+    if (typeof value._serialized === 'string') return value._serialized
+    if (typeof value.$1 === 'string') return value.$1
+    if (value.user && value.server) return `${value.user}@${value.server}`
+    return ''
+}
+
+/**
+ * W2: the provider message key is the identity of a WhatsApp message; what the
+ * message says never is. The key is `_serialized`. The 2026-07 WhatsApp Web
+ * update renamed it to `$1` (the W1 library pin maps it back). When both are
+ * missing, the key is rebuilt from its parts in the library's own
+ * `fromMe_remote_id[_participant]` form. Returns null when the provider gave
+ * no key at all. Callers must then not merge the message with another one on
+ * its content.
+ */
+function whatsAppProviderMessageIdV1(rawId: unknown, chatJid: string): string | null {
+    if (typeof rawId === 'string') return rawId.trim() ? rawId : null
+    const id = rawId && typeof rawId === 'object' ? rawId as Record<string, any> : null
+    if (!id) return null
+    for (const key of ['_serialized', '$1']) {
+        const value = typeof id[key] === 'string' ? id[key].trim() : ''
+        if (value) return value
+    }
+    const localId = typeof id.id === 'string' ? id.id.trim() : ''
+    if (!localId) return null
+    const remote = serializeWid(id.remote) || chatJid
+    const participant = serializeWid(id.participant)
+    return [id.fromMe ? 'true' : 'false', remote, localId, participant]
+        .filter(Boolean)
+        .join('_')
+}
+
 /** Reconstruct a stable history id when whatsapp-web.js omits `_serialized`. */
 function serializeHistoryMessageId(
     rawId: unknown,
@@ -95,30 +131,11 @@ function serializeHistoryMessageId(
     message: { body?: string; timestamp?: number; fromMe?: boolean; type?: string },
     ordinal: number,
 ): string {
-    if (typeof rawId === 'string' && rawId.trim()) return rawId
+    const providerMessageId = whatsAppProviderMessageIdV1(rawId, chatJid)
+    if (providerMessageId) return providerMessageId
 
-    const id = rawId && typeof rawId === 'object' ? rawId as Record<string, any> : null
-    const serialized = typeof id?._serialized === 'string' ? id._serialized.trim() : ''
-    if (serialized) return serialized
-
-    const serializeWid = (wid: unknown): string => {
-        if (typeof wid === 'string') return wid
-        if (!wid || typeof wid !== 'object') return ''
-        const value = wid as Record<string, any>
-        if (typeof value._serialized === 'string') return value._serialized
-        if (value.user && value.server) return `${value.user}@${value.server}`
-        return ''
-    }
-
-    const localId = typeof id?.id === 'string' ? id.id.trim() : ''
-    if (localId) {
-        const remote = serializeWid(id?.remote) || chatJid
-        const participant = serializeWid(id?.participant)
-        return [id?.fromMe ? 'true' : 'false', remote, localId, participant]
-            .filter(Boolean)
-            .join('_')
-    }
-
+    // No provider key: a deterministic id of this history position. Two
+    // different messages with the same text keep different ids.
     const seed = JSON.stringify([
         chatJid,
         message.timestamp || 0,
@@ -325,6 +342,112 @@ async function assertPrivateWhatsAppConversationConnectionV1(
     throw new Error(storedConnectionId
         ? 'CONTACT_CONVERSATION_TRANSPORT_MISMATCH'
         : 'CONTACT_CONVERSATION_TRANSPORT_UNBOUND')
+}
+
+// ─── W2: message admission by provider identity ─────────────────────────
+//
+// One provider message key means one Message row (unique Message.externalId).
+// A different key always means a different message, even when the text, type,
+// direction and second are the same. The one content match is the outbound
+// echo: a provider message the account sent itself may claim a CRM send in the
+// same conversation that has no provider id yet, and nothing else.
+
+/** How far the provider send time of an echo may be from the CRM send time. */
+const WA_LIVE_ECHO_WINDOW_MS = 10_000
+const WA_HISTORY_ECHO_WINDOW_MS = 2_000
+
+/** S1 outcomes that prove a CRM send never left; no provider message is one. */
+const WA_UNDISPATCHED_DELIVERY_OUTCOMES = new Set(['safe_to_redeliver', 'terminal'])
+
+type WhatsAppMessageAdmissionV1 =
+    | { kind: 'new' }
+    | { kind: 'known'; messageId: string }
+    | { kind: 'echo'; messageId: string }
+
+// Live ingress, background sync and history import all run in this process:
+// the client map above is process-global. Admission for one conversation is
+// serialized, so one path's identity lookup and the write it decides cannot
+// interleave with another path's. The unique Message.externalId guards
+// writers outside this process.
+const globalForAdmission = global as unknown as { _waAdmissionTails?: Map<string, Promise<void>> }
+const admissionTails: Map<string, Promise<void>> = globalForAdmission._waAdmissionTails || new Map()
+globalForAdmission._waAdmissionTails = admissionTails
+
+async function withWhatsAppMessageAdmissionLockV1<T>(conversationId: string, run: () => Promise<T>): Promise<T> {
+    const previous = admissionTails.get(conversationId) ?? Promise.resolve()
+    let release!: () => void
+    const own = new Promise<void>(resolve => { release = resolve })
+    const tail = previous.then(() => own)
+    admissionTails.set(conversationId, tail)
+    await previous
+    try {
+        return await run()
+    } finally {
+        release()
+        if (admissionTails.get(conversationId) === tail) admissionTails.delete(conversationId)
+    }
+}
+
+/** A create lost the race for this provider key: the message is already stored. */
+function isProviderMessageIdTakenV1(error: unknown): boolean {
+    if (!error || typeof error !== 'object' || (error as { code?: unknown }).code !== 'P2002') return false
+    const target = (error as { meta?: { target?: unknown } }).meta?.target
+    // A channel message create sets no other caller-chosen unique field.
+    if (target === undefined || target === null) return true
+    return (Array.isArray(target) ? target : [target]).some(field => String(field).includes('externalId'))
+}
+
+async function admitWhatsAppProviderMessageV1(input: {
+    providerMessageId: string
+    conversationId: string
+    direction: 'inbound' | 'outbound'
+    content: string
+    sentAt: Date
+    echoWindowMs: number
+    phase: 'live' | 'sync' | 'import'
+}): Promise<WhatsAppMessageAdmissionV1> {
+    const known = await prisma.message.findUnique({
+        where: { externalId: input.providerMessageId },
+        select: { id: true, chatId: true },
+    })
+    if (known) {
+        // The key already has its row. It is never reassigned or copied, even
+        // when that row sits in another conversation.
+        if (known.chatId !== input.conversationId) {
+            opsLog('warn', 'wa_message_provider_id_owned_elsewhere', {
+                phase: input.phase,
+                conversationId: input.conversationId,
+                ownerMessageId: known.id,
+                ownerConversationId: known.chatId,
+            })
+        }
+        return { kind: 'known', messageId: known.id }
+    }
+    if (input.direction !== 'outbound') return { kind: 'new' }
+
+    // Only a CRM send without a provider id can be this echo. A row that
+    // already holds a key is another provider message, whatever it says.
+    const sentAtMs = input.sentAt.getTime()
+    const candidates = await prisma.message.findMany({
+        where: {
+            chatId: input.conversationId,
+            direction: 'outbound',
+            externalId: null,
+            content: input.content,
+            sentAt: {
+                gte: new Date(sentAtMs - input.echoWindowMs),
+                lte: new Date(sentAtMs + input.echoWindowMs),
+            },
+        },
+        orderBy: [{ sentAt: 'asc' }, { createdAt: 'asc' }],
+        take: 20,
+        select: { id: true, status: true, metadata: true },
+    })
+    const echo = candidates.find(candidate => !(
+        candidate.status === 'failed'
+        && WA_UNDISPATCHED_DELIVERY_OUTCOMES.has(String(metadataRecord(candidate.metadata).deliveryOutcome))
+    ))
+    return echo ? { kind: 'echo', messageId: echo.id } : { kind: 'new' }
 }
 
 /**
@@ -777,7 +900,8 @@ async function syncHistory(connectionId: string, client: Client) {
                                 if (!chat?.msgs) return []
                                 const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
                                 return models.map((m: any) => ({
-                                    id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
+                                    // W1: WhatsApp Web 2026-07 exposes the key as `$1`.
+                                    id: m.id?._serialized || m.id?.$1 || '', body: m.body || '', timestamp: m.t || 0,
                                     fromMe: !!m.id?.fromMe, type: m.type || 'chat',
                                     // Report real hasMedia — needed to kick off getMessageById
                                     // lookup in enrichStoreFallbackMedia below.
@@ -969,46 +1093,50 @@ async function syncHistory(connectionId: string, client: Client) {
                             if (!isGroupChat) {
                                 await assertPrivateWhatsAppConversationConnectionV1(unifiedChat, connectionId, 'sync')
                             }
-                            const existing = await prisma.message.findFirst({
-                                where: {
-                                    OR: [
-                                        { externalId: msg.id },
-                                        {
-                                            chatId: unifiedChat.id,
-                                            content: waContentWithFallback(msg.body, msg.type),
-                                            direction: msg.fromMe ? 'outbound' : 'inbound',
-                                            sentAt: {
-                                                gte: new Date(ts.getTime() - 2000),
-                                                lte: new Date(ts.getTime() + 2000)
-                                            }
-                                        }
-                                    ]
-                                }
-                            })
-
-                            if (existing) {
-                                if (!existing.externalId) {
+                            // W2: admitted by provider key only. The echo of a CRM
+                            // send takes the provider key onto that send's row.
+                            const savedMsg = await withWhatsAppMessageAdmissionLockV1(unifiedChat.id, async () => {
+                                const admission = await admitWhatsAppProviderMessageV1({
+                                    providerMessageId: msg.id,
+                                    conversationId: unifiedChat.id,
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    content: waContentWithFallback(msg.body, msg.type),
+                                    sentAt: ts,
+                                    echoWindowMs: WA_HISTORY_ECHO_WINDOW_MS,
+                                    phase: 'sync',
+                                })
+                                if (admission.kind === 'known') return null
+                                if (admission.kind === 'echo') {
                                     try {
-                                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: msg.id })
+                                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: admission.messageId, externalId: msg.id })
                                     } catch (updErr: any) {
                                         if (updErr.code !== 'P2002') throw updErr
                                         // Another message already has this externalId — skip silently
                                     }
+                                    return null
                                 }
-                            } else {
-                                const { message: savedMsg } = await createChannelMessageV1({
-                                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
-                                    chatId: unifiedChat.id,
-                                    direction: msg.fromMe ? 'outbound' : 'inbound',
-                                    type: mapToUnifiedMessageType(msg.type),
-                                    content: waContentWithFallback(msg.body, msg.type),
-                                    externalId: msg.id,
-                                    channel: 'whatsapp',
-                                    sentAt: ts,
-                                    // Outbound came from phone — already delivered.
-                                    status: msg.fromMe ? 'delivered' : undefined,
-                                })
+                                try {
+                                    const { message } = await createChannelMessageV1({
+                                        contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                        chatId: unifiedChat.id,
+                                        direction: msg.fromMe ? 'outbound' : 'inbound',
+                                        type: mapToUnifiedMessageType(msg.type),
+                                        content: waContentWithFallback(msg.body, msg.type),
+                                        externalId: msg.id,
+                                        channel: 'whatsapp',
+                                        sentAt: ts,
+                                        // Outbound came from phone — already delivered.
+                                        status: msg.fromMe ? 'delivered' : undefined,
+                                    })
+                                    return message
+                                } catch (createErr) {
+                                    // Another writer stored this provider key first.
+                                    if (!isProviderMessageIdTakenV1(createErr)) throw createErr
+                                    return null
+                                }
+                            })
 
+                            if (savedMsg) {
                                 // Media download — backfill path.
                                 if (msg.hasMedia && msgType !== 'chat') {
                                     const origMsg = fetchedByJid.get(msg.id)
@@ -1253,6 +1381,20 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         const fromJid = msg.from || ''
         const toJid = msg.to || ''
         if (fromJid === 'status@broadcast' || toJid === 'status@broadcast') return
+
+        // W2: identity first. Every path below keys the message on
+        // msg.id._serialized. Without a provider key, a message cannot be
+        // told apart from another one with the same text, and Messaging
+        // stores no channel message without one. So it is reported, not
+        // stored or merged.
+        const providerMessageId = whatsAppProviderMessageIdV1(msg.id, msg.fromMe ? toJid : fromJid)
+        if (!providerMessageId) {
+            opsLog('error', 'wa_message_provider_id_missing', { connectionId, phase: 'live', type: msg.type ?? null })
+            return
+        }
+        if (msg.id?._serialized !== providerMessageId) {
+            ;(msg as any).id = { ...(msg.id ?? {}), _serialized: providerMessageId }
+        }
 
         // Group messages go through a separate, much simpler branch — the
         // 1:1 logic below relies on partnerJid being a phone number, which
@@ -1591,29 +1733,27 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 if (waLegacyErr.code !== 'P2002') throw waLegacyErr
             }
 
-            // Unified Message — dedup by externalId OR by content+direction+time window.
-            // For outbound messages, this also catches echoes from CRM-initiated sends
-            // (which create the optimistic Message record before the WA library fires the event).
-            const existingUnified = await prisma.message.findFirst({
-                where: {
-                    OR: [
-                        { externalId: msg.id._serialized },
-                        {
-                            chatId: unifiedChat.id,
-                            content: waContentWithFallback(msg.body, msg.type),
-                            direction,
-                            sentAt: {
-                                gte: new Date(ts.getTime() - 10000),
-                                lte: new Date(ts.getTime() + 10000)
-                            }
-                        }
-                    ]
+            // Unified Message — W2: admitted by provider key only. Two inbound
+            // messages with the same text are two messages. The one content match
+            // is the echo of a CRM-initiated send, which creates its optimistic
+            // Message before the WA library fires the event.
+            const msgType = mapToUnifiedMessageType(msg.type)
+            const savedMsg = await withWhatsAppMessageAdmissionLockV1(unifiedChat.id, async () => {
+                const admission = await admitWhatsAppProviderMessageV1({
+                    providerMessageId: msg.id._serialized,
+                    conversationId: unifiedChat.id,
+                    direction,
+                    content: waContentWithFallback(msg.body, msg.type),
+                    sentAt: ts,
+                    echoWindowMs: WA_LIVE_ECHO_WINDOW_MS,
+                    phase: 'live',
+                })
+                if (admission.kind === 'known') {
+                    console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${admission.messageId})`)
+                    return null
                 }
-            })
-
-            if (existingUnified) {
-                console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
-                if (!existingUnified.externalId) {
+                if (admission.kind === 'echo') {
+                    const existingUnified = { id: admission.messageId }
                     // A CRM-initiated send creates the optimistic Message before the
                     // provider echo arrives. The echo is the authority for the provider
                     // id, the delivered state and the time the message actually left.
@@ -1633,20 +1773,29 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     } catch (updErr: any) {
                         if (updErr.code !== 'P2002') throw updErr
                     }
+                    return null
                 }
-            } else {
-                const msgType = mapToUnifiedMessageType(msg.type)
-                const { message: savedMsg } = await createChannelMessageV1({
-                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
-                    chatId: unifiedChat.id,
-                    direction,
-                    type: msgType,
-                    content: waContentWithFallback(msg.body, msg.type),
-                    externalId: msg.id._serialized,
-                    sentAt: ts,
-                    status: isOutbound ? 'delivered' : undefined,
-                })
+                try {
+                    const { message } = await createChannelMessageV1({
+                        contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                        chatId: unifiedChat.id,
+                        direction,
+                        type: msgType,
+                        content: waContentWithFallback(msg.body, msg.type),
+                        externalId: msg.id._serialized,
+                        sentAt: ts,
+                        status: isOutbound ? 'delivered' : undefined,
+                    })
+                    return message
+                } catch (createErr) {
+                    // Sync or import stored this provider key first.
+                    if (!isProviderMessageIdTakenV1(createErr)) throw createErr
+                    console.log(`[WA-SERVICE] DB-DEDUP: provider key already stored ${direction} msgId=${msg.id._serialized}`)
+                    return null
+                }
+            })
 
+            if (savedMsg) {
                 // Download and save media attachment (image, voice, video, document, sticker).
                 // msgType here is unified ('text' | 'image' | ...), so exclude 'text'.
                 let mediaDownloaded = false
@@ -2334,7 +2483,8 @@ export async function importWhatsAppHistory(
                                 if (!chat?.msgs) return []
                                 const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
                                 return models.map((m: any) => ({
-                                    id: m.id?._serialized || '',
+                                    // W1: WhatsApp Web 2026-07 exposes the key as `$1`.
+                                    id: m.id?._serialized || m.id?.$1 || '',
                                     body: m.body || '',
                                     timestamp: m.t || 0,
                                     fromMe: !!m.id?.fromMe,
@@ -2524,38 +2674,54 @@ export async function importWhatsAppHistory(
                             if (legacyErr.code !== 'P2002') throw legacyErr
                         }
 
-                        // Unified Message with dedup
-                        const existing = await prisma.message.findFirst({
-                            where: {
-                                OR: [
-                                    { externalId: msgId },
-                                    {
-                                        chatId: unifiedChat.id,
-                                        content: waContentWithFallback(msg.body, msg.type),
-                                        direction: msg.fromMe ? 'outbound' : 'inbound',
-                                        sentAt: { gte: new Date(ts.getTime() - 2000), lte: new Date(ts.getTime() + 2000) }
-                                    }
-                                ]
+                        // Unified Message — W2: admitted by provider key only.
+                        // The echo of a CRM send takes the key onto that send's
+                        // row, so a second same-text message is not hidden behind it.
+                        const savedMsg = await withWhatsAppMessageAdmissionLockV1(unifiedChat.id, async () => {
+                            const admission = await admitWhatsAppProviderMessageV1({
+                                providerMessageId: msgId,
+                                conversationId: unifiedChat.id,
+                                direction: msg.fromMe ? 'outbound' : 'inbound',
+                                content: waContentWithFallback(msg.body, msg.type),
+                                sentAt: ts,
+                                echoWindowMs: WA_HISTORY_ECHO_WINDOW_MS,
+                                phase: 'import',
+                            })
+                            if (admission.kind === 'known') return null
+                            if (admission.kind === 'echo') {
+                                try {
+                                    await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: admission.messageId, externalId: msgId })
+                                } catch (updErr: any) {
+                                    if (updErr.code !== 'P2002') throw updErr
+                                }
+                                return null
+                            }
+                            try {
+                                const { message } = await createChannelMessageV1({
+                                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                    chatId: unifiedChat.id,
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    type: mapToUnifiedMessageType(msg.type),
+                                    content: waContentWithFallback(msg.body, msg.type),
+                                    externalId: msgId,
+                                    channel: 'whatsapp',
+                                    sentAt: ts,
+                                    // Backfilled outbound messages came from
+                                    // WA Web's own Store — they already shipped
+                                    // from the phone. Mark delivered so the UI
+                                    // doesn't flag them with "Повторить".
+                                    status: msg.fromMe ? 'delivered' : undefined,
+                                })
+                                return message
+                            } catch (createErr) {
+                                // Live ingress or sync stored this provider key first.
+                                if (!isProviderMessageIdTakenV1(createErr)) throw createErr
+                                return null
                             }
                         })
 
                         totalMessages++
-                        if (!existing) {
-                            const { message: savedMsg } = await createChannelMessageV1({
-                                contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
-                                chatId: unifiedChat.id,
-                                direction: msg.fromMe ? 'outbound' : 'inbound',
-                                type: mapToUnifiedMessageType(msg.type),
-                                content: waContentWithFallback(msg.body, msg.type),
-                                externalId: msgId,
-                                channel: 'whatsapp',
-                                sentAt: ts,
-                                // Backfilled outbound messages came from
-                                // WA Web's own Store — they already shipped
-                                // from the phone. Mark delivered so the UI
-                                // doesn't flag them with "Повторить".
-                                status: msg.fromMe ? 'delivered' : undefined,
-                            })
+                        if (savedMsg) {
                             newMessages++
 
                             // Media download (image/video/voice/document/sticker).
