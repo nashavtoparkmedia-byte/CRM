@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "17443fcf9b27d95213723e041dd9b68ad0078d33a59960e642f8b80e6b7cecc3"
+      "sha256": "e14d59352f8fb89fe7f3571ba1f9ec7c506fbb7e8ed6f9479b5c0904970c5e3a"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "4ec83db44354ebef3c333ea4a3caebcfaaff87a229090698ec1d3fd8fd807851"
+      "sha256": "be9f81d39eb74639e874f95d04f671adba05c485405c1132a1b0acdae6a70723"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "130fc1fd3bb6c2812de574694ad9cdf33f91e0c3b2f216c132c7439e6e1f752c"
+      "sha256": "09f6241590e23e19902d27c3adc0f15df6dca94ccc79a44268e98f982443de8d"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
