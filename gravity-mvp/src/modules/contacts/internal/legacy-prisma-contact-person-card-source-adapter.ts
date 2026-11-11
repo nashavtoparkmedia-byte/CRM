@@ -1,7 +1,8 @@
 // The only database reader behind contacts.ContactPersonCardQuery.v1.
 //
-// It reads Contacts-owned models only — Contact, ContactPhone, ContactIdentity
-// and ContactMerge — by the exact Contact id it is given, inside one REPEATABLE
+// It reads Contacts-owned models only — Contact, ContactPhone, ContactIdentity,
+// ContactMerge and ContactCommunicationPolicyEvent — by the exact Contact id it
+// is given (the merge and policy records of its lineage), inside one REPEATABLE
 // READ snapshot, and resolves the lineage with the existing lineage handler bound
 // to the same client. It never reads Chat, Message, Driver or any provider table
 // and never writes. It assembles nothing beyond the source shape; the pure
@@ -13,6 +14,17 @@ import { makePrismaContactLineagePortV1 } from './prisma-contact-lineage-port'
 import type { ContactPersonCardSourcePortV1, ContactPersonCardSourceV1 } from './contact-person-card'
 
 type ContactPersonCardSourceClient = Pick<typeof prisma, '$transaction'>
+
+/** Only the merge record's own flags leave the snapshot; the snapshot's contents never do. */
+function mergeRecordFlags(snapshot: unknown): { automated: boolean | null; recoveryState: string | null; recoveredAt: string | null } {
+  const record = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? (snapshot as Record<string, unknown>)._merge : null
+  const flags = record && typeof record === 'object' && !Array.isArray(record) ? record as Record<string, unknown> : {}
+  return {
+    automated: typeof flags.automated === 'boolean' ? flags.automated : null,
+    recoveryState: typeof flags.recoveryState === 'string' ? flags.recoveryState : null,
+    recoveredAt: typeof flags.recoveredAt === 'string' ? flags.recoveredAt : null,
+  }
+}
 
 export function makePrismaContactPersonCardSourcePortV1(client: ContactPersonCardSourceClient): ContactPersonCardSourcePortV1 {
   return {
@@ -58,9 +70,15 @@ export function makePrismaContactPersonCardSourcePortV1(client: ContactPersonCar
         const lineageIds = lineage?.contactIds ?? [contact.id]
         const merges = await tx.contactMerge.findMany({
           where: { OR: [{ survivorId: { in: lineageIds } }, { mergedId: { in: lineageIds } }] },
-          select: { id: true, action: true, reason: true, mergedBy: true, createdAt: true, mergedId: true, survivorId: true },
+          select: { id: true, action: true, reason: true, mergedBy: true, createdAt: true, mergedId: true, survivorId: true, snapshotBefore: true },
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           take: 100,
+        })
+        const policyEvents = await tx.contactCommunicationPolicyEvent.findMany({
+          where: { contactId: { in: lineageIds } },
+          select: { eventId: true, cause: true, actor: true, recordedAt: true, afterDenyAll: true, afterDenyMessage: true, afterDenyVoice: true },
+          orderBy: [{ recordedAt: 'desc' }, { eventId: 'asc' }],
+          take: 50,
         })
         return {
           id: contact.id,
@@ -95,7 +113,9 @@ export function makePrismaContactPersonCardSourcePortV1(client: ContactPersonCar
             createdAt: merge.createdAt,
             mergedId: merge.mergedId,
             survivorId: merge.survivorId,
+            ...mergeRecordFlags(merge.snapshotBefore),
           })),
+          policyEvents,
         }
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
     },

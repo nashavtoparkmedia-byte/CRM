@@ -63,7 +63,7 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
     mainDriverId: 'd-1', legacyYandexDriverId: null, phones: [], channels: [],
     lineage: { canonicalContactId: 'c-1', contactIds: ['c-1'], mergedFromCount: 0, mergeHistory: [] },
     conflicts: [], hasOpenConflict: false, hasPersonBlockingConflict: false, candidates: [],
-    automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null }, isArchived: false,
+    automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null }, isArchived: false, linkHistory: [],
   }
   return {
     loadContactPersonCardV1: createContactPersonCardCompositionV1({
