@@ -440,6 +440,17 @@ function assertTelegramAdmissionModel(source, laneSource) {
       displayName: 'providerDisplayName',
     },
   ]
+  // Only importTelegramHistory admits 'import' (the history projection): the live
+  // processor's own phase can be 'inbound' or 'catch-up', never 'import'.
+  const inboundProcessors = laneAst.statements.filter(statement => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === 'processInboundTelegramMessage'
+  ))
+  const phaseParameter = inboundProcessors[0]?.parameters.find(parameter => ts.isIdentifier(parameter.name) && parameter.name.text === 'phase')
+  if (inboundProcessors.length !== 1 || !phaseParameter?.type
+    || normalize(phaseParameter.type.getText(laneAst)) !== "'inbound'|'catch-up'"
+    || phaseParameter.initializer?.getText(laneAst) !== "'inbound'") {
+    throw new Error('Telegram live processor phase')
+  }
   // The lane calls exactly the ingress composition's admission, never a local copy.
   const admissionImports = namedImports(laneAst).filter(binding => binding.imported === 'admitTelegramPrivateConversation')
   if (admissionImports.length !== 1 || admissionImports[0].specifier !== '@/modules/telegram-channel/application/mtproto-guarded-ingress'
@@ -1019,6 +1030,9 @@ telegramAdmissionProbes.push([rewriteCallStatement(
 // The lane may neither link for itself nor call a local copy of the admission.
 telegramAdmissionProbes.push([telegramSource, `${telegramLaneSource}\nvoid ensureConversationContactLinkV1({})\n`])
 telegramAdmissionProbes.push([telegramSource, `${telegramLaneSource}\nasync function admitTelegramPrivateConversation(input: unknown) { return input }\n`])
+// The live processor may never reach the history projection.
+telegramAdmissionProbes.push([telegramSource, telegramLaneSource.replace("    phase: 'inbound' | 'catch-up' = 'inbound',", "    phase: 'inbound' | 'catch-up' | 'import' = 'inbound',")])
+telegramAdmissionProbes.push([telegramSource, telegramLaneSource.replace("    phase: 'inbound' | 'catch-up' = 'inbound',", "    phase: TelegramPrivateIngressPhase = 'inbound',")])
 const adapterProbes = [
   adapter.replace(
     'CAST(${CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1} AS integer)',
