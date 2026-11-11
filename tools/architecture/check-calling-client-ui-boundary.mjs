@@ -37,7 +37,7 @@ assert.doesNotMatch(driverPage, /@\/components\/sip\//)
 const callingUi = {
   ActiveCallPopup: 'f7700d253b859ee01b43f89cc7ba8af0fb068a13f49042b8c1fd18a56490fdf3',
   AiMockCallButton: '0f43b263af489520593cb4548bf65431ac6d10632099242f1b0a6d664874983b',
-  CallButton: 'cbd06d8c974b4e0d1d685d64bf5af4ab8b2f3266e3a69d57af9c49d565e70a35',
+  CallButton: 'd8624076cfa990f853251440b106b5bcd43f405b5883915a0ba75613b4588983',
   CallToolbar: '20a7882a3baf097e68058bef84d95cf7c51d6e76f3a86831e73a6cd75001544e',
   CallsList: 'a3170cf9229a7f5f209da37973bd220da5824b76468a8046cff198ec9e016303',
   IncomingCallPopup: '204e10ff13102736b2ea13eab60d98d9d9c57a29a3a47045a69fd5bcdaf9c6a7',
@@ -84,12 +84,30 @@ assert.match(sipProvider, /<OutboundCallingClientProvider value=\{\{ status, out
 const fleetButton = read('gravity-mvp/src/modules/fleet-operations/internal/client-ui/DriverCallButton.tsx')
 assert.match(fleetButton, /useOutboundCallingClient/)
 assert.doesNotMatch(fleetButton, /@\/modules\/calling\//)
-assert.equal(
-  fleetButton
-    .replace("import { useOutboundCallingClient } from '@/infrastructure/ui/calling-client-capability'", "import { useSip } from '@/modules/calling/public/v1/sip-client-context'")
-    .replace('const { status, hasActiveCall: activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useOutboundCallingClient()', 'const { status, activeCall, outboundMode, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()'),
-  read('gravity-mvp/src/modules/calling/public/v1/client-ui/CallButton.tsx'),
-)
+// P1 (Calling Legacy Click-to-Call Safety): Calling's CallButton names a Contact and its Contacts
+// phone id and offers a call only when Calling allows it. Fleet's twin is no longer the same
+// implementation: it stays at its reviewed legacy bytes, still posting a raw phoneNumber, which the
+// originate route refuses before any policy runs. It therefore fails closed until Fleet moves it to
+// the Contact-based props; until then it must not change silently.
+assert.equal(sha256(fleetButton), 'd5ebba0f52000fdf5a95419c715d9094625fca45cca32004562e1cfb221b90f0')
+assert.match(fleetButton, /body: JSON\.stringify\(\{ phoneNumber \}\)/)
+const originateRoute = read('gravity-mvp/src/app/api/calls/originate/route.ts')
+assert.match(originateRoute, /if \('phoneNumber' in fields \|\| 'phone' in fields\) \{\n\s+return NextResponse\.json\(\{ error: 'phone_number_not_accepted' \}, \{ status: 400 \}\)/)
+assert.doesNotMatch(originateRoute, /@\/lib\/freeswitch\//)
+const callButton = read('gravity-mvp/src/modules/calling/public/v1/client-ui/CallButton.tsx')
+assert.doesNotMatch(callButton, /JSON\.stringify\(\{ phoneNumber/)
+assert.match(callButton, /JSON\.stringify\(\{ requestId: requestId\.current, contactId, phoneId: phone\.phoneId \}\)/)
+// No alternative outbound path: nothing calls the legacy raw-number originate, the manual-call
+// runtime takes authority only from a signed Staff Session, and its extension directory never
+// reaches the SIP credentials in lib/sip/extensions.ts.
+const { execFileSync } = await import('node:child_process')
+const legacyCallers = execFileSync('git', ['grep', '-lE', '\\boriginateCall\\(', '--', 'gravity-mvp/src'], { cwd: root, encoding: 'utf8' })
+  .split('\n').filter(Boolean).filter((file) => file !== 'gravity-mvp/src/lib/freeswitch/EslClient.ts')
+assert.deepEqual(legacyCallers, [])
+const manualRuntime = read('gravity-mvp/src/modules/calling/application/manual-call-runtime.ts')
+assert.match(manualRuntime, /const principal = await getStaffSessionPrincipalV1\(\)/)
+assert.doesNotMatch(manualRuntime, /getCurrentUser|crm_user_id|user-directory|@\/lib\/sip\//)
+assert.doesNotMatch(read('gravity-mvp/src/modules/calling/internal/manual-calls/staff-extension-directory.ts'), /from '@\/lib\/sip|process\.env|PASSWORD/)
 assert.equal(
   read('gravity-mvp/src/modules/fleet-operations/internal/client-ui/DriverCallsList.tsx'),
   read('gravity-mvp/src/modules/calling/public/v1/client-ui/CallsList.tsx'),
