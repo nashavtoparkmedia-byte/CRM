@@ -84,6 +84,7 @@ export {
     readContactPersonCardV1,
     previewContactMergeV1,
     resolveContactReadAuthorityV1,
+    resolveContactWriteAuthorityV1,
     searchContactsV1,
 } from '../../application/contact-operations'
 export {
@@ -98,6 +99,16 @@ export type {
     ContactReaderPrincipalV1,
     ContactReaderRoleV1,
 } from './contact-read-authority'
+export {
+    CONTACT_TRANSITIONAL_ADMIN_ACTOR_V1,
+    CONTACT_WRITE_AUTHORITY_POLICY_VERSION_V1,
+    CONTACT_WRITE_AUTHORITY_QUERY_V1,
+} from './contact-write-authority'
+export type {
+    ContactWriteAuthorityDenialV1,
+    ContactWriteAuthorityV1,
+    ContactWriterPrincipalV1,
+} from './contact-write-authority'
 export { resolveContactIdentityConflictStateV1 } from './contact-identity-conflict-state'
 export type {
     ContactIdentityConflictClassV1,

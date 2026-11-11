@@ -10,7 +10,12 @@ const mocks = vi.hoisted(() => ({
     principal: vi.fn(),
 }))
 
-vi.mock('@/modules/contacts/public/v1', () => ({
+vi.mock('@/modules/contacts/public/v1', () => ({ resolveContactWriteAuthorityV1: async () => {
+    const signed = await mocks.principal()
+    return signed
+      ? { decision: 'allow', principal: { kind: 'integration_admin_session', transitional: true }, actor: signed.id, policyVersion: 'contacts.write-authority.v1' }
+      : { decision: 'deny', reason: 'no_session' }
+  },
     getContactParkCheckContextV1: mocks.getContext,
     persistContactParkCheckResultV1: mocks.persist,
 }))

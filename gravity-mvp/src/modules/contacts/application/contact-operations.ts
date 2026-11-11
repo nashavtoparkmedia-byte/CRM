@@ -49,6 +49,7 @@ import {
 } from '../public/v1/driver-person-confirmation'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { createContactMergePreviewHandlerV1 } from '../internal/contact-merge-preview'
+import { resolveContactWriteAuthorityFromIdentityAccessV1 } from '../internal/identity-access-contact-write-authority'
 import { legacyPrismaContactMergePreviewSourcesV1 } from '../internal/legacy-prisma-contact-merge-preview-adapter'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 import {
@@ -165,3 +166,6 @@ export function createContactCardForConversationReaderV1(resolveConversation: Co
 // contacts.ContactMergePreviewQuery.v1: read-only; the caller has passed the read authority.
 const previewContactMerge = createContactMergePreviewHandlerV1(legacyPrismaContactMergePreviewSourcesV1)
 export const previewContactMergeV1 = (...args: Parameters<typeof previewContactMerge>) => previewContactMerge(...args)
+
+// contacts.ContactWriteAuthorityQuery.v1: every Contacts write route asks it first (Security W1).
+export const resolveContactWriteAuthorityV1 = () => resolveContactWriteAuthorityFromIdentityAccessV1()

@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { RECOVER_AUTOMATED_CONTACT_MERGE_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { mergeContactsV1 } from '@/infrastructure/contact-merge-composition'
-import { contactOwnershipBusyResultV1 } from '@/modules/contacts/public/v1'
+import { contactOwnershipBusyResultV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -15,8 +14,8 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(request)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -26,7 +25,7 @@ export async function POST(
     const result = await mergeContactsV1.recover({
       contract: RECOVER_AUTOMATED_CONTACT_MERGE_COMMAND_V1,
       mergeId: id,
-      requestedBy: principal.id,
+      requestedBy: authority.actor,
       basis: String(body.basis || 'operator requested automated merge recovery'),
     })
     return NextResponse.json(result, {

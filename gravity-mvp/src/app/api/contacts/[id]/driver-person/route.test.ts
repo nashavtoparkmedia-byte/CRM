@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
-vi.mock('@/modules/contacts/public/v1', () => ({ confirmDriverPersonV1: mocks.confirm }))
+vi.mock('@/modules/contacts/public/v1', () => ({ resolveContactWriteAuthorityV1: async () => {
+    const signed = await mocks.principal()
+    return signed
+      ? { decision: 'allow', principal: { kind: 'integration_admin_session', transitional: true }, actor: signed.id, policyVersion: 'contacts.write-authority.v1' }
+      : { decision: 'deny', reason: 'no_session' }
+  }, confirmDriverPersonV1: mocks.confirm }))
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
   normalizeDriverLicenceVuV1: (value: unknown) => String(value ?? '').replace(/\D/g, ''),
   normalizeParkPhoneDigitsV1: (value: unknown) => String(value ?? '').replace(/\D/g, ''),

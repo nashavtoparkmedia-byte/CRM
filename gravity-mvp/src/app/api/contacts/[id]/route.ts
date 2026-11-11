@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { ContactService } from '@/lib/ContactService'
-import { resolveContactLineageV1 } from '@/modules/contacts/public/v1'
+import { resolveContactLineageV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import type { Prisma } from '@prisma/client'
 import {
   contactAutomationState,
@@ -10,7 +10,6 @@ import {
   phoneEvidenceState,
 } from '@/modules/contacts/public/v1/contact-evidence-state'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -294,7 +293,7 @@ export async function PATCH(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!await getIntegrationAdminPrincipal()) {
+  if ((await resolveContactWriteAuthorityV1()).decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
