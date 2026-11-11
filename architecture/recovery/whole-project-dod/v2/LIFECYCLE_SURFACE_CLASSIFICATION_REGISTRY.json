@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 747,
+    "total_entries": 749,
     "test": 39,
     "dead_historical": 92,
     "migration_only": 91,
-    "active_operational": 520,
+    "active_operational": 522,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -5286,6 +5286,24 @@
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Active architecture control-plane surface for the Fleet Operations DriverProfilesForContactsQuery.v1 read model; approved path is a bounded read-only boundary control that pins the exact contract shape, the handler protocol (parse before any read), the single read-only Prisma reader over Fleet-owned Driver and Park rows, and the capability declarations, then runs the proofs. It owns no runtime write.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-driver-licence-readers.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for the Owner D2 (OD-03) driving-licence (ВУ) rule; approved path is a bounded read-only inventory control that lists every tracked non-test source file touching the ВУ under any of its names (licence fields, the vu: person keys, the conduit types, whole Driver rows, raw SQL), gives each one disposition (owner-internal, evidence key, admin-only with a verified guard, masked through maskDriverLicenceV1, the named-owner D2-L legacy screens, view decision, type-only or a licence term), fails on any unlisted reader, stale entry, removed guard, missing mask or log line that prints a ВУ carrier, and runs its negative probes. It owns no runtime write.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-driver-licence-view-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface for Fleet Operations' licence-carrying reads DriverProfilesForContactsQuery.v2 and DriverProfilesByExactLicenceQuery.v1 (Owner D2, OD-03); approved path is a bounded read-only boundary control that pins the required licence view, maskDriverLicenceV1 as the only place a view turns into a shown ВУ (only an exact full shows the stored text), handlers that parse before they read and set the licence only through the mask, the one parameterized read-only reader over Fleet-owned rows, and the declarations, checks each rule against known mutants and runs the proofs. It owns no runtime write.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
       "functional_owner": "architecture_recovery"
     },

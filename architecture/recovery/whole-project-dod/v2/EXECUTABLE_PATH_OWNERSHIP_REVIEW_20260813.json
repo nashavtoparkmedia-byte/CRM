@@ -336,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 267,
-        "path_sha256": "4ef9895ff704b40fb74d084d505ada0ea2af2d5e9814187c6677588f637039ce"
+        "path_count": 269,
+        "path_sha256": "c827ae039fa41fb49176766544af6f5cb6c9ddd1d6359592da7eebef48334312"
       }
     },
     {
@@ -3446,6 +3446,26 @@
       "source_sha256": "e38827608fcdf3b260e688691e7aea39c797d210fb4dce644b763aedde29828b",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review under the Orchestrator V7 Contact Identity full conditional delivery mandate (2026-11-07) admits this exact path — the read-only presentation of the person card view: park profiles, channel accounts, phones, lineage, conflicts and candidates as the read models decided them — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactPersonCardQuery.v1, ContactLookup.v1, the platform-shell composition) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/licence-search/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "513aad2d34e32d285362c0f362ac52ac779d68e8cc55410b96c79eb1af60db6a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11) admits this exact path — the POST /contacts/licence-search transport (beside the «Люди» pages, outside the app/api/contacts Contacts module, because it composes Contacts and Fleet through platform-shell) of the «Люди» search by an exact driving licence (ВУ): a same-origin JSON body, never the URL, answered no-store with the profiles Fleet masked for the caller's view and never the typed licence — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactReadAuthorityQuery.v1 through the platform-shell composition, fleet_operations.DriverProfilesByExactLicenceQuery.v1) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/LicenceSearchClient.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "b493f0fecfa5f1af722f2091ade61ef8077ab7eeef53b118f04cf3c352b537fb",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11) admits this exact path — the «Люди» ВУ search client that posts the typed licence to that transport and renders the masked answer, opening a person card only through each row's stored Contact link — with its APPLICATION_RUNTIME lifecycle, the finite legacy_gravity_runtime owner used by neighbouring root-level application routes, the gravity_runtime_remainder governed exclusion and this source hash as one indivisible assignment. It reads only through accepted public capabilities (contacts.ContactReadAuthorityQuery.v1 through the platform-shell composition, fleet_operations.DriverProfilesByExactLicenceQuery.v1) and performs no write; domain mutations remain constrained by the accepted public owner boundaries."
     },
     {
       "path": "gravity-mvp/src/app/compensation/referrals/page.tsx",
