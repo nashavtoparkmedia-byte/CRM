@@ -94,13 +94,27 @@ assert.deepEqual(
     [
         '/login', 'browser', 'app/login/page',
         'src/lib/users/user-service.ts#getLoginMode',
-        'src/lib/users/user-service.ts#getUsers',
+        'src/lib/users/user-service.ts#getSignInEmployees',
         'src/lib/users/user-service.ts#staffLogin',
         '/login/mobile', 'shell', 'app/login/mobile/page',
         'src/app/login/mobile/actions.ts#submitMobileLoginAction',
     ],
     'the session-less server actions must be exactly the reviewed sign-in actions',
 )
+// The session-less sign-in list carries no contact data: /login reads the minimal list, never the full registry.
+const loginPageSource = readFileSync(join(appRoot, 'src/app/login/page.tsx'), 'utf8')
+assert.match(loginPageSource, /getSignInEmployees\(\)/, '/login must list employees through getSignInEmployees')
+assert.doesNotMatch(loginPageSource, /\bgetUsers\b/, '/login must not call the full registry read session-less')
+const signInListSource = readFileSync(join(appRoot, 'src/lib/users/user-service.ts'), 'utf8')
+    .match(/export async function getSignInEmployees\(\)[\s\S]*?\n\}/)?.[0] ?? ''
+assert.match(signInListSource, /record\.status === 'Активен'/, 'the sign-in list must hold active employees only')
+assert.match(signInListSource, /\(\{ id, firstName, lastName, role \}\) => \(\{ id, firstName, lastName, role \}\)/, 'the sign-in list must carry id, name and role only')
+const sessionlessPins = [
+    ['app/login/page', 'src/lib/users/user-service.ts', 'getLoginMode'],
+    ['app/login/page', 'src/lib/users/user-service.ts', 'getSignInEmployees'],
+    ['app/login/page', 'src/lib/users/user-service.ts', 'staffLogin'],
+    ['app/login/mobile/page', 'src/app/login/mobile/actions.ts', 'submitMobileLoginAction'],
+]
 
 const nginxSource = readFileSync(join(repositoryRoot, 'deploy/nginx/templates/crm.conf.template'), 'utf8')
 const nginxDenials = nginxSource.match(/location\s+\^~\s+\/api\/debug-db\s*\{[\s\S]*?return\s+404\s*;/g) ?? []
@@ -166,6 +180,15 @@ const routingManifestPaths = [
 ].filter(existsSync)
 if (requireBuild) {
     assert.ok(routingManifestPaths.length > 0, 'Next middleware/proxy manifest is required after build')
+    // Availability: every session-less pin resolves in the build's own action manifest, on its page's worker.
+    const actionManifest = JSON.parse(readFileSync(join(appRoot, '.next/server/server-reference-manifest.json'), 'utf8')).node
+    for (const [worker, filename, exportedName] of sessionlessPins) {
+        const resolved = Object.values(actionManifest).filter((entry) => {
+            const onWorker = entry?.workers?.[worker]
+            return onWorker?.filename === filename && onWorker?.exportedName === exportedName
+        })
+        assert.equal(resolved.length, 1, `${filename}#${exportedName} must resolve once on ${worker} in the built action manifest`)
+    }
 }
 
 if (routingManifestPaths.length > 0) {

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -48,6 +48,7 @@ const { issueStaffSessionTokenV1 } = await import('@/modules/identity-access/int
 const { staffSessionCookieNameForRequestV1 } = await import('@/modules/identity-access/public/v1/staff-session')
 const { issueMobileSession, MOBILE_SESSION_COOKIE } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
 const { issueIntegrationAdminSession } = await import('@/modules/identity-access/public/v1/integration-admin-credentials')
+const userService = await import('@/lib/users/user-service')
 
 const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
 const MANAGER = { id: 'u1', firstName: 'Мария', lastName: 'Иванова', role: 'Менеджер', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' }
@@ -61,6 +62,10 @@ const NATIVE_UA = 'Dalvik/2.1.0 (Linux; U; Android 14)'
 const ID = {
     getLoginMode: `00${'a1'.repeat(20)}`,
     getUsers: `00${'a2'.repeat(20)}`,
+    getSignInEmployees: `00${'a6'.repeat(20)}`,
+    // Same export names, another file, on the sign-in page's worker.
+    shadowSignInEmployees: `00${'e1'.repeat(20)}`,
+    shadowStaffLogin: `60${'e2'.repeat(20)}`,
     staffLogin: `60${'a3'.repeat(20)}`,
     login: `40${'a4'.repeat(20)}`,
     queryCurrentUserV1: `40${'a5'.repeat(20)}`,
@@ -86,6 +91,9 @@ function manifestNode(): Record<string, { workers: Record<string, unknown>, laye
     return {
         [ID.getLoginMode]: action(USER_SERVICE, 'getLoginMode', [LOGIN_WORKER, MOBILE_WORKER, MESSAGES_WORKER]),
         [ID.getUsers]: action(USER_SERVICE, 'getUsers', [LOGIN_WORKER, MOBILE_WORKER, MESSAGES_WORKER]),
+        [ID.getSignInEmployees]: action(USER_SERVICE, 'getSignInEmployees', [LOGIN_WORKER]),
+        [ID.shadowSignInEmployees]: action('src/app/login/shadow-actions.ts', 'getSignInEmployees', [LOGIN_WORKER]),
+        [ID.shadowStaffLogin]: action('src/app/login/shadow-actions.ts', 'staffLogin', [LOGIN_WORKER]),
         [ID.staffLogin]: action(USER_SERVICE, 'staffLogin', [LOGIN_WORKER, MOBILE_WORKER]),
         [ID.login]: action(USER_SERVICE, 'login', [LOGIN_WORKER, MOBILE_WORKER]),
         [ID.queryCurrentUserV1]: action(IDENTITY_ACTIONS, 'queryCurrentUserV1', [LOGIN_WORKER, MOBILE_WORKER, MESSAGES_WORKER]),
@@ -235,8 +243,9 @@ describe('enforcement off: the browser lane is exactly as before', () => {
 describe('enforcement on: a browser request without a verified session is refused', () => {
     beforeEach(() => enforce())
 
-    test('a page read gets 303 to /login with a same-origin `next`', async () => {
-        expectLoginRedirect(await proxy(request('/messages?id=7')), '/messages?id=7')
+    test('a page read gets 303 to /login with a same-origin `next`: the path only, never the query', async () => {
+        expectLoginRedirect(await proxy(request('/messages?id=7')), '/messages')
+        expectLoginRedirect(await proxy(request('/contacts?q=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2%201234567890')), '/contacts')
         expectLoginRedirect(await proxy(request('/contacts/abc', { method: 'HEAD' })), '/contacts/abc')
         expectLoginRedirect(await proxy(request('/')), '/')
     })
@@ -265,6 +274,16 @@ describe('enforcement on: a browser request without a verified session is refuse
         await expectRefusedJson(await proxy(action('/login', ID.addUser)))
         // A pinned sign-in action posted to another page is refused there.
         await expectRefusedJson(await proxy(action('/messages', ID.staffLogin)))
+        // The full registry read is no sign-in action: it carries contact data.
+        await expectRefusedJson(await proxy(action('/login', ID.getUsers)))
+        // A pin is file#export: the same export name from another file is refused.
+        await expectRefusedJson(await proxy(action('/login', ID.shadowSignInEmployees)))
+        await expectRefusedJson(await proxy(action('/login', ID.shadowStaffLogin)))
+        // An action header is never a pass to a listed route: any Next-Action needs its pin.
+        for (const id of [ID.staffLogin, ID.getSignInEmployees, ID.sendMessage]) {
+            await expectRefusedJson(await proxy(action('/api/webhooks/bot', id)))
+            await expectRefusedJson(await proxy(action('/api/mobile/session/logout', id, { ua: NATIVE_UA })))
+        }
         // The mobile sign-in is pinned for its own page and the shell lane only.
         await expectRefusedJson(await proxy(action('/login', ID.submitMobileLoginAction)))
         await expectRefusedJson(await proxy(action('/login/mobile', ID.submitMobileLoginAction)))
@@ -282,7 +301,7 @@ describe('enforcement on: a browser request without a verified session is refuse
     })
 
     test('the pinned sign-in actions of /login pass, with no identity downstream', async () => {
-        for (const id of [ID.getLoginMode, ID.getUsers, ID.staffLogin]) {
+        for (const id of [ID.getLoginMode, ID.getSignInEmployees, ID.staffLogin]) {
             const req = action('/login', id, { cookies: { crm_user_id: 'u2', theme: 'dark' } })
             const response = await proxy(req)
             expectForwardedWithoutIdentity(response, req)
@@ -483,6 +502,31 @@ describe('enforcement on: a forged shell marker opens no more than the enforced 
     })
 })
 
+describe('the session-less sign-in list carries no contact data', () => {
+    test('getSignInEmployees: active employees only, id, name and role only', async () => {
+        writeFileSync(process.env.YOKO_USER_REGISTRY_FILE as string, JSON.stringify([
+            { ...MANAGER, email: 'maria.ivanova@example.test', phone: '+79990001122' },
+            { ...ADMIN, email: 'a.sidorov@example.test', phone: '+79990003344' },
+            { id: 'u9', firstName: 'Отключённый', lastName: 'Сотрудник', role: 'Менеджер', status: 'Отключен', createdAt: '2026-03-24T00:00:00Z', email: 'off@example.test', phone: '+79990005566' },
+        ], null, 2))
+        const list = await userService.getSignInEmployees()
+        expect(list).toEqual([
+            { id: 'u1', firstName: 'Мария', lastName: 'Иванова', role: 'Менеджер' },
+            { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор' },
+        ])
+        const bytes = JSON.stringify(list)
+        for (const forbidden of ['@', '+7999', '7999000', 'email', 'phone', 'status', 'createdAt', 'Активен', 'Отключ', 'u9', '2026-03-24']) {
+            expect(bytes, forbidden).not.toContain(forbidden)
+        }
+    })
+
+    test('the sign-in page asks for that list, not the full registry read', () => {
+        const page = readFileSync(path.join(__dirname, '../../app/login/page.tsx'), 'utf8')
+        expect(page).toContain('getSignInEmployees()')
+        expect(page).not.toMatch(/\bgetUsers\b/)
+    })
+})
+
 describe('the reviewed surface is pinned', () => {
     test('the session-less allowlist is exactly these exact paths, methods and reasons', () => {
         expect(ENFORCED_SESSIONLESS_ALLOWLIST.map(({ path, methods }) => ({ path, methods }))).toEqual([
@@ -513,7 +557,7 @@ describe('the reviewed surface is pinned', () => {
                 worker: 'app/login/page',
                 actions: [
                     'src/lib/users/user-service.ts#getLoginMode',
-                    'src/lib/users/user-service.ts#getUsers',
+                    'src/lib/users/user-service.ts#getSignInEmployees',
                     'src/lib/users/user-service.ts#staffLogin',
                 ],
             },

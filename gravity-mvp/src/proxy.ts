@@ -99,7 +99,7 @@ import {
  * only when the build's own manifest maps that id, for that page, to one of
  * SESSIONLESS_SERVER_ACTIONS. Everything else gets 401 JSON for the API, for
  * every server action and for any method but GET/HEAD; a page read gets a 303
- * to `/login`.
+ * to `/login` carrying only the path.
  */
 
 /** User-Agent fragment the Android shell appends to identify its lane. */
@@ -202,7 +202,7 @@ export const SESSIONLESS_SERVER_ACTIONS: Readonly<Record<string, { readonly lane
         worker: 'app/login/page',
         actions: [
             'src/lib/users/user-service.ts#getLoginMode',
-            'src/lib/users/user-service.ts#getUsers',
+            'src/lib/users/user-service.ts#getSignInEmployees',
             'src/lib/users/user-service.ts#staffLogin',
         ],
     },
@@ -252,9 +252,13 @@ function isApiPath(pathname: string): boolean {
     return pathname === '/api' || pathname.startsWith('/api/')
 }
 
-/** A same-origin path to come back to after sign-in, never another origin. */
+/**
+ * A same-origin path to come back to after sign-in, never another origin. The
+ * path only: a query string may carry search text, which must not travel into
+ * the Location header and the sign-in page's access log.
+ */
 function loginReturnTarget(request: NextRequest): string {
-    const target = `${request.nextUrl.pathname}${request.nextUrl.search}`
+    const target = request.nextUrl.pathname
     return target.startsWith('/') && !target.startsWith('//') && !target.includes('\\') ? target : '/'
 }
 

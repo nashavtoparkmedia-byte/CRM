@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getLoginMode, getUsers, login, staffLogin } from '@/lib/users/user-service'
+import { getLoginMode, getSignInEmployees, login, staffLogin } from '@/lib/users/user-service'
 import { LogIn } from 'lucide-react'
 
 type LoginMode = 'password' | 'legacy' | 'unavailable' | 'loading'
@@ -23,7 +23,7 @@ export default function LoginPage() {
     const [pending, setPending] = useState(false)
 
     useEffect(() => {
-        getUsers().then(setUsers)
+        getSignInEmployees().then(setUsers)
         getLoginMode().then(setMode)
     }, [])
 

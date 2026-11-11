@@ -75,12 +75,15 @@ assertCheck(
 )
 // The pin froze the legacy implementation during the CRM-ARCH-007 boundary
 // migration. Staff Session v1 (docs/design/staff-session-v1.md v1.3, Security
-// DESIGN PASS 9b688587) is the one reviewed change since: the registry path
+// DESIGN PASS 9b688587) was the first reviewed change since: the registry path
 // and atomic writes (D3), the strict user-management guard (D2, D4) and the
-// legacy-login refusal (N-D2). Any further edit needs its own reviewed re-pin.
+// legacy-login refusal (N-D2). The second is enforcement deny-by-default
+// (docs/design/staff-session-enforce-deny-v1.md, Security R1): the additive
+// getSignInEmployees, the minimal session-less sign-in list (active employees,
+// id, name and role only). Any further edit needs its own reviewed re-pin.
 assertCheck(
     'legacy Identity implementation is byte-identical',
-    sha256('gravity-mvp/src/lib/users/user-service.ts') === 'cb0a4931b5b6c5ed0a4ce8be21aedd0a7bc9446a0f8487316f5404b1aa431f48'
+    sha256('gravity-mvp/src/lib/users/user-service.ts') === 'de0029122f933c928aa0ad36aa6b84f760c7a694d701fc191257ec3c3adb33e5'
         && sha256('gravity-mvp/src/lib/users/auth-helpers.js') === 'c935ead6eaa8e19be1b71124c6bf6fbe7d6053d77173fc446171f1a21b4af95a',
     'protected auth implementation changed during boundary migration',
 )
