@@ -99,7 +99,7 @@ export {
     contactLookupCriteriaV1,
     contactLookupLimitV1,
 } from './contact-lookup'
-export type { ContactLookupItemV1, ContactLookupResultV1 } from './contact-lookup'
+export type { ContactLookupItemV1, ContactLookupRankClassV1, ContactLookupResultV1 } from './contact-lookup'
 // ContactCommunicationPermissionQuery.v1 is the only communication-policy
 // surface other contexts may reach. The mutation (setContactCommunicationPolicyV1,
 // its handler factory and its ports) is deliberately NOT exported here: it is a

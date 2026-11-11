@@ -223,6 +223,10 @@ function assertAdapterLocksBeforeJudging(source) {
   const purge = methodBody(source, 'purgeHeld')
   if (!/where: \{ id: \{ in: expired\.map\(row => row\.id\) \}, sentAt: \{ lt: input\.before \} \},/u.test(purge)) throw new Error('retention deletes a held row for anything but its own age')
   if (!/if \(input\.dryRun \|\| expired\.length === 0\) return expired\.length/u.test(purge)) throw new Error('retention dry run deletes')
+  // The selection is the command's batch: its own age cut-off, oldest first, bounded by the command's limit (1..1000).
+  if (!/prisma\.heldChannelMessage\.findMany\(\{\s*where: \{ sentAt: \{ lt: input\.before \} \},\s*orderBy: \[\{ sentAt: 'asc' \}, \{ id: 'asc' \}\],\s*take: input\.limit,\s*select: \{ id: true \},\s*\}\)/u.test(purge)) {
+    throw new Error('retention does not select one bounded, oldest-first batch of its own expired rows')
+  }
   if (!release.includes("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },")) {
     throw new Error('release: an event held for another proven identity may be released')
   }
@@ -241,6 +245,27 @@ function assertAdapterLocksBeforeJudging(source) {
   if (!/transaction\.domainOutboxEvent\.createMany\(/u.test(visible)) throw new Error('notification intent is not written in the transaction')
   if (!/\?\s*\{ delivery: newDeliveryEvidenceRecordV1\('provider_echo', 'echo', now\) \}/u.test(visible)) throw new Error('outbound echo evidence drift')
   if (!/status: outbound \? 'sent' : 'delivered'/u.test(visible)) throw new Error('an outbound echo may be marked delivered')
+
+  // A history projection (provider-history replay) changes only the side effects of a
+  // visible write: the Message is written exactly as for a live event, then the
+  // notification intent and the workflow projection are skipped. It never reaches the
+  // judgement, the key handling or the held store's release rule.
+  inOrder(visible, [
+    'await transaction.message.create(',
+    "if (event.projection !== 'live') return message.id",
+    'transaction.domainOutboxEvent.createMany(',
+    'ConversationWorkflowService.onGroupInboundMessage(',
+  ], 'history projection')
+  if ((visible.match(/\bprojection\b/gu) || []).length !== 1) throw new Error('a visible write branches on its projection more than once')
+  if (!/^\s*projection: input\.projection \?\? 'live',$/mu.test(functionBody(source, 'guardedEvent'))) throw new Error('an event without a projection is not live')
+  if (!release.includes("projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',")) {
+    throw new Error('a released event does not keep the projection it was held with')
+  }
+  if (!functionBody(source, 'writeHeld').includes("...(event.projection === 'history' ? { projection: 'history' } : {}),")) {
+    throw new Error('a held history event does not record its projection')
+  }
+  const judged = append.slice(0, append.indexOf('decideGuardedAppendV1(input.conversationKind, input.attribution, binding)'))
+  if (/\bprojection\b/u.test(judged)) throw new Error('the projection reaches the judgement or the key handling')
 }
 
 function assertAdapterWritesNoBinding(source) {
@@ -262,6 +287,7 @@ function assertPurePolicy(source) {
   if (specifiers.length !== 1 || specifiers[0] !== '../../../../contracts/messaging/v1') throw new Error('policy imports drift')
   if (!/^import type \{/mu.test(source)) throw new Error('policy imports values')
   if (/\bawait\b|\bprisma\b|\bfetch\(|process\.env/u.test(source)) throw new Error('policy performs IO')
+  if (/\bprojection\b/u.test(source)) throw new Error('the judgement depends on the projection')
   // (d) a proof that equals a binding R-22 proves is another person's never shows an event.
   if (!source.includes('if (!binding.contradicted && binding.contactId === attribution.contactId && binding.contactIdentityId === attribution.contactIdentityId) {')) {
     throw new Error('policy shows a proven sender in a contradicted binding')
@@ -405,6 +431,9 @@ rejectProbe(migrationSql, migrationSql.replace(/,\n\s*CONSTRAINT "HeldChannelMes
 rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },', 'where: { id: { in: expired.map(row => row.id) } },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('if (input.dryRun || expired.length === 0) return expired.length', 'if (expired.length === 0) return 0'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: 1000,\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("where: { sentAt: { lt: input.before } },\n      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n", "where: { sentAt: { lt: input.before } },\n"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
@@ -417,6 +446,15 @@ rejectProbe(adapterSource, adapterSource.replace(
 ), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('const winner = await recordedEvent(prisma, event)', 'const winner = null'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, transaction)', 'ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt)'), assertAdapterLocksBeforeJudging)
+// history projection
+rejectProbe(adapterSource, adapterSource.replace("  if (event.projection !== 'live') return message.id\n", ''), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("  if (event.projection !== 'live') return message.id\n", '').replace("  if (kind === 'group') {\n", "  if (event.projection !== 'live') return message.id\n  if (kind === 'group') {\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, binding)', "const decision = input.projection === 'history' ? ({ visible: true } as const) : decideGuardedAppendV1(input.conversationKind, input.attribution, binding)"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',", "projection: 'live',"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("        ...(event.projection === 'history' ? { projection: 'history' } : {}),\n      } as Prisma.InputJsonValue,", '      } as Prisma.InputJsonValue,'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("projection: input.projection ?? 'live',", "projection: input.projection ?? 'history',"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('...(outbound ? { delivery: newDeliveryEvidenceRecordV1', "...(outbound && event.projection === 'live' ? { delivery: newDeliveryEvidenceRecordV1"), assertAdapterLocksBeforeJudging)
+rejectProbe(policySource, policySource.replace('export function decideGuardedAppendV1(', '// projection is ignored here\nexport function decideGuardedAppendV1('), assertPurePolicy)
 rejectProbe(adapterSource, adapterSource.replace("status: outbound ? 'sent' : 'delivered'", "status: 'delivered'"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `${adapterSource}\nawait prisma.heldChannelMessage.deleteMany({ where: {} })\n`, assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `import { resolveChannelContactV1 } from '@/modules/contacts/public/v1'\n${adapterSource}`, assertAdapterWritesNoBinding)

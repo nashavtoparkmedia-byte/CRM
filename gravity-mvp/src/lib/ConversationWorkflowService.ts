@@ -62,6 +62,9 @@ export class ConversationWorkflowService {
 
   /**
    * Called by ALL inbound handlers (TG, MAX, WA) after saving the message.
+   * The last inbound/outbound times only move forward: a released held event or an
+   * out-of-order delivery older than the conversation's last one leaves them as they
+   * are (GREATEST ignores the NULL of a conversation's first event).
    */
   static async onInboundMessage(chatId: string, sentAt: Date, db: ConversationWorkflowClient = prisma): Promise<void> {
     const rows = await db.$queryRaw<Array<{ status: string }>>`
@@ -79,7 +82,7 @@ export class ConversationWorkflowService {
       `UPDATE "Chat"
        SET "unreadCount" = "unreadCount" + 1,
            "requiresResponse" = true,
-           "lastInboundAt" = $1,
+           "lastInboundAt" = GREATEST("lastInboundAt", $1),
            status = $2,
            "updatedAt" = NOW()
        WHERE id = $3`,
@@ -98,7 +101,7 @@ export class ConversationWorkflowService {
     await db.$executeRawUnsafe(
       `UPDATE "Chat"
        SET "unreadCount" = "unreadCount" + 1,
-           "lastInboundAt" = $1,
+           "lastInboundAt" = GREATEST("lastInboundAt", $1),
            "updatedAt" = NOW()
        WHERE id = $2`,
       sentAt,
@@ -127,7 +130,7 @@ export class ConversationWorkflowService {
     await db.$executeRawUnsafe(
       `UPDATE "Chat"
        SET "requiresResponse" = false,
-           "lastOutboundAt" = $1,
+           "lastOutboundAt" = GREATEST("lastOutboundAt", $1),
            status = $2,
            "updatedAt" = NOW()
        WHERE id = $3`,

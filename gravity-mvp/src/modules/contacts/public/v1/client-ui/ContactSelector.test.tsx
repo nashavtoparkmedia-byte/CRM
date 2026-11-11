@@ -144,6 +144,25 @@ describe('ContactSelector states', () => {
     expect(screen.getByTestId('contact-selector-status').textContent).toBe('Найдено контактов: 3')
   })
 
+  it('says when not every typed word matched, and nothing for any other class', async () => {
+    const { lookup, calls } = controlledLookup()
+    render(<Harness lookup={lookup} />)
+    type('Сидоров Пётр Ильич')
+    await flushDebounce()
+    calls[0].resolve(result([
+      { ...PETR, match: 'name_all_words' },
+      { ...ANNA, match: 'name_all_but_one_word' },
+      IVAN,
+    ]))
+    await settle()
+    expect(options().map(option => option.textContent)).toEqual([
+      'Пётр СидоровMAX',
+      'Анна СмирноваСовпали не все слова',
+      'Иван Петров · +7 900 123-45-67Telegram · WhatsApp',
+    ])
+    expect(screen.getAllByTestId('contact-selector-partial')).toHaveLength(1)
+  })
+
   it('shows the empty state only after a valid query completed with no items', async () => {
     const { lookup, calls } = controlledLookup()
     render(<Harness lookup={lookup} />)
