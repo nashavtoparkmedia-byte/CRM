@@ -4421,6 +4421,64 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "messaging-live-acceptance-recipient-guard-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MESSAGING_SHARED_RELIABILITY_LIVE_GUARD_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_LIVE_INTEGRATION_ACCEPTANCE_STAGE1_DECISION_A_SHARED_GUARD_GO_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. It changes no assignment; its only source fingerprint moves are the three mechanical rebinds below."
+      },
+      "reason": "Records the four tracked executable surfaces added on top of main fa3c07e5 by the shared live-acceptance recipient guard (Owner mandate LIVE INTEGRATION ACCEPTANCE of 2026-11-11, Orchestrator Stage-1 decision (a), Security ruling D1), the public health status fix (an activation blocker of the central enforce-deny proxy #227) and the media send status fix (release-blocking under the Owner's correct-statuses goal): 2,842 + 4 = 2,846 surfaces, context-owned 1,578 -> 1,580, governed exclusions 1,264 -> 1,266. The test-environment-only guard gravity-mvp/src/modules/messaging/public/v1/live-acceptance-recipient-guard.ts and its test are owned through the messaging context manifest owned_paths; the shared conformance vectors next to them are data, not an executable surface. The two route tests gravity-mvp/src/app/api/health/public-health-routes.test.ts and gravity-mvp/src/app/api/messages/send-media/send-media-status.test.ts fall under an existing governed exclusion pattern and need no exact assignment. The two health routes and the media send route are already assigned exact-inventory surfaces whose bytes change, so their source fingerprints are rebound mechanically. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2846,
+        "tracked_inventory_sha256": "e99164ce41c6241a1f29f7a83a8c0e0eaabd35d428d62094f148bc46b638574b",
+        "coverage_sha256": "31b68abc55747404f2abf4099ebf5ba1573eebfdfed8e7f437c181d2689fbbce"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/health/route.ts",
+          "previous_source_sha256": "805750cb98def8f1fe6d9934ed340b794068ba3a4052ed0ae41b1ff5b15d4843",
+          "current_source_sha256": "3627ace334ad4f12b7e39fa4598f8f5e8ec1efa60473893ad48bf841a833e600",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This change makes the ungated public health route return only its aggregated status, the stable degradation reason codes and the time, with no connection id, error text or counts (an activation blocker of the central enforce-deny proxy #227). It changes only the bytes of this already assigned runtime surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves to the reviewed bytes."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/messages/send-media/route.ts",
+          "previous_source_sha256": "72eb7fbd557af32b708f7b8355f833158d19af19caecb6c5effc800c73e6b628",
+          "current_source_sha256": "c80c679513a0057d810568f54ced9e548a3060d6b432512ea7fde64409490441",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This change makes the media send store its honest initial delivery state, 'sent' with the S2 evidence the send proved (provider_ack with a provider message id, client_action without), instead of 'delivered' with no receipt; it also stores an empty provider id as null (release-blocking under the Owner's correct-statuses goal). It changes only the bytes of this already assigned runtime surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves to the reviewed bytes."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/transport/health/route.ts",
+          "previous_source_sha256": "19eea1c5422fae1750a5091455d25cc1bab8afd262901f9710f44bcd9d3f7e61",
+          "current_source_sha256": "cf3f44ba013e9867e90277e499d01b2ba22aa198727c6097af918807cdc89354",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "This change makes the ungated public transport health route return only an aggregated status and per-channel ready/total counts, and a code instead of the error text on failure (no connection id, instance id or provider error), for the central enforce-deny proxy #227. It changes only the bytes of this already assigned runtime surface. Its lifecycle, functional owner, governed exclusion, inventory kind, review decision and reviewed rationale are carried forward unchanged; only the exact source fingerprint moves to the reviewed bytes."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
