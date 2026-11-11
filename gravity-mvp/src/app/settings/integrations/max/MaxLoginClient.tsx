@@ -304,7 +304,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
                     <TabsContent value="personal" className="space-y-[4px]">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты (1)</h2>
+                            <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты ({isPersonalLoggedIn ? 1 : 0})</h2>
                             {!isScraperOnline && (
                                 <span className="flex items-center gap-1.5 text-xs font-medium text-destructive">
                                     <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Скрейпер не запущен
