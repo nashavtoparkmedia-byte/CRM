@@ -42,7 +42,8 @@ describe('POST /api/monitoring/fleet-check/callback', () => {
 
   it('answers 401 and reads nothing without the right secret', async () => {
     process.env.FLEET_CHECK_CALLBACK_SECRET = SECRET
-    for (const headers of [{}, { 'x-fleet-check-secret': '' }, { 'x-fleet-check-secret': `${SECRET}x` }, { authorization: `Bearer ${SECRET}` }]) {
+    const cases: Array<Record<string, string>> = [{}, { 'x-fleet-check-secret': '' }, { 'x-fleet-check-secret': `${SECRET}x` }, { authorization: `Bearer ${SECRET}` }]
+    for (const headers of cases) {
       const response = await POST(request(headers))
       expect(response.status).toBe(401)
       expect(await response.json()).toEqual({ error: 'unauthorized' })
