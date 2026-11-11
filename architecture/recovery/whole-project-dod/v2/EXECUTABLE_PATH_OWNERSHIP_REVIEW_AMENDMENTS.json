@@ -4349,6 +4349,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-live-acceptance-recipient-guard-main-c1a32dd5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_LIVE_ACCEPTANCE_GUARD_EXECUTOR_REVIEW_C1A32DD5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_LIVE_INTEGRATION_ACCEPTANCE_PR_MAX_LIVE_1_GO_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at c1a32dd5, whose tail is contact-identity-lookup-search-normalization-main-f8a36b9f-20261111, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
+      },
+      "reason": "Records the two tracked executable surfaces the MAX live-acceptance recipient guard (PR-MAX-LIVE-1, the test-only, env-gated allowlist and send cap of the live provider acceptance, Owner mandate 2026-11-11 with Security rulings D1/D2) adds on top of main c1a32dd5: 2,841 + 2 = 2,843 surfaces, context-owned 1,578 -> 1,580, governed exclusions unchanged at 1,263. The new paths are the guard, max-web-scraper/lib/LiveAcceptanceGuard.js, and its test, max-web-scraper/test/max-live-acceptance-guard.test.js, both owned by max_channel through its context manifest owned_paths. The shared conformance vectors it carries under max-web-scraper/test/fixtures are data, not an executable surface. Every changed path (the scraper entry point, its transport interceptor and two source-contract tests) is context-owned through the same manifest and needs no exact assignment; no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate 6d9bfb53, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main c1a32dd5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2841,
+        "tracked_inventory_sha256": "790bf0b4053fa333cc6472036b14bcd70b48f5338581dbc5ffc6e1eed8e1c303",
+        "coverage_sha256": "f82a1ef30cf4e646ce72d3066870156fafde61de00a16f587d256e7abcf99c66"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2843,
+        "tracked_inventory_sha256": "bfcccbdaa750a4c904d951a62c487df57f96aa8d9b615d1d31fb0279ab536371",
+        "coverage_sha256": "e3356fc2f799e0d8868be0bfa660c6217cbe066b8c8433734b9b4637108c157e"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
