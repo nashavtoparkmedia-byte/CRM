@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "ca6d921c3b53398baa1c8ef951588d32e6776891e9a47c0d2749cb3f0039c109"
+      "sha256": "abb2b453b295febc06b7644889bd133c3387b7711977ae9a6d4a29479621d4da"
     },
     {
       "context": "edge_delivery",
@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "ca98fcb95074abedf2bcea248149e937d0806e96a4c08fb7bfb5b0062bf054b5"
+      "sha256": "afd1b3fd4337a8694d20e8ada3c86690d7d0e081cfca35af9f6e5dd4daa80334"
     },
     {
       "context": "identity_access",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "46fdaf901240b596f0096ee79e09da6c5c3fefadf7a18f87d5ce0d6b2d8b7391"
+      "sha256": "f3e1d7f7652f984face501816d9104ab86c708623ddd46def1893c87c03ffe85"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "17443fcf9b27d95213723e041dd9b68ad0078d33a59960e642f8b80e6b7cecc3"
+      "sha256": "b47ab3bb22bfc0df6aaf8aeda74c0e8b42bdb2c781b0a9dc5d969ee5bb462d20"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "ba688dc99090465ef2ea025c4a745a97a731bff5129369a3616b734af95fb4d8"
+      "sha256": "55b955907b6de74d87fa72e02bd310f147cee569711693845f829e517eb64d05"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
