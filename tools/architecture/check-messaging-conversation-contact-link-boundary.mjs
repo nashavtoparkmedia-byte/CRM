@@ -68,10 +68,15 @@ const consumerModel = new Map([
     // runs only after the provider event is already durable.
     placements: ['try/try/function:POST'],
   }],
-  ['gravity-mvp/src/app/tg-actions.ts', {
+  // R-21 adoption: the Telegram MTProto admission moved out of the 'use server'
+  // lane into its server-only ingress composition, which derives the guarded
+  // append's attribution from this link. A refusal there is caught only to be
+  // classified (held durably when the conversation is somebody else's), so the
+  // call sits in one try block; the call itself is unchanged.
+  ['gravity-mvp/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts', {
     count: 1,
     chatIds: ['chat.id'],
-    placements: ['function:admitTelegramPrivateConversation'],
+    placements: ['try/function:admitTelegramPrivateConversation'],
   }],
   ['gravity-mvp/src/app/api/webhooks/max/route.ts', {
     count: 1,
@@ -376,16 +381,20 @@ const acceptsRetiredConsumerModel = overrides => {
   try { assertRetiredConsumerModel(overrides); return true } catch { return false }
 }
 
-function assertTelegramAdmissionModel(source) {
-  const file = 'gravity-mvp/src/app/tg-actions.ts'
+const telegramIngressFile = 'gravity-mvp/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts'
+const telegramLaneFile = 'gravity-mvp/src/app/tg-actions.ts'
+function assertTelegramAdmissionModel(source, laneSource) {
+  const file = telegramIngressFile
   const ast = parse(file, source)
+  const laneAst = parse(telegramLaneFile, laneSource)
+  if (identifierCalls(laneAst, 'ensureConversationContactLinkV1').length !== 0) throw new Error('Telegram lane links outside its admission')
   const phases = ast.statements.filter(statement => (
     ts.isTypeAliasDeclaration(statement) && statement.name.text === 'TelegramPrivateIngressPhase'
   ))
   const admissions = ast.statements.filter(statement => (
     ts.isFunctionDeclaration(statement) && statement.name?.text === 'admitTelegramPrivateConversation'
   ))
-  if (phases.length !== 1 || normalize(phases[0].type.getText(ast)) !== "'inbound'|'mirror'|'import'"
+  if (phases.length !== 1 || normalize(phases[0].type.getText(ast)) !== "'inbound'|'mirror'|'catch-up'|'import'"
     || admissions.length !== 1 || !admissions[0].body
     || !admissions[0].modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
     throw new Error('Telegram admission helper')
@@ -394,36 +403,35 @@ function assertTelegramAdmissionModel(source) {
   if (linkCalls.length !== 1 || !ts.isAwaitExpression(linkCalls[0].parent)
     || !ts.isExpressionStatement(linkCalls[0].parent.parent)
     || syntacticallyDead(linkCalls[0])
-    || callPlacement(linkCalls[0]) !== 'function:admitTelegramPrivateConversation') {
+    || callPlacement(linkCalls[0]) !== 'try/function:admitTelegramPrivateConversation') {
     throw new Error('Telegram link ownership')
   }
   let owner = linkCalls[0].parent
   while (owner && !ts.isFunctionDeclaration(owner)) owner = owner.parent
   if (owner !== admissions[0]) throw new Error('Telegram link escaped admission helper')
-  const calls = identifierCalls(ast, 'admitTelegramPrivateConversation')
+  // The admission no longer moves the conversation order: only an appended event does.
+  const calls = identifierCalls(laneAst, 'admitTelegramPrivateConversation')
   const expectedCalls = [
     {
-      binding: 'unifiedChat',
+      binding: 'admission',
       placement: 'if/function:processInboundTelegramMessage',
       phase: 'phase',
       peerId: 'senderId',
       providerAccountId: 'providerAccountId',
       connectionId: 'connectionId',
       displayName: 'senderName',
-      lastMessageAt: 'now',
     },
     {
-      binding: 'chat',
+      binding: 'admission',
       placement: 'function:processOutboundMirrorMessage',
       phase: "'mirror'",
       peerId: 'recipientId',
       providerAccountId: 'providerAccountId',
       connectionId: 'connectionId',
       displayName: 'recipientName',
-      lastMessageAt: 'sentAt',
     },
     {
-      binding: 'unifiedChat',
+      binding: 'admission',
       placement: 'try/for-of/try/function:importTelegramHistory',
       phase: "'import'",
       peerId: 'peerId',
@@ -432,6 +440,24 @@ function assertTelegramAdmissionModel(source) {
       displayName: 'providerDisplayName',
     },
   ]
+  // Only importTelegramHistory admits 'import' (the history projection): the live
+  // processor's own phase can be 'inbound' or 'catch-up', never 'import'.
+  const inboundProcessors = laneAst.statements.filter(statement => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === 'processInboundTelegramMessage'
+  ))
+  const phaseParameter = inboundProcessors[0]?.parameters.find(parameter => ts.isIdentifier(parameter.name) && parameter.name.text === 'phase')
+  if (inboundProcessors.length !== 1 || !phaseParameter?.type
+    || normalize(phaseParameter.type.getText(laneAst)) !== "'inbound'|'catch-up'"
+    || phaseParameter.initializer?.getText(laneAst) !== "'inbound'") {
+    throw new Error('Telegram live processor phase')
+  }
+  // The lane calls exactly the ingress composition's admission, never a local copy.
+  const admissionImports = namedImports(laneAst).filter(binding => binding.imported === 'admitTelegramPrivateConversation')
+  if (admissionImports.length !== 1 || admissionImports[0].specifier !== '@/modules/telegram-channel/application/mtproto-guarded-ingress'
+    || admissionImports[0].local !== 'admitTelegramPrivateConversation' || admissionImports[0].typeOnly
+    || laneAst.statements.some(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'admitTelegramPrivateConversation')) {
+    throw new Error('Telegram lane admission binding')
+  }
   if (calls.length !== expectedCalls.length) throw new Error('Telegram admission caller denominator')
   for (let index = 0; index < calls.length; index += 1) {
     const call = calls[index]
@@ -443,13 +469,13 @@ function assertTelegramAdmissionModel(source) {
       || !ts.isIdentifier(declaration.name) || declaration.name.text !== binding
       || callPlacement(call) !== placement
       || call.arguments.length !== 1 || !ts.isObjectLiteralExpression(call.arguments[0])
-      || JSON.stringify(objectValues(call.arguments[0], ast)) !== JSON.stringify(expectedValues)) {
+      || JSON.stringify(objectValues(call.arguments[0], laneAst)) !== JSON.stringify(expectedValues)) {
       throw new Error(`Telegram admission caller ${index + 1}`)
     }
   }
 }
-const acceptsTelegramAdmissionModel = source => {
-  try { assertTelegramAdmissionModel(source); return true } catch { return false }
+const acceptsTelegramAdmissionModel = (source, laneSource) => {
+  try { assertTelegramAdmissionModel(source, laneSource); return true } catch { return false }
 }
 
 function assertCompositionModel(publicSource, applicationSource) {
@@ -921,7 +947,7 @@ check(
 )
 check(
   'the sole Telegram link remains inside one admission helper reached by inbound mirror and import flows',
-  accepts(() => assertTelegramAdmissionModel(sources.get('gravity-mvp/src/app/tg-actions.ts'))),
+  accepts(() => assertTelegramAdmissionModel(sources.get(telegramIngressFile), sources.get(telegramLaneFile))),
   'Telegram admission phase, caller mapping or shared link ownership drift',
 )
 const rewriteCallStatement = (file, source, callee, target, rewrite) => {
@@ -976,29 +1002,37 @@ const retiredConsumerProbes = [
   new Map([['gravity-mvp/src/app/api/webhook/max/route.ts',
     sources.get('gravity-mvp/src/app/api/webhook/max/route.ts').replace('status: 410', 'status: 200')]]),
 ]
-const telegramSource = sources.get('gravity-mvp/src/app/tg-actions.ts')
+const telegramSource = sources.get(telegramIngressFile)
+const telegramLaneSource = sources.get(telegramLaneFile)
+// Each probe is [ingress, lane]; every one must be refused.
 const telegramAdmissionProbes = [0, 1, 2].map(target => {
   let index = 0
-  return telegramSource.replaceAll('await admitTelegramPrivateConversation({', match => {
+  return [telegramSource, telegramLaneSource.replaceAll('await admitTelegramPrivateConversation({', match => {
     const replacement = index === target ? 'await removedTelegramPrivateConversation({' : match
     index += 1
     return replacement
-  })
+  })]
 })
-telegramAdmissionProbes.push(rewriteCallStatement(
-  'gravity-mvp/src/app/tg-actions.ts',
+telegramAdmissionProbes.push([rewriteCallStatement(
+  telegramIngressFile,
   telegramSource,
   'ensureConversationContactLinkV1',
   0,
   statement => `return chat\n${statement}`,
-))
-telegramAdmissionProbes.push(rewriteCallStatement(
-  'gravity-mvp/src/app/tg-actions.ts',
+), telegramLaneSource])
+telegramAdmissionProbes.push([rewriteCallStatement(
+  telegramIngressFile,
   telegramSource,
   'ensureConversationContactLinkV1',
   0,
   statement => `if (true) { return chat }\n${statement}`,
-))
+), telegramLaneSource])
+// The lane may neither link for itself nor call a local copy of the admission.
+telegramAdmissionProbes.push([telegramSource, `${telegramLaneSource}\nvoid ensureConversationContactLinkV1({})\n`])
+telegramAdmissionProbes.push([telegramSource, `${telegramLaneSource}\nasync function admitTelegramPrivateConversation(input: unknown) { return input }\n`])
+// The live processor may never reach the history projection.
+telegramAdmissionProbes.push([telegramSource, telegramLaneSource.replace("    phase: 'inbound' | 'catch-up' = 'inbound',", "    phase: 'inbound' | 'catch-up' | 'import' = 'inbound',")])
+telegramAdmissionProbes.push([telegramSource, telegramLaneSource.replace("    phase: 'inbound' | 'catch-up' = 'inbound',", "    phase: TelegramPrivateIngressPhase = 'inbound',")])
 const adapterProbes = [
   adapter.replace(
     'CAST(${CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1} AS integer)',
@@ -1030,12 +1064,12 @@ check(
     acceptsAdapterModel(adapter) &&
     acceptsRetiredConsumerModel() &&
     acceptsConsumerModel() &&
-    acceptsTelegramAdmissionModel(telegramSource) &&
+    acceptsTelegramAdmissionModel(telegramSource, telegramLaneSource) &&
     !acceptsCompositionModel(directFacadeBindingProbe, application) &&
     adapterProbes.every(probe => !acceptsAdapterModel(probe)) &&
     retiredConsumerProbes.every(probe => !acceptsRetiredConsumerModel(probe)) &&
     consumerProbes.every(probe => !acceptsConsumerModel(probe)) &&
-    telegramAdmissionProbes.every(probe => !acceptsTelegramAdmissionModel(probe)),
+    telegramAdmissionProbes.every(([ingress, lane]) => !acceptsTelegramAdmissionModel(ingress, lane)),
   'a fail-open adapter, restored legacy route, facade bypass or denominator drift was accepted',
 )
 check(

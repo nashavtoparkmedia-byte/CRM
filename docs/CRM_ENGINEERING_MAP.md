@@ -265,8 +265,8 @@ Each entry lists what the code actually does.
   under a fresh proof and counted by `heldChannelMessagesV1`; see I-66, I-67.
   The guarded write capabilities are reachable only from server-side callers
   (I-70); a release scrubs the held row and the held store expires after 365
-  days (I-71). Not yet wired into the Telegram bot webhook (Telegram Incident,
-  T3).
+  days (I-71). Adopted by the Telegram MTProto lane (I-72); not yet wired into
+  the Telegram bot webhook (T3).
 - **Delivery-truth extension points (S2)**: a channel adapter answers a text send
   with `TextDeliveryResultV1` (`provider_ack` / `provider_echo` / `client_action`,
   `channel-delivery-runtime.ts`) or throws `channelDeliveryErrorV1(…,
@@ -809,16 +809,20 @@ Fleet sync: reconciler adapter → `runDriverClusterContactOwnershipV1`.
 `G/instrumentation.ts` → `initializeOperationalTelegramRuntimeV1` →
 `initTelegramListeners` (`G/app/tg-actions.ts`) → `NewMessage` handler →
 exact service-peer guard (I-50) → `processInboundTelegramMessage` →
-`admitTelegramPrivateConversation` (`upsertChannelConversationV1`,
-`externalChatId = telegram:<peerId>`) → F-01 → exact-key-first dedupe
-(`findStoredTelegramMessage`, I-52) → `createChannelMessageV1`
-(`externalId = telegram:<account>:<peer>:<msgId>`) → `attachMessageMediaV1` →
-`channelConversationWorkflowV1.onInboundMessage` → `publishPersistedMessageV1`.
-An admission that cannot prove attribution is classified by the caller and the
-event is held (I-51). Mirror, catch-up and history import follow the same
-admission and dedupe; catch-up and import isolate each message and dialog
-(I-53). An own outbound message is then delivery evidence, and read markers
-arrive as `UpdateReadHistoryOutbox` (F-33).
+`admitTelegramPrivateConversation` (server-only
+`G/modules/telegram-channel/application/mtproto-guarded-ingress.ts`:
+`upsertChannelConversationV1`, `externalChatId = telegram:<peerId>`, F-01, and
+the release of held events under this admission's proof) → exact-key-first
+dedupe (`findStoredTelegramMessage`, I-52) → the admission's `append`, i.e.
+`appendGuardedChannelMessageV1` (`externalId = telegram:<account>:<peer>:<msgId>`;
+the message, its workflow projection and notification intent in one
+transaction, or a durable hold) → on `appended` only: `attachMessageMediaV1`,
+`lastMessageAt`, `publishPersistedMessageV1` (I-72). An admission that cannot
+prove attribution is classified by the caller and the event is held (I-51).
+Mirror, catch-up and history import follow the same admission, dedupe and
+guard (import with the `history` projection); catch-up and import isolate each
+message and dialog (I-53). An own outbound message is then delivery evidence,
+and read markers arrive as `UpdateReadHistoryOutbox` (F-33).
 
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
@@ -1540,8 +1544,9 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `conversation-binding-audit-handler.ts` — same tests and control.
 - **I-70 The guarded write capabilities are reachable only from server-side
   callers.** `appendGuardedChannelMessageV1` and `releaseHeldChannelMessagesV1`
-  are referenced only by their handler, the Messaging composition and the public
-  facade; no file under `G/app/` and no `'use server'` module may reference them,
+  are referenced only by their handler, the Messaging composition, the public
+  facade and the reviewed ingress consumer `mtproto-guarded-ingress.ts` (I-72);
+  no file under `G/app/` and no `'use server'` module may reference them,
   so no HTTP route, server action or operator API can hand the guard a
   client-supplied `attribution`. The proof is the caller's server-side Contacts
   outcome for the conversation's peer (the sender of an inbound event, the
@@ -1555,6 +1560,31 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   allowlist by name with its review. — `check-messaging-guarded-append-boundary.mjs`
   (static caller allowlist), `guarded-channel-message-commands.ts` (contract
   wording).
+- **I-72 A Telegram MTProto event becomes a message only through the guarded
+  append, under its own admission's proof.** `admitTelegramPrivateConversation`
+  (server-only `mtproto-guarded-ingress.ts`, no `'use server'`, outside
+  `G/app/`) resolves the peer with Contacts and ensures the conversation link in
+  one admission; `proven` is exactly that identity, and the proof never crosses
+  the module (it exports nothing that takes an attribution or a contact/identity
+  id). A link refusal (`DRIVER`/`OWNERSHIP`/`IDENTITY_LINK_MISMATCH`) in a
+  conversation that carries a person binding is `unproven` and held durably; in
+  a conversation bound to nobody, a contradictory Contacts answer, and a
+  `*_STALE` refusal keep the pre-append HOLD (I-51). An own message carries the
+  recipient's proof. The projection follows the admission phase, never the
+  event: live inbound, the phone mirror and catch-up are `live` (the mirror runs
+  the outbound projection, so a phone reply reopens a resolved conversation);
+  only an `import` admission (history import) is `history` (no workflow, no
+  notification intent). Media, `lastMessageAt` and the realtime/AI publication follow
+  `appended` only; a visible `duplicate` gets missing media, a held one nothing.
+  After a proven admission held events are counted, then released once with
+  that admission's fresh proof (never a read-back of the binding); a release is
+  best effort, its events come back as duplicates and are never published or
+  answered by AI. Guard refusals cross as one bounded code: `CONTENDED` is
+  `held_transient`, `CONVERSATION_*` `rejected`, a contract refusal `failed`. —
+  `mtproto-guarded-ingress.ts`, `tg-actions.ts` —
+  `tg-actions.identity.test.ts` (R-21 seam block),
+  `check-messaging-guarded-append-boundary.mjs` (ingress consumer),
+  `check-messaging-conversation-contact-link-boundary.mjs` (admission pin).
 - **I-71 A released held row keeps no content, and the held store expires.**
   A release writes the event into `Message` and leaves the `HeldChannelMessage`
   row with `content ''` and `metadata '{}'`; the database refuses a released row
@@ -1616,8 +1646,11 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   Admission's own pre-link writes (Chat upsert, contact resolution and its
   conflict records) are not undone. HOLD is not persistence and not loss
   prevention: the content stays with the provider and is recovered only if it is
-  fetched again. The admission helper, its single link call and its three call
-  sites are unchanged; classification happens in the callers. —
+  fetched again. Since the R-21 adoption (I-72) a link refusal in a conversation
+  that carries somebody else's binding is no longer a HOLD: the event reaches the
+  guard `unproven` and is held durably by Messaging. The admission helper (now in
+  `mtproto-guarded-ingress.ts`), its single link call and its three call sites in
+  `tg-actions.ts` are pinned; classification happens in the callers. —
   `classifyTelegramIngressFailure` — `tg-actions.identity.test.ts` (HOLD block),
   `check-messaging-conversation-contact-link-boundary.mjs` (placement pin).
 - **I-52 An MTProto event with a valid provider id is a duplicate only of its exact
@@ -1896,7 +1929,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-18 | Insecure compose defaults (`ESL_PASSWORD:-ClueCon`, `MANAGER_10x_PASSWORD:-changeme10x`); two env names for the ESL secret (`ESL_PASSWORD`, `FS_ESL_PASSWORD`) | compose; `EslClient.ts`, controlled-call adapter | HIGH |
 | R-19 | `getTasks` writes on read (flips overdue, recalculates attempts) | `G/app/tasks/actions.ts` ~L451–470 | MEDIUM |
 | R-20 | Many API routes perform no in-route auth (messages, chats assign, tasks reassign, max-scraper restart, import-jobs, whatsapp delete, fleet-check callback). Under a mobile session chats assign and the Fleet monitoring writes take the signed operator (I-62); the browser lane is unchanged | route files; `G/proxy.ts` passes the browser lane | MEDIUM as a count; follows from R-01 |
-| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-66, I-67: guarded append, durable hold, release, held count); the route does not use it yet (Telegram T3), and the body log is unchanged. The A1/A2 pre-adoption gates are in place (I-70 server-side callers only, I-71 scrubbed release and held-store retention) |
+| R-21 | Bot-lane inbound persists and runs workflow before enrichment (I-43), so a blocked attribution leaves the message in a Chat whose stale `driverId`/`contactId` merges it into another person's conversation and routes replies there; the same handler logs the whole webhook body | `G/app/api/webhook/telegram/route.ts` (persist before enrich; `[WEBHOOK-TG] Received` body log) | CRITICAL until a read-only count proves no cross-person merge. The Messaging part exists (I-66, I-67: guarded append, durable hold, release, held count); the MTProto lane writing into the same Chat uses it (I-72); the route does not use it yet (Telegram T3), and the body log is unchanged. The A1/A2 pre-adoption gates are in place (I-70 server-side callers only, I-71 scrubbed release and held-store retention) |
 | R-22 | Messages already stored in mismatched Telegram chats stay merged by `driverId` in the inbox, driver card routing, AI context and driver-selector workflow | `G/lib/MessageService.ts` `listConversations`; `G/app/api/messages/drivers/[id]/channels/route.ts`; `ContextBuilder.ts`; `ConversationWorkflowService.ts` | HIGH. Messaging read side closed for new reads (I-68, I-69): no driver merge in the inbox, contradicted bindings stand alone, workflow and AI context follow the same trust, read-only audit count. Stored bindings are not changed; `G/app/api/messages/drivers/[id]/channels/route.ts` is read only by the importer-less `Messenger.tsx` (C-16) and is left for its retirement |
 | R-23 | Historical Telegram `777000` content (login codes) may exist in `Chat`/`Message` rows and in container logs written before I-50 | data; log retention | HIGH (security incident) |
 | R-24 | The MTProto send path logs the whole GramJS error object, which can carry the outgoing request | `G/app/tg-actions.ts` `[TG-SEND] SEND ERROR`, `[TG-MEDIA] SEND ERROR` | MEDIUM |
