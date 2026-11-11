@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { isAuthorizedMaxScraperWebhookV1 as matchesScraperWebhookSecret } from '../../internal/scraper-webhook-auth'
+import { isAuthorizedMaxScraperWebhookV1 } from '../../internal/scraper-webhook-auth'
 
 /**
  * Admits a machine callback from the MAX scraper into a CRM route owned
@@ -9,5 +9,5 @@ import { isAuthorizedMaxScraperWebhookV1 as matchesScraperWebhookSecret } from '
  * secret, compared in constant time, refused when the secret is unset or blank.
  */
 export function isAuthorizedMaxScraperCallbackV1(request: Request): boolean {
-    return matchesScraperWebhookSecret(request)
+    return isAuthorizedMaxScraperWebhookV1(request)
 }
