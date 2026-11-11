@@ -9,8 +9,9 @@ import {
     createReplaceDriverTelegramLinkHandlerV1,
     createUpsertDriverTelegramLinkHandlerV1,
 } from '../public/v1/driver-telegram-handler'
-import { createReadDriverTelegramParkLinksHandlerV1 } from '../public/v1/driver-telegram-park-link-handler'
+import { createGetDriverTelegramLinkStoredStatusesHandlerV1, createReadDriverTelegramParkLinksHandlerV1 } from '../public/v1/driver-telegram-park-link-handler'
 import {
+    legacyPrismaDriverTelegramLinkStoredReadPortV1,
     legacyPrismaDriverTelegramParkLinkReadPortV1,
     legacyPrismaDriverTelegramPortV1,
 } from '../public/v1/legacy-prisma-driver-telegram-adapter'
@@ -43,6 +44,8 @@ export const deleteDriverTelegramLinkV1 = (...args: Parameters<typeof deleteDriv
 export const patchDriverTelegramLinkV1 = (...args: Parameters<typeof patchDriverTelegramLink>) => patchDriverTelegramLink(...args)
 export const upsertDriverTelegramLinkV1 = (...args: Parameters<typeof upsertDriverTelegramLink>) => upsertDriverTelegramLink(...args)
 export const readDriverTelegramParkLinksV1 = (...args: Parameters<typeof readDriverTelegramParkLinks>) => readDriverTelegramParkLinks(...args)
+/** DISPLAY-ONLY (telegram.BotLinkStatusQuery.v1): grants nothing; never an access decision. */
+export const getDriverTelegramLinkStoredStatusesV1 = createGetDriverTelegramLinkStoredStatusesHandlerV1(legacyPrismaDriverTelegramLinkStoredReadPortV1)
 export const saveManualDriverTelegramLinkV1 = (...args: Parameters<typeof saveManualDriverTelegramLink>) => saveManualDriverTelegramLink(...args)
 export const removeManualDriverTelegramLinkV1 = (...args: Parameters<typeof removeManualDriverTelegramLink>) => removeManualDriverTelegramLink(...args)
 export const notifyManualDriverTelegramLinkV1 = (...args: Parameters<typeof notifyManualDriverTelegramLink>) => notifyManualDriverTelegramLink(...args)
