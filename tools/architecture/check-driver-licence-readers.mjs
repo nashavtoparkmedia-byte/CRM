@@ -16,7 +16,10 @@
 //                    never rendered.
 //   command_input  — a command contract that carries the ВУ as an input.
 //   admin_only     — output reaches only an integration-admin surface; `gate`
-//                    names the guard and `gateFile` where it is (verified here).
+//                    names the guard and `gateFile` where it is. Verified here:
+//                    in a route file EVERY exported HTTP handler must call the
+//                    guard before its first data read (a guard in PATCH says
+//                    nothing about GET); a page or action module must call it.
 //                    `becomes: 'masked'` marks a D2 conduit that is admin-only
 //                    until its masking step lands (Cash's referral reads), when
 //                    it must move to `masked`.
@@ -136,6 +139,7 @@ const ADMIN_GATES = {
 
 const fleet = 'fleet_operations'
 const work = 'work_management'
+const contacts = 'contacts'
 const P = 'gravity-mvp/src/'
 
 /** The exact inventory. Keys are repository paths. */
@@ -143,7 +147,7 @@ export const LICENCE_READERS = {
   [`${P}app/api/bot-link/route.ts`]: { disposition: 'admin_only', gate: 'hasIntegrationAdminAccess' },
   [`${P}app/api/contacts/[id]/driver-person/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal' },
   [`${P}app/api/contacts/[id]/parks/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal' },
-  [`${P}app/api/contacts/[id]/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'Messages contact panel (licenseHistory); D2-L moves it to the reader authority and the mask' },
+  [`${P}app/api/contacts/[id]/route.ts`]: { disposition: 'd2l', owner: contacts, note: 'GET is ungated at app level (only PATCH is guarded): Messages contact panel with licenseHistory; its own PR gates GET with the read authority (Security 2026-11-12)' },
   [`${P}app/contacts/licence-search/route.ts`]: { disposition: 'masked', gateFile: `${P}modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.ts`, note: '«Люди» ВУ search transport (POST body); answers Fleet\'s masked profiles, never the typed licence' },
   [`${P}app/api/debug-db/list-all-chats/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'debug listing includes the chat\'s Driver row' },
   [`${P}app/api/monitoring/attention/route.ts`]: { disposition: 'd2l', owner: fleet },
@@ -162,9 +166,9 @@ export const LICENCE_READERS = {
   [`${P}app/contacts/page.tsx`]: { disposition: 'licence_term_only', note: 'names the ВУ search component; carries no number' },
   [`${P}app/drivers/actions.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/drivers/archive/ArchiveClient.tsx`]: { disposition: 'd2l', owner: fleet },
-  [`${P}app/messages/components/ContactEvidenceDetails.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/route.ts`, note: 'renders /api/contacts/[id]; D2-L' },
+  [`${P}app/messages/components/ContactEvidenceDetails.tsx`]: { disposition: 'd2l', owner: contacts, note: 'renders the ungated GET /api/contacts/[id] until its gate lands' },
   [`${P}app/messages/components/DriverPersonSearchModal.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/driver-person/route.ts`, note: 'renders /api/contacts/[id]/driver-person; D2-L' },
-  [`${P}app/messages/hooks/useContact.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/route.ts`, note: 'fetches /api/contacts/[id]; D2-L' },
+  [`${P}app/messages/hooks/useContact.ts`]: { disposition: 'd2l', owner: contacts, note: 'fetches the ungated GET /api/contacts/[id] until its gate lands' },
   [`${P}app/monitoring/MonitoringClient.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/monitoring/components/AllDriversSection.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/monitoring/components/AttentionSection.tsx`]: { disposition: 'd2l', owner: fleet },
@@ -231,6 +235,59 @@ export const LICENCE_READERS = {
   ['yandex-fleet-scraper/src/worker.ts']: { disposition: 'owner_internal', note: 'Fleet\'s scraper worker' },
 }
 
+const HTTP_HANDLER = /export\s+async\s+function\s+(GET|POST|PUT|PATCH|DELETE)\s*\(/gu
+/** The first data read of a handler; a guard must come before it. */
+const FIRST_READ = /prisma\.|\.json\(\)|searchParams|\$queryRaw|findUnique|findMany|findFirst/u
+
+/**
+ * Each exported HTTP handler of a route file with the body text that belongs to
+ * it: the parameter list is skipped by balanced parentheses, the body by
+ * balanced braces. Comments are stripped by the caller.
+ */
+export function routeHandlers(source) {
+  const handlers = []
+  for (const match of source.matchAll(HTTP_HANDLER)) {
+    let index = match.index + match[0].length
+    let depth = 1
+    while (index < source.length && depth > 0) {
+      if (source[index] === '(') depth += 1
+      else if (source[index] === ')') depth -= 1
+      index += 1
+    }
+    const open = source.indexOf('{', index)
+    if (open < 0) continue
+    let braces = 1
+    let end = open + 1
+    while (end < source.length && braces > 0) {
+      if (source[end] === '{') braces += 1
+      else if (source[end] === '}') braces -= 1
+      end += 1
+    }
+    handlers.push({ method: match[1], body: source.slice(open + 1, end - 1) })
+  }
+  return handlers
+}
+
+/**
+ * Whether a gate file guards every way in. A route file passes only when EACH
+ * exported HTTP handler calls the guard before its first data read (a guard in
+ * PATCH says nothing about GET); any other gate file (a page, a server-action
+ * module) must call the guard somewhere.
+ */
+export function gateViolations(gateSource, token) {
+  const source = stripComments(gateSource)
+  const handlers = routeHandlers(source)
+  if (handlers.length === 0) return source.includes(token) ? [] : ['the guard is gone']
+  const violations = []
+  for (const handler of handlers) {
+    const guard = handler.body.indexOf(token)
+    const read = handler.body.search(FIRST_READ)
+    if (guard < 0) violations.push(`the guard is missing in ${handler.method}`)
+    else if (read >= 0 && read < guard) violations.push(`${handler.method} reads data before the guard`)
+  }
+  return violations
+}
+
 const DISPOSITIONS = new Set(['owner_internal', 'evidence_key', 'command_input', 'admin_only', 'masked', 'd2l', 'view_decision', 'type_only', 'licence_term_only'])
 
 /** Every tracked non-test code file under the source roots that names a ВУ carrier. */
@@ -257,7 +314,7 @@ export function licenceReaderViolations(inventory, discovered, readFile) {
       const token = ADMIN_GATES[entry.gate]
       const gateFile = entry.gateFile ?? file
       if (!token) violations.push(`admin_only without a known gate: ${file}`)
-      else if (!readFile(gateFile).includes(token)) violations.push(`admin_only guard ${entry.gate} is gone from ${gateFile} (for ${file})`)
+      else for (const problem of gateViolations(readFile(gateFile), token)) violations.push(`admin_only guard ${entry.gate}: ${problem} in ${gateFile} (for ${file})`)
     }
     // A contract declares the masked field; its handler (gateFile) applies the mask.
     if (entry.disposition === 'masked' && found.has(file) && !readFile(entry.gateFile ?? file).includes('maskDriverLicenceV1')) {
@@ -284,7 +341,10 @@ function runNegativeProbes() {
     ['unlisted reader', { ...base, 'a/new.ts': 'row.externalPersonKey' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/new\.ts/u],
     ['vu person-key template', { ...base, 'a/key.ts': 'const k = `vu:${n}`' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/key\.ts/u],
     ['stale entry', base, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' }, 'a/gone.ts': { disposition: 'd2l', owner: 'x' } }, /stale inventory entry .*a\/gone\.ts/u],
-    ['guard removed', { ...base, 'a/gate.ts': 'nothing' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/gate.ts' } }, /guard getIntegrationAdminPrincipal is gone/u],
+    ['guard removed', { ...base, 'a/gate.ts': 'nothing' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/gate.ts' } }, /guard getIntegrationAdminPrincipal: the guard is gone/u],
+    ['guard only in PATCH, GET ungated', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': "export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) { const row = await prisma.contact.findUnique({ where: { id: '1' } }); return row }\nexport async function PATCH(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; return 1 }" }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, /the guard is missing in GET in a\/route\.ts/u],
+    ['guard after the first read', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': 'export async function GET(req: Request) { const rows = await prisma.driver.findMany({ select: { id: true } }); if (!await getIntegrationAdminPrincipal()) return null; return rows }' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, /GET reads data before the guard/u],
+    ['every handler guarded first', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': 'export async function GET(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; return await prisma.driver.findMany({ select: { id: true } }) }\nexport async function POST(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; const body = await req.json(); return body }' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, null],
     ['mask missing', base, { 'a/reader.ts': { disposition: 'masked' } }, /masked reader without maskDriverLicenceV1/u],
     ['logged carrier', { 'a/reader.ts': "console.error('x', row.normalizedVu)" }, { 'a/reader.ts': { disposition: 'owner_internal' } }, /log or error text prints a ВУ carrier/u],
     ['thrown carrier', { 'a/reader.ts': 'throw new Error(`bad ${driver.licenseNumber}`)' }, { 'a/reader.ts': { disposition: 'owner_internal' } }, /log or error text prints a ВУ carrier/u],
