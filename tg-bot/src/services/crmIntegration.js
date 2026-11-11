@@ -1,5 +1,8 @@
+const crypto = require('crypto');
+const fsp = require('fs/promises');
 const http = require('http');
 const https = require('https');
+const path = require('path');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
@@ -74,13 +77,132 @@ function isRetryableStatus(statusCode) {
     return typeof statusCode === 'number' && statusCode >= 500;
 }
 
+function positiveInteger(value, fallback) {
+    const parsed = Number.parseInt(String(value ?? ''), 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Bounds of the durable redelivery outbox (T3-O). Rows hold a person's message
+ * (PII at rest): each is deleted on a 2xx or terminal CRM answer, the table is
+ * capped, and anything older than the age limit is purged.
+ */
+function redeliveryLimits(environment = process.env) {
+    return Object.freeze({
+        maxRows: positiveInteger(environment.BOT_CRM_OUTBOX_MAX_ROWS, 5000),
+        maxAgeMs: positiveInteger(environment.BOT_CRM_OUTBOX_MAX_AGE_HOURS, 72) * 60 * 60 * 1000,
+        firstDelayMs: 30_000,
+        maxDelayMs: 15 * 60 * 1000,
+        batch: 20,
+    });
+}
+
+/** Backoff for the next redelivery attempt: 30 s doubling, capped at 15 min. */
+function redeliveryDelayMs(attempts, limits) {
+    return Math.min(limits.firstDelayMs * (2 ** Math.max(0, attempts)), limits.maxDelayMs);
+}
+
+/**
+ * The outbox: one file per kept event in a directory beside the bot's SQLite
+ * file (BOT_CRM_OUTBOX_DIR, default <dir of BOT_SQLITE_PATH>/crm-forward-outbox),
+ * so it shares that volume and its protection. The directory is 0700 and every
+ * file 0600, written atomically (temporary file, then rename). The name is the
+ * sha256 of the provider event id, which the CRM already de-duplicates, so a
+ * redelivery can never create a second message.
+ */
+function createFileCrmOutbox(directory, limits = redeliveryLimits()) {
+    const fileFor = (eventKey) => path.join(directory, `${crypto.createHash('sha256').update(String(eventKey)).digest('hex')}.json`);
+    let ready = null;
+    const ensure = () => {
+        ready = ready || fsp.mkdir(directory, { recursive: true, mode: 0o700 });
+        return ready;
+    };
+    const names = async () => (await fsp.readdir(directory)).filter(name => /^[0-9a-f]{64}\.json$/.test(name));
+    const readEntry = async (name) => {
+        try {
+            const entry = JSON.parse(await fsp.readFile(path.join(directory, name), 'utf8'));
+            return entry && typeof entry.eventKey === 'string' && typeof entry.body === 'string' ? entry : null;
+        } catch {
+            return null;
+        }
+    };
+    const write = async (entry) => {
+        const target = fileFor(entry.eventKey);
+        const temporary = `${target}.${process.pid}.tmp`;
+        await fsp.writeFile(temporary, JSON.stringify(entry), { mode: 0o600 });
+        await fsp.rename(temporary, target);
+    };
+    const unlink = async (file) => {
+        try { await fsp.unlink(file); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+    };
+    return Object.freeze({
+        limits,
+        async put(eventKey, body, now) {
+            await ensure();
+            if ((await names()).length >= limits.maxRows) return { stored: false, reason: 'full' };
+            try {
+                await fsp.access(fileFor(eventKey));
+                return { stored: true, duplicate: true };
+            } catch {
+                await write({ eventKey, body, attempts: 0, nextAt: now + limits.firstDelayMs, createdAt: now });
+                return { stored: true, duplicate: false };
+            }
+        },
+        async due(now) {
+            await ensure();
+            const entries = (await Promise.all((await names()).map(readEntry))).filter(Boolean);
+            return entries.filter(entry => entry.nextAt <= now)
+                .sort((a, b) => a.createdAt - b.createdAt || a.eventKey.localeCompare(b.eventKey))
+                .slice(0, limits.batch)
+                .map(entry => ({ eventKey: entry.eventKey, body: entry.body, attempts: entry.attempts }));
+        },
+        async remove(eventKey) {
+            await ensure();
+            await unlink(fileFor(eventKey));
+        },
+        async reschedule(eventKey, attempts, nextAt) {
+            await ensure();
+            const entry = await readEntry(path.basename(fileFor(eventKey)));
+            if (entry) await write({ ...entry, attempts, nextAt });
+        },
+        async purgeExpired(now) {
+            await ensure();
+            let purged = 0;
+            for (const name of await names()) {
+                const entry = await readEntry(name);
+                // An unreadable entry cannot be redelivered; it is purged with the expired ones.
+                if (!entry || entry.createdAt < now - limits.maxAgeMs) {
+                    await unlink(path.join(directory, name));
+                    purged += 1;
+                }
+            }
+            return purged;
+        },
+        async count() {
+            await ensure();
+            return (await names()).length;
+        },
+    });
+}
+
+/** The production outbox directory: beside the bot's SQLite file unless configured. */
+function crmOutboxDirectory(environment = process.env) {
+    if (environment.BOT_CRM_OUTBOX_DIR) return environment.BOT_CRM_OUTBOX_DIR;
+    return path.join(path.dirname(environment.BOT_SQLITE_PATH || './database.sqlite'), 'crm-forward-outbox');
+}
+
 /**
  * Service to forward incoming Telegram events to the CRM system's Webhook.
  */
 class CrmIntegrationService {
-    constructor() {
+    constructor(options = {}) {
         this.crmWebhookUrl = resolveCrmWebhookUrl(process.env.CRM_WEBHOOK_URL);
         this.isEnabled = process.env.CRM_INTEGRATION_ENABLED !== 'false';
+        // Without an outbox (tests of the bounded retry alone) an exhausted
+        // event is reported but not kept; the production instance has one.
+        this.outbox = options.outbox || null;
+        this.now = options.now || (() => Date.now());
+        this.draining = false;
     }
 
     forwardMessageToCrm(ctx, direction = 'INCOMING', retryCount = 0) {
@@ -275,19 +397,19 @@ class CrmIntegrationService {
                             });
                         }
                         logger.error(`[CRM IN] Failed to forward to CRM. Status: ${status}`);
-                        this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { status });
+                        this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { status }, { eventKey: payload.providerEventId, body: data });
                     }));
                 });
 
                 req.setTimeout(TIMEOUT_MS, () => terminate(() => {
                     req.destroy();
                     logger.error(`[CRM IN] Timeout forwarding to CRM for ${telegramId} (Attempt ${retryCount + 1})`);
-                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'timeout' });
+                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'timeout' }, { eventKey: payload.providerEventId, body: data });
                 }));
 
                 req.on('error', (error) => terminate(() => {
                     logger.error(`[CRM IN] Error forwarding to CRM: ${error.message}`);
-                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'transport_error' });
+                    this.handleRetry(ctx, direction, retryCount, MAX_RETRIES, resolve, { reason: 'transport_error' }, { eventKey: payload.providerEventId, body: data });
                 }));
 
                 req.write(data);
@@ -299,7 +421,7 @@ class CrmIntegrationService {
         });
     }
 
-    handleRetry(ctx, direction, retryCount, maxRetries, resolve, detail = {}) {
+    handleRetry(ctx, direction, retryCount, maxRetries, resolve, detail = {}, redelivery = null) {
         if (retryCount < maxRetries) {
             const delay = 1000 * (retryCount + 1);
             logger.info(`[CRM IN] Retrying in ${delay}ms... (Attempt ${retryCount + 2}/${maxRetries + 1})`);
@@ -308,16 +430,119 @@ class CrmIntegrationService {
             }, delay);
             return;
         }
-        logger.error(`[CRM IN] Max retries reached. Message dropped.`);
-        resolve({
+        const report = (kept) => resolve({
             outcome: CRM_FORWARD_OUTCOME.RETRY_EXHAUSTED_TRANSIENT,
             attempts: retryCount + 1,
+            kept,
             ...detail,
         });
+        // The update is already consumed from Telegram, so this is the last
+        // moment the event exists: keep its exact body for redelivery.
+        if (!this.outbox || !redelivery?.eventKey) {
+            logger.error('[CRM IN] Max retries reached. Message dropped (no redelivery outbox).');
+            return report(false);
+        }
+        this.outbox.put(redelivery.eventKey, redelivery.body, this.now()).then((result) => {
+            if (result.stored) {
+                logger.warn(`[CRM IN] Max retries reached; event=${redelivery.eventKey} kept for redelivery`);
+                return report(true);
+            }
+            logger.error(`[CRM IN] Max retries reached; event=${redelivery.eventKey} NOT kept (outbox ${result.reason})`);
+            return report(false);
+        }, (error) => {
+            logger.error(`[CRM IN] Max retries reached; event=${redelivery.eventKey} NOT kept (outbox error ${error?.code || error?.name || 'unknown'})`);
+            report(false);
+        });
+    }
+
+    /** One POST of an already-built body with the current strong secret. */
+    postKeptBody(body) {
+        return new Promise((resolve) => {
+            const signature = acceptableBotCrmSecret();
+            if (!signature || !this.crmWebhookUrl) return resolve({ status: null, reason: 'unbound' });
+            const configuredTimeout = Number.parseInt(process.env.BOT_CRM_FORWARD_TIMEOUT_MS || '', 10);
+            const timeoutMs = Number.isInteger(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 15000;
+            let settled = false;
+            const settle = (value) => { if (!settled) { settled = true; resolve(value); } };
+            try {
+                const parsed = new URL(this.crmWebhookUrl);
+                const lib = parsed.protocol === 'https:' ? https : http;
+                const req = lib.request({
+                    hostname: parsed.hostname,
+                    port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+                    path: parsed.pathname + parsed.search,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(body),
+                        'x-bot-signature': signature,
+                    },
+                }, (res) => {
+                    res.resume();
+                    res.on('end', () => settle({ status: res.statusCode }));
+                });
+                req.setTimeout(timeoutMs, () => { req.destroy(); settle({ status: null, reason: 'timeout' }); });
+                req.on('error', () => settle({ status: null, reason: 'transport_error' }));
+                req.write(body);
+                req.end();
+            } catch {
+                settle({ status: null, reason: 'local_exception' });
+            }
+        });
+    }
+
+    /**
+     * Redeliver due kept events once. A 2xx (including the CRM's duplicate
+     * answer) or a terminal 4xx deletes the row; a transient answer reschedules
+     * it with backoff. Expired rows are purged first. Logs carry ids only.
+     */
+    async drainRedeliveryOutbox() {
+        if (!this.outbox || this.draining) return { skipped: true };
+        this.draining = true;
+        const summary = { delivered: 0, refused: 0, rescheduled: 0, purged: 0 };
+        try {
+            const limits = this.outbox.limits;
+            const now = this.now();
+            summary.purged = await this.outbox.purgeExpired(now);
+            if (summary.purged > 0) logger.error(`[CRM OUTBOX] purged ${summary.purged} event(s) older than the age limit`);
+            for (const row of await this.outbox.due(now)) {
+                const answer = await this.postKeptBody(row.body);
+                if (answer.status !== null && answer.status >= 200 && answer.status < 300) {
+                    await this.outbox.remove(row.eventKey);
+                    summary.delivered += 1;
+                    logger.info(`[CRM OUTBOX] event=${row.eventKey} redelivered`);
+                } else if (answer.status !== null && !isRetryableStatus(answer.status)) {
+                    await this.outbox.remove(row.eventKey);
+                    summary.refused += 1;
+                    logger.error(`[CRM OUTBOX] event=${row.eventKey} refused by the CRM (status ${answer.status}); not retried`);
+                } else {
+                    const attempts = row.attempts + 1;
+                    await this.outbox.reschedule(row.eventKey, attempts, this.now() + redeliveryDelayMs(attempts, limits));
+                    summary.rescheduled += 1;
+                    if (answer.reason === 'unbound') break;
+                }
+            }
+        } catch (error) {
+            logger.error(`[CRM OUTBOX] drain failed: ${error?.code || error?.name || 'unknown'}`);
+        } finally {
+            this.draining = false;
+        }
+        return summary;
+    }
+
+    /** Start the periodic redelivery (production instance only). */
+    startRedeliveryDrainer(intervalMs = 30_000) {
+        if (!this.outbox || this.drainTimer) return;
+        this.drainTimer = setInterval(() => { this.drainRedeliveryOutbox(); }, intervalMs);
+        if (typeof this.drainTimer.unref === 'function') this.drainTimer.unref();
     }
 }
 
-module.exports = new CrmIntegrationService();
+module.exports = new CrmIntegrationService({ outbox: createFileCrmOutbox(crmOutboxDirectory()) });
+module.exports.createFileCrmOutbox = createFileCrmOutbox;
+module.exports.crmOutboxDirectory = crmOutboxDirectory;
+module.exports.redeliveryLimits = redeliveryLimits;
+module.exports.redeliveryDelayMs = redeliveryDelayMs;
 module.exports.CRM_FORWARD_OUTCOME = CRM_FORWARD_OUTCOME;
 module.exports.isRetryableStatus = isRetryableStatus;
 module.exports.CrmIntegrationService = CrmIntegrationService;

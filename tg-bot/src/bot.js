@@ -435,6 +435,9 @@ Promise.all([
     userService.syncPendingCrmUsers()
 ]).then(() => {
     userService.startPeriodicCrmSync();
+    // T3-O: events the CRM could not take in time are redelivered from the
+    // bot's own outbox until the CRM answers 2xx or refuses them terminally.
+    crmIntegration.startRedeliveryDrainer();
 
     // Webhook mode is opt-in. When BOT_UPDATE_MODE is webhook the runtime
     // registers the webhook with Telegram and re-asserts it if Telegram drops
