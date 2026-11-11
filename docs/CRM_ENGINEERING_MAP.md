@@ -985,12 +985,23 @@ Device registration: Android `PushRegistrar` →
 
 ### Calling
 
-**F-17 Manager outbound call**
-`CallButton.tsx` → `POST G/app/api/calls/originate/route.ts` → `originateCall()`
-(`EslClient.ts`, ESL `bgapi originate`) → browser JsSIP auto-answers the bridged
-leg (`sip-client-context.tsx`) → ESL `CHANNEL_CREATE` → `resolveContactByPhoneV1`
-+ `prisma.call.upsert({where:{fsUuid}})` → `CHANNEL_ANSWER` → SSE via
-`G/modules/calling/internal/call-stream.ts`.
+**F-17 Manager outbound call (P1 verified destination)**
+`CallButton.tsx` `{contactId, phoneId?}` → `manualCallAvailabilityActionV1`
+(`calling.ManualCallAvailabilityQuery.v1`; no button and no `tel:` unless allowed) →
+`POST G/app/api/calls/originate/route.ts` `{requestId, contactId, phoneId}` (a raw
+`phoneNumber` is refused with 400) → `calling.StartManualCallCommand.v1`
+(`G/modules/calling/application/manual-call.ts`): signed Staff Session + role
+Менеджер/Руководитель/Администратор + server-side extension → `ContactPersonCardQuery.v1`
+(canonical, not archived) → the phone id must be this Contact's active, current,
+`unique` number → `ContactCommunicationPermissionQuery.v1` voice (deny / unavailable
+refuse) → advisory-locked claim pre-creates the `Call` (`manual_<sha>`, deterministic
+`fsUuid`; replay / conflict / busy) → ESL `bgapi originate` with `originate_timeout`
+(`internal/manual-calls/freeswitch-manual-call-adapter.ts`; unknown outcome → never
+redialled) → browser JsSIP auto-answers the bridged leg → ESL `CHANNEL_CREATE` (create-only
+upsert keeps the pre-created row) → `CHANNEL_ANSWER` → SSE. `POST /api/calls/cancel` only
+for the caller or an administrator and only an active call. No dialplan routes an extension
+to the trunk (`03_user_outbound.xml`); the legacy `originateCall()` in `EslClient.ts` has no
+caller.
 
 **F-18 Inbound call and alerts**
 SIP trunk → `telephony/conf/dialplan/public/00_inbound_did.xml` →

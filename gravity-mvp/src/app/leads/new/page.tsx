@@ -473,13 +473,12 @@ function LeadRow({
       {/* Телефон */}
       <td className="px-[4px] py-3">
         {lead.phone ? (
-          <a
-            href={`tel:${lead.phone}`}
-            className="inline-flex items-center gap-1.5 font-mono text-sm text-primary hover:underline"
-          >
-            <Phone className="h-3.5 w-3.5" />
+          // No call action here: a lead's number is not a Contact's verified number, and the CRM
+          // offers a call only through Calling's verified-destination policy (P1, Owner Q4).
+          <span className="inline-flex items-center gap-1.5 font-mono text-sm text-foreground">
+            <Phone className="h-3.5 w-3.5 text-muted-foreground" />
             {lead.phone}
-          </a>
+          </span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
