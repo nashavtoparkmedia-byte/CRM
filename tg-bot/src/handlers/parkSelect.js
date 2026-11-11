@@ -15,10 +15,12 @@ const CRM_URL = () => {
     }
     return 'http://localhost:3002/api/webhooks/bot';
 };
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
 
 function postJSON(url, body) {
     return new Promise((resolve) => {
+        const secret = acceptableBotCrmSecret();
+        if (!secret) return resolve({ ok: false, data: {} });
         const parsed = new URL(url);
         const data = JSON.stringify(body);
         const options = {
@@ -29,7 +31,7 @@ function postJSON(url, body) {
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(data),
-                'x-bot-signature': CRM_SECRET()
+                'x-bot-signature': secret
             }
         };
         const lib = parsed.protocol === 'https:' ? https : http;

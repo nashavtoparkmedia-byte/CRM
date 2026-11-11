@@ -38,7 +38,7 @@ function responseRecorder() {
     };
 }
 
-function request(body, signature = 'shared-secret') {
+function request(body, signature = 'test-bot-crm-shared-secret-0123456789abcdef') {
     return { body, get: name => name === 'x-bot-signature' ? signature : undefined };
 }
 
@@ -61,7 +61,7 @@ function fixture(overrides = {}, opts = {}) {
     };
     const logger = { info() {}, error() {} };
     const environment = {
-        BOT_CRM_SECRET: 'shared-secret',
+        BOT_CRM_SECRET: 'test-bot-crm-shared-secret-0123456789abcdef',
         CRM_TELEGRAM_CONNECTION_ID: 'bot-connection',
     };
     return {
@@ -198,8 +198,8 @@ test('delivers to the exact peer with the exact text and echoes the proof', asyn
 test('rejects missing auth and wrong connection with zero send mutation', async () => {
     for (const scenario of [
         { signature: null, account: '123', connection: 'bot-connection', status: 401 },
-        { signature: 'shared-secret', account: '999', connection: 'bot-connection', status: 409 },
-        { signature: 'shared-secret', account: '123', connection: 'other-connection', status: 409 },
+        { signature: 'test-bot-crm-shared-secret-0123456789abcdef', account: '999', connection: 'bot-connection', status: 409 },
+        { signature: 'test-bot-crm-shared-secret-0123456789abcdef', account: '123', connection: 'other-connection', status: 409 },
     ]) {
         const { calls, handler } = fixture();
         const response = responseRecorder();
@@ -292,7 +292,7 @@ test('rejects an unproven provider message id rather than reporting false succes
                 telegram: { sendMessage: async () => ({ message_id: messageId }) },
             },
             logger: { info() {}, error() {} },
-            environment: { BOT_CRM_SECRET: 'shared-secret', CRM_TELEGRAM_CONNECTION_ID: 'bot-connection' },
+            environment: { BOT_CRM_SECRET: 'test-bot-crm-shared-secret-0123456789abcdef', CRM_TELEGRAM_CONNECTION_ID: 'bot-connection' },
         });
         await unprovenHandler(
             request({ chatId: '42', text: 'hello', connectionId: 'bot-connection' }),
