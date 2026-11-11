@@ -55,6 +55,15 @@ describe('guarded append contract', () => {
     expect(parsed.attribution).not.toBe(PROVEN)
   })
 
+  it('accepts an explicit live or history projection, keeps an absent one absent and refuses anything else', () => {
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand())).not.toHaveProperty('projection')
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection: 'live' })).projection).toBe('live')
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection: 'history' })).projection).toBe('history')
+    for (const projection of ['History', 'import', '', null, 1, { mode: 'history' }]) {
+      expect(() => parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection }))).toThrow(GuardedChannelMessageCommandValidationError)
+    }
+  })
+
   it('accepts an unproven private command with a bounded refusal code', () => {
     expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({ attribution: UNPROVEN })).attribution).toEqual(UNPROVEN)
     expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({
@@ -224,6 +233,13 @@ describe('guarded append handlers', () => {
       visible: true,
       newlyRecorded: true,
     })
+  })
+
+  it('passes a history projection to the port unchanged', async () => {
+    const port = fakePort()
+    await createAppendGuardedChannelMessageHandlerV1(port)(appendCommand({ projection: 'history' }))
+    const { contract: _contract, ...input } = appendCommand({ projection: 'history' })
+    expect(port.append).toHaveBeenCalledWith(input)
   })
 
   it('marks only appended and held as newly recorded', async () => {

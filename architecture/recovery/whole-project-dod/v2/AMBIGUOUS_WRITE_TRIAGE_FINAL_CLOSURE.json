@@ -3350,9 +3350,9 @@
     {
       "record_id": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
       "site_signature": "3c19ed802cbe84691670543cdca4eebbf0fd9d4be3dc210aae055f810a59fed8",
-      "source_sha256": "d78d981d0eb1f337dc81db46d2c376078a1b2b6eb1dc148b62bbd99b9d8b7ae9",
+      "source_sha256": "310bcf9a34a386c033c33fbf39cc6de583682de5ff084cdda757f11f4bfeb03a",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
-      "line": 116,
+      "line": 119,
       "column": 9,
       "kind": "raw",
       "method": "$queryRaw",
@@ -3368,7 +3368,7 @@
         "set_config"
       ],
       "sql_sha256": "5532fd4b9139650dbc6a4e9239119272ef96d4d74e459ba819cd86bb71ebe5df",
-      "sql_provenance_sha256": "25282f7429ab227399d57bb6b6dd87384fb5d1bd9a9399a609aa3ee3c974584d",
+      "sql_provenance_sha256": "be9c0b4fc8b384c29e69046a7bed9d41e1c8bccf3ba4bf90673187d972a2bdeb",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
@@ -3393,9 +3393,9 @@
     {
       "record_id": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
       "site_signature": "fd5a11f0c29ec2e62a99fac42dd7d2ceef2cb748277f5c18c8856461c056dba7",
-      "source_sha256": "d78d981d0eb1f337dc81db46d2c376078a1b2b6eb1dc148b62bbd99b9d8b7ae9",
+      "source_sha256": "310bcf9a34a386c033c33fbf39cc6de583682de5ff084cdda757f11f4bfeb03a",
       "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts",
-      "line": 132,
+      "line": 135,
       "column": 11,
       "kind": "raw",
       "method": "$queryRaw",
@@ -3415,7 +3415,7 @@
         "pg_advisory_xact_lock"
       ],
       "sql_sha256": "5c5e080d469d714e5aa58717b1928801ccd489f43f108b02804927ffb2370883",
-      "sql_provenance_sha256": "f9ba2916cc05ab62e9fae1fb4b55118f5de23629dfed4846f64a32dfcaf5c835",
+      "sql_provenance_sha256": "2b52362f9cc858c38e63994f8a53109fac63a66909aa952077800dbb47259c7c",
       "source_context": "messaging",
       "source_technical_module": "messaging.module",
       "owner_contexts": [],
