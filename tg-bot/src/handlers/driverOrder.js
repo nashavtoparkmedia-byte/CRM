@@ -42,7 +42,7 @@ const CRM_URL = () => {
     }
     return 'http://localhost:3002/api/webhooks/bot';
 };
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
 
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
@@ -79,7 +79,12 @@ function postJSON(url, body, headers = {}) {
 }
 
 async function callCRM(action, payload) {
-    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': CRM_SECRET() });
+    const secret = acceptableBotCrmSecret();
+    if (!secret) {
+        logger.error(`[DriverOrder] CRM ${action}: BOT_CRM_SECRET is not configured; refusing`);
+        return { ok: false, status: 0, data: { error: 'BOT_CRM_SECRET_UNCONFIGURED' } };
+    }
+    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': secret });
     logger.info(`[DriverOrder] CRM ${action}: status=${result.status} ok=${result.data?.ok}`);
     return result;
 }

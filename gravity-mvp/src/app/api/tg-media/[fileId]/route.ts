@@ -6,7 +6,8 @@
  *   GET /api/tg-media/<file_id>
  *
  * Поток:
- *   1. Читаем BOT_TOKEN из tg-bot/.env (один раз cached).
+ *   1. Читаем токен бота из примонтированного секретного файла
+ *      (TELEGRAM_BOT_TOKEN_FILE); без него маршрут отвечает 503.
  *   2. getFile(file_id) → file_path
  *   3. download https://api.telegram.org/file/bot<TOKEN>/<file_path>
  *   4. Stream response с правильным Content-Type / Content-Disposition
@@ -15,21 +16,9 @@
  * подряд в одну сессию).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 
-let cachedToken: string | null = null
-function getBotToken(): string {
-    if (cachedToken) return cachedToken
-    const envPath = path.resolve(process.cwd(), '../tg-bot/.env')
-    if (!fs.existsSync(envPath)) throw new Error('tg-bot/.env не найден')
-    const content = fs.readFileSync(envPath, 'utf-8')
-    const m = content.match(/^BOT_TOKEN=([^\r\n]+)/m)
-    if (!m) throw new Error('BOT_TOKEN не найден в tg-bot/.env')
-    cachedToken = m[1].trim()
-    return cachedToken
-}
+import { readTelegramBotTokenV1 } from '@/modules/telegram-channel/public/v1'
 
 const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
 const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined
@@ -59,7 +48,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ fil
     }
 
     try {
-        const token = getBotToken()
+        let token: string
+        try {
+            token = await readTelegramBotTokenV1()
+        } catch {
+            // No token file is mounted: refuse cleanly, never fall back.
+            return NextResponse.json({ error: 'TELEGRAM_BOT_MEDIA_UNCONFIGURED' }, { status: 503 })
+        }
         const fetchOpts = dispatcher ? { dispatcher } : {}
 
         // 1. getFile → file_path
@@ -101,9 +96,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ fil
                 'Cache-Control': 'private, max-age=300',
             },
         })
-    } catch (e: any) {
-        console.error('[tg-media] error:', e)
-        return NextResponse.json({ error: e?.message || 'unknown' }, { status: 500 })
+    } catch (e: unknown) {
+        // The request URLs carry the bot token, so neither the error object nor
+        // its message is logged or returned; the error class is enough.
+        console.error(`[tg-media] fetch failed: ${e instanceof Error ? e.name : 'unknown'}`)
+        return NextResponse.json({ error: 'TELEGRAM_BOT_MEDIA_UNAVAILABLE' }, { status: 502 })
     }
 }
 

@@ -25,7 +25,19 @@ check('nonblocking outer catch retained', consumer.includes("console.error('[not
 check('later neighboring Chat migration remains explicit', consumer.includes('UPDATE_CONVERSATION_COMMAND_V1') && consumer.includes('updateConversationV1({'), 'later neighboring migration absent')
 check('SendMessage command predeclared', messaging.commands.includes('SendMessageCommand.v1'), 'manifest command absent')
 check('Platform Messaging dependency pre-approved', platform.allowed_dependencies.some((item) => item.context === 'messaging' && item.surface === 'messaging.public'), 'approved dependency absent')
-check('authenticated ingress secret retained without raw Bot API delivery', consumer.includes('process.env.BOT_CRM_SECRET') && !/BOT_API_URL|notifyDriverLinked/.test(consumer), 'secret or raw delivery boundary drifted')
+// T3-1: the route authenticates through Telegram's one constant-time check of a
+// strong BOT_CRM_SECRET before it reads the body; it neither reads the secret
+// itself nor compares it plainly.
+const BOT_ROUTE_GATE = "if (!verifyTelegramBotCrmSignatureV1(request.headers.get('x-bot-signature'))) {"
+const authenticatedBeforeBody = (source) => {
+    const gate = source.indexOf(BOT_ROUTE_GATE)
+    const body = source.indexOf('await request.json()')
+    return gate >= 0 && body > gate && !/process\.env\.BOT_CRM_SECRET|signature\s*!==|!==\s*process\.env/.test(source)
+}
+const gateMovedBelowBody = (source) => source
+    .replace(BOT_ROUTE_GATE, 'if (false) {')
+    .replace('const body = await request.json()', `const body = await request.json()\n        ${BOT_ROUTE_GATE} return null }`)
+check('authenticated ingress secret retained without raw Bot API delivery', authenticatedBeforeBody(consumer) && !authenticatedBeforeBody(gateMovedBelowBody(consumer)) && !authenticatedBeforeBody(consumer.replace(BOT_ROUTE_GATE, "if (request.headers.get('x-bot-signature') !== process.env.BOT_CRM_SECRET) {")) && !/BOT_API_URL|notifyDriverLinked/.test(consumer), 'secret or raw delivery boundary drifted')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

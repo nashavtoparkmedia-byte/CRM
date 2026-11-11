@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 const adminAuth = require('../middleware/auth');
-const { isAcceptableWebhookSecret, requireTelegramWebhookSecret } = require('./webhookAuth');
+const { acceptableBotCrmSecret, isAcceptableWebhookSecret, isBotCrmSignatureValid, requireTelegramWebhookSecret } = require('./webhookAuth');
 const { redactText, sanitizeLogValue, startPayloadEvidence, redactStartCommandText } = require('./redactSecrets');
 const serverAuth = require('../../tg-bot-frontend/lib/serverAuth');
 
@@ -317,4 +317,31 @@ test('driver registry sync preserves identity, fails closed and retries historic
     assert.match(service, /\/api\/webhook\/telegram/);
     assert.match(bot, /userService\.syncPendingCrmUsers\(\)/);
     assert.match(bot, /userService\.startPeriodicCrmSync\(\)/);
+});
+
+const STRONG_BOT_CRM_SECRET = 'bot-crm-test-secret-Z9y8X7w6V5u4T3s2R1q0';
+
+test('BOT_CRM_SECRET is accepted only when strong, with no fallback value', () => {
+    for (const value of [undefined, null, '', ' ', 'secret', 'shared-secret', 'x'.repeat(31), ` ${STRONG_BOT_CRM_SECRET}`, `${STRONG_BOT_CRM_SECRET}\n`, 'x'.repeat(257), 'replace-me-with-a-generated-value-0123456789']) {
+        assert.equal(acceptableBotCrmSecret({ BOT_CRM_SECRET: value }), null, `accepted ${JSON.stringify(value)}`);
+    }
+    assert.equal(acceptableBotCrmSecret({}), null);
+    assert.equal(acceptableBotCrmSecret({ BOT_CRM_SECRET: STRONG_BOT_CRM_SECRET }), STRONG_BOT_CRM_SECRET);
+    assert.equal(acceptableBotCrmSecret({ BOT_CRM_SECRET: 'x'.repeat(32) }), 'x'.repeat(32));
+});
+
+test('x-bot-signature is compared in constant time against the strong secret only', () => {
+    const environment = { BOT_CRM_SECRET: STRONG_BOT_CRM_SECRET };
+    assert.equal(isBotCrmSignatureValid(STRONG_BOT_CRM_SECRET, environment), true);
+    assert.equal(isBotCrmSignatureValid(`${STRONG_BOT_CRM_SECRET}x`, environment), false);
+    assert.equal(isBotCrmSignatureValid(STRONG_BOT_CRM_SECRET.slice(0, -1), environment), false);
+    assert.equal(isBotCrmSignatureValid('', environment), false);
+    assert.equal(isBotCrmSignatureValid(undefined, environment), false);
+    // An empty or weak configured secret never matches, not even an equal header.
+    assert.equal(isBotCrmSignatureValid('', { BOT_CRM_SECRET: '' }), false);
+    assert.equal(isBotCrmSignatureValid('secret', { BOT_CRM_SECRET: 'secret' }), false);
+    assert.equal(isBotCrmSignatureValid(undefined, {}), false);
+    const source = read('src/security/webhookAuth.js');
+    assert.match(source, /return constantTimeEqual\(supplied, expected\);/);
+    assert.doesNotMatch(source.split('function isBotCrmSignatureValid', 2)[1], /supplied\s*[!=]==?\s*expected|expected\s*[!=]==?\s*supplied/);
 });

@@ -7,6 +7,7 @@
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
 
 const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
 
@@ -44,6 +45,9 @@ function pingCrm() {
         try { parsed = new URL(url); } catch { return resolve(false); }
 
         const data = JSON.stringify({ action: '__ping__', payload: {} });
+        // Liveness only (any answer below 500 counts), so a missing secret sends
+        // no signature rather than a made-up one.
+        const secret = acceptableBotCrmSecret();
         const options = {
             hostname: parsed.hostname,
             port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
@@ -52,7 +56,7 @@ function pingCrm() {
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(data),
-                'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret'
+                ...(secret ? { 'x-bot-signature': secret } : {}),
             }
         };
 

@@ -26,7 +26,7 @@ const CRM_URL = () => {
     return 'http://localhost:3002/api/webhooks/bot';
 };
 
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
 
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
@@ -70,7 +70,14 @@ function postJSON(url, body, headers = {}) {
  * caller cannot mistake "the CRM never answered" for "the CRM said no".
  */
 async function callCRM(action, payload) {
-    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': CRM_SECRET() });
+    const secret = acceptableBotCrmSecret();
+    if (!secret) {
+        logger.error(`[crmAction] ${action}: BOT_CRM_SECRET is not configured; refusing to call the CRM`);
+        const error = new Error(`CRM action ${action} refused: BOT_CRM_SECRET is not configured`);
+        error.status = 0;
+        throw error;
+    }
+    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': secret });
     logger.info(`[crmAction] ${action}: status=${result.status}`);
     if (!result.ok) {
         const error = new Error(`CRM action ${action} failed with status ${result.status}`);

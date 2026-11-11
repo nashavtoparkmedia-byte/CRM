@@ -14,6 +14,7 @@ export { buildPendingBotLinkRequests, createRecordBotUserProfileHandlerV1 } from
 export type { BotUserProfilePersistencePortV1, PendingBotLinkRequest } from './bot-user-profile-handler'
 export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-delivery-capability'
 export { sendExactTelegramBotMessageV1, readTelegramBotFileV1, TELEGRAM_BOT_FILE_CONTENT_TYPES_V1, TELEGRAM_BOT_FILE_MAX_BYTES_V1 } from './bot-message-delivery'
+export { readTelegramBotTokenV1, telegramBotCrmSecretV1, TELEGRAM_BOT_TOKEN_FILE_ENV_NAME, verifyTelegramBotCrmSignatureV1 } from './bot-message-delivery'
 export type { TelegramBotFileReadV1 } from './bot-message-delivery'
 export type { TelegramBotInlineButtonV1, TelegramBotInlineKeyboardV1 } from './bot-message-delivery'
 export { canonicalTelegramBotConnectionIdV1, TELEGRAM_BOT_CONNECTION_ENV_NAME } from './bot-transport-config'

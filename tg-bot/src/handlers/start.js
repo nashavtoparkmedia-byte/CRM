@@ -6,6 +6,8 @@ const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { ensureBotMappingV1 } = require('../public-bot-maintenance');
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
+const { diagnosticAdminIds } = require('../utils/driverOrderDiagnostics');
 
 /**
  * The one spelling of the compensation entry label, and the one place that
@@ -25,6 +27,8 @@ function compensationEntryButtons() {
 
 function crmParkRequest(action, payload) {
     return new Promise((resolve) => {
+        const secret = acceptableBotCrmSecret();
+        if (!secret) return resolve({ ok: false, data: {} });
         const base = (() => {
             if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
             const fwd = process.env.CRM_WEBHOOK_URL;
@@ -39,7 +43,7 @@ function crmParkRequest(action, payload) {
             port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
             path: parsed.pathname,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret' }
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-bot-signature': secret }
         }, (res) => {
             let body = '';
             res.on('data', c => body += c);
@@ -52,17 +56,14 @@ function crmParkRequest(action, payload) {
     });
 }
 
-// Admin list
-const ADMINS = [316425068];
-
 /**
  * Check if a user is an admin
  * @param {Number} userId 
  * @returns {Boolean}
  */
 function isAdmin(userId) {
-    const ADMIN_ID = 316425068;
-    return userId === ADMIN_ID || userId === parseInt(process.env.ADMIN_ID);
+    // Configured admins only (ADMIN_IDS / ADMIN_ID); there is no built-in one.
+    return diagnosticAdminIds().includes(Number(userId));
 }
 
 const { PrismaClient } = require('@prisma/client');
@@ -304,6 +305,12 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
 
                 await ctx.reply('⏳ Отправляю данные...');
 
+                const syncSecret = acceptableBotCrmSecret();
+                if (!syncSecret) {
+                    logger.error('[sync_user] BOT_CRM_SECRET is not configured; refusing to call the CRM');
+                    return await ctx.reply('❌ Ошибка отправки данных. Попробуйте позже.');
+                }
+
                 // Call webhook
                 const apiUrl = process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
                 const payloadStr = JSON.stringify({
@@ -321,7 +328,7 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
                     headers: {
                         'Content-Type': 'application/json',
                         'Content-Length': Buffer.byteLength(payloadStr),
-                        'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret'
+                        'x-bot-signature': syncSecret
                     }
                 }, (res) => {
                     if (res.statusCode >= 200 && res.statusCode < 300) {

@@ -3,6 +3,7 @@ const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { diagnosticAdminIds } = require('../utils/driverOrderDiagnostics');
 
 /**
  * Start the connection flow
@@ -90,10 +91,12 @@ async function handleConnectionData(ctx) {
 }
 
 /**
- * Notify admin @yokopark (ID: 316425068)
+ * Notify the configured admins (ADMIN_IDS / ADMIN_ID). There is no built-in
+ * recipient: with nothing configured, nothing is sent.
  */
 async function notifyAdmin(ctx, type) {
-    const ADMIN_TARGET = 316425068;
+    const adminIds = diagnosticAdminIds();
+    if (adminIds.length === 0) return;
     const userId = ctx.from.id;
     const username = ctx.from.username || 'N/A';
     const fullName = ctx.from.first_name + (ctx.from.last_name ? ' ' + ctx.from.last_name : '');
@@ -113,15 +116,17 @@ async function notifyAdmin(ctx, type) {
 
 Данные сохранены в Google Sheets.`;
 
-    try {
-        await ctx.telegram.sendMessage(ADMIN_TARGET, message, {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-                [Markup.button.url('Открыть профиль', `tg://user?id=${userId}`)]
-            ])
-        });
-    } catch (err) {
-        logger.error(`Admin notification failed for ${userId}:`, err.message);
+    for (const adminId of adminIds) {
+        try {
+            await ctx.telegram.sendMessage(adminId, message, {
+                parse_mode: 'HTML',
+                ...Markup.inlineKeyboard([
+                    [Markup.button.url('Открыть профиль', `tg://user?id=${userId}`)]
+                ])
+            });
+        } catch (err) {
+            logger.error(`Admin notification failed for ${userId}:`, err.message);
+        }
     }
 }
 

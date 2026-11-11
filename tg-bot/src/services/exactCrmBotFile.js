@@ -1,5 +1,7 @@
 'use strict';
 
+const { isBotCrmSignatureValid } = require('../security/webhookAuth');
+
 /**
  * Hands one file the bot received to the CRM, by its Telegram file id.
  *
@@ -40,8 +42,7 @@ function contentTypeForPath(filePath) {
 
 function createExactCrmBotFileHandler({ bot, logger, environment = process.env, maxBytes = MAX_BYTES }) {
     return async function exactCrmBotFile(req, res) {
-        const secret = concreteId(environment.BOT_CRM_SECRET);
-        if (!secret || req.get('x-bot-signature') !== secret) {
+        if (!isBotCrmSignatureValid(req.get('x-bot-signature'), environment)) {
             return res.status(401).json({ success: false, error: 'TELEGRAM_BOT_TRANSPORT_UNAUTHORIZED' });
         }
 

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -76,7 +78,9 @@ vi.mock('@/modules/contacts/public/v1', () => ({
 vi.mock('@/modules/contacts/public/v2', () => ({
   resolveContactV2: mocks.promoteDisplayName,
 }))
-vi.mock('@/modules/telegram-channel/public/v1', () => ({
+vi.mock('@/modules/telegram-channel/public/v1', async () => ({
+  // The real constant-time check: the route's only gate is under test here.
+  verifyTelegramBotCrmSignatureV1: (await vi.importActual<typeof import('@/modules/telegram-channel/public/v1/bot-message-delivery')>('@/modules/telegram-channel/public/v1/bot-message-delivery')).verifyTelegramBotCrmSignatureV1,
   prepareDriverTelegramConversationAuthorityV1: mocks.authorizeDriverTelegram,
   canonicalTelegramBotConnectionIdV1: mocks.canonicalBotConnection,
   recordBotUserProfileV1: mocks.recordProfile,
@@ -98,7 +102,7 @@ import { POST } from './route'
 
 const originalSecret = process.env.BOT_CRM_SECRET
 
-function request(overrides: Record<string, unknown> = {}, signature = 'test-bot-secret') {
+function request(overrides: Record<string, unknown> = {}, signature = 'test-bot-crm-shared-secret-0123456789abcdef') {
   return new NextRequest('https://crm.example/api/webhook/telegram', {
     method: 'POST',
     headers: {
@@ -157,7 +161,7 @@ function expectNoPersonOrMessageMutation() {
 describe('Telegram webhook account and transport admission', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.BOT_CRM_SECRET = 'test-bot-secret'
+    process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
     mocks.appendCollision.mockResolvedValue(undefined)
     mocks.markIdentityConflict.mockResolvedValue(undefined)
     mocks.linkDriver.mockResolvedValue(false)
@@ -487,7 +491,7 @@ describe('Telegram webhook account and transport admission', () => {
   // Registration records BotUser profile evidence only; it must not depend on
   // shared Chat transport ownership.
 
-  function registrationRequest(payload: Record<string, unknown>, signature = 'test-bot-secret') {
+  function registrationRequest(payload: Record<string, unknown>, signature = 'test-bot-crm-shared-secret-0123456789abcdef') {
     return new NextRequest('https://crm.example/api/webhook/telegram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bot-signature': signature },
@@ -523,6 +527,49 @@ describe('Telegram webhook account and transport admission', () => {
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toEqual({ error: 'Unauthorized' })
     expect(mocks.recordProfile).not.toHaveBeenCalled()
+  })
+
+  // ── T3-1 / T3-3: the shared-secret gate and what reaches the log ─────
+
+  test.each([
+    ['unset', undefined, ''],
+    ['empty, against an empty header', '', ''],
+    ['short, against an equal header', 'short-secret', 'short-secret'],
+    ['whitespace-padded, against an equal header', ' test-bot-crm-shared-secret-0123456789abcdef', ' test-bot-crm-shared-secret-0123456789abcdef'],
+  ])('a %s BOT_CRM_SECRET refuses both entry points', async (_label, configured, header) => {
+    if (configured === undefined) delete process.env.BOT_CRM_SECRET
+    else process.env.BOT_CRM_SECRET = configured
+
+    expect((await POST(request({}, header))).status).toBe(401)
+    expect((await POST(registrationRequest({ telegramId: '42' }, header))).status).toBe(401)
+    expect(mocks.upsertConversation).not.toHaveBeenCalled()
+    expect(mocks.recordProfile).not.toHaveBeenCalled()
+    expectNoPersonOrMessageMutation()
+  })
+
+  test('logs ids and types only, never the text, names or username of a message', async () => {
+    const admitted = chat({})
+    mocks.upsertConversation.mockResolvedValue({ conversation: admitted })
+    mocks.patchConversation.mockResolvedValue({ conversation: admitted })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await POST(request({
+        text: 'PRIVATE-BODY-TEXT-T3',
+        username: 'private_username_t3',
+        firstName: 'PrivateFirst',
+        lastName: 'PrivateLast',
+      }))
+      const lines = log.mock.calls.map(call => call.map(String).join(' '))
+      expect(lines.some(line => line.includes('[WEBHOOK-TG] Received event=update:1001 direction=INCOMING chatType=private attachments=0'))).toBe(true)
+      for (const line of lines) {
+        expect(line).not.toMatch(/PRIVATE-BODY-TEXT-T3|private_username_t3|PrivateFirst|PrivateLast/)
+      }
+    } finally {
+      log.mockRestore()
+    }
+    const source = readFileSync(resolve(__dirname, 'route.ts'), 'utf8')
+    expect(source).not.toMatch(/JSON\.stringify\(body\)/)
+    expect(source).not.toMatch(/console\.log\([^)]*\$\{(?:text|chatTitle|senderDisplay|username|tgDisplayName)\b/)
   })
 
   // ── persist-before-enrichment ────────────────────────────────────────

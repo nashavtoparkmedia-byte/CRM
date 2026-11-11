@@ -93,7 +93,7 @@ async function saveConfirmedTelegramLink(driverId: string, telegramId: string) {
   }
 }
 
-// GET /api/bot-link?telegramId=316425068
+// GET /api/bot-link?telegramId=<telegram user id>
 export async function GET(req: NextRequest) {
   if (!(await hasIntegrationAdminAccess())) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

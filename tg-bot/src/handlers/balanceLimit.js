@@ -5,7 +5,7 @@ const logger = require('../utils/logger');
 const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
+const { acceptableBotCrmSecret } = require('../security/webhookAuth');
 
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
@@ -41,9 +41,14 @@ function postJSON(url, body, headers = {}) {
 }
 
 async function callCRM(action, payload) {
+    const secret = acceptableBotCrmSecret();
+    if (!secret) {
+        logger.error(`[LimitScene] CRM ${action}: BOT_CRM_SECRET is not configured; refusing`);
+        return { ok: false, status: 0, data: { error: 'BOT_CRM_SECRET_UNCONFIGURED' } };
+    }
     logger.info(`[LimitScene] Calling CRM action=${action} url=${CRM_URL()}`);
     const result = await postJSON(CRM_URL(), { action, payload }, {
-        'x-bot-signature': CRM_SECRET()
+        'x-bot-signature': secret
     });
     logger.info(`[LimitScene] CRM response: status=${result.status}`);
     return result;

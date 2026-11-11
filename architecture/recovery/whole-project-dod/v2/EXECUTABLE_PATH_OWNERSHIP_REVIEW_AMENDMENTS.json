@@ -4421,6 +4421,78 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "telegram-t3s-bot-ingress-security-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "TELEGRAM_RELIABILITY_T3S_BOT_INGRESS_SECURITY_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_DECISION_OD05_TELEGRAM_BOT_T3_FIRST_RELEASE_SECURITY_T3S_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that amendment and every earlier one untouched. It adds no tracked surface; it records only five mechanical source-hash rebinds of exactly assigned bot and media routes."
+      },
+      "reason": "Records the Telegram Bot first-release security fixes (T3-S) on main fa3c07e5: the bot routes authenticate with a strong BOT_CRM_SECRET in constant time, the bot message route logs no message bodies, the media proxy reads the bot token from a mounted file, and no route defaults to or documents a personal Telegram id. Tracked executable surfaces stay 2,842, context-owned 1,578, governed exclusions 1,264; the current triple is the repository's own derivation over this exact clean candidate (preview_reviewed_current_denominator, which writes nothing). Its position binds it to this chain tail only: if another amendment lands on main first, it is regenerated over the then-current main.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "previous_source_sha256": "b115d4c3bc01d9f1c773e191e14e2a7ece8b431ed439ad3ead5b965908213514",
+          "current_source_sha256": "7baeb93c2ae9b87145029dc57208c9bf67ae84c9fcfdc06d6579558f468c7518",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved first-release Telegram Bot scope (OD-05, 2026-11-11 13:05 and 16:40; Security release classification T3-S MANDATORY), recorded on main fa3c07e5: a code comment no longer names a personal Telegram user id (T3-2); no executable change. It decides no person, holds no credential beyond the bounded check it performs, and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/test-car/route.ts",
+          "previous_source_sha256": "2308e2711bee2571f63df20b959ee0643fefcac4e6d07826332563b861efdc59",
+          "current_source_sha256": "78892f2e139063a5023b9e13a143cac786f5d21a1433ec9617929a93597beacd",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved first-release Telegram Bot scope (OD-05, 2026-11-11 13:05 and 16:40; Security release classification T3-S MANDATORY), recorded on main fa3c07e5: the diagnostic route no longer defaults to a personal Telegram user id and answers 400 without one (T3-2). It decides no person, holds no credential beyond the bounded check it performs, and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/tg-media/[fileId]/route.ts",
+          "previous_source_sha256": "817330803b7cf0cb8cc4008273f6132ac29bcfe4ed97a906419118277f07869e",
+          "current_source_sha256": "ed7343d7c0a2fc6592b6234e6c770f2ffcb7faa7cfe931eee5cdc3edc131f498",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved first-release Telegram Bot scope (OD-05, 2026-11-11 13:05 and 16:40; Security release classification T3-S MANDATORY), recorded on main fa3c07e5: the media proxy reads the Driver Bot token only through telegram_channel public v1 readTelegramBotTokenV1 (the mounted file named by TELEGRAM_BOT_TOKEN_FILE) instead of another service's .env, answers 503 when it is absent, and logs fetch errors by class only (T3-6). It decides no person, holds no credential beyond the bounded check it performs, and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "previous_source_sha256": "b0f69ce069fd76a05bd4696c942ee276a94bedf23ce7c8a080e91bffd8e79ef2",
+          "current_source_sha256": "a7c06b0158115479be555c055f099e40d2319ae65f0304d62754bd98deb49339",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved first-release Telegram Bot scope (OD-05, 2026-11-11 13:05 and 16:40; Security release classification T3-S MANDATORY), recorded on main fa3c07e5: both bot entry points authenticate through telegram_channel public v1 verifyTelegramBotCrmSignatureV1 (strong BOT_CRM_SECRET, constant time) instead of a plain comparison (T3-1), and the route logs ids and types only, never message text, names or username (T3-3). It decides no person, holds no credential beyond the bounded check it performs, and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "previous_source_sha256": "71bf4ea7892c405fda0ef1ee4ab6be2b02cebf5de417fbef729ced8fb03958f8",
+          "current_source_sha256": "fd84c1ed5a7d6b99d59cbf1eb611338c888bdee96341b0d9683fc2524168fd8b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Owner-approved first-release Telegram Bot scope (OD-05, 2026-11-11 13:05 and 16:40; Security release classification T3-S MANDATORY), recorded on main fa3c07e5: the proxy-allowlisted bot action route authenticates through verifyTelegramBotCrmSignatureV1 (strong BOT_CRM_SECRET, constant time); the old check accepted an empty secret against an empty header (T3-1). It decides no person, holds no credential beyond the bounded check it performs, and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
