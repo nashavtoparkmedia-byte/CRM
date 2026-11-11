@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, UPDATE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { deleteHistoryImportJobV1, updateHistoryImportJobV1 } from '@/modules/messaging/public/v1'
-import { isAuthorizedMaxScraperWebhookV1 } from '@/modules/max-channel/internal/scraper-webhook-auth'
+import { isAuthorizedMaxScraperCallbackV1 } from '@/modules/max-channel/public/v1/scraper-callback-authorization'
 
 // The MAX scraper's history-import job callback: machine to machine, so it is
 // admitted by the scraper's shared webhook secret, not by a staff session.
@@ -11,7 +11,7 @@ export async function DELETE(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    if (!isAuthorizedMaxScraperWebhookV1(req)) {
+    if (!isAuthorizedMaxScraperCallbackV1(req)) {
         return NextResponse.json({ error: 'MAX_SCRAPER_WEBHOOK_UNAUTHORIZED' }, { status: 401 })
     }
     try {
@@ -27,7 +27,7 @@ export async function PATCH(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    if (!isAuthorizedMaxScraperWebhookV1(req)) {
+    if (!isAuthorizedMaxScraperCallbackV1(req)) {
         return NextResponse.json({ error: 'MAX_SCRAPER_WEBHOOK_UNAUTHORIZED' }, { status: 401 })
     }
     try {
