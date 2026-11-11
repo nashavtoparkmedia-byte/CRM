@@ -571,6 +571,62 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await prisma.contactIdentity.delete({ where: { id: wrongPeerIdentity } })
   })
 
+  // Provider-history replay (history import): judged and keyed as a live event, shown
+  // without the conversation's workflow projection or a notification intent.
+  async function lastTimes(chatId: string) {
+    const [row] = await prisma.$queryRaw<Array<{ lastInboundAt: Date | null; lastOutboundAt: Date | null }>>`
+      SELECT "lastInboundAt", "lastOutboundAt" FROM "Chat" WHERE id = ${chatId}`
+    return row
+  }
+
+  it('a history event is shown without the workflow projection or a notification intent; a live one still projects', async () => {
+    const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
+    await prisma.chat.update({ where: { id: chatId }, data: { status: 'resolved', unreadCount: 0, requiresResponse: false } })
+    const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+
+    const inbound = await append(chatId, PROVEN_A, key('history-in'), { projection: 'history', sentAt: old })
+    const outbound = await append(chatId, PROVEN_A, key('history-out'), { projection: 'history', direction: 'outbound', sentAt: new Date(old.getTime() + 1000) })
+    expect(inbound).toMatchObject({ outcome: 'appended', visible: true, newlyRecorded: true })
+    expect(outbound).toMatchObject({ outcome: 'appended', visible: true, newlyRecorded: true })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 0, requiresResponse: false, status: 'resolved' })
+    expect(await lastTimes(chatId)).toEqual({ lastInboundAt: null, lastOutboundAt: null })
+    const shown = await prisma.message.findMany({ where: { chatId }, orderBy: { sentAt: 'asc' } })
+    expect(shown.map(row => row.externalId)).toEqual([key('history-in'), key('history-out')])
+    expect(meta(shown[0].metadata).guardedAppend).toEqual({ v: 1, attribution: 'proven', projection: 'history' })
+    // S2 is the event's own evidence, not a projection: an own message still carries its provider echo.
+    expect(meta(shown[1].metadata).delivery).toMatchObject({ v: 1, evidence: 'provider_echo', source: 'echo' })
+    expect(await prisma.domainOutboxEvent.count({ where: { aggregateId: { in: shown.map(row => row.id) } } })).toBe(0)
+
+    // The same key is one event: a later live delivery of a history event is a duplicate, not a second projection.
+    expect(await append(chatId, PROVEN_A, key('history-in'))).toMatchObject({ outcome: 'duplicate', messageId: inbound.messageId, newlyRecorded: false })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 0, status: 'resolved' })
+
+    const live = await append(chatId, PROVEN_A, key('live-in'))
+    expect(live).toMatchObject({ outcome: 'appended' })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 1, requiresResponse: true, status: 'open' })
+    expect((await lastTimes(chatId)).lastInboundAt).not.toBeNull()
+  })
+
+  it('a held history event is held exactly like a live one and keeps its projection on release', async () => {
+    const chatId = await chat()
+    const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('held-history'), { projection: 'history', sentAt: old })).toMatchObject({ outcome: 'held', holdReason: 'binding_absent' })
+    expect(await append(chatId, PROVEN_B, key('held-live'), { sentAt: new Date(old.getTime() + 1000) })).toMatchObject({ outcome: 'held', holdReason: 'binding_absent' })
+    const [heldHistory, heldLive] = await heldRows(chatId)
+    expect(meta(heldHistory.holdEvidence).projection).toBe('history')
+    expect(meta(heldLive.holdEvidence)).not.toHaveProperty('projection')
+
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB, status: 'resolved', unreadCount: 0, requiresResponse: false } })
+    expect(await release(chatId, PROVEN_B)).toMatchObject({ outcome: 'released', released: 2, remaining: 0 })
+
+    // Only the live event projects: one unread, the conversation reopens.
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 1, requiresResponse: true, status: 'open' })
+    const shown = await prisma.message.findMany({ where: { chatId }, orderBy: { sentAt: 'asc' } })
+    expect(meta(shown[0].metadata).guardedAppend).toMatchObject({ releasedFrom: heldHistory.id, projection: 'history' })
+    expect(meta(shown[1].metadata).guardedAppend).not.toHaveProperty('projection')
+    expect(await prisma.domainOutboxEvent.count({ where: { aggregateId: shown[0].id } })).toBe(0)
+  })
+
   it('held events never appear in a conversation read of Message', async () => {
     const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
     await append(chatId, PROVEN_A, key('mine'))
