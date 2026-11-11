@@ -4314,6 +4314,61 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "identity-access-mobile-personal-signin-e85631a6-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_MOBILE_PERSONAL_SIGNIN_EXECUTOR_REVIEW_E85631A6",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_DECISION_D4_PERSONAL_MOBILE_CREDENTIALS_20261111_ORCHESTRATOR_V8_MASTER_PROMPT_3_1",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain of its base e85631a6 (the enforcement deny-by-default head), whose tail is identity-access-enforce-sessionless-deny-30bdcf05-20261111, and leaves that tail unchanged."
+      },
+      "reason": "Records the tracked executable surfaces that the personal mobile sign-in (Identity Access, Owner decision D4: personal mobile credentials) adds on top of e85631a6: 2,837 + 3 = 2,840 surfaces, context-owned 1,573 -> 1,573 and governed exclusions 1,264 -> 1,267. One test-support script sits under the gravity_scripts exclusion and two Vitest suites beside the security suites under the gravity_root exclusion. No exact-inventory surface moves a source hash. The changed product paths (identity_access application and public modules, the mobile sign-in page and action, the push-registration route and contract, docs) are context-owned or outside exact inventories and need no exact assignment; the messaging push-chain PostgreSQL test carries a test-only adaptation agreed with its owner. Its predecessor is the tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to e85631a6 only and claims no final place in the chain: when its base is re-recorded or lands on main it is regenerated over the then-current tail, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2837,
+        "tracked_inventory_sha256": "018ec4d0c1c09b381724822f676d7081a0530f875c3944f1b2dc91bb5109ed76",
+        "coverage_sha256": "64e1f31d0aa2f84193543f3a459fc5aa0037cd46e3715437c8a3c31d178d0a96"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "1b3a83fb1896ee006317eb92efb5346a7062085704d63d8909a7a435d0c0783a",
+        "coverage_sha256": "affda3866574d9af5f2eb61b5893751fc31ee53f99420bbf03b194b6dee3e8c8"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/scripts/e2e-seed-staff-password.mjs",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test-support script under gravity-mvp/scripts, covered by the gravity_scripts governed exclusion by path prefix, so it receives no explicit exact-inventory assignment. It gives one test employee a personal Staff Session password in a DISPOSABLE CRM by driving the product's own integration-admin bootstrap and setStaffPassword over HTTP; it writes nothing to a database itself, holds no credential of its own (test values come from the environment and are never printed) and refuses every base URL that is not loopback before it sends anything (Security condition C1). Lifecycle TEST, recorded in the lifecycle registry as TEST_SUPPORT with no production capability."
+        },
+        {
+          "path": "gravity-mvp/src/lib/security/e2e-seed-staff-password.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix, with no explicit exact-inventory assignment. Lifecycle TEST: the seed refuses every non-loopback base URL before any request, and nothing in deploy/ or the operations docs refers to it; it sends no request and holds no real credential."
+        },
+        {
+          "path": "gravity-mvp/src/lib/security/mobile-push-registration-liveness.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix, with no explicit exact-inventory assignment. Lifecycle TEST: the real push-registration route refuses an employee whose credential no longer backs the v2 session (401) and answers an unreadable store 503, both before any registration write; the stores are in memory, no database connection."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
