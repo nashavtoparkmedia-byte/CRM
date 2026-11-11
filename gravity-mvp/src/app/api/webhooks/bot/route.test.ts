@@ -57,7 +57,9 @@ vi.mock('@/modules/fleet-operations/public/v1/yandex-connection-capability', () 
     listYandexConnectionMetadataV1: mocks.listYandexConnectionMetadata,
 }))
 
-vi.mock('@/modules/telegram-channel/public/v1', () => ({
+vi.mock('@/modules/telegram-channel/public/v1', async () => ({
+    // The real constant-time check: the route's only gate is under test here.
+    verifyTelegramBotCrmSignatureV1: (await vi.importActual<typeof import('@/modules/telegram-channel/public/v1/bot-message-delivery')>('@/modules/telegram-channel/public/v1/bot-message-delivery')).verifyTelegramBotCrmSignatureV1,
     patchDriverTelegramLinkV1: mocks.patchDriverTelegramLink,
     upsertDriverTelegramLinkV1: mocks.upsertDriverTelegramLink,
     prepareDriverTelegramConversationAuthorityV1: mocks.authorizeDriverTelegram,
@@ -103,7 +105,7 @@ function syncUserRequest(payload: Record<string, unknown>) {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
-            'x-bot-signature': 'test-bot-secret',
+            'x-bot-signature': 'test-bot-crm-shared-secret-0123456789abcdef',
         },
         body: JSON.stringify({ action: 'sync_user', payload }),
     })
@@ -114,7 +116,7 @@ function actionRequest(action: string, payload: Record<string, unknown>) {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
-            'x-bot-signature': 'test-bot-secret',
+            'x-bot-signature': 'test-bot-crm-shared-secret-0123456789abcdef',
         },
         body: JSON.stringify({ action, payload }),
     })
@@ -123,7 +125,7 @@ function actionRequest(action: string, payload: Record<string, unknown>) {
 describe('driver-bot generic phone ingress', () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegram.mockResolvedValue(null)
         mocks.findDrivers.mockResolvedValue([])
         mocks.upsertDriverTelegramLink.mockResolvedValue({ upserted: true })
@@ -131,6 +133,40 @@ describe('driver-bot generic phone ingress', () => {
         mocks.recordBotUserProfile.mockResolvedValue({ recorded: true })
         mocks.recordPendingBotLinkRequest.mockResolvedValue({ recorded: true })
         vi.stubGlobal('fetch', mocks.providerFetch)
+    })
+
+    // T3-1: this route is on the proxy allowlist, so the shared-secret check is
+    // its only gate. An empty or weak configured secret refuses everything.
+    test.each([
+        ['unset', undefined, ''],
+        ['empty, against an empty header', '', ''],
+        ['short, against an equal header', 'short-secret', 'short-secret'],
+        ['a placeholder, against an equal header', 'replace-me-with-a-generated-value-0123456789', 'replace-me-with-a-generated-value-0123456789'],
+    ])('a %s BOT_CRM_SECRET refuses every action', async (_label, configured, header) => {
+        if (configured === undefined) delete process.env.BOT_CRM_SECRET
+        else process.env.BOT_CRM_SECRET = configured
+        const response = await POST(new Request('https://crm.example/api/webhooks/bot', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-bot-signature': header },
+            body: JSON.stringify({ action: 'sync_user', payload: { telegramId: '123456', phone: '79990001122' } }),
+        }))
+
+        expect(response.status).toBe(401)
+        expect(mocks.recordBotUserProfile).not.toHaveBeenCalled()
+        expect(mocks.findDriverTelegram).not.toHaveBeenCalled()
+    })
+
+    test('a wrong signature against a strong secret is refused, an exact one is admitted', async () => {
+        const wrong = await POST(new Request('https://crm.example/api/webhooks/bot', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-bot-signature': 'test-bot-crm-shared-secret-0123456789abcdeX' },
+            body: JSON.stringify({ action: 'sync_user', payload: { telegramId: '123456' } }),
+        }))
+        expect(wrong.status).toBe(401)
+        expect(mocks.recordBotUserProfile).not.toHaveBeenCalled()
+        const source = readFileSync(resolve(__dirname, 'route.ts'), 'utf8')
+        expect(source).toMatch(/if \(!verifyTelegramBotCrmSignatureV1\(request\.headers\.get\('x-bot-signature'\)\)\) \{/)
+        expect(source).not.toMatch(/process\.env\.BOT_CRM_SECRET/)
     })
 
     test('records verified self-contact evidence locally and pends a number that names no Driver, without a provider request', async () => {
@@ -442,7 +478,7 @@ describe('driver-bot current Telegram authority', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegramFirst.mockResolvedValue({
             id: 'mapping-1',
             driverId: 'driver-1',
@@ -662,7 +698,7 @@ describe('driver-bot cash compensation pilot', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: 'park-a' })
         // The link proof every bot Driver action shares.
         mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
@@ -1009,7 +1045,7 @@ describe('driver-bot Yandex profile id of a reconciled Driver', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegramFirst.mockResolvedValue({
             id: 'mapping-1',
             driverId: 'driver-1',
@@ -1293,7 +1329,7 @@ describe('driver-bot acts only on the driver\'s own profile in its own park', ()
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
         mocks.canonicalBotConnection.mockReturnValue(BOT_CONNECTION)
         mocks.recordDriverAction.mockResolvedValue({ action: { id: 'action-1' } })
@@ -1624,7 +1660,7 @@ describe('R-OWNER-28: one Telegram account acts on the same person\'s own Driver
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         anchor = row(YOKO, { id: 'driver-1' })
         drivers = [anchor, row(NASH), row(YOKO2)]
         selectedPark = YOKO
@@ -2314,7 +2350,7 @@ describe('B4: every provider call is bounded and nothing changes after the bot g
         // Queued one-off provider answers must not leak from one case into the next.
         mocks.providerFetch.mockReset()
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         accounts += 1
         telegramId = String(700_000 + accounts)
         mapping = { id: 'mapping-1', driverId: 'driver-1', telegramId: BigInt(telegramId), activeParkId: 'park-1', carLabel: null }
@@ -2805,7 +2841,7 @@ describe('Owner scenarios: the simple Telegram → Driver link is the authority'
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegramFirst.mockResolvedValue(link)
         mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
         // No Contact confirms this driver: the state of 43 of 47 production links.
@@ -2882,7 +2918,7 @@ describe('driver-bot cash referral', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        process.env.BOT_CRM_SECRET = 'test-bot-secret'
+        process.env.BOT_CRM_SECRET = 'test-bot-crm-shared-secret-0123456789abcdef'
         mocks.findDriverTelegramFirst.mockResolvedValue({ driverId: 'driver-1', activeParkId: 'park-a' })
         mocks.findDriverTelegram.mockResolvedValue({ driverId: 'driver-1' })
         mocks.authorizeDriverTelegram.mockResolvedValue({
