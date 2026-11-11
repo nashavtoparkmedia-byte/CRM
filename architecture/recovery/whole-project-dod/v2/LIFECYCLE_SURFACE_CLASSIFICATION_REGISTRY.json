@@ -4,8 +4,8 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 746,
-    "test": 39,
+    "total_entries": 747,
+    "test": 40,
     "dead_historical": 92,
     "migration_only": 91,
     "active_operational": 519,
@@ -6816,6 +6816,15 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "identity_access",
       "source_sha256": "37496e67680637ee2a42f6dfcea21d6ab7d064d57e065a56894de671b836c459"
+    },
+    {
+      "path": "gravity-mvp/scripts/e2e-seed-staff-password.mjs",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "rationale": "End-to-end test support for the personal mobile sign-in (docs/design/mobile-personal-signin-v1.md): it gives one test employee a personal Staff Session password in a disposable CRM by driving the product's own integration-admin bootstrap and setStaffPassword over HTTP. It refuses every base URL that is not loopback before it sends anything (Security condition C1), writes nothing to a database itself and holds no credential of its own: test values come from the environment and are never printed. It is never referenced from deploy/ or the operations docs, so it has no production path. Lifecycle classification does not authorize direct writes.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "gravity_application_operations"
     }
   ]
 }
