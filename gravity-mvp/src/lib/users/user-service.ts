@@ -79,6 +79,29 @@ export async function getUsers(): Promise<UserItem[]> {
     } catch { return [] }
 }
 
+/** One row of the `/login` list: only what it shows, never contact data. */
+export interface SignInEmployee {
+    id: string
+    firstName: string
+    lastName: string
+    role: UserItem['role']
+}
+
+/**
+ * Who can sign in, for `/login`: active employees only, and only their name
+ * and role. While enforcement is on this is a session-less read
+ * (docs/design/staff-session-enforce-deny-v1.md §2.3), so it must never carry
+ * email, phone, status or dates; `getUsers` stays the session holder's read.
+ */
+export async function getSignInEmployees(): Promise<SignInEmployee[]> {
+    try {
+        const records = await readRegistryForDisplayV1()
+        return records
+            .filter((record) => record.status === 'Активен')
+            .map(({ id, firstName, lastName, role }) => ({ id, firstName, lastName, role }))
+    } catch { return [] }
+}
+
 export async function getCurrentUser(): Promise<UserItem | null> {
     const cookieStore = await cookies()
     const id = cookieStore.get('crm_user_id')?.value

@@ -4263,6 +4263,57 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "identity-access-enforce-sessionless-deny-30bdcf05-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "IDENTITY_ACCESS_ENFORCE_SESSIONLESS_DENY_EXECUTOR_REVIEW_30BDCF05",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_DECISION_IDENTITY_ACCESS_VARIANT_1_20261111_ORCHESTRATOR_V8_MASTER_PROMPT_3_1",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the chain of its base 30bdcf05 (the F-1 mobile logout head), whose tail is identity-access-mobile-logout-f1-main-42caee7e-20261110, and leaves that tail unchanged."
+      },
+      "reason": "Records the tracked executable surface that enforcement without a verified session (Identity Access, Owner decision Variant 1) adds on top of 30bdcf05 and the one source fingerprint it moves: 2,836 + 1 = 2,837 surfaces, context-owned 1,573 -> 1,573 and governed exclusions 1,263 -> 1,264. One Vitest suite sits beside the security suites under the gravity_root exclusion. The request boundary gravity-mvp/src/proxy.ts keeps its exact-runtime inventory membership, lifecycle and owner; only its source hash moves. The other changed paths (src/lib/users/user-service.ts with the additive getSignInEmployees, src/app/login/page.tsx, scripts/check-public-boundaries.mjs, tools/architecture/check-identity-boundary.mjs, package.json, the staff-session test, the design note and the engineering map) are context-owned, outside exact inventories or not executable surfaces and need no exact assignment. Its predecessor is the tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to 30bdcf05 only and claims no final place in the chain: when its base is re-recorded or lands on main it is regenerated over the then-current tail, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2836,
+        "tracked_inventory_sha256": "dbaa18b026d58cf428d11d0526bec279bce99bd72796e5bb111eceb3f028f539",
+        "coverage_sha256": "b1372f229b29b28fe074b507f489dd8497fb8270777357b5e029ddae6824dc29"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2837,
+        "tracked_inventory_sha256": "018ec4d0c1c09b381724822f676d7081a0530f875c3944f1b2dc91bb5109ed76",
+        "coverage_sha256": "64e1f31d0aa2f84193543f3a459fc5aa0037cd46e3715437c8a3c31d178d0a96"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/proxy.ts",
+          "previous_source_sha256": "93e66b42753368bc1a620db836d5f740b4b6af4d00e0591c8a8a60acf98a7699",
+          "current_source_sha256": "ffdce844c8344238b4975bdc16700141b4f7eebb0f063caff4f3c8ee9024c8c6",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "With YOKO_STAFF_SESSION_ENFORCE=on the request boundary refuses a browser request without a verified session (401 JSON for the API, every server action and any non-GET; 303 to /login for page reads) instead of forwarding it without crm_user_id; only a pinned exact-path allowlist passes, with no identity, and a session-less server action runs only when the build's own manifest maps it to a pinned sign-in action of that page and lane. With enforcement off the browser lane is unchanged; the shell lane, live sessions and the R3 503 are unchanged. Its APPLICATION_RUNTIME lifecycle, functional owner, gravity_runtime_remainder exclusion and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/lib/security/staff-session-enforce-deny.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked test under gravity-mvp/src/lib/security, covered by the gravity_root governed exclusion by path prefix. That exclusion is a path-prefix rule with no exact inventory, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST: enforcement without a verified session through the real request boundary, with real signed sessions, a temporary registry file and a temporary server-action manifest; the credential store and the logout barrier are in memory, it opens no database connection and holds no real credential."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

@@ -715,18 +715,25 @@ describe('one operator resolution (BR-4) and the request boundary', () => {
         expect(down.status).toBe(503)
     })
 
-    test('browser lane without a session: unchanged while enforcement is off; crm_user_id removed when it is on (R1)', async () => {
+    test('browser lane without a session: unchanged while enforcement is off; refused when it is on, crm_user_id never forwarded (R1)', async () => {
         const untouched = await proxy(browser('/messages', 'crm_user_id=u2'))
         expect(untouched.headers.get('x-middleware-next')).toBe('1')
         expect(downstreamCookie(untouched)).toBeNull()
         vi.stubEnv('YOKO_STAFF_SESSION_ENFORCE', 'on')
-        const enforced = await proxy(browser('/messages', 'crm_user_id=u2; theme=dark'))
-        // The request goes on, rewritten: every other cookie kept, crm_user_id gone.
-        expect(enforced.headers.get('x-middleware-next')).toBe('1')
-        expect(downstreamCookie(enforced)).toBe('theme=dark')
-        const onlyIdentity = await proxy(browser('/api/chats/1/assign', 'crm_user_id=u2', 'POST'))
-        expect(onlyIdentity.headers.get('x-middleware-next')).toBe('1')
+        // No personal sign-in, no CRM (docs/design/staff-session-enforce-deny-v1.md).
+        const page = await proxy(browser('/messages', 'crm_user_id=u2; theme=dark'))
+        expect(page.status).toBe(303)
+        expect(new URL(page.headers.get('location') ?? '').pathname).toBe('/login')
+        const write = await proxy(browser('/api/chats/1/assign', 'crm_user_id=u2', 'POST'))
+        expect(write.status).toBe(401)
+        expect(write.headers.get('x-middleware-next')).toBeNull()
+        // The sign-in page goes on, rewritten: every other cookie kept, crm_user_id gone.
+        const login = await proxy(browser('/login', 'crm_user_id=u2; theme=dark'))
+        expect(login.headers.get('x-middleware-next')).toBe('1')
+        expect(downstreamCookie(login)).toBe('theme=dark')
         // Only crm_user_id was sent, so the rewritten request carries no Cookie header at all.
+        const onlyIdentity = await proxy(browser('/login', 'crm_user_id=u2'))
+        expect(onlyIdentity.headers.get('x-middleware-next')).toBe('1')
         expect(onlyIdentity.headers.get('x-middleware-override-headers')).not.toBeNull()
         expect(onlyIdentity.headers.get('x-middleware-override-headers')).not.toContain('cookie')
         expect(downstreamCookie(onlyIdentity)).toBeNull()

@@ -36,8 +36,12 @@ export default async function MobileLoginPage({
     if (await hasMobileSessionV1()) redirect(next)
 
     const configured = isMobileLaneConfigured()
+    // This page renders without a session, so the picker gets only what it
+    // shows: never an employee's email, phone, status or dates.
     const operators = configured
-        ? (await listUserIdentitiesV1()).filter((user) => user.status === 'Активен')
+        ? (await listUserIdentitiesV1())
+            .filter((user) => user.status === 'Активен')
+            .map(({ id, firstName, lastName, role }) => ({ id, firstName, lastName, role }))
         : []
 
     return (
