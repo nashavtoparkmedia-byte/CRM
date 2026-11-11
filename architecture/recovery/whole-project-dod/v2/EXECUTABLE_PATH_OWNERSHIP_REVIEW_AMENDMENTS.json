@@ -4313,6 +4313,154 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "calling-p1-manual-call-safety-main-f8a36b9f-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "CALLING_P1_MANUAL_CALL_SAFETY_MAIN_F8A36B9F_EXECUTOR_REVIEW_20261111",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_UNIFIED_CALLING_P1_CALLS_ROUTES_OWNERSHIP_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f8a36b9f, whose tail is messaging-r21-a1a2-pre-adoption-after-r22-20261110, and leaves that amendment untouched. It lands only through the Orchestrator's ownership authority."
+      },
+      "reason": "Records the tracked executable surfaces of P1 «Calling Legacy Click-to-Call Safety» on top of main f8a36b9f: 2,840 + 16 = 2,856 surfaces, context-owned 1,577 -> 1,591 (14 new Calling paths under gravity-mvp/src/modules/calling and gravity-mvp/src/contracts/calling), governed exclusions 1,263 -> 1,265 (two TEST files beside the click-to-call routes; the remainder's exact runtime inventory is unchanged). Two reviewed exact-inventory assignments rewrite their bytes: the click-to-call routes gravity-mvp/src/app/api/calls/originate/route.ts and gravity-mvp/src/app/api/calls/cancel/route.ts become thin adapters over Calling's public manual-call handler, so this amendment carries exactly two source-fingerprint rebinds. Calling consumes, through its already allowed dependencies, exactly ContactPersonCardQuery.v1, ContactCommunicationPermissionQuery.v1 and the Staff Session principal; it writes no Contacts, Identity or Fleet data. The routes stay in the gravity_runtime_remainder exclusion: moving existing runtime files into Calling would change that exclusion's reviewed exact runtime inventory, which an amendment may not carry. The current triple is the repository's own derivation over this exact clean candidate (d96099f3), read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "232ca7adc7807654c8051ebec48d7ac4f189b3f89202ecdd47c417299cae86cc",
+        "coverage_sha256": "727da669274a65a48f96852a3c0389527d7516e22f2711dc4b51d8c5a8378009"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2856,
+        "tracked_inventory_sha256": "76c9d195d94091f3a54a720b696c5830c71123b9a5fbb5e8214e4409287fb13c",
+        "coverage_sha256": "a6c44ab30b2ffd91c6d2571291da9cf0d242d76ef96b6fe0c6c0266052eacf92"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/calls/cancel/route.ts",
+          "previous_source_sha256": "a4b2573e4211e864b82878ea0913900a069131a6f275532e538af602600ed442",
+          "current_source_sha256": "978fe4c67d5d604033abe66226d6218e7167f62b6ed93ea901276086e35dc6df",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The click-to-call route is now a thin adapter over Calling's public manual-call handler: it requires a JSON same-origin mutation, refuses a client-supplied phone number before anything runs, and hands only the request id, the Contact id and its Contacts phone id (or, for cancel, one strict channel uuid) to Calling, which makes every decision on the server with Contacts' and Identity Access's answers. Its lifecycle, functional owner, exclusion, exact inventory membership and reviewed rationale are unchanged; only the bytes move."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/calls/originate/route.ts",
+          "previous_source_sha256": "1186603b2a9b6d3e88f79e9b31013e588362ed4f0fcccf85cb904f0c02df7d69",
+          "current_source_sha256": "d60aee22c766a06109ec04fad96f7201743f34d23e4cb46833ca3c8e37dac9b5",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The click-to-call route is now a thin adapter over Calling's public manual-call handler: it requires a JSON same-origin mutation, refuses a client-supplied phone number before anything runs, and hands only the request id, the Contact id and its Contacts phone id (or, for cancel, one strict channel uuid) to Calling, which makes every decision on the server with Contacts' and Identity Access's answers. Its lifecycle, functional owner, exclusion, exact inventory membership and reviewed rationale are unchanged; only the bytes move."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/api/calls/cancel/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest test beside its click-to-call route, under the gravity_runtime_remainder governed exclusion by its path prefix (gravity-mvp/src), like the existing gravity-mvp/src/app/api/calls/route.test.ts. Its lifecycle is TEST, so it never enters that exclusion's exact runtime inventory, which stays exactly the reviewed one; it receives no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/calls/originate/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest test beside its click-to-call route, under the gravity_runtime_remainder governed exclusion by its path prefix (gravity-mvp/src), like the existing gravity-mvp/src/app/api/calls/route.test.ts. Its lifecycle is TEST, so it never enters that exclusion's exact runtime inventory, which stays exactly the reviewed one; it receives no explicit exact-inventory assignment."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/manual-call.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/contracts/calling/v1/manual-call.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/manual-call-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/manual-call.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/manual-call.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/freeswitch-manual-call-adapter.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/freeswitch-manual-call-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/manual-call-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/manual-call.postgres.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/staff-extension-directory.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/staff-extension-directory.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/manual-calls/telephony-dialplan.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/manual-call-actions.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/public/v1/manual-call-handler.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
