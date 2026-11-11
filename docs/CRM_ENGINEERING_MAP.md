@@ -1001,7 +1001,10 @@ redialled) → browser JsSIP auto-answers the bridged leg → ESL `CHANNEL_CREAT
 upsert keeps the pre-created row) → `CHANNEL_ANSWER` → SSE. `POST /api/calls/cancel` only
 for the caller or an administrator and only an active call. No dialplan routes an extension
 to the trunk (`03_user_outbound.xml`); the legacy `originateCall()` in `EslClient.ts` has no
-caller.
+caller. Messages (CW P2): `ChatHeader` passes `{contactId}` (the preferred phone),
+`ContactProfileDrawer` `{contactId, phoneId}` per phone row, and `NewChatPopover` shows
+`CallButton` only in a found Contact's row (typed text is never dialled); nothing under
+`G/app/messages` posts to `/api/calls/originate`.
 
 **F-18 Inbound call and alerts**
 SIP trunk → `telephony/conf/dialplan/public/00_inbound_did.xml` →
