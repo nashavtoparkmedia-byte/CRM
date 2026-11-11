@@ -4,7 +4,7 @@
   "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale. Composing two already accepted ownership authorities is not a per-surface review event: a merge composition declares both accepted inputs, carries the superseded accepted amendment of the merged input verbatim, and states in machine-checked form that it performs no primary per-surface review.",
   "base": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "3141b3f5d77acb81e3e4f6736ac51b2ceb5d8e2500a12ebe5dc9328faff5e132"
+    "decision_registry_sha256": "b7aa3afbb7903c7538cc3aa547793700b75b323d48bcc758b2d510d7484056ef"
   },
   "amendments": [
     {
@@ -4423,214 +4423,103 @@
       }
     },
     {
-      "amendment_id": "contact-identity-d2-staff-read-authority-main-fa3c07e5-20261111",
+      "amendment_id": "calling-c4-manual-ai-conversation-main-fa3c07e5-20261111",
       "reviewed_at": "2026-11-11T00:00:00Z",
-      "reviewed_by": "CONTACT_IDENTITY_D2_READ_AUTHORITY_EXECUTOR_REVIEW_FA3C07E5",
+      "reviewed_by": "CALLING_C4_MANUAL_AI_CONVERSATION_MAIN_FA3C07E5_EXECUTOR_REVIEW_20261111",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "ORCHESTRATOR_V8_MANDATE_07_CONTACT_IDENTITY_D2_OD03_OWNER_GO_20261111",
+      "authorization": "ORCH_V8_AI_CALLING_C4_MANDATE_09_CONDITIONAL_OWNERSHIP_20261108",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5 (#214, then #226, which adds no amendment), whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. Two new exact runtime paths are admitted in the reviewed decision registry itself, as the person-card precedent did; this amendment changes no assignment."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that amendment untouched. It lands only through the Orchestrator's ownership authority."
       },
-      "reason": "Records the tracked executable surfaces D2 (OD-03, Owner GO 2026-11-11: personal Staff Session sign-in for Менеджер, Руководитель and Администратор to read «Люди» and the person card, the full ВУ for Администратор only, the exact-ВУ search for every reader role) adds on top of main fa3c07e5 (#214, #226): 2,842 + 28 = 2,870 surfaces, context-owned 1,578 -> 1,600, governed exclusions 1,264 -> 1,270. Context-owned through their manifests: Contacts' ContactReadAuthorityQuery.v1 and its Identity Access feed with their proofs; Cash's Fleet DriverProfilesForContactsQuery.v2, DriverProfilesByExactLicenceQuery.v1, the licence view, the mask, the port, the reader and their proofs; the platform-shell ВУ-search composition and its proof. Two app test suites are unassigned under the app TEST cohort precedent, two boundary controls fall under the architecture_controls exclusion with their lifecycle classified, and the two new runtime paths (the ВУ search route POST /contacts/licence-search and its client) are admitted in the reviewed decision registry, which moves the gravity_runtime_remainder exact inventory 267 -> 269. Four exact-inventory paths change bytes and are rebound mechanically. The ВУ view follows the Owner's decision of 2026-11-11 (~10:20): every verified staff reader role sees the full ВУ, and the lookup transport answers no-store (Security R1). Its predecessor is the tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "reason": "Records the tracked executable surfaces the Calling C4 manual AI conversation adds on top of main fa3c07e5: 2,842 + 11 = 2,853 surfaces, context-owned 1,578 -> 1,589, governed exclusions unchanged at 1,264. Every new path lives under gravity-mvp/src/modules/calling or gravity-mvp/src/contracts/calling and is owned by the calling context through its manifest owned_paths. One reviewed exact-inventory assignment rewrites its bytes: the person card view now hosts Calling's public AI-conversation panel, so this amendment carries exactly one source-fingerprint rebind. Calling consumes, through its already allowed contacts.public dependency, exactly two Contacts capabilities on this path: ContactPersonCardQuery.v1 (who the person is, read for the exact canonical id the card showed) and ContactCommunicationPermissionQuery.v1 (voice, read at admission and again immediately before the provider effect); it writes no Contacts or Fleet data. The current triple is the repository's own derivation over this exact clean candidate (61e5a0f2), read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
       "predecessor": {
         "tracked_executable_surfaces": 2842,
         "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
         "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
       },
       "current": {
-        "tracked_executable_surfaces": 2870,
-        "tracked_inventory_sha256": "a076e676794ff90f1b8a4c8568f7f8444ad86856a84f100266366b1e9661a0af",
-        "coverage_sha256": "34d6b4eb95cefe07d65552cfcf896e308092d815eeafe25db3f1683c351d7ebe"
+        "tracked_executable_surfaces": 2853,
+        "tracked_inventory_sha256": "8a33ed57c9bef50987c2a9c7dd9b04d178e2f4ec61987f2ff5ade7703f90333a",
+        "coverage_sha256": "bab7d71c1bba5c3b8266ad02e3743df0d7825b5e85b5a5807731b94a33b35184"
       },
       "source_hash_rebinds": [
         {
-          "path": "gravity-mvp/src/app/api/contacts/lookup/route.ts",
-          "previous_source_sha256": "28d17e4297bc8af572e7b10e59cb7b7c875791c3be6a206dd07a7023305b8d90",
-          "current_source_sha256": "22159b48b29cf77f56163b8a2d990dddcc6c6855ac4502e341aeb83a2f19fee1",
-          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "Orchestrator V8 mandate 07 Contact Identity D2 (OD-03), Owner GO 2026-11-11: the lookup transport now admits whoever Contacts' read authority allows (a Staff Session employee of any reader role, or transitionally the integration-admin session) and answers every denial with 401 before any lookup; crm_user_id is still never read; every answer (200, 401, 500) carries Cache-Control: no-store (Security R1). Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
-        },
-        {
-          "path": "gravity-mvp/src/app/contacts/[id]/page.tsx",
-          "previous_source_sha256": "2a750d31999233c7ea184909bf905aefeff51cdf4f17de3f75ed47c229a14b52",
-          "current_source_sha256": "1310595e9589195bd0254580bfca437098a4597711f2a1bc9ce74d219126663b",
-          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "Orchestrator V8 mandate 07 Contact Identity D2 (OD-03), Owner GO 2026-11-11: only the text of the no-access screen changes: it now leads to the personal sign-in first and keeps the integration-admin sign-in as the transitional path. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
-        },
-        {
           "path": "gravity-mvp/src/app/contacts/[id]/PersonCardView.tsx",
           "previous_source_sha256": "7494dac890807f2a1b22f0c8c8cfbde608c44d42e081acb71c3a3e92c3e2f10a",
-          "current_source_sha256": "fdd623d2e18b2e8a8bcf16d57bd7d2c49ed19beea0d8ace94ae56ec04c3fa9fa",
+          "current_source_sha256": "e3ed253b368581d5a316f4ab529b98aa19bc863643e2aa1df93e7e83cbeb0009",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "Orchestrator V8 mandate 07 Contact Identity D2 (OD-03), Owner GO 2026-11-11: each park profile row also shows its ВУ exactly as Fleet gives it for the reader's view (since the Owner's decision of 2026-11-11 ~10:20, the full ВУ for every staff reader role). Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
-        },
-        {
-          "path": "gravity-mvp/src/app/contacts/page.tsx",
-          "previous_source_sha256": "05b24b791a02f4c9dcffc11e0e59e5a068195ed40cf75ef0607c993cb8177227",
-          "current_source_sha256": "69f1204ecb7fb36e3d91019c6493a093fa43c3ab0920bfd1b0538ea839e86a39",
-          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
-          "review_rationale": "Orchestrator V8 mandate 07 Contact Identity D2 (OD-03), Owner GO 2026-11-11: «Люди» gates on Contacts' read authority instead of the integration-admin principal alone, leads a refused reader to the personal sign-in first, and mounts the exact-ВУ search beside the person search. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+          "review_rationale": "The «Карточка человека» view renders Calling's public client component AiConversationPanel for the canonical Contact it already shows; the panel decides nothing itself, every admission (principal, Contacts identity, voice permission, destination) is Calling's on the server with Contacts' answers. The view still reads only the platform composition it was given. Its lifecycle, functional owner, exclusion, exact inventory membership and reviewed rationale are unchanged; only the bytes move."
         }
       ],
       "unassigned_tracked_surfaces": [
         {
-          "path": "gravity-mvp/src/app/api/contacts/lookup/route.test.ts",
+          "path": "gravity-mvp/src/contracts/calling/v1/ai-conversation.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Route and page test files in this cohort are intentionally unassigned. Every tracked TEST-lifecycle surface under gravity-mvp/src/app carries no ownership assignment in the reviewed decision registry, including its accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory. It proves that GET /api/contacts/lookup answers only with Contacts' read authority and refuses every denial with 401 before any lookup. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
         },
         {
-          "path": "gravity-mvp/src/app/contacts/licence-serialized-responses.test.tsx",
+          "path": "gravity-mvp/src/contracts/calling/v1/ai-conversation.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation-runtime.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Route and page test files in this cohort are intentionally unassigned. Every tracked TEST-lifecycle surface under gravity-mvp/src/app carries no ownership assignment in the reviewed decision registry, including its accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory. It proves on the serialized bytes (the card page rendered to HTML and the ВУ-search route answering a real Request, every refusal and failure answer and every log line included) that Менеджер and Руководитель never receive the full ВУ, with Администратор as the positive control. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
         },
         {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v1/driver-licence-view.ts",
+          "path": "gravity-mvp/src/modules/calling/application/ai-conversation.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): the licence view type ('full' | 'last4') Fleet's licence-carrying reads require. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
         },
         {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v1/driver-profiles-by-exact-licence-query.test.ts",
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation-prisma-adapter.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation-simulated-provider.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
+        },
+        {
+          "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-conversation.postgres.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): fleet_operations.DriverProfilesByExactLicenceQuery.v1, the persisted park profiles whose ВУ is exactly the typed one, masked for the caller's view and never echoing the typed value. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
         },
         {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v1/driver-profiles-by-exact-licence-query.ts",
+          "path": "gravity-mvp/src/modules/calling/public/v1/ai-conversation-actions.ts",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): fleet_operations.DriverProfilesByExactLicenceQuery.v1, the persisted park profiles whose ВУ is exactly the typed one, masked for the caller's view and never echoing the typed value. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
         },
         {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v2/driver-profiles-for-contacts-query.test.ts",
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/AiConversationPanel.test.tsx",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): fleet_operations.DriverProfilesForContactsQuery.v2, v1's park profiles plus the ВУ masked for the caller's required licence view. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle TEST."
         },
         {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v2/driver-profiles-for-contacts-query.ts",
+          "path": "gravity-mvp/src/modules/calling/public/v1/client-ui/AiConversationPanel.tsx",
           "lifecycle": "APPLICATION_RUNTIME",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): fleet_operations.DriverProfilesForContactsQuery.v2, v1's park profiles plus the ВУ masked for the caller's required licence view. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/contracts/fleet-operations/v2/index.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/contracts/fleet-operations in its manifest owned_paths): the v2 contract index that exports fleet_operations.DriverProfilesForContactsQuery.v2, v1's park profiles plus the ВУ masked for the caller's required licence view. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-read-authority.staff-session.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Identity Access feed of contacts.ContactReadAuthorityQuery.v1, read in the no-elevation order (a staff cookie decides alone; the enforcement switch and the transitional integration-admin session only without one), proven against the real Staff Session tokens, registry file and request boundary with the credential store held in memory. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-read-authority.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Identity Access feed of contacts.ContactReadAuthorityQuery.v1, read in the no-elevation order (a staff cookie decides alone; the enforcement switch and the transitional integration-admin session only without one). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/contacts/internal/identity-access-contact-read-authority.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): the Identity Access feed of contacts.ContactReadAuthorityQuery.v1, read in the no-elevation order (a staff cookie decides alone; the enforcement switch and the transitional integration-admin session only without one). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-read-authority.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): contacts.ContactReadAuthorityQuery.v1, the one answer to who may read people and which ВУ view they hold (a Staff Session employee by role, or transitionally the integration-admin session until Staff Session is enforced). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/contacts/public/v1/contact-read-authority.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the contacts bounded context owns (gravity-mvp/src/modules/contacts in its manifest owned_paths): contacts.ContactReadAuthorityQuery.v1, the one answer to who may read people and which ВУ view they hold (a Staff Session employee by role, or transitionally the integration-admin session until Staff Session is enforced), as a pure decision. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-licence-mask.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): maskDriverLicenceV1, Fleet's one representation of a stored ВУ for a reader (only an exact full view shows it; anything else shows at most its last four characters). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-licence-mask.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): maskDriverLicenceV1, Fleet's one representation of a stored ВУ for a reader (only an exact full view shows it; anything else shows at most its last four characters). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-licence-read-port.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the persistence port of Fleet's licence-carrying reads. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-licence-reads.postgres.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the isolated-PostgreSQL proof of the read-only, parameterized stored-licence reader behind both licence-carrying queries. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the handler behind fleet_operations.DriverProfilesByExactLicenceQuery.v1, the persisted park profiles whose ВУ is exactly the typed one, masked for the caller's view and never echoing the typed value. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the handler behind fleet_operations.DriverProfilesByExactLicenceQuery.v1, the persisted park profiles whose ВУ is exactly the typed one, masked for the caller's view and never echoing the typed value. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the handler behind fleet_operations.DriverProfilesForContactsQuery.v2, v1's park profiles plus the ВУ masked for the caller's required licence view, reusing v1's read unchanged. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the handler behind fleet_operations.DriverProfilesForContactsQuery.v2, v1's park profiles plus the ВУ masked for the caller's required licence view, reusing v1's read unchanged. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-licence-adapter.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the fleet_operations bounded context owns (gravity-mvp/src/modules/fleet-operations in its manifest owned_paths): the one read-only, parameterized reader of the stored ВУ over Fleet-owned Driver and Park rows for both licence-carrying queries. Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/platform-shell/application/contact-licence-search-composition.test.ts",
-          "lifecycle": "TEST",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new Vitest suite under a path the platform_shell bounded context owns (gravity-mvp/src/modules/platform-shell in its manifest owned_paths): the platform-shell composition of the «Люди» search by an exact ВУ (Contacts' read authority first, then Fleet's exact-licence query with that view; no echo, no unmasked last-4 answer). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "gravity-mvp/src/modules/platform-shell/application/contact-licence-search-composition.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new tracked executable surface under a path the platform_shell bounded context owns (gravity-mvp/src/modules/platform-shell in its manifest owned_paths): the platform-shell composition of the «Люди» search by an exact ВУ (Contacts' read authority first, then Fleet's exact-licence query with that view; no echo, no unmasked last-4 answer). Context ownership comes from the manifest, so the surface receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle APPLICATION_RUNTIME. Added under the Orchestrator V8 mandate 07 Contact Identity D2 (OD-03) Owner GO (2026-11-11); it holds no credential and opens no database connection of its own."
-        },
-        {
-          "path": "tools/architecture/check-driver-licence-readers.mjs",
-          "lifecycle": "OPERATIONAL_SCRIPT",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It keeps the exact inventory of every non-test source file that touches the ВУ under any of its names, each with a verified disposition, fails on an unlisted reader, a removed guard, a missing mask or a log line that prints a ВУ carrier, and runs its negative probes; it writes nothing."
-        },
-        {
-          "path": "tools/architecture/check-fleet-driver-licence-view-boundary.mjs",
-          "lifecycle": "OPERATIONAL_SCRIPT",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "A new boundary control under tools/architecture, which the architecture_controls governed exclusion covers by prefix and which carries no exact inventory, so it receives no explicit exact-inventory assignment. Its reviewed lifecycle, disposition, production reachability and functional owner are recorded in the lifecycle surface classification registry, not here. It pins Fleet's licence-carrying reads to the required view and to maskDriverLicenceV1 as the only place a view turns into a shown ВУ, checks each rule against known mutants and runs the proofs; it writes nothing."
+          "review_rationale": "Owned by the calling context through its manifest owned_paths, so the coverage derivation assigns it a context owner and it never reaches a governed exclusion or an exact inventory; it therefore receives no explicit exact-inventory assignment and moves no exact-inventory transition. Lifecycle APPLICATION_RUNTIME."
         }
       ],
       "invariants": {

@@ -18,6 +18,7 @@ export * from './ai-agent-profile-commands'
 export * from './ai-agent-config-commands'
 export * from './ai-intern-control'
 export * from './ai-call-campaign-management'
+export * from './ai-conversation'
 export {
     CALL_ALERT_REQUESTED_EVENT_V1,
     CALL_ALERT_KINDS_V1,
