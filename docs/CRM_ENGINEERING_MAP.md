@@ -13,8 +13,11 @@ mobile operator authority (BR-4: request boundary, logout barrier, protected eff
 change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
 Partial update 2026-11-08: §2.8, F-25 (browser operator row), the `StaffCredential` data rows, the Login / sessions / guards routing row, I-SS1 (number assigned at landing) and R-01 describe Staff Session v1 (`docs/design/staff-session-v1.md` v1.3), verified against its own change on top of main `7bf380c2`. It is dormant until `STAFF_SESSION_SECRET` is provisioned.
+Partial update 2026-11-10: F-24a and I-31b describe the referral screen's writes through Staff Session (the Cash wiring, `docs/design/cash-staff-authority-v2.md`) and its C2 control, verified against their own change on top of main `42caee7e`.
 Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
 tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
+Partial update 2026-11-08: §2.4 (tests), F-08 and I-09 describe WhatsApp message admission by provider key (W2), verified
+against its own change on top of main `3ac5ce07`.
 
 # YOKO CRM — Engineering Map
 
@@ -385,8 +388,8 @@ Each entry lists what the code actually does.
   boot warm-up and a 60 s watchdog in `G/instrumentation.ts`.
 - **Extension points**: `WhatsAppChannelDeliveryV1`; message-type mapping
   functions in `WhatsAppService.ts` (repeated across live, sync and import paths).
-- **Tests**: `G/lib/whatsapp/WhatsAppService.connection-binding.test.ts`,
-  `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
+- **Tests**: `G/lib/whatsapp/WhatsAppService.connection-binding.test.ts` (incl. the
+  W2 message-identity suite), `whatsapp-qr-ceremony.test.ts`; `check-whatsapp-runtime-provider-boundary.mjs`,
   `check-messaging-whatsapp-*-boundary.mjs`.
 
 ### 2.5 MAX channel (`max_channel`)
@@ -878,9 +881,11 @@ collision checks → `createExternalConversationV1` / `patchExternalConversation
 checks → `assertPrivateWhatsAppConversationConnectionV1` →
 `prisma.whatsAppChat.upsert` → `upsertChannelConversationV1` → F-01 (with
 `canonicalWhatsAppIdentityExternalIdV1`) → `DriverMatchService.linkChatToDriver` →
-`prisma.whatsAppMessage.upsert` → `createChannelMessageV1`
+`prisma.whatsAppMessage.upsert` → `admitWhatsAppProviderMessageV1` (by provider key,
+per-conversation lock; I-09) → `createChannelMessageV1`
 (`externalId = msg.id._serialized`) → `attachMessageMediaV1` → workflow →
-`publishPersistedMessageV1`.
+`publishPersistedMessageV1`. Background sync and history import admit through the
+same helper.
 
 **F-09 Operator outbound text**
 `G/app/messages/hooks/useMessages.ts` (generates `clientMessageId`) →
@@ -1122,9 +1127,10 @@ Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
 `G/app/compensation/referrals/actions.ts` → CRM manager session (`managerSession`) →
 the search and the person card also need the verified integration-admin principal
 (`getIntegrationAdminPrincipal`; ContactLookup.v1 answers only it) → every write also
-needs `resolveCashStaffAuthorityV1` (`referral-data.ts`; it refuses
-`staff_session_unavailable` until Identity Access hands over the signed session facts,
-`docs/design/cash-staff-authority-v1.md`) → `cashReferralManager*V1` /
+needs `resolveCashStaffAuthorityV1` (`referral-data.ts` → `resolveCashStaffAuthorityFromSessionV1`
+with Identity Access's `getStaffSessionPrincipalV1`, `listUserIdentitiesV1` and the server
+clock; only a confirmed `Администратор` writes, `docs/design/cash-staff-authority-v2.md`;
+the allowlist is held by `check-cash-referral-staff-authority-boundary.mjs`) → `cashReferralManager*V1` /
 `cashAccessManager{Grant,Revoke}V1` (`application/cash-referral-manager-operations.ts`,
 behind `YOKO_CASH_ACCESS_LEDGER=on`) → `COMP/cash-referral-manager-service.ts` → the
 ledger adapter. Recording an invitation and granting access are separate writes; a grant
@@ -1478,7 +1484,18 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   Exception: `send-media` has no such lookup (R-04).
 - **I-09 Inbound dedupe on `Message.externalId` (unique).** — receive and
   external-message adapters. Exception: `createChannelMessageV1` leaves dedupe to
-  the caller; Telegram and WhatsApp add a same-content time-window dedupe.
+  the caller; Telegram adds a same-content time-window dedupe. WhatsApp (W2) admits
+  live, sync and import messages by provider key only (`_serialized`, else `$1`,
+  else the key rebuilt from its parts), so two keys are two messages whatever they
+  say. A taken key is never copied or moved, and a lost create race (P2002) counts
+  as already stored. The one content match is the outbound echo: a `fromMe` message
+  may claim one outbound row in the same conversation that has no provider id yet
+  and is not `failed` with outcome `safe_to_redeliver`/`terminal`; the window is
+  ±10 s live and ±2 s for history. A live message without a provider key is not
+  stored (`wa_message_provider_id_missing`). — `admitWhatsAppProviderMessageV1` in
+  `G/lib/whatsapp/WhatsAppService.ts` — `WhatsAppService.connection-binding.test.ts`
+  (W2 suite),
+  `check-messaging-whatsapp-message-boundary.mjs`.
 - **I-10 Redelivery only when the failure is classified `safe_to_redeliver`
   under taxonomy v2.** — `classifyDeliveryOutcome`, `isSafeToRedeliver`
   (`retrySend`), the retry SQL selector — `delivery-recovery-operations.test.ts`,
@@ -1822,7 +1839,7 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   `compensation-manager-principal.ts` — its test. Exception: the session itself is
   the unsigned browser cookie (F-25); the real gate on `/compensation` is nginx
   Basic Auth (`check-compensation-edge-perimeter-boundary.mjs`).
-- **I-31b A referral manager write needs a signed staff session and the kind's capability.**
+- **I-31b A referral manager write needs Identity Access's Staff Session of a confirmed Администратор and the kind's capability.**
   No role, principal id or the unsigned `crm_user_id` cookie admits a write, and the
   authority is resolved on the server, never taken from the browser:
   `cash.referral.qualify` for invitations, `cash.access.manage` for grant and revoke. A
@@ -1830,7 +1847,7 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   invitation grants nothing. — `cashStaffAuthorityAdmitsV1` in `COMP/cash-referral-manager.ts`,
   the writer CHECKs of `20261106210000_add_cash_referral_manager_links` —
   `cash-referral-manager*.test.ts`, `G/app/compensation/referrals/referral-actions.test.ts`,
-  `cash-referral-manager-scenario.postgres.test.ts`.
+  `cash-referral-manager-scenario.postgres.test.ts`, `check-cash-referral-staff-authority-boundary.mjs`.
 - **I-31a On demand never reads a park.** In mode `on_demand` the only provider
   request is one proven driver's completed cash orders of one business day, made after
   eligibility and the day checks; a response that is not exactly that is not written. —
