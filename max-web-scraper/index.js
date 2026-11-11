@@ -33,6 +33,7 @@ const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { deriveMaxChatKind }        = require('./lib/ChatKind')
 const { attestDomRead, domCandidateExtraction, pageSample } = require('./lib/DomRouteAttestation')
 const { MaxWebReplyBridge }        = require('./lib/MaxWebReplyBridge')
+const { MaxLiveAcceptanceGuard, liveRefusalError, liveRefusalBody } = require('./lib/LiveAcceptanceGuard')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -266,6 +267,10 @@ function isProtocolMaxChatId(chatId) {
 
 // 'none' | 'from_connection_time' | 'available_history'
 let HISTORY_IMPORT_MODE = process.env.HISTORY_IMPORT_MODE || 'from_connection_time'
+// Live provider acceptance only: the guard reads its flag from the environment
+// once, here. Unset in production: every check below then answers "allowed"
+// and changes nothing.
+const liveGuard = new MaxLiveAcceptanceGuard({ env: process.env, historyImportMode: HISTORY_IMPORT_MODE })
 let qrUpdatedAt         = null   // timestamp последней генерации QR
 const SESSION_START_MS  = Date.now()  // для подавления ложного QR при перезапуске
 
@@ -660,6 +665,37 @@ async function processSendQueue() {
   isSending = false
 }
 
+/**
+ * Live acceptance: one permit for one outbound action on `chatId`, taken right
+ * before it runs and released after, with the page's window closed again
+ * whatever the action did. Off, it only runs the action.
+ */
+async function withLiveSend(chatId, operation, run, { refusedResult = null } = {}) {
+  if (!liveGuard.enabled) return run()
+  const decision = liveGuard.beginSend(chatId, operation)
+  if (!decision.allowed) {
+    if (refusedResult) return refusedResult(decision)
+    throw liveRefusalError(decision)
+  }
+  try {
+    return await run()
+  } finally {
+    liveGuard.endSend()
+    await transport.disarmLivePageSend()
+  }
+}
+
+/** In a sender: the chat it resolved must be the permitted one. Off, it passes. */
+function assertLiveTarget(...ids) {
+  const decision = liveGuard.checkTarget(...ids)
+  if (!decision.allowed) throw liveRefusalError(decision)
+  return decision
+}
+
+function liveTextRefusal(decision) {
+  return { outcome: 'refused', code: decision.code, reason: decision.reason || null }
+}
+
 function normalizeExactMaxProviderAccountId(value) {
   if (value == null || !['string', 'number'].includes(typeof value)) return null
   const normalized = String(value).trim()
@@ -712,6 +748,7 @@ function maxScraperWebhookHeaders(headers = {}) {
 
 function forwardMaxReactionWebhook(url, payload) {
   try {
+    if (!liveGuard.reactionAllowed(payload)) return Promise.resolve(liveGuard.reactionSkipResponse())
     const providerAccountId = liveAuthenticatedMaxProviderAccountId()
     if (!providerAccountId) throw new Error('MAX_PROVIDER_ACCOUNT_UNPROVEN')
     if (payload.providerAccountId != null) {
@@ -764,6 +801,10 @@ async function forwardToWebhook(payload) {
 }
 
 function postToCrmWebhook(normalizedPayload) {
+  // Live acceptance: an event of a chat that is not allowlisted is settled
+  // here and never reaches the CRM.
+  const liveInbound = liveGuard.webhookDecision(normalizedPayload)
+  if (!liveInbound.allowed) return Promise.resolve(liveInbound.syntheticResult)
   const url  = new URL(CRM_WEBHOOK_URL)
   const body = JSON.stringify(normalizedPayload)
   const mod  = url.protocol === 'https:' ? https : http
@@ -802,6 +843,13 @@ function postToCrmWebhook(normalizedPayload) {
 async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   const rawChatId = msg.chatId
   if (msg.chatId != null) msg = { ...msg, chatId: normalizeMaxChatId(msg.chatId), rawChatId }
+
+  // Live acceptance: a chat that is not allowlisted is neither downloaded,
+  // forwarded nor recovered; it is settled as skipped.
+  if (!liveGuard.inboundAllowed(msg.chatId)) {
+    if (msg.id) inboundLedger.markPersisted(String(msg.id), msg.chatId, 'skipped:live_acceptance_not_allowlisted')
+    return
+  }
 
   // Server push: message was deleted in MAX — propagate to CRM
   if (msg.status === 'REMOVED') {
@@ -1370,6 +1418,14 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
     replyProviderId = resolved.providerMessageId
   }
 
+  // Live acceptance: the chat and the web route it resolved to must be the
+  // permitted chat, and the page must open its window for this send.
+  const liveTarget = liveGuard.checkTarget(protocolChatId, route.uiRouteId)
+  if (!liveTarget.allowed) return liveTextRefusal(liveTarget)
+  if (liveTarget.enforced && !(await transport.armLivePageSend())) {
+    return { outcome: 'refused', code: 'MAX_LIVE_PAGE_GUARD_MISSING', reason: 'page_guard_not_armed' }
+  }
+
   const cid = stableTextCid(clientMessageId)
   // The page is claimed from navigation to the end of the evidence wait, so no
   // DOM recovery can navigate it away between the readiness check and the send.
@@ -1684,6 +1740,11 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
   if (!page || !isReady) return false
 
   const uiRouteId = UI_CHAT_ID_OVERRIDES[String(chatId)] || String(chatId)
+  // Live acceptance: the route this upload opens must be the permitted chat.
+  const liveTarget = assertLiveTarget(chatId, uiRouteId)
+  if (liveTarget.enforced && !(await transport.armLivePageSend())) {
+    throw liveRefusalError({ code: 'MAX_LIVE_PAGE_GUARD_MISSING', reason: 'page_guard_not_armed' })
+  }
   const targetUrl = `https://web.max.ru/${uiRouteId}`
   if (transportForAck) transportForAck._activeUiChatId = protocolChatIdForUiRoute(chatId)
   const safeName = String(filename || 'upload.bin').replace(/[^\w.\-]+/g, '_').slice(-120) || 'upload.bin'
@@ -4811,6 +4872,7 @@ async function uploadRawBinary(url, fileBuffer, filename, mimeType) {
  * Send a photo message: opcode 80 → FormData upload → opcode 64.
  */
 async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType, caption) {
+  assertLiveTarget(chatId)
   maxDeliveryLog({
     operation: 'upload',
     status: 'upload_started',
@@ -4897,6 +4959,7 @@ async function sendMessageWithRetry(transport, chatId, messagePayload, maxRetrie
  * Response from opcode 82: {info: [{videoId, url, token}]}
  */
 async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, caption) {
+  assertLiveTarget(chatId)
   maxDeliveryLog({
     operation: 'upload',
     status: 'upload_started',
@@ -4949,6 +5012,7 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
  * Response from opcode 87: {info: [{fileId, url}]}  (no token — fileId is enough)
  */
 async function sendFile(transport, chatId, fileBuffer, filename, mimeType, caption) {
+  assertLiveTarget(chatId)
   maxDeliveryLog({
     operation: 'upload',
     status: 'upload_started',
@@ -5003,6 +5067,7 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 // MAX's response to that request - matched by seq, never a later push - is the
 // proof the reaction was applied; its reactionInfo is the message's new state.
 async function sendReactionRequest(transport, opcode, chatId, messageId, reaction) {
+  assertLiveTarget(chatId)
   const request = {
     chatId: maxChatIdForRequest(chatId),
     messageId: maxMessageIdForRequest(messageId),
@@ -5173,6 +5238,7 @@ process.on('unhandledRejection', (reason) => {
 
 const session      = new SessionController()
 const transport    = new TransportInterceptor()
+transport.setLiveAcceptanceGuard(liveGuard)
 const sync         = new MessageSync()
 const contactStore = new ContactStore()
 
@@ -6013,6 +6079,14 @@ app.post('/send-message', async (req, res) => {
     return res.status(400).json({ error: 'chatId or phone is required' })
   }
   if (!chatId && phone) chatId = phone
+  // Live acceptance: refused before the provider account is even looked at,
+  // so the refusal holds with no MAX session at all.
+  const livePrecheck = liveGuard.precheckSend(String(chatId || '').replace(/\D/g, ''))
+  if (!livePrecheck.allowed) {
+    const answer = textSendHttpAnswer(liveTextRefusal(livePrecheck), { chatId: String(chatId || '').replace(/\D/g, ''), providerAccountId: null })
+    console.warn(`[Send] live acceptance refused: ${livePrecheck.code}; nothing dispatched`)
+    return res.status(answer.status).json(answer.body)
+  }
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
 
@@ -6032,7 +6106,7 @@ app.post('/send-message', async (req, res) => {
 
   let result
   try {
-    result = await enqueueSend(() => sendText(
+    result = await enqueueSend(() => withLiveSend(digits, 'send_text', () => sendText(
       transport,
       digits,
       message,
@@ -6040,7 +6114,7 @@ app.post('/send-message', async (req, res) => {
       uiChatId,
       clientMessageId,
       { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
-    ))
+    ), { refusedResult: liveTextRefusal }))
   } catch (e) {
     // sendText decides every outcome itself; an exception here means the call
     // broke at a point where an action may already have been taken.
@@ -6074,6 +6148,8 @@ app.post('/send-reaction', async (req, res) => {
   if (!remove && !emoji) {
     return res.status(400).json({ error: 'emoji is required unless remove=true' })
   }
+  const livePrecheck = liveGuard.precheckSend(chatId)
+  if (!livePrecheck.allowed) return res.status(422).json(liveRefusalBody(livePrecheck))
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   if (/^max-(dom|recovered)-/.test(String(messageId)) || /-recovered$/.test(String(messageId))) {
@@ -6085,13 +6161,14 @@ app.post('/send-reaction', async (req, res) => {
   try {
     let result
     if (remove) {
-      result = await removeReaction(transport, Number(chatId), messageId)
+      result = await withLiveSend(chatId, 'reaction_remove', () => removeReaction(transport, Number(chatId), messageId))
     } else {
       // Помечаем как нашу собственную реакцию чтобы opcode 135 echo не дублировал обновление
-      result = await sendReaction(transport, Number(chatId), messageId, emoji)
+      result = await withLiveSend(chatId, 'reaction', () => sendReaction(transport, Number(chatId), messageId, emoji))
     }
     res.json({ success: true, ...result, providerAccountId })
   } catch (e) {
+    if (e?.liveRefused) return res.status(422).json(liveRefusalBody(e))
     res.status(500).json({ error: e.message })
   }
 })
@@ -6104,6 +6181,8 @@ app.post('/delete-message', async (req, res) => {
   if (!chatId || !messageId) {
     return res.status(400).json({ error: 'chatId and messageId required' })
   }
+  const livePrecheck = liveGuard.precheckSend(chatId)
+  if (!livePrecheck.allowed) return res.status(422).json(liveRefusalBody(livePrecheck))
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   try {
@@ -6111,11 +6190,14 @@ app.post('/delete-message', async (req, res) => {
     // yield*r(66,{chatId:e.id,postId,messageIds:i,forMe:!n}) - forMe:false is
     // delete for everyone. MAX answers with the ids it removed and any it could not.
     const providerMessageId = maxMessageIdForRequest(messageId)
-    const result = await transport.requestBinary(OP.DELETE_MESSAGE, {
-      chatId:     maxChatIdForRequest(chatId),
-      messageIds: [providerMessageId],
-      forMe:      false,
-    }, { timeoutMs: 15_000, purpose: 'delete' })
+    const result = await withLiveSend(chatId, 'delete', () => {
+      assertLiveTarget(chatId)
+      return transport.requestBinary(OP.DELETE_MESSAGE, {
+        chatId:     maxChatIdForRequest(chatId),
+        messageIds: [providerMessageId],
+        forMe:      false,
+      }, { timeoutMs: 15_000, purpose: 'delete' })
+    })
     const failed = Array.isArray(result?.failedMessageIds)
       && result.failedMessageIds.some(id => canonicalMaxMessageIdHex(id) === canonicalMaxMessageIdHex(String(messageId)))
     if (failed) {
@@ -6126,6 +6208,7 @@ app.post('/delete-message', async (req, res) => {
     res.json({ success: true, providerAccountId })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
+    if (e?.liveRefused) return res.status(422).json(liveRefusalBody(e))
     if (e.dispatched === false) return res.status(503).json({ error: `MAX_DELETE_NOT_DISPATCHED: ${e.reason || e.message}`, code: 'MAX_DELETE_NOT_DISPATCHED' })
     if (e.refused) return res.status(422).json({ error: `MAX_DELETE_REFUSED: ${e.maxError}`, code: 'MAX_DELETE_REFUSED' })
     res.status(502).json({ error: `MAX_DELETE_OUTCOME_UNKNOWN: ${e.reason || e.message}`, code: 'MAX_DELETE_OUTCOME_UNKNOWN' })
@@ -6139,11 +6222,13 @@ app.post('/send-image', async (req, res) => {
   if (!chatId || !base64 || !filename || !mimeType) {
     return res.status(400).json({ error: 'chatId, base64, filename, mimeType are required' })
   }
+  const livePrecheck = liveGuard.precheckSend(chatId)
+  if (!livePrecheck.allowed) return res.status(422).json(liveRefusalBody(livePrecheck))
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   try {
     const fileBuffer = decodeBase64Payload(base64)
-    const externalId = await enqueueSend(async () => {
+    const externalId = await enqueueSend(() => withLiveSend(chatId, 'send_image', async () => {
       if (phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)]) {
         try {
           let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
@@ -6177,10 +6262,11 @@ app.post('/send-image', async (req, res) => {
         if (uiSent) return uiSent
         throw nativeErr
       }
-    })
+    }))
     const delivery = normalizeMediaSendResult(externalId)
     res.json({ success: true, ...delivery, providerAccountId })
   } catch (e) {
+    if (e?.liveRefused) return res.status(422).json(liveRefusalBody(e))
     res.status(500).json({ error: e.message })
   }
 })
@@ -6192,13 +6278,15 @@ app.post('/send-media', async (req, res) => {
   if (!chatId || !base64 || !filename || !mimeType || !mediaType) {
     return res.status(400).json({ error: 'chatId, base64, filename, mimeType, mediaType are required' })
   }
+  const livePrecheck = liveGuard.precheckSend(chatId)
+  if (!livePrecheck.allowed) return res.status(422).json(liveRefusalBody(livePrecheck))
   const providerAccountId = requireLiveMaxProviderAccount(req, res)
   if (providerAccountId === null) return
   try {
     const fileBuffer = decodeBase64Payload(base64)
     const cid = Number(chatId)
 
-    const externalId = await enqueueSend(async () => {
+    const externalId = await enqueueSend(() => withLiveSend(chatId, 'send_media', async () => {
       const hasCaption = String(caption || '').trim().length > 0
       const shouldPreferUiMedia = (mediaType === 'image' || mimeType.startsWith('image/')) && (hasCaption || phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)])
       if (shouldPreferUiMedia) {
@@ -6247,12 +6335,13 @@ app.post('/send-media', async (req, res) => {
         if (uiSent) return uiSent
         throw nativeErr
       }
-    })
+    }))
 
     const delivery = normalizeMediaSendResult(externalId)
     res.json({ success: true, ...delivery, providerAccountId })
   } catch (e) {
     console.error('[send-media] Error:', e.message)
+    if (e?.liveRefused) return res.status(422).json(liveRefusalBody(e))
     res.status(500).json({ error: e.message })
   }
 })
@@ -6295,6 +6384,8 @@ app.get('/status', (req, res) => {
       openGaps:      transport ? Object.keys(transport.gapFloors()).length : 0,
       catchUp:       transport?._catchUp ? { running: transport._catchUp.running, lastRunAt: transport._catchUp.lastRunAt || null, lastResult: transport._catchUp.lastResult } : null,
     },
+    // Only with the live-acceptance guard on: its mode and counts, never an id.
+    ...(liveGuard.enabled ? { liveAcceptance: liveGuard.statusSummary() } : {}),
   })
 })
 
@@ -6322,6 +6413,9 @@ app.post('/set-history-mode', (req, res) => {
   const valid = ['none', 'from_connection_time', 'available_history']
   if (!valid.includes(mode)) {
     return res.status(400).json({ error: `Invalid mode. Use: ${valid.join(', ')}` })
+  }
+  if (!liveGuard.historyModeAllowed(mode)) {
+    return res.status(403).json({ error: 'MAX_LIVE_HISTORY_MODE_LOCKED: live acceptance keeps from_connection_time or none', code: 'MAX_LIVE_HISTORY_MODE_LOCKED' })
   }
   HISTORY_IMPORT_MODE = mode
   console.log('[App] History import mode:', mode)
@@ -6391,6 +6485,9 @@ app.get('/import-progress', (req, res) => {
 // Запустить импорт истории с отчётом о результатах
 // Body: { jobId, crmApiUrl, mode, daysBack? }
 app.post('/import-history', async (req, res) => {
+  if (!liveGuard.importHistoryAllowed()) {
+    return res.status(403).json({ error: 'MAX_LIVE_HISTORY_IMPORT_LOCKED: no history import during live acceptance', code: 'MAX_LIVE_HISTORY_IMPORT_LOCKED' })
+  }
   if (!isReady) {
     return res.status(503).json({ error: 'Scraper not ready yet' })
   }

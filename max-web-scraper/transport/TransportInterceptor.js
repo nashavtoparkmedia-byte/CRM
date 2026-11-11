@@ -1245,6 +1245,7 @@ class TransportInterceptor {
     this._sentReactionHandlers = []  // срабатывают когда пользователь ставит реакцию в MAX веб
     this._page                 = null
     this._cdpClient            = null
+    this._liveGuard            = null       // MAX live-acceptance guard (lib/LiveAcceptanceGuard); null or off in production
     this._pendingReqs          = new Map()  // own request seq → {resolve, reject, timeout, opcode, purpose}
     this._ownRequestCounter    = 0          // position in the own-request seq range
     this._pageOutSeqHigh       = -1         // highest seq the page itself used on the current socket
@@ -1302,6 +1303,31 @@ class TransportInterceptor {
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
 
+  /** The live-acceptance guard; set before injectHooks. Off (or absent) changes nothing. */
+  setLiveAcceptanceGuard(guard) {
+    this._liveGuard = guard || null
+  }
+
+  _liveGuardOn() {
+    return Boolean(this._liveGuard && this._liveGuard.enabled)
+  }
+
+  /** Opens the page's window for the frames of one UI send. False when the page guard is missing. */
+  async armLivePageSend() {
+    if (!this._liveGuardOn()) return true
+    if (!this._page) return false
+    try {
+      return await this._page.evaluate(() => (typeof window.__maxLiveArm === 'function' ? window.__maxLiveArm() === true : false))
+    } catch {
+      return false
+    }
+  }
+
+  async disarmLivePageSend() {
+    if (!this._liveGuardOn() || !this._page) return
+    try { await this._page.evaluate(() => { if (typeof window.__maxLiveDisarm === 'function') window.__maxLiveDisarm() }) } catch {}
+  }
+
   async injectHooks(page) {
     this._page = page
 
@@ -1310,6 +1336,14 @@ class TransportInterceptor {
     await page.exposeFunction('__maxWsReceive', (data) => {
       try { this._handleFrame(String(data)) } catch {}
     })
+
+    // Only with the live-acceptance guard on: the page's socket refuses
+    // send-class frames nobody armed. Production adds nothing here.
+    const liveGuardScript = this._liveGuardOn() ? this._liveGuard.pageInitScript() : null
+    if (liveGuardScript) {
+      await page.addInitScript(liveGuardScript)
+      console.log('[Transport] live-acceptance page guard injected')
+    }
 
     await page.addInitScript(WS_INIT_SCRIPT)
     console.log('[Transport] WS-хук инжектирован')
@@ -1358,6 +1392,7 @@ class TransportInterceptor {
             const opcode  = buf.readInt16BE(4)
             const outgoing = decodeMaxBinaryFrame(buf)
             if (outgoing.ok) {
+              if (this._liveGuard) this._liveGuard.observeWireFrame(outgoing)
               this._handleOutgoingFrame({ ...outgoing, socket: requestId ?? null })
             } else {
               console.warn(`[WS→MAX BIN] undecodable outgoing frame reason:${outgoing.reason} op:${outgoing.opcode ?? 'n/a'} seq:${outgoing.seq ?? 'n/a'}`)
@@ -1521,6 +1556,8 @@ class TransportInterceptor {
         this._readMarksWithheld += 1
         this._wireIntervention.lastAt = Date.now()
         console.log(`[readMark] page read mark withheld seq:${data.seq} cmd:${data.cmd} total:${this._readMarksWithheld}`)
+      } else if (data.__diag === 'live_guard_frame_dropped' && this._liveGuardOn()) {
+        this._liveGuard.notePageFrameDropped(data)
       } else {
         console.log('[Transport DIAG]', JSON.stringify(data))
       }
@@ -2737,6 +2774,13 @@ class TransportInterceptor {
       Object.assign(new Error(`MAX op:${opcode} ${purpose} ${dispatched ? 'unanswered' : 'not dispatched'}: ${reason}`), { opcode, purpose, reason, dispatched, ...extra })
     const blocker = this.ownRequestBlocker()
     if (blocker) return Promise.reject(fail(blocker, false))
+    // L2 of the live-acceptance guard: a send-class frame only for the chat of
+    // the active permit. Off, it answers allowed and nothing below changes.
+    const liveFrame = this._liveGuard ? this._liveGuard.checkOwnFrame(opcode, payload) : null
+    if (liveFrame && !liveFrame.allowed) {
+      return Promise.reject(fail(`live_acceptance_refused:${liveFrame.code}`, false, { liveRefused: true, code: liveFrame.code }))
+    }
+    const armOwnFrame = Boolean(liveFrame && liveFrame.enforced && liveFrame.sendClass)
     const seq = this._allocateOwnRequestSeq()
     if (seq === null) return Promise.reject(fail('no_free_request_seq', false))
     let frame
@@ -2751,7 +2795,13 @@ class TransportInterceptor {
         reject(fail('timeout', true, { seq }))
       }, timeoutMs)
       this._pendingReqs.set(seq, { resolve, reject, timeout, opcode, purpose, own: true, sentAt: 0 })
-      this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
+      const dispatch = armOwnFrame
+        // The page guard lets exactly this one frame through, in the same turn.
+        ? this._page.evaluate(b => (typeof window.__maxLiveSendOwnFrame === 'function'
+          ? window.__maxLiveSendOwnFrame(() => window.__maxWsSendBinary(b))
+          : { ok: false, error: 'live_guard_page_script_missing' }), frame.toString('base64'))
+        : this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
+      dispatch
         .then(result => {
           const pending = this._pendingReqs.get(seq)
           if (result && result.ok) {
@@ -2899,6 +2949,13 @@ class TransportInterceptor {
           summary.deferred = true
           summary.blocker = blocker
           break
+        }
+        // Live acceptance: history is read back only for allowlisted chats.
+        if (this._liveGuard && !this._liveGuard.catchUpAllowed(chatId)) {
+          this._gapFloors.delete(chatId)
+          this._persistGapFloors()
+          summary.chats.push({ chatId, skipped: 'live_acceptance_not_allowlisted' })
+          continue
         }
         const result = await this._catchUpChat(chatId, floor, { maxPagesPerChat, pageSize })
         summary.chats.push(result)
