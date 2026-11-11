@@ -15,7 +15,10 @@ export default async function CompensationReferralsPage() {
     const enabled = cashReferralManagerEnabledV1()
     // Finding people asks Contacts' ContactLookup.v1, answered only to the verified integration-admin principal.
     const lookupAvailable = session.ok && enabled && (await getIntegrationAdminPrincipal()) !== null
-    const writesAvailable = lookupAvailable && (await resolveCashStaffAuthorityV1()).ok
+    // Writing needs Identity Access's Staff Session of a confirmed Администратор; the page only says which answer it got.
+    const staff = lookupAvailable ? await resolveCashStaffAuthorityV1() : null
+    const writesAvailable = staff !== null && staff.ok
+    const writesRefusal = staff !== null && !staff.ok ? staff.refusal : 'staff_session_unavailable'
 
     return (
         <div className="p-6 max-w-3xl">
@@ -32,7 +35,7 @@ export default async function CompensationReferralsPage() {
                     <a href="/settings/integrations/access?next=%2Fcompensation%2Freferrals" className="font-medium text-primary">Войти</a>
                 </p>
             )}
-            {lookupAvailable && <ReferralManager writesAvailable={writesAvailable} />}
+            {lookupAvailable && <ReferralManager writesAvailable={writesAvailable} writesRefusal={writesRefusal} />}
         </div>
     )
 }

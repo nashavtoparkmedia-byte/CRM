@@ -53,8 +53,11 @@ export interface CashReferralManagerPortV1 {
     now(): Date
     /** Each park's display name, from the park metadata; no credential. */
     parkNames(): Promise<ReadonlyMap<string, string>>
-    /** Contacts' ContactLookup.v1: live Contacts matching a name or a phone, in its own order. */
-    lookupContacts(query: string, limit: number): Promise<{ contacts: readonly { contactId: string; displayTitle: string }[]; truncated: boolean }>
+    /**
+     * Contacts' ContactLookup.v1: live Contacts matching a name or a phone, in its own order.
+     * `fullMatch` is false when Contacts says not every typed word matched (or names a class Cash does not know).
+     */
+    lookupContacts(query: string, limit: number): Promise<{ contacts: readonly { contactId: string; displayTitle: string; fullMatch: boolean }[]; truncated: boolean }>
     /** Fleet's own profiles whose licence is this one. */
     searchProfilesByLicence(licence: string, limit: number): Promise<CashReferralManagerProfileV1[]>
     profilesOfContacts(contactIds: readonly string[]): Promise<CashReferralManagerProfileV1[]>
@@ -121,7 +124,7 @@ export async function searchCashReferralPeopleV1(port: CashReferralManagerPortV1
     for (const lookup of lookups) {
         for (const contact of lookup.result.contacts) {
             const entry = found.get(contact.contactId) ?? { displayTitle: contact.displayTitle, matchedBy: new Set<CashReferralMatchV1>() }
-            entry.matchedBy.add(lookup.match)
+            entry.matchedBy.add(contact.fullMatch ? lookup.match : 'partial')
             found.set(contact.contactId, entry)
         }
     }
