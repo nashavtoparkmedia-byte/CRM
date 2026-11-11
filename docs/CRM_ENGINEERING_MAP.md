@@ -14,6 +14,7 @@ change on top of main `e256d14b`.
 Partial update 2026-10-28: §2.2, the Contact card read model routing row and I-63 describe the CC-1 Contact Card read model, verified against its own change on top of main `e256d14b`.
 Partial update 2026-11-08: §2.8, F-25 (browser operator row), the `StaffCredential` data rows, the Login / sessions / guards routing row, I-SS1 (number assigned at landing) and R-01 describe Staff Session v1 (`docs/design/staff-session-v1.md` v1.3), verified against its own change on top of main `7bf380c2`. It is dormant until `STAFF_SESSION_SECRET` is provisioned.
 Partial update 2026-11-10: F-24a and I-31b describe the referral screen's writes through Staff Session (the Cash wiring, `docs/design/cash-staff-authority-v2.md`) and its C2 control, verified against their own change on top of main `42caee7e`.
+Partial update 2026-11-11: F-27 and R-09 describe the fleet-check callback's shared secret, verified against their own change on top of #214's head `ad5565fa`.
 Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash referral ledger (S1) and the manager referral
 tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
 
@@ -1132,8 +1133,12 @@ Also reachable via `GET /api/cron/sync-trips` and the drivers UI.
 `POST G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` (row lock on
 `Driver`) → `POST {scraper}/api/checks` (`yandex-fleet-scraper/src/api.ts`,
 idempotency key = BullMQ `jobId`) → `worker.ts` (Playwright) → `fireWebhook` to
-`CRM_WEBHOOK_URL` → `POST G/app/api/monitoring/fleet-check/callback/route.ts` →
-`Driver` + `DriverEvent`.
+`CRM_WEBHOOK_URL` with header `X-Fleet-Check-Secret` (`FLEET_CHECK_CALLBACK_SECRET`;
+unset → nothing is sent) → `POST G/app/api/monitoring/fleet-check/callback/route.ts`
+(`fleetCheckCallbackGateV1` in `fleet-operations/public/v1/fleet-check-callback-auth.ts`,
+before the body is read: CRM secret unset or weak → 503, header missing or wrong → 401,
+constant-time over SHA-256 digests) → `Driver` + `DriverEvent`. A machine route: the
+staff-session proxy exempts exactly this path and method (Identity Access's allowlist).
 
 **F-28 Task creation**
 Manual / from a message: `createTask` (`G/app/tasks/actions.ts`) → `task.create`
@@ -1887,7 +1892,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-06 | Bot-lane inbound and lead intake never call `publishPersistedMessageV1` → no SSE push and no AI pipeline for those messages | `G/app/api/webhook/telegram/route.ts`, `G/lib/leads/intake.ts` | HIGH |
 | R-07 | `MessageEventLog` has no re-drive; a crash leaves events and `aiStatus` stuck | writers are only insert + claim/complete/fail | HIGH |
 | R-08 | Android discards call alerts: `PushPayload` knows only `chat_message` while the server sends `call_incoming` / `call_missed` | `android/app/src/main/java/ru/yokoone/crm/shell/push/PushPayload.kt` | HIGH |
-| R-09 | Scraper result webhook target has no path in the base compose file (`CRM_WEBHOOK_URL: http://gravity-mvp:3002`) while the worker posts to it verbatim and the receiver is `/api/monitoring/fleet-check/callback` | compose L485, L517; `yandex-fleet-scraper/src/worker.ts` `fireWebhook` | HIGH for base compose; production overlay unknown |
+| R-09 | Scraper result webhook target has no path in the base compose file (`CRM_WEBHOOK_URL: http://gravity-mvp:3002`) while the worker posts to it verbatim and the receiver is `/api/monitoring/fleet-check/callback`. The callback now also needs `FLEET_CHECK_CALLBACK_SECRET` on both sides. Both are production-acceptance items (with «the edge must not expose the path without auth»); the compose file is not changed here because it is lifecycle- and migration-pinned | compose L485, L517; `yandex-fleet-scraper/src/worker.ts` `fireWebhook` | HIGH for base compose; production overlay unknown; on the production list |
 | R-10 | Fleet-check quota comparison uses fields the scraper `/admin/stats` does not return | `G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` L71; `/admin/stats` in `yandex-fleet-scraper/src/api.ts` returns queue counts only | HIGH |
 | R-11 | tg-bot falls back to secret `'secret'` when `BOT_CRM_SECRET` is unset | `tg-bot/src/services/crmAction.js` L29 | HIGH |
 | R-12 | `getTelegramClient` triggers `catchUpMissedMessages` on every cached-client fetch | `G/app/tg-actions.ts` L1721, L1728 | HIGH |
