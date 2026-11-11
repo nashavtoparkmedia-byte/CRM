@@ -1,7 +1,7 @@
 # Personal mobile sign-in (v1)
 
 - **Owner:** identity_access.
-- **Status:** draft for Security review (2026-11-11).
+- **Status:** Security DESIGN PASS WITH ONE CONDITION (C1, applied in §3 item 4), 2026-11-11.
 - **Owner decision:** D4 option 1 (2026-11-11, ~11:30), «персональные мобильные учётные данные». At mobile sign-in, the employee uses their own Staff Session password. The shared `MOBILE_ACCESS_PASS` plus a free choice of operator is **removed** as a sign-in route. Required before production activation.
 - **Builds on:** Staff Session v1.3 (`docs/design/staff-session-v1.md`), F-1 (#216), enforcement deny-by-default (`docs/design/staff-session-enforce-deny-v1.md`).
 
@@ -124,6 +124,11 @@ With `MOBILE_ACCESS_*` gone, v2 replaces this:
    - the password comes from `E2E_STAFF_PASSWORD`, a fixed test value in the workflow, never printed.
    
    It writes nothing directly to the database. It works only where the bootstrap window is open: no credential yet and enforcement off, which is exactly a fresh disposable CRM.
+
+   **C1 (Security condition).** A production CRM before its first bootstrap also has that window open. One mistaken run would then give a real employee a publicly known password. Therefore:
+   - the script **refuses any base URL whose host is not loopback** (`127.0.0.1`, `::1`, `localhost`) before it sends anything, with a test;
+   - it is never referenced from `deploy/` or the operations docs;
+   - the production list gets the line «bootstrap first Администратор by the Owner with a fresh password before anything else touches the instance; the CI test password is never used outside disposable CRMs».
 5. **Switch-over.** No flag. The shared route is removed in the same change, and existing mobile sessions end on deploy (§2.2). **The Android release notes must say:**
    - every phone signs in again with the employee's own password;
    - the session lasts 12 h (`MOBILE_SESSION_TTL_SECONDS`) and autofill is off, so the password is typed at least every 12 h;
@@ -163,6 +168,9 @@ App-side rulings (Security): one generic refusal with no auto-retry; WebView aut
   - push: a disabled, reset, revoked or browser-logged-out employee's registration is skipped at fan-out and at send time;
   - push: a registration with the shared subject is skipped;
   - push: an unreadable store skips and never sends;
+  - push: the send-time check runs even after fan-out passed (a mutant that skips it fails);
+  - the seed script refuses a non-loopback base URL before sending (C1);
+  - the mobile audit `sid` is the labelled id, never the token;
   - push-registration: 401 `MOBILE_SESSION_REVOKED` for the barrier and for a liveness end, 503 `MOBILE_SESSION_UNVERIFIABLE` for an unreadable store;
   - the audit actors stay distinct: `mobile:` for the phone, `staff:` for the browser;
   - no password or password field in any log line or refusal (byte scan of the captured console);
@@ -180,9 +188,18 @@ App-side rulings (Security): one generic refusal with no auto-retry; WebView aut
   - v1 accepted.
 - **Heavy production-build E2E:** a personal sign-in on `/login/mobile`, the shared pass refused, the session ending on a browser logout.
 
-## 6. Security rulings (early comments, 2026-11-11)
+## 6. Security rulings
 
-- **Throttle source across lanes (for Security's ruling).** The `source:<x-real-ip>` key is shared by both lanes, as for the browser login today. In an office behind one NAT, repeated failures by one person throttle sign-in for everyone behind that address, phones and browsers alike, for the throttle window. The per-user key stays the main defence. Proposed: accept it, as already accepted for the browser login in Staff Session v1.3.
+**DESIGN PASS WITH ONE CONDITION (C1, §3 item 4) on 301c622e, 2026-11-11.** For the implementation review:
+- the push send path checks liveness per registration **even when fan-out already did**, which closes the time-of-check gap. A mutant that skips the send-time check must fail;
+- a liveness end answers the same 401 `MOBILE_SESSION_REVOKED` as a logout. It never tells "disabled" apart from "logged out";
+- the audit `sid` for mobile is the labelled id, never the raw token.
+
+**Throttle source shared across lanes: ACCEPTED**, the same trade-off as Staff Session v1.3.
+
+Early comments:
+
+- **Throttle source across lanes (accepted).** The `source:<x-real-ip>` key is shared by both lanes, as for the browser login. In an office behind one NAT, repeated failures by one person throttle sign-in for everyone behind that address, phones and browsers alike, for the throttle window. The per-user key stays the main defence.
 
 - **O1:** kind `login` / `logout` with actor `mobile:<id>` is accepted, with no migration (§2.1 step 6).
 - **O2:** a mobile logout ends only that phone session. "Everywhere" is a password reset or a revoke.
