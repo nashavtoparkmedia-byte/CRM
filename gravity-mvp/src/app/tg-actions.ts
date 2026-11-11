@@ -9,13 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
-import { appendConversationIdentityCollisionV1, attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, applyMessageDeliveryEvidenceV1, patchMessageMetadataV1, prepareOutboundConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
-import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V2, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { attachBinaryMessageMediaV1, attachMessageMediaV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, patchChannelConversationV1, patchHistoryImportJobV1, applyMessageDeliveryEvidenceV1, patchMessageMetadataV1, prepareOutboundConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V2, PATCH_MESSAGE_METADATA_COMMAND_V1, type AppendGuardedChannelMessageResultV1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public/v1'
+import { admitTelegramPrivateConversation, TELEGRAM_GUARDED_APPEND_REFUSAL_CODES, type AdmittedTelegramPrivateConversation, type TelegramGuardedEvent, type TelegramPrivateIngressPhase } from '@/modules/telegram-channel/application/mtproto-guarded-ingress'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { cleanupDanglingContactIdentitiesV1, isResolvedChannelContactResultV1, markChannelIdentityConflictV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
-import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
+import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -439,7 +439,6 @@ export async function getTelegramRuntimeStatus() {
 }
 
 import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
-import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 
 /**
  * Скачивание медиа из Telegram падает transient-ошибкой, если соединение
@@ -481,19 +480,6 @@ function detectTgMediaType(message: any): { type: string; fallback: string } | n
     if (mediaClass.includes('Geo')) return { type: 'text', fallback: '[Геолокация]' }
     if (mediaClass.includes('Contact')) return { type: 'text', fallback: '[Контакт]' }
     return { type: 'text', fallback: '[Медиа]' }
-}
-
-type TelegramPrivateIngressPhase = 'inbound' | 'mirror' | 'import'
-
-type TelegramPrivateConversation = {
-    id: string
-    channel: string
-    externalChatId: string
-    chatType: string
-    contactId: string | null
-    contactIdentityId: string | null
-    driverId: string | null
-    metadata: unknown
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -571,6 +557,7 @@ const TELEGRAM_INGRESS_ERROR_CODES = new Set([
     'CONTACT_CONVERSATION_LINK_STALE',
     'CONVERSATION_IDENTITY_COLLISION_CHAT_NOT_FOUND',
     'TELEGRAM_DELIVERY_EVIDENCE_REFUSED',
+    ...TELEGRAM_GUARDED_APPEND_REFUSAL_CODES,
 ])
 const TELEGRAM_INGRESS_ERROR_DETAILS = new Set([
     'channel_mismatch',
@@ -655,6 +642,8 @@ type TelegramIngressOutcome =
     | 'held_legacy'
     | 'key_conflict'
     | 'held'
+    // R-21: the guard recorded the event durably in Messaging's held store; the dialog goes on.
+    | 'guard_held'
     | 'held_transient'
     | 'rejected'
     | 'failed'
@@ -668,6 +657,10 @@ const TELEGRAM_REJECTED_CODES = new Set([
     'TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN',
     'TELEGRAM_CONNECTION_ID_UNPROVEN',
     'TELEGRAM_CONVERSATION_IDENTITY_COLLISION',
+    // The guard refused the conversation itself; the same event fails the same way again.
+    'TELEGRAM_GUARDED_APPEND_CONVERSATION_NOT_FOUND',
+    'TELEGRAM_GUARDED_APPEND_CONVERSATION_CHANNEL_MISMATCH',
+    'TELEGRAM_GUARDED_APPEND_CONVERSATION_KIND_MISMATCH',
 ])
 const TELEGRAM_HELD_CODES = new Set([
     'CONTACT_CONVERSATION_DRIVER_MISMATCH',
@@ -678,6 +671,8 @@ const TELEGRAM_HELD_CODES = new Set([
 const TELEGRAM_HELD_TRANSIENT_CODES = new Set([
     'CONTACT_IDENTITY_LINK_STALE',
     'CONTACT_CONVERSATION_LINK_STALE',
+    // The guard's transaction rolled back on contention; the next catch-up retries it unchanged.
+    'TELEGRAM_GUARDED_APPEND_CONTENDED',
     'PG_LOCK_TIMEOUT',
     'PG_SERIALIZATION_FAILURE',
     'PG_DEADLOCK',
@@ -697,6 +692,9 @@ const TELEGRAM_HELD_TRANSIENT_CODES = new Set([
  * pre-link writes (Chat upsert, contact resolution) stay as they are. HOLD is
  * not message persistence and not loss prevention: the content stays only with
  * the provider and is recovered only if it is fetched again.
+ * A link refusal in a conversation that is somebody else's is no longer a HOLD:
+ * the event reaches the guard unproven and is held durably by Messaging
+ * ('guard_held'), to be released by a later proven admission.
  */
 function classifyTelegramIngressFailure(code: string): TelegramIngressFailure {
     const base = code.split(':')[0]
@@ -804,41 +802,63 @@ async function findStoredTelegramMessage(input: {
     return fallback ? { kind: 'duplicate', messageId: fallback.id } : { kind: 'none' }
 }
 
-type TelegramMessageCreateResult =
-    | { kind: 'created'; message: any }
-    | { kind: 'duplicate'; messageId: string }
+type TelegramGuardedWriteResult =
+    | { kind: 'appended'; messageId: string }
+    | { kind: 'held'; holdReason: string }
+    /** `messageId` only when the recorded event is visible; a held duplicate has nothing to attach to. */
+    | { kind: 'duplicate'; messageId: string | null }
     | { kind: 'key_conflict' }
 
 /**
- * Inserts under the unique external key. A concurrent writer of the same key
- * (P2002) is a benign duplicate only when the winning row is found and is this
- * event's: same Chat, direction and channel and, for a synthetic local key
- * (second resolution, no provider id), the same content. Any other winner is a
- * key_conflict; the insert wrote nothing and nothing is overwritten.
+ * R-21: an event becomes a message only through Messaging's guarded atomic
+ * append, under the attribution its admission proved. The guard writes the
+ * message, its workflow projection and (inbound) its notification intent in
+ * one transaction, or holds the event durably where the conversation's person
+ * binding is not what admission proved. It settles a concurrent writer of the
+ * same key itself: the same event in this conversation is a duplicate, the key
+ * anywhere else a key_conflict.
+ * The guard dedupes by key alone, so an event without a provider id (synthetic
+ * local key) is a duplicate only of a visible row with the same content; any
+ * other row under that key is a key_conflict, and nothing is attached to it.
  */
-async function createTelegramMessageOrFindWinner(input: {
-    chatId: string
-    direction: 'inbound' | 'outbound'
-    content: string
-    type: string
-    sentAt: Date
-    externalId: string
-    syntheticKey: boolean
-    metadata: Record<string, unknown>
-}): Promise<TelegramMessageCreateResult> {
+async function appendTelegramGuardedEvent(
+    admitted: AdmittedTelegramPrivateConversation,
+    event: TelegramGuardedEvent,
+    syntheticKey: boolean,
+): Promise<TelegramGuardedWriteResult> {
+    const result: AppendGuardedChannelMessageResultV1 = await admitted.append(event)
+    switch (result.outcome) {
+        case 'appended':
+            return { kind: 'appended', messageId: result.messageId }
+        case 'held':
+            return { kind: 'held', holdReason: result.holdReason }
+        case 'key_conflict':
+            return { kind: 'key_conflict' }
+        case 'duplicate': {
+            if (!result.visible || !result.messageId) return { kind: 'duplicate', messageId: null }
+            if (syntheticKey) {
+                const row = await prisma.message.findUnique({ where: { id: result.messageId }, select: { content: true } })
+                if (!row || row.content !== event.content) return { kind: 'key_conflict' }
+            }
+            return { kind: 'duplicate', messageId: result.messageId }
+        }
+    }
+}
+
+function logTelegramGuardHeld(loggerPrefix: string, chatId: string, holdReason: string): void {
+    console.log(`[${loggerPrefix}] GUARD-HELD chat=${chatId} reason=${holdReason}`)
+}
+
+/** Realtime and the AI pipeline for a message this observation just appended; never for a held, duplicate or released event. */
+async function publishAppendedTelegramMessage(messageId: string, loggerPrefix: string): Promise<void> {
     try {
-        const result = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: input.chatId, direction: input.direction, content: input.content, channel: 'telegram', type: input.type as any, sentAt: input.sentAt, ...(input.direction === 'inbound' ? { status: 'delivered' as const } : {}), externalId: input.externalId, metadata: input.metadata })
-        return { kind: 'created', message: result.message }
+        const row = await prisma.message.findUnique({ where: { id: messageId } })
+        if (!row) return
+        emitMessageReceived(row as unknown as Parameters<typeof emitMessageReceived>[0]).catch(e =>
+            console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(e)}`)
+        )
     } catch (error: unknown) {
-        if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error
-        const winner = await prisma.message.findUnique({
-            where: { externalId: input.externalId },
-            select: { id: true, chatId: true, direction: true, channel: true, content: true },
-        })
-        if (!winner) throw error
-        if (!isOwnTelegramMessageRow(winner, input)) return { kind: 'key_conflict' }
-        if (input.syntheticKey && winner.content !== input.content) return { kind: 'key_conflict' }
-        return { kind: 'duplicate', messageId: winner.id }
+        console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(error)}`)
     }
 }
 
@@ -907,191 +927,12 @@ async function recordNewTelegramOutboundEvidence(input: {
     }
 }
 
-async function rejectTelegramConversationCollision(
-    chat: TelegramPrivateConversation,
-    input: {
-        phase: TelegramPrivateIngressPhase
-        externalChatId: string
-        peerId: string
-        providerAccountId: string
-        connectionId: string
-    },
-    reason: string,
-): Promise<never> {
-    const storedMetadata = metadataRecord(chat.metadata)
-    const existingProviderAccountId = concreteOpaqueId(storedMetadata.providerAccountId)
-    const existingConnectionId = concreteOpaqueId(storedMetadata.connectionId)
-    const existingPeerId = concreteOpaqueId(storedMetadata.peerId)
-    const evidence = {
-        channel: 'telegram' as const,
-        reason,
-        phase: input.phase,
-        externalChatId: input.externalChatId,
-        existingExternalChatId: chat.externalChatId,
-        incomingPeerId: input.peerId,
-        existingPeerId,
-        incomingProviderAccountId: input.providerAccountId,
-        existingProviderAccountId,
-        incomingConnectionId: input.connectionId,
-        existingConnectionId,
-    }
-    await appendConversationIdentityCollisionV1({ chatId: chat.id, evidence })
-    if (chat.contactId && chat.contactIdentityId) {
-        try {
-            await markChannelIdentityConflictV1({
-                contactId: chat.contactId,
-                identityId: chat.contactIdentityId,
-                channel: 'telegram',
-                reason,
-                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${input.peerId}:${reason}`,
-                details: {
-                    phase: input.phase,
-                    incomingPeerId: input.peerId,
-                    existingPeerId,
-                    incomingProviderAccountId: input.providerAccountId,
-                    existingProviderAccountId,
-                    incomingConnectionId: input.connectionId,
-                    existingConnectionId,
-                },
-            })
-        } catch (error: unknown) {
-            console.error(`[TG-IDENTITY] Failed to mark linked identity conflicted: code=${telegramIngressErrorCode(error)}`)
-        }
-    }
-    throw new Error(`TELEGRAM_CONVERSATION_IDENTITY_COLLISION:${reason}`)
-}
-
-/**
- * Admits one private GramJS conversation before any person/link/message write.
- * Telegram user ids are global-looking, but a CRM conversation is owned by the
- * exact authenticated account and transport that observed it. Legacy/unbound
- * rows are evidence gaps, not permission to claim the peer for this account.
- */
-async function admitTelegramPrivateConversation(input: {
-    phase: TelegramPrivateIngressPhase
-    peerId: string
-    providerAccountId: string
-    connectionId: string
-    displayName: string | null
-    lastMessageAt?: Date
-}): Promise<TelegramPrivateConversation> {
-    const peerId = concreteOpaqueId(input.peerId)
-    const providerAccountId = concreteOpaqueId(input.providerAccountId)
-    const connectionId = concreteOpaqueId(input.connectionId)
-    if (!peerId || !/^\d+$/.test(peerId) || peerId === '0') {
-        throw new Error('TELEGRAM_PEER_ID_UNPROVEN')
-    }
-    if (!providerAccountId || providerAccountId !== input.providerAccountId) {
-        throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN')
-    }
-    if (!connectionId || connectionId !== input.connectionId) {
-        throw new Error('TELEGRAM_CONNECTION_ID_UNPROVEN')
-    }
-
-    const externalChatId = `telegram:${peerId}`
-    const admitted = await upsertChannelConversationV1({
-        contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
-        externalChatId,
-        channel: 'telegram',
-        name: input.displayName ?? `TG ${peerId}`,
-        chatType: 'private',
-        metadata: {
-            chatKind: 'private',
-            peerId,
-            providerAccountId,
-            connectionId,
-        },
-    })
-    const chat = admitted.conversation as TelegramPrivateConversation
-    const storedMetadata = metadataRecord(chat.metadata)
-    const storedConnectionId = concreteOpaqueId(storedMetadata.connectionId)
-    const storedPeerId = concreteOpaqueId(storedMetadata.peerId)
-    // Each arm rejects only on a CONTRADICTION that production rows can actually
-    // express. A stored value that is simply absent is a legacy compatibility
-    // state: those rows predate transport/peer stamping, and the conversation
-    // adapter never writes metadata onto an existing row, so an "unproven" arm
-    // would fire forever on every one of them and could never self-heal.
-    // Measured 2026-09-12 over 167 production telegram Chat rows: 0 carry
-    // providerAccountId, 0 carry peerId, 0 carry chatKind, 109 carry
-    // connectionId, and all 167 carry chatType='private'.
-    // Provider-account comparison is gone entirely: see
-    // docs/design/provider-account-identity-v1.md.
-    const reason = chat.channel !== 'telegram'
-        ? 'channel_mismatch'
-        : chat.externalChatId !== externalChatId
-            ? 'conversation_key_mismatch'
-            // A stored transport that disagrees is a real cross-transport claim.
-            : storedConnectionId !== null && storedConnectionId !== connectionId
-                ? 'transport_connection_mismatch'
-                // A stored peer that disagrees means this conversation belongs to
-                // somebody else. This is the cross-peer guard and it stays exact.
-                : storedPeerId !== null && storedPeerId !== peerId
-                    ? 'peer_identity_mismatch'
-                    // chatType is carried by every production row; chatKind is
-                    // only compared when the row actually has one.
-                    : chat.chatType !== 'private'
-                        || (storedMetadata.chatKind !== undefined && storedMetadata.chatKind !== 'private')
-                        ? 'chat_kind_mismatch'
-                        : null
-    if (reason) {
-        await rejectTelegramConversationCollision(chat, {
-            phase: input.phase,
-            externalChatId,
-            peerId,
-            providerAccountId,
-            connectionId,
-        }, reason)
-    }
-
-    const contactResult = await resolveChannelContactOperationV1(
-        'telegram',
-        peerId,
-        null,
-        input.displayName,
-        { chatKind: 'private', providerAccountId },
-    )
-    if (
-        !isResolvedChannelContactResultV1(contactResult)
-        || !contactResult.identity
-        || contactResult.identity.channel !== 'telegram'
-        || contactResult.identity.externalId !== peerId
-    ) {
-        throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
-    }
-    await ensureConversationContactLinkV1({
-        contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
-        chatId: chat.id,
-        contactId: contactResult.contact.id,
-        contactIdentityId: contactResult.identity.id,
-    })
-    if (input.phase === 'inbound') {
-        await contactReachabilityV1.recordExactProviderReachability({
-            identityId: contactResult.identity.id,
-            contactId: contactResult.contact.id,
-            channel: 'telegram',
-            providerAccountId,
-            providerTargetId: peerId,
-            status: 'confirmed',
-        })
-    }
-
-    const patched = await patchChannelConversationV1({
-        contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
-        selector: { chatId: chat.id },
-        patch: {
-            name: input.displayName ?? `TG ${peerId}`,
-            ...(input.lastMessageAt ? { lastMessageAt: input.lastMessageAt } : {}),
-        },
-    })
-    return patched.conversation as TelegramPrivateConversation
-}
-
 async function processInboundTelegramMessage(
     message: any,
     connectionId: string,
     providerAccountId: string,
     loggerPrefix = 'TG-LISTENER',
-    phase: 'inbound' | 'import' = 'inbound',
+    phase: 'inbound' | 'catch-up' = 'inbound',
 ): Promise<TelegramIngressOutcome> {
     if (message && !message.out) {
         // Only PeerUser denotes a private conversation. A group/channel update
@@ -1130,16 +971,16 @@ async function processInboundTelegramMessage(
             return null
         })()
 
-        // Admit the exact provider account + connection + peer and complete
-        // Contacts ownership before any message or workflow side effect.
-        const unifiedChat = await admitTelegramPrivateConversation({
+        // Admit the exact provider account + connection + peer and prove the
+        // peer from Contacts before any message or workflow side effect.
+        const admission = await admitTelegramPrivateConversation({
             phase,
             peerId: senderId,
             providerAccountId,
             connectionId,
             displayName: senderName,
-            lastMessageAt: now,
         })
+        const unifiedChat = admission.conversation
         console.log(`[${loggerPrefix}] INBOUND conn=${connectionId} chat=${unifiedChat.id}`)
 
         // 3. DE-DUPLICATION: exact provider key first (see findStoredTelegramMessage)
@@ -1162,80 +1003,97 @@ async function processInboundTelegramMessage(
             logTelegramMessageKeyConflict(loggerPrefix, unifiedChat.id)
             return 'key_conflict'
         }
-        const existing = stored.kind === 'duplicate' ? { id: stored.messageId } : null
-
-        if (existing) {
-            console.log(`[${loggerPrefix}] DB-DEDUP: skipped existing=${existing.id}`)
-            // Self-heal: if a prior attempt created the message but the media
-            // download failed (e.g. connection dropped mid-deploy), retry it
-            // here — this path re-runs on every catchup/restart, so a message
-            // stuck without an attachment gets another chance each time.
-            if (mediaInfo && message.downloadMedia) {
-                try {
-                    const attCount = await (prisma.messageAttachment as any).count({ where: { messageId: existing.id } })
-                    if (attCount === 0) {
-                        const client = clientCache.get(connectionId)
-                        if (client) {
-                            const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
-                            if (buffer) {
-                                const mimeType = message.media?.document?.mimeType ||
-                                    (mediaInfo.type === 'image' ? 'image/jpeg' : 'application/octet-stream')
-                                const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
-                                const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                                await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: existing.id, mediaType: mediaInfo.type, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
-                                console.log(`[${loggerPrefix}] MEDIA retry-saved for existing msg=${existing.id}`)
-                            }
-                        }
-                    }
-                } catch (retryErr: any) {
-                    console.error(`[${loggerPrefix}] MEDIA retry failed for existing msg=${existing.id}: code=${telegramIngressErrorCode(retryErr)}`)
-                }
-            }
+        if (stored.kind === 'duplicate') {
+            console.log(`[${loggerPrefix}] DB-DEDUP: skipped existing=${stored.messageId}`)
+            await retryMissingInboundTelegramMedia(message, mediaInfo, stored.messageId, connectionId, loggerPrefix)
             return 'duplicate'
-        } else {
-            const msgType = mediaInfo?.type || 'text'
-            const savedMsgResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: 'inbound', content: text, type: msgType, sentAt: now, externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
-            if (savedMsgResult.kind === 'key_conflict') {
-                logTelegramMessageKeyConflict(loggerPrefix, unifiedChat.id)
-                return 'key_conflict'
-            }
-            if (savedMsgResult.kind === 'duplicate') {
-                console.log(`[${loggerPrefix}] DB-DEDUP: concurrent writer existing=${savedMsgResult.messageId}`)
-                return 'duplicate'
-            }
-            const savedMsg = savedMsgResult.message as any
-
-            // Download and save media attachment (photo, voice, video, document, sticker)
-            if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
-                try {
-                    const client = clientCache.get(connectionId)
-                    if (client) {
-                        const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
-                        if (buffer) {
-                            const mimeType = message.media?.document?.mimeType ||
-                                (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
-                            const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
-                            const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                            await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: savedMsg.id, mediaType: msgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
-                            console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} for msg=${savedMsg.id}`)
-                        }
-                    }
-                } catch (mediaErr: any) {
-                    console.error(`[${loggerPrefix}] Media download failed for msg=${savedMsg.id}: code=${telegramIngressErrorCode(mediaErr)}`)
-                }
-            }
-
-            console.log(`[${loggerPrefix}] SAVED inbound message=${savedMsg.id} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
-            ConversationWorkflowService.onInboundMessage(unifiedChat.id, now).catch(e =>
-                console.error(`[${loggerPrefix}] onInboundMessage error: code=${telegramIngressErrorCode(e)}`)
-            )
-            emitMessageReceived(savedMsg).catch(e =>
-                console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(e)}`)
-            )
-            return 'saved'
         }
+
+        const msgType = mediaInfo?.type || 'text'
+        const written = await appendTelegramGuardedEvent(admission, {
+            direction: 'inbound',
+            type: msgType as TelegramGuardedEvent['type'],
+            content: text,
+            externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`,
+            sentAt: now,
+            metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {},
+        }, !externalMsgId)
+        if (written.kind === 'key_conflict') {
+            logTelegramMessageKeyConflict(loggerPrefix, unifiedChat.id)
+            return 'key_conflict'
+        }
+        if (written.kind === 'held') {
+            logTelegramGuardHeld(loggerPrefix, unifiedChat.id, written.holdReason)
+            return 'guard_held'
+        }
+        if (written.kind === 'duplicate') {
+            console.log(`[${loggerPrefix}] DB-DEDUP: recorded existing=${written.messageId ?? 'held'}`)
+            if (written.messageId) await retryMissingInboundTelegramMedia(message, mediaInfo, written.messageId, connectionId, loggerPrefix)
+            return 'duplicate'
+        }
+
+        // Download and save media attachment (photo, voice, video, document, sticker)
+        if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
+            try {
+                const client = clientCache.get(connectionId)
+                if (client) {
+                    const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
+                    if (buffer) {
+                        const mimeType = message.media?.document?.mimeType ||
+                            (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+                        const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+                        const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                        await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: written.messageId, mediaType: msgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
+                        console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} for msg=${written.messageId}`)
+                    }
+                }
+            } catch (mediaErr: any) {
+                console.error(`[${loggerPrefix}] Media download failed for msg=${written.messageId}: code=${telegramIngressErrorCode(mediaErr)}`)
+            }
+        }
+
+        // The guard committed the workflow projection and the notification
+        // intent with the message; only the conversation's order and realtime
+        // remain, and only for a message this observation appended.
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: now } })
+        console.log(`[${loggerPrefix}] SAVED inbound message=${written.messageId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
+        await publishAppendedTelegramMessage(written.messageId, loggerPrefix)
+        return 'saved'
     }
     return 'skipped'
+}
+
+/**
+ * Self-heal: if a prior attempt created the message but the media download
+ * failed (e.g. connection dropped mid-deploy), retry it here — this path
+ * re-runs on every catchup/restart, so a message stuck without an attachment
+ * gets another chance each time. Only a visible message of this event is ever
+ * given media.
+ */
+async function retryMissingInboundTelegramMedia(
+    message: any,
+    mediaInfo: { type: string } | null,
+    messageId: string,
+    connectionId: string,
+    loggerPrefix: string,
+): Promise<void> {
+    if (!mediaInfo || !message.downloadMedia) return
+    try {
+        const attCount = await (prisma.messageAttachment as any).count({ where: { messageId } })
+        if (attCount !== 0) return
+        const client = clientCache.get(connectionId)
+        if (!client) return
+        const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
+        if (!buffer) return
+        const mimeType = message.media?.document?.mimeType ||
+            (mediaInfo.type === 'image' ? 'image/jpeg' : 'application/octet-stream')
+        const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+        const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+        await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId, mediaType: mediaInfo.type, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
+        console.log(`[${loggerPrefix}] MEDIA retry-saved for existing msg=${messageId}`)
+    } catch (retryErr: any) {
+        console.error(`[${loggerPrefix}] MEDIA retry failed for existing msg=${messageId}: code=${telegramIngressErrorCode(retryErr)}`)
+    }
 }
 
 /**
@@ -1293,15 +1151,16 @@ async function processOutboundMirrorMessage(
     })()
 
     // Mirrored messages are provider observations too. Re-admit and re-link
-    // every event; an existing global peer key is never enough authority.
-    const chat = await admitTelegramPrivateConversation({
+    // every event; an existing global peer key is never enough authority. The
+    // attribution of an own message is the recipient's (the conversation's peer).
+    const admission = await admitTelegramPrivateConversation({
         phase: 'mirror',
         peerId: recipientId,
         providerAccountId,
         connectionId,
         displayName: recipientName,
-        lastMessageAt: sentAt,
     })
+    const chat = admission.conversation
 
     const msgType = mediaInfo?.type || 'text'
 
@@ -1353,38 +1212,55 @@ async function processOutboundMirrorMessage(
         return existingOutcome
     }
 
-    // New outbound message sent from outside CRM — mirror it
-    const savedResult = await createTelegramMessageOrFindWinner({ chatId: chat.id, direction: 'outbound', content: text, type: msgType, sentAt, externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
-    if (savedResult.kind === 'key_conflict') {
+    // New outbound message sent from outside CRM — mirror it through the guard.
+    // A visible mirror runs the outbound workflow projection like a CRM send
+    // (a phone reply in a resolved conversation reopens it).
+    const written = await appendTelegramGuardedEvent(admission, {
+        direction: 'outbound',
+        type: msgType as TelegramGuardedEvent['type'],
+        content: text,
+        externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`,
+        sentAt,
+        metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {},
+    }, !externalMsgId)
+    if (written.kind === 'key_conflict') {
         logTelegramMessageKeyConflict(loggerPrefix, chat.id)
         return 'key_conflict'
     }
-    if (savedResult.kind === 'duplicate') {
-        console.log(`[${loggerPrefix}] DEDUP: concurrent writer existing=${savedResult.messageId}`)
-        return 'duplicate'
+    if (written.kind === 'held') {
+        logTelegramGuardHeld(loggerPrefix, chat.id, written.holdReason)
+        return 'guard_held'
     }
-    const saved = savedResult.message as any
-    if (externalMsgId) {
-        await recordNewTelegramOutboundEvidence({
-            chatId: chat.id,
-            messageId: saved.id,
-            providerMessageId: externalMsgId,
-            evidence,
-            providerSentAt: sentAt,
-            loggerPrefix,
-        })
+    let attachTo: string
+    if (written.kind === 'duplicate') {
+        console.log(`[${loggerPrefix}] DEDUP: recorded existing=${written.messageId ?? 'held'}`)
+        // A held duplicate has no message to attach to.
+        if (!written.messageId) return 'duplicate'
+        attachTo = written.messageId
+    } else {
+        attachTo = written.messageId
+        if (externalMsgId) {
+            await recordNewTelegramOutboundEvidence({
+                chatId: chat.id,
+                messageId: written.messageId,
+                providerMessageId: externalMsgId,
+                evidence,
+                providerSentAt: sentAt,
+                loggerPrefix,
+            })
+        }
     }
 
-    await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
+    // The new message, or the visible duplicate still missing its attachment.
+    await ensureOutboundTelegramAttachment(message, attachTo, msgType, loggerPrefix)
+    if (written.kind === 'duplicate') return 'duplicate'
 
     // Update chat's lastMessageAt
     await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: chat.id }, patch: { lastMessageAt: sentAt } })
 
-    console.log(`[${loggerPrefix}] MIRRORED outbound message=${saved.id} type=${msgType} chat=${chat.id}`)
+    console.log(`[${loggerPrefix}] MIRRORED outbound message=${written.messageId} type=${msgType} chat=${chat.id}`)
 
-    emitMessageReceived(saved).catch(e =>
-        console.error(`[${loggerPrefix}] emitMessageReceived error: code=${telegramIngressErrorCode(e)}`)
-    )
+    await publishAppendedTelegramMessage(written.messageId, loggerPrefix)
     return 'saved'
 }
 
@@ -1437,6 +1313,7 @@ async function catchUpMissedMessages(
         held_legacy: 0,
         key_conflict: 0,
         held: 0,
+        guard_held: 0,
         held_transient: 0,
         rejected: 0,
         failed: 0,
@@ -1486,7 +1363,7 @@ async function catchUpMissedMessages(
                                 connectionId,
                                 providerAccountId,
                                 'TG-CATCHUP',
-                                'import',
+                                'catch-up',
                             )
                     } catch (messageError: unknown) {
                         const code = telegramIngressErrorCode(messageError)
@@ -1494,6 +1371,8 @@ async function catchUpMissedMessages(
                         console.warn(`[TG-CATCHUP] message ${outcome} conn=${connectionId} code=${code}`)
                     }
                     counts[outcome]++
+                    // A guard hold is durable and per event: the dialog goes on,
+                    // so every later event is held (or released) too.
                     if (outcome === 'held' || outcome === 'held_transient' || outcome === 'rejected') {
                         // The same admission fails the same way for the rest of
                         // this dialog; do not repeat its pre-link writes.
@@ -1514,7 +1393,7 @@ async function catchUpMissedMessages(
         runError = telegramIngressErrorCode(err)
         console.error(`[TG-CATCHUP] Error: code=${runError}`)
     }
-    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} keyConflicts=${counts.key_conflict} held=${counts.held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs} readReceipts=${readReceipts}${runError ? ` error=${runError}` : ''}`)
+    console.log(`[TG-CATCHUP] summary conn=${connectionId} dialogs=${dialogCount} fetched=${fetched} saved=${counts.saved} duplicates=${counts.duplicate} reconciledSend=${counts.reconciled_send} heldLegacy=${counts.held_legacy} keyConflicts=${counts.key_conflict} held=${counts.held} guardHeld=${counts.guard_held} heldTransient=${counts.held_transient} rejected=${counts.rejected} failed=${counts.failed} skipped=${counts.skipped} serviceSkipped=${counts.service_skipped + serviceDialogs} failedDialogs=${failedDialogs} readReceipts=${readReceipts}${runError ? ` error=${runError}` : ''}`)
     if (!runError) console.log(`[TG-CATCHUP] Finished. Processed ${fetched} messages.`)
 }
 
@@ -2553,6 +2432,8 @@ export async function importTelegramHistory(
     let keyConflictMessages = 0
     let reconciledSendMessages = 0
     let failedMessages = 0
+    // Events the guard held durably (R-21); a later proven admission releases them.
+    let guardHeldMessages = 0
     let heldDialogs = 0
     let rejectedDialogs = 0
     let failedDialogs = 0
@@ -2587,13 +2468,14 @@ export async function importTelegramHistory(
                 || null
 
             try {
-                const unifiedChat = await admitTelegramPrivateConversation({
+                const admission = await admitTelegramPrivateConversation({
                     phase: 'import',
                     peerId,
                     providerAccountId,
                     connectionId: connection.id,
                     displayName: providerDisplayName,
                 })
+                const unifiedChat = admission.conversation
                 totalContacts++
 
                 // Fetch messages — limit determined by mode (msgLimit)
@@ -2610,7 +2492,8 @@ export async function importTelegramHistory(
                     if (!oldestFetched || oldestFetched >= cutoff) dialogsWithMessageCapHit++
                 }
 
-                let chatMaxTs: Date | null = null
+                // The conversation's order moves only for a message this import appended.
+                let chatMaxAppendedTs: Date | null = null
                 for (const msg of messages) {
                     const histMediaInfo = detectTgMediaType(msg)
                     const msgText = msg.message || (histMediaInfo ? histMediaInfo.fallback : '')
@@ -2621,7 +2504,6 @@ export async function importTelegramHistory(
 
                     if (!minDate || ts < minDate) minDate = ts
                     if (!maxDate || ts > maxDate) maxDate = ts
-                    if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
                     totalMessages++
 
                     // One failing message never costs the rest of the dialog.
@@ -2681,17 +2563,33 @@ export async function importTelegramHistory(
                             continue
                         }
 
-                        const savedHistResult = await createTelegramMessageOrFindWinner({ chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, type: histMsgType, sentAt: ts, externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, syntheticKey: !externalMsgId, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
+                        // History is replayed silently: the guard judges, keys and
+                        // holds it like a live event, but a visible write leaves
+                        // the conversation's workflow and the notification outbox
+                        // untouched, and nothing is published.
+                        const savedHistResult = await appendTelegramGuardedEvent(admission, {
+                            direction: isOutbound ? 'outbound' : 'inbound',
+                            type: histMsgType as TelegramGuardedEvent['type'],
+                            content: msgText,
+                            externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`,
+                            sentAt: ts,
+                            metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {},
+                        }, !externalMsgId)
                         if (savedHistResult.kind === 'key_conflict') {
                             keyConflictMessages++
                             logTelegramMessageKeyConflict('TG-IMPORT', unifiedChat.id)
+                            continue
+                        }
+                        if (savedHistResult.kind === 'held') {
+                            guardHeldMessages++
                             continue
                         }
                         if (savedHistResult.kind === 'duplicate') {
                             existingMessages++
                             continue
                         }
-                        const savedHistMsg = savedHistResult.message as any
+                        const savedHistMsg = { id: savedHistResult.messageId }
+                        if (!chatMaxAppendedTs || ts > chatMaxAppendedTs) chatMaxAppendedTs = ts
                         if (isOutbound && externalMsgId) {
                             await recordNewTelegramOutboundEvidence({
                                 chatId: unifiedChat.id,
@@ -2739,8 +2637,8 @@ export async function importTelegramHistory(
                 }
 
                 // Update lastMessageAt
-                if (chatMaxTs) {
-                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: chatMaxTs } })
+                if (chatMaxAppendedTs) {
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: chatMaxAppendedTs } })
                 }
 
                 // Periodic progress update (every 5 chats)
@@ -2789,6 +2687,7 @@ export async function importTelegramHistory(
             || failedMessages > 0
             || heldLegacyMessages > 0
             || keyConflictMessages > 0
+            || guardHeldMessages > 0
         const resultType = totalMessages > 0 || incomplete ? 'partial' : 'live_only'
         await updateTgImportJob(jobId, {
             status: 'completed',
@@ -2816,6 +2715,7 @@ export async function importTelegramHistory(
                     failedMessages,
                     heldLegacyMessages,
                     keyConflictMessages,
+                    guardHeldMessages,
                     reconciledSendMessages,
                     serviceSkipped,
                     archivedFolderCoverage: 'unverified',

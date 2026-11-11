@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
     patchConversation: vi.fn(),
     appendCollision: vi.fn(),
     createMessage: vi.fn(),
+    appendGuarded: vi.fn(),
+    heldCount: vi.fn(),
+    releaseHeld: vi.fn(),
+    createdRows: new Map<string, Record<string, unknown>>(),
+    heldRows: new Map<string, Record<string, any>>(),
     ensureContactLink: vi.fn(),
     resolveContact: vi.fn(),
     isResolvedContact: vi.fn(),
@@ -110,7 +115,13 @@ vi.mock('@/lib/prisma', () => ({
         },
         message: {
             findFirst: mocks.messageFindFirst,
-            findUnique: mocks.messageFindUnique,
+            // A row the guard stand-in appended is read back by id (publish, synthetic-key check).
+            findUnique: (args: { where?: { id?: string } }) => {
+                const id = args?.where?.id
+                return id && mocks.createdRows.has(id)
+                    ? Promise.resolve(mocks.createdRows.get(id))
+                    : mocks.messageFindUnique(args)
+            },
             findMany: mocks.messageFindMany,
         },
         messageAttachment: {
@@ -141,6 +152,9 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     attachBinaryMessageMediaV1: mocks.attachBinaryMedia,
     attachMessageMediaV1: mocks.attachMessageMedia,
     createChannelMessageV1: mocks.createMessage,
+    appendGuardedChannelMessageV1: mocks.appendGuarded,
+    heldChannelMessagesV1: mocks.heldCount,
+    releaseHeldChannelMessagesV1: mocks.releaseHeld,
     deleteConversationsByIdV1: vi.fn(),
     deleteHistoryImportJobsForChannelV1: vi.fn(),
     deleteHistoryImportJobsForConnectionV1: vi.fn(),
@@ -199,6 +213,107 @@ import {
 } from './tg-actions'
 
 let connectionSequence = 0
+
+type GuardedCommand = {
+    chatId: string
+    direction: 'inbound' | 'outbound'
+    content: string
+    externalId: string
+    sentAt: Date
+    metadata?: Record<string, unknown>
+    attribution: { status: string }
+    projection?: 'live' | 'history'
+}
+
+const APPEND_RESULT = 'messaging.AppendGuardedChannelMessageResult.v1'
+
+function appendedResult(messageId: string) {
+    return { contract: APPEND_RESULT, outcome: 'appended', messageId, heldMessageId: null, holdReason: null, visible: true, newlyRecorded: true }
+}
+function heldResult(heldMessageId: string, holdReason = 'attribution_unproven') {
+    return { contract: APPEND_RESULT, outcome: 'held', messageId: null, heldMessageId, holdReason, visible: false, newlyRecorded: true }
+}
+function duplicateResult(messageId: string | null, visible = messageId !== null) {
+    return { contract: APPEND_RESULT, outcome: 'duplicate', messageId, heldMessageId: visible ? null : 'held-row', holdReason: null, visible, newlyRecorded: false }
+}
+function keyConflictResult() {
+    return { contract: APPEND_RESULT, outcome: 'key_conflict', messageId: null, heldMessageId: null, holdReason: null, visible: false, newlyRecorded: false }
+}
+
+/**
+ * Stand-in for Messaging's guarded append: a visible write is observed through
+ * the createMessage mock (so a test can shape or refuse the write), and a live
+ * inbound one carries its workflow projection inside the same "transaction",
+ * as the guard does. A history write projects nothing. A unique violation is
+ * settled like the guard settles it: by the committed winner of the key, a
+ * duplicate in this conversation, direction and channel, a key_conflict
+ * anywhere else; without a winner the violation escapes.
+ */
+async function guardedAppendThroughCreate(command: GuardedCommand) {
+    const held = mocks.heldRows.get(command.externalId)
+    if (held) {
+        return held.chatId === command.chatId && held.direction === command.direction
+            ? duplicateResult(null, false)
+            : keyConflictResult()
+    }
+    // The lane sends `unproven` only for a conversation bound to somebody else: held.
+    if (command.attribution.status === 'unproven') {
+        const heldMessageId = `held:${command.externalId}`
+        mocks.heldRows.set(command.externalId, { ...command, id: heldMessageId })
+        return heldResult(heldMessageId)
+    }
+    let created: { message?: Record<string, unknown> } | undefined
+    try {
+        created = await mocks.createMessage(command)
+    } catch (error: unknown) {
+        if ((error as { code?: unknown } | null)?.code !== 'P2002') throw error
+        const winner = await mocks.messageFindUnique({ where: { externalId: command.externalId } })
+        if (!winner) throw error
+        return winner.chatId === command.chatId && winner.direction === command.direction && winner.channel === 'telegram'
+            ? duplicateResult(winner.id)
+            : keyConflictResult()
+    }
+    const message = { ...command, ...(created?.message ?? {}) } as unknown as Record<string, unknown> & { id: string }
+    if (command.direction === 'inbound' && command.projection !== 'history') {
+        await mocks.inboundWorkflow(command.chatId, command.sentAt)
+    }
+    mocks.createdRows.set(message.id, message)
+    return appendedResult(message.id)
+}
+
+/** The guard's held-store count, by conversation. */
+async function heldCountOfStandIn(query: { chatId?: string }) {
+    const held = [...mocks.heldRows.values()].filter(row => !query.chatId || row.chatId === query.chatId).length
+    return { contract: 'messaging.HeldChannelMessagesResult.v1', held, byReason: { attribution_unproven: held } }
+}
+
+/** The guard's release: each held event of the conversation becomes visible once, projected as it was held. */
+async function releaseThroughCreate(command: { chatId: string; attribution: { status: string } }) {
+    let released = 0
+    let keyConflicts = 0
+    for (const [key, row] of [...mocks.heldRows]) {
+        if (row.chatId !== command.chatId) continue
+        try {
+            const created = await mocks.createMessage(row)
+            mocks.createdRows.set(String(created?.message?.id ?? row.id), { ...row, ...(created?.message ?? {}) })
+            if (row.direction === 'inbound' && row.projection !== 'history') await mocks.inboundWorkflow(row.chatId, row.sentAt)
+            mocks.heldRows.delete(key)
+            released++
+        } catch {
+            keyConflicts++
+        }
+    }
+    const remaining = [...mocks.heldRows.values()].filter(row => row.chatId === command.chatId).length
+    return {
+        contract: 'messaging.ReleaseHeldChannelMessagesResult.v1',
+        outcome: released > 0 ? 'released' : remaining > 0 || keyConflicts > 0 ? 'still_held' : 'nothing_held',
+        released,
+        remaining,
+        keyConflicts,
+        senderMismatches: 0,
+        holdReason: null,
+    }
+}
 
 function connection(id: string) {
     return {
@@ -270,6 +385,11 @@ describe('GramJS private conversation identity admission', () => {
         mocks.markIdentityConflict.mockResolvedValue(undefined)
         mocks.messageFindFirst.mockResolvedValue(null)
         mocks.createMessage.mockResolvedValue({ message: { id: 'message-1' } })
+        mocks.createdRows.clear()
+        mocks.heldRows.clear()
+        mocks.appendGuarded.mockImplementation(guardedAppendThroughCreate)
+        mocks.heldCount.mockImplementation(heldCountOfStandIn)
+        mocks.releaseHeld.mockImplementation(releaseThroughCreate)
         mocks.ensureContactLink.mockResolvedValue({ completed: true })
         mocks.isResolvedContact.mockReturnValue(true)
         mocks.resolveContact.mockImplementation(async (_channel: string, peerId: string) => ({
@@ -1022,7 +1142,7 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.upsertConversation).not.toHaveBeenCalled()
                 expectNothingPersistedOrPublished()
                 expect(summary).toContain('serviceSkipped=2')
-                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=import')
+                expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=catch-up')
                 expect(logs()).toContain('telegram_mtproto_service_peer_skipped phase=mirror')
                 expect(logs()).not.toContain('51734')
             })
@@ -1116,7 +1236,7 @@ describe('GramJS private conversation identity admission', () => {
                     'telegram:7500:43:22',
                 ])
                 expect(summary).toContain('dialogs=2 fetched=5 saved=2 duplicates=0')
-                expect(summary).toContain('held=3 heldTransient=0 rejected=0 failed=0 skipped=0 serviceSkipped=0 failedDialogs=0')
+                expect(summary).toContain('held=3 guardHeld=0 heldTransient=0 rejected=0 failed=0 skipped=0 serviceSkipped=0 failedDialogs=0')
                 expect(logs()).toContain('[TG-CATCHUP] Finished. Processed 5 messages.')
             })
 
@@ -1219,6 +1339,245 @@ describe('GramJS private conversation identity admission', () => {
             }
 
             const keys = (rows: Map<string, StoredMessage>) => [...rows.keys()].sort()
+
+            /**
+             * R-21 adoption: the conversation IS bound to another person's Driver
+             * until `repair()`, after which it is bound to the proven peer. The
+             * link is refused while it is somebody else's.
+             */
+            function boundToAnotherPerson() {
+                let repaired = false
+                mocks.ensureContactLink.mockImplementation(async () => {
+                    if (!repaired) throw new Error('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+                    return { completed: true }
+                })
+                mocks.upsertConversation.mockImplementation(async (command: { externalChatId: string; metadata: Record<string, unknown> }) => {
+                    const peer = command.externalChatId.slice('telegram:'.length)
+                    mocks.admittedChat = repaired
+                        ? { ...exactChat(command), contactId: `contact:${peer}`, contactIdentityId: `identity:${peer}` }
+                        : { ...exactChat(command), driverId: 'driver:another-person' }
+                    return { conversation: mocks.admittedChat }
+                })
+                return { repair: () => { repaired = true } }
+            }
+
+            test('R-21: a dialog bound to another person is held durably, then released once by the next proven catch-up and never published', async () => {
+                const rows = useMessageStore()
+                const chat = boundToAnotherPerson()
+                messagesByPeer({ '42': [53, 52, 51].map(id => privateMessage({ peer: '42', id, text: `seam body ${id}` })) })
+                const base = `telegram-guard-catchup-${connectionSequence}`
+
+                const before = await catchUpOn(`${base}-before`, [userDialog('42')], '7530')
+
+                // Every event reached the guard unproven and is held; the dialog was not cut short.
+                expect(before).toContain('saved=0')
+                expect(before).toContain('held=0 guardHeld=3')
+                expect(mocks.appendGuarded.mock.calls.map(call => call[0].attribution)).toEqual([
+                    { status: 'unproven', reason: 'CONTACT_CONVERSATION_DRIVER_MISMATCH' },
+                    { status: 'unproven', reason: 'CONTACT_CONVERSATION_DRIVER_MISMATCH' },
+                    { status: 'unproven', reason: 'CONTACT_CONVERSATION_DRIVER_MISMATCH' },
+                ])
+                expect(rows.size).toBe(0)
+                expect(mocks.heldRows.size).toBe(3)
+                expectNothingPersistedOrPublished()
+                expect(mocks.releaseHeld).not.toHaveBeenCalled()
+                expect(mocks.patchConversation.mock.calls.filter(call => 'lastMessageAt' in call[0].patch)).toEqual([])
+
+                chat.repair()
+                const after = await catchUpOn(`${base}-after`, [userDialog('42')], '7530')
+
+                // The first proven admission released all three with its own fresh proof.
+                expect(mocks.releaseHeld).toHaveBeenCalledOnce()
+                expect(mocks.releaseHeld).toHaveBeenCalledWith(expect.objectContaining({
+                    chatId: 'chat:telegram:42',
+                    conversationKind: 'private',
+                    attribution: { status: 'proven', contactId: 'contact:42', contactIdentityId: 'identity:42' },
+                }))
+                expect(keys(rows)).toEqual(['telegram:7530:42:51', 'telegram:7530:42:52', 'telegram:7530:42:53'])
+                expect(mocks.heldRows.size).toBe(0)
+                // Released events come back as duplicates: projected by the release, never published.
+                expect(after).toContain('saved=0 duplicates=3')
+                expect(mocks.inboundWorkflow).toHaveBeenCalledTimes(3)
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+
+                const imported = await importOn(`${base}-after`, [userDialog('42')])
+
+                expect(imported.detailsJson.newMessages).toBe(0)
+                expect(imported.detailsJson.existingMessages).toBe(3)
+                expect(mocks.createMessage).toHaveBeenCalledTimes(3)
+                expect(logs()).not.toContain('seam body')
+            })
+
+            test('R-21: live events held for another person are released once by the next proven history import', async () => {
+                const rows = useMessageStore()
+                const chat = boundToAnotherPerson()
+                const connectionId = `telegram-guard-import-${connectionSequence}`
+                const handler = await initializeListener(connectionId, '7531')
+                const held = [61, 62, 63].map(id => privateMessage({ peer: '42', id, text: `seam body ${id}` }))
+
+                for (const message of held) await handler({ message })
+
+                expect(rows.size).toBe(0)
+                expect(mocks.heldRows.size).toBe(3)
+                expectNothingPersistedOrPublished()
+                expect(logs().match(/GUARD-HELD chat=chat:telegram:42 reason=attribution_unproven/g)).toHaveLength(3)
+                // A redelivered held event stays one held event.
+                await handler({ message: held[0] })
+                expect(mocks.heldRows.size).toBe(3)
+
+                chat.repair()
+                messagesByPeer({ '42': [...held].reverse() })
+                const recovered = await importOn(connectionId, [userDialog('42')])
+
+                expect(keys(rows)).toEqual(['telegram:7531:42:61', 'telegram:7531:42:62', 'telegram:7531:42:63'])
+                expect(recovered.detailsJson.newMessages).toBe(0)
+                expect(recovered.detailsJson.existingMessages).toBe(3)
+                expect(recovered.detailsJson.completeness.guardHeldMessages).toBe(0)
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+                expect(logs()).not.toContain('seam body')
+            })
+
+            test('R-21: a held import event is counted, keeps the import partial and moves no conversation order', async () => {
+                useMessageStore()
+                boundToAnotherPerson()
+                messagesByPeer({ '42': [72, 71].map(id => privateMessage({ peer: '42', id })) })
+
+                const patch = await runImport([userDialog('42')], '7532')
+
+                expect(mocks.appendGuarded.mock.calls.map(call => call[0].projection)).toEqual(['history', 'history'])
+                expect(patch.resultType).toBe('partial')
+                expect(patch.detailsJson.newMessages).toBe(0)
+                expect(patch.detailsJson.completeness.guardHeldMessages).toBe(2)
+                expect(patch.detailsJson.completeness.heldDialogs).toBe(0)
+                expect(mocks.patchConversation.mock.calls.filter(call => 'lastMessageAt' in call[0].patch)).toEqual([])
+            })
+
+            test('R-21: every write carries the proof of the conversation peer; catch-up projects live, import history', async () => {
+                const handler = await initializeListener(`telegram-guard-proof-${connectionSequence}`, '7533')
+                const proof = { status: 'proven', contactId: 'contact:42', contactIdentityId: 'identity:42' }
+
+                await handler({ message: privateMessage({ peer: '42', id: 81 }) })
+                await handler({ message: privateMessage({ peer: '42', id: 82, out: true }) })
+                expect(mocks.appendGuarded.mock.calls.map(call => call[0])).toEqual([
+                    expect.objectContaining({ contract: 'messaging.AppendGuardedChannelMessageCommand.v1', chatId: 'chat:telegram:42', conversationKind: 'private', channel: 'telegram', direction: 'inbound', attribution: proof, projection: 'live', externalId: 'telegram:7533:42:81' }),
+                    // An own message carries the recipient's (the peer's) proof, never the account's.
+                    expect.objectContaining({ direction: 'outbound', attribution: proof, projection: 'live', externalId: 'telegram:7533:42:82' }),
+                ])
+                // Appended: the conversation order moves and the message is published, once each.
+                expect(mocks.patchConversation.mock.calls.filter(call => 'lastMessageAt' in call[0].patch)).toHaveLength(2)
+                expect(mocks.emitMessage).toHaveBeenCalledTimes(2)
+                expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
+
+                mocks.appendGuarded.mockClear()
+                messagesByPeer({ '43': [privateMessage({ peer: '43', id: 91 })] })
+                await runCatchUp([userDialog('43')], '7534')
+                expect(mocks.appendGuarded.mock.calls.map(call => call[0].projection)).toEqual(['live'])
+
+                mocks.appendGuarded.mockClear()
+                mocks.inboundWorkflow.mockClear()
+                mocks.emitMessage.mockClear()
+                messagesByPeer({ '44': [privateMessage({ peer: '44', id: 92 })] })
+                const patch = await runImport([userDialog('44')], '7535')
+                expect(patch.detailsJson.newMessages).toBe(1)
+                expect(mocks.appendGuarded.mock.calls.map(call => call[0].projection)).toEqual(['history'])
+                expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+            })
+
+            test('R-21: a link refusal in a conversation bound to nobody keeps the pre-append HOLD', async () => {
+                const handler = await initializeListener(`telegram-guard-unbound-${connectionSequence}`, '7536')
+                mocks.ensureContactLink.mockRejectedValueOnce(new Error('CONTACT_IDENTITY_LINK_MISMATCH'))
+
+                await handler({ message: privateMessage({ peer: '42', id: 93 }) })
+
+                expect(mocks.appendGuarded).not.toHaveBeenCalled()
+                expect(mocks.heldRows.size).toBe(0)
+                expect(logs()).toContain('held code=CONTACT_IDENTITY_LINK_MISMATCH')
+            })
+
+            test('R-21: a proven admission counts first and releases nothing when nothing is held', async () => {
+                const handler = await initializeListener(`telegram-guard-count-${connectionSequence}`, '7537')
+
+                await handler({ message: privateMessage({ peer: '42', id: 94 }) })
+
+                expect(mocks.heldCount).toHaveBeenCalledWith({ contract: 'messaging.HeldChannelMessagesQuery.v1', chatId: 'chat:telegram:42' })
+                expect(mocks.releaseHeld).not.toHaveBeenCalled()
+            })
+
+            test('R-21: a failed release never costs the current event', async () => {
+                const handler = await initializeListener(`telegram-guard-release-fail-${connectionSequence}`, '7538')
+                mocks.heldCount.mockResolvedValueOnce({ contract: 'messaging.HeldChannelMessagesResult.v1', held: 2, byReason: {} })
+                mocks.releaseHeld.mockRejectedValueOnce(Object.assign(new Error('lock timeout for "secret body"'), { code: 'P2034' }))
+
+                await handler({ message: privateMessage({ peer: '42', id: 95, text: 'secret body' }) })
+
+                expect(mocks.appendGuarded).toHaveBeenCalledOnce()
+                expect(mocks.emitMessage).toHaveBeenCalledOnce()
+                expect(logs()).toContain('[TG-GUARD] release failed chat=chat:telegram:42 code=P2034')
+                expect(logs()).not.toContain('secret body')
+            })
+
+            test.each([
+                ['CONTENDED', 'held_transient'],
+                ['CONVERSATION_NOT_FOUND', 'rejected'],
+                ['CONVERSATION_CHANNEL_MISMATCH', 'rejected'],
+                ['CONVERSATION_KIND_MISMATCH', 'rejected'],
+            ] as const)('R-21: a guard refusal %s is %s, stops the dialog and logs one bounded code', async (code, outcome) => {
+                const { GuardedChannelMessageError } = await import('@/contracts/messaging/v1')
+                mocks.appendGuarded.mockRejectedValueOnce(new GuardedChannelMessageError(code, 'conversation "secret body"'))
+                messagesByPeer({ '42': [102, 101].map(id => privateMessage({ peer: '42', id, text: 'secret body' })) })
+
+                const summary = await runCatchUp([userDialog('42')], '7539')
+
+                expect(mocks.appendGuarded).toHaveBeenCalledOnce()
+                expect(summary).toContain(outcome === 'held_transient' ? 'heldTransient=2' : 'rejected=2')
+                expect(logs()).toContain(`message ${outcome} conn=telegram-d1-catchup-${connectionSequence} code=TELEGRAM_GUARDED_APPEND_${code}`)
+                expect(logs()).not.toContain('secret body')
+            })
+
+            test('R-21: a contract refusal of the guard fails only that message', async () => {
+                const { GuardedChannelMessageCommandValidationError } = await import('@/contracts/messaging/v1')
+                mocks.appendGuarded.mockRejectedValueOnce(new GuardedChannelMessageCommandValidationError('INVALID_CONTRACT', 'metadata "secret body"'))
+                messagesByPeer({ '42': [112, 111].map(id => privateMessage({ peer: '42', id, text: 'secret body' })) })
+
+                const summary = await runCatchUp([userDialog('42')], '7540')
+
+                expect(summary).toContain('saved=1')
+                expect(summary).toContain('failed=1')
+                expect(logs()).toContain('code=TELEGRAM_GUARDED_APPEND_INVALID_CONTRACT')
+                expect(logs()).not.toContain('secret body')
+            })
+
+            test('R-21: a visible duplicate gets its missing media, a held one gets nothing', async () => {
+                const handler = await initializeListener(`telegram-guard-media-${connectionSequence}`, '7541')
+                const photo = { media: { className: 'MessageMediaPhoto' }, downloadMedia: () => undefined }
+                mocks.appendGuarded.mockResolvedValueOnce(duplicateResult('visible-row'))
+                mocks.appendGuarded.mockResolvedValueOnce(duplicateResult(null, false))
+
+                await handler({ message: privateMessage({ peer: '42', id: 121, text: '', extra: photo }) })
+                await handler({ message: privateMessage({ peer: '42', id: 122, text: '', extra: photo }) })
+
+                expect(mocks.attachMessageMedia).toHaveBeenCalledOnce()
+                expect(mocks.attachMessageMedia).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'visible-row' }))
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+            })
+
+            test('A1: the use-server lane names no guarded capability; the ingress module is server-only and takes no proof', () => {
+                const lane = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
+                const ingress = readFileSync(`${process.cwd()}/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts`, 'utf8')
+                for (const capability of ['appendGuardedChannelMessageV1', 'releaseHeldChannelMessagesV1', 'heldChannelMessagesV1', 'runHeldChannelMessageRetentionV1']) {
+                    expect(lane).not.toMatch(new RegExp(`\\b${capability}\\b`))
+                }
+                expect(lane).not.toMatch(/\bcreateChannelMessageV1\b/)
+                expect(ingress).not.toMatch(/['"]use server['"]/)
+                expect(ingress).not.toMatch(/import\s*\*|export\s*\*/)
+                // No exported function or type takes an attribution or a contact/identity id from its caller.
+                const exported = ingress.split('\nexport ').slice(1).map(block => block.split('\n}')[0])
+                for (const block of exported) {
+                    const signature = block.split('{')[0] + (block.startsWith('async function') ? block.slice(0, block.indexOf('): Promise')) : '')
+                    expect(signature).not.toMatch(/GuardedSenderAttributionV1|contactId|contactIdentityId|attribution:/)
+                }
+            })
 
             test('a dialog held for another person is recovered exactly once by the next catch-up after its owner repairs it', async () => {
                 const rows = useMessageStore()
@@ -1398,21 +1757,23 @@ describe('GramJS private conversation identity admission', () => {
                 expect(logs()).toContain('DB-DEDUP: skipped existing=message:telegram:7203:42:5003')
             })
 
-            test('a concurrent writer of the same key is a benign duplicate only when its row is found', async () => {
+            test('a concurrent writer of the same key is settled by the guard: its duplicate projects, orders and publishes nothing', async () => {
                 const handler = await initializeListener(`telegram-dedupe-race-${connectionSequence}`, '7204')
                 const unique = () => Object.assign(new Error('Unique constraint failed on the fields: (`externalId`)'), { code: 'P2002' })
-                mocks.createMessage.mockRejectedValueOnce(unique())
-                mocks.messageFindUnique
-                    .mockResolvedValueOnce(null)
-                    .mockResolvedValueOnce(null)
-                    .mockResolvedValueOnce({ id: 'winner', chatId: 'chat:telegram:42', direction: 'inbound', channel: 'telegram', content: 'exact identity text' })
+                mocks.appendGuarded.mockResolvedValueOnce(duplicateResult('winner'))
+                // The winner's row is readable, so publishing it would be observable.
+                mocks.createdRows.set('winner', { id: 'winner', chatId: 'chat:telegram:42', direction: 'inbound', content: 'exact identity text' })
 
                 await handler({ message: privateMessage({ peer: '42', id: 5004 }) })
 
+                expect(mocks.createMessage).not.toHaveBeenCalled()
                 expect(mocks.inboundWorkflow).not.toHaveBeenCalled()
                 expect(mocks.emitMessage).not.toHaveBeenCalled()
-                expect(logs()).toContain('DB-DEDUP: concurrent writer existing=winner')
+                expect(mocks.patchConversation.mock.calls.filter(call => 'lastMessageAt' in call[0].patch)).toEqual([])
+                expect(logs()).toContain('DB-DEDUP: recorded existing=winner')
                 expect(logs()).not.toContain('Error (conn=')
+
+                // A unique violation the guard did not settle is a failure, never a guessed duplicate.
 
                 mocks.createMessage.mockRejectedValueOnce(unique())
                 await handler({ message: privateMessage({ peer: '42', id: 5005 }) })
@@ -1605,7 +1966,7 @@ describe('GramJS private conversation identity admission', () => {
                     expect(mocks.createMessage).toHaveBeenCalledOnce()
                     expectStoredRowUntouched()
                     expect(logs()).toContain('[TG-LISTENER] KEY-CONFLICT chat=chat:telegram:42 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
-                    expect(logs()).not.toContain('concurrent writer')
+                    expect(logs()).not.toContain('DB-DEDUP: recorded')
                     expect(logs()).not.toContain('Error (conn=')
                 })
 
@@ -1639,14 +2000,14 @@ describe('GramJS private conversation identity admission', () => {
                     expect(mocks.createMessage.mock.calls.map(call => call[0].externalId)).toEqual([key, key])
                     expect([...rows.values()]).toEqual([expect.objectContaining({ externalId: key, content: 'first message' })])
                     expect(logs()).toContain('[TG-LISTENER] KEY-CONFLICT chat=chat:telegram:42 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
-                    expect(logs()).not.toContain('concurrent writer')
+                    expect(logs()).not.toContain('DB-DEDUP: recorded')
                     expect(logs()).not.toContain('second message')
                     expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
                     expect(mocks.emitMessage).toHaveBeenCalledOnce()
 
                     // The same id-less message racing itself is still a benign duplicate.
                     await handler({ message: privateMessage({ peer: '42', text: 'first message', date }) })
-                    expect(logs()).toContain('DB-DEDUP: concurrent writer existing=message:1')
+                    expect(logs()).toContain('DB-DEDUP: recorded existing=message:1')
                     expect(mocks.inboundWorkflow).toHaveBeenCalledOnce()
                     expect(rows.size).toBe(1)
                 })
@@ -1659,7 +2020,7 @@ describe('GramJS private conversation identity admission', () => {
                     await handler({ message: privateMessage({ peer: '84', text: 'first sent', date, out: true }) })
                     await handler({ message: privateMessage({ peer: '84', text: 'second sent', date, out: true }) })
                     expect(logs()).toContain('[TG-MIRROR] KEY-CONFLICT chat=chat:telegram:84 code=TELEGRAM_MESSAGE_KEY_CONFLICT')
-                    expect(logs()).not.toContain('concurrent writer')
+                    expect(logs()).not.toContain('DB-DEDUP: recorded')
                     expect(mocks.emitMessage).toHaveBeenCalledOnce()
 
                     messagesByPeer({ '45': ['first imported', 'second imported'].map(text => privateMessage({ peer: '45', text, date })) })
@@ -1784,15 +2145,19 @@ describe('GramJS private conversation identity admission', () => {
                 }
             })
 
-            test('workflow and publication failures log codes only', async () => {
-                mocks.inboundWorkflow.mockRejectedValueOnce(new Error('update failed for "secret body"'))
-                mocks.emitMessage.mockRejectedValueOnce(new Error('broadcast failed for "secret body"'))
+            test('a workflow failure inside the guard publishes nothing; publication failures log codes only', async () => {
                 const handler = await initializeListener(`telegram-log-workflow-${connectionSequence}`, '7302')
 
+                // The workflow projection commits with the message, so its failure is the append's.
+                mocks.inboundWorkflow.mockRejectedValueOnce(new Error('update failed for "secret body"'))
                 await handler({ message: privateMessage({ peer: '42', id: 9401, text: 'secret body' }) })
+                expect(mocks.emitMessage).not.toHaveBeenCalled()
+                expect(logs()).toContain('failed code=UNCLASSIFIED')
 
+                mocks.emitMessage.mockRejectedValueOnce(new Error('broadcast failed for "secret body"'))
+                await handler({ message: privateMessage({ peer: '42', id: 9402, text: 'secret body' }) })
                 await vi.waitFor(() => expect(logs()).toContain('emitMessageReceived error: code=UNCLASSIFIED'))
-                expect(logs()).toContain('onInboundMessage error: code=UNCLASSIFIED')
+                expect(logs()).not.toContain('onInboundMessage error')
                 expect(logs()).not.toContain('secret body')
             })
 
@@ -1819,24 +2184,30 @@ describe('GramJS private conversation identity admission', () => {
             })
 
             test('no ingress log statement can reference message text, names, provider ids or raw error text', () => {
-                const source = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
-                const ingressFunctions = [
-                    'logTelegramServicePeerSkipped',
-                    'logTelegramMessageKeyConflict',
-                    'rejectTelegramConversationCollision',
-                    'admitTelegramPrivateConversation',
-                    'processInboundTelegramMessage',
-                    'processOutboundMirrorMessage',
-                    'ensureOutboundTelegramAttachment',
-                    'catchUpMissedMessages',
-                    'processReactionUpdate',
-                    'attachInboundListener',
-                    'importTelegramHistory',
-                    'updateTgImportJob',
+                const lane = readFileSync(`${process.cwd()}/src/app/tg-actions.ts`, 'utf8')
+                const ingress = readFileSync(`${process.cwd()}/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts`, 'utf8')
+                const ingressFunctions: Array<[string, string]> = [
+                    ['logTelegramServicePeerSkipped', lane],
+                    ['logTelegramMessageKeyConflict', lane],
+                    ['logTelegramGuardHeld', lane],
+                    ['appendTelegramGuardedEvent', lane],
+                    ['publishAppendedTelegramMessage', lane],
+                    ['retryMissingInboundTelegramMedia', lane],
+                    ['rejectTelegramConversationCollision', ingress],
+                    ['releaseHeldWithFreshProof', ingress],
+                    ['admitTelegramPrivateConversation', ingress],
+                    ['processInboundTelegramMessage', lane],
+                    ['processOutboundMirrorMessage', lane],
+                    ['ensureOutboundTelegramAttachment', lane],
+                    ['catchUpMissedMessages', lane],
+                    ['processReactionUpdate', lane],
+                    ['attachInboundListener', lane],
+                    ['importTelegramHistory', lane],
+                    ['updateTgImportJob', lane],
                 ]
                 const forbidden = /\.message\b|\.stack\b|JSON\.stringify|\b(?:text|content|msgText|fileName|mimeType|senderName|recipientName|senderId|recipientId|peerId|externalMsgId|rawExternalMsgId|username|firstName|lastName)\b|,\s*(?:err|error|e|retryErr|mediaErr|chatErr|messageError|dialogError)\s*\)/
                 let checked = 0
-                for (const name of ingressFunctions) {
+                for (const [name, source] of ingressFunctions) {
                     const start = source.search(new RegExp(`\\n(?:export )?(?:async )?function ${name}\\(`))
                     expect(start, name).toBeGreaterThan(-1)
                     const rest = source.slice(start + 1)
@@ -1910,7 +2281,8 @@ describe('GramJS private conversation identity admission', () => {
                         direction: command.direction,
                         type: command.type,
                         content: command.content,
-                        status: command.status ?? 'sent',
+                        // The guard writes inbound 'delivered' and an own message 'sent'.
+                        status: command.status ?? (command.direction === 'inbound' ? 'delivered' : 'sent'),
                         externalId: command.externalId,
                         metadata: command.metadata ?? {},
                         sentAt: command.sentAt,
