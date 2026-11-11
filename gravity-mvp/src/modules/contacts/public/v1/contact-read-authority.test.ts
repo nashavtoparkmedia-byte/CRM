@@ -2,7 +2,8 @@
  * ContactReadAuthorityQuery.v1 proven as a fail-closed, non-elevating decision.
  *
  * The decision is pure: these tests cover the whole table the Owner approved
- * (D2): the three staff roles and their ВУ views, a refused staff cookie, the
+ * (D2, ВУ view as revised 2026-11-11 ~10:20: every staff reader role sees the
+ * full ВУ): the three staff roles, a refused staff cookie or unknown role, the
  * transitional integration-admin path and the enforcement switch that ends it.
  */
 import { describe, expect, it } from 'vitest'
@@ -16,18 +17,12 @@ import {
 const staff = (role: string, userId = 'user-1') => ({ staffCookie: 'present' as const, staffPrincipal: { userId, role } })
 
 describe('decideContactReadAuthorityV1', () => {
-  it('lets every reader role read people, with the full ВУ for Администратор only', () => {
-    expect(decideContactReadAuthorityV1(staff('Администратор'))).toEqual({
-      decision: 'allow',
-      principal: { kind: 'staff_session', userId: 'user-1', role: 'Администратор' },
-      licenceView: 'full',
-      policyVersion: CONTACT_READ_AUTHORITY_POLICY_VERSION_V1,
-    })
-    for (const role of ['Руководитель', 'Менеджер']) {
+  it('lets exactly the three reader roles read people, each with the full ВУ', () => {
+    for (const role of ['Администратор', 'Руководитель', 'Менеджер']) {
       expect(decideContactReadAuthorityV1(staff(role))).toEqual({
         decision: 'allow',
         principal: { kind: 'staff_session', userId: 'user-1', role },
-        licenceView: 'last4',
+        licenceView: 'full',
         policyVersion: CONTACT_READ_AUTHORITY_POLICY_VERSION_V1,
       })
     }
@@ -60,21 +55,21 @@ describe('decideContactReadAuthorityV1', () => {
     }
   })
 
-  it('has no input through which a staff user could be raised to the admin view', () => {
+  it('has no input through which a staff user could become the integration-admin principal', () => {
     // A present staff cookie has no integration-admin input at all: the type
-    // admits none, and a Менеджер stays 'last4' whatever else the request holds.
+    // admits none, and the principal stays the employee whatever else the request holds.
     const answer = decideContactReadAuthorityV1({
       staffCookie: 'present',
       staffPrincipal: { userId: 'user-2', role: 'Менеджер' },
       // @ts-expect-error an admin input is not part of the staff branch
       integrationAdminVerified: true,
     })
-    expect(answer).toMatchObject({ decision: 'allow', licenceView: 'last4' })
+    expect(answer).toMatchObject({ decision: 'allow', principal: { kind: 'staff_session', userId: 'user-2', role: 'Менеджер' } })
   })
 
-  it('maps only Администратор to the full ВУ view', () => {
+  it('maps every reader role to the full ВУ view', () => {
     expect(contactLicenceViewForRoleV1('Администратор')).toBe('full')
-    expect(contactLicenceViewForRoleV1('Руководитель')).toBe('last4')
-    expect(contactLicenceViewForRoleV1('Менеджер')).toBe('last4')
+    expect(contactLicenceViewForRoleV1('Руководитель')).toBe('full')
+    expect(contactLicenceViewForRoleV1('Менеджер')).toBe('full')
   })
 })

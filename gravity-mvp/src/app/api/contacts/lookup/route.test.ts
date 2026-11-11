@@ -2,7 +2,8 @@
  * GET /api/contacts/lookup answers only with Contacts' read authority.
  *
  * A denial of any kind (no session, a refused staff cookie, the transitional
- * admin read switched off) is 401 and never reaches the lookup.
+ * admin read switched off) is 401 and never reaches the lookup. No answer may be
+ * cached: 200, 401 and 500 all carry Cache-Control: no-store.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -28,6 +29,7 @@ describe('GET /api/contacts/lookup', () => {
       contacts.resolveContactReadAuthorityV1.mockResolvedValueOnce({ decision: 'deny', reason })
       const response = await GET(request())
       expect(response.status).toBe(401)
+      expect(response.headers.get('cache-control')).toBe('no-store')
     }
     expect(contacts.searchContactsV1).not.toHaveBeenCalled()
   })
@@ -37,11 +39,12 @@ describe('GET /api/contacts/lookup', () => {
       contacts.resolveContactReadAuthorityV1.mockResolvedValueOnce({
         decision: 'allow',
         principal: { kind: 'staff_session', userId: 'u', role },
-        licenceView: role === 'Администратор' ? 'full' : 'last4',
+        licenceView: 'full',
         policyVersion: 'contacts.read-authority.v1',
       })
       const response = await GET(request())
       expect(response.status).toBe(200)
+      expect(response.headers.get('cache-control')).toBe('no-store')
     }
     expect(contacts.searchContactsV1).toHaveBeenCalledTimes(3)
     expect(contacts.searchContactsV1).toHaveBeenCalledWith({ query: 'Иванов', limit: undefined })
@@ -56,5 +59,20 @@ describe('GET /api/contacts/lookup', () => {
     })
     await GET(request())
     expect(contacts.resolveContactReadAuthorityV1).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers a lookup failure with 500, no-store and no cause', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    contacts.resolveContactReadAuthorityV1.mockResolvedValue({
+      decision: 'allow',
+      principal: { kind: 'staff_session', userId: 'u', role: 'Менеджер' },
+      licenceView: 'full',
+      policyVersion: 'contacts.read-authority.v1',
+    })
+    contacts.searchContactsV1.mockRejectedValueOnce(new Error('relation "Contact" does not exist'))
+    const response = await GET(request())
+    expect(response.status).toBe(500)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.text()).toBe('{"error":"Internal Server Error"}')
   })
 })

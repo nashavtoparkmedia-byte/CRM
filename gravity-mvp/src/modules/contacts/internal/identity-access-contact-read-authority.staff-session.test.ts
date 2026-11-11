@@ -5,9 +5,10 @@
  *
  * - A staff cookie on a lane with no secret is refused; the integration-admin
  *   session beside it is not consulted.
- * - With both sessions, a real Менеджер token keeps the last-4 view.
- * - A role lowered in the registry, or a disabled employee, never keeps the
- *   full view on the next request.
+ * - With both sessions, a real Менеджер token stays the Менеджер: the principal
+ *   is the employee, never the integration-admin session.
+ * - Every reader role sees the full ВУ (Owner 2026-11-11); a role changed in the
+ *   registry applies on the next request, and a disabled employee is refused.
  * - An unreadable store: inside a route the answer is a denial; at the request
  *   boundary every D2 path (pages, the lookup and ВУ-search APIs, the referral
  *   page and its server-action POST) is answered 503 before any of them runs, and the
@@ -147,15 +148,16 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
     await expect(resolve()).resolves.toMatchObject({ decision: 'allow', principal: { kind: 'integration_admin_session' }, licenceView: 'full' })
   })
 
-  test('both sessions: a real Менеджер token keeps the last-4 view', async () => {
+  test('both sessions: a real Менеджер token stays the Менеджер, never the admin session', async () => {
     configureLane()
     configureAdmin()
     const token = await staffToken('u1')
     asRequest({ [STAFF_COOKIE]: token, [INTEGRATION_ADMIN_SESSION_COOKIE]: issueIntegrationAdminSession()!, crm_user_id: 'u2' })
-    await expect(resolve()).resolves.toMatchObject({
+    await expect(resolve()).resolves.toEqual({
       decision: 'allow',
       principal: { kind: 'staff_session', userId: 'u1', role: 'Менеджер' },
-      licenceView: 'last4',
+      licenceView: 'full',
+      policyVersion: 'contacts.read-authority.v1',
     })
   })
 
@@ -165,14 +167,15 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
     await expect(resolve()).resolves.toEqual({ decision: 'deny', reason: 'no_session' })
   })
 
-  test('a role lowered in the registry or a disabled employee never keeps the full view', async () => {
+  test('a role changed in the registry applies on the next request, and a disabled employee is refused', async () => {
     configureLane()
     const token = await staffToken('u2')
     asRequest({ [STAFF_COOKIE]: token })
-    await expect(resolve()).resolves.toMatchObject({ decision: 'allow', licenceView: 'full' })
+    await expect(resolve()).resolves.toMatchObject({ decision: 'allow', principal: { role: 'Администратор' }, licenceView: 'full' })
     writeRegistry([MANAGER, { ...ADMIN, role: 'Менеджер' }])
-    const lowered = await resolve()
-    expect(lowered.decision === 'allow' ? lowered.licenceView : 'denied').not.toBe('full')
+    await expect(resolve()).resolves.toMatchObject({ decision: 'allow', principal: { role: 'Менеджер' }, licenceView: 'full' })
+    writeRegistry([MANAGER, { ...ADMIN, role: 'Оператор' }])
+    await expect(resolve()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
     writeRegistry([MANAGER, { ...ADMIN, status: 'Отключен' }])
     await expect(resolve()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
   })

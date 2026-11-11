@@ -3,8 +3,9 @@
 //
 // Two reads, each owned by its own context, composed here and nowhere else:
 //   1. Contacts' ContactReadAuthorityQuery.v1 — whether the caller may read
-//      people at all, and the ВУ view they hold (full for Администратор, the last
-//      four characters for everyone else). Nothing else is read before it allows.
+//      people at all, and the ВУ view they hold (since the Owner's decision of
+//      2026-11-11, full for every staff reader role). Nothing else is read
+//      before it allows.
 //   2. Fleet Operations' DriverProfilesByExactLicenceQuery.v1 — the persisted
 //      park profiles whose ВУ is exactly the typed one, each ВУ masked by Fleet on
 //      the server for that view.

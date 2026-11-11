@@ -6,9 +6,10 @@ import Link from 'next/link'
 /**
  * «Люди» → поиск по ВУ (Owner D2, OD-03). The full licence goes to the server in
  * a POST body; the answer shows each profile's ВУ only as the reader's view
- * allows («•••• 5678» for everyone but Администратор) and never repeats the
- * typed value. A profile opens the person card through the row's own stored
- * Contact link; a profile without one is shown as such, never matched here.
+ * allows (since the Owner's decision of 2026-11-11, the full ВУ for every staff
+ * reader role) and never repeats the typed value. A profile opens the person
+ * card through the row's own stored Contact link; a profile without one is
+ * shown as such, never matched here.
  */
 type LicenceSearchProfile = {
   driverId: string

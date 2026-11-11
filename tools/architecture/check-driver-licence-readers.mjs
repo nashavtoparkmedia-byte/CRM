@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Driver-licence (ВУ) reader inventory (Owner D2, OD-03; Security D2 criterion 4).
 //
-// The full ВУ number may be shown to an Администратор only; Менеджер and
-// Руководитель see its last four characters, and the decision is Contacts' read
-// authority (ContactReadAuthorityQuery.v1) applied by Fleet's mask. This control
-// keeps an exact inventory of every non-test source file that touches the ВУ
+// Who sees the ВУ is Contacts' read authority (ContactReadAuthorityQuery.v1),
+// applied through Fleet's licence view. Since the Owner's decision of 2026-11-11
+// (~10:20) every verified staff reader role sees the full number, so what guards
+// the ВУ is the personal sign-in: no reader may show it outside a verified
+// session, and none may print it to a log. This control keeps an exact inventory of every non-test source file that touches the ВУ
 // under ANY of its names: the licence fields (licenseNumber, licenseHistory, …)
 // and the person keys that embed it (externalPersonKey / profileClusterKey are
 // `vu:<normalized ВУ>`, normalizedVu, rawVu). Each file carries a disposition:
@@ -19,11 +20,13 @@
 //                    `becomes: 'masked'` marks a D2 conduit that is admin-only
 //                    until its masking step lands (Cash's referral reads), when
 //                    it must move to `masked`.
-//   masked         — a D2 surface that must mask by licenceView
-//                    (maskDriverLicenceV1, verified here).
-//   d2l            — a legacy screen that still shows the full ВУ on the legacy
-//                    perimeter; the P1 «D2-L» moves it to personal sign-in and the
-//                    mask. `owner` names the context that executes it.
+//   masked         — a D2 surface behind the read authority whose ВУ passes
+//                    through Fleet's licence view (maskDriverLicenceV1, verified
+//                    here).
+//   d2l            — a legacy screen that shows the ВУ on the legacy perimeter
+//                    (no personal sign-in yet); the P1 «D2-L» moves it onto the
+//                    Staff Session read authority. `owner` names the context that
+//                    executes it.
 //   view_decision  — carries the licenceView decision or its type, never a number.
 //   type_only      — declares or re-exports a ВУ-bearing type and reads no data.
 //   licence_term_only — the word names a questionnaire flag or field («has a

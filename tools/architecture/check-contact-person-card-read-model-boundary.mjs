@@ -157,7 +157,14 @@ function assertAuthority(read = readRepo) {
   assert.equal((feed.match(/getIntegrationAdminPrincipal\(\)/gu) ?? []).length, 1, 'the admin session is read more than once')
   const decision = withoutComments(read(READ_DECISION))
   assert(!/from '@\/|from "@\//u.test(decision), 'the read decision is not pure')
-  assert(decision.includes("return role === 'Администратор' ? 'full' : 'last4'"), 'the full ВУ view is no longer Администратор-only')
+  // Owner 2026-11-11 (~10:20): exactly the three reader roles, each with the full ВУ;
+  // an unknown role, an empty user or a refused staff cookie is a denial.
+  assert(decision.includes("export const CONTACT_READER_ROLES_V1 = ['Администратор', 'Руководитель', 'Менеджер'] as const"), 'the reader roles are no longer exactly Администратор, Руководитель and Менеджер')
+  order(decision, [
+    "if (staff === null || typeof staff.userId !== 'string' || staff.userId === '' || !isReaderRole(staff.role)) {",
+    "return deny('staff_session_refused')",
+  ], 'the read decision refusal')
+  assert(/export function contactLicenceViewForRoleV1\(_role: ContactReaderRoleV1\): ContactLicenceViewV1 \{\s*return 'full'\s*\}/u.test(decision), 'a staff reader role no longer gets the full ВУ view')
   assert(decision.includes("if (inputs.staffSessionEnforced === true) return deny('transitional_admin_read_disabled')"), 'the enforcement switch no longer ends the transitional admin read')
   assert(decision.includes('licenceView: contactLicenceViewForRoleV1(staff.role),'), 'a staff reader\'s ВУ view no longer comes from the role decision')
   assert(decision.includes("principal: { kind: 'integration_admin_session', transitional: true },"), 'the integration-admin full view is no longer marked transitional')
@@ -199,6 +206,8 @@ function assertComposition(read = readRepo) {
   assert(!CLIENT_IDENTITY.test(page), 'the page reads a client-held identity')
   const lookup = withoutComments(read(LOOKUP_ROUTE))
   order(lookup, ['const authority = await resolveContactReadAuthorityV1()', "if (authority.decision !== 'allow') {", 'await searchContactsV1('], 'the lookup route')
+  assert(lookup.includes("const NO_STORE = { 'Cache-Control': 'no-store' }"), 'the lookup route has no no-store header')
+  assert.equal((lookup.match(/NextResponse\.json\(/gu) ?? []).length, (lookup.match(/headers: NO_STORE/gu) ?? []).length, 'a lookup answer may be cached')
   assert(!CLIENT_IDENTITY.test(lookup), 'the lookup route reads a client-held identity')
   const people = withoutComments(read(PEOPLE_PAGE))
   order(people, ['const authority = await resolveContactReadAuthorityV1()', "authority.decision !== 'allow'", '<ContactsSearchClient />'], 'the «Люди» page')
@@ -247,9 +256,10 @@ function assertDeclarations(read = readRepo) {
 
 /** 7. Each ВУ-view rule holds against known mutants («full by default» and its kin). */
 const MUTANTS = [
-  [READ_DECISION, "return role === 'Администратор' ? 'full' : 'last4'", "return role !== 'Менеджер' ? 'full' : 'last4'"],
-  [READ_DECISION, "return role === 'Администратор' ? 'full' : 'last4'", "return 'full'"],
-  [READ_DECISION, 'licenceView: contactLicenceViewForRoleV1(staff.role),', "licenceView: 'full',"],
+  [READ_DECISION, "staff.userId === '' || !isReaderRole(staff.role)) {", "staff.userId === '') {"],
+  [READ_DECISION, "['Администратор', 'Руководитель', 'Менеджер'] as const", "['Администратор', 'Руководитель', 'Менеджер', 'Оператор'] as const"],
+  [READ_DECISION, "_role: ContactReaderRoleV1): ContactLicenceViewV1 {\n  return 'full'", "_role: ContactReaderRoleV1): ContactLicenceViewV1 {\n  return _role === 'Администратор' ? 'full' : 'last4'"],
+  [READ_DECISION, "return deny('staff_session_refused')", "return deny('no_session')"],
   [READ_DECISION, "if (inputs.staffSessionEnforced === true) return deny('transitional_admin_read_disabled')", "if (false) return deny('transitional_admin_read_disabled')"],
   [READ_DECISION, "principal: { kind: 'integration_admin_session', transitional: true },", "principal: { kind: 'integration_admin_session' },"],
   [HANDLER, "licenceView: principal.licenceView === 'full' ? 'full' : 'last4',", "licenceView: principal.licenceView ?? 'full',"],
@@ -264,6 +274,8 @@ const MUTANTS = [
   [LICENCE_SEARCH, "error instanceof Error ? error.name : 'unknown'", 'error instanceof Error ? error.message : licence'],
   [LICENCE_ROUTE, 'if (!isExactSameOriginMutationRequest(req) || !isJsonMutationRequest(req)) {', 'if (!isJsonMutationRequest(req)) {'],
   [LICENCE_ROUTE, '{ status: 401, headers: NO_STORE }', '{ status: 401 }'],
+  [LOOKUP_ROUTE, "{ status: 401, headers: NO_STORE }", '{ status: 401 }'],
+  [LOOKUP_ROUTE, 'NextResponse.json(result, { headers: NO_STORE })', 'NextResponse.json(result)'],
 ]
 
 function checkAll(read) {

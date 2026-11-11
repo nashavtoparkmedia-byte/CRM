@@ -15,11 +15,16 @@ import { resolveContactReadAuthorityV1, searchContactsV1 } from '@/modules/conta
  * result names people, so it is answered only to a caller who may open the card
  * it leads to: a verified Staff Session employee or, transitionally, the
  * integration-admin session. `crm_user_id` is never consulted.
+ *
+ * Every answer names people or says why not, so none may be cached: each one
+ * carries `Cache-Control: no-store`.
  */
+const NO_STORE = { 'Cache-Control': 'no-store' }
+
 export async function GET(req: NextRequest) {
   const authority = await resolveContactReadAuthorityV1()
   if (authority.decision !== 'allow') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
   }
   const query = req.nextUrl.searchParams.get('q')
   const limitParam = req.nextUrl.searchParams.get('limit')
@@ -28,10 +33,10 @@ export async function GET(req: NextRequest) {
   const limit = parsedLimit !== undefined && Number.isFinite(parsedLimit) ? parsedLimit : undefined
   try {
     const result = await searchContactsV1({ query, limit })
-    return NextResponse.json(result)
+    return NextResponse.json(result, { headers: NO_STORE })
   } catch (err: unknown) {
     // The cause is logged, never returned: a lookup failure is not operator text.
     console.error('[contacts/lookup] Error:', err instanceof Error ? err.message : err)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: NO_STORE })
   }
 }

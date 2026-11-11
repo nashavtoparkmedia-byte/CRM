@@ -3,9 +3,16 @@
 //
 // Contacts owns this decision (Owner D2, OD-03): Identity Access says who the
 // employee is and their role; Contacts says whether that principal may read
-// people and which ВУ view applies; Fleet masks the ВУ by that view. Callers
+// people and which ВУ view applies; Fleet shows the ВУ by that view. Callers
 // evaluate the answer once per request and pass `licenceView` on; nobody derives
 // it from `role` or writes it as a literal.
+//
+// ВУ view (Owner decision 2026-11-11 ~10:20, on the brute-force risk of a
+// last-4 view next to the exact-ВУ search): every verified staff reader role
+// sees the full ВУ — «Оставить как есть и принять риск … Полный доступ всем».
+// What protects the data is the personal sign-in itself: without a verified
+// session nothing is shown. The 'last4' view stays in the contract (Fleet's
+// mask still honours it) but this decision no longer answers it.
 //
 // The resolution is fail-closed and never elevates (docs/design/
 // d2-contacts-read-authority-v1.md §3):
@@ -56,9 +63,9 @@ function isReaderRole(role: unknown): role is ContactReaderRoleV1 {
   return typeof role === 'string' && (CONTACT_READER_ROLES_V1 as readonly string[]).includes(role)
 }
 
-/** The ВУ view of a staff role: only Администратор sees the full number. */
-export function contactLicenceViewForRoleV1(role: ContactReaderRoleV1): ContactLicenceViewV1 {
-  return role === 'Администратор' ? 'full' : 'last4'
+/** The ВУ view of a staff reader role: every reader role sees the full number (Owner 2026-11-11). */
+export function contactLicenceViewForRoleV1(_role: ContactReaderRoleV1): ContactLicenceViewV1 {
+  return 'full'
 }
 
 function deny(reason: ContactReadAuthorityDenialV1): ContactReadAuthorityV1 {

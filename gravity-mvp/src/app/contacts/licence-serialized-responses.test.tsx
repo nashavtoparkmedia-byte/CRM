@@ -1,14 +1,13 @@
 /**
- * Security D2 evidence 4: under the last-4 view no serialized answer of a D2
- * surface carries the full ВУ: not the «Карточка человека» HTML, not the «Люди»
- * ВУ-search JSON, not an error answer and not a log line.
+ * The ВУ in the serialized answers of the D2 surfaces, under the Owner's rule of
+ * 2026-11-11 (~10:20): every verified staff reader role — Администратор,
+ * Руководитель, Менеджер — sees the full ВУ; nobody without a verified session
+ * sees it, and no refusal, failure answer or log line carries it.
  *
  * These read the bytes a browser would receive, not a DTO: the card page is
  * rendered to HTML and the search route answers a real Request. Behind them run
  * the REAL compositions, the REAL Contacts read decision and the REAL Fleet
- * handlers with their mask; only Fleet's persistence holds a stored ВУ in
- * memory. An Администратор is the positive control: the same fixtures do show
- * the number in full, so the test can see it when it is there.
+ * handlers; only Fleet's persistence holds a stored ВУ in memory.
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NextRequest } from 'next/server'
@@ -87,10 +86,10 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
 const { default: ContactPersonPage } = await import('./[id]/page')
 const { POST } = await import('./licence-search/route')
 
-/** Every five-character run of the licence: the mask shows four, so none may appear. */
+/** Every five-character run of the licence, however it is spaced: none may appear where no ВУ is due. */
 const FULL_FRAGMENTS = Array.from({ length: KEY.length - 4 }, (_, index) => KEY.slice(index, index + 5))
 
-function assertNoFullLicence(serialized: string, where: string) {
+function assertNoLicence(serialized: string, where: string) {
   const compact = serialized.replace(/\s|&nbsp;|&#x27;|&quot;|[-.() ]/gu, '')
   for (const fragment of FULL_FRAGMENTS) expect(compact, `${where} carries ${fragment}`).not.toContain(fragment)
 }
@@ -117,36 +116,30 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  assertNoFullLicence(JSON.stringify(logged.mock.calls), 'a log line')
+  assertNoLicence(JSON.stringify(logged.mock.calls), 'a log line')
   vi.restoreAllMocks()
 })
 
 describe('the «Карточка человека» HTML', () => {
-  it('shows Менеджер and Руководитель only the last four characters of the ВУ', async () => {
-    for (const role of ['Менеджер', 'Руководитель']) {
+  it('shows every staff reader role the stored ВУ in full', async () => {
+    for (const role of ['Администратор', 'Руководитель', 'Менеджер']) {
       fixture.role = role
-      const html = await cardHtml()
-      expect(html).toContain('ВУ •••• 5678')
-      assertNoFullLicence(html, `the card HTML for ${role}`)
+      expect(await cardHtml(), role).toContain(`ВУ ${STORED}`)
     }
   })
 
-  it('positive control: an Администратор sees the stored ВУ in full', async () => {
-    fixture.role = 'Администратор'
-    expect(await cardHtml()).toContain(`ВУ ${STORED}`)
-  })
-
-  it('a refused reader gets the sign-in screen and no Fleet read happens', async () => {
+  it('a refused reader gets the sign-in screen, no ВУ and no Fleet read', async () => {
     fixture.role = 'Оператор'
     const html = await cardHtml()
     expect(html).toContain('Нет доступа к карточке человека')
+    assertNoLicence(html, 'the refused card HTML')
     expect(fixture.fleetReads).toBe(0)
   })
 })
 
 describe('the «Люди» ВУ search JSON', () => {
-  it('answers Менеджер and Руководитель with the masked ВУ only, never echoing the typed one', async () => {
-    for (const role of ['Менеджер', 'Руководитель']) {
+  it('answers every staff reader role with the stored ВУ, never with the typed spelling', async () => {
+    for (const role of ['Администратор', 'Руководитель', 'Менеджер']) {
       fixture.role = role
       for (const typed of [STORED, '9912345678', '99-12-345 678', '  9912 345678 ']) {
         const response = await POST(searchRequest({ licence: typed }))
@@ -154,18 +147,12 @@ describe('the «Люди» ВУ search JSON', () => {
         expect(response.status).toBe(200)
         expect(response.headers.get('cache-control')).toBe('no-store')
         expect(JSON.parse(text)).toEqual({
-          profiles: [{ driverId: 'd-1', linkedContactId: 'c-1', fullName: 'Громов Пётр', parkName: 'Парк Север', licence: '•••• 5678', dismissedAt: null }],
+          profiles: [{ driverId: 'd-1', linkedContactId: 'c-1', fullName: 'Громов Пётр', parkName: 'Парк Север', licence: STORED, dismissedAt: null }],
           truncated: false,
         })
-        assertNoFullLicence(text, `the search JSON for ${role}`)
+        if (typed !== STORED) expect(text, `${role} echo of «${typed}»`).not.toContain(typed)
       }
     }
-  })
-
-  it('positive control: an Администратор sees the stored ВУ in full', async () => {
-    fixture.role = 'Администратор'
-    const text = await (await POST(searchRequest({ licence: '9912345678' }))).text()
-    expect(text).toContain(STORED)
   })
 
   it('answers a too-short value exactly like a licence nobody holds', async () => {
@@ -190,7 +177,7 @@ describe('the «Люди» ВУ search JSON', () => {
       fixture.fleetFails = false
       const response = await call()
       expect(response.status, name).toBe(status)
-      assertNoFullLicence(await response.text(), `the ${name} answer`)
+      assertNoLicence(await response.text(), `the ${name} answer`)
     }
   })
 

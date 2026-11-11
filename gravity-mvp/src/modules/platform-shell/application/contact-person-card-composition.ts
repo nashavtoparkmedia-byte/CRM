@@ -8,8 +8,8 @@
 //   2. Fleet Operations' DriverProfilesForContactsQuery.v2 — the persisted park
 //      profiles of every Contact in the lineage (and the legacy Yandex link),
 //      each with its driving licence (ВУ) masked by Fleet on the server for the
-//      ВУ view Contacts answered with (full for Администратор, last four
-//      characters for everyone else). The view is passed on unchanged; a Fleet
+//      ВУ view Contacts answered with (since the Owner's decision of 2026-11-11,
+//      full for every staff reader role). The view is passed on unchanged; a Fleet
 //      answer for any other view is not shown.
 //   3. Messaging's ContactConversationsQuery.v1 — the conversation to open per
 //      channel, so the page can lead into the existing «Сообщения».

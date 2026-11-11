@@ -5,7 +5,7 @@
  * These prove the reading ORDER the no-elevation rule rests on: with a staff
  * cookie present only Staff Session is asked; the enforcement switch and the
  * transitional integration-admin session are asked only without one. They also
- * prove that the role is read per request (a mid-session downgrade applies at
+ * prove that the role is read per request (a mid-session role change applies at
  * once) and that the card authority admits exactly the two reader kinds.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,7 +46,7 @@ describe('resolveContactReadAuthorityFromIdentityAccessV1', () => {
     await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toMatchObject({
       decision: 'allow',
       principal: { kind: 'staff_session', userId: 'user-7', role: 'Менеджер' },
-      licenceView: 'last4',
+      licenceView: 'full',
     })
     expect(ia.getIntegrationAdminPrincipal).not.toHaveBeenCalled()
     expect(ia.isStaffSessionEnforcedForRequestV1).not.toHaveBeenCalled()
@@ -62,9 +62,11 @@ describe('resolveContactReadAuthorityFromIdentityAccessV1', () => {
 
   it('applies a role change at once: the role is read per request, never cached', async () => {
     ia.hasStaffSessionCookieV1.mockResolvedValue(true)
-    ia.getStaffSessionPrincipalV1.mockResolvedValueOnce(employee('Администратор')).mockResolvedValueOnce(employee('Менеджер'))
-    await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toMatchObject({ licenceView: 'full' })
-    await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toMatchObject({ licenceView: 'last4' })
+    ia.getStaffSessionPrincipalV1.mockResolvedValueOnce(employee('Администратор')).mockResolvedValueOnce(employee('Менеджер')).mockResolvedValueOnce(null)
+    await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toMatchObject({ principal: { role: 'Администратор' } })
+    await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toMatchObject({ principal: { role: 'Менеджер' } })
+    // A session that no longer verifies (disabled employee, revoked session) is refused at once.
+    await expect(resolveContactReadAuthorityFromIdentityAccessV1()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
   })
 
   it('ends the transitional admin read once Staff Session is enforced, without reading the admin session', async () => {
@@ -94,7 +96,7 @@ describe('identityAccessContactPersonCardAuthorityV1', () => {
     ia.hasStaffSessionCookieV1.mockResolvedValue(true)
     ia.getStaffSessionPrincipalV1.mockResolvedValue(employee('Руководитель'))
     await expect(identityAccessContactPersonCardAuthorityV1.currentPrincipal())
-      .resolves.toEqual({ kind: 'staff_session', licenceView: 'last4' })
+      .resolves.toEqual({ kind: 'staff_session', licenceView: 'full' })
     ia.getStaffSessionPrincipalV1.mockResolvedValue(null)
     await expect(identityAccessContactPersonCardAuthorityV1.currentPrincipal()).resolves.toBeNull()
     ia.hasStaffSessionCookieV1.mockResolvedValue(false)
