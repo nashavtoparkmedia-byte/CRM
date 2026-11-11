@@ -25,7 +25,9 @@ import { legacyPrismaDriverLicencePortV1 as port } from './legacy-prisma-driver-
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
 const tag = `lic${process.pid}${Date.now()}`
-let database: PrismaClient
+// One unconditional client: it connects only on the first query, so a skipped
+// suite never opens a connection.
+const database = new PrismaClient()
 
 const ids = {
   park: `${tag}-park`,
@@ -40,11 +42,21 @@ const ids = {
 
 proof('Fleet licence reads on PostgreSQL', () => {
   beforeAll(async () => {
-    database = new PrismaClient()
     await database.park.create({ data: { id: ids.park, parkCode: `${tag}-code`, parkName: 'Парк Один', externalParkId: `${tag}-ext` } })
     await database.contact.create({ data: { id: ids.contact, displayName: 'Иванов Иван' } })
-    const driver = (id: string, fullName: string, licenseNumber: string | null, extra: Record<string, unknown> = {}) =>
-      database.driver.create({ data: { id, yandexDriverId: `yd-${id}`, fullName, licenseNumber, ...extra } })
+    // A static payload: every column is named, nothing is spread in.
+    const driver = (id: string, fullName: string, licenseNumber: string | null, links: { parkId?: string; contactId?: string; externalParkId?: string } = {}) =>
+      database.driver.create({
+        data: {
+          id,
+          yandexDriverId: `yd-${id}`,
+          fullName,
+          licenseNumber,
+          parkId: links.parkId ?? null,
+          contactId: links.contactId ?? null,
+          externalParkId: links.externalParkId ?? null,
+        },
+      })
     await driver(ids.spaced, 'Б Водитель', '99 12 345678', { parkId: ids.park, contactId: ids.contact, externalParkId: `${tag}-ext` })
     await driver(ids.plain, 'А Водитель', '9912345678', { contactId: ids.contact })
     await driver(ids.other, 'В Водитель', '99-12-345-679')
@@ -54,10 +66,10 @@ proof('Fleet licence reads on PostgreSQL', () => {
   }, 60_000)
 
   afterAll(async () => {
-    await database?.driver.deleteMany({ where: { id: { startsWith: tag } } })
-    await database?.contact.deleteMany({ where: { id: ids.contact } })
-    await database?.park.deleteMany({ where: { id: ids.park } })
-    await database?.$disconnect()
+    await database.driver.deleteMany({ where: { id: { startsWith: tag } } })
+    await database.contact.deleteMany({ where: { id: ids.contact } })
+    await database.park.deleteMany({ where: { id: ids.park } })
+    await database.$disconnect()
   })
 
   it('matches the stored licence by letters and digits, upper case, exactly', async () => {
