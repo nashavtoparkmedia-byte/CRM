@@ -85,7 +85,29 @@ Unchanged:
 - **D2:** a mobile principal never becomes a `staff_session` principal. `getStaffSessionPrincipalV1` stays null for a mobile cookie and for the shell lane. Whether mobile employees get «Люди» is a separate Owner decision.
 - **Admin-only role checks** stay where they are.
 
-### 2.4 What is removed
+### 2.4 Push follows the employee too
+
+Push v1 binds a registration to the shared credential:
+`currentMobilePushCredentialFactsV1()` returns `{ credentialSubject: MOBILE_ACCESS_USER }`.
+Fan-out and send-time eligibility require `registration.credentialSubject === facts.credentialSubject`.
+With `MOBILE_ACCESS_*` gone, v2 replaces this:
+
+- **Stored subject.** At registration the subject is written from the verified v2 session as `staff-v2:<uep>`, the employee's credential epoch carried by the token. No migration: the column exists, and the operator id is already stored on the row.
+- **Eligibility.** Fan-out (`listEligible`) and send time (`sendableToken` / `resolveTarget`) keep the global filters: revoked, session expiry, global epoch, and a subject with the `staff-v2:` prefix. They add **the employee's liveness, per registration**, with the same rule as §2.3:
+  - the registry record is Активен and `createdAt` matches;
+  - the StaffCredential row is not revoked;
+  - `row.sessionEpoch` equals the `<uep>` stored in the subject.
+
+  A disabled, re-created, reset, revoked or browser-logged-out employee's phone stops receiving chat notifications and call alerts **at the next fan-out or send**. It does not wait for the phone's next request or the 12 h expiry. An unreadable store skips the delivery (fail closed, reason `unverifiable`); it never sends.
+- **Existing registrations** stored with the shared subject fail the prefix and are skipped from deploy on. A phone re-registers automatically after it signs in again.
+- **Push-registration answers in v2** (the route's status map):
+  - the barrier, or the employee's liveness ended → **401 `MOBILE_SESSION_REVOKED`**. That keeps today's code for the barrier (acceptance test16), and a liveness end answers the same;
+  - the session or staff store is unreadable → **503 `MOBILE_SESSION_UNVERIFIABLE`**, a new code with `Retry-After: 5`. It is retryable and never a refusal;
+  - no cookie or an invalid one → 401 `MOBILE_SESSION_REQUIRED` (unchanged).
+
+  Any refusal blocks registration until a new sign-in, as today.
+
+### 2.5 What is removed
 
 - **Code:** `verifyMobileAccessCredentials`, the `MOBILE_ACCESS_*` configuration, the username field, and the "configure MOBILE_ACCESS_*" text. `isMobileLaneConfigured` becomes "the staff lane is ready".
 - **Docs:** the `MOBILE_ACCESS_*` rows in `docs/SECRETS.md` are retired. Removing the values from the deploy environment is an ops step (Owner).
@@ -102,7 +124,19 @@ Unchanged:
    - the password comes from `E2E_STAFF_PASSWORD`, a fixed test value in the workflow, never printed.
    
    It writes nothing directly to the database. It works only where the bootstrap window is open: no credential yet and enforcement off, which is exactly a fresh disposable CRM.
-5. **Switch-over.** No flag. The shared route is removed in the same change, and existing mobile sessions end on deploy (§2.2). **The Android release notes must say that every phone signs in again with the employee's own password.**
+5. **Switch-over.** No flag. The shared route is removed in the same change, and existing mobile sessions end on deploy (§2.2). **The Android release notes must say:**
+   - every phone signs in again with the employee's own password;
+   - the session lasts 12 h (`MOBILE_SESSION_TTL_SECONDS`) and autofill is off, so the password is typed at least every 12 h;
+   - notifications resume after the new sign-in.
+6. **E2E environment for a disposable CRM.** These are the names for the credential inventory review; all are test values, never printed:
+   - `STAFF_SESSION_SECRET`: at least 32 bytes, not a placeholder, and different from `ADMIN_PASS` and `BOT_CRM_SECRET`. This plus a located registry makes `staffLaneStateV1() === 'ready'`;
+   - `YOKO_USER_REGISTRY_FILE`: a writable path, e.g. under the job's temp dir;
+   - `YOKO_USER_REGISTRY_SEED=once`: seeds that file from the image registry `gravity-mvp/src/data/users.json` while no StaffCredential row exists. That is where «Мария» (`u1`), Сидоров (`u2`) and Ремезов (`u3`) come from; the seed script creates no employee;
+   - `ADMIN_USER` / `ADMIN_PASS`: the integration-admin bootstrap sign-in (`/settings/integrations/access`);
+   - `E2E_STAFF_PASSWORD`: the test employee's personal password set through the bootstrap;
+   - `STAFF_SESSION_REVOCATION_EPOCH` is optional (default `0`);
+   - `MOBILE_ACCESS_USER` / `MOBILE_ACCESS_PASS` are **removed**;
+   - `acceptance-seed.sql` creates no StaffCredential row, so the bootstrap window stays open. Both `next start` runs (main and push) can use the seed script, because the build manifest exists.
    - The acceptance workflow drops `MOBILE_ACCESS_*` and seeds a personal password. That is a workflow change on the Android side.
 
 App-side rulings (Security): one generic refusal with no auto-retry; WebView autofill off (`IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS`); the password never stored on the device or logged.
@@ -126,6 +160,10 @@ App-side rulings (Security): one generic refusal with no auto-retry; WebView aut
   - a v1 token is refused;
   - the session ends on disable, re-create, password reset, revoke and browser logout, also when it is next used long after (an offline phone);
   - a demote between two requests: the second request sees the lower role;
+  - push: a disabled, reset, revoked or browser-logged-out employee's registration is skipped at fan-out and at send time;
+  - push: a registration with the shared subject is skipped;
+  - push: an unreadable store skips and never sends;
+  - push-registration: 401 `MOBILE_SESSION_REVOKED` for the barrier and for a liveness end, 503 `MOBILE_SESSION_UNVERIFIABLE` for an unreadable store;
   - the audit actors stay distinct: `mobile:` for the phone, `staff:` for the browser;
   - no password or password field in any log line or refusal (byte scan of the captured console);
   - a mobile logout leaves the desktop session;
@@ -143,6 +181,8 @@ App-side rulings (Security): one generic refusal with no auto-retry; WebView aut
 - **Heavy production-build E2E:** a personal sign-in on `/login/mobile`, the shared pass refused, the session ending on a browser logout.
 
 ## 6. Security rulings (early comments, 2026-11-11)
+
+- **Throttle source across lanes (for Security's ruling).** The `source:<x-real-ip>` key is shared by both lanes, as for the browser login today. In an office behind one NAT, repeated failures by one person throttle sign-in for everyone behind that address, phones and browsers alike, for the throttle window. The per-user key stays the main defence. Proposed: accept it, as already accepted for the browser login in Staff Session v1.3.
 
 - **O1:** kind `login` / `logout` with actor `mobile:<id>` is accepted, with no migration (§2.1 step 6).
 - **O2:** a mobile logout ends only that phone session. "Everywhere" is a password reset or a revoke.
