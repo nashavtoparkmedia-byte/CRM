@@ -40,7 +40,17 @@ const retentionJobPath = 'gravity-mvp/src/lib/RetentionCleanup.ts'
  * carrying a 'use server' directive may reach them.
  */
 const GUARDED_WRITE_CAPABILITIES = ['appendGuardedChannelMessageV1', 'releaseHeldChannelMessagesV1']
-const APPROVED_GUARDED_WRITE_CALLERS = new Set([handlerPath, compositionPath, facadePath])
+/**
+ * The first ingress consumer (R-21 adoption, Telegram MTProto personal account),
+ * reviewed by Messaging and Security with its adoption PR. It is server-only
+ * composition: it derives the attribution itself (Contacts resolution, then
+ * EnsureConversationContactLink, in one admission), and it exports nothing that
+ * takes an attribution or a contact/identity id. The 'use server' lane
+ * (tg-actions.ts) reaches it, never the capabilities.
+ */
+const telegramIngressPath = 'gravity-mvp/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts'
+const telegramLanePath = 'gravity-mvp/src/app/tg-actions.ts'
+const APPROVED_GUARDED_WRITE_CALLERS = new Set([handlerPath, compositionPath, facadePath, telegramIngressPath])
 const GUARDED_RETENTION_CAPABILITY = 'runHeldChannelMessageRetentionV1'
 const APPROVED_GUARDED_RETENTION_CALLERS = new Set([handlerPath, compositionPath, facadePath, retentionJobPath])
 const GUARDED_READ_CAPABILITY = 'heldChannelMessagesV1'
@@ -368,6 +378,80 @@ function assertRetentionJobIsolated(source) {
   }
 }
 
+/** The parameter list of `export [async] function <name>(…)`, by paren matching. */
+function exportedFunctionParameters(source) {
+  const lists = []
+  for (const match of source.matchAll(/^export (?:async )?function (\w+)\s*\(/gmu)) {
+    let depth = 0
+    const open = match.index + match[0].length - 1
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === '(') depth += 1
+      else if (source[index] === ')') {
+        depth -= 1
+        if (depth === 0) { lists.push([match[1], source.slice(open + 1, index)]); break }
+      }
+    }
+  }
+  return lists
+}
+
+const PROOF_INPUT = /\battribution\b|\bcontactId\b|\bcontactIdentityId\b|GuardedSenderAttributionV1|GuardedReleaseAttributionV1/u
+// The ingress exports exactly these; any other export (an arrow, a class, a
+// default, a re-export list) could hand its internals a caller-made proof.
+const TELEGRAM_INGRESS_EXPORTS = [
+  'const TELEGRAM_GUARDED_APPEND_REFUSAL_CODES',
+  'function admitTelegramPrivateConversation',
+  'interface AdmittedTelegramPrivateConversation',
+  'interface TelegramGuardedEvent',
+  'type TelegramPrivateConversation',
+  'type TelegramPrivateIngressPhase',
+]
+const TELEGRAM_INGRESS_PROOF = /const proof = \{\s*status: 'proven' as const,\s*contactId: contactResult\.contact\.id,\s*contactIdentityId: contactResult\.identity\.id,\s*\}/u
+const TELEGRAM_INGRESS_PROJECTION = "const projection: GuardedProjectionV1 = phase === 'import' ? 'history' : 'live'"
+
+// A1, the Telegram ingress consumer: server-only, named facade imports only, the
+// proof derived inside its own admission from Contacts' answer, the projection
+// derived from the admission phase, and no exported surface that takes either.
+function assertTelegramIngressConsumer(source, laneSource) {
+  if (isServerActionModule(source)) throw new Error(`${telegramIngressPath}: the ingress consumer carries a 'use server' directive`)
+  if (starSpecifiers(source).length > 0) throw new Error(`${telegramIngressPath}: the ingress consumer uses a namespace import or star re-export`)
+  for (const specifier of importSpecifiers(source)) {
+    if (/modules\/messaging\//u.test(specifier) && specifier !== '@/modules/messaging/public/v1') {
+      throw new Error(`${telegramIngressPath}: reaches Messaging outside its public facade (${specifier})`)
+    }
+  }
+  const exportsFound = [...source.matchAll(/^\s*export\b(.*)$/gmu)].map(match => {
+    const declared = /^\s+(?:async\s+)?(const|function|interface|type)\s+(\w+)\b/u.exec(match[1])
+    return declared ? `${declared[1]} ${declared[2]}` : `unsupported: ${match[1].trim().slice(0, 40)}`
+  }).sort()
+  if (JSON.stringify(exportsFound) !== JSON.stringify(TELEGRAM_INGRESS_EXPORTS)) {
+    throw new Error(`${telegramIngressPath}: export set drift (${exportsFound.join('; ')})`)
+  }
+  for (const [name, parameters] of exportedFunctionParameters(source)) {
+    if (PROOF_INPUT.test(parameters)) throw new Error(`${telegramIngressPath}: exported ${name} takes a person proof from its caller`)
+  }
+  const event = source.match(/^export interface TelegramGuardedEvent \{([\s\S]*?)^\}/mu)?.[1]
+  if (event === undefined || PROOF_INPUT.test(event) || /\bprojection\b/u.test(event)) {
+    throw new Error(`${telegramIngressPath}: the event a caller appends may carry a person proof or a projection`)
+  }
+  if (source.split(TELEGRAM_INGRESS_PROJECTION).length !== 2 || !/^\s+projection,$/mu.test(functionBody(source, 'admittedConversation'))) {
+    throw new Error(`${telegramIngressPath}: the projection is not derived from the admission phase`)
+  }
+  const admission = functionBody(source, 'admitTelegramPrivateConversation')
+  if (!TELEGRAM_INGRESS_PROOF.test(admission) || /\b(?:chat|patched|conversation|admitted)\.(?:conversation\.)?(?:contactId|contactIdentityId)\b/u.test(admission)) {
+    throw new Error(`${telegramIngressPath}: the proof is not exactly Contacts' resolved contact and identity`)
+  }
+  inOrder(admission, [
+    'await resolveChannelContactOperationV1(',
+    'await ensureConversationContactLinkV1(',
+    "status: 'proven' as const,",
+    'await releaseHeldWithFreshProof(chat.id, proof)',
+  ], 'telegram ingress admission')
+  for (const name of [...GUARDED_WRITE_CAPABILITIES, GUARDED_RETENTION_CAPABILITY, GUARDED_READ_CAPABILITY]) {
+    if (mentions(laneSource, name)) throw new Error(`${telegramLanePath}: the 'use server' lane names ${name}`)
+  }
+}
+
 // ── run on the real tree ───────────────────────────────────────────────
 
 const files = runtimeFiles()
@@ -379,9 +463,14 @@ const contractSource = files.get(contractPath)
 const retentionSource = files.get(retentionJobPath)
 const compositionSource = files.get(compositionPath)
 const migrationSql = read(migrationPath)
+const telegramIngressSource = files.get(telegramIngressPath)
+const telegramLaneSource = files.get(telegramLanePath)
+assert.ok(telegramIngressSource, `${telegramIngressPath} missing`)
+assert.ok(telegramLaneSource, `${telegramLanePath} missing`)
 
 assertHeldStoreOwner(files)
 assertServerSideCallersOnly(files)
+assertTelegramIngressConsumer(telegramIngressSource, telegramLaneSource)
 assertNoRuntimeImportsFromTestPaths(files)
 assertRetentionJobIsolated(files.get(retentionJobPath))
 assertAdapterLocksBeforeJudging(adapterSource)
@@ -479,5 +568,25 @@ rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'UPDATE "Message" SET 
 rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'ALTER TABLE "Chat" ADD COLUMN "heldCount" INTEGER;\n\nCOMMIT;'), assertMigration)
 rejectProbe(migrationSql, migrationSql.replace('CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"', 'CREATE INDEX "HeldChannelMessage_externalId_key"'), assertMigration)
 rejectProbe(compositionSource, `${compositionSource}\nconst rogue = createAppendGuardedChannelMessageHandlerV1(fakePort)\n`, assertComposition)
+// The Telegram ingress consumer (R-21 adoption).
+rejectProbe(telegramIngressSource, `'use server'\n${telegramIngressSource}`, (changed) => assertServerSideCallersOnly(withFile(telegramIngressPath, changed)))
+rejectProbe(telegramIngressSource, `'use server'\n${telegramIngressSource}`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramLaneSource, `${telegramLaneSource}\nvoid appendGuardedChannelMessageV1\n`, (changed) => assertServerSideCallersOnly(withFile(telegramLanePath, changed)))
+rejectProbe(telegramLaneSource, `${telegramLaneSource}\nvoid heldChannelMessagesV1\n`, (changed) => assertTelegramIngressConsumer(telegramIngressSource, changed))
+rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/telegram-channel/application/other-ingress.ts', changed)))
+rejectProbe(telegramIngressSource, `${telegramIngressSource}\nexport async function appendAs(input: { attribution: GuardedSenderAttributionV1 }) { return input }\n`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `${telegramIngressSource}\nexport function releaseFor(chatId: string, contactIdentityId: string) { return [chatId, contactIdentityId] }\n`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('export interface TelegramGuardedEvent {\n', 'export interface TelegramGuardedEvent {\n    attribution?: unknown\n'), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `import * as messaging from '@/modules/messaging/public/v1'\n${telegramIngressSource}`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `import { legacy } from '@/modules/messaging/application/messaging-operations'\n${telegramIngressSource}`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('        await ensureConversationContactLinkV1({', '        void ({'), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('    await releaseHeldWithFreshProof(chat.id, proof)\n', ''), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('export interface TelegramGuardedEvent {\n', "export interface TelegramGuardedEvent {\n    projection: 'live' | 'history'\n"), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace(TELEGRAM_INGRESS_PROJECTION, "const projection: GuardedProjectionV1 = 'live'"), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `${telegramIngressSource}\nexport const appendAs = (attribution: unknown) => attribution\n`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `${telegramIngressSource}\nexport { admittedConversation }\n`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, `${telegramIngressSource}\nexport default admittedConversation\n`, (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('        contactId: contactResult.contact.id,\n        contactIdentityId: contactResult.identity.id,', '        contactId: chat.contactId ?? contactResult.contact.id,\n        contactIdentityId: contactResult.identity.id,'), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
+rejectProbe(telegramIngressSource, telegramIngressSource.replace('        contactIdentityId: contactResult.identity.id,\n    }\n    await releaseHeldWithFreshProof', '        contactIdentityId: patched.conversation.contactIdentityId as string,\n    }\n    await releaseHeldWithFreshProof'), (changed) => assertTelegramIngressConsumer(changed, telegramLaneSource))
 
 process.stdout.write(`messaging guarded append boundary: PASS (one held-store owner, server-side callers only, lock-then-judge, no binding writes, pure policy, parse-first handlers, scrubbed release; ${probes} negative probes rejected)\n`)
