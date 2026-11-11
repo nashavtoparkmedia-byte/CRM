@@ -26,6 +26,7 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
   const { createContactPersonCardCompositionV1 } = await import('@/modules/platform-shell/application/contact-person-card-composition')
   const { createContactLicenceSearchCompositionV1 } = await import('@/modules/platform-shell/application/contact-licence-search-composition')
   const { createDriverProfilesForContactsHandlerV2 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler')
+  const { createDriverProfilesForContactsHandlerV3 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v3-handler')
   const { createDriverProfilesByExactLicenceHandlerV1 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler')
 
   const authority = async () => decideContactReadAuthorityV1({ staffCookie: 'present', staffPrincipal: { userId: 'u1', role: fixture.role } })
@@ -73,7 +74,10 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
           ? { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card, licenceView: answer.licenceView } as never
           : { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'forbidden' }
       },
-      readDriverProfilesForContacts: createDriverProfilesForContactsHandlerV2(readV1 as never, licences),
+      readDriverProfilesForContacts: createDriverProfilesForContactsHandlerV3(
+        createDriverProfilesForContactsHandlerV2(readV1 as never, licences),
+        { async findCardFieldsOfDrivers(ids: readonly string[]) { return new Map(ids.map((id) => [id, { phone: '+79991000101', isSelfEmployed: true, employmentType: 'selfemployed' }])) } },
+      ),
       readContactConversations: async () => ({ contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] }) as never,
     }),
     searchPeopleByExactLicenceV1: createContactLicenceSearchCompositionV1({

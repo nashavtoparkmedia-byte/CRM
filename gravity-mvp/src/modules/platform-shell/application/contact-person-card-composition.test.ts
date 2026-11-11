@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CONTACT_PERSON_CARD_RESULT_V1, type ContactPersonCardV1 } from '@/contracts/contacts/v1'
-import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV2 } from '@/contracts/fleet-operations/v2'
+import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V3 as DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV3 as DriverProfileForContactV2 } from '@/contracts/fleet-operations/v3'
 import { CONTACT_CONVERSATIONS_RESULT_V1 } from '@/contracts/messaging/v1'
 import { createContactPersonCardCompositionV1 } from './contact-person-card-composition'
 
@@ -33,7 +33,7 @@ function profile(overrides: Partial<DriverProfileForContactV2> & { driverId: str
   return {
     linkBasis: 'contact_link', linkedContactId: 'c-1', externalParkId: 'p', externalDriverProfileId: 'x', parkName: 'Парк', fullName: 'Иванов Иван',
     personResolutionStatus: 'vu_clustered', personKeyType: 'normalized_vu', sourceFreshness: 'fresh', sourceState: 'current',
-    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null, licence: '•••• 5678',
+    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null, licence: '•••• 5678', phone: null, isSelfEmployed: null, employmentType: null,
     ...overrides,
   }
 }
@@ -45,7 +45,7 @@ describe('loadContactPersonCardV1', () => {
       async readContactPersonCard() { calls.push('contacts'); return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts(query) {
         calls.push('fleet')
-        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v2', licenceView: 'last4', subjects: [
+        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v3', licenceView: 'last4', subjects: [
           { contactId: 'c-1', legacyYandexDriverId: 'yd-1' }, { contactId: 'c-old', legacyYandexDriverId: null },
         ] })
         return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [

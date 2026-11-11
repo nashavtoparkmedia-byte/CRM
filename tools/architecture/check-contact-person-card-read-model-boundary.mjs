@@ -191,14 +191,14 @@ function assertComposition(read = readRepo) {
   // and a Fleet answer for another view or with an unmasked ВУ is never shown.
   order(composition, [
     "const licenceView = answer.licenceView === 'full' ? 'full' : 'last4'",
-    'deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2, licenceView, subjects })',
+    'deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3, licenceView, subjects })',
     '&& profiles.value.licenceView === licenceView',
     '&& profiles.value.entries.every(entry => entry.profiles.every(profile => maskedForView(profile.licence, licenceView)))',
     'if (profiles.ok && profilesShown) {',
     'partial: { driverProfiles: !profilesShown,',
   ], 'the composition ВУ view')
   assert(composition.includes("return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)"), 'the composition no longer checks Fleet\'s mask for a last-4 reader')
-  assert(composition.includes('readDriverProfilesForContacts: readDriverProfilesForContactsV2,'), 'the card is not bound to Fleet\'s masked v2 read')
+  assert(composition.includes('readDriverProfilesForContacts: readDriverProfilesForContactsV3,'), 'the card is not bound to Fleet\'s v3 read (masked ВУ, profile phone and employment)')
   assert(!composition.includes('readDriverProfilesForContactsV1'), 'the card still reads Fleet\'s v1 profiles')
   const page = withoutComments(read(PAGE))
   assert(page.includes("if (result.status === 'redirected') redirect("), 'a merged-away id is no longer followed to its canonical Contact')
@@ -267,7 +267,7 @@ const MUTANTS = [
   [COMPOSITION, "const licenceView = answer.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = answer.licenceView ?? 'full'"],
   [COMPOSITION, '&& profiles.value.licenceView === licenceView', ''],
   [COMPOSITION, "return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)", 'return true'],
-  [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV2,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
+  [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV3,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
   [LICENCE_SEARCH, "const licenceView = authority.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = authority.licenceView ?? 'full'"],
   [LICENCE_SEARCH, "if (authority.decision !== 'allow') return { status: 'denied' }", ''],
   [LICENCE_SEARCH, 'if (!answer.profiles.every(profile => maskedForView(profile.licence, licenceView))) {', 'if (false) {'],

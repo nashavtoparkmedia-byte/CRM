@@ -5,8 +5,9 @@
 //      channel accounts, lineage, conflicts and candidates. It alone decides
 //      whether the caller may see anything: no Fleet or Messaging read happens
 //      before it answers `confirmed`.
-//   2. Fleet Operations' DriverProfilesForContactsQuery.v2 — the persisted park
+//   2. Fleet Operations' DriverProfilesForContactsQuery.v3 — the persisted park
 //      profiles of every Contact in the lineage (and the legacy Yandex link),
+//      with each profile's own phone and employment type (Contact Identity V2),
 //      each with its driving licence (ВУ) masked by Fleet on the server for the
 //      ВУ view Contacts answered with (since the Owner's decision of 2026-11-11,
 //      full for every staff reader role). The view is passed on unchanged; a Fleet
@@ -23,19 +24,19 @@ import {
 } from '@/contracts/contacts/v1'
 import type { DriverProfileForContactV1 } from '@/contracts/fleet-operations/v1'
 import {
-  DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2,
-  type DriverProfileForContactV2,
-  type DriverProfilesForContactsResultV2,
-} from '@/contracts/fleet-operations/v2'
+  DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3,
+  type DriverProfileForContactV3,
+  type DriverProfilesForContactsResultV3,
+} from '@/contracts/fleet-operations/v3'
 import {
   CONTACT_CONVERSATIONS_QUERY_V1,
   type ContactConversationsResultV1,
 } from '@/contracts/messaging/v1'
 import { readContactPersonCardV1 } from '@/modules/contacts/public/v1'
-import { DRIVER_LICENCE_MASK_V1, readDriverProfilesForContactsV2 } from '@/modules/fleet-operations/public/v1'
+import { DRIVER_LICENCE_MASK_V1, readDriverProfilesForContactsV3 } from '@/modules/fleet-operations/public/v1'
 import { contactConversationsV1 } from '@/modules/messaging/public/v1'
 
-export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV2 & {
+export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV3 & {
   /** Which Contact of the lineage this row was matched through. */
   viaContactId: string
   /** Contacts' legacy main-driver projection names this row. */
@@ -74,7 +75,7 @@ export type ContactPersonCardLoadResultV1 =
 
 export type ContactPersonCardCompositionDependenciesV1 = {
   readContactPersonCard: (query: unknown) => Promise<ContactPersonCardResultV1>
-  readDriverProfilesForContacts: (query: unknown) => Promise<DriverProfilesForContactsResultV2>
+  readDriverProfilesForContacts: (query: unknown) => Promise<DriverProfilesForContactsResultV3>
   readContactConversations: (query: unknown) => Promise<ContactConversationsResultV1>
 }
 
@@ -105,7 +106,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
       legacyYandexDriverId: id === card.contactId ? card.legacyYandexDriverId : null,
     }))
     const [profiles, conversations] = await Promise.all([
-      settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2, licenceView, subjects })),
+      settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3, licenceView, subjects })),
       settle(() => deps.readContactConversations({ contract: CONTACT_CONVERSATIONS_QUERY_V1, contactIds: lineageIds.slice(0, 25) })),
     ])
     const driverProfiles: ContactPersonCardDriverProfileV1[] = []
@@ -181,7 +182,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
 export async function loadContactPersonCardV1(contactId: string): Promise<ContactPersonCardLoadResultV1> {
   return createContactPersonCardCompositionV1({
     readContactPersonCard: readContactPersonCardV1,
-    readDriverProfilesForContacts: readDriverProfilesForContactsV2,
+    readDriverProfilesForContacts: readDriverProfilesForContactsV3,
     readContactConversations: contactConversationsV1,
   })(contactId)
 }
