@@ -21,6 +21,22 @@
 //   d2l            — a legacy screen that still shows the full ВУ on the legacy
 //                    perimeter; the P1 «D2-L» moves it to personal sign-in and the
 //                    mask. `owner` names the context that executes it.
+//   view_decision  — carries the licenceView decision or its type, never a number.
+//   type_only      — declares or re-exports a ВУ-bearing type and reads no data.
+//   licence_term_only — the word names a questionnaire flag or field («has a
+//                    licence», categories), not the number.
+//
+// A file is a ВУ reader when, with comments stripped, it matches any rule:
+//   name        — any spelling of licen[cs]e, case-insensitive (licenseNumber,
+//                 licence, searchProfilesByLicence, SQL "licenseNumber", …);
+//   person_key  — externalPersonKey, profileClusterKey, normalizedVu, rawVu or a
+//                 `vu:${…}` template;
+//   conduit     — a type that carries the ВУ between layers
+//                 (CashReferralManagerProfileV1, the referral responses, the
+//                 Fleet licence DTOs);
+//   driver_row  — a Prisma Driver read without `select`, or an `include` of a
+//                 Driver relation as `true`: the whole row, licenseNumber with it.
+// False positives are classified, never excluded from the scan.
 //
 // It fails on a reader that is not listed, a listed file that no longer reads the
 // ВУ (stale), an admin_only entry whose guard is gone, a masked entry without the
@@ -35,7 +51,48 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 
-export const LICENCE_CARRIER = /\blicen[cs]e(?:Number|History|_number)\b|\bdriver_?licen[cs]e\b|\bdriverLicen[cs]e\b|\bexternalPersonKey\b|\bprofileClusterKey\b|\bnormalizedVu\b|\brawVu\b|`vu:\$\{/u
+const NAME_RULE = /licen[cs]e/iu
+const PERSON_KEY_RULE = /\bexternalPersonKey\b|\bprofileClusterKey\b|\bnormalizedVu\b|\brawVu\b|`vu:\$\{/u
+const CONDUIT_RULE = /\b(?:CashReferralManagerProfileV1|ReferralSearchResponse|ReferralPersonResponse|DriverProfileForContactV2|DriverProfilesByExactLicenceResultV1)\b/u
+const DRIVER_READ = /\b(?:prisma|tx|db|transaction|client)\s*\.\s*driver\s*\.\s*(?:findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow)\s*\(/gu
+const DRIVER_INCLUDE = /\binclude\s*:\s*\{[^}]*\b(?:driver|drivers|driverProfiles|mainDriver|contactProfile)\s*:\s*true\b/u
+
+/** Source text without line and block comments; string and template contents are kept. */
+export function stripComments(text) {
+  let out = ''
+  let quote = null
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i]
+    const n = text[i + 1]
+    if (quote !== null) {
+      out += c
+      if (c === '\\') { out += n ?? ''; i += 1 } else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; out += c; continue }
+    if (c === '/' && n === '/') { while (i < text.length && text[i] !== '\n') i += 1; out += '\n'; continue }
+    if (c === '/' && n === '*') {
+      i += 2
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) { if (text[i] === '\n') out += '\n'; i += 1 }
+      i += 1
+      continue
+    }
+    out += c
+  }
+  return out
+}
+
+/** The rules a source text matches (comments stripped). */
+export function licenceReaderRules(source) {
+  const text = stripComments(source)
+  const rules = []
+  if (NAME_RULE.test(text)) rules.push('name')
+  if (PERSON_KEY_RULE.test(text)) rules.push('person_key')
+  if (CONDUIT_RULE.test(text)) rules.push('conduit')
+  const rowRead = [...text.matchAll(DRIVER_READ)].some((match) => !/\bselect\s*:/u.test(callArguments(text, match.index + match[0].length)))
+  if (rowRead || DRIVER_INCLUDE.test(text)) rules.push('driver_row')
+  return rules
+}
 // A carrier used as a VALUE (`.x` or `${x}`) inside the argument list of a log
 // call or an error constructor. A field NAME in a message ('licenseNumber must
 // be a string') is not the number and does not count.
@@ -84,7 +141,12 @@ export const LICENCE_READERS = {
   [`${P}app/api/monitoring/attention/route.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/api/monitoring/drivers/[id]/fleet-check/route.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/api/monitoring/drivers/route.ts`]: { disposition: 'd2l', owner: fleet },
+  [`${P}app/api/debug-db/list-all-chats/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'debug listing includes the chat\'s Driver row' },
+  [`${P}app/api/monitoring/drivers/[id]/attention/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; reads the Driver row, returns only the attention id and status' },
+  [`${P}app/api/monitoring/drivers/[id]/event/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; returns only the event id and type' },
+  [`${P}app/api/monitoring/fleet-check/callback/route.ts`]: { disposition: 'owner_internal', note: 'scraper callback; reads the Driver row, returns only ok and the status' },
   [`${P}app/api/webhooks/bot/route.ts`]: { disposition: 'owner_internal', note: 'bot webhook compares the person key to find a driver\'s parks; it returns no key' },
+  [`${P}app/compensation/referrals/actions.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'server actions that answer the browser with the referral views (full ВУ); D2: masked after #214' },
   [`${P}app/compensation/referrals/ReferralManager.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked by licenceView once the referral reads move onto ContactReadAuthorityQuery.v1 (after #214)' },
   [`${P}app/compensation/referrals/referral-data.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}app/compensation/referrals/view.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
@@ -99,21 +161,30 @@ export const LICENCE_READERS = {
   [`${P}app/monitoring/lib/types.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/monitoring/page.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/settings/integrations/bot/BotPageClient.tsx`]: { disposition: 'admin_only', gate: 'requireIntegrationAdminPageAccess', gateFile: `${P}app/settings/integrations/bot/page.tsx`, note: 'its data comes from /api/bot-link (hasIntegrationAdminAccess)' },
-  [`${P}app/tasks/components/TaskCaseListHeader.tsx`]: { disposition: 'd2l', owner: work },
   [`${P}app/tasks/excel-actions.ts`]: { disposition: 'd2l', owner: work },
+  [`${P}contracts/contacts/v1/contact-person-card-contracts.ts`]: { disposition: 'view_decision' },
   [`${P}contracts/contacts/v1/driver-person-confirmation-command.ts`]: { disposition: 'evidence_key' },
   [`${P}contracts/fleet-operations/v1/resolve-imported-driver-command.ts`]: { disposition: 'command_input' },
+  [`${P}lib/MessageService.ts`]: { disposition: 'owner_internal', note: 'retrySend includes the chat\'s Driver row to resend; it answers only success and error' },
+  [`${P}lib/ai-call/default-scenario.ts`]: { disposition: 'licence_term_only', note: 'questionnaire flag hasLicenseB' },
+  [`${P}lib/ai-call/devSimulator.ts`]: { disposition: 'licence_term_only', note: 'questionnaire field name' },
+  [`${P}lib/ai-call/mock-payload.ts`]: { disposition: 'licence_term_only', note: 'has_license / license_categories' },
+  [`${P}lib/aiCallAnalysis/qualifyPrompt.ts`]: { disposition: 'licence_term_only', note: 'has_license / license_categories' },
   [`${P}lib/tasks/excel-contract.ts`]: { disposition: 'd2l', owner: work },
   [`${P}lib/tasks/list-columns.ts`]: { disposition: 'd2l', owner: work },
   [`${P}lib/tasks/list-renderers.tsx`]: { disposition: 'd2l', owner: work },
   [`${P}lib/tasks/list-views.ts`]: { disposition: 'd2l', owner: work },
   [`${P}lib/tasks/scenario-config.ts`]: { disposition: 'd2l', owner: work },
   [`${P}lib/tasks/scenario-fields.ts`]: { disposition: 'd2l', owner: work },
+  [`${P}modules/contacts/internal/identity-access-contact-person-card-authority.ts`]: { disposition: 'view_decision' },
   [`${P}modules/contacts/internal/contact-merge-state-composer.ts`]: { disposition: 'evidence_key' },
   [`${P}modules/contacts/internal/contact-person-card.ts`]: { disposition: 'evidence_key', note: 'the card carries only the count of confirmed cluster keys, never a key' },
   [`${P}modules/contacts/public/v1/contact-merge-handler.ts`]: { disposition: 'evidence_key' },
+  [`${P}modules/contacts/public/v1/contact-read-authority.ts`]: { disposition: 'view_decision' },
   [`${P}modules/contacts/public/v1/driver-person-confirmation.ts`]: { disposition: 'evidence_key' },
+  [`${P}modules/contacts/public/v1/index.ts`]: { disposition: 'view_decision' },
   [`${P}modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts`]: { disposition: 'evidence_key' },
+  [`${P}modules/fleet-operations/application/cash-referral-manager-operations.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'forwards searchProfilesByLicence and its profiles; D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'referral search by licence; D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/compensation/compensation-referral-ledger.ts`]: { disposition: 'owner_internal', note: 'stores a digest of the person key, never the key' },
@@ -122,22 +193,27 @@ export const LICENCE_READERS = {
   [`${P}modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-decision-adapter.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts`]: { disposition: 'owner_internal' },
+  [`${P}modules/fleet-operations/public/v1/index.ts`]: { disposition: 'type_only', note: 're-exports CashReferralManagerProfileV1' },
   [`${P}modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/public/v1/legacy-prisma-resolve-imported-driver-adapter.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/public/v1/monitoring-ui/ActionButtons.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}modules/fleet-operations/public/v1/monitoring-ui/FleetCheckModal.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}modules/fleet-operations/public/v1/park-phone-search.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/parks/route.ts`, note: 'returns the profile ВУ to /api/contacts/[id]/parks and /api/bot-link, both integration-admin' },
+  [`${P}modules/fleet-operations/public/v1/scheduled-scraper-check-dispatch.ts`]: { disposition: 'owner_internal', note: 'dispatches fleet checks by the profile licence' },
   [`${P}modules/fleet-operations/public/v1/resolve-imported-driver-handler.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/public/v1/yandex-fleet-reconciler.ts`]: { disposition: 'owner_internal' },
+  ['tools/audio-bridge-day1/llm-client.js']: { disposition: 'licence_term_only', note: 'questionnaire field name' },
+  ['yandex-fleet-scraper/src/api.ts']: { disposition: 'owner_internal', note: 'Fleet\'s scraper service checks a licence on Yandex' },
+  ['yandex-fleet-scraper/src/worker.ts']: { disposition: 'owner_internal', note: 'Fleet\'s scraper worker' },
 }
 
-const DISPOSITIONS = new Set(['owner_internal', 'evidence_key', 'command_input', 'admin_only', 'masked', 'd2l'])
+const DISPOSITIONS = new Set(['owner_internal', 'evidence_key', 'command_input', 'admin_only', 'masked', 'd2l', 'view_decision', 'type_only', 'licence_term_only'])
 
 /** Every tracked non-test code file under the source roots that names a ВУ carrier. */
 export function discoverLicenceReaders(files, readFile) {
   return files
     .filter((file) => CODE_FILE.test(file) && !TEST_FILE.test(file))
-    .filter((file) => LICENCE_CARRIER.test(readFile(file)))
+    .filter((file) => licenceReaderRules(readFile(file)).length > 0)
     .sort()
 }
 
@@ -147,7 +223,7 @@ export function licenceReaderViolations(inventory, discovered, readFile) {
   const listed = new Set(Object.keys(inventory))
   for (const file of discovered) {
     if (!listed.has(file)) violations.push(`unlisted ВУ reader: ${file}`)
-    if (printsLicenceCarrier(readFile(file))) violations.push(`a log or error text prints a ВУ carrier: ${file}`)
+    if (printsLicenceCarrier(stripComments(readFile(file)))) violations.push(`a log or error text prints a ВУ carrier: ${file}`)
   }
   const found = new Set(discovered)
   for (const [file, entry] of Object.entries(inventory)) {
@@ -185,6 +261,13 @@ function runNegativeProbes() {
     ['logged carrier', { 'a/reader.ts': "console.error('x', row.normalizedVu)" }, { 'a/reader.ts': { disposition: 'owner_internal' } }, /log or error text prints a ВУ carrier/u],
     ['thrown carrier', { 'a/reader.ts': 'throw new Error(`bad ${driver.licenseNumber}`)' }, { 'a/reader.ts': { disposition: 'owner_internal' } }, /log or error text prints a ВУ carrier/u],
     ['field name is not a value', { 'a/reader.ts': "throw new TypeError('licenseNumber must be a string'); const v = row.licenseNumber" }, { 'a/reader.ts': { disposition: 'owner_internal' } }, null],
+    ['full Driver row without select', { ...base, 'a/row.ts': 'await prisma.driver.findMany({ where: { id } })' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/row\.ts/u],
+    ['Driver relation included whole', { ...base, 'a/inc.ts': 'prisma.chat.findMany({ include: { driver: true } })' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/inc\.ts/u],
+    ['raw SQL string', { ...base, 'a/sql.ts': 'prisma.$queryRawUnsafe(\'SELECT "licenseNumber" FROM "Driver"\')' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/sql\.ts/u],
+    ['British spelling', { ...base, 'a/uk.ts': 'searchProfilesByLicence(licence)' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/uk\.ts/u],
+    ['conduit type', { ...base, 'a/type.ts': 'let r: ReferralSearchResponse' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: a\/type\.ts/u],
+    ['comment only is not a reader', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/c.ts': '// licenseNumber is never read here\nconst y = 1' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, null],
+    ['selected Driver read is not a row', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/s.ts': 'prisma.driver.findMany({ select: { id: true } })' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, null],
     ['d2l without owner', base, { 'a/reader.ts': { disposition: 'd2l' } }, /d2l entry without an owner/u],
   ]
   for (const [name, files, inventory, expected] of probes) {
