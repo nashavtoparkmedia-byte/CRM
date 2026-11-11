@@ -627,6 +627,61 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await prisma.domainOutboxEvent.count({ where: { aggregateId: shown[0].id } })).toBe(0)
   })
 
+  // Behaviour fix: the last inbound/outbound times only move forward. An event older than
+  // the conversation's last one (out-of-order delivery, catch-up, a released hold) still
+  // runs its workflow step, but leaves those times and the inbox order (lastMessageAt) as they are.
+  async function workflowState(chatId: string) {
+    const [row] = await prisma.$queryRaw<Array<{ lastInboundAt: Date | null; lastOutboundAt: Date | null; lastMessageAt: Date | null; unreadCount: number; requiresResponse: boolean; status: string }>>`
+      SELECT "lastInboundAt", "lastOutboundAt", "lastMessageAt", "unreadCount", "requiresResponse", status FROM "Chat" WHERE id = ${chatId}`
+    return row
+  }
+
+  for (const channel of ['telegram', 'whatsapp', 'max'] as const) {
+    it(`${channel}: an older event never moves the last inbound/outbound time back; everything else is unchanged`, async () => {
+      sequence += 1
+      const lastMessageAt = new Date('2026-11-01T12:00:00.000Z')
+      const ids2 = { private: `${RUN}_${channel}_p${sequence}`, group: `${RUN}_${channel}_g${sequence}` }
+      for (const [chatType, id] of Object.entries(ids2)) {
+        createdChats.push(id)
+        await prisma.chat.create({ data: { id, channel, externalChatId: `${channel}:${RUN}:${chatType}:${sequence}`, chatType, lastMessageAt } })
+      }
+      const newer = new Date('2026-11-10T10:00:00.000Z')
+      const older = new Date('2026-11-09T10:00:00.000Z')
+
+      await ConversationWorkflowService.onInboundMessage(ids2.private, newer)
+      await ConversationWorkflowService.onInboundMessage(ids2.private, older)
+      expect(await workflowState(ids2.private)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: null, lastMessageAt, unreadCount: 2, requiresResponse: true, status: 'new' })
+
+      await ConversationWorkflowService.onOutboundMessage(ids2.private, newer)
+      await ConversationWorkflowService.onOutboundMessage(ids2.private, older)
+      // The status still steps per event: new -> open -> waiting_customer.
+      expect(await workflowState(ids2.private)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: newer, lastMessageAt, unreadCount: 2, requiresResponse: false, status: 'waiting_customer' })
+
+      await ConversationWorkflowService.onGroupInboundMessage(ids2.group, newer)
+      await ConversationWorkflowService.onGroupInboundMessage(ids2.group, older)
+      expect(await workflowState(ids2.group)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: null, lastMessageAt, unreadCount: 2, requiresResponse: false, status: 'new' })
+
+      // A newer event still moves them forward.
+      const newest = new Date('2026-11-11T10:00:00.000Z')
+      await ConversationWorkflowService.onInboundMessage(ids2.private, newest)
+      expect((await workflowState(ids2.private)).lastInboundAt).toEqual(newest)
+    })
+  }
+
+  it('releasing a hold older than the last visible event keeps the last inbound time and the inbox order', async () => {
+    const chatId = await chat()
+    const lastMessageAt = new Date('2026-11-01T12:00:00.000Z')
+    await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt } })
+    const heldAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('old-hold'), { sentAt: heldAt })).toMatchObject({ outcome: 'held' })
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB } })
+    const visibleAt = new Date(Date.now() - 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('newer-visible'), { sentAt: visibleAt })).toMatchObject({ outcome: 'appended' })
+
+    expect(await release(chatId, PROVEN_B)).toMatchObject({ outcome: 'released', released: 1 })
+    expect(await workflowState(chatId)).toMatchObject({ lastInboundAt: visibleAt, lastMessageAt, unreadCount: 2, requiresResponse: true })
+  })
+
   it('held events never appear in a conversation read of Message', async () => {
     const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
     await append(chatId, PROVEN_A, key('mine'))
