@@ -23,7 +23,7 @@
  * that). Production: the Owner bootstraps the first Администратор with a fresh
  * password before anything else touches the instance.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -78,7 +78,10 @@ export async function seedStaffPasswordV1({ base, userId, appRoot, env = process
         if (!env[name]) throw new Error(`${name} is required`)
     }
     const manifest = JSON.parse(readFileSync(join(appRoot, '.next/server/server-reference-manifest.json'), 'utf8')).node
-    const registry = JSON.parse(readFileSync(env.YOKO_USER_REGISTRY_FILE ?? join(appRoot, 'src/data/users.json'), 'utf8'))
+    // A fresh CRM seeds its registry from the image's on first use (YOKO_USER_REGISTRY_SEED=once), so
+    // until it has, the image's registry is what it will hold.
+    const registryFile = env.YOKO_USER_REGISTRY_FILE && existsSync(env.YOKO_USER_REGISTRY_FILE) ? env.YOKO_USER_REGISTRY_FILE : join(appRoot, 'src/data/users.json')
+    const registry = JSON.parse(readFileSync(registryFile, 'utf8'))
     const target = registry.find((record) => record.id === userId)
     if (!target) throw new Error('the employee is not in the registry')
 

@@ -40,7 +40,9 @@ const FAILURE_STATUS: Record<MobilePushRegistrationFailureCodeV1, number> = {
 }
 
 function respond(status: number, body: Record<string, unknown>): Response {
-    return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
+    // 503 is retryable, never a refusal: say when to come back.
+    const headers: Record<string, string> = status === 503 ? { 'Cache-Control': 'no-store', 'Retry-After': '5' } : { 'Cache-Control': 'no-store' }
+    return Response.json(body, { status, headers })
 }
 
 export async function POST(request: NextRequest) {
