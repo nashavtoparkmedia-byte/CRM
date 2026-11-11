@@ -251,6 +251,7 @@
         "DriverProfilesByExactLicenceQuery.v1",
         "DriverProfilesForContactsQuery.v1",
         "DriverProfilesForContactsQuery.v2",
+        "DriverProfilesForContactsQuery.v3",
         "DriverView.v1",
         "FleetMonitoringPolicy.v1",
         "FleetMonitoringViews.v1",

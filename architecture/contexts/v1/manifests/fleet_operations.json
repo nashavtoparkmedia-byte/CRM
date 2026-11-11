@@ -283,6 +283,7 @@
     "YandexFleetOperations.v1",
     "DriverProfilesForContactsQuery.v1",
     "DriverProfilesForContactsQuery.v2",
+    "DriverProfilesForContactsQuery.v3",
     "DriverProfilesByExactLicenceQuery.v1"
   ],
   "responsibility": "Driver/fleet state and communication history, Yandex synchronization and isolated YFS checking workflow.",

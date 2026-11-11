@@ -21,6 +21,8 @@ import { legacyPrismaFindDriverByExactPhonePortV1 } from '../public/v1/legacy-pr
 import { createDriverProfilesForContactsHandlerV1 } from '../public/v1/driver-profiles-for-contacts-handler'
 import { legacyPrismaDriverProfilesForContactsPortV1 } from '../public/v1/legacy-prisma-driver-profiles-for-contacts-adapter'
 import { createDriverProfilesForContactsHandlerV2 } from '../public/v1/driver-profiles-for-contacts-v2-handler'
+import { createDriverProfilesForContactsHandlerV3 } from '../public/v1/driver-profiles-for-contacts-v3-handler'
+import { legacyPrismaDriverCardFieldsPortV1 } from '../public/v1/legacy-prisma-driver-card-fields-adapter'
 import { createDriverProfilesByExactLicenceHandlerV1 } from '../public/v1/driver-profiles-by-exact-licence-handler'
 import { legacyPrismaDriverLicencePortV1 } from '../public/v1/legacy-prisma-driver-licence-adapter'
 import { createGetDriverCallablePhoneHandlerV1 } from '../public/v1/get-driver-callable-phone-handler'
@@ -63,6 +65,7 @@ const runApiLogRetention = createRunApiLogRetentionHandlerV1(legacyPrismaFleetEv
 const findDriverByExactPhone = createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
 const readDriverProfilesForContacts = createDriverProfilesForContactsHandlerV1(legacyPrismaDriverProfilesForContactsPortV1)
 const readDriverProfilesForContactsLicenced = createDriverProfilesForContactsHandlerV2(readDriverProfilesForContacts, legacyPrismaDriverLicencePortV1)
+const readDriverProfilesForContactsCard = createDriverProfilesForContactsHandlerV3(readDriverProfilesForContactsLicenced, legacyPrismaDriverCardFieldsPortV1)
 const findDriverProfilesByExactLicence = createDriverProfilesByExactLicenceHandlerV1(legacyPrismaDriverLicencePortV1)
 const getDriverCallablePhone = createGetDriverCallablePhoneHandlerV1(legacyPrismaGetDriverCallablePhonePortV1)
 const searchLocalDrivers = createSearchLocalDriversHandlerV1(legacyPrismaSearchLocalDriversPortV1)
@@ -88,6 +91,7 @@ export const runApiLogRetentionV1 = (...args: Parameters<typeof runApiLogRetenti
 export const findDriverByExactPhoneV1 = (...args: Parameters<typeof findDriverByExactPhone>) => findDriverByExactPhone(...args)
 export const readDriverProfilesForContactsV1 = (...args: Parameters<typeof readDriverProfilesForContacts>) => readDriverProfilesForContacts(...args)
 export const readDriverProfilesForContactsV2 = (...args: Parameters<typeof readDriverProfilesForContactsLicenced>) => readDriverProfilesForContactsLicenced(...args)
+export const readDriverProfilesForContactsV3 = (...args: Parameters<typeof readDriverProfilesForContactsCard>) => readDriverProfilesForContactsCard(...args)
 export const findDriverProfilesByExactLicenceV1 = (...args: Parameters<typeof findDriverProfilesByExactLicence>) => findDriverProfilesByExactLicence(...args)
 export const getDriverCallablePhoneV1 = (...args: Parameters<typeof getDriverCallablePhone>) => getDriverCallablePhone(...args)
 export const searchLocalDriversV1 = (...args: Parameters<typeof searchLocalDrivers>) => searchLocalDrivers(...args)
