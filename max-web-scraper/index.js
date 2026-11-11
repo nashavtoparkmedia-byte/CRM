@@ -414,7 +414,9 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
         port:     url.port || (url.protocol === 'https:' ? 443 : 80),
         path:     url.pathname,
         method:   'PATCH',
-        headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        // The CRM admits this callback by the shared webhook secret; without
+        // one configured this throws and the job is left as it is.
+        headers:  maxScraperWebhookHeaders({ 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }),
       }, res => { res.resume(); res.on('end', resolve) })
       req.on('error', reject)
       req.write(body); req.end()
