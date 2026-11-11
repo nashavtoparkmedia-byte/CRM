@@ -6,8 +6,12 @@ import type {
     CashReferralManagerCandidateV1,
     CashReferralManagerProfileV1,
     CashReferralPersonCardV1,
+    CashStaffAuthorityResolutionV1,
     CashStaffAuthorityV1,
 } from '@/modules/fleet-operations/public/v1'
+import { resolveCashStaffAuthorityFromSessionV1 } from '@/modules/fleet-operations/public/v1'
+import { getStaffSessionPrincipalV1 } from '@/modules/identity-access/public/v1'
+import { listUserIdentitiesV1 } from '@/modules/identity-access/public/v1/user-directory'
 
 import type {
     ReferralAccessView,
@@ -20,29 +24,26 @@ import type {
 /**
  * The signed staff session a referral or access write is made by.
  *
- * The contract is docs/design/cash-staff-authority-v1.md: the one CRM
- * manager is the verified integration-admin session, and Identity Access is
- * to expose its facts (principal, session id, when it authenticated) as
- * getIntegrationAdminSessionFactsV1. It does not exist yet, and nothing
- * here stands in for it: the browser lane is the unsigned crm_user_id
- * cookie, which proves nobody, and the database admits a manager event only
- * from a signed session holding the capability. Until then every write is
- * refused here, whatever the cookie or the role says; the screens stay
- * readable.
- *
- * The capability binding is ready in Fleet (cashStaffAuthorityFromAdminSessionV1,
- * tested), so the wiring is this one function, with managerSession() still
- * the UI gate in front of it:
- *
- *     const authority = cashStaffAuthorityFromAdminSessionV1(await getIntegrationAdminSessionFactsV1())
- *     return authority === null ? { ok: false, refusal: 'staff_session_unavailable' } : { ok: true, authority }
+ * The contract is docs/design/cash-staff-authority-v2.md: Identity Access
+ * proves the employee (Staff Session v1.3, getStaffSessionPrincipalV1) and
+ * names them in its published directory (UserIdentity.v1); Cash binds the
+ * two Cash capabilities to a confirmed Администратор only. Nothing here reads
+ * the crm_user_id cookie, a header or a form field, and managerSession()
+ * stays in front only as a gate that narrows. No session, or one Identity
+ * Access cannot verify, writes nothing; the screens stay readable.
  */
 export async function resolveCashStaffAuthorityV1(): Promise<
     | { ok: true; authority: CashStaffAuthorityV1 }
-    | { ok: false; refusal: 'staff_session_unavailable' }
+    | { ok: false; refusal: CashStaffAuthorityRefusalV1 }
 > {
-    return { ok: false, refusal: 'staff_session_unavailable' }
+    return resolveCashStaffAuthorityFromSessionV1({
+        principal: getStaffSessionPrincipalV1,
+        directory: listUserIdentitiesV1,
+        now: () => new Date(),
+    })
 }
+
+type CashStaffAuthorityRefusalV1 = Extract<CashStaffAuthorityResolutionV1, { ok: false }>['refusal']
 
 function employmentOf(profile: CashReferralManagerProfileV1): string {
     if (profile.isSelfEmployed === true) return 'СМЗ'
