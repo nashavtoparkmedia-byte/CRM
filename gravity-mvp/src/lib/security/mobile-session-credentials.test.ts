@@ -13,7 +13,10 @@ import {
 } from '@/modules/identity-access/public/v1/mobile-session-credentials'
 import { issueIntegrationAdminSession, verifyIntegrationAdminSession }
     from '@/modules/identity-access/public/v1/integration-admin-credentials'
-import { issueStaffSessionTokenV1, readStaffSessionTokenV1 } from '@/modules/identity-access/internal/staff-session-credentials'
+
+/** Change one character in the middle, so the bytes really differ (a suffix edit can be a no-op or hit padding bits). */
+const tamper = (value: string) => `${value.slice(0, 5)}${value[5] === 'A' ? 'B' : 'A'}${value.slice(6)}`
+
 
 /**
  * The v2 mobile session primitive (docs/design/mobile-personal-signin-v1.md
@@ -100,7 +103,7 @@ describe('mobile session token v2', () => {
             const forged = Buffer.from(JSON.stringify({ ...decoded, ...change }), 'utf8').toString('base64url')
             expect(verifyMobileSession(`${forged}.${signature}`, env, NOW)).toBeNull()
         }
-        expect(verifyMobileSession(`${payload}.${signature.slice(0, -2)}AA`, env, NOW)).toBeNull()
+        expect(verifyMobileSession(`${payload}.${tamper(signature)}`, env, NOW)).toBeNull()
         expect(verifyMobileSession(payload, env, NOW)).toBeNull()
         expect(verifyMobileSession(`${payload}.${signature}.extra`, env, NOW)).toBeNull()
         expect(verifyMobileSession('', env, NOW)).toBeNull()
@@ -108,12 +111,8 @@ describe('mobile session token v2', () => {
         expect(verifyMobileSession('x'.repeat(5000), env, NOW)).toBeNull()
     })
 
-    test('mobile, staff and integration-admin tokens never verify in another lane', () => {
+    test('mobile and integration-admin tokens never verify in the other lane (staff: staff-session.test.ts)', () => {
         const mobileToken = issueMobileSession(OPERATOR, DEVICE, EPOCH, env, NOW) as string
-        const staffToken = issueStaffSessionTokenV1({ userId: OPERATOR, userEpoch: EPOCH }, env, NOW) as string
-        expect(staffToken).toBeTypeOf('string')
-        expect(verifyMobileSession(staffToken, env, NOW)).toBeNull()
-        expect(readStaffSessionTokenV1(mobileToken, env, NOW)).toBeNull()
         const adminEnv = { ADMIN_USER: 'shared-name', ADMIN_PASS: 'another perfectly fine passphrase' }
         const adminToken = issueIntegrationAdminSession(adminEnv, NOW) as string
         expect(verifyIntegrationAdminSession(mobileToken, adminEnv, NOW)).toBe(false)
