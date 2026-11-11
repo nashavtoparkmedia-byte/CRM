@@ -22,7 +22,7 @@ def test_ui_text_success_without_provider_id_does_not_return_null():
 
 
 def test_send_message_endpoint_answers_from_the_decided_outcome():
-    assert "result = await enqueueSend(() => sendText(" in source
+    assert "result = await enqueueSend(() => withLiveSend(digits, 'send_text', () => sendText(" in source
     assert "const answer = textSendHttpAnswer(result, { chatId: digits, providerAccountId })" in source
     assert "return res.status(answer.status).json(answer.body)" in source
     assert "normalizeTextSendResult" not in source

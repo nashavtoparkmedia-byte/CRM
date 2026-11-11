@@ -4421,6 +4421,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-live-acceptance-recipient-guard-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_LIVE_ACCEPTANCE_GUARD_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_LIVE_INTEGRATION_ACCEPTANCE_PR_MAX_LIVE_1_GO_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
+      },
+      "reason": "Records the two tracked executable surfaces the MAX live-acceptance recipient guard (PR-MAX-LIVE-1, the test-only, env-gated allowlist and send cap of the live provider acceptance, Owner mandate 2026-11-11 with Security rulings D1/D2) adds on top of main fa3c07e5: 2,842 + 2 = 2,844 surfaces, context-owned 1,578 -> 1,580, governed exclusions unchanged at 1,264. The new paths are the guard, max-web-scraper/lib/LiveAcceptanceGuard.js, and its test, max-web-scraper/test/max-live-acceptance-guard.test.js, both owned by max_channel through its context manifest owned_paths. The shared conformance vectors it carries under max-web-scraper/test/fixtures are data, not an executable surface. Every changed path (the scraper entry point, its transport interceptor and two source-contract tests) is context-owned through the same manifest and needs no exact assignment; no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate 34c66f9a, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2844,
+        "tracked_inventory_sha256": "2fae96c57dd003691ddd96a2efe6585dc36419774d537991d8342051182b3490",
+        "coverage_sha256": "fa8caefde8c693ca9252b6c3a20c51f3461c578a4b77922484776a98d1d744b9"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

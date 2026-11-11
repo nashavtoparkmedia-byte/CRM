@@ -116,7 +116,7 @@ test('MAX text send to a phone target fails closed before anything is typed', ()
   assertBefore(
     handler,
     "code: 'MAX_ROUTE_UNRESOLVED', reason: digits ? 'phone_target' : 'invalid_target'",
-    'enqueueSend(() => sendText(',
+    "enqueueSend(() => withLiveSend(digits, 'send_text', () => sendText(",
     'a phone target must be refused before anything can be typed',
   )
 })
@@ -345,7 +345,7 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
 test('MAX text send endpoint answers from the decided outcome only', () => {
   const scraper = read('max-web-scraper/index.js')
 
-  assert.match(scraper, /result = await enqueueSend\(\(\) => sendText\(/)
+  assert.match(scraper, /result = await enqueueSend\(\(\) => withLiveSend\(digits, 'send_text', \(\) => sendText\(/)
   assert.match(scraper, /\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
   assert.match(scraper, /const answer = textSendHttpAnswer\(result, \{ chatId: digits, providerAccountId \}\)/)
   assert.match(scraper, /externalId: result\.providerMessageId,/)
