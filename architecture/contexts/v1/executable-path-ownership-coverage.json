@@ -296,7 +296,7 @@
     "exact_inventory_change_count": 4,
     "reviewed_assignment_count": 316,
     "amendments_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
-    "amendments_sha256": "375d0e9154060775ba1965d49aa108439a79814562b7cddfd5818cbca6b1f696",
+    "amendments_sha256": "92e4ac9da59aedaa2a57d627e799c63fb4c0af7980bec54fff6be61ab51f6ca6",
     "amendment_count": 54
   }
 }
