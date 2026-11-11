@@ -4315,18 +4315,18 @@
       }
     },
     {
-      "amendment_id": "telegram-r21-mtproto-guarded-append-main-f8a36b9f-20261111",
+      "amendment_id": "contact-identity-lookup-search-normalization-main-f8a36b9f-20261111",
       "reviewed_at": "2026-11-11T00:00:00Z",
-      "reviewed_by": "TELEGRAM_RELIABILITY_R21_MTPROTO_ADOPTION_EXECUTOR_REVIEW_F8A36B9F",
+      "reviewed_by": "CONTACT_IDENTITY_LOOKUP_SEARCH_EXECUTOR_REVIEW_F8A36B9F",
       "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
-      "authorization": "ORCH_GO_TELEGRAM_RELIABILITY_MTPROTO_GUARDED_APPEND_ADOPTION_20261111",
+      "authorization": "ORCHESTRATOR_V8_MANDATE_07_CONTACT_IDENTITY_ROOT_CAUSE_ENGINEERING_GO_20261110",
       "predecessor_review": {
         "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
         "role": "SOL_HIGH_INTERNAL_REVIEW",
         "immutable": true,
-        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f8a36b9f, whose tail is messaging-r21-a1a2-pre-adoption-after-r22-20261110, and leaves that amendment and every earlier one untouched. It reviews only the one surface the R-21 adoption on the Telegram MTProto lane adds on that tail; it carries no source-hash rebind."
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f8a36b9f, whose tail is messaging-r21-a1a2-pre-adoption-after-r22-20261110, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
       },
-      "reason": "Records the tracked executable surface the R-21 guarded-append adoption on the Telegram MTProto lane adds on top of main f8a36b9f (after #219 A1/A2) and the Messaging history projection it builds on: 2,840 + 1 = 2,841 surfaces, context-owned 1,577 -> 1,578, governed exclusions unchanged at 1,263. The new path lives under gravity-mvp/src/modules/telegram-channel and is owned by the telegram_channel context through its manifest owned_paths. The changed gravity-mvp/src/app/tg-actions.ts is context-owned (telegram_channel internal surface) and carries no exact-inventory assignment, and the two changed boundary controls stay under the architecture_controls governed exclusion, so no source-hash rebind is required. The exact-inventory deltas the preview reports are main's own. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation, which writes nothing. Its position binds it to this chain tail only: if another amendment lands on main first, it is regenerated over the then-current main.",
+      "reason": "Records the one tracked executable surface the ContactLookup.v1 search fix (Orchestrator V8 mandate 07 root-cause fix, after the Owner found nobody in «Люди» by a ФИО and a number from the dispatcher profile) adds on top of main f8a36b9f: 2,840 + 1 = 2,841 surfaces, context-owned 1,577 -> 1,578, governed exclusions unchanged at 1,263. The new path is the isolated-PostgreSQL proof of the lookup adapter, gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-lookup-adapter.postgres.test.ts, owned through the contacts context manifest owned_paths. Every changed path (the ContactLookup.v1 capability and its adapter, the public index, ContactSelector and the HTTP lookup client, and their tests) is context-owned through the same manifest and needs no exact assignment; no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main f8a36b9f only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
       "predecessor": {
         "tracked_executable_surfaces": 2840,
         "tracked_inventory_sha256": "232ca7adc7807654c8051ebec48d7ac4f189b3f89202ecdd47c417299cae86cc",
@@ -4334,18 +4334,11 @@
       },
       "current": {
         "tracked_executable_surfaces": 2841,
-        "tracked_inventory_sha256": "649a5e73037e638357d93706f34029dee450613e6a69f40b2130171073e6cb47",
-        "coverage_sha256": "941bd025480db74854041b49a8f562157cfa22f2fd203d3a22d1a627e3e6aeda"
+        "tracked_inventory_sha256": "790bf0b4053fa333cc6472036b14bcd70b48f5338581dbc5ffc6e1eed8e1c303",
+        "coverage_sha256": "f82a1ef30cf4e646ce72d3066870156fafde61de00a16f587d256e7abcf99c66"
       },
       "source_hash_rebinds": [],
-      "unassigned_tracked_surfaces": [
-        {
-          "path": "gravity-mvp/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts",
-          "lifecycle": "APPLICATION_RUNTIME",
-          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The server-only Telegram MTProto ingress composition (R-21 adoption): it admits a private GramJS conversation, proves the peer from Contacts, appends each event through Messaging's guarded append and releases held events with the fresh proof; it has no 'use server' directive and exports nothing that takes a person proof. Under gravity-mvp/src/modules/telegram-channel, a path the telegram_channel context owns, so context ownership comes from the manifest and it receives no explicit exact-inventory assignment; lifecycle is inferred by the tracked surface inventory."
-        }
-      ],
+      "unassigned_tracked_surfaces": [],
       "invariants": {
         "assignments_added": 0,
         "assignments_removed": 0,

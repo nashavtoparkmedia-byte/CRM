@@ -12,9 +12,12 @@ import { describe, expect, it } from 'vitest'
 import {
   CONTACT_LOOKUP_DEFAULT_LIMIT_V1,
   CONTACT_LOOKUP_MAX_LIMIT_V1,
+  CONTACT_LOOKUP_MAX_WORDS_V1,
   buildContactLookupItemV1,
   contactLookupCriteriaV1,
+  contactLookupFoldV1,
   contactLookupLimitV1,
+  contactLookupRankClassesV1,
   contactLookupSortKeyV1,
   createSearchContactsHandlerV1,
   type ContactLookupPortV1,
@@ -62,19 +65,66 @@ function recordingPort(behaviour: {
 
 describe('contactLookupCriteriaV1', () => {
   it('classifies a phone query by its digits', () => {
-    expect(contactLookupCriteriaV1('+7 (900) 123-45-67')).toEqual({ kind: 'phone', digits: '79001234567' })
-    expect(contactLookupCriteriaV1('123')).toEqual({ kind: 'phone', digits: '123' })
+    expect(contactLookupCriteriaV1('+7 (900) 123-45-67'))
+      .toEqual({ kind: 'phone', digits: '79001234567', digitReadings: ['79001234567'] })
+    expect(contactLookupCriteriaV1('123')).toEqual({ kind: 'phone', digits: '123', digitReadings: ['123'] })
   })
 
-  it('classifies anything else as a display-name query', () => {
-    expect(contactLookupCriteriaV1('  Иван  ')).toEqual({ kind: 'text', text: 'Иван' })
-    expect(contactLookupCriteriaV1('Ив')).toEqual({ kind: 'text', text: 'Ив' })
+  it('also reads a leading 8 as +7, however the number is spaced, dashed or bracketed', () => {
+    for (const query of ['89001234567', '8 900 123 45 67', '8-900-123-45-67', '8 (900) 123-45-67', ' 8(900)1234567 ']) {
+      expect(contactLookupCriteriaV1(query))
+        .toEqual({ kind: 'phone', digits: '89001234567', digitReadings: ['89001234567', '79001234567'] })
+    }
+    // A partial number typed with 8 is read both ways too.
+    expect(contactLookupCriteriaV1('8 900 12'))
+      .toEqual({ kind: 'phone', digits: '890012', digitReadings: ['890012', '790012'] })
+    // «+8…» is a typed country code, not the domestic 8: it is searched as typed.
+    expect(contactLookupCriteriaV1('+8 900 123')).toEqual({ kind: 'phone', digits: '8900123', digitReadings: ['8900123'] })
+    // A number without 8 or 7 gains no reading.
+    expect(contactLookupCriteriaV1('900 123-45-67'))
+      .toEqual({ kind: 'phone', digits: '9001234567', digitReadings: ['9001234567'] })
+  })
+
+  it('classifies anything else as a display-name query of folded words', () => {
+    expect(contactLookupCriteriaV1('  Иван  ')).toEqual({ kind: 'text', text: 'Иван', words: ['иван'] })
+    expect(contactLookupCriteriaV1('Ив')).toEqual({ kind: 'text', text: 'Ив', words: ['ив'] })
+    expect(contactLookupCriteriaV1('Громов   Сергей  Петрович (демо)'))
+      .toEqual({ kind: 'text', text: 'Громов Сергей Петрович (демо)', words: ['громов', 'сергей', 'петрович', 'демо'] })
+  })
+
+  it('treats «ё» and «е» as one letter in either direction', () => {
+    expect(contactLookupFoldV1('Пётр Фёдоров')).toBe('петр федоров')
+    expect(contactLookupFoldV1('ПЁТР')).toBe('петр')
+    expect(contactLookupCriteriaV1('Пётр')).toMatchObject({ words: ['петр'] })
+    expect(contactLookupCriteriaV1('Петр')).toMatchObject({ words: ['петр'] })
+    expect(contactLookupCriteriaV1('Соловьёв')).toMatchObject({ words: ['соловьев'] })
+  })
+
+  it('ignores initials beside a longer word, deduplicates words and caps their number', () => {
+    expect(contactLookupCriteriaV1('Громов С. П.')).toMatchObject({ words: ['громов'] })
+    expect(contactLookupCriteriaV1('Иванов иванов ИВАНОВ')).toMatchObject({ words: ['иванов'] })
+    expect(contactLookupCriteriaV1('Петров-Водкин')).toMatchObject({ words: ['петров', 'водкин'] })
+    const many = contactLookupCriteriaV1('аа бб вв гг дд ее жж зз')
+    expect(many).toMatchObject({ words: ['аа', 'бб', 'вв', 'гг', 'дд', 'ее'] })
+    expect(many?.kind === 'text' && many.words.length).toBe(CONTACT_LOOKUP_MAX_WORDS_V1)
   })
 
   it('refuses a query no match could satisfy', () => {
-    for (const query of ['', '   ', 'и', '1', '12', '+7', '()', null, undefined, 7, {}, ['Иван'], 'Иван\u0000']) {
+    for (const query of [
+      '', '   ', 'и', '1', '12', '+7', '()', null, undefined, 7, {}, ['Иван'], 'Иван\u0000', 'И П', 'А. Б.', '..',
+    ]) {
       expect(contactLookupCriteriaV1(query as never)).toBeNull()
     }
+  })
+})
+
+describe('contactLookupRankClassesV1', () => {
+  it('asks the all-but-one-word class only for three or more words', () => {
+    expect(contactLookupRankClassesV1(contactLookupCriteriaV1('8 900')!)).toEqual(['phone_exact', 'phone_substring'])
+    expect(contactLookupRankClassesV1(contactLookupCriteriaV1('Иванов')!)).toEqual(['name_prefix', 'name_all_words'])
+    expect(contactLookupRankClassesV1(contactLookupCriteriaV1('Иванов Пётр')!)).toEqual(['name_prefix', 'name_all_words'])
+    expect(contactLookupRankClassesV1(contactLookupCriteriaV1('Иванов Пётр Сергеевич')!))
+      .toEqual(['name_prefix', 'name_all_words', 'name_all_but_one_word'])
   })
 })
 
@@ -279,8 +329,43 @@ describe('createSearchContactsHandlerV1', () => {
     expect(result).toMatchObject({ total: 1, truncated: false })
     expect(calls[0]).toEqual({
       kind: 'candidates',
-      detail: { criteria: { kind: 'phone', digits: '79001234567' }, rankClass: 'phone_exact', limit: 11 },
+      detail: {
+        criteria: { kind: 'phone', digits: '79001234567', digitReadings: ['79001234567'] },
+        rankClass: 'phone_exact',
+        limit: 11,
+      },
     })
+    expect(result.items[0].match).toBe('phone_exact')
+  })
+
+  it('says which class found each item, ranking a partial name last', async () => {
+    const { port, calls } = recordingPort({
+      ids: {
+        name_prefix: ['contact-prefix'],
+        name_all_words: ['contact-any-order', 'contact-prefix'],
+        name_all_but_one_word: ['contact-partial'],
+      },
+      sources: [
+        source({ id: 'contact-prefix', displayName: 'Яков Иванов' }),
+        source({ id: 'contact-any-order', displayName: 'Борис Иванов' }),
+        source({ id: 'contact-partial', displayName: 'Абрам Иванов' }),
+      ],
+    })
+    const result = await createSearchContactsHandlerV1(port)({ query: 'Иванов Пётр Сергеевич' })
+    expect(result.items.map(item => [item.contactId, item.match])).toEqual([
+      ['contact-prefix', 'name_prefix'],
+      ['contact-any-order', 'name_all_words'],
+      ['contact-partial', 'name_all_but_one_word'],
+    ])
+    expect(calls.filter(call => call.kind === 'candidates').map(call => (call.detail as { rankClass: string }).rankClass))
+      .toEqual(['name_prefix', 'name_all_words', 'name_all_but_one_word'])
+  })
+
+  it('never asks the all-but-one-word class for a two-word name', async () => {
+    const { port, calls } = recordingPort({ ids: { name_all_but_one_word: ['contact-partial'] } })
+    const result = await createSearchContactsHandlerV1(port)({ query: 'Иванов Пётр' })
+    expect(result.items).toEqual([])
+    expect(calls.map(call => (call.detail as { rankClass?: string }).rankClass)).toEqual(['name_prefix', 'name_all_words'])
   })
 
   it('falls through to a phone substring when no exact match exists', async () => {
@@ -303,7 +388,7 @@ describe('createSearchContactsHandlerV1', () => {
       .resolves.toEqual(['contact-exact', 'contact-substring'])
 
     const byName = recordingPort({
-      ids: { name_prefix: ['contact-prefix'], name_substring: ['contact-substring', 'contact-prefix'] },
+      ids: { name_prefix: ['contact-prefix'], name_all_words: ['contact-substring', 'contact-prefix'] },
       sources: [
         source({ id: 'contact-prefix', displayName: 'Яков Яковлев' }),
         source({ id: 'contact-substring', displayName: 'Абрам Абрамов' }),
@@ -334,7 +419,7 @@ describe('createSearchContactsHandlerV1', () => {
 
   it('deduplicates a contact id returned by more than one rank class', async () => {
     const { port, calls } = recordingPort({
-      ids: { name_prefix: ['contact-1', 'contact-1'], name_substring: ['contact-1'] },
+      ids: { name_prefix: ['contact-1', 'contact-1'], name_all_words: ['contact-1'] },
     })
     const result = await createSearchContactsHandlerV1(port)({ query: 'Иван' })
     expect(result.items.map(item => item.contactId)).toEqual(['contact-1'])
