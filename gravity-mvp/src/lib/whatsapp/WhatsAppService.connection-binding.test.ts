@@ -1,8 +1,11 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import {
+    PATCH_MESSAGE_DELIVERY_RESULT_V2,
     parseCreateChannelMessageCommandV1,
     parsePatchMessageDeliveryCommandV1,
+    parsePatchMessageDeliveryCommandV2,
 } from '@/contracts/messaging/v1/channel-message-commands'
+import { deliveryEvidenceRankV1, deriveDeliveryStateV1, provenDeliveryRankV1, statusForDeliveryEvidenceV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 
 type EventHandler = (...args: unknown[]) => unknown
 
@@ -37,6 +40,7 @@ const mocks = vi.hoisted(() => ({
     patchExternalConversation: vi.fn(),
     patchHistoryImportJob: vi.fn(),
     patchMessageDelivery: vi.fn(),
+    applyDeliveryEvidence: vi.fn(),
     upsertChannelConversation: vi.fn(),
     attachPhoneToIdentity: vi.fn(),
     attachProviderIdentityAlias: vi.fn(),
@@ -164,6 +168,7 @@ vi.mock('@/modules/messaging/public/v1', () => ({
     patchExternalConversationV1: mocks.patchExternalConversation,
     patchHistoryImportJobV1: mocks.patchHistoryImportJob,
     patchMessageDeliveryV1: mocks.patchMessageDelivery,
+    applyMessageDeliveryEvidenceV1: mocks.applyDeliveryEvidence,
     upsertChannelConversationV1: mocks.upsertChannelConversation,
 }))
 
@@ -240,6 +245,8 @@ import {
     initializeClient,
     sendMessage,
 } from './WhatsAppService'
+import { registerWhatsAppMessagingDeliveryCapabilityV1 } from '@/modules/whatsapp-channel/public/v1/messaging-delivery-capability'
+import { getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 import { canonicalWhatsAppIdentityExternalIdV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
 const STORED_CONNECTION_ID = 'wa-connection-a'
@@ -830,7 +837,7 @@ describe('WhatsApp private conversation connection ownership', () => {
         expect(mocks.recordExactProviderReachability).not.toHaveBeenCalled()
     })
 
-    test('reconciles a matched optimistic outbound Message with the provider id, delivered state and provider send time', async () => {
+    test('reconciles a matched optimistic outbound Message with the provider id and provider send time; the echo claims acceptance, not delivery', async () => {
         await initializeClient(INCOMING_CONNECTION_ID)
         const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
         // The CRM send has no provider id yet, so it is the echo candidate.
@@ -853,7 +860,9 @@ describe('WhatsApp private conversation connection ownership', () => {
         const [command] = mocks.patchMessageDelivery.mock.calls[0]
         expect(command.messageId).toBe('optimistic-1')
         expect(command.externalId).toBe('wa-outbound-echo')
-        expect(command.status).toBe('delivered')
+        // P-B: the echo proves the provider took the message (S2 provider_echo),
+        // not that the person's phone has it; delivered and read come from acks.
+        expect(command.status).toBeUndefined()
         expect(command.sentAt).toEqual(new Date(providerSeconds * 1000))
     })
 
@@ -876,7 +885,7 @@ describe('WhatsApp private conversation connection ownership', () => {
         expect(mocks.patchMessageDelivery).toHaveBeenCalledOnce()
         const [command] = mocks.patchMessageDelivery.mock.calls[0]
         expect(command.externalId).toBe('wa-outbound-corrupt-ts')
-        expect(command.status).toBe('delivered')
+        expect(command.status).toBeUndefined()
         expect(command.sentAt).toBeUndefined()
     })
 
@@ -1219,6 +1228,26 @@ function installStore() {
         store.messages.push(row)
         return { message: { ...row } }
     })
+    // Messaging's S2 command against the store, with the real evidence policy:
+    // exact provider id only, applied when stronger than what the row proves.
+    mocks.applyDeliveryEvidence.mockImplementation(async (command: unknown) => {
+        const parsed = parsePatchMessageDeliveryCommandV2(command)
+        await roundTrip()
+        const result = (outcome: 'applied' | 'unchanged' | 'no_match', messageId: string | null) => ({
+            contract: PATCH_MESSAGE_DELIVERY_RESULT_V2,
+            outcome,
+            messageId,
+            matchedBy: messageId ? 'provider_id' as const : null,
+            reason: null,
+        })
+        const row = store.messages.find(candidate => candidate.externalId === parsed.providerMessageId)
+        if (!row) return result('no_match', null)
+        if (deliveryEvidenceRankV1(parsed.evidence) <= provenDeliveryRankV1(row)) return result('unchanged', row.id)
+        row.status = statusForDeliveryEvidenceV1(parsed.evidence)
+        row.metadata = { ...row.metadata, delivery: { v: 1, evidence: parsed.evidence } }
+        return result('applied', row.id)
+    })
+
     mocks.patchMessageDelivery.mockImplementation(async (command: unknown) => {
         const parsed = parsePatchMessageDeliveryCommandV1(command)
         await roundTrip()
@@ -1298,6 +1327,7 @@ type ProviderMessage = {
     fromMe?: boolean
     hasMedia?: boolean
     timestamp?: number
+    ack?: number
 }
 
 function liveMessage(partnerJid: string, message: ProviderMessage) {
@@ -1329,6 +1359,7 @@ function providerHistoryChat(partnerJid: string, messages: ProviderMessage[]) {
             fromMe: Boolean(message.fromMe),
             type: message.type ?? 'chat',
             hasMedia: Boolean(message.hasMedia),
+            ack: message.ack,
             downloadMedia: async () => null,
         }))),
     }
@@ -1587,8 +1618,9 @@ describe('W2 — WhatsApp message identity', () => {
             await live(PARTNER_A_JID, echo)
             await live(PARTNER_A_JID, echo)
 
-            expect(rowsIn(chat.id).map(row => [row.id, row.externalId, row.status])).toEqual([
-                ['crm-send-1', key(true, PARTNER_A_JID, 'LE1'), 'delivered'],
+            // P-B: the echo claims the send and proves acceptance (provider_echo), not delivery.
+            expect(rowsIn(chat.id).map(row => [row.id, row.externalId, row.status, row.metadata.delivery])).toEqual([
+                ['crm-send-1', key(true, PARTNER_A_JID, 'LE1'), 'sent', { v: 1, evidence: 'provider_echo' }],
             ])
             expect(mocks.patchMessageDelivery).toHaveBeenCalledOnce()
         })
@@ -1767,6 +1799,217 @@ describe('W2 — WhatsApp message identity', () => {
 
             await forceSync(ACCOUNT_A)
             expect(rowsIn(chat.id).map(row => [row.id, row.externalId])).toEqual([['crm-send-1', echo]])
+        })
+    })
+
+    describe('P-B — WhatsApp outbound truth (own messages live, acks as delivery evidence)', () => {
+        function handlerOf(connectionId: string, event: string) {
+            const handler = mocks.clients.get(connectionId)?.handlers.get(event)
+            if (!handler) throw new Error(`${event} handler was not registered`)
+            return handler
+        }
+
+        function seedSent(input: { id: string, chatId: string, content: string, externalId: string, status?: string, evidence?: string }) {
+            seedCrmSend({
+                id: input.id,
+                chatId: input.chatId,
+                content: input.content,
+                sentAt: new Date(NOW_SECONDS * 1000),
+                status: input.status ?? 'sent',
+                metadata: { delivery: { v: 1, evidence: input.evidence ?? 'client_action', evidenceAt: new Date(NOW_SECONDS * 1000).toISOString(), source: 'send' } },
+            })
+            const row = store.messages.find(candidate => candidate.id === input.id)!
+            row.externalId = input.externalId
+            return row
+        }
+
+        /** Fake setTimeout, real setImmediate (the store's round trip): advance in steps and let each lookup land. */
+        async function advance(ms: number) {
+            for (let elapsed = 0; elapsed < ms; elapsed += 500) {
+                await vi.advanceTimersByTimeAsync(500)
+                await new Promise(resolve => setImmediate(resolve))
+            }
+        }
+
+        function ackEvent(partnerJid: string, providerId: string, fromMe = true) {
+            return { id: { _serialized: providerId, fromMe }, fromMe, to: fromMe ? partnerJid : '79990000000@c.us', from: fromMe ? '79990000000@c.us' : partnerJid }
+        }
+
+        test('D-WA-1: an own message reaches the live handler through message_create (the library never emits it as `message`)', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const phoneMessage = liveMessage(PARTNER_A_JID, { id: { _serialized: key(true, PARTNER_A_JID, 'PH1') }, body: 'Написал с телефона', fromMe: true })
+
+            await handlerOf(ACCOUNT_A, 'message_create')(phoneMessage)
+
+            expect(rowsIn(chat.id).map(row => [row.direction, row.externalId, row.content])).toEqual([
+                ['outbound', key(true, PARTNER_A_JID, 'PH1'), 'Написал с телефона'],
+            ])
+        })
+
+        test('D-WA-1: a message from the person is handled once, although the library emits it as both events', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const inbound = liveMessage(PARTNER_A_JID, { id: { _serialized: key(false, PARTNER_A_JID, 'IN1') }, body: 'Добрый день' })
+
+            await handlerOf(ACCOUNT_A, 'message_create')(inbound)
+            expect(rowsIn(chat.id)).toEqual([])
+            await handlerOf(ACCOUNT_A, 'message')(inbound)
+
+            expect(rowsIn(chat.id).map(row => [row.direction, row.externalId])).toEqual([['inbound', key(false, PARTNER_A_JID, 'IN1')]])
+            expect(mocks.createChannelMessage).toHaveBeenCalledOnce()
+        })
+
+        test('D-WA-1: a CRM send\'s own echo claims its row through message_create, with no second row; a replay changes nothing', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            seedCrmSend({ id: 'crm-send-1', chatId: chat.id, content: 'Выезжаю', sentAt: new Date(NOW_SECONDS * 1000) })
+            const echo = liveMessage(PARTNER_A_JID, { id: { _serialized: key(true, PARTNER_A_JID, 'CE1') }, body: 'Выезжаю', fromMe: true })
+
+            await handlerOf(ACCOUNT_A, 'message_create')(echo)
+            await handlerOf(ACCOUNT_A, 'message_create')(echo)
+
+            expect(rowsIn(chat.id).map(row => [row.id, row.externalId, row.status, row.metadata.delivery])).toEqual([
+                ['crm-send-1', key(true, PARTNER_A_JID, 'CE1'), 'sent', { v: 1, evidence: 'provider_echo' }],
+            ])
+            expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+            expect(deriveDeliveryStateV1(store.messages.find(row => row.id === 'crm-send-1')!)).toBe('provider_accepted')
+        })
+
+        test('acks move a CRM send from «Ожидает подтверждения» to accepted, delivered and read — never back', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const providerId = key(true, PARTNER_A_JID, 'S1')
+            const row = seedSent({ id: 'crm-send-1', chatId: chat.id, content: 'Ок, принято', externalId: providerId })
+            const ack = handlerOf(ACCOUNT_A, 'message_ack')
+            expect(deriveDeliveryStateV1(row)).toBe('send_requested')
+
+            for (const [value, state] of [[1, 'provider_accepted'], [2, 'delivered'], [3, 'read'], [2, 'read'], [1, 'read']] as const) {
+                await ack(ackEvent(PARTNER_A_JID, providerId), value)
+                await vi.waitFor(() => expect(deriveDeliveryStateV1(row)).toBe(state))
+            }
+            expect(row.status).toBe('read')
+            expect(rowsIn(chat.id)).toHaveLength(1)
+        })
+
+        test('ack 4 (played) reads as read; pending (0) and error (-1) are not evidence', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const voiceId = key(true, PARTNER_A_JID, 'V1')
+            const textId = key(true, PARTNER_A_JID, 'T1')
+            const voice = seedSent({ id: 'crm-voice', chatId: chat.id, content: '[voice]', externalId: voiceId })
+            seedSent({ id: 'crm-text', chatId: chat.id, content: 'Ок', externalId: textId })
+            const ack = handlerOf(ACCOUNT_A, 'message_ack')
+
+            await ack(ackEvent(PARTNER_A_JID, textId), 0)
+            await ack(ackEvent(PARTNER_A_JID, textId), -1)
+            await ack(ackEvent(PARTNER_A_JID, voiceId), 4)
+
+            await vi.waitFor(() => expect(voice.status).toBe('read'))
+            expect(mocks.applyDeliveryEvidence.mock.calls.map(call => (call[0] as { providerMessageId: string }).providerMessageId)).toEqual([voiceId])
+            expect(mocks.registryTouch).toHaveBeenCalled()
+        })
+
+        test('an ack for a message from the person changes nothing, even when its id names a CRM send', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const providerId = key(true, PARTNER_A_JID, 'S9')
+            const send = seedSent({ id: 'crm-send-9', chatId: chat.id, content: 'Ок', externalId: providerId })
+
+            await handlerOf(ACCOUNT_A, 'message_ack')(ackEvent(PARTNER_A_JID, providerId, false), 3)
+            await new Promise(resolve => setImmediate(resolve))
+            await new Promise(resolve => setImmediate(resolve))
+
+            expect(mocks.applyDeliveryEvidence).not.toHaveBeenCalled()
+            expect(send.status).toBe('sent')
+        })
+
+        test('an own ack whose id is held by a row that is not a WhatsApp outbound message changes nothing', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const inboundId = key(false, PARTNER_A_JID, 'IN1')
+            const inbound = seedSent({ id: 'inbound-1', chatId: chat.id, content: 'Добрый день', externalId: inboundId })
+            inbound.direction = 'inbound'
+            const otherChannelId = key(true, PARTNER_A_JID, 'TG1')
+            const otherChannel = seedSent({ id: 'tg-send-1', chatId: chat.id, content: 'Ок', externalId: otherChannelId })
+            otherChannel.channel = 'telegram'
+            const ack = handlerOf(ACCOUNT_A, 'message_ack')
+
+            await ack(ackEvent(PARTNER_A_JID, inboundId, true), 3)
+            await ack(ackEvent(PARTNER_A_JID, otherChannelId, true), 3)
+            await new Promise(resolve => setImmediate(resolve))
+            await new Promise(resolve => setImmediate(resolve))
+
+            expect(mocks.applyDeliveryEvidence).not.toHaveBeenCalled()
+            expect([inbound.status, otherChannel.status]).toEqual(['sent', 'sent'])
+        })
+
+        test('an ack that overtakes the send\'s own write of the provider id is applied once the row holds it', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout'] })
+            try {
+                await connect(ACCOUNT_A)
+                const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+                const providerId = key(true, PARTNER_A_JID, 'R1')
+                seedCrmSend({ id: 'crm-send-race', chatId: chat.id, content: 'Ок', sentAt: new Date(NOW_SECONDS * 1000) })
+                const row = store.messages.find(candidate => candidate.id === 'crm-send-race')!
+
+                await handlerOf(ACCOUNT_A, 'message_ack')(ackEvent(PARTNER_A_JID, providerId), 2)
+                await new Promise(resolve => setImmediate(resolve))
+                expect(mocks.applyDeliveryEvidence).not.toHaveBeenCalled()
+
+                row.externalId = providerId // the send's own write lands
+                await advance(1500)
+                await vi.waitFor(() => expect(row.status).toBe('delivered'))
+                expect(mocks.applyDeliveryEvidence).toHaveBeenCalledOnce()
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        test('an ack whose row never appears is given up after the bounded waits, without a write', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout'] })
+            try {
+                await connect(ACCOUNT_A)
+                await handlerOf(ACCOUNT_A, 'message_ack')(ackEvent(PARTNER_A_JID, key(true, PARTNER_A_JID, 'GONE')), 3)
+                await advance(6000)
+                await vi.waitFor(() => expect(mocks.opsLog).toHaveBeenCalledWith('info', 'wa_delivery_evidence_no_row', { connectionId: ACCOUNT_A, phase: 'ack', evidence: 'read_receipt' }))
+                expect(mocks.applyDeliveryEvidence).not.toHaveBeenCalled()
+            } finally {
+                vi.useRealTimers()
+            }
+        })
+
+        test('recovery: background sync catches up the acks missed while the CRM was down', async () => {
+            await connect(ACCOUNT_A)
+            const chat = seedChat({ id: 'chat-a', externalChatId: PARTNER_A_CHAT, connectionId: ACCOUNT_A })
+            const readId = key(true, PARTNER_A_JID, 'D1')
+            const read = seedSent({ id: 'crm-read', chatId: chat.id, content: 'Первое', externalId: readId })
+            seedCrmSend({ id: 'crm-unclaimed', chatId: chat.id, content: 'Второе', sentAt: new Date(NOW_SECONDS * 1000) })
+            const unclaimedId = key(true, PARTNER_A_JID, 'D2')
+            const quietId = key(true, PARTNER_A_JID, 'D3')
+            const quiet = seedSent({ id: 'crm-quiet', chatId: chat.id, content: 'Третье', externalId: quietId })
+            providerChats.set(ACCOUNT_A, [providerHistoryChat(PARTNER_A_JID, [
+                { id: { _serialized: readId }, body: 'Первое', fromMe: true, ack: 3 },
+                { id: { _serialized: unclaimedId }, body: 'Второе', fromMe: true, ack: 2 },
+                { id: { _serialized: quietId }, body: 'Третье', fromMe: true },
+            ])])
+
+            await forceSync(ACCOUNT_A)
+
+            const unclaimed = store.messages.find(row => row.id === 'crm-unclaimed')!
+            expect([read.status, unclaimed.externalId, unclaimed.status, quiet.status]).toEqual(['read', unclaimedId, 'delivered', 'sent'])
+            expect(quiet.metadata.delivery).toEqual({ v: 1, evidence: 'history_readback' })
+            expect(rowsIn(chat.id)).toHaveLength(3)
+        })
+
+        test('sendText answers with client_action evidence: the provider has not confirmed anything yet', async () => {
+            mocks.clientSendMessage.mockResolvedValue({ id: { _serialized: key(true, PARTNER_A_JID, 'SEND1') }, timestamp: NOW_SECONDS })
+            registerWhatsAppMessagingDeliveryCapabilityV1()
+            await connect(ACCOUNT_A)
+
+            const result = await getWhatsAppChannelDeliveryV1().sendText({ connectionId: ACCOUNT_A, chatId: PARTNER_A_JID, content: 'Ок' })
+
+            expect(result).toEqual({ evidence: 'client_action', providerMessageId: key(true, PARTNER_A_JID, 'SEND1') })
         })
     })
 })

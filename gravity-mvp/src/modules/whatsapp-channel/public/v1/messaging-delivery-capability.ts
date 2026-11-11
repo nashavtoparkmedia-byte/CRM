@@ -19,7 +19,11 @@ async function resolveConnectionId(connectionId?: string): Promise<string> {
 const capability: WhatsAppChannelDeliveryV1 = {
     async sendText(input) {
         const connectionId = await resolveConnectionId(input.connectionId)
-        return sendMessage(connectionId, input.chatId, input.content, input.quotedMessageId)
+        const { externalId } = await sendMessage(connectionId, input.chatId, input.content, input.quotedMessageId)
+        // P-B: the library resolves once WhatsApp Web has the message (ack 0,
+        // pending); that proves the client acted, not that WhatsApp accepted it.
+        // The row waits for the server ack, then the device and read acks (S2).
+        return { evidence: 'client_action', providerMessageId: externalId }
     },
     async sendMedia(input) {
         const connectionId = await resolveConnectionId(input.connectionId)
