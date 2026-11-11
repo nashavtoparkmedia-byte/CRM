@@ -5,3 +5,17 @@ last_seen_dedupe.json
 *.png
 *.log
 debug*.txt
+# Debug artifacts of the scraper: screenshots, page dumps, QR images, run logs
+# and backups can carry personal data or a live login. They are never committed
+# (test/committed-debug-artifacts.test.js fails on one).
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.html
+*.htm
+*.txt
+*.bak
+last_qr*
+max_dom_dump*
+media_storage/
