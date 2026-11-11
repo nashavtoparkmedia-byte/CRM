@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 // Proxy the browser → max-web-scraper status. The client used to fetch
 // http://localhost:3005 directly, which on prod means the USER's machine
@@ -9,6 +10,12 @@ const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+    // The live MAX login QR, the scraper's restart and its state belong to the
+    // integration administrator only: any other staff or mobile session could
+    // otherwise scan the QR into its own account or disrupt the channel.
+    if (!await getIntegrationAdminPrincipal()) {
+        return NextResponse.json({ error: 'MAX_SCRAPER_ADMIN_REQUIRED' }, { status: 403 })
+    }
     try {
         const res = await fetch(`${MAX_SCRAPER_URL}/status`, {
             cache: 'no-store',
