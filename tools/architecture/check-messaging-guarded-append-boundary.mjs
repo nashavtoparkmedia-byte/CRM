@@ -223,6 +223,10 @@ function assertAdapterLocksBeforeJudging(source) {
   const purge = methodBody(source, 'purgeHeld')
   if (!/where: \{ id: \{ in: expired\.map\(row => row\.id\) \}, sentAt: \{ lt: input\.before \} \},/u.test(purge)) throw new Error('retention deletes a held row for anything but its own age')
   if (!/if \(input\.dryRun \|\| expired\.length === 0\) return expired\.length/u.test(purge)) throw new Error('retention dry run deletes')
+  // The selection is the command's batch: its own age cut-off, oldest first, bounded by the command's limit (1..1000).
+  if (!/prisma\.heldChannelMessage\.findMany\(\{\s*where: \{ sentAt: \{ lt: input\.before \} \},\s*orderBy: \[\{ sentAt: 'asc' \}, \{ id: 'asc' \}\],\s*take: input\.limit,\s*select: \{ id: true \},\s*\}\)/u.test(purge)) {
+    throw new Error('retention does not select one bounded, oldest-first batch of its own expired rows')
+  }
   if (!release.includes("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },")) {
     throw new Error('release: an event held for another proven identity may be released')
   }
@@ -427,6 +431,9 @@ rejectProbe(migrationSql, migrationSql.replace(/,\n\s*CONSTRAINT "HeldChannelMes
 rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },', 'where: { id: { in: expired.map(row => row.id) } },'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('if (input.dryRun || expired.length === 0) return expired.length', 'if (expired.length === 0) return 0'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: 1000,\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("where: { sentAt: { lt: input.before } },\n      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n", "where: { sentAt: { lt: input.before } },\n"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
