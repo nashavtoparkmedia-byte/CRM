@@ -4,6 +4,7 @@ import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import { cashAccessEventHashV1, foldCashAccessLedgerV1, verifyCashAccessChainV1, type CashAccessEventV1 } from './compensation-referral-ledger'
 import {
     cashReferralLicenceKeyV1,
+    cashReferralLookupFullMatchV1,
     cashStaffAuthorityFromStaffSessionV1,
     cashStaffSessionIdV1,
     type CashReferralInvitationRowV1,
@@ -60,7 +61,7 @@ function profile(driverId: string, contactId: string, fullName: string, over: Pa
 class MemoryStore {
     profiles: CashReferralManagerProfileV1[] = []
     /** What ContactLookup.v1 searches: live Contacts, their name and their stored phone digits. */
-    contacts: Array<{ contactId: string; displayTitle: string; phones: string[] }> = []
+    contacts: Array<{ contactId: string; displayTitle: string; phones: string[]; match?: unknown }> = []
     lookups: string[] = []
     lineages = new Map<string, string[]>()
     events: CashAccessEventV1[] = []
@@ -105,7 +106,15 @@ class MemoryStore {
                 const found = this.contacts.filter((c) => (phone
                     ? c.phones.some((stored) => stored.includes(query))
                     : c.displayTitle.toLowerCase().includes(query.toLowerCase())))
-                return { contacts: found.slice(0, limit).map(({ contactId, displayTitle }) => ({ contactId, displayTitle })), truncated: found.length > limit }
+                // As the adapter: Contacts' match class, a full one unless the fixture names another.
+                return {
+                    contacts: found.slice(0, limit).map(({ contactId, displayTitle, match }) => ({
+                        contactId,
+                        displayTitle,
+                        fullMatch: cashReferralLookupFullMatchV1(match !== undefined ? match : (phone ? 'phone_substring' : 'name_all_words')),
+                    })),
+                    truncated: found.length > limit,
+                }
             },
             searchProfilesByLicence: async (licence) => this.profiles.filter((p) => cashReferralLicenceKeyV1(p.licenseNumber) === licence),
             profilesOfContacts: async (ids) => this.profiles.filter((p) => p.contactId !== null && ids.includes(p.contactId)),
@@ -251,6 +260,24 @@ describe('scenario A: recording an invitation', () => {
         expect(both.candidates).toHaveLength(1)
         expect(both.candidates[0]).toMatchObject({ selectable: true, personContactId: 'contact-B' })
         expect([...both.candidates[0].matchedBy].sort()).toEqual(['licence', 'phone'])
+    })
+
+    it('says when Contacts matched not every typed word, and only then', async () => {
+        // A full ФИО typed against a card without the patronymic: ContactLookup.v1's name_all_but_one_word.
+        store.contacts.push({ contactId: 'contact-T', displayTitle: 'Тарасов Олег', phones: [], match: 'name_all_but_one_word' })
+        store.lineages.set('contact-T', ['contact-T'])
+        const partial = await searchCashReferralPeopleV1(port, 'Тарасов Олег')
+        expect(partial).toMatchObject({ status: 'ok', candidates: [{ selectable: true, personContactId: 'contact-T', matchedBy: ['partial'] }] })
+        // Every other class Contacts declares is a full match.
+        for (const match of ['name_prefix', 'name_all_words']) {
+            store.contacts[store.contacts.length - 1].match = match
+            expect(await searchCashReferralPeopleV1(port, 'Тарасов Олег')).toMatchObject({ status: 'ok', candidates: [{ personContactId: 'contact-T', matchedBy: ['name'] }] })
+        }
+        // A class Cash does not know, or none, is never taken for a full match.
+        for (const match of ['bogus', 'NAME_ALL_WORDS', null, 42]) {
+            store.contacts[store.contacts.length - 1].match = match
+            expect(await searchCashReferralPeopleV1(port, 'Тарасов Олег')).toMatchObject({ status: 'ok', candidates: [{ personContactId: 'contact-T', matchedBy: ['partial'] }] })
+        }
     })
 
     it('names a person who has no park profile by the title Contacts shows', async () => {
@@ -458,6 +485,9 @@ describe('authority', () => {
 })
 
 describe('a Staff Session\'s authority, end to end', () => {
+    const SID_ALEXANDER = '4f1c9e2a7b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9012345678abcde'
+    const SID_OLGA = '9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9'
+    const SID_IGOR = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
     const session = (userId: string, sid: string, role = 'Администратор') => ({
         kind: 'staff_session', userId, role, sid,
         issuedAt: new Date('2026-11-06T08:30:00.000Z'), expiresAt: new Date('2026-11-06T20:30:00.000Z'),
@@ -474,8 +504,8 @@ describe('a Staff Session\'s authority, end to end', () => {
     }
 
     it('attributes every write and every history line to the employee and the session that made it', async () => {
-        const alexander = authorityOf('u2', 'sid-alexander')
-        const olga = authorityOf('u3', 'sid-olga')
+        const alexander = authorityOf('u2', SID_ALEXANDER)
+        const olga = authorityOf('u3', SID_OLGA)
         expect(await recordCashReferralInvitationV1(port, { inviterContactId: 'contact-A', inviteeContactId: 'contact-B', comment: null, requestId: requestId(), authority: alexander }))
             .toEqual({ status: 'recorded', attributionId: 'att-1' })
         expect(await grantCashAccessV1(port, { contactId: 'contact-A', basis: 'referral_program', referralAttributionId: 'att-1', comment: null, requestId: requestId(), authority: alexander }))
@@ -486,12 +516,12 @@ describe('a Staff Session\'s authority, end to end', () => {
         const chain = store.chainOf('contact-A')
         expect(verifyCashAccessChainV1(chain).ok).toBe(true)
         expect(chain.map((event) => [event.kind, event.actorKind, event.actorId, event.actorCapability, event.actorSessionId, event.actorAuthenticatedAt?.toISOString()])).toEqual([
-            ['referral_link_recorded', 'signed_staff_session', 'staff:u2', 'cash.referral.qualify', cashStaffSessionIdV1('sid-alexander'), '2026-11-06T08:30:00.000Z'],
-            ['manual_granted', 'signed_staff_session', 'staff:u2', 'cash.access.manage', cashStaffSessionIdV1('sid-alexander'), '2026-11-06T08:30:00.000Z'],
-            ['manual_cleared', 'signed_staff_session', 'staff:u3', 'cash.access.manage', cashStaffSessionIdV1('sid-olga'), '2026-11-06T08:30:00.000Z'],
+            ['referral_link_recorded', 'signed_staff_session', 'staff:u2', 'cash.referral.qualify', cashStaffSessionIdV1(SID_ALEXANDER), '2026-11-06T08:30:00.000Z'],
+            ['manual_granted', 'signed_staff_session', 'staff:u2', 'cash.access.manage', cashStaffSessionIdV1(SID_ALEXANDER), '2026-11-06T08:30:00.000Z'],
+            ['manual_cleared', 'signed_staff_session', 'staff:u3', 'cash.access.manage', cashStaffSessionIdV1(SID_OLGA), '2026-11-06T08:30:00.000Z'],
         ])
         // No raw session id is kept anywhere in the chain.
-        expect(JSON.stringify(chain)).not.toContain('sid-alexander')
+        expect(JSON.stringify(chain)).not.toContain(SID_ALEXANDER)
 
         const card = await cashReferralPersonCardV1(port, 'contact-A')
         if (card.status !== 'ok') throw new Error('no card')
@@ -503,8 +533,8 @@ describe('a Staff Session\'s authority, end to end', () => {
     })
 
     it('writes nothing twice for a repeated request, whoever repeats it', async () => {
-        const alexander = authorityOf('u2', 'sid-alexander')
-        const olga = authorityOf('u3', 'sid-olga')
+        const alexander = authorityOf('u2', SID_ALEXANDER)
+        const olga = authorityOf('u3', SID_OLGA)
         const id = requestId()
         const grant = (authority: CashStaffAuthorityV1, rid: string) =>
             grantCashAccessV1(port, { contactId: 'contact-A', basis: 'manager_decision', referralAttributionId: null, comment: 'Решение Owner по пилоту', requestId: rid, authority })
@@ -515,7 +545,7 @@ describe('a Staff Session\'s authority, end to end', () => {
     })
 
     it('gives a verified Менеджер no authority to write with', async () => {
-        const binding = cashStaffAuthorityFromStaffSessionV1(session('u4', 'sid-igor', 'Менеджер'), directory.u4, NOW)
+        const binding = cashStaffAuthorityFromStaffSessionV1(session('u4', SID_IGOR, 'Менеджер'), directory.u4, NOW)
         expect(binding).toEqual({ bound: false, refusal: 'staff_role_not_allowed' })
         expect(store.events).toHaveLength(0)
     })

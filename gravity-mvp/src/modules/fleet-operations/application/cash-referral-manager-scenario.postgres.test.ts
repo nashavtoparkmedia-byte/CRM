@@ -23,7 +23,7 @@
  * DATABASE_URL holding the canonical migration catalog.
  */
 
-import { randomInt, randomUUID } from 'node:crypto'
+import { createHash, randomInt, randomUUID } from 'node:crypto'
 
 import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -52,13 +52,16 @@ const digits = (length: number) => Array.from({ length }, () => String(randomInt
 let database: PrismaClient
 const ledgerSwitch = process.env.YOKO_CASH_ACCESS_LEDGER
 
+/** Identity Access's sid for this run: 64 hex digits, as getStaffSessionPrincipalV1 hands it over. */
+const SID = createHash('sha256').update(`yoko.test.staff-session:${tag}`).digest('hex')
+
 /** One verified Staff Session of a confirmed Администратор, as Identity Access will hand it over. */
 const staff = {
     principal: {
         kind: 'staff_session',
         userId: `u-${tag}`,
         role: 'Администратор',
-        sid: `sid-${tag}`,
+        sid: SID,
         issuedAt: new Date(Date.now() - 60_000),
         expiresAt: new Date(Date.now() + 12 * 3_600_000),
     },
@@ -66,7 +69,7 @@ const staff = {
 }
 const STAFF_LABEL = 'Александр Сидоров'
 const STAFF_ACTOR_ID = `staff:u-${tag}`
-const STAFF_SESSION_ID = cashStaffSessionIdV1(`sid-${tag}`)
+const STAFF_SESSION_ID = cashStaffSessionIdV1(SID)
 
 async function staffAuthority(): Promise<CashStaffAuthorityV1> {
     const resolved = await resolveCashStaffAuthorityFromSessionV1({
