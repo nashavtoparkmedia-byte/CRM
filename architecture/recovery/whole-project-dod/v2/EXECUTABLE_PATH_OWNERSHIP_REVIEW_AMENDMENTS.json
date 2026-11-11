@@ -4369,6 +4369,40 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "android-personal-signin-acceptance-027d260b-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "ANDROID_PERSONAL_SIGNIN_EXECUTOR_REVIEW_027D260B",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "OWNER_DECISION_D4_PERSONAL_MOBILE_CREDENTIALS_20261111_ORCHESTRATOR_V8_MANDATE_08_ANDROID_V1",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not edited. This amendment extends the candidate chain of the identity_access personal mobile sign-in PR #235 (HEAD 027d260b), whose tail is identity-access-mobile-personal-signin-e85631a6-20261111, and leaves that tail unchanged. The Android side of the personal sign-in depends on that change and is stacked on it."
+      },
+      "reason": "Records the tracked executable inventory transition the Android side of the personal mobile sign-in makes on top of the identity_access candidate 027d260b: 1b3a83fb -> fa4b4a2f with the denominator unchanged at 2,840 surfaces and the coverage digest unchanged at affda386. The change adds no tracked executable surface and retires none: its product and tests are an Android layout, Android Kotlin tests and one Markdown record, none of whose extensions the inventory tracks. The single input that moves is the reviewed lifecycle classification of .github/workflows/android-acceptance-e2e.yml, whose source_sha256 pin is rebound from b7b4468b to c6a08fae because the workflow replaces the shared MOBILE_ACCESS_* sign-in with the staff lane and seeds the test employee's own password through identity_access's loopback-only bootstrap script. registered_source_sha256 is an inventory identity input, which is why the inventory digest moves while every other field of the triple stands still. The two reviewed credential dispositions bound to those same workflow bytes are rebound in the same movement after a fresh credential inventory of this tree showed both sites unchanged at 161:39 and 165:33, the job-env block keeping its line count and the new synthetic constants being published below those sites; fresh credential verification passes with 0 new ambiguous and 0 new public risk. No ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale changes, and no reviewed assignment's source fingerprint moves, so this amendment carries no rebind and records no unassigned surface. The current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to the identity_access candidate only and claims no final place in the chain: when its base is re-recorded or lands on main it is regenerated over the then-current tail, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "1b3a83fb1896ee006317eb92efb5346a7062085704d63d8909a7a435d0c0783a",
+        "coverage_sha256": "affda3866574d9af5f2eb61b5893751fc31ee53f99420bbf03b194b6dee3e8c8"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "fa4b4a2ff103e4aaba9ba36352db7e78dad63e1fea0bf29b7f7980545e12960e",
+        "coverage_sha256": "affda3866574d9af5f2eb61b5893751fc31ee53f99420bbf03b194b6dee3e8c8"
+      },
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

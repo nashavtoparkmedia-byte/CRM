@@ -5,10 +5,16 @@
     android:layout_height="match_parent"
     android:background="@color/shell_background">
 
+    <!-- No system autofill inside the CRM (Security, personal mobile sign-in):
+         a password manager must not offer to keep the employee's own Staff
+         Session password, which on a shared device would let the next person
+         sign in as that employee. Asserted by ShellAutofillPolicyTest and by
+         the acceptance sign-in on the running app. -->
     <WebView
         android:id="@+id/web_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:importantForAutofill="noExcludeDescendants" />
 
     <LinearLayout
         android:id="@+id/error_panel"

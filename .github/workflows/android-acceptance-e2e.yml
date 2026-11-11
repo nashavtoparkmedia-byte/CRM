@@ -95,8 +95,8 @@ jobs:
       # so this makes the emulator lane match the lane that already works
       # instead of weakening the cookie.
       DATABASE_URL: postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public
-      MOBILE_ACCESS_USER: acceptance
-      MOBILE_ACCESS_PASS: yoko acceptance passphrase
+      E2E_STAFF_OPERATOR: u1
+      E2E_STAFF_PASSWORD: yoko acceptance passphrase
       EMULATOR_ORIGIN: http://127.0.0.1:3002
 
     steps:
@@ -189,6 +189,22 @@ jobs:
           done
           echo "acceptance MAX transport did not start"; cat "$RUNNER_TEMP/acceptance-max-transport.log"; exit 1
 
+      # Personal mobile sign-in (identity_access #235, docs/mobile/
+      # ANDROID_PERSONAL_SIGNIN.md): the shell signs in with an employee's own
+      # Staff Session password, so the CRM needs its staff lane. Published here,
+      # below the reviewed credential sites, for the reason the push phase gives
+      # for its own constants. Each value is synthetic, lives for one job and
+      # authenticates to nothing beyond this runner.
+      - name: Publish the disposable staff lane constants
+        run: |
+          {
+            echo "STAFF_SESSION_SECRET=yoko-acceptance-staff-session-signing-key-0123456789"
+            echo "ADMIN_USER=acceptance-admin"
+            echo "ADMIN_PASS=yoko acceptance integration admin"
+            echo "E2E_ADMIN_STAFF_PASSWORD=yoko acceptance administrator passphrase"
+            echo "YOKO_USER_REGISTRY_FILE=$RUNNER_TEMP/yoko-user-registry.json"
+          } >> "$GITHUB_ENV"
+
       - name: Start the CRM with no provider credentials
         run: |
           # env -i so nothing from the runner environment can reach the app.
@@ -200,8 +216,11 @@ jobs:
           nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production \
             DATABASE_URL="$DATABASE_URL" \
             MAX_SCRAPER_URL="http://127.0.0.1:3905" \
-            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
-            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            ADMIN_USER="$ADMIN_USER" \
+            ADMIN_PASS="$ADMIN_PASS" \
+            STAFF_SESSION_SECRET="$STAFF_SESSION_SECRET" \
+            YOKO_USER_REGISTRY_FILE="$YOKO_USER_REGISTRY_FILE" \
+            YOKO_USER_REGISTRY_SEED=once \
             npx next start -p 3002 -H 0.0.0.0 > "$RUNNER_TEMP/crm.log" 2>&1 &
           # Recorded so the push phase can stop exactly this process rather
           # than pattern-matching its way to something else on the runner.
@@ -211,6 +230,23 @@ jobs:
             sleep 2
           done
           echo "CRM did not become reachable"; cat "$RUNNER_TEMP/crm.log"; exit 1
+
+      # Мария (u1) gets her own password through the product's own bootstrap,
+      # over HTTP on this loopback CRM: the integration admin sets an
+      # Администратор's password, who then sets hers. Nothing is written to the
+      # database directly and no value is printed. The push phase restarts the
+      # same build on the same database and registry, so this runs once.
+      - name: Give the test employee her own password
+        run: |
+          set -e
+          cd gravity-mvp
+          env -i PATH="$PATH" HOME="$HOME" \
+            ADMIN_USER="$ADMIN_USER" \
+            ADMIN_PASS="$ADMIN_PASS" \
+            E2E_STAFF_PASSWORD="$E2E_STAFF_PASSWORD" \
+            E2E_ADMIN_STAFF_PASSWORD="$E2E_ADMIN_STAFF_PASSWORD" \
+            YOKO_USER_REGISTRY_FILE="$YOKO_USER_REGISTRY_FILE" \
+            node scripts/e2e-seed-staff-password.mjs --base http://127.0.0.1:3002 --user "$E2E_STAFF_OPERATOR"
 
       - name: Confirm the shell lane fails closed before any test runs
         run: |
@@ -707,8 +743,9 @@ jobs:
           nohup env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test \
             DATABASE_URL="$DATABASE_URL" \
             MAX_SCRAPER_URL="http://127.0.0.1:3905" \
-            MOBILE_ACCESS_USER="$MOBILE_ACCESS_USER" \
-            MOBILE_ACCESS_PASS="$MOBILE_ACCESS_PASS" \
+            STAFF_SESSION_SECRET="$STAFF_SESSION_SECRET" \
+            YOKO_USER_REGISTRY_FILE="$YOKO_USER_REGISTRY_FILE" \
+            YOKO_USER_REGISTRY_SEED=once \
             MAX_SCRAPER_WEBHOOK_SECRET="$MAX_SCRAPER_WEBHOOK_SECRET" \
             MOBILE_PUSH_ENABLED=true \
             MOBILE_PUSH_FCM_PROJECT_ID="yoko-acceptance" \
