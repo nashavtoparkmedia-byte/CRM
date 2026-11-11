@@ -4421,6 +4421,78 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-scraper-route-gates-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_SCRAPER_ROUTE_GATES_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_IMPORT_JOBS_GATE_GO_AND_SECURITY_F1_FIRST_RELEASE_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. It changes no assignment: it records four new surfaces (a public max_channel function and three tests) and the mechanical source-fingerprint rebinds of five exact-inventory routes whose bytes the gates change."
+      },
+      "reason": "Records the MAX-side CRM route gates of the live provider acceptance's first release on top of main fa3c07e5: 2,842 + 4 = 2,846 tracked executable surfaces, context-owned 1,578 -> 1,580 and governed exclusions 1,264 -> 1,266. The PATCH and DELETE handlers of the scraper's history-import job callback, gravity-mvp/src/app/api/import-jobs/[id]/route.ts, now admit only the scraper's shared webhook secret through max_channel's new public function isAuthorizedMaxScraperCallbackV1, the constant-time check the MAX webhook routes use, moved verbatim from max-channel/internal/scraper-webhook-auth.ts (which now re-exports it under the name those routes import), so the platform_shell route imports no max_channel internal; and the four scraper proxy routes under gravity-mvp/src/app/api/max-scraper (qr, restart, status, import-progress) admit only the signed integration-administrator session through Identity Access's public getIntegrationAdminPrincipal (Security finding F1). These five paths are exact-inventory paths of gravity_runtime_remainder and change bytes only, so they receive mechanical source-fingerprint rebinds; their exclusion, lifecycle and functional owner are unchanged. Of the four new surfaces, the public function gravity-mvp/src/modules/max-channel/public/v1/scraper-callback-authorization.ts is owned by max_channel through its context manifest owned_paths; the three tests are gravity-mvp/src/app/api/import-jobs/[id]/route.test.ts and gravity-mvp/src/app/api/max-scraper/admin-only-routes.test.ts sit under the gravity_root governed exclusion, like the operator text-send route test, and max-web-scraper/test/max-import-job-callback-source.test.js is owned by max_channel through its context manifest owned_paths. The internal helper's change and the scraper's own change (the job callback now sends the secret header) are context-owned through the same manifest and need no exact assignment. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate 02527435, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2846,
+        "tracked_inventory_sha256": "eb7053bad889541b6f3d37b8d66d82d86deefd2e715a8a45e5cf32bb1e308ce3",
+        "coverage_sha256": "d02e22b2b7edb21134edf82bb3afa0815b7de0d5f14b39621023c4bbbbca9f1e"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
+          "previous_source_sha256": "4942ad0c4b62ec9212e90017ad77d73b7c99608e04a93d206130f6d756a5f064",
+          "current_source_sha256": "80c650dbbdf0ce87897a7077b86e4ae3e41912b15fe3ab60eba4dfcd4f8741d2",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator GO for the MAX route gates of the live provider acceptance's first release and Security finding F1 (2026-11-11, on main fa3c07e5): the scraper's history-import job callback: PATCH and DELETE answer 401 MAX_SCRAPER_WEBHOOK_UNAUTHORIZED unless the request carries the scraper's shared webhook secret, checked through max_channel's public isAuthorizedMaxScraperCallbackV1, the same constant-time check the MAX webhook routes use (refused when the secret is unset), before any job read or write. The status allowlist, the MAX range reconciliation, success only after the owner command and the error mapping are unchanged. It holds no credential of its own and reaches no new production capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/max-scraper/import-progress/route.ts",
+          "previous_source_sha256": "791289b34f165f42e098611b9fa2ede2a4f7ddfd5055c724356eff166400b1db",
+          "current_source_sha256": "1c6dcf7d86350a1a88b77e3654ca9426505cab30b6656e3030702e6977592556",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator GO for the MAX route gates of the live provider acceptance's first release and Security finding F1 (2026-11-11, on main fa3c07e5): the history-import progress proxy answers 403 MAX_SCRAPER_ADMIN_REQUIRED unless Identity Access's public getIntegrationAdminPrincipal admits the signed integration-administrator session, before it reaches the scraper; otherwise it proxies as before. It decides nothing else, holds no credential and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/max-scraper/qr/route.ts",
+          "previous_source_sha256": "d281f2955d42253a40cd3fb630a55381d99c4e2614e4cb27f08bbd7b0db8b766",
+          "current_source_sha256": "d8412f4c4909bddc790fcffa22512902c68e0f63610e465c809c9948b0fe67ba",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator GO for the MAX route gates of the live provider acceptance's first release and Security finding F1 (2026-11-11, on main fa3c07e5): the live MAX login QR proxy answers 403 MAX_SCRAPER_ADMIN_REQUIRED unless Identity Access's public getIntegrationAdminPrincipal admits the signed integration-administrator session, before it reaches the scraper, so no staff or mobile session can fetch the QR and scan it into its own account; otherwise it proxies as before. It decides nothing else, holds no credential and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/max-scraper/restart/route.ts",
+          "previous_source_sha256": "881f6fb02d99cb3da61f0b906ac634a69330fa510e737195923e9e4dd9328ea5",
+          "current_source_sha256": "9e53e6817f0ff18ea12e68f8ac526334aa75f11c7668affecc4601d63976e2d0",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator GO for the MAX route gates of the live provider acceptance's first release and Security finding F1 (2026-11-11, on main fa3c07e5): the scraper restart proxy answers 403 MAX_SCRAPER_ADMIN_REQUIRED unless Identity Access's public getIntegrationAdminPrincipal admits the signed integration-administrator session, before it reaches the scraper; otherwise it proxies as before. It decides nothing else, holds no credential and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/max-scraper/status/route.ts",
+          "previous_source_sha256": "063626f2002a9f022b839efe9c176059f79ffa4502bb2f271de67e9ff5bfdd64",
+          "current_source_sha256": "ed733c9751f97c4b09011b2d87751188cf6863147f3a3f0626d8e2d466672625",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator GO for the MAX route gates of the live provider acceptance's first release and Security finding F1 (2026-11-11, on main fa3c07e5): the scraper state proxy answers 403 MAX_SCRAPER_ADMIN_REQUIRED unless Identity Access's public getIntegrationAdminPrincipal admits the signed integration-administrator session, before it reaches the scraper; otherwise it proxies as before. It decides nothing else, holds no credential and reaches no new capability. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
