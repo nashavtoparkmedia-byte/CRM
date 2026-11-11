@@ -253,7 +253,9 @@ check(
 check(
   'transport and security remain caller-owned',
   webhook.includes("request.headers.get('x-bot-signature')")
-    && webhook.includes('process.env.BOT_CRM_SECRET')
+    // T3-1: the one constant-time check of a strong BOT_CRM_SECRET, never a direct read.
+    && webhook.includes("if (!verifyTelegramBotCrmSignatureV1(request.headers.get('x-bot-signature'))) {")
+    && !webhook.includes('process.env.BOT_CRM_SECRET')
     && webhook.includes('findCarById('),
   'security/transport drift',
 )
