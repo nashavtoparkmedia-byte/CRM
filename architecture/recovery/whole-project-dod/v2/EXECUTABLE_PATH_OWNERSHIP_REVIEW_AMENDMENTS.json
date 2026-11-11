@@ -4421,6 +4421,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-scraper-debug-artifacts-cleanup-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_SCRAPER_DEBUG_ARTIFACTS_CLEANUP_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "SECURITY_F2_HYGIENE_GO_AND_ORCHESTRATOR_RELEASE_CLASSIFICATION_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint; it drops only the lifecycle registry entry of the removed script."
+      },
+      "reason": "Records the denominator movement of the Security F2 hygiene change on top of main fa3c07e5: one tracked executable surface leaves and one enters, so the count stays 2,842, context-owned stays 1,578 and governed exclusions stay 1,264, while the tracked inventory changes. The surface that leaves is the committed Windows diagnostic script max-web-scraper/diag.bat, removed with the other committed debug artifacts of 2026-03-22 (the screenshots, text dumps and the backup copy are not executable surfaces). The surface that enters is the guard test max-web-scraper/test/committed-debug-artifacts.test.js, owned by max_channel through its context manifest owned_paths, like the removed script. No assignment, functional owner or governed exclusion is created, altered or removed. The removed script's entry in LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY goes with it (748 -> 747 entries), as for the dropped Android acceptance script, and no remaining surface's classification changes. No exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate fa32ae22, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "69e0c0d32467542237db24d4671581e11f727d3a1409f0b747e31ab590b17ca4",
+        "coverage_sha256": "77a920417a27c2de5fcc8feae1c3ff2ef0b1323090337c6214d12ae76ac3b9f3"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
