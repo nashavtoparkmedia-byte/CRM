@@ -16,6 +16,9 @@
 //   command_input  — a command contract that carries the ВУ as an input.
 //   admin_only     — output reaches only an integration-admin surface; `gate`
 //                    names the guard and `gateFile` where it is (verified here).
+//                    `becomes: 'masked'` marks a D2 conduit that is admin-only
+//                    until its masking step lands (Cash's referral reads), when
+//                    it must move to `masked`.
 //   masked         — a D2 surface that must mask by licenceView
 //                    (maskDriverLicenceV1, verified here).
 //   d2l            — a legacy screen that still shows the full ВУ on the legacy
@@ -146,10 +149,10 @@ export const LICENCE_READERS = {
   [`${P}app/api/monitoring/drivers/[id]/event/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; returns only the event id and type' },
   [`${P}app/api/monitoring/fleet-check/callback/route.ts`]: { disposition: 'owner_internal', note: 'scraper callback; reads the Driver row, returns only ok and the status' },
   [`${P}app/api/webhooks/bot/route.ts`]: { disposition: 'owner_internal', note: 'bot webhook compares the person key to find a driver\'s parks; it returns no key' },
-  [`${P}app/compensation/referrals/actions.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'server actions that answer the browser with the referral views (full ВУ); D2: masked after #214' },
-  [`${P}app/compensation/referrals/ReferralManager.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked by licenceView once the referral reads move onto ContactReadAuthorityQuery.v1 (after #214)' },
-  [`${P}app/compensation/referrals/referral-data.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
-  [`${P}app/compensation/referrals/view.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
+  [`${P}app/compensation/referrals/actions.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', note: 'server actions that answer the browser with the referral views (full ВУ); D2: masked after #214' },
+  [`${P}app/compensation/referrals/ReferralManager.tsx`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked by licenceView once the referral reads move onto ContactReadAuthorityQuery.v1 (after #214)' },
+  [`${P}app/compensation/referrals/referral-data.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
+  [`${P}app/compensation/referrals/view.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}app/drivers/actions.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/drivers/archive/ArchiveClient.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/messages/components/ContactEvidenceDetails.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/route.ts`, note: 'renders /api/contacts/[id]; D2-L' },
@@ -184,14 +187,14 @@ export const LICENCE_READERS = {
   [`${P}modules/contacts/public/v1/driver-person-confirmation.ts`]: { disposition: 'evidence_key' },
   [`${P}modules/contacts/public/v1/index.ts`]: { disposition: 'view_decision' },
   [`${P}modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts`]: { disposition: 'evidence_key' },
-  [`${P}modules/fleet-operations/application/cash-referral-manager-operations.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'forwards searchProfilesByLicence and its profiles; D2: masked after #214' },
-  [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'referral search by licence; D2: masked after #214' },
-  [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
+  [`${P}modules/fleet-operations/application/cash-referral-manager-operations.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'forwards searchProfilesByLicence and its profiles; D2: masked after #214' },
+  [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager-service.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'referral search by licence; D2: masked after #214' },
+  [`${P}modules/fleet-operations/internal/compensation/cash-referral-manager.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/compensation/compensation-referral-ledger.ts`]: { disposition: 'owner_internal', note: 'stores a digest of the person key, never the key' },
   [`${P}modules/fleet-operations/internal/compensation/compensation-referral-qualification.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/internal/compensation/compensation-referral-service.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-decision-adapter.ts`]: { disposition: 'owner_internal' },
-  [`${P}modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
+  [`${P}modules/fleet-operations/internal/compensation/legacy-prisma-cash-referral-manager-adapter.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts`]: { disposition: 'owner_internal' },
   [`${P}modules/fleet-operations/public/v1/index.ts`]: { disposition: 'type_only', note: 're-exports CashReferralManagerProfileV1' },
   [`${P}modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js`]: { disposition: 'owner_internal' },
@@ -235,8 +238,12 @@ export function licenceReaderViolations(inventory, discovered, readFile) {
       if (!token) violations.push(`admin_only without a known gate: ${file}`)
       else if (!readFile(gateFile).includes(token)) violations.push(`admin_only guard ${entry.gate} is gone from ${gateFile} (for ${file})`)
     }
-    if (entry.disposition === 'masked' && found.has(file) && !readFile(file).includes('maskDriverLicenceV1')) {
+    // A contract declares the masked field; its handler (gateFile) applies the mask.
+    if (entry.disposition === 'masked' && found.has(file) && !readFile(entry.gateFile ?? file).includes('maskDriverLicenceV1')) {
       violations.push(`masked reader without maskDriverLicenceV1: ${file}`)
+    }
+    if (entry.becomes !== undefined && (entry.becomes !== 'masked' || entry.disposition !== 'admin_only')) {
+      violations.push(`only an admin_only reader may carry the pending condition becomes: 'masked': ${file}`)
     }
     if (entry.disposition === 'd2l' && typeof entry.owner !== 'string') violations.push(`d2l entry without an owner: ${file}`)
   }
@@ -286,5 +293,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const probes = runNegativeProbes()
   const byDisposition = {}
   for (const entry of Object.values(LICENCE_READERS)) byDisposition[entry.disposition] = (byDisposition[entry.disposition] ?? 0) + 1
-  process.stdout.write(`${JSON.stringify({ control: 'driver-licence-readers', status: 'PASS', readers: discovered.length, by_disposition: byDisposition, negative_probes: probes })}\n`)
+  const pendingMask = Object.entries(LICENCE_READERS).filter(([, entry]) => entry.becomes === 'masked').map(([file]) => file)
+  process.stdout.write(`${JSON.stringify({ control: 'driver-licence-readers', status: 'PASS', readers: discovered.length, by_disposition: byDisposition, d2_condition_admin_only_until_masked: pendingMask.length, negative_probes: probes })}\n`)
 }

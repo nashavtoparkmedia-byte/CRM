@@ -204,6 +204,7 @@ function runProofs() {
     'src/modules/platform-shell/application/contact-person-card-composition.test.ts',
     'src/modules/contacts/public/v1/contact-read-authority.test.ts',
     'src/modules/contacts/internal/identity-access-contact-read-authority.test.ts',
+    'src/modules/contacts/internal/identity-access-contact-read-authority.staff-session.test.ts',
     'src/app/api/contacts/lookup/route.test.ts',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8', env: { ...process.env, CI: '1' } })
   assert.equal(vitest.status, 0, `the person card read model proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
