@@ -7,6 +7,7 @@ import {
   type AppendGuardedChannelMessageCommandV1,
   type ChannelMessageJsonV1,
   type GuardedConversationKindV1,
+  type GuardedProjectionV1,
   type GuardedSenderAttributionV1,
   type HeldChannelMessageReasonV1,
 } from '../../../../contracts/messaging/v1'
@@ -66,6 +67,8 @@ interface GuardedEvent {
   externalId: string
   sentAt: Date
   metadata: Record<string, unknown>
+  /** `history` replays a provider-history event: no workflow projection, no notification intent. */
+  projection: GuardedProjectionV1
 }
 
 type GuardedAudit = Record<string, ChannelMessageJsonV1>
@@ -191,6 +194,9 @@ async function writeVisible(transaction: GuardedDb, kind: GuardedConversationKin
       metadata: metadata as Prisma.InputJsonValue,
     },
   })
+  // A provider-history event is shown as it happened: the conversation's workflow
+  // state and the notification outbox stay as the live events left them.
+  if (event.projection !== 'live') return message.id
   if (!outbound && persistsWithNotificationIntentV1({ direction: message.direction, type: message.type, channel: message.channel, metadata: message.metadata })) {
     const intent = inboundNotificationIntentV1(message, now)
     if (intent) {
@@ -243,6 +249,7 @@ async function writeHeld(
         v: 1,
         attribution: attributionEvidence(attribution),
         binding: { ...binding },
+        ...(event.projection === 'history' ? { projection: 'history' } : {}),
       } as Prisma.InputJsonValue,
     },
     select: { id: true },
@@ -281,6 +288,7 @@ function guardedEvent(input: Omit<AppendGuardedChannelMessageCommandV1, 'contrac
     externalId: input.externalId,
     sentAt: input.sentAt,
     metadata: { ...(input.metadata ?? {}) },
+    projection: input.projection ?? 'live',
   }
 }
 
@@ -300,7 +308,11 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
         const binding = await bindingOf(transaction, conversation)
         const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, binding)
         if (decision.visible) {
-          const messageId = await writeVisible(transaction, input.conversationKind, event, { v: 1, attribution: input.attribution.status })
+          const messageId = await writeVisible(transaction, input.conversationKind, event, {
+            v: 1,
+            attribution: input.attribution.status,
+            ...(event.projection === 'history' ? { projection: 'history' } : {}),
+          })
           return { outcome: 'appended', messageId } as const
         }
         const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, binding)
@@ -364,6 +376,8 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
             externalId: held.externalId,
             sentAt: held.sentAt,
             metadata: record(held.metadata),
+            // A held history event keeps its projection: releasing it later never reopens the conversation.
+            projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',
           }
           const visible = await transaction.message.findUnique({
             where: { externalId: held.externalId },
@@ -384,6 +398,7 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
               releasedFrom: held.id,
               heldAt: held.heldAt.toISOString(),
               holdReason: held.holdReason,
+              ...(event.projection === 'history' ? { projection: 'history' } : {}),
             })
           }
           await transaction.heldChannelMessage.update({

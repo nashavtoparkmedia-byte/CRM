@@ -31,7 +31,7 @@ const exactCapabilities = ['onGroupInboundMessage', 'onInboundMessage', 'onOutbo
 // (_getGroupSelector groups one person's conversations by the inbox person key,
 // conversationPersonGroupKeyV1); the three published capabilities, their
 // consumers and the public facade are unchanged.
-assert.equal(sha256(read(implementationPath)), '8382214b36fe6034aaf2a13b2cfcb4b4ae72b99e99772265b8e384b3977b5868')
+assert.equal(sha256(read(implementationPath)), 'faac15459dff8d6b1ec95ed84b19a58a25f8e92a263142d72ca26b23c6c219c6')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''

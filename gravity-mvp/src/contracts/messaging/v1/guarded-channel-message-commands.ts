@@ -49,6 +49,19 @@ export type GuardedSenderAttributionV1 =
   | { status: 'unproven'; reason: string }
   | { status: 'not_applicable' }
 
+/**
+ * Which side effects a visible write carries.
+ *   live    — the default: the conversation's workflow projection (unread,
+ *             requiresResponse, status, last inbound/outbound time) and, inbound,
+ *             the notification intent, as for any live event;
+ *   history — an event replayed from provider history (history import): it is
+ *             judged, held or shown and keyed exactly like a live event, but a
+ *             visible write leaves the conversation's workflow state and the
+ *             notification outbox untouched. A held history event keeps this on
+ *             release. Catch-up of missed live events is `live`.
+ */
+export type GuardedProjectionV1 = 'live' | 'history'
+
 /** Why an event was held instead of shown. */
 export type HeldChannelMessageReasonV1 =
   /** The sender is proven but the conversation carries no person binding. */
@@ -82,6 +95,8 @@ export interface AppendGuardedChannelMessageCommandV1 {
   sentAt: Date
   /** Event provenance. `delivery` and `guardedAppend` are written only by Messaging. */
   metadata?: { [key: string]: ChannelMessageJsonV1 }
+  /** Side effects of a visible write; `live` when absent. Never changes the judgement. */
+  projection?: GuardedProjectionV1
 }
 
 /**
@@ -333,7 +348,7 @@ export function parseAppendGuardedChannelMessageCommandV1(input: unknown): Appen
     input,
     APPEND_GUARDED_CHANNEL_MESSAGE_COMMAND_V1,
     'messaging.AppendGuardedChannelMessageCommand.',
-    ['contract', 'chatId', 'conversationKind', 'attribution', 'channel', 'direction', 'type', 'content', 'externalId', 'sentAt', 'metadata'],
+    ['contract', 'chatId', 'conversationKind', 'attribution', 'channel', 'direction', 'type', 'content', 'externalId', 'sentAt', 'metadata', 'projection'],
   )
   const chatId = requiredId(value.chatId, 'chatId')
   const kind = conversationKind(value.conversationKind)
@@ -351,6 +366,7 @@ export function parseAppendGuardedChannelMessageCommandV1(input: unknown): Appen
     if (reserved.length > 0) invalid(`metadata may not set ${reserved.sort().join(', ')}`)
     metadata = value.metadata as { [key: string]: ChannelMessageJsonV1 }
   }
+  if (value.projection !== undefined && value.projection !== 'live' && value.projection !== 'history') invalid('projection is invalid')
   return {
     contract: APPEND_GUARDED_CHANNEL_MESSAGE_COMMAND_V1,
     chatId,
@@ -363,6 +379,7 @@ export function parseAppendGuardedChannelMessageCommandV1(input: unknown): Appen
     externalId,
     sentAt: value.sentAt,
     ...(metadata ? { metadata } : {}),
+    ...(value.projection !== undefined ? { projection: value.projection as GuardedProjectionV1 } : {}),
   }
 }
 
