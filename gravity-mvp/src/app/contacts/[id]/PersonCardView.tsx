@@ -147,6 +147,7 @@ function DriverProfileRow({ profile }: { profile: ContactPersonCardDriverProfile
         </div>
         <div className="mt-0.5 text-[13px] text-[#64748B]">
           {profile.fullName}
+          {profile.licence ? ` · ВУ ${profile.licence}` : ''}
           {profile.currentStatus || profile.workStatus ? ` · ${profile.currentStatus ?? profile.workStatus}` : ''}
           {profile.legalRole ? ` · ${profile.legalRole}` : ''}
           {profile.dismissedAt ? ` · уволен ${formatDate(profile.dismissedAt) ?? ''}` : ''}

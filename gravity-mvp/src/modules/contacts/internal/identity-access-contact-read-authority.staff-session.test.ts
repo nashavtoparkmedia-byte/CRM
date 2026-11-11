@@ -9,8 +9,8 @@
  * - A role lowered in the registry, or a disabled employee, never keeps the
  *   full view on the next request.
  * - An unreadable store: inside a route the answer is a denial; at the request
- *   boundary every D2 path (pages, the lookup API, the referral page and its
- *   server-action POST) is answered 503 before any of them runs, and the
+ *   boundary every D2 path (pages, the lookup and ВУ-search APIs, the referral
+ *   page and its server-action POST) is answered 503 before any of them runs, and the
  *   boundary's matcher covers each of them.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -188,6 +188,7 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
       ['/contacts', 'GET'],
       ['/contacts/ci-demo-contact-gromov', 'GET'],
       ['/api/contacts/lookup?q=%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2', 'GET'],
+      ['/contacts/licence-search', 'POST'],
       ['/compensation/referrals', 'GET'],
       ['/compensation/referrals', 'POST'],
     ]

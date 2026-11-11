@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CONTACT_PERSON_CARD_RESULT_V1, type ContactPersonCardV1 } from '@/contracts/contacts/v1'
-import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, type DriverProfileForContactV1 } from '@/contracts/fleet-operations/v1'
+import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV2 } from '@/contracts/fleet-operations/v2'
 import { CONTACT_CONVERSATIONS_RESULT_V1 } from '@/contracts/messaging/v1'
 import { createContactPersonCardCompositionV1 } from './contact-person-card-composition'
 
@@ -28,11 +28,11 @@ function card(overrides: Partial<ContactPersonCardV1> = {}): ContactPersonCardV1
   }
 }
 
-function profile(overrides: Partial<DriverProfileForContactV1> & { driverId: string }): DriverProfileForContactV1 {
+function profile(overrides: Partial<DriverProfileForContactV2> & { driverId: string }): DriverProfileForContactV2 {
   return {
     linkBasis: 'contact_link', linkedContactId: 'c-1', externalParkId: 'p', externalDriverProfileId: 'x', parkName: 'Парк', fullName: 'Иванов Иван',
     personResolutionStatus: 'vu_clustered', personKeyType: 'normalized_vu', sourceFreshness: 'fresh', sourceState: 'current',
-    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null,
+    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null, licence: '•••• 5678',
     ...overrides,
   }
 }
@@ -44,10 +44,10 @@ describe('loadContactPersonCardV1', () => {
       async readContactPersonCard() { calls.push('contacts'); return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts(query) {
         calls.push('fleet')
-        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v1', subjects: [
+        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v2', licenceView: 'last4', subjects: [
           { contactId: 'c-1', legacyYandexDriverId: 'yd-1' }, { contactId: 'c-old', legacyYandexDriverId: null },
         ] })
-        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [
           { contactId: 'c-1', profiles: [profile({ driverId: 'd-1' }), profile({ driverId: 'd-2', parkName: 'Парк 2' })] },
           { contactId: 'c-old', profiles: [profile({ driverId: 'd-2', parkName: 'Парк 2' }), profile({ driverId: 'd-3' })] },
         ] }
@@ -83,7 +83,7 @@ describe('loadContactPersonCardV1', () => {
   it('counts a conversation once when Messaging answers a merged-away id with the survivor\'s conversations too', async () => {
     const load = createContactPersonCardCompositionV1({
       async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
-      async readDriverProfilesForContacts() { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [] } },
+      async readDriverProfilesForContacts() { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [] } },
       async readContactConversations() {
         // The real ContactConversationsQuery.v1: the canonical id gets its own chats, the
         // merged-away id gets its own AND the canonical survivor's (linkedIds = [id, canonical]).
@@ -114,7 +114,7 @@ describe('loadContactPersonCardV1', () => {
     const load = createContactPersonCardCompositionV1({
       async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts() {
-        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [
           // reached first through the canonical id by the legacy link, pointing at the merged-away lineage member: no contradiction
           { contactId: 'c-1', profiles: [profile({ driverId: 'd-merged', linkBasis: 'legacy_yandex_link', linkedContactId: 'c-old' }), profile({ driverId: 'd-foreign', linkBasis: 'legacy_yandex_link', linkedContactId: 'c-stranger' })] },
           // the same row again through its own Contact link: the direct link wins
@@ -161,5 +161,58 @@ describe('loadContactPersonCardV1', () => {
     expect(result.view.driverProfiles).toEqual([])
     expect(result.view.conversations).toEqual([])
     expect(result.view.partial).toEqual({ driverProfiles: true, conversations: false })
+  })
+
+  it('asks Fleet for the ВУ view Contacts answered with, and shows the masked ВУ as Fleet gave it', async () => {
+    for (const licenceView of ['full', 'last4'] as const) {
+      const asked: unknown[] = []
+      const load = createContactPersonCardCompositionV1({
+        async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView } },
+        async readDriverProfilesForContacts(query) {
+          asked.push((query as { licenceView: unknown }).licenceView)
+          const licence = licenceView === 'full' ? '99 12 345678' : '•••• 5678'
+          return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView, entries: [{ contactId: 'c-1', profiles: [profile({ driverId: 'd-1', licence })] }] }
+        },
+        async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      })
+      const result = await load('c-1')
+      if (result.status !== 'confirmed') throw new Error('unreachable')
+      expect(asked).toEqual([licenceView])
+      expect(result.view.driverProfiles.map(p => p.licence)).toEqual([licenceView === 'full' ? '99 12 345678' : '•••• 5678'])
+      expect(result.view.partial.driverProfiles).toBe(false)
+    }
+  })
+
+  it('a card answer without a ВУ view asks Fleet for the last-4 view, never the full one', async () => {
+    const asked: unknown[] = []
+    const load = createContactPersonCardCompositionV1({
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } as never },
+      async readDriverProfilesForContacts(query) {
+        asked.push((query as { licenceView: unknown }).licenceView)
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [] }
+      },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+    })
+    await load('c-1')
+    expect(asked).toEqual(['last4'])
+  })
+
+  it('withholds the profiles when Fleet answers for another view or shows a last-4 reader an unmasked ВУ', async () => {
+    const answers = [
+      { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'full' as const, entries: [{ contactId: 'c-1', profiles: [profile({ driverId: 'd-1', licence: '99 12 345678' })] }] },
+      { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4' as const, entries: [{ contactId: 'c-1', profiles: [profile({ driverId: 'd-1', licence: '99 12 345678' })] }] },
+    ]
+    for (const answer of answers) {
+      const load = createContactPersonCardCompositionV1({
+        async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
+        async readDriverProfilesForContacts() { return answer },
+        async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      })
+      const result = await load('c-1')
+      if (result.status !== 'confirmed') throw new Error('unreachable')
+      expect(result.view.driverProfiles).toEqual([])
+      expect(result.view.partial.driverProfiles).toBe(true)
+      expect(JSON.stringify(result)).not.toContain('345678')
+    }
   })
 })

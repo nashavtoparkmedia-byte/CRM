@@ -86,8 +86,8 @@ does not read the mobile session.
 | `/contacts` («Люди») | page | `allow` shows the search; `deny` shows sign-in (personal login first). |
 | `/api/contacts/lookup` | route | `allow` searches; `deny` → 401. |
 | `/contacts/[id]` | `ContactPersonCardQuery.v1` authority | admits `staff_session` beside the transitional admin; the confirmed answer carries `licenceView` for the composition. |
-| person card composition | platform-shell | passes `licenceView` to Fleet's DTO; renders `licence` as Fleet returns it. |
-| exact-ВУ search in «Люди» | `/api/contacts/lookup` (licence mode) | Fleet `findDriverProfilesByExactLicenceV1({ licence, licenceView })`; Contact ids and masked numbers only; never the typed value. |
+| person card composition | platform-shell | asks Fleet's `DriverProfilesForContactsQuery.v2` with the card answer's `licenceView` (last-4 unless exactly `full`); withholds the profiles block when Fleet answers for another view or shows a last-4 reader an unmasked ВУ; the card renders `licence` as Fleet returns it («ВУ •••• 5678»). |
+| exact-ВУ search in «Люди» | `POST /contacts/licence-search` (beside the pages: it composes Contacts and Fleet through platform-shell, which the `app/api/contacts` Contacts module may not import) → platform-shell `searchPeopleByExactLicenceV1` | the licence travels in a same-origin JSON body, never the URL; Contacts' answer first, then Fleet `findDriverProfilesByExactLicenceV1({ licence, licenceView })`; masked numbers and each row's stored Contact link only; never the typed value; a too-short value answers like an unknown one; `Cache-Control: no-store`. |
 | referral screen | Cash actions | the same answer; `licenceView` handed to Fleet from it (Cash C2 control). |
 
 Out of D2 and unchanged:
@@ -99,7 +99,12 @@ Out of D2 and unchanged:
 
 ## 5. Controls and proofs
 
-- `check-contact-read-authority-boundary`:
+As built, the read-authority rules live in
+`check-contact-person-card-read-model-boundary` (17 mutants, then the proofs)
+and the inventory in `check-driver-licence-readers`; Fleet's mask is pinned by
+Cash's `check-fleet-driver-licence-view-boundary`.
+
+- Read-authority rules:
   - the resolver reads only the Identity Access public functions above;
   - no `cookies()`, `headers()` or `crm_user_id` reads in Contacts' authority;
   - the person-card authority admits exactly `staff_session` and the
@@ -124,4 +129,12 @@ Out of D2 and unchanged:
   - the mask removed;
   - the role or view taken from `crm_user_id`;
   - the admin cookie consulted with a staff cookie present;
-  - the enforcement switch ignored.
+  - the enforcement switch ignored;
+  - «full by default» in the role decision, the card answer, the card principal,
+    the composition and the ВУ search; the view echo and mask checks removed;
+    the ВУ search logging the typed value; its same-origin and no-store guards
+    removed.
+- Serialized answers (`app/contacts/licence-serialized-responses.test.tsx`): the
+  card HTML and the ВУ-search JSON, including every refusal and failure answer
+  and every log line, carry no five-character run of the stored ВУ for
+  Менеджер or Руководитель; an Администратор sees it in full (positive control).

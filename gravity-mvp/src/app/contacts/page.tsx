@@ -1,6 +1,7 @@
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { resolveContactReadAuthorityV1 } from '@/modules/contacts/public/v1'
 import ContactsSearchClient from './ContactsSearchClient'
+import LicenceSearchClient from './LicenceSearchClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,10 @@ export default async function ContactsPage() {
           </div>
         </div>
       ) : (
-        <ContactsSearchClient />
+        <>
+          <ContactsSearchClient />
+          <LicenceSearchClient />
+        </>
       )}
     </PageContainer>
   )
