@@ -80,6 +80,8 @@ const credentials = await import('@/modules/identity-access/internal/staff-sessi
 const operations = await import('@/modules/identity-access/application/staff-session-operations')
 const { issueIntegrationAdminSession, INTEGRATION_ADMIN_SESSION_COOKIE } = await import('@/modules/identity-access/public/v1/integration-admin-credentials')
 const { resolveContactReadAuthorityFromIdentityAccessV1: resolve } = await import('./identity-access-contact-read-authority')
+const { resolveContactWriteAuthorityFromIdentityAccessV1: resolveWriter } = await import('./identity-access-contact-write-authority')
+const { MOBILE_SESSION_COOKIE } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
 const { NextRequest } = await import('next/server')
 const { proxy, config } = await import('@/proxy')
 
@@ -202,5 +204,28 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
       const response = await proxy(new NextRequest(url, { headers, method }))
       expect(response.status, `${method} ${target}`).toBe(503)
     }
+  })
+
+  test('the write authority: a real employee writes as staff:<id>; mobile, crm_user_id or a refused cookie never write (W2, W3)', async () => {
+    configureLane()
+    configureAdmin()
+    const token = await staffToken('u1')
+    const admin = issueIntegrationAdminSession()!
+    asRequest({ [STAFF_COOKIE]: token })
+    await expect(resolveWriter()).resolves.toMatchObject({ decision: 'allow', principal: { kind: 'staff_session', userId: 'u1', role: 'Менеджер' }, actor: 'staff:u1' })
+    // An admin cookie and crm_user_id beside the staff cookie change nothing: the employee is the actor.
+    asRequest({ [STAFF_COOKIE]: token, [INTEGRATION_ADMIN_SESSION_COOKIE]: admin, crm_user_id: 'u2' })
+    await expect(resolveWriter()).resolves.toMatchObject({ decision: 'allow', actor: 'staff:u1' })
+    // A mobile session beside the staff cookie: Identity Access answers no staff principal, so nobody writes.
+    asRequest({ [STAFF_COOKIE]: token, [MOBILE_SESSION_COOKIE]: 'any-mobile-session' })
+    await expect(resolveWriter()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
+    // A mobile session alone is not a writer either.
+    asRequest({ [MOBILE_SESSION_COOKIE]: 'any-mobile-session' })
+    await expect(resolveWriter()).resolves.toEqual({ decision: 'deny', reason: 'no_session' })
+    asRequest({ crm_user_id: 'u2' })
+    await expect(resolveWriter()).resolves.toEqual({ decision: 'deny', reason: 'no_session' })
+    writeRegistry([{ ...MANAGER, status: 'Отключен' }, ADMIN])
+    asRequest({ [STAFF_COOKIE]: token })
+    await expect(resolveWriter()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
   })
 })
