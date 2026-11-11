@@ -81,6 +81,7 @@ Under enforcement that would be the one data read left open without a session.
 - `/login` now calls `getSignInEmployees`: **active** employees only, `{ id, firstName, lastName, role }` only.
 - `getUsers` stays the session holder's read (`/users`) and is **not** pinned. A session-less `getUsers` gets 401.
 - With enforcement off, the visible list of `/login` loses disabled employees. They could not sign in anyway.
+- The shell sign-in page `/login/mobile` also renders without a session, and a forged marker reaches it. Its picker used to receive the full `UserIdentityV1` (email, phone, `createdAt`) in the page payload. It now receives the same projection: active employees, `{ id, firstName, lastName, role }`.
 
 A pin is `file#export`: the same export name from another file is refused (R2b).
 An action header on a listed machine route is refused too, because the action
@@ -205,6 +206,7 @@ It is listed because tg-bot depends on it in production. Hardening it is recomme
   - each listed route's own gate;
   - the pinned actions;
   - `/login` reads `getSignInEmployees`, never `getUsers`, and that list stays active-only and `{ id, firstName, lastName, role }`;
+  - `/login/mobile` passes its picker the same projection;
   - with `--require-build`: each pin resolves once on its worker in the built manifest.
 - **`tools/architecture/check-identity-boundary.mjs`** re-pins `user-service.ts` for the additive `getSignInEmployees`.
 - **Mutants**, all killed:

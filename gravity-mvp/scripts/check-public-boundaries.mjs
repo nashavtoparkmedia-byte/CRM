@@ -109,6 +109,12 @@ const signInListSource = readFileSync(join(appRoot, 'src/lib/users/user-service.
     .match(/export async function getSignInEmployees\(\)[\s\S]*?\n\}/)?.[0] ?? ''
 assert.match(signInListSource, /record\.status === 'Активен'/, 'the sign-in list must hold active employees only')
 assert.match(signInListSource, /\(\{ id, firstName, lastName, role \}\) => \(\{ id, firstName, lastName, role \}\)/, 'the sign-in list must carry id, name and role only')
+// The shell sign-in page renders without a session too: its picker gets the same minimal projection.
+assert.match(
+    readFileSync(join(appRoot, 'src/app/login/mobile/page.tsx'), 'utf8'),
+    /\.filter\(\(user\) => user\.status === 'Активен'\)\s*\.map\(\(\{ id, firstName, lastName, role \}\) => \(\{ id, firstName, lastName, role \}\)\)/,
+    '/login/mobile must pass only active employees, id, name and role, to its picker',
+)
 const sessionlessPins = [
     ['app/login/page', 'src/lib/users/user-service.ts', 'getLoginMode'],
     ['app/login/page', 'src/lib/users/user-service.ts', 'getSignInEmployees'],

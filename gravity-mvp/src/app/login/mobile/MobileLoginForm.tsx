@@ -47,7 +47,7 @@ export default function MobileLoginForm({
     operators,
 }: {
     next: string
-    operators: UserIdentityV1[]
+    operators: Array<Pick<UserIdentityV1, 'id' | 'firstName' | 'lastName' | 'role'>>
 }) {
     const [deviceId, setDeviceId] = useState('')
     const [error, setError] = useState<string | null>(null)
