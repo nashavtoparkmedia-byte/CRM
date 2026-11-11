@@ -29,6 +29,7 @@ import {
     resolveCashStaffAuthorityFromSessionV1,
     type CashReferralInvitationRowV1,
     type CashReferralManagerProfileV1,
+    cashReferralLookupFullMatchV1,
 } from './cash-referral-manager'
 
 /**
@@ -216,7 +217,7 @@ describe('the Cash authority of a verified Staff Session', () => {
         kind: 'staff_session',
         userId: 'u2',
         role: 'Администратор',
-        sid: 'Qm9hcmQtc2Vzc2lvbi0x',
+        sid: '4f1c9e2a7b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9012345678abcde',
         issuedAt: new Date('2026-11-08T09:00:00.000Z'),
         expiresAt: new Date('2026-11-08T21:00:00.000Z'),
     }
@@ -255,7 +256,7 @@ describe('the Cash authority of a verified Staff Session', () => {
         expect(name).toMatch(/^staff_session:[0-9a-f]{64}$/u)
         expect(name).not.toContain(principal.sid)
         expect(cashStaffSessionIdV1(principal.sid)).toBe(name)
-        expect(cashStaffSessionIdV1('another-session')).not.toBe(name)
+        expect(cashStaffSessionIdV1('9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d5e4f30211203f4e5d6c7b8a9')).not.toBe(name)
     })
 
     it('binds nothing without a session, or for any other principal kind', () => {
@@ -275,6 +276,11 @@ describe('the Cash authority of a verified Staff Session', () => {
         expect(refusal({ ...principal, userId: 'u'.repeat(201) })).toBe('staff_session_invalid')
         expect(refusal({ ...principal, sid: '' })).toBe('staff_session_invalid')
         expect(refusal({ ...principal, sid: 42 })).toBe('staff_session_invalid')
+        // Only Identity Access's sid format: 64 lower-case hex digits, nothing else.
+        expect(refusal({ ...principal, sid: principal.sid.toUpperCase() })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, sid: principal.sid.slice(1) })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, sid: `${principal.sid}0` })).toBe('staff_session_invalid')
+        expect(refusal({ ...principal, sid: 'Qm9hcmQtc2Vzc2lvbi0x' })).toBe('staff_session_invalid')
         expect(refusal({ ...principal, issuedAt: new Date('not a date') })).toBe('staff_session_invalid')
         expect(refusal({ ...principal, issuedAt: '2026-11-08T09:00:00.000Z' })).toBe('staff_session_invalid')
         // Expired, exactly at expiry, and issued after the write.
@@ -464,5 +470,14 @@ describe('who may write', () => {
         expect(cashReferralRequestIdValidV1('8f14e45f-ceea-467a-9575-3f1c0b5e6a11')).toBe(true)
         expect(cashReferralRequestIdValidV1('retry')).toBe(false)
         expect(cashReferralRequestIdValidV1(undefined)).toBe(false)
+    })
+})
+
+describe('which ContactLookup.v1 matches count as full', () => {
+    it('trusts only the four classes in which every typed word or the phone matched', () => {
+        for (const match of ['phone_exact', 'phone_substring', 'name_prefix', 'name_all_words']) expect(cashReferralLookupFullMatchV1(match)).toBe(true)
+        for (const match of ['name_all_but_one_word', 'name_substring', 'Name_Prefix', '', ' name_prefix', undefined, null, 1, {}, ['name_prefix']]) {
+            expect(cashReferralLookupFullMatchV1(match)).toBe(false)
+        }
     })
 })
