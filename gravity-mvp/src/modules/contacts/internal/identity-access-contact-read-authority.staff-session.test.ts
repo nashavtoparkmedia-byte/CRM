@@ -82,6 +82,7 @@ const { issueIntegrationAdminSession, INTEGRATION_ADMIN_SESSION_COOKIE } = await
 const { resolveContactReadAuthorityFromIdentityAccessV1: resolve } = await import('./identity-access-contact-read-authority')
 const { NextRequest } = await import('next/server')
 const { proxy, config } = await import('@/proxy')
+const { GET: contactGet } = await import('@/app/api/contacts/[id]/route')
 
 const STAFF_COOKIE = '__Host-yoko_staff_session'
 const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
@@ -201,6 +202,23 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
       const headers = new Headers({ 'user-agent': 'Mozilla/5.0 Chrome/120', cookie: `${STAFF_COOKIE}=${token}` })
       const response = await proxy(new NextRequest(url, { headers, method }))
       expect(response.status, `${method} ${target}`).toBe(503)
+    }
+  })
+
+  test('GET /api/contacts/:id answers a request without a verified session with 401 and no person bytes', async () => {
+    configureAdmin()
+    const cases: Array<[string, Record<string, string>]> = [
+      ['only crm_user_id', { crm_user_id: 'u2' }],
+      ['a staff cookie on a lane without a secret', { [STAFF_COOKIE]: 'any.token', crm_user_id: 'u2' }],
+      ['nothing', {}],
+    ]
+    for (const [name, cookies] of cases) {
+      asRequest(cookies)
+      const response = await contactGet(new NextRequest('https://yokoone.ru/api/contacts/ci-demo-contact-gromov'), { params: Promise.resolve({ id: 'ci-demo-contact-gromov' }) })
+      const body = await response.text()
+      expect(response.status, name).toBe(401)
+      expect(response.headers.get('cache-control'), name).toBe('no-store')
+      expect(body, name).toBe('{"error":"Unauthorized"}')
     }
   })
 })

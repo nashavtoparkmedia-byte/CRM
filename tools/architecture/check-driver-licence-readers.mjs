@@ -23,6 +23,10 @@
 //                    `becomes: 'masked'` marks a D2 conduit that is admin-only
 //                    until its masking step lands (Cash's referral reads), when
 //                    it must move to `masked`.
+//   read_authority — a Contacts people surface whose every handler asks a
+//                    verified authority first (Contacts' read or write
+//                    authority, or the integration-admin session), verified per
+//                    handler like admin_only.
 //   masked         — a D2 surface behind the read authority whose ВУ passes
 //                    through Fleet's licence view (maskDriverLicenceV1, verified
 //                    here).
@@ -147,7 +151,7 @@ export const LICENCE_READERS = {
   [`${P}app/api/bot-link/route.ts`]: { disposition: 'admin_only', gate: 'hasIntegrationAdminAccess' },
   [`${P}app/api/contacts/[id]/driver-person/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal' },
   [`${P}app/api/contacts/[id]/parks/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal' },
-  [`${P}app/api/contacts/[id]/route.ts`]: { disposition: 'd2l', owner: contacts, note: 'GET is ungated at app level (only PATCH is guarded): Messages contact panel with licenseHistory; its own PR gates GET with the read authority (Security 2026-11-12)' },
+  [`${P}app/api/contacts/[id]/route.ts`]: { disposition: 'read_authority', note: 'Messages contact panel (licenseHistory): GET asks Contacts\' read authority first, PATCH its write guard (Security 2026-11-12)' },
   [`${P}app/contacts/licence-search/route.ts`]: { disposition: 'masked', gateFile: `${P}modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.ts`, note: '«Люди» ВУ search transport (POST body); answers Fleet\'s masked profiles, never the typed licence' },
   [`${P}app/api/debug-db/list-all-chats/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'debug listing includes the chat\'s Driver row' },
   [`${P}app/api/monitoring/attention/route.ts`]: { disposition: 'd2l', owner: fleet },
@@ -166,9 +170,9 @@ export const LICENCE_READERS = {
   [`${P}app/contacts/page.tsx`]: { disposition: 'licence_term_only', note: 'names the ВУ search component; carries no number' },
   [`${P}app/drivers/actions.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/drivers/archive/ArchiveClient.tsx`]: { disposition: 'd2l', owner: fleet },
-  [`${P}app/messages/components/ContactEvidenceDetails.tsx`]: { disposition: 'd2l', owner: contacts, note: 'renders the ungated GET /api/contacts/[id] until its gate lands' },
+  [`${P}app/messages/components/ContactEvidenceDetails.tsx`]: { disposition: 'read_authority', gateFile: `${P}app/api/contacts/[id]/route.ts`, note: 'renders GET /api/contacts/[id]' },
   [`${P}app/messages/components/DriverPersonSearchModal.tsx`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/api/contacts/[id]/driver-person/route.ts`, note: 'renders /api/contacts/[id]/driver-person; D2-L' },
-  [`${P}app/messages/hooks/useContact.ts`]: { disposition: 'd2l', owner: contacts, note: 'fetches the ungated GET /api/contacts/[id] until its gate lands' },
+  [`${P}app/messages/hooks/useContact.ts`]: { disposition: 'read_authority', gateFile: `${P}app/api/contacts/[id]/route.ts`, note: 'fetches GET /api/contacts/[id]' },
   [`${P}app/monitoring/MonitoringClient.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/monitoring/components/AllDriversSection.tsx`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/monitoring/components/AttentionSection.tsx`]: { disposition: 'd2l', owner: fleet },
@@ -274,13 +278,15 @@ export function routeHandlers(source) {
  * PATCH says nothing about GET); any other gate file (a page, a server-action
  * module) must call the guard somewhere.
  */
-export function gateViolations(gateSource, token) {
+export function gateViolations(gateSource, tokens) {
+  const accepted = Array.isArray(tokens) ? tokens : [tokens]
   const source = stripComments(gateSource)
   const handlers = routeHandlers(source)
-  if (handlers.length === 0) return source.includes(token) ? [] : ['the guard is gone']
+  if (handlers.length === 0) return accepted.some(token => source.includes(token)) ? [] : ['the guard is gone']
   const violations = []
   for (const handler of handlers) {
-    const guard = handler.body.indexOf(token)
+    const positions = accepted.map(token => handler.body.indexOf(token)).filter(index => index >= 0)
+    const guard = positions.length === 0 ? -1 : Math.min(...positions)
     const read = handler.body.search(FIRST_READ)
     if (guard < 0) violations.push(`the guard is missing in ${handler.method}`)
     else if (read >= 0 && read < guard) violations.push(`${handler.method} reads data before the guard`)
@@ -288,7 +294,10 @@ export function gateViolations(gateSource, token) {
   return violations
 }
 
-const DISPOSITIONS = new Set(['owner_internal', 'evidence_key', 'command_input', 'admin_only', 'masked', 'd2l', 'view_decision', 'type_only', 'licence_term_only'])
+/** A Contacts people surface: each handler asks a verified authority first (Contacts' read or write authority, or the integration-admin session). */
+const READ_AUTHORITY_GATES = ['resolveContactReadAuthorityV1()', 'resolveContactWriteAuthorityV1()', 'getIntegrationAdminPrincipal()']
+
+const DISPOSITIONS = new Set(['read_authority', 'owner_internal', 'evidence_key', 'command_input', 'admin_only', 'masked', 'd2l', 'view_decision', 'type_only', 'licence_term_only'])
 
 /** Every tracked non-test code file under the source roots that names a ВУ carrier. */
 export function discoverLicenceReaders(files, readFile) {
@@ -310,6 +319,9 @@ export function licenceReaderViolations(inventory, discovered, readFile) {
   for (const [file, entry] of Object.entries(inventory)) {
     if (!DISPOSITIONS.has(entry.disposition)) violations.push(`unknown disposition ${entry.disposition}: ${file}`)
     if (!found.has(file)) violations.push(`stale inventory entry (no longer reads the ВУ): ${file}`)
+    if (entry.disposition === 'read_authority') {
+      for (const problem of gateViolations(readFile(entry.gateFile ?? file), READ_AUTHORITY_GATES)) violations.push(`read_authority guard: ${problem} in ${entry.gateFile ?? file} (for ${file})`)
+    }
     if (entry.disposition === 'admin_only') {
       const token = ADMIN_GATES[entry.gate]
       const gateFile = entry.gateFile ?? file
@@ -344,6 +356,7 @@ function runNegativeProbes() {
     ['guard removed', { ...base, 'a/gate.ts': 'nothing' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/gate.ts' } }, /guard getIntegrationAdminPrincipal: the guard is gone/u],
     ['guard only in PATCH, GET ungated', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': "export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) { const row = await prisma.contact.findUnique({ where: { id: '1' } }); return row }\nexport async function PATCH(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; return 1 }" }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, /the guard is missing in GET in a\/route\.ts/u],
     ['guard after the first read', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': 'export async function GET(req: Request) { const rows = await prisma.driver.findMany({ select: { id: true } }); if (!await getIntegrationAdminPrincipal()) return null; return rows }' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, /GET reads data before the guard/u],
+    ['read_authority with GET ungated', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': 'export async function GET(req: Request) { return await prisma.contact.findUnique({ where: { id: 1 } }) }\nexport async function PATCH(req: Request) { if ((await resolveContactWriteAuthorityV1()).decision !== \'allow\') return null; return 1 }' }, { 'a/reader.ts': { disposition: 'read_authority', gateFile: 'a/route.ts' } }, /read_authority guard: the guard is missing in GET/u],
     ['every handler guarded first', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/route.ts': 'export async function GET(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; return await prisma.driver.findMany({ select: { id: true } }) }\nexport async function POST(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; const body = await req.json(); return body }' }, { 'a/reader.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', gateFile: 'a/route.ts' } }, null],
     ['mask missing', base, { 'a/reader.ts': { disposition: 'masked' } }, /masked reader without maskDriverLicenceV1/u],
     ['logged carrier', { 'a/reader.ts': "console.error('x', row.normalizedVu)" }, { 'a/reader.ts': { disposition: 'owner_internal' } }, /log or error text prints a ВУ carrier/u],

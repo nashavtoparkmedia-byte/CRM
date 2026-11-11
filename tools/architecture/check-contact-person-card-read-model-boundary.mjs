@@ -42,6 +42,7 @@ const PAGE = 'gravity-mvp/src/app/contacts/[id]/page.tsx'
 const LICENCE_SEARCH = 'gravity-mvp/src/modules/platform-shell/application/contact-licence-search-composition.ts'
 const LICENCE_ROUTE = 'gravity-mvp/src/app/contacts/licence-search/route.ts'
 const LOOKUP_ROUTE = 'gravity-mvp/src/app/api/contacts/lookup/route.ts'
+const CONTACT_ROUTE = 'gravity-mvp/src/app/api/contacts/[id]/route.ts'
 const MANIFEST = 'architecture/contexts/v1/manifests/contacts.json'
 const REGISTRY = 'architecture/contracts/v1/registry.json'
 const CAPABILITY = 'ContactPersonCardQuery.v1'
@@ -209,6 +210,19 @@ function assertComposition(read = readRepo) {
   assert(lookup.includes("const NO_STORE = { 'Cache-Control': 'no-store' }"), 'the lookup route has no no-store header')
   assert.equal((lookup.match(/NextResponse\.json\(/gu) ?? []).length, (lookup.match(/headers: NO_STORE/gu) ?? []).length, 'a lookup answer may be cached')
   assert(!CLIENT_IDENTITY.test(lookup), 'the lookup route reads a client-held identity')
+  // GET /api/contacts/:id (the Messages contact panel: phones, accounts, ВУ history)
+  // asks the read authority before anything else and is never cached (Security 2026-11-12).
+  const contactRoute = withoutComments(read(CONTACT_ROUTE))
+  const contactGet = contactRoute.slice(contactRoute.indexOf('export async function GET('), contactRoute.indexOf('export async function PATCH('))
+  order(contactGet, [
+    'export async function GET(',
+    'const authority = await resolveContactReadAuthorityV1()',
+    "if (authority.decision !== 'allow') {",
+    "return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })",
+    'await params',
+  ], 'the contact GET route')
+  assert.equal((contactGet.match(/NextResponse\.json\(/gu) ?? []).length, (contactGet.match(/headers: NO_STORE/gu) ?? []).length, 'a contact GET answer may be cached')
+  assert(!CLIENT_IDENTITY.test(contactGet), 'the contact GET route reads a client-held identity')
   const people = withoutComments(read(PEOPLE_PAGE))
   order(people, ['const authority = await resolveContactReadAuthorityV1()', "authority.decision !== 'allow'", '<ContactsSearchClient />'], 'the «Люди» page')
   assert(!CLIENT_IDENTITY.test(people), 'the «Люди» page reads a client-held identity')
@@ -276,6 +290,8 @@ const MUTANTS = [
   [LICENCE_ROUTE, '{ status: 401, headers: NO_STORE }', '{ status: 401 }'],
   [LOOKUP_ROUTE, "{ status: 401, headers: NO_STORE }", '{ status: 401 }'],
   [LOOKUP_ROUTE, 'NextResponse.json(result, { headers: NO_STORE })', 'NextResponse.json(result)'],
+  [CONTACT_ROUTE, "  const authority = await resolveContactReadAuthorityV1()\n  if (authority.decision !== 'allow') {\n    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })\n  }\n", ''],
+  [CONTACT_ROUTE, "{ status: 404, headers: NO_STORE }", '{ status: 404 }'],
 ]
 
 function checkAll(read) {

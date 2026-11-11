@@ -239,7 +239,7 @@ export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' 
     const ambiguityCandidateCount = contactResolution?.status === 'ambiguous'
         ? Math.max(2, Number(contactResolution.candidateCount) || 0)
         : null
-    const { contact, isLoading: contactLoading, refetch: refetchContact } = useContact(
+    const { contact, isLoading: contactLoading, unauthorized: contactUnauthorized, refetch: refetchContact } = useContact(
         ambiguityCandidateCount === null ? chat?.contactId : undefined,
     )
     const { channelStatus } = useChannelStatus(contact?.id)
@@ -628,6 +628,25 @@ export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' 
         return { phone, identities: contact.identities.filter(item => item.phoneId === phone.id) }
     }) : []
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
+
+    // GET /api/contacts/:id answers only a verified staff or integration-admin
+    // session; without one the panel asks to sign in instead of going blank.
+    if (contactUnauthorized) {
+        return (
+            <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
+                <div className="h-[44px] border-b border-[#E8E8E8] flex items-center justify-between px-[4px] shrink-0">
+                    <span className="text-[13px] font-semibold text-[#111]">Профиль</span>
+                    <button onClick={() => toggleProfileDrawer(false)} className="w-6 h-6 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors">
+                        <X size={14} />
+                    </button>
+                </div>
+                <div className="px-3 py-4 text-[13px] text-[#111]" role="status">
+                    Чтобы видеть данные человека, войдите в CRM со своим паролем.{' '}
+                    <a href="/login" className="font-semibold text-[#3390EC]">Войти</a>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
