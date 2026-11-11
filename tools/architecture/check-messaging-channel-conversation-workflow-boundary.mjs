@@ -21,8 +21,16 @@ const retiredIngress = 'gravity-mvp/src/app/api/webhook/max/route.ts'
 const consumers = [
     'gravity-mvp/src/app/api/webhook/telegram/route.ts',
     'gravity-mvp/src/app/api/webhooks/max/route.ts',
-    'gravity-mvp/src/app/tg-actions.ts',
     'gravity-mvp/src/lib/whatsapp/WhatsAppService.ts',
+]
+// The Telegram MTProto lane (R-21 adoption) writes every provider event through
+// Messaging's guarded append, which projects the workflow inside its own
+// transaction. The lane and its server-only ingress must therefore name no
+// workflow capability at all: a lane-side projection would run outside the
+// guard's write and could project an event the guard holds.
+const guardedOnlyIngress = [
+    'gravity-mvp/src/app/tg-actions.ts',
+    'gravity-mvp/src/modules/telegram-channel/application/mtproto-guarded-ingress.ts',
 ]
 const exactCapabilities = ['onGroupInboundMessage', 'onInboundMessage', 'onOutboundMessage']
 
@@ -54,6 +62,16 @@ for (const consumerPath of consumers) {
     assert.doesNotMatch(consumer, /@\/lib\/ConversationWorkflowService/)
 }
 
+const assertGuardedOnlyIngress = (source) => {
+    assert.doesNotMatch(source, /channelConversationWorkflowV1|channel-conversation-workflow|@\/lib\/ConversationWorkflowService|ConversationWorkflowService/u)
+    assert.doesNotMatch(source, /\bon(?:Group)?InboundMessage\(|\bonOutboundMessage\(/u)
+}
+for (const ingressPath of guardedOnlyIngress) assertGuardedOnlyIngress(read(ingressPath))
+const laneSource = read(guardedOnlyIngress[0])
+assert.throws(() => assertGuardedOnlyIngress(`${laneSource}\nimport { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'\n`))
+assert.throws(() => assertGuardedOnlyIngress(`${laneSource}\nvoid ConversationWorkflowService.onInboundMessage(chatId, sentAt)\n`))
+assert.throws(() => assertGuardedOnlyIngress(`${laneSource}\nawait workflow.onOutboundMessage(chatId, sentAt)\n`))
+
 // The retired ingress must stay a static tombstone: no request parsing, no
 // workflow capability, and the exact replacement pointer.
 const assertRetiredIngress = (source) => {
@@ -76,7 +94,7 @@ const manifest = JSON.parse(read('architecture/contexts/v1/manifests/messaging.j
 assert(manifest.public_surface.includes('ChannelConversationWorkflow.v1'))
 
 const scan = await scanArchitecture(root)
-const workflowIngress = [...consumers, retiredIngress]
+const workflowIngress = [...consumers, ...guardedOnlyIngress, retiredIngress]
 assert.deepEqual(scan.findings.filter((finding) => (
     workflowIngress.includes(finding.file) && finding.details?.target === implementationPath
 )), [])
@@ -84,6 +102,8 @@ assert.deepEqual(scan.findings.filter((finding) => (
 process.stdout.write(`${JSON.stringify({
     status: 'PASS',
     runtime_consumers: consumers.length,
+    guarded_only_ingress: guardedOnlyIngress.length,
+    negative_guarded_ingress_probes: 'REJECTED',
     retired_ingress: 1,
     write_capabilities: exactCapabilities.length,
     negative_unrelated_write_probe: 'REJECTED',
