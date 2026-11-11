@@ -12,8 +12,12 @@ const startedAt = Date.now()
 /**
  * GET /api/health
  *
- * Unified system health snapshot. Read-only, bounded queries.
- * Returns: transport + pipeline + workflow + recovery + integrity + runtime metadata.
+ * Public system health status. Read-only, bounded queries.
+ * The checks below still run (transport, pipeline, recovery, integrity), but the
+ * response carries only the aggregated status, the stable degradation reason
+ * codes and the time: no connection id, no error text, no counts of people's
+ * conversations, so the route can stay ungated for ops probes. Details belong
+ * behind a staff session, not here.
  */
 export async function GET() {
   const now = new Date()
@@ -234,13 +238,7 @@ export async function GET() {
     overallStatus = 'degraded'
   }
 
-  return NextResponse.json({
-    status: overallStatus,
-    degradedReasons: degradedReasons.length > 0 ? degradedReasons : undefined,
-    timestamp: now.toISOString(),
-    uptimeSeconds: Math.floor((now.getTime() - startedAt) / 1000),
-    environment: process.env.NODE_ENV || 'unknown',
-    version: process.env.APP_VERSION || 'unknown',
+  return NextResponse.json(publicHealthBodyV1(overallStatus, degradedReasons, now, {
     transport: transportSection,
     pipeline: pipelineSection,
     workflow: workflowSection,
@@ -250,5 +248,24 @@ export async function GET() {
     integrity: integritySection,
     lifecycle: lifecycleSection,
     runtime,
-  })
+    uptimeSeconds: Math.floor((now.getTime() - startedAt) / 1000),
+  }))
+}
+
+/**
+ * The only body this public route returns. `details` is computed for the status
+ * decision and deliberately dropped here; it is the argument only so the probe
+ * code above stays one unit.
+ */
+function publicHealthBodyV1(
+  status: 'ok' | 'degraded' | 'error',
+  degradedReasons: string[],
+  now: Date,
+  _details: Record<string, unknown>,
+): { status: 'ok' | 'degraded' | 'error'; degradedReasons?: string[]; timestamp: string } {
+  return {
+    status,
+    ...(degradedReasons.length > 0 ? { degradedReasons: [...degradedReasons] } : {}),
+    timestamp: now.toISOString(),
+  }
 }

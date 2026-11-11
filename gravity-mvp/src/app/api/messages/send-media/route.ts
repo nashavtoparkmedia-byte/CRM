@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { contactPermissionRefusalV1, isSendToContactReservedClientMessageIdV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
+import { contactPermissionRefusalV1, isSendToContactReservedClientMessageIdV1, newDeliveryEvidenceRecordV1, statusForDeliveryEvidenceV1 } from '@/modules/messaging/public/v1/delivery-state-policy'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
@@ -145,9 +145,16 @@ export async function POST(req: NextRequest) {
         const approxSize = Math.round(cleanBase64.length * 0.75)
 
         // Save outbound message + attachment.
-        // Channel already delivered — если БД упадёт, лог + return 200 чтобы
-        // оператор не пересылал. UI просто не покажет attachment, но клиент
-        // его уже получил.
+        // S2: a returned provider message id proves only that the provider
+        // accepted the file (provider_ack), never that it was delivered; without
+        // an id this is a client action. Either way the row starts at 'sent' and
+        // only receipt evidence (acks) may move it to delivered/read later.
+        // Если БД упадёт, лог + return 200, чтобы оператор не пересылал: провайдер
+        // файл уже принял.
+        // An empty provider id stores nothing (Message.externalId is unique), as for text sends.
+        if (externalId !== null && String(externalId).trim() === '') externalId = null
+        const sentAt = new Date()
+        const sendEvidence = externalId ? 'provider_ack' as const : 'client_action' as const
         let message: any = null
         try {
             message = await prisma.message.create({
@@ -159,20 +166,20 @@ export async function POST(req: NextRequest) {
                     channel: channel as any,
                     externalId,
                     ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
-                    status: sendError ? 'failed' : 'delivered',
-                    sentAt: new Date(),
+                    status: sendError ? 'failed' : statusForDeliveryEvidenceV1(sendEvidence),
+                    sentAt,
                     metadata: {
                         origin: 'operator', filename, mimeType,
-                        ...(sendError ? { sendError } : {}),
-                    },
+                        ...(sendError ? { sendError } : { delivery: newDeliveryEvidenceRecordV1(sendEvidence, 'send', sentAt) }),
+                    } as any,
                 },
             })
         } catch (dbErr: any) {
-            console.error('[send-media] DB message.create failed (channel уже доставил):', dbErr?.message)
+            console.error('[send-media] DB message.create failed (provider already accepted the file):', dbErr?.message)
             return NextResponse.json({
                 success: true,
-                delivered: true,
-                warning: `Сообщение доставлено клиенту, но не сохранилось в БД: ${dbErr?.message}`,
+                sent: true,
+                warning: `Файл отправлен, но не сохранился в БД: ${dbErr?.message}`,
             })
         }
 

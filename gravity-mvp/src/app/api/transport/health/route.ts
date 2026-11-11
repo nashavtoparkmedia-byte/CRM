@@ -7,36 +7,33 @@ import {
 /**
  * GET /api/transport/health
  *
- * Returns runtime status of all transport connections from TransportRegistry.
- * Read-only — does not modify any state.
+ * Public transport status. Read-only — does not modify any state.
+ * Per channel only the ready and total connection counts and an aggregated
+ * status: no connection id, instance id or error text, so the route can stay
+ * ungated for ops probes. Details belong behind a staff session, not here.
  */
 export async function GET() {
   try {
     const entries = transportRegistryHealthV1.getAllEntries()
-    const now = Date.now()
-
-    const format = (e: TransportConnectionEntryV1) => ({
-      id: e.connectionId,
-      channel: e.channel,
-      instanceId: e.instanceId ? e.instanceId.substring(0, 8) : null,
-      state: e.state,
-      lastSeen: e.lastSeen?.toISOString() || null,
-      lastError: e.lastError,
-      retryAttempt: e.retryAttempt,
-      uptimeMs: e.readyAt ? now - e.readyAt.getTime() : null,
-      reconnectInFlight: e.reconnectInFlight,
-    })
-
-    const whatsapp = entries.filter(e => e.channel === 'whatsapp').map(format)
-    const telegram = entries.filter(e => e.channel === 'telegram').map(format)
+    const summary = (channel: string) => {
+      const connections = entries.filter((e: TransportConnectionEntryV1) => e.channel === channel)
+      return {
+        readyCount: connections.filter(e => e.state === 'ready').length,
+        totalCount: connections.length,
+      }
+    }
+    const status = entries.some(e => e.state === 'failed')
+      ? 'error'
+      : entries.some(e => e.state !== 'ready' && e.state !== 'stopped') ? 'degraded' : 'ok'
 
     return NextResponse.json({
-      whatsapp: { connections: whatsapp },
-      telegram: { connections: telegram },
+      status,
+      whatsapp: summary('whatsapp'),
+      telegram: summary('telegram'),
       timestamp: new Date().toISOString(),
     })
-  } catch (err: any) {
-    console.error('[transport/health] Error:', err.message)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch {
+    console.error('[transport/health] registry read failed')
+    return NextResponse.json({ status: 'error', code: 'TRANSPORT_HEALTH_UNAVAILABLE' }, { status: 500 })
   }
 }
