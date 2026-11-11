@@ -4349,6 +4349,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-scraper-debug-artifacts-cleanup-main-c1a32dd5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_SCRAPER_DEBUG_ARTIFACTS_CLEANUP_EXECUTOR_REVIEW_C1A32DD5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "SECURITY_F2_HYGIENE_GO_AND_ORCHESTRATOR_RELEASE_CLASSIFICATION_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at c1a32dd5, whose tail is contact-identity-lookup-search-normalization-main-f8a36b9f-20261111, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
+      },
+      "reason": "Records the denominator movement of the Security F2 hygiene change on top of main c1a32dd5: one tracked executable surface leaves and one enters, so the count stays 2,841, context-owned stays 1,578 and governed exclusions stay 1,263, while the tracked inventory changes. The surface that leaves is the committed Windows diagnostic script max-web-scraper/diag.bat, removed with the other committed debug artifacts of 2026-03-22 (the screenshots, text dumps and the backup copy are not executable surfaces). The surface that enters is the guard test max-web-scraper/test/committed-debug-artifacts.test.js, owned by max_channel through its context manifest owned_paths, like the removed script. No assignment, lifecycle, functional owner or governed exclusion is created, altered or removed, and no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate e8abf96d, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main c1a32dd5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2841,
+        "tracked_inventory_sha256": "790bf0b4053fa333cc6472036b14bcd70b48f5338581dbc5ffc6e1eed8e1c303",
+        "coverage_sha256": "f82a1ef30cf4e646ce72d3066870156fafde61de00a16f587d256e7abcf99c66"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2841,
+        "tracked_inventory_sha256": "7a304ea57a26c3f87539b781ef740ff4ec64e73ba2a65e9beda8b726de81b650",
+        "coverage_sha256": "0efab4d33485e00510bd54c9c851a59030005452344d30b22d48f3cf2846ac06"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
