@@ -66,7 +66,7 @@ class PushAcceptanceTest {
         }
     }
 
-    private val user = "acceptance"
+    /** Мария's (u1) own Staff Session password, seeded by the workflow as E2E_STAFF_PASSWORD; a public test value. */
     private val password = "yoko acceptance passphrase"
 
     /** The captured payload, handed in by the workflow with -e arguments. */
@@ -776,9 +776,9 @@ class PushAcceptanceTest {
 
         val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
         assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
-        assertTrue("expected a login and a password field, found ${fields.size}", fields.size >= 2)
-        fields[0].text = user
-        fields[1].text = password
+        // Personal sign-in: the employee and their own password; no shared login field.
+        assertTrue("expected one password field, found ${fields.size}", fields.size == 1)
+        fields[0].text = password
 
         val submit = device.wait(Until.findObject(By.text("Войти")), ACTION_TIMEOUT)
         assertNotNull("submit button not found; on screen: ${visibleText()}", submit)
@@ -797,7 +797,10 @@ class PushAcceptanceTest {
     }
 
     private fun visibleText(limit: Int = 260): String = runCatching {
+        // A text field's content is never reported: on the sign-in form it is
+        // the employee's password (Security, personal sign-in).
         device.findObjects(By.textStartsWith(""))
+            .filter { it.className != "android.widget.EditText" }
             .mapNotNull { it.text?.trim() }
             .filter { it.isNotEmpty() }
             .joinToString(" | ")
@@ -806,7 +809,10 @@ class PushAcceptanceTest {
 
     private fun treeShape(limit: Int = 400): String = runCatching {
         device.findObjects(By.textStartsWith(""))
-            .joinToString(" | ") { "${it.className?.substringAfterLast('.')}='${it.text?.take(24)}'" }
+            .joinToString(" | ") {
+                val text = if (it.className == "android.widget.EditText") "" else it.text?.take(24)
+                "${it.className?.substringAfterLast('.')}='$text'"
+            }
             .take(limit)
     }.getOrDefault("<unreadable>")
 

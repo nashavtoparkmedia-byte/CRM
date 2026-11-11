@@ -2,8 +2,11 @@ package ru.yokoone.crm.shell
 
 import android.content.Intent
 import android.os.SystemClock
+import android.view.View
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
@@ -72,8 +75,11 @@ class LoginAcceptanceTest {
         }
     }
 
-    /** Credentials for the disposable stand. Never a production secret. */
-    private val user = "acceptance"
+    /**
+     * The test employee's own Staff Session password on the disposable stand
+     * (personal mobile sign-in): the workflow seeds it for Мария (u1) as
+     * E2E_STAFF_PASSWORD. A fixed, public test value; never a production secret.
+     */
     private val correctPassword = "yoko acceptance passphrase"
     private val wrongPassword = "definitely-not-the-password"
 
@@ -138,7 +144,7 @@ class LoginAcceptanceTest {
 
         assertTrue(
             "no readable rejection message after a wrong password; on screen: ${visibleText()}",
-            device.wait(Until.hasObject(By.textContains("Неверный логин или пароль")), ACTION_TIMEOUT),
+            device.wait(Until.hasObject(By.textContains(REFUSED)), ACTION_TIMEOUT),
         )
         // The operator has to be able to try again without restarting anything.
         // Counting the fields is not enough: they survive a submit button that
@@ -146,7 +152,7 @@ class LoginAcceptanceTest {
         // named for. So the button has to be back to its idle label too.
         assertTrue(
             "the form was not usable again after the rejection; on screen: ${visibleText()}",
-            device.findObjects(By.clazz("android.widget.EditText")).size >= 2,
+            device.findObjects(By.clazz("android.widget.EditText")).size == 1,
         )
         assertNotNull(
             "the submit button did not return to its idle state after the rejection, " +
@@ -159,7 +165,7 @@ class LoginAcceptanceTest {
     @Test
     fun test02_correctPasswordAfterRejectionOpensTheMessenger() {
         signIn(wrongPassword)
-        device.wait(Until.hasObject(By.textContains("Неверный логин или пароль")), ACTION_TIMEOUT)
+        device.wait(Until.hasObject(By.textContains(REFUSED)), ACTION_TIMEOUT)
 
         signIn(correctPassword)
 
@@ -446,12 +452,21 @@ class LoginAcceptanceTest {
         )
         option!!.click()
 
+        // Personal sign-in: the employee and their own password, nothing else.
+        // Exactly one text field, so a shared login field coming back fails here.
         val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), ACTION_TIMEOUT)
         assertNotNull("sign-in fields not found; on screen: ${visibleText()}", fields)
-        assertTrue("expected a login and a password field, found ${fields.size}", fields.size >= 2)
+        assertEquals("the personal sign-in form has one text field, the password", 1, fields.size)
 
-        fields[0].text = user
-        fields[1].text = password
+        // Before the password is typed: no autofill service may be offered it
+        // (Security ruling (a)); the running WebView carries the layout's rule.
+        assertEquals(
+            "the running shell WebView is not excluded from autofill",
+            View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS,
+            shellWebViewAutofillMode(),
+        )
+
+        fields[0].text = password
 
         // EXACT text, not textContains. The sign-in page renders inside the CRM
         // chrome, and that chrome carries its own "Войти..." item — visible in
@@ -472,6 +487,19 @@ class LoginAcceptanceTest {
         // before the click — so it reported true whatever happened and proved
         // nothing. What the click reached is established by the assertions the
         // scenarios make about the screen that follows it.
+    }
+
+    /** importantForAutofill of the resumed shell's WebView, read on the main thread; null when none is resumed. */
+    private fun shellWebViewAutofillMode(): Int? {
+        var mode: Int? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            mode = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .firstOrNull { it is MainActivity }
+                ?.findViewById<View>(R.id.web_view)
+                ?.importantForAutofill
+        }
+        return mode
     }
 
     /**
@@ -505,7 +533,10 @@ class LoginAcceptanceTest {
      */
     private fun visibleText(limit: Int = 260): String {
         val texts = runCatching {
+            // A text field's content is never reported: on the sign-in form it
+            // is the employee's password (Security, personal sign-in).
             device.findObjects(By.textStartsWith(""))
+                .filter { it.className != "android.widget.EditText" }
                 .mapNotNull { it.text }
                 .filter { it.isNotBlank() }
                 .distinct()
@@ -529,7 +560,7 @@ class LoginAcceptanceTest {
             .take(30)
             .joinToString(" | ") { node ->
                 val cls = node.className?.substringAfterLast('.') ?: "?"
-                val text = node.text?.take(18) ?: ""
+                val text = if (node.className == "android.widget.EditText") "" else node.text?.take(18) ?: ""
                 val desc = node.contentDescription?.take(18) ?: ""
                 buildString {
                     append(cls)
@@ -550,6 +581,9 @@ class LoginAcceptanceTest {
         const val MESSENGER_TIMEOUT = 45_000L
         const val SETTLE_MS = 2_000L
         const val POLL_MS = 250L
+
+        /** The personal sign-in's one refusal for a wrong password or a throttle (identity_access #235). */
+        const val REFUSED = "Неверный пароль или вход временно ограничен"
 
         /** The synthetic fixture from android/tools/acceptance-seed.sql. */
         const val TG_CHAT = "Тест · Telegram"
