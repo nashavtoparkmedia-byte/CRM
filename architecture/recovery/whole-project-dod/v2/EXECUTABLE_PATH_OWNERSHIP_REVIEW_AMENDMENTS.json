@@ -4421,6 +4421,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "max-settings-personal-account-count-main-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "MAX_SETTINGS_PERSONAL_ACCOUNT_COUNT_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_VISUAL_DEMO_UI_DEFECT_RELEASE_FIRST_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
+      },
+      "reason": "Records the one tracked executable surface the MAX settings count fix adds on top of main fa3c07e5: 2,842 + 1 = 2,843 surfaces, context-owned 1,578 -> 1,579, governed exclusions unchanged at 1,264. The visual-demo inventory found that the personal-account tab of the MAX integration settings always read one connected account; the heading of gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx now counts the signed-in account the scraper reports. The new path is its render test, gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.test.tsx, owned by the configuration context through its manifest owned_paths like the screen itself; the changed screen is context-owned through the same manifest and needs no exact assignment, and no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over the exact clean candidate b4b426a7, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main fa3c07e5 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2843,
+        "tracked_inventory_sha256": "0fa0edabb6be74ead3da5b2a36e869d984f0aefdb68f5c5ef9d7c56eb49e1fce",
+        "coverage_sha256": "1e5695f9db71d6ef5ff505b252331b91c6b27a09c4022a7bc6d15d90a58afc7b"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
