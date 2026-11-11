@@ -281,7 +281,9 @@
     "CommunicationEventRetention.v1",
     "ScheduledScraperCheckDispatch.v1",
     "YandexFleetOperations.v1",
-    "DriverProfilesForContactsQuery.v1"
+    "DriverProfilesForContactsQuery.v1",
+    "DriverProfilesForContactsQuery.v2",
+    "DriverProfilesByExactLicenceQuery.v1"
   ],
   "responsibility": "Driver/fleet state and communication history, Yandex synchronization and isolated YFS checking workflow.",
   "schema": "yoko.crm.module-manifest.v1",
@@ -323,7 +325,8 @@
       "node tools/architecture/check-fleet-driver-action-boundary.mjs",
       "node tools/architecture/check-fleet-monitoring-policy-boundary.mjs",
       "node tools/architecture/check-yandex-fleet-operations-boundary.mjs",
-      "node tools/architecture/check-fleet-driver-profiles-for-contacts-boundary.mjs"
+      "node tools/architecture/check-fleet-driver-profiles-for-contacts-boundary.mjs",
+      "node tools/architecture/check-fleet-driver-licence-view-boundary.mjs"
     ]
   },
   "version": 1
