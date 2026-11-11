@@ -82,6 +82,7 @@ export {
     createContactCardForConversationReaderV1,
     type ContactCardConversationResolverV1,
     readContactPersonCardV1,
+    previewContactMergeV1,
     resolveContactReadAuthorityV1,
     searchContactsV1,
 } from '../../application/contact-operations'
