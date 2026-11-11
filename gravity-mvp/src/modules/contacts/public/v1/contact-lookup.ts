@@ -16,6 +16,23 @@
 // in ContactDisplayPolicy, which shares the canonical precedence with the Contact
 // Card and deliberately refuses the provider-external-id fallback, so a provider
 // id cannot reach a human-readable field by any path.
+//
+// How a query matches (amended 2026-11-10, after the Owner's own attempt to find
+// a driver by the ФИО and the number shown in the dispatcher profile):
+// - A name query is a set of words. «ё» and «е» are one letter, case does not
+//   matter, and the words may come in any order. A one-letter word (an initial)
+//   is ignored once a longer word is present.
+// - A name ranks by how much of it matched: first a name that starts with the
+//   first typed word and contains every other one, then a name that contains
+//   every typed word in any order, and last, only for three or more typed words,
+//   a name that contains all of them but one. That last class is how a full
+//   «Фамилия Имя Отчество» copied from a park profile still finds a card that
+//   carries no patronymic; each item says which class found it (`match`), so a
+//   consumer can say that not every word matched. A match is a search hit and
+//   never evidence that two records are one person.
+// - A phone query is its digits. A leading 8 typed without «+» is also read as
+//   +7, so «8 (999) 100-01-01» finds +79991000101; the digits as typed are still
+//   searched too. A stored number equals the query with or without its «+».
 
 import {
   buildProviderNeutralContactDisplayV1,
@@ -27,6 +44,8 @@ export const CONTACT_LOOKUP_DEFAULT_LIMIT_V1 = 10
 export const CONTACT_LOOKUP_MAX_LIMIT_V1 = 25
 export const CONTACT_LOOKUP_MIN_TEXT_LENGTH_V1 = 2
 export const CONTACT_LOOKUP_MIN_PHONE_DIGITS_V1 = 3
+/** Words beyond this many are not searched: a name is never longer. */
+export const CONTACT_LOOKUP_MAX_WORDS_V1 = 6
 
 export type ContactLookupItemV1 = {
   /** The canonical Contact id — the only person identifier this contract emits. */
@@ -36,6 +55,12 @@ export type ContactLookupItemV1 = {
   primaryPhone: string | null
   /** Channel names of ACTIVE Contacts identities, sorted and deduplicated. */
   channels: string[]
+  /**
+   * The rank class that found this item. `name_all_but_one_word` means one typed
+   * word is not in the name. A search result always carries it; an item built
+   * outside a search, such as a consumer's own fixture, may omit it.
+   */
+  match?: ContactLookupRankClassV1
 }
 
 export type ContactLookupResultV1 = {
@@ -46,10 +71,17 @@ export type ContactLookupResultV1 = {
   truncated: boolean
 }
 
-/** A phone query searches normalized digits; a text query searches the display name. */
+/**
+ * A phone query searches digits; a text query searches the display name by words.
+ *
+ * `digitReadings` are the digit strings a stored number is compared with: the
+ * digits as typed and, when they start with 8 and no «+» was typed, the same
+ * number read as +7. `words` are folded (NFKC, lower case, «ё» as «е»), unique,
+ * in typed order and at most CONTACT_LOOKUP_MAX_WORDS_V1.
+ */
 export type ContactLookupCriteriaV1 =
-  | { kind: 'phone'; digits: string }
-  | { kind: 'text'; text: string }
+  | { kind: 'phone'; digits: string; digitReadings: string[] }
+  | { kind: 'text'; text: string; words: string[] }
 
 /**
  * The ranking classes, highest precedence first.
@@ -58,12 +90,20 @@ export type ContactLookupCriteriaV1 =
  * class at a time and a lower class is queried only while the budget is unfilled.
  * A single bounded query plus post-hoc classification could let a substring match
  * hide an exact one behind the database's own row limit.
+ *
+ * - phone_exact: a stored number equals one digit reading, with or without «+».
+ * - phone_substring: a stored number contains one digit reading.
+ * - name_prefix: the folded name starts with the first word and contains all.
+ * - name_all_words: the folded name contains every word, in any order.
+ * - name_all_but_one_word: the folded name contains all words but exactly one;
+ *   asked only when three or more words were typed.
  */
 export const CONTACT_LOOKUP_RANK_CLASSES_V1 = [
   'phone_exact',
   'phone_substring',
   'name_prefix',
-  'name_substring',
+  'name_all_words',
+  'name_all_but_one_word',
 ] as const
 
 export type ContactLookupRankClassV1 = typeof CONTACT_LOOKUP_RANK_CLASSES_V1[number]
@@ -134,18 +174,49 @@ export function contactLookupCriteriaV1(query: unknown): ContactLookupCriteriaV1
   if (/[\u0000-\u001F\u007F]/u.test(trimmed)) return null
   if (/^[\d\s+\-()]+$/u.test(trimmed)) {
     const digits = stripToDigits(trimmed)
-    return digits.length >= CONTACT_LOOKUP_MIN_PHONE_DIGITS_V1 ? { kind: 'phone', digits } : null
+    if (digits.length < CONTACT_LOOKUP_MIN_PHONE_DIGITS_V1) return null
+    const digitReadings = [digits]
+    // «8 999 …» is how a Russian number is usually typed; stored numbers are +7.
+    if (!trimmed.startsWith('+') && digits.startsWith('8')) digitReadings.push(`7${digits.slice(1)}`)
+    return { kind: 'phone', digits, digitReadings }
   }
-  return trimmed.length >= CONTACT_LOOKUP_MIN_TEXT_LENGTH_V1 ? { kind: 'text', text: trimmed } : null
+  if (trimmed.length < CONTACT_LOOKUP_MIN_TEXT_LENGTH_V1) return null
+  const words = contactLookupWordsV1(trimmed)
+  return words.length > 0 ? { kind: 'text', text: trimmed.replace(/\s+/gu, ' '), words } : null
+}
+
+/**
+ * The comparison form of a name: NFKC, lower case, «ё» as «е».
+ *
+ * The database side applies the same fold to the stored name (see the lookup
+ * adapter), so «Пётр» and «Петр» find each other in both directions.
+ */
+export function contactLookupFoldV1(value: string | null | undefined): string {
+  return String(value ?? '').normalize('NFKC').toLowerCase().replace(/ё/gu, 'е')
+}
+
+/**
+ * The words of a name query, folded, unique, in typed order.
+ *
+ * Words are split on anything that is not a letter or a digit, so brackets,
+ * dots and hyphens separate words. A one-letter word is an initial and too
+ * unspecific to require; it is dropped once any longer word is present, and a
+ * query of initials only yields no words at all.
+ */
+export function contactLookupWordsV1(text: string): string[] {
+  const all = contactLookupFoldV1(text).split(/[^\p{L}\p{N}]+/u).filter(word => word.length > 0)
+  const unique = [...new Set(all.filter(word => word.length >= 2))]
+  return unique.slice(0, CONTACT_LOOKUP_MAX_WORDS_V1)
 }
 
 /** The rank classes a given criteria uses, in precedence order. */
 export function contactLookupRankClassesV1(
   criteria: ContactLookupCriteriaV1,
 ): ContactLookupRankClassV1[] {
-  return criteria.kind === 'phone'
-    ? ['phone_exact', 'phone_substring']
-    : ['name_prefix', 'name_substring']
+  if (criteria.kind === 'phone') return ['phone_exact', 'phone_substring']
+  return criteria.words.length >= 3
+    ? ['name_prefix', 'name_all_words', 'name_all_but_one_word']
+    : ['name_prefix', 'name_all_words']
 }
 
 /**
@@ -270,7 +341,7 @@ export function createSearchContactsHandlerV1(port: ContactLookupPortV1) {
         ? left.rank - right.rank
         : compareBySortKeyThenId(left, right)))
 
-    const items = ordered.slice(0, limit).map(entry => entry.item)
+    const items = ordered.slice(0, limit).map(entry => ({ ...entry.item, match: classes[entry.rank] }))
     return { items, total: items.length, truncated }
   }
 }

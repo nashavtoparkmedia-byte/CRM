@@ -231,7 +231,8 @@
     "DraftImprovement.v1",
     "ResolveConversationContactQuery.v1",
     "ContactConversationsQuery.v1",
-    "HeldChannelMessagesQuery.v1"
+    "HeldChannelMessagesQuery.v1",
+    "ConversationBindingAuditQuery.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers, history import state, and inbound AI reply/draft orchestration.",
   "schema": "yoko.crm.module-manifest.v1",
@@ -243,7 +244,8 @@
       "node tools/architecture/validate-context-manifests.mjs",
       "node tools/architecture/enforce-architecture.mjs",
       "node tools/architecture/test-architecture-enforcement.mjs",
-      "node tools/architecture/check-messaging-guarded-append-boundary.mjs"
+      "node tools/architecture/check-messaging-guarded-append-boundary.mjs",
+      "node tools/architecture/check-messaging-binding-trust-boundary.mjs"
     ],
     "blast_radius": {
       "consumer_contexts": [

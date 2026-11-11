@@ -5,11 +5,11 @@ import {
   CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1,
   DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
 } from '@/contracts/contacts/v1'
-import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { DETACH_CONTACT_TASKS_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { deleteContactForRetentionV1 } from '@/modules/contacts/public/v1'
 import { runApiLogRetentionV1, runCommunicationEventRetentionV1, runDriverEventRetentionV1 } from '@/modules/fleet-operations/public/v1'
-import { deleteRetainedMessagesV1, detachContactConversationsV1, purgeMessageRetryMetadataV1 } from '@/modules/messaging/public/v1'
+import { deleteRetainedMessagesV1, detachContactConversationsV1, purgeMessageRetryMetadataV1, runHeldChannelMessageRetentionV1 } from '@/modules/messaging/public/v1'
 import { detachContactTasksV1 } from '@/modules/work-management/public/v1'
 
 /**
@@ -88,6 +88,23 @@ export class RetentionCleanup {
       // 2. Delivered/read messages > 12 months
       if (!checkTimeout()) {
         result.deletedMessages += await this._cleanupOldMessages(365, 200, dryRun)
+      }
+
+      // 2b. Held provider events (R-21 hold store) follow the same 12 months (A2).
+      // Isolated: the held store arrives with a source-only migration, so a
+      // database that has not applied it yet must not cost the remaining steps.
+      if (!checkTimeout()) {
+        try {
+          const held = await runHeldChannelMessageRetentionV1({
+            contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+            dryRun,
+          })
+          result.deletedMessages += held.selectedCount
+        } catch (heldStoreError: unknown) {
+          // Its own name: runAll keeps exactly one outer `err` catch (retention-event boundary).
+          const message = heldStoreError instanceof Error ? heldStoreError.message : String(heldStoreError)
+          opsLog('error', 'retention_cleanup_held_store_error', { error: message, dryRun })
+        }
       }
 
       // 3. Purge retry metadata on old failed messages > 30 days
