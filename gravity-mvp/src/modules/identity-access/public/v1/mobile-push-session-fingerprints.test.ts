@@ -80,6 +80,13 @@ describe('Mobile Push v1 session identity', () => {
         expect(mobileSessionBindingIdV1({ ...principal, runtimeOperatorId: 'u9' })).toBe(mobileSessionBindingIdV1(principal))
     })
 
+    it('a correctly signed payload of another version or audience is refused', () => {
+        for (const overrides of [{ v: 1 }, { v: 3 }, { aud: 'yoko-gravity-staff-session' }, { uep: -1 }, { uep: '4' }, { uep: undefined }]) {
+            expect(verifyMobileSession(signedSession(overrides), ENV, NOW), JSON.stringify(overrides)).toBeNull()
+        }
+        expect(verifyMobileSession(signedSession({}), ENV, NOW)).not.toBeNull()
+    })
+
     it('6. every v2 session has an instance id: a signed payload without one is refused', () => {
         // Correctly signed with the v2 key, so only the sid rule can refuse it.
         expect(verifyMobileSession(sessionWithoutInstanceId(), ENV, NOW)).toBeNull()
