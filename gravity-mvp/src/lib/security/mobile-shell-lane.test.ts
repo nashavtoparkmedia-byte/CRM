@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 /**
@@ -17,6 +18,15 @@ import path from 'node:path'
 vi.mock('@/modules/identity-access/internal/mobile-session-barrier', () => ({
     prismaMobileSessionBarrierV1: { isBarred: vi.fn(async () => false) },
 }))
+// The employee behind the v2 session still holds a live credential.
+vi.mock('@/modules/identity-access/internal/staff-credential-store', () => ({
+    prismaStaffCredentialStoreV1: {
+        findStatus: vi.fn(async (userId: string) => (userId === 'u1'
+            ? { userId, registryCreatedAt: '2026-03-24T00:00:00Z', sessionEpoch: 0, revokedAt: null }
+            : null)),
+        anyRow: vi.fn(async () => true),
+    },
+}))
 
 const { NextRequest } = await import('next/server')
 const { proxy, MOBILE_SHELL_UA_TOKEN } = await import('@/proxy')
@@ -24,10 +34,12 @@ const { issueMobileSession, MOBILE_SESSION_COOKIE } = await import(
     '@/modules/identity-access/public/v1/mobile-session-credentials'
 )
 
-const ENV = {
-    MOBILE_ACCESS_USER: 'mobile-operator',
-    MOBILE_ACCESS_PASS: 'correct horse battery staple',
-}
+const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
+const ENV = { STAFF_SESSION_SECRET: SECRET }
+const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'shell-registry-')), 'users.json')
+writeFileSync(REGISTRY, JSON.stringify([
+    { id: 'u1', firstName: 'Мария', lastName: 'Иванова', role: 'Менеджер', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' },
+]))
 const SHELL_UA = `Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ${MOBILE_SHELL_UA_TOKEN}1`
 const DESKTOP_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120'
 const NOW = Date.UTC(2026, 8, 11, 9, 0, 0)
@@ -46,12 +58,12 @@ function passed(response: Response): boolean {
 }
 
 function liveToken(now = NOW) {
-    return issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', ENV, now) as string
+    return issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', 0, ENV, now) as string
 }
 
 beforeEach(() => {
-    process.env.MOBILE_ACCESS_USER = ENV.MOBILE_ACCESS_USER
-    process.env.MOBILE_ACCESS_PASS = ENV.MOBILE_ACCESS_PASS
+    process.env.STAFF_SESSION_SECRET = SECRET
+    process.env.YOKO_USER_REGISTRY_FILE = REGISTRY
     delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -126,9 +138,9 @@ describe('session lifecycle bites on the next request', () => {
         expect((await proxy(request('/api/messages', { ua: SHELL_UA, cookie }))).status).toBe(401)
     })
 
-    test('rotating the credential closes the lane', async () => {
+    test('rotating the staff secret closes the lane', async () => {
         const cookie = liveToken()
-        process.env.MOBILE_ACCESS_PASS = 'a completely different passphrase'
+        process.env.STAFF_SESSION_SECRET = `${SECRET}-rotated`
         expect((await proxy(request('/api/messages', { ua: SHELL_UA, cookie }))).status).toBe(401)
     })
 

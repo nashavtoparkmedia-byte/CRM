@@ -2,6 +2,7 @@ import type { MobilePushTargetResolutionV1 } from '../../../contracts/identity-a
 import { createMobilePushRegistrationHandlerV1 } from '../public/v1/mobile-push-registration-handler'
 import { prismaMobileDeviceRegistrationPortV1 } from '../public/v1/prisma-mobile-device-registration-adapter'
 import { currentMobilePushEligibilityFactsV1 } from './mobile-push-registration-operations'
+import { staffCredentialLivenessManyV1 } from './staff-session-operations'
 
 /**
  * Mobile Push v1 — send-time resolution of one delivery: the only operation
@@ -14,7 +15,7 @@ import { currentMobilePushEligibilityFactsV1 } from './mobile-push-registration-
  * out under, so a rotated token is honoured and a stale session is refused.
  */
 
-const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
+const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1, staffCredentialLivenessManyV1)
 
 export async function resolveMobilePushTargetV1(
     registrationId: string,

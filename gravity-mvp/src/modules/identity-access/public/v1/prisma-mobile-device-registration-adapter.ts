@@ -45,7 +45,7 @@ function ineligibleWhere(facts: MobilePushEligibilityFactsV1): Prisma.MobileDevi
         { revokedAt: { not: null } },
         { sessionExpiresAt: { lte: facts.now } },
         { sessionRevocationEpoch: { not: facts.revocationEpoch } },
-        { credentialSubject: { not: facts.credentialSubject } },
+        { NOT: { credentialSubject: { startsWith: facts.credentialSubjectPrefix } } },
     ]
 }
 
@@ -296,13 +296,18 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 fcmToken: { not: null },
                 sessionExpiresAt: { gt: facts.now },
                 sessionRevocationEpoch: facts.revocationEpoch,
-                credentialSubject: facts.credentialSubject,
+                credentialSubject: { startsWith: facts.credentialSubjectPrefix },
             },
-            select: { id: true, sessionBindingId: true },
+            select: { id: true, sessionBindingId: true, runtimeOperatorId: true, credentialSubject: true },
             orderBy: { id: 'asc' },
             take: ELIGIBILITY_LIMIT,
         })
-        return rows.map((row) => ({ registrationId: row.id, sessionBindingId: row.sessionBindingId }))
+        return rows.map((row) => ({
+            registrationId: row.id,
+            sessionBindingId: row.sessionBindingId,
+            runtimeOperatorId: row.runtimeOperatorId,
+            credentialSubject: row.credentialSubject,
+        }))
     },
 
     async status(registrationId) {
@@ -322,11 +327,13 @@ export const prismaMobileDeviceRegistrationPortV1: MobilePushRegistrationPortV1 
                 revokedAt: null,
                 sessionExpiresAt: { gt: facts.now },
                 sessionRevocationEpoch: facts.revocationEpoch,
-                credentialSubject: facts.credentialSubject,
+                credentialSubject: { startsWith: facts.credentialSubjectPrefix },
             },
-            select: { fcmToken: true },
+            select: { fcmToken: true, runtimeOperatorId: true, credentialSubject: true },
         })
-        return row ? { sendable: true, token: row.fcmToken } : { sendable: false }
+        return row
+            ? { sendable: true, token: row.fcmToken, runtimeOperatorId: row.runtimeOperatorId, credentialSubject: row.credentialSubject }
+            : { sendable: false }
     },
 
     async clearTokenIfCurrent(registrationId, rejectedToken) {

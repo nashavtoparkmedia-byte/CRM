@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID } from 'node:crypto'
 import {
     createStaffPasswordVerifierV1,
     isStaffSessionEnforcedV1,
@@ -9,6 +9,7 @@ import {
     staffPasswordRefusalV1,
     staffSessionCookieOptionsV1,
     staffSessionIdV1,
+    staffSessionSecretV1,
     verifyStaffPasswordV1,
     type StaffPasswordRefusalV1,
 } from '../internal/staff-session-credentials'
@@ -243,13 +244,26 @@ export type StaffLoginResultV1 =
     | { ok: true, token: string, principal: StaffSessionPrincipalV1 }
     | { ok: false, reason: 'refused' | 'throttled' | 'busy' | 'unavailable' }
 
+export type StaffCredentialCheckV1 =
+    | { ok: true, record: RegistryRecordV1, credential: StaffCredentialStatusV1, throttleKeys: string[] }
+    | { ok: false, reason: 'refused' | 'throttled' | 'busy' | 'unavailable' }
+
 /**
- * Password login. The same scrypt runs for an unknown, disabled, revoked or
- * credential-less employee, and every such case answers the same `refused`.
+ * The one check of an employee's own password, for both lanes (browser
+ * `/login` and mobile `/login/mobile`, docs/design/mobile-personal-signin-v1.md).
+ *
+ * The same scrypt runs for an unknown, disabled, revoked or credential-less
+ * employee, and every such case answers the same `refused`. The throttle keys
+ * (`user:<id>`, `source:<x-real-ip>`) are shared by both lanes. A refusal is
+ * logged without anything the user typed.
  */
-export async function staffLoginV1(input: { userId: unknown, password: unknown, source: string | null }, nowMs = Date.now()): Promise<StaffLoginResultV1> {
-    const lane = await staffLaneStateV1().catch(() => ({ kind: 'refused', reason: 'lane_unreadable' } as const))
-    if (lane.kind !== 'ready') return { ok: false, reason: 'unavailable' }
+export async function verifyStaffCredentialV1(
+    input: { userId: unknown, password: unknown, source: string | null },
+    lane: 'browser' | 'mobile',
+    nowMs = Date.now(),
+): Promise<StaffCredentialCheckV1> {
+    const state = await staffLaneStateV1().catch(() => ({ kind: 'refused', reason: 'lane_unreadable' } as const))
+    if (state.kind !== 'ready') return { ok: false, reason: 'unavailable' }
     const userId = typeof input.userId === 'string' && input.userId.length <= 64 ? input.userId : ''
     const keys = [`user:${userId}`, ...(input.source ? [`source:${input.source}`] : [])]
     if (throttledUntil(keys, nowMs) > nowMs) return { ok: false, reason: 'throttled' }
@@ -257,7 +271,7 @@ export async function staffLoginV1(input: { userId: unknown, password: unknown, 
     let record: RegistryRecordV1 | undefined
     let credential: Awaited<ReturnType<typeof store.findVerifier>> = null
     try {
-        const registry = await readRegistryStrictV1(lane.registryPath)
+        const registry = await readRegistryStrictV1(state.registryPath)
         record = registry.find((candidate) => candidate.id === userId)
         credential = userId === '' ? null : await store.findVerifier(userId)
     } catch {
@@ -269,10 +283,26 @@ export async function staffLoginV1(input: { userId: unknown, password: unknown, 
     if (outcome === 'busy') return { ok: false, reason: 'busy' }
     if (!eligible || !outcome) {
         recordFailure(keys, nowMs)
-        console.warn(`[staff-session] login refused user=${record === undefined ? 'unknown' : 'registry'}`)
+        console.warn(`[${lane === 'browser' ? 'staff-session' : 'mobile-auth'}] login refused user=${record === undefined ? 'unknown' : 'registry'}`)
         return { ok: false, reason: 'refused' }
     }
-    const token = issueStaffSessionTokenV1({ userId: record!.id, userEpoch: row!.sessionEpoch }, undefined, nowMs)
+    return { ok: true, record: record!, credential: row!, throttleKeys: keys }
+}
+
+/** A successful sign-in in either lane clears its throttle keys. */
+export function clearStaffCredentialFailuresV1(throttleKeys: string[]): void {
+    clearFailures(throttleKeys)
+}
+
+/**
+ * Password login. The same scrypt runs for an unknown, disabled, revoked or
+ * credential-less employee, and every such case answers the same `refused`.
+ */
+export async function staffLoginV1(input: { userId: unknown, password: unknown, source: string | null }, nowMs = Date.now()): Promise<StaffLoginResultV1> {
+    const checked = await verifyStaffCredentialV1(input, 'browser', nowMs)
+    if (!checked.ok) return { ok: false, reason: checked.reason }
+    const { record, credential: row, throttleKeys: keys } = checked
+    const token = issueStaffSessionTokenV1({ userId: record.id, userEpoch: row.sessionEpoch }, undefined, nowMs)
     if (token === null) return { ok: false, reason: 'unavailable' }
     const verified = await verifyStaffSessionTokenV1(token, nowMs)
     if (verified.kind !== 'valid') return { ok: false, reason: 'unavailable' }
@@ -294,6 +324,80 @@ export async function staffLogoutV1(token: string | undefined): Promise<'ended' 
         await tx.record({ userId, kind: 'logout', actor: `staff:${userId}`, sid })
     })
     return 'ended'
+}
+
+// ── The mobile lane rides on the same credential ─────────────────────────
+
+const MOBILE_SESSION_KEY_LABEL = 'yoko-mobile-session-key.v2'
+
+/**
+ * The key that signs mobile sessions: derived from STAFF_SESSION_SECRET under
+ * its own label, so it is never the staff session key and a token of one lane
+ * never verifies in the other. Null while the staff lane has no valid secret.
+ */
+export function mobileSessionSigningKeyV1(environment?: Parameters<typeof staffSessionSecretV1>[0]): Buffer | null {
+    const secret = staffSessionSecretV1(environment)
+    return secret === null ? null : createHmac('sha256', secret).update(MOBILE_SESSION_KEY_LABEL, 'utf8').digest()
+}
+
+/**
+ * Whether the employee's own credential still backs a session issued at
+ * `userEpoch`: the Staff Session rule (registry record present, Активен,
+ * `createdAt` matching the credential row, row not revoked, epoch unchanged).
+ * `unverifiable` when the store or the registry cannot be read.
+ */
+export async function staffCredentialLivenessV1(userId: string, userEpoch: number): Promise<'live' | 'ended' | 'unverifiable'> {
+    const lane = await staffLaneStateV1().catch(() => ({ kind: 'refused', reason: 'lane_unreadable' } as const))
+    if (lane.kind === 'dormant') return 'ended'
+    if (lane.kind === 'refused') return 'unverifiable'
+    let row: StaffCredentialStatusV1 | null
+    let registry: RegistryRecordV1[]
+    try {
+        row = await store.findStatus(userId)
+        registry = await readRegistryStrictV1(lane.registryPath)
+    } catch (error) {
+        console.error('[mobile-auth] credential store unreadable; refusing the session:', error instanceof Error ? error.name : 'unknown')
+        return 'unverifiable'
+    }
+    const record = registry.find((candidate) => candidate.id === userId)
+    return isEligible(record, row) && row!.sessionEpoch === userEpoch ? 'live' : 'ended'
+}
+
+/**
+ * The same rule for many (employee, epoch) pairs at once: one registry read,
+ * one status read per employee. For push fan-out.
+ */
+export async function staffCredentialLivenessManyV1(
+    pairs: ReadonlyArray<{ userId: string, userEpoch: number }>,
+): Promise<{ kind: 'read', live: (userId: string, userEpoch: number) => boolean } | { kind: 'unverifiable' }> {
+    const lane = await staffLaneStateV1().catch(() => ({ kind: 'refused', reason: 'lane_unreadable' } as const))
+    if (lane.kind === 'dormant') return { kind: 'read', live: () => false }
+    if (lane.kind === 'refused') return { kind: 'unverifiable' }
+    try {
+        const registry = await readRegistryStrictV1(lane.registryPath)
+        const rows = new Map<string, StaffCredentialStatusV1 | null>()
+        for (const userId of new Set(pairs.map((pair) => pair.userId))) rows.set(userId, await store.findStatus(userId))
+        return {
+            kind: 'read',
+            live: (userId, userEpoch) => {
+                const row = rows.get(userId) ?? null
+                return isEligible(registry.find((candidate) => candidate.id === userId), row) && row!.sessionEpoch === userEpoch
+            },
+        }
+    } catch (error) {
+        console.error('[mobile-push] credential store unreadable; skipping:', error instanceof Error ? error.name : 'unknown')
+        return { kind: 'unverifiable' }
+    }
+}
+
+/** Audit of the mobile lane: actor `mobile:<id>`, never a browser login (`staff:<id>`). */
+export async function recordMobileStaffEventV1(userId: string, kind: 'login' | 'logout', sid: string | null): Promise<void> {
+    // Never throws: a sign-in or a logout is never undone by its audit write.
+    try {
+        await store.record({ userId, kind, actor: `mobile:${userId}`, sid })
+    } catch (error) {
+        console.error(`[mobile-auth] ${kind} audit failed:`, error instanceof Error ? error.name : 'unknown')
+    }
 }
 
 // ── Credential administration ────────────────────────────────────────────

@@ -1,5 +1,10 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { copyFileSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
+
+vi.setConfig({ testTimeout: 60_000 })
 
 /**
  * BR-4: the effective Android operator is the verified signed mobile session operator.
@@ -43,6 +48,26 @@ const fleetDb = vi.hoisted(() => {
     return db
 })
 
+// v2: every mobile session is an employee's own credential (docs/design/mobile-personal-signin-v1.md).
+const staff = vi.hoisted(() => ({
+    rows: new Map<string, { userId: string, registryCreatedAt: string, verifier: unknown, sessionEpoch: number, revokedAt: Date | null }>(),
+}))
+vi.mock('@/modules/identity-access/internal/staff-credential-store', () => {
+    const status = (userId: string) => {
+        const row = staff.rows.get(userId)
+        return row === undefined ? null : { userId, registryCreatedAt: row.registryCreatedAt, sessionEpoch: row.sessionEpoch, revokedAt: row.revokedAt }
+    }
+    return {
+        prismaStaffCredentialStoreV1: {
+            findStatus: async (userId: string) => status(userId),
+            findVerifier: async (userId: string) => (staff.rows.has(userId) ? { status: status(userId), verifier: staff.rows.get(userId)!.verifier } : null),
+            anyRow: async () => staff.rows.size > 0,
+            states: async () => [...staff.rows.values()].map((row) => ({ userId: row.userId, revoked: row.revokedAt !== null })),
+            record: async () => {},
+            locked: async <T>(work: (view: unknown) => Promise<T>) => work({}),
+        },
+    }
+})
 vi.mock('@/modules/identity-access/internal/mobile-session-barrier', () => ({
     prismaMobileSessionBarrierV1: {
         isBarred: vi.fn(async (deviceId: string, entry: string) => {
@@ -104,7 +129,12 @@ const fleetCheckRoute = await import('@/app/api/monitoring/drivers/[id]/fleet-ch
 const fleetResolveRoute = await import('@/app/api/monitoring/attention/[id]/route')
 const { AUTHENTICATE_USER_COMMAND_V1, END_USER_SESSION_COMMAND_V1 } = await import('@/contracts/identity-access/v1')
 
-const ENV = { MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: 'correct horse battery staple' }
+const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
+const ENV = { STAFF_SESSION_SECRET: SECRET }
+const PASSWORDS: Record<string, string> = { u1: 'manager pass phrase 2026', u2: 'admin pass phrase 2026' }
+const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'br4-registry-')), 'users.json')
+copyFileSync(path.join(process.cwd(), 'src/data/users.json'), REGISTRY)
+const { createStaffPasswordVerifierV1 } = await import('@/modules/identity-access/internal/staff-session-credentials')
 const SHELL_UA = `Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ${MOBILE_SHELL_UA_TOKEN}1`
 const DESKTOP_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120'
 const A = 'u2'   // Администратор: on desktop this role may switch identity, so the mobile denial is the strict case
@@ -112,7 +142,7 @@ const B = 'u1'   // Менеджер
 const DEVICE = 'a1b2c3d4e5f6a7b8'
 
 function session(operator = A, device = DEVICE) {
-    return issueMobileSession(operator, device, ENV) as string
+    return issueMobileSession(operator, device, 0, ENV) as string
 }
 
 function request(pathname: string, init: { ua?: string, cookies?: Record<string, string>, method?: string } = {}) {
@@ -152,9 +182,24 @@ async function assign(userId: string) {
     return assignRoute.POST(req, { params: Promise.resolve({ id: 'chat-1' }) })
 }
 
+beforeAll(async () => {
+    // Only A has a personal credential: every mobile session here is A's. B and
+    // u3 have none, so the legacy desktop lane keeps its crm_user_id semantics
+    // for them (a credential row closes the password-less login, N-D2).
+    staff.rows.set(A, {
+        userId: A,
+        registryCreatedAt: '2026-03-24T00:00:00Z',
+        verifier: await createStaffPasswordVerifierV1(PASSWORDS[A]),
+        sessionEpoch: 0,
+        revokedAt: null,
+    })
+})
+
 beforeEach(() => {
-    process.env.MOBILE_ACCESS_USER = ENV.MOBILE_ACCESS_USER
-    process.env.MOBILE_ACCESS_PASS = ENV.MOBILE_ACCESS_PASS
+    process.env.STAFF_SESSION_SECRET = SECRET
+    process.env.YOKO_USER_REGISTRY_FILE = REGISTRY
+    delete process.env.MOBILE_ACCESS_USER
+    delete process.env.MOBILE_ACCESS_PASS
     delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
     state.barred.clear()
     state.barrierUnreadable = false
@@ -268,7 +313,7 @@ describe('2, 3: no operator switch under a mobile session', () => {
 
     test('a second mobile login on top of a live session is refused: changing operator needs a logout first', async () => {
         await through(request('/login/mobile', { method: 'POST', cookies: { [MOBILE_SESSION_COOKIE]: session() } }))
-        const result = await establishMobileSessionV1(ENV.MOBILE_ACCESS_USER, ENV.MOBILE_ACCESS_PASS, B, 'b2c3d4e5f6a7b8c9')
+        const result = await establishMobileSessionV1(B, PASSWORDS[B], 'b2c3d4e5f6a7b8c9')
         expect(result).toEqual({ ok: false, reason: 'session_active' })
         expect(state.responseCookies).toEqual([])
     })
@@ -417,10 +462,10 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
     })
 
     test('a session on the shared unstable device id can never be barred, so it is refused and cannot be issued', async () => {
-        const unstable = issueMobileSession(A, 'ephemeral-device', ENV) as string
+        const unstable = issueMobileSession(A, 'ephemeral-device', 0, ENV) as string
         expect((await proxy(request('/api/messages', { cookies: { [MOBILE_SESSION_COOKIE]: unstable } }))).status).toBe(401)
         state.requestCookies = new Map()
-        expect(await establishMobileSessionV1(ENV.MOBILE_ACCESS_USER, ENV.MOBILE_ACCESS_PASS, A, 'ephemeral-device'))
+        expect(await establishMobileSessionV1(A, PASSWORDS[A], 'ephemeral-device'))
             .toEqual({ ok: false, reason: 'invalid_device' })
     })
 
@@ -429,7 +474,7 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
         const principal = verifyMobileSession(loggedOut)!
         state.barred.add(`${principal.deviceId}|${mobileSessionBarrierEntryV1(principal)}`)
         // An unreadable barrier is answered 503 with no redirect at all (test above).
-        const refusals = [loggedOut, issueMobileSession(A, 'ephemeral-device', ENV) as string]
+        const refusals = [loggedOut, issueMobileSession(A, 'ephemeral-device', 0, ENV) as string]
         for (const cookie of refusals) {
             const cookies = { [MOBILE_SESSION_COOKIE]: cookie, crm_user_id: A }
             const refused = await proxy(request('/messages', { cookies }))
@@ -443,7 +488,7 @@ describe('7, 8, 9: logout and dead sessions fail closed', () => {
 
         // The form then works over the dead cookie: a logged-out token is not a live session.
         await through(request('/login/mobile', { method: 'POST', cookies: { [MOBILE_SESSION_COOKIE]: loggedOut } }))
-        expect(await establishMobileSessionV1(ENV.MOBILE_ACCESS_USER, ENV.MOBILE_ACCESS_PASS, A, DEVICE)).toMatchObject({ ok: true })
+        expect(await establishMobileSessionV1(A, PASSWORDS[A], DEVICE)).toMatchObject({ ok: true })
 
         // A live session is still sent on to its destination.
         await through(request('/login/mobile?next=%2Fmessages', { cookies: { [MOBILE_SESSION_COOKIE]: session() } }))

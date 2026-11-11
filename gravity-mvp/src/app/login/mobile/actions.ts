@@ -22,31 +22,28 @@ export async function submitMobileLoginAction(
 ): Promise<{ error: string | null }> {
     const next = normalizeMobileReturnTo(formData.get('next'))
 
+    // The employee picks themself and types their own password; the operator
+    // is whoever that password verifies (docs/design/mobile-personal-signin-v1.md).
     const result = await establishMobileSessionV1(
-        formData.get('username'),
-        formData.get('password'),
         formData.get('operatorId'),
+        formData.get('password'),
         formData.get('deviceId'),
     )
 
     if (result.ok) redirect(next)
 
-    // One message for every credential-shaped failure: the form must not say
-    // which half was wrong. Operator-shaped failures are distinguishable
-    // because they are the operator's own selection, not a secret.
     switch (result.reason) {
-        case 'not_configured':
-            return { error: 'Мобильный вход не настроен на сервере. Обратитесь к администратору.' }
-        case 'unknown_operator':
-            return { error: 'Выберите сотрудника из списка.' }
-        case 'inactive_operator':
-            return { error: 'Учётная запись отключена.' }
         case 'invalid_device':
             return { error: 'Устройство не распознано. Переустановите приложение.' }
         case 'session_active':
             return { error: 'Сначала выйдите из текущей сессии.' }
+        case 'busy':
+        case 'unavailable':
+        case 'issue_failed':
+            return { error: 'Вход временно недоступен. Попробуйте позже.' }
         default:
-            return { error: 'Неверный логин или пароль.' }
+            // refused and throttled: one answer, nothing about which part failed.
+            return { error: 'Неверный пароль или вход временно ограничен.' }
     }
 }
 

@@ -22,8 +22,15 @@ export interface RegisterMobilePushDeviceBodyV1 {
 
 export type MobilePushRegistrationFailureCodeV1 =
     | 'MOBILE_SESSION_REQUIRED'
-    /** This device completed a logout for this session; only a new login may register again. */
+    /**
+     * This device completed a logout for this session, or the employee's own
+     * credential no longer backs it (disabled, reset, revoked, logged out in
+     * the browser). The two are deliberately not told apart. Only a new
+     * sign-in may register again.
+     */
     | 'MOBILE_SESSION_REVOKED'
+    /** The session could not be checked (store or registry unreadable). Retryable; never a refusal. */
+    | 'MOBILE_SESSION_UNVERIFIABLE'
     /** The session predates Mobile Push v1 and carries no server-issued instance id; re-login. */
     | 'MOBILE_SESSION_REISSUE_REQUIRED'
     | 'PUSH_DEVICE_ID_NOT_STABLE'

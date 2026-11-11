@@ -17,15 +17,40 @@ export const UNSTABLE_DEVICE_ID_V1 = 'ephemeral-device'
 
 /**
  * Server-known facts that decide whether a registration may receive push right
- * now. All of them are non-secret: nothing derived from MOBILE_ACCESS_PASS is
- * stored or compared, so the database holds no verifier for password guesses.
- * Rotating that password therefore requires advancing
- * MOBILE_SESSION_REVOCATION_EPOCH to silence sessions issued under the old one.
+ * now. All of them are non-secret. A v2 registration's subject is
+ * `staff-v2:<uep>`, the employee's credential epoch of the session that
+ * registered: the prefix is a database filter, and the epoch is compared with
+ * the employee's live credential per registration (`MobilePushEmployeeLivenessV1`),
+ * at fan-out and again at send time (docs/design/mobile-personal-signin-v1.md §2.4).
  */
 export interface MobilePushEligibilityFactsV1 {
     now: Date
     revocationEpoch: string
+    credentialSubjectPrefix: string
+}
+
+/**
+ * Whether employees' credentials still back the given (employee, epoch) pairs:
+ * the Staff Session rule. `unverifiable` when it cannot be read; then nothing
+ * is sent.
+ */
+export type MobilePushEmployeeLivenessV1 = (
+    pairs: ReadonlyArray<{ userId: string, userEpoch: number }>,
+) => Promise<{ kind: 'read', live: (userId: string, userEpoch: number) => boolean } | { kind: 'unverifiable' }>
+
+/** A registration eligible by the stored facts, with what the liveness check needs. Never a token. */
+export interface MobilePushEligibleRegistrationV1 extends MobilePushEligibleDeviceV1 {
+    runtimeOperatorId: string
     credentialSubject: string
+}
+
+/** The credential epoch a v2 subject carries, or null for any other subject. */
+export function mobilePushSubjectEpochV1(credentialSubject: string, prefix: string): number | null {
+    if (!credentialSubject.startsWith(prefix)) return null
+    const digits = credentialSubject.slice(prefix.length)
+    if (!/^(0|[1-9][0-9]{0,9})$/.test(digits)) return null
+    const epoch = Number(digits)
+    return Number.isSafeInteger(epoch) && epoch <= 2 ** 31 - 1 ? epoch : null
 }
 
 /**
@@ -115,7 +140,7 @@ export interface MobilePushRegistrationPortV1 {
         reason: 'logout',
         now: Date,
     ): Promise<number>
-    listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]>
+    listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleRegistrationV1[]>
     status(registrationId: string): Promise<MobilePushRegistrationStatusV1 | null>
     /**
      * The one read of the provider token, for the delivery being sent now. ONE
@@ -128,7 +153,7 @@ export interface MobilePushRegistrationPortV1 {
         registrationId: string,
         sessionBindingId: string,
         facts: MobilePushEligibilityFactsV1,
-    ): Promise<{ sendable: false } | { sendable: true, token: string | null }>
+    ): Promise<{ sendable: false } | { sendable: true, token: string | null, runtimeOperatorId: string, credentialSubject: string }>
     /** CAS: clear the token only if it is still exactly the one the provider rejected. */
     clearTokenIfCurrent(registrationId: string, rejectedToken: string): Promise<boolean>
     /** CAS: revoke only if the registration still carries the rejected token. */
@@ -137,7 +162,10 @@ export interface MobilePushRegistrationPortV1 {
 
 const MAX_BIND_ROUNDS = 3
 
-export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrationPortV1) {
+export function createMobilePushRegistrationHandlerV1(
+    port: MobilePushRegistrationPortV1,
+    employeeLiveness: MobilePushEmployeeLivenessV1,
+) {
     return {
         /**
          * Bind the device's current token.
@@ -192,8 +220,23 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
             return port.revokeDevice(deviceId, barred, session, 'logout', now)
         },
 
+        /**
+         * Fan-out: the registrations eligible by the stored facts whose
+         * employee's credential still backs the session that registered. A
+         * store that cannot be read yields nothing.
+         */
         async listEligible(facts: MobilePushEligibilityFactsV1): Promise<MobilePushEligibleDeviceV1[]> {
-            return port.listEligible(facts)
+            const rows = await port.listEligible(facts)
+            const candidates = rows.flatMap((row) => {
+                const userEpoch = mobilePushSubjectEpochV1(row.credentialSubject, facts.credentialSubjectPrefix)
+                return userEpoch === null ? [] : [{ row, userId: row.runtimeOperatorId, userEpoch }]
+            })
+            if (candidates.length === 0) return []
+            const liveness = await employeeLiveness(candidates.map(({ userId, userEpoch }) => ({ userId, userEpoch })))
+            if (liveness.kind !== 'read') return []
+            return candidates
+                .filter(({ userId, userEpoch }) => liveness.live(userId, userEpoch))
+                .map(({ row }) => ({ registrationId: row.registrationId, sessionBindingId: row.sessionBindingId }))
         },
 
         /**
@@ -206,7 +249,17 @@ export function createMobilePushRegistrationHandlerV1(port: MobilePushRegistrati
             facts: MobilePushEligibilityFactsV1,
         ): Promise<MobilePushTargetResolutionV1> {
             const target = await port.sendableToken(registrationId, sessionBindingId, facts)
-            if (target.sendable) return target.token ? { kind: 'send', token: target.token } : { kind: 'await_token' }
+            if (target.sendable) {
+                // The employee is checked again at send time, even after fan-out
+                // passed: a disable, reset or logout in between must win.
+                const userEpoch = mobilePushSubjectEpochV1(target.credentialSubject, facts.credentialSubjectPrefix)
+                if (userEpoch === null) return { kind: 'skip', reason: 'ineligible' }
+                const liveness = await employeeLiveness([{ userId: target.runtimeOperatorId, userEpoch }])
+                if (liveness.kind !== 'read' || !liveness.live(target.runtimeOperatorId, userEpoch)) {
+                    return { kind: 'skip', reason: 'ineligible' }
+                }
+                return target.token ? { kind: 'send', token: target.token } : { kind: 'await_token' }
+            }
             // Not sendable: that decision is final. The reason below is metadata
             // for the operations log only and never turns a skip into a send.
             const status = await port.status(registrationId)

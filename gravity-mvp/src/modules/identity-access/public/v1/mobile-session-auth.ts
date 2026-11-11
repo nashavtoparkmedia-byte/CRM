@@ -2,20 +2,23 @@ import { cookies, headers } from 'next/headers'
 import {
     MOBILE_SESSION_COOKIE,
     MOBILE_SESSION_TTL_SECONDS,
-    getMobileAccessCredentialConfig,
-    getMobileSessionRevocationEpoch,
+    isMobileSessionSigningConfigured,
     issueMobileSession,
     mobileSessionBarrierEntryV1,
     mobileSessionBindingIdV1,
     isSafeDeviceId,
     isSafeRuntimeOperatorId,
-    verifyMobileAccessCredentials,
     verifyMobileSession,
     type MobileSessionPrincipalV1,
 } from './mobile-session-credentials'
 import { UNSTABLE_DEVICE_ID_V1 } from './mobile-push-registration-handler'
 import { resolveCookieOperatorV1, resolveRequestOperatorV1 } from './mobile-session-operator'
-import { listUserIdentitiesV1 } from './user-directory'
+import {
+    clearStaffCredentialFailuresV1,
+    recordMobileStaffEventV1,
+    staffLaneStateV1,
+    verifyStaffCredentialV1,
+} from '../../application/staff-session-operations'
 
 /**
  * User-Agent fragment the Android shell appends to identify its lane.
@@ -41,17 +44,24 @@ export const MOBILE_SHELL_UA_TOKEN = 'YokoShell/'
 
 const LEGACY_UI_IDENTITY_COOKIE = 'crm_user_id'
 
+/**
+ * Why a mobile sign-in did not happen. `refused` covers every credential
+ * failure (unknown id, wrong password, disabled, no credential) with one
+ * answer; `throttled` is shown with the same text by the sign-in page.
+ */
 export type MobileLoginFailure =
-    | 'not_configured'
-    | 'invalid_credentials'
-    | 'unknown_operator'
-    | 'inactive_operator'
+    | 'refused'
+    | 'throttled'
+    | 'busy'
+    | 'unavailable'
     | 'invalid_device'
     | 'issue_failed'
     | 'session_active'
 
-export function isMobileLaneConfigured(): boolean {
-    return getMobileAccessCredentialConfig() !== null
+/** Whether the mobile sign-in can run: the staff lane is ready (secret valid, registry located). */
+export async function isMobileLaneConfigured(): Promise<boolean> {
+    if (!isMobileSessionSigningConfigured()) return false
+    return (await staffLaneStateV1().catch(() => ({ kind: 'refused' } as const))).kind === 'ready'
 }
 
 /**
@@ -107,51 +117,47 @@ function sessionCookieOptions(maxAge: number) {
 }
 
 /**
- * Establish a mobile session after proving the provisioned credential.
+ * Establish a mobile session for the employee whose own Staff Session password
+ * verifies (docs/design/mobile-personal-signin-v1.md §2.1). The operator IS
+ * that employee: `userId` is only the id the password is checked against.
  *
- * Returns the failure reason rather than throwing, so the login screen can say
- * something true without leaking which half of the credential was wrong: the
- * caller maps every credential-shaped failure to one message.
+ * The same verifier, scrypt slot, throttle keys and uniform `refused` as the
+ * browser `/login`. There is no shared credential and no fallback: a staff
+ * lane that is not ready answers `unavailable`.
  */
 export async function establishMobileSessionV1(
-    suppliedUsername: unknown,
+    userId: unknown,
     suppliedPassword: unknown,
-    runtimeOperatorId: unknown,
     deviceId: unknown,
 ): Promise<{ ok: true, principal: MobileSessionPrincipalV1 } | { ok: false, reason: MobileLoginFailure }> {
-    if (!isMobileLaneConfigured()) return { ok: false, reason: 'not_configured' }
+    if (!isMobileSessionSigningConfigured()) return { ok: false, reason: 'unavailable' }
     // The shared fallback id cannot carry a logout barrier, so a session on it
     // could never be ended server-side (BR-4).
     if (!isSafeDeviceId(deviceId) || deviceId === UNSTABLE_DEVICE_ID_V1) return { ok: false, reason: 'invalid_device' }
-    if (!isSafeRuntimeOperatorId(runtimeOperatorId)) return { ok: false, reason: 'unknown_operator' }
 
     // Changing the operator means ending this session first (BR-4): a second
     // login on top of a live one would be an operator switch without a logout.
     if ((await resolveRequestOperatorV1()).kind === 'mobile_session') return { ok: false, reason: 'session_active' }
 
-    if (!verifyMobileAccessCredentials(suppliedUsername, suppliedPassword)) {
-        console.warn('[mobile-auth] denied mobile session: credential not proven')
-        return { ok: false, reason: 'invalid_credentials' }
-    }
+    // X-Real-IP is set by the nginx edge; without the edge there is no source key.
+    const source = (await headers()).get('x-real-ip')?.trim().slice(0, 64) || null
+    const checked = await verifyStaffCredentialV1(
+        { userId: isSafeRuntimeOperatorId(userId) ? userId : '', password: suppliedPassword, source },
+        'mobile',
+    )
+    if (!checked.ok) return { ok: false, reason: checked.reason }
 
-    // The operator must exist and be enabled. Resolved through the context's
-    // own versioned directory rather than the legacy user service, which stays
-    // isolated behind its compatibility adapter. `getCurrentUser` does not
-    // check status today; the mobile lane does, so a disabled operator cannot
-    // keep a phone working.
-    const operator = (await listUserIdentitiesV1()).find((user) => user.id === runtimeOperatorId)
-    if (!operator) return { ok: false, reason: 'unknown_operator' }
-    if (operator.status !== 'Активен') return { ok: false, reason: 'inactive_operator' }
-
-    const token = issueMobileSession(runtimeOperatorId, deviceId)
+    const token = issueMobileSession(checked.record.id, deviceId, checked.credential.sessionEpoch)
     if (!token) return { ok: false, reason: 'issue_failed' }
 
     const principal = verifyMobileSession(token)
     if (!principal) return { ok: false, reason: 'issue_failed' }
+    clearStaffCredentialFailuresV1(checked.throttleKeys)
 
     const cookieStore = await cookies()
     cookieStore.set(MOBILE_SESSION_COOKIE, token, sessionCookieOptions(MOBILE_SESSION_TTL_SECONDS))
     await writeDerivedUiIdentityCookie(principal)
+    await recordMobileStaffEventV1(principal.runtimeOperatorId, 'login', mobileSessionBindingIdV1(principal))
     return { ok: true, principal }
 }
 
@@ -198,11 +204,13 @@ async function recordMobileLogoutBarrier(principal: MobileSessionPrincipalV1): P
             sessionBindingId: mobileSessionBindingIdV1(principal),
             barrierEntry: mobileSessionBarrierEntryV1(principal),
         })
-        return true
     } catch (error) {
         console.error('[mobile-auth] push registration revocation on logout failed:', error instanceof Error ? error.name : 'unknown')
         return false
     }
+    // The audit never decides the logout: it only records one that happened.
+    await recordMobileStaffEventV1(principal.runtimeOperatorId, 'logout', mobileSessionBindingIdV1(principal))
+    return true
 }
 
 async function clearMobileSessionCookies(): Promise<void> {

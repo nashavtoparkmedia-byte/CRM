@@ -225,7 +225,7 @@ describe('staff session primitives', () => {
 
     test('mobile and integration-admin tokens never verify as staff tokens', () => {
         const env = { STAFF_SESSION_SECRET: SECRET, MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: SECRET.slice(0, 30), ADMIN_USER: 'admin', ADMIN_PASS: SECRET.slice(0, 31) }
-        expect(credentials.readStaffSessionTokenV1(issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', env), env)).toBeNull()
+        expect(credentials.readStaffSessionTokenV1(issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', 0, env), env)).toBeNull()
         expect(credentials.readStaffSessionTokenV1(issueIntegrationAdminSession(env), env)).toBeNull()
     })
 

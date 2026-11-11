@@ -75,22 +75,26 @@ the repository, `yoko_integration_admin_session`, rather than a second
 independently-reasoned design.
 
 - Cookie `yoko_mobile_session`: `httpOnly`, `secure` in production, `sameSite=lax`, 12-hour `maxAge`.
-- HMAC-SHA256 over `{v, aud, sub, op, did, rev, iat, exp}`, constant-time verify.
-- The signing key is derived with a lane-specific label, so a token from this
-  lane cannot verify as an integration-admin token or the reverse.
-- **What it proves**: possession of `MOBILE_ACCESS_USER` and
-  `MOBILE_ACCESS_PASS`. Access, not personal identity — see the unresolved
-  section above. There is no fallback to the project-admin credential: a phone
-  must never carry the password that unlocks integration credentials, and an
-  unprovisioned or placeholder value disables mobile login rather than opening
-  it.
+- HMAC-SHA256 over `{v: 2, aud, op, uep, did, rev, iat, exp, sid}`, constant-time verify.
+- The signing key is derived from `STAFF_SESSION_SECRET` with the mobile lane's
+  own label, so a token from this lane cannot verify as a staff or
+  integration-admin token or the reverse.
+- **What it proves** (v2, docs/design/mobile-personal-signin-v1.md): the
+  employee's **own** Staff Session password, checked with the same verifier,
+  throttle and uniform refusal as the browser `/login`. The operator is that
+  employee. The shared `MOBILE_ACCESS_USER` / `MOBILE_ACCESS_PASS` route is
+  removed; a staff lane that is not ready answers "unavailable", never a
+  fallback. Every request also checks the employee's liveness (registry
+  Активен + createdAt, credential not revoked, epoch `uep` unchanged), so a
+  disable, password reset, revoke or browser logout ends the phone session on
+  its next request.
 - **Expiry**: 12 hours, checked at the request boundary on every request.
 - **Logout**: `clearMobileSessionV1` clears the session and the derived value;
   the next request from the shell gets the login screen.
 - **Server-side revocation**, two levers, neither needing a table or a deploy:
   raise `MOBILE_SESSION_REVOCATION_EPOCH` to invalidate every device at once, or
-  rotate `MOBILE_ACCESS_PASS`. Both take effect on the shell's next request,
-  with the cookie still sitting on the device.
+  end one employee's sessions (password reset or revoke on `/users`). Both take
+  effect on the shell's next request, with the cookie still sitting on the device.
 
 `op` is the runtime operator id from `users.json`. It is **not** a Prisma
 `CrmUser.id` and nothing may use it as one. It is carried inside the signed

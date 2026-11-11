@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { prismaMobileSessionBarrierV1 } from '../internal/mobile-session-barrier'
-import { staffSessionCookieNameV1, verifyStaffSessionTokenV1 } from './staff-session-operations'
+import { staffCredentialLivenessV1, staffSessionCookieNameV1, verifyStaffSessionTokenV1 } from './staff-session-operations'
 import { UNSTABLE_DEVICE_ID_V1 } from '../public/v1/mobile-push-registration-handler'
 import {
     LEGACY_UI_IDENTITY_COOKIE_V1,
@@ -13,7 +13,8 @@ import {
 /**
  * The operator a request acts as (BR-4).
  *
- * `mobile_session` is the verified, not logged-out signed session: its operator
+ * `mobile_session` is the verified, not logged-out signed session whose
+ * employee's own credential still backs it: its operator
  * is the actor for every protected effect of the request, and no cookie, UI
  * selection or client-supplied id overrides it. `mobile_session_refused` means
  * a session cookie is present but does not grant anything; the request then has
@@ -88,6 +89,12 @@ export async function resolveCookieOperatorV1(
     const barrier = await mobileSessionBarrierStateV1(resolution.principal)
     if (barrier === 'unreadable') return { kind: 'mobile_session_refused', unverifiable: true }
     if (barrier === 'barred') return { kind: 'mobile_session_refused' }
+    // The session follows the employee (docs/design/mobile-personal-signin-v1.md
+    // §2.3): disabled, re-created, reset, revoked or logged out in the browser
+    // ends it on this very request, however long the phone was offline.
+    const liveness = await staffCredentialLivenessV1(resolution.principal.runtimeOperatorId, resolution.principal.staffEpoch)
+    if (liveness === 'unverifiable') return { kind: 'mobile_session_refused', unverifiable: true }
+    if (liveness === 'ended') return { kind: 'mobile_session_refused' }
     return { kind: 'mobile_session', operatorId: resolution.operatorId }
 }
 
