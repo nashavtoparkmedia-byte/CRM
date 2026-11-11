@@ -20,6 +20,9 @@ import { createFindDriverByExactPhoneHandlerV1 } from '../public/v1/find-driver-
 import { legacyPrismaFindDriverByExactPhonePortV1 } from '../public/v1/legacy-prisma-find-driver-by-exact-phone-adapter'
 import { createDriverProfilesForContactsHandlerV1 } from '../public/v1/driver-profiles-for-contacts-handler'
 import { legacyPrismaDriverProfilesForContactsPortV1 } from '../public/v1/legacy-prisma-driver-profiles-for-contacts-adapter'
+import { createDriverProfilesForContactsHandlerV2 } from '../public/v1/driver-profiles-for-contacts-v2-handler'
+import { createDriverProfilesByExactLicenceHandlerV1 } from '../public/v1/driver-profiles-by-exact-licence-handler'
+import { legacyPrismaDriverLicencePortV1 } from '../public/v1/legacy-prisma-driver-licence-adapter'
 import { createGetDriverCallablePhoneHandlerV1 } from '../public/v1/get-driver-callable-phone-handler'
 import { legacyPrismaGetDriverCallablePhonePortV1 } from '../public/v1/legacy-prisma-get-driver-callable-phone-adapter'
 import { createSearchLocalDriversHandlerV1, normalizeDriverSearchQueryV1 } from '../public/v1/search-local-drivers-handler'
@@ -59,6 +62,8 @@ const runDriverEventRetention = createRunDriverEventRetentionHandlerV1(legacyPri
 const runApiLogRetention = createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 const findDriverByExactPhone = createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
 const readDriverProfilesForContacts = createDriverProfilesForContactsHandlerV1(legacyPrismaDriverProfilesForContactsPortV1)
+const readDriverProfilesForContactsLicenced = createDriverProfilesForContactsHandlerV2(readDriverProfilesForContacts, legacyPrismaDriverLicencePortV1)
+const findDriverProfilesByExactLicence = createDriverProfilesByExactLicenceHandlerV1(legacyPrismaDriverLicencePortV1)
 const getDriverCallablePhone = createGetDriverCallablePhoneHandlerV1(legacyPrismaGetDriverCallablePhonePortV1)
 const searchLocalDrivers = createSearchLocalDriversHandlerV1(legacyPrismaSearchLocalDriversPortV1)
 const reconcileDriverProfile = createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
@@ -82,6 +87,8 @@ export const runDriverEventRetentionV1 = (...args: Parameters<typeof runDriverEv
 export const runApiLogRetentionV1 = (...args: Parameters<typeof runApiLogRetention>) => runApiLogRetention(...args)
 export const findDriverByExactPhoneV1 = (...args: Parameters<typeof findDriverByExactPhone>) => findDriverByExactPhone(...args)
 export const readDriverProfilesForContactsV1 = (...args: Parameters<typeof readDriverProfilesForContacts>) => readDriverProfilesForContacts(...args)
+export const readDriverProfilesForContactsV2 = (...args: Parameters<typeof readDriverProfilesForContactsLicenced>) => readDriverProfilesForContactsLicenced(...args)
+export const findDriverProfilesByExactLicenceV1 = (...args: Parameters<typeof findDriverProfilesByExactLicence>) => findDriverProfilesByExactLicence(...args)
 export const getDriverCallablePhoneV1 = (...args: Parameters<typeof getDriverCallablePhone>) => getDriverCallablePhone(...args)
 export const searchLocalDriversV1 = (...args: Parameters<typeof searchLocalDrivers>) => searchLocalDrivers(...args)
 export async function searchYandexParksByDriverQueryV1(query: unknown): Promise<ParkDriverSearchResultV1> {
