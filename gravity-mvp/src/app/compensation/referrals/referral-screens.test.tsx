@@ -6,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * What has to hold: the manager picks both people themselves and nothing is
  * picked for them; recording says it changed no access; a write is offered
- * only when a signed staff session can make it; and the screen says only
- * what the backend answered.
+ * only when Identity Access's Staff Session of a confirmed Администратор can
+ * make it; and the screen says only what the backend answered, including why
+ * it may not write.
  */
 
 const searchReferralPeople = vi.fn()
@@ -125,10 +126,37 @@ describe('recording an invitation', () => {
         expect(await screen.findByText('Этот водитель уже закреплён за другим пригласившим. Пригласивший: Иванов Иван Иванович.')).toBeTruthy()
     })
 
-    it('offers no write while there is no signed staff session, and says why', () => {
+    it('offers no write while there is no signed staff session, says why, and leads to the staff sign-in', () => {
         render(<ReferralManager writesAvailable={false} />)
         expect(text(screen.getByTestId('writes-unavailable'))).toContain('нужен подписанный вход сотрудника')
+        expect(screen.getByRole('link', { name: 'Войти' }).getAttribute('href')).toBe('/login')
         expect(disabled(screen.getByRole('button', { name: 'Закрепить приглашение' }))).toBe(true)
+    })
+
+    it('tells a verified employee without the Cash role that only an administrator writes, with no sign-in to offer', () => {
+        render(<ReferralManager writesAvailable={false} writesRefusal="staff_role_not_allowed" />)
+        expect(text(screen.getByTestId('writes-unavailable'))).toBe('Закреплять приглашения и выдавать доступ может только администратор.')
+        expect(screen.queryByRole('link', { name: 'Войти' })).toBeNull()
+        expect(disabled(screen.getByRole('button', { name: 'Закрепить приглашение' }))).toBe(true)
+    })
+})
+
+describe('a search hit where not every word matched', () => {
+    it('says so for a person found only by a partial name, and still lets the manager pick them', async () => {
+        searchReferralPeople.mockResolvedValue({ status: 'ok', truncated: false, candidates: [
+            candidate({ personContactId: 'contact-T', displayName: 'Тарасов Олег', matchedBy: ['partial'] }),
+            candidate({ personContactId: 'contact-F', displayName: 'Тарасов Олег Петрович', matchedBy: ['name'] }),
+            candidate({ personContactId: 'contact-P', displayName: 'Тарасов Олег', matchedBy: ['partial', 'phone'] }),
+        ] })
+        render(<ReferralManager writesAvailable />)
+        fireEvent.change(screen.getByLabelText('Найти водителя'), { target: { value: 'Тарасов Олег Петрович' } })
+        fireEvent.keyDown(screen.getByLabelText('Найти водителя'), { key: 'Enter' })
+        const rows = await screen.findAllByRole('listitem')
+        const warned = rows.map((row) => row.querySelector('[data-testid="partial-name-match"]') !== null)
+        expect(warned).toEqual([true, false, false])
+        expect(text(rows[0])).toContain('Совпали не все слова')
+        expect(text(rows[0])).toContain('совпало: ФИО не полностью')
+        expect(disabled(rows[0].querySelector('button')!)).toBe(false)
     })
 })
 
