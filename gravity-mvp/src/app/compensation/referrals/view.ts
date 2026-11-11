@@ -95,6 +95,12 @@ export const MATCH_LABELS: Record<string, string> = {
     name: 'ФИО',
     phone: 'телефон',
     licence: 'ВУ',
+    partial: 'ФИО не полностью',
+}
+
+/** Found only by a name in which one typed word is missing: it may be a namesake. */
+export function partialNameOnly(matchedBy: readonly string[]): boolean {
+    return matchedBy.includes('partial') && !matchedBy.some((match) => match === 'name' || match === 'phone' || match === 'licence')
 }
 
 export const ACCESS_STATE_LABELS: Record<ReferralAccessView['state'], string> = {

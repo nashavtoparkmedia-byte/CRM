@@ -141,6 +141,25 @@ describe('recording an invitation', () => {
     })
 })
 
+describe('a search hit where not every word matched', () => {
+    it('says so for a person found only by a partial name, and still lets the manager pick them', async () => {
+        searchReferralPeople.mockResolvedValue({ status: 'ok', truncated: false, candidates: [
+            candidate({ personContactId: 'contact-T', displayName: 'Тарасов Олег', matchedBy: ['partial'] }),
+            candidate({ personContactId: 'contact-F', displayName: 'Тарасов Олег Петрович', matchedBy: ['name'] }),
+            candidate({ personContactId: 'contact-P', displayName: 'Тарасов Олег', matchedBy: ['partial', 'phone'] }),
+        ] })
+        render(<ReferralManager writesAvailable />)
+        fireEvent.change(screen.getByLabelText('Найти водителя'), { target: { value: 'Тарасов Олег Петрович' } })
+        fireEvent.keyDown(screen.getByLabelText('Найти водителя'), { key: 'Enter' })
+        const rows = await screen.findAllByRole('listitem')
+        const warned = rows.map((row) => row.querySelector('[data-testid="partial-name-match"]') !== null)
+        expect(warned).toEqual([true, false, false])
+        expect(text(rows[0])).toContain('Совпали не все слова')
+        expect(text(rows[0])).toContain('совпало: ФИО не полностью')
+        expect(disabled(rows[0].querySelector('button')!)).toBe(false)
+    })
+})
+
 describe('the person card', () => {
     it('shows whom the person invited and that they hold no access yet', () => {
         render(<PersonCard writesAvailable onChanged={() => {}} person={person({

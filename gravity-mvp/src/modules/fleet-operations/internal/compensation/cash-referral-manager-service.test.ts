@@ -4,6 +4,7 @@ import { compensationLineageDigestV1 } from './compensation-pilot-lineage'
 import { cashAccessEventHashV1, foldCashAccessLedgerV1, verifyCashAccessChainV1, type CashAccessEventV1 } from './compensation-referral-ledger'
 import {
     cashReferralLicenceKeyV1,
+    cashReferralLookupFullMatchV1,
     cashStaffAuthorityFromStaffSessionV1,
     cashStaffSessionIdV1,
     type CashReferralInvitationRowV1,
@@ -60,7 +61,7 @@ function profile(driverId: string, contactId: string, fullName: string, over: Pa
 class MemoryStore {
     profiles: CashReferralManagerProfileV1[] = []
     /** What ContactLookup.v1 searches: live Contacts, their name and their stored phone digits. */
-    contacts: Array<{ contactId: string; displayTitle: string; phones: string[] }> = []
+    contacts: Array<{ contactId: string; displayTitle: string; phones: string[]; match?: unknown }> = []
     lookups: string[] = []
     lineages = new Map<string, string[]>()
     events: CashAccessEventV1[] = []
@@ -105,7 +106,15 @@ class MemoryStore {
                 const found = this.contacts.filter((c) => (phone
                     ? c.phones.some((stored) => stored.includes(query))
                     : c.displayTitle.toLowerCase().includes(query.toLowerCase())))
-                return { contacts: found.slice(0, limit).map(({ contactId, displayTitle }) => ({ contactId, displayTitle })), truncated: found.length > limit }
+                // As the adapter: Contacts' match class, a full one unless the fixture names another.
+                return {
+                    contacts: found.slice(0, limit).map(({ contactId, displayTitle, match }) => ({
+                        contactId,
+                        displayTitle,
+                        fullMatch: cashReferralLookupFullMatchV1(match !== undefined ? match : (phone ? 'phone_substring' : 'name_all_words')),
+                    })),
+                    truncated: found.length > limit,
+                }
             },
             searchProfilesByLicence: async (licence) => this.profiles.filter((p) => cashReferralLicenceKeyV1(p.licenseNumber) === licence),
             profilesOfContacts: async (ids) => this.profiles.filter((p) => p.contactId !== null && ids.includes(p.contactId)),
@@ -251,6 +260,24 @@ describe('scenario A: recording an invitation', () => {
         expect(both.candidates).toHaveLength(1)
         expect(both.candidates[0]).toMatchObject({ selectable: true, personContactId: 'contact-B' })
         expect([...both.candidates[0].matchedBy].sort()).toEqual(['licence', 'phone'])
+    })
+
+    it('says when Contacts matched not every typed word, and only then', async () => {
+        // A full ФИО typed against a card without the patronymic: ContactLookup.v1's name_all_but_one_word.
+        store.contacts.push({ contactId: 'contact-T', displayTitle: 'Тарасов Олег', phones: [], match: 'name_all_but_one_word' })
+        store.lineages.set('contact-T', ['contact-T'])
+        const partial = await searchCashReferralPeopleV1(port, 'Тарасов Олег')
+        expect(partial).toMatchObject({ status: 'ok', candidates: [{ selectable: true, personContactId: 'contact-T', matchedBy: ['partial'] }] })
+        // Every other class Contacts declares is a full match.
+        for (const match of ['name_prefix', 'name_all_words']) {
+            store.contacts[store.contacts.length - 1].match = match
+            expect(await searchCashReferralPeopleV1(port, 'Тарасов Олег')).toMatchObject({ status: 'ok', candidates: [{ personContactId: 'contact-T', matchedBy: ['name'] }] })
+        }
+        // A class Cash does not know, or none, is never taken for a full match.
+        for (const match of ['bogus', 'NAME_ALL_WORDS', null, 42]) {
+            store.contacts[store.contacts.length - 1].match = match
+            expect(await searchCashReferralPeopleV1(port, 'Тарасов Олег')).toMatchObject({ status: 'ok', candidates: [{ personContactId: 'contact-T', matchedBy: ['partial'] }] })
+        }
     })
 
     it('names a person who has no park profile by the title Contacts shows', async () => {

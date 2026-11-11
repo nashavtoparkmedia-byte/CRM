@@ -29,6 +29,7 @@ import {
     resolveCashStaffAuthorityFromSessionV1,
     type CashReferralInvitationRowV1,
     type CashReferralManagerProfileV1,
+    cashReferralLookupFullMatchV1,
 } from './cash-referral-manager'
 
 /**
@@ -469,5 +470,14 @@ describe('who may write', () => {
         expect(cashReferralRequestIdValidV1('8f14e45f-ceea-467a-9575-3f1c0b5e6a11')).toBe(true)
         expect(cashReferralRequestIdValidV1('retry')).toBe(false)
         expect(cashReferralRequestIdValidV1(undefined)).toBe(false)
+    })
+})
+
+describe('which ContactLookup.v1 matches count as full', () => {
+    it('trusts only the four classes in which every typed word or the phone matched', () => {
+        for (const match of ['phone_exact', 'phone_substring', 'name_prefix', 'name_all_words']) expect(cashReferralLookupFullMatchV1(match)).toBe(true)
+        for (const match of ['name_all_but_one_word', 'name_substring', 'Name_Prefix', '', ' name_prefix', undefined, null, 1, {}, ['name_prefix']]) {
+            expect(cashReferralLookupFullMatchV1(match)).toBe(false)
+        }
     })
 })

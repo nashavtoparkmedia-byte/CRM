@@ -20,6 +20,7 @@ import {
     MATCH_LABELS,
     UNSELECTABLE_LABELS,
     formatDateTime,
+    partialNameOnly,
     refusalText,
     type ReferralCandidateView,
     type ReferralInvitationView,
@@ -138,6 +139,11 @@ export function PersonPicker({ label, picked, onPick }: {
                                         совпало: {candidate.matchedBy.map((match) => MATCH_LABELS[match] ?? match).join(', ')}
                                     </span>
                                 </span>
+                                {partialNameOnly(candidate.matchedBy) && (
+                                    <span className="block text-[12px] text-destructive" data-testid="partial-name-match">
+                                        Совпали не все слова. Сверьте телефон и ВУ.
+                                    </span>
+                                )}
                                 {candidate.profiles.map((profile) => (
                                     <span key={profile.driverId} className="block text-[13px] text-muted">{profileLine(profile)}</span>
                                 ))}

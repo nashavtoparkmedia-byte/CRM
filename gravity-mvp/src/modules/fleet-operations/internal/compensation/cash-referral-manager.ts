@@ -380,7 +380,24 @@ export interface CashReferralManagerProfileV1 {
     contactId: string | null
 }
 
-export type CashReferralMatchV1 = 'name' | 'phone' | 'licence'
+/**
+ * How a person was found. `partial`: Contacts found the name with one typed word
+ * missing (ContactLookup.v1's `name_all_but_one_word`, for example a full ФИО
+ * against a card without the patronymic), or answered with a match class Cash
+ * does not know. The screen then says that not every word matched.
+ */
+export type CashReferralMatchV1 = 'name' | 'phone' | 'licence' | 'partial'
+
+/**
+ * ContactLookup.v1's classes in which every typed word, or the phone, matched.
+ * Only these count as a full match; any other class, or none, is `partial`:
+ * Cash never takes a match class it does not know for a full one.
+ */
+export const CASH_REFERRAL_FULL_LOOKUP_CLASSES_V1 = ['phone_exact', 'phone_substring', 'name_prefix', 'name_all_words'] as const
+
+export function cashReferralLookupFullMatchV1(match: unknown): boolean {
+    return typeof match === 'string' && (CASH_REFERRAL_FULL_LOOKUP_CLASSES_V1 as readonly string[]).includes(match)
+}
 
 /** A profile Fleet found by its licence. */
 export interface CashReferralManagerHitV1 {
