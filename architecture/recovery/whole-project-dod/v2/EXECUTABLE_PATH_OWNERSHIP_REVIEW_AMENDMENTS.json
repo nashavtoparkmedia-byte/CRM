@@ -4313,6 +4313,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "contact-identity-lookup-search-normalization-main-f8a36b9f-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_LOOKUP_SEARCH_EXECUTOR_REVIEW_F8A36B9F",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_V8_MANDATE_07_CONTACT_IDENTITY_ROOT_CAUSE_ENGINEERING_GO_20261110",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at f8a36b9f, whose tail is messaging-r21-a1a2-pre-adoption-after-r22-20261110, and leaves that tail unchanged. It changes no assignment and rebinds no source fingerprint."
+      },
+      "reason": "Records the one tracked executable surface the ContactLookup.v1 search fix (Orchestrator V8 mandate 07 root-cause fix, after the Owner found nobody in «Люди» by a ФИО and a number from the dispatcher profile) adds on top of main f8a36b9f: 2,840 + 1 = 2,841 surfaces, context-owned 1,577 -> 1,578, governed exclusions unchanged at 1,263. The new path is the isolated-PostgreSQL proof of the lookup adapter, gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-lookup-adapter.postgres.test.ts, owned through the contacts context manifest owned_paths. Every changed path (the ContactLookup.v1 capability and its adapter, the public index, ContactSelector and the HTTP lookup client, and their tests) is context-owned through the same manifest and needs no exact assignment; no exact-inventory path changes bytes, so no source-fingerprint rebind is required. Its predecessor is the published tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main f8a36b9f only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2840,
+        "tracked_inventory_sha256": "232ca7adc7807654c8051ebec48d7ac4f189b3f89202ecdd47c417299cae86cc",
+        "coverage_sha256": "727da669274a65a48f96852a3c0389527d7516e22f2711dc4b51d8c5a8378009"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2841,
+        "tracked_inventory_sha256": "790bf0b4053fa333cc6472036b14bcd70b48f5338581dbc5ffc6e1eed8e1c303",
+        "coverage_sha256": "f82a1ef30cf4e646ce72d3066870156fafde61de00a16f587d256e7abcf99c66"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
