@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { isContactConfirmedMainDriverV1 } from '@/modules/contacts/public/v1'
+import { conversationPersonBindingStateV1, isConversationPersonTrustedV1 } from '../../public/v1/conversation-binding-trust-policy'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import type { ExternalMessageRecordV1 } from '@/contracts/messaging/v1'
 import {
@@ -95,11 +97,40 @@ export class ContextBuilder {
     if (config.mode === 'off' && !opts?.ignoreModeOff) return null
 
     // Load chat
-    const chat = await prisma.chat.findUnique({
+    const row = await prisma.chat.findUnique({
       where:  { id: message.chatId },
-      select: { id: true, channel: true, externalChatId: true, driverId: true },
+      select: {
+        id: true,
+        channel: true,
+        externalChatId: true,
+        driverId: true,
+        chatType: true,
+        contactId: true,
+        contactIdentityId: true,
+        contactIdentity: { select: { id: true, channel: true, externalId: true, contactId: true, isActive: true } },
+      },
     })
-    if (!chat) return null
+    if (!row) return null
+
+    // R-22: a Driver's name and phone enter the AI context only when this
+    // conversation's binding is not provably another person's AND Contacts
+    // confirms that Driver as the bound contact's own. A stale driverId never
+    // puts another person's identity into a prompt.
+    const bindingState = conversationPersonBindingStateV1({
+      channel: row.channel,
+      chatType: row.chatType,
+      externalChatId: row.externalChatId,
+      contactId: row.contactId,
+      contactIdentityId: row.contactIdentityId,
+      linkedIdentity: row.contactIdentity,
+    })
+    const driverProven = Boolean(
+      row.driverId
+      && row.contactId
+      && isConversationPersonTrustedV1(bindingState)
+      && await isContactConfirmedMainDriverV1(row.contactId, row.driverId),
+    )
+    const chat = { id: row.id, channel: row.channel, externalChatId: row.externalChatId, driverId: driverProven ? row.driverId : null }
 
     // Load driver
     let driver: { fullName: string | null; phone: string | null } | null = null

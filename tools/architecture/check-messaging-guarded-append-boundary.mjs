@@ -17,7 +17,7 @@
 //   - The composition root binds each guarded handler to the adapter once.
 
 import assert from 'node:assert/strict'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
@@ -30,16 +30,37 @@ const handlerPath = 'gravity-mvp/src/modules/messaging/public/v1/guarded-channel
 const adapterPath = 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts'
 const compositionPath = 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts'
 const migrationPath = 'gravity-mvp/prisma/migrations/20261108120000_add_messaging_held_channel_message/migration.sql'
+const facadePath = 'gravity-mvp/src/modules/messaging/public/v1/index.ts'
+const retentionJobPath = 'gravity-mvp/src/lib/RetentionCleanup.ts'
+/**
+ * A1: the guarded write capabilities take a person proof as INPUT and trust it,
+ * so only server-side composition that derives that proof from Contacts may
+ * call them. The first ingress consumer is added here by name, with its review;
+ * no file under the app layer (routes, pages, server actions) and no file
+ * carrying a 'use server' directive may reach them.
+ */
+const GUARDED_WRITE_CAPABILITIES = ['appendGuardedChannelMessageV1', 'releaseHeldChannelMessagesV1']
+const APPROVED_GUARDED_WRITE_CALLERS = new Set([handlerPath, compositionPath, facadePath])
+const GUARDED_RETENTION_CAPABILITY = 'runHeldChannelMessageRetentionV1'
+const APPROVED_GUARDED_RETENTION_CALLERS = new Set([handlerPath, compositionPath, facadePath, retentionJobPath])
+const GUARDED_READ_CAPABILITY = 'heldChannelMessagesV1'
 const closedSet = [contractPath, policyPath, handlerPath, adapterPath]
 
-const RUNTIME_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx'])
+// Every file the bundler can load counts: dot-prefixed entries and .mts/.cts are
+// scanned too (only build output and node_modules are skipped), and operator
+// scripts join the scan so no caller can hide outside gravity-mvp/src.
+const RUNTIME_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.jsx', '.mts', '.cts'])
+const SKIPPED_ENTRIES = new Set(['node_modules', '.next', '.git', '.turbo'])
+const scriptsRoot = 'gravity-mvp/scripts'
 const isTest = (file) => /\.(test|spec)\.[cm]?[jt]sx?$/u.test(file) || file.includes('/__tests__/')
+// Test files stay outside the caller scan, so runtime code may never import one.
+const TEST_PATH_IMPORT = /\/__tests__\/|\.(?:test|spec)(?:\.[cm]?[jt]sx?)?(?:\?.*)?$/u
 
 function runtimeFiles() {
   const files = new Map()
   const walk = (directory) => {
     for (const entry of readdirSync(path.join(root, directory))) {
-      if (entry === 'node_modules' || entry.startsWith('.')) continue
+      if (SKIPPED_ENTRIES.has(entry)) continue
       const relative = `${directory}/${entry}`
       const stats = statSync(path.join(root, relative))
       if (stats.isDirectory()) walk(relative)
@@ -47,7 +68,15 @@ function runtimeFiles() {
     }
   }
   walk(sourceRoot)
+  if (existsSync(path.join(root, scriptsRoot))) walk(scriptsRoot)
   return files
+}
+
+function assertNoRuntimeImportsFromTestPaths(files) {
+  for (const [file, source] of files) {
+    const hit = importSpecifiers(source).find(specifier => TEST_PATH_IMPORT.test(specifier))
+    if (hit) throw new Error(`${file}: runtime code imports a test path (${hit}); test files are outside the caller scan`)
+  }
 }
 
 function importSpecifiers(source) {
@@ -104,8 +133,44 @@ function assertHeldStoreOwner(files) {
     if (/\bheldChannelMessage\b|"HeldChannelMessage"|\bHeldChannelMessage\s*\(|FROM\s+"?HeldChannelMessage/u.test(source)) {
       throw new Error(`${file}: touches the held store outside the guarded adapter`)
     }
-    if (importSpecifiers(source).some(specifier => specifier.endsWith('/legacy-prisma-guarded-channel-message-adapter')) && file !== compositionPath) {
-      throw new Error(`${file}: imports the guarded adapter outside the composition root`)
+    // Any spelling of the adapter module (static or dynamic import, with or
+    // without an extension or query suffix) outside the composition root.
+    if (file !== compositionPath && /legacy-prisma-guarded-channel-message-adapter/u.test(source)) {
+      throw new Error(`${file}: names the guarded adapter module outside the composition root`)
+    }
+  }
+}
+
+const APP_LAYER = /^gravity-mvp\/src\/app\//u
+// A directive prologue may carry a trailing comment, extra semicolons or a second
+// directive; an inline server action carries the directive inside its body.
+const USE_SERVER = /^\s*['"]use server['"]\s*(?:;|\/\/|\/\*|$)/mu
+const INLINE_USE_SERVER = /\{\s*['"]use server['"]\s*;/u
+const isServerActionModule = (source) => USE_SERVER.test(source) || INLINE_USE_SERVER.test(source)
+const mentions = (source, name) => new RegExp(`\\b${name}\\b`, 'u').test(source)
+// A namespace import or star re-export of the facade or the composition carries the
+// capabilities without naming them (computed access), so neither is allowed outside
+// the approved callers. The control is identifier-based beyond that.
+const GUARDED_MODULE = /(?:modules\/messaging\/public\/v1(?:\/index)?|messaging-operations)(?:\.[cm]?[jt]sx?)?(?:\?.*)?$/u
+const starSpecifiers = (source) => [
+  ...[...source.matchAll(/^\s*import\s*\*\s*as\s+\w+\s+from\s*['"]([^'"]+)['"]/gmu)].map(match => match[1]),
+  ...[...source.matchAll(/^\s*export\s*\*\s*(?:as\s+\w+\s+)?from\s*['"]([^'"]+)['"]/gmu)].map(match => match[1]),
+]
+
+function assertServerSideCallersOnly(files) {
+  for (const [file, source] of files) {
+    const appLayer = APP_LAYER.test(file) || isServerActionModule(source)
+    if (!APPROVED_GUARDED_WRITE_CALLERS.has(file) && starSpecifiers(source).some(specifier => GUARDED_MODULE.test(specifier))) {
+      throw new Error(`${file}: a namespace import or star re-export of the Messaging facade or composition would carry the guarded capabilities unnamed`)
+    }
+    for (const name of [...GUARDED_WRITE_CAPABILITIES, GUARDED_RETENTION_CAPABILITY, GUARDED_READ_CAPABILITY]) {
+      if (appLayer && mentions(source, name)) throw new Error(`${file}: the app layer or a server action reaches ${name}`)
+    }
+    for (const name of GUARDED_WRITE_CAPABILITIES) {
+      if (mentions(source, name) && !APPROVED_GUARDED_WRITE_CALLERS.has(file)) throw new Error(`${file}: calls ${name} without an approved server-side composition review`)
+    }
+    if (mentions(source, GUARDED_RETENTION_CAPABILITY) && !APPROVED_GUARDED_RETENTION_CALLERS.has(file)) {
+      throw new Error(`${file}: calls ${GUARDED_RETENTION_CAPABILITY} outside the retention job`)
     }
   }
 }
@@ -127,10 +192,17 @@ function assertAdapterLocksBeforeJudging(source) {
     'await lockEventKeys(transaction,',
     'await recordedEvent(transaction,',
     'if (recorded) return recorded',
-    'decideGuardedAppendV1(',
+    'const binding = await bindingOf(transaction, conversation)',
+    'decideGuardedAppendV1(input.conversationKind, input.attribution, binding)',
     'await writeVisible(transaction,',
     'await writeHeld(transaction,',
   ], 'append')
+  // (d) R-22 on the write side: the binding is judged with R-22's own policy.
+  const binding = functionBody(source, 'bindingOf')
+  if (!/conversationPersonBindingStateV1\(\{[\s\S]*?\}\) === 'contradicted'/u.test(binding) || !/^\s*contradicted,$/mu.test(binding)) {
+    throw new Error('the guarded binding is not judged with the R-22 trust policy')
+  }
+  if (!importSpecifiers(source).includes('./conversation-binding-trust-policy')) throw new Error('the guarded adapter does not use the R-22 trust policy')
   if (!/if \(isUniqueViolation\(error\)\) \{\s+const winner = await recordedEvent\(prisma, event\)/u.test(append)) {
     throw new Error('append: a unique violation is not settled by the committed winner')
   }
@@ -140,20 +212,29 @@ function assertAdapterLocksBeforeJudging(source) {
     'prisma.$transaction(',
     'await lockConversation(transaction,',
     "if (input.conversationKind === 'private' && proof.status !== 'proven') {",
-    'decideGuardedAppendV1(',
+    'decideGuardedAppendV1(input.conversationKind, proof, await bindingOf(transaction, conversation))',
     'if (!decision.visible)',
     'transaction.heldChannelMessage.findMany(',
     'await lockEventKeys(transaction,',
     'await writeVisible(transaction,',
     'transaction.heldChannelMessage.update(',
+    "data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },",
   ], 'release')
+  const purge = methodBody(source, 'purgeHeld')
+  if (!/where: \{ id: \{ in: expired\.map\(row => row\.id\) \}, sentAt: \{ lt: input\.before \} \},/u.test(purge)) throw new Error('retention deletes a held row for anything but its own age')
+  if (!/if \(input\.dryRun \|\| expired\.length === 0\) return expired\.length/u.test(purge)) throw new Error('retention dry run deletes')
+  // The selection is the command's batch: its own age cut-off, oldest first, bounded by the command's limit (1..1000).
+  if (!/prisma\.heldChannelMessage\.findMany\(\{\s*where: \{ sentAt: \{ lt: input\.before \} \},\s*orderBy: \[\{ sentAt: 'asc' \}, \{ id: 'asc' \}\],\s*take: input\.limit,\s*select: \{ id: true \},\s*\}\)/u.test(purge)) {
+    throw new Error('retention does not select one bounded, oldest-first batch of its own expired rows')
+  }
   if (!release.includes("where: { ...unreleased, OR: [{ senderContactIdentityId: null }, ...(sender ? [{ senderContactIdentityId: sender }] : [])] },")) {
     throw new Error('release: an event held for another proven identity may be released')
   }
   if (!/senderContactIdentityId: attribution\.status === 'proven' \? attribution\.contactIdentityId : null,/u.test(functionBody(source, 'writeHeld'))) {
     throw new Error('a held event does not record its proven sender')
   }
-  if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(source)) throw new Error('held rows are deleted or bulk-rewritten by the adapter')
+  const outsidePurge = source.replace(methodBody(source, 'purgeHeld'), '')
+  if (/\bheldChannelMessage\.(?:delete|deleteMany|upsert|updateMany)\b/u.test(outsidePurge)) throw new Error('held rows are deleted or bulk-rewritten outside retention')
 
   const visible = functionBody(source, 'writeVisible')
   for (const projection of ['onGroupInboundMessage', 'onOutboundMessage', 'onInboundMessage']) {
@@ -164,6 +245,27 @@ function assertAdapterLocksBeforeJudging(source) {
   if (!/transaction\.domainOutboxEvent\.createMany\(/u.test(visible)) throw new Error('notification intent is not written in the transaction')
   if (!/\?\s*\{ delivery: newDeliveryEvidenceRecordV1\('provider_echo', 'echo', now\) \}/u.test(visible)) throw new Error('outbound echo evidence drift')
   if (!/status: outbound \? 'sent' : 'delivered'/u.test(visible)) throw new Error('an outbound echo may be marked delivered')
+
+  // A history projection (provider-history replay) changes only the side effects of a
+  // visible write: the Message is written exactly as for a live event, then the
+  // notification intent and the workflow projection are skipped. It never reaches the
+  // judgement, the key handling or the held store's release rule.
+  inOrder(visible, [
+    'await transaction.message.create(',
+    "if (event.projection !== 'live') return message.id",
+    'transaction.domainOutboxEvent.createMany(',
+    'ConversationWorkflowService.onGroupInboundMessage(',
+  ], 'history projection')
+  if ((visible.match(/\bprojection\b/gu) || []).length !== 1) throw new Error('a visible write branches on its projection more than once')
+  if (!/^\s*projection: input\.projection \?\? 'live',$/mu.test(functionBody(source, 'guardedEvent'))) throw new Error('an event without a projection is not live')
+  if (!release.includes("projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',")) {
+    throw new Error('a released event does not keep the projection it was held with')
+  }
+  if (!functionBody(source, 'writeHeld').includes("...(event.projection === 'history' ? { projection: 'history' } : {}),")) {
+    throw new Error('a held history event does not record its projection')
+  }
+  const judged = append.slice(0, append.indexOf('decideGuardedAppendV1(input.conversationKind, input.attribution, binding)'))
+  if (/\bprojection\b/u.test(judged)) throw new Error('the projection reaches the judgement or the key handling')
 }
 
 function assertAdapterWritesNoBinding(source) {
@@ -185,6 +287,11 @@ function assertPurePolicy(source) {
   if (specifiers.length !== 1 || specifiers[0] !== '../../../../contracts/messaging/v1') throw new Error('policy imports drift')
   if (!/^import type \{/mu.test(source)) throw new Error('policy imports values')
   if (/\bawait\b|\bprisma\b|\bfetch\(|process\.env/u.test(source)) throw new Error('policy performs IO')
+  if (/\bprojection\b/u.test(source)) throw new Error('the judgement depends on the projection')
+  // (d) a proof that equals a binding R-22 proves is another person's never shows an event.
+  if (!source.includes('if (!binding.contradicted && binding.contactId === attribution.contactId && binding.contactIdentityId === attribution.contactIdentityId) {')) {
+    throw new Error('policy shows a proven sender in a contradicted binding')
+  }
 }
 
 function assertHandlersParseFirst(source) {
@@ -192,6 +299,7 @@ function assertHandlersParseFirst(source) {
     ['appendGuardedChannelMessageV1', 'parseAppendGuardedChannelMessageCommandV1(command)', 'await port.append('],
     ['releaseHeldChannelMessagesV1', 'parseReleaseHeldChannelMessagesCommandV1(command)', 'await port.release('],
     ['heldChannelMessagesV1', 'parseHeldChannelMessagesQueryV1(query)', 'await port.countHeld('],
+    ['runHeldChannelMessageRetentionV1', 'parseRunHeldChannelMessageRetentionCommandV1(command)', 'await port.purgeHeld('],
   ]
   for (const [name, parse, persist] of handlers) {
     const start = source.indexOf(`async function ${name}(`)
@@ -235,16 +343,32 @@ function assertMigration(sql) {
   if (!/AND \("holdEvidence" #>> '\{attribution,status\}'\) IS NOT DISTINCT FROM 'proven'\s+AND "senderContactIdentityId" IS NOT DISTINCT FROM \("holdEvidence" #>> '\{attribution,contactIdentityId\}'\)\)/u.test(sql)) {
     throw new Error('sender evidence check drift (it must be NULL-safe: a NULL comparison passes a CHECK)')
   }
+  // A2: the database, not only the adapter, keeps a released row without content or metadata.
+  if (!/CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\s+CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)/u.test(sql)) {
+    throw new Error('released-scrubbed check drift (a released row must carry no content and no metadata)')
+  }
   if (!/CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"/u.test(sql)) throw new Error('held event key is not unique')
 }
 
 function assertComposition(source) {
-  for (const factory of ['createAppendGuardedChannelMessageHandlerV1', 'createReleaseHeldChannelMessagesHandlerV1', 'createHeldChannelMessagesQueryHandlerV1']) {
+  for (const factory of ['createAppendGuardedChannelMessageHandlerV1', 'createReleaseHeldChannelMessagesHandlerV1', 'createHeldChannelMessagesQueryHandlerV1', 'createRunHeldChannelMessageRetentionHandlerV1']) {
     const calls = [...source.matchAll(new RegExp(`${factory}\\(([^)]*)\\)`, 'gu'))]
     if (calls.length !== 1 || calls[0][1] !== 'legacyPrismaGuardedChannelMessagePortV1') throw new Error(`${factory}: composition drift`)
   }
   if (importSpecifiers(source).filter(specifier => specifier === '../public/v1/legacy-prisma-guarded-channel-message-adapter').length !== 1) {
     throw new Error('adapter import drift')
+  }
+}
+
+// A2: the held-store retention step may fail on its own (a database without the
+// held store) but never costs the retention job its other steps.
+function assertRetentionJobIsolated(source) {
+  const step = source.indexOf('runHeldChannelMessageRetentionV1({')
+  if (step < 0) throw new Error('retention job does not run the held-store retention')
+  if (!/try \{\s*const held = await $/u.test(source.slice(Math.max(0, step - 120), step))) throw new Error('held-store retention is not isolated in its own try block')
+  // The isolated catch has its own name so runAll keeps exactly one outer `err` catch (check-retention-event-boundary.mjs).
+  if (!/\} catch \(heldStoreError: unknown\) \{[\s\S]{0,400}?retention_cleanup_held_store_error/u.test(source.slice(step, step + 900))) {
+    throw new Error('held-store retention failure is not caught and logged on its own')
   }
 }
 
@@ -256,10 +380,14 @@ const adapterSource = files.get(adapterPath)
 const policySource = files.get(policyPath)
 const handlerSource = files.get(handlerPath)
 const contractSource = files.get(contractPath)
+const retentionSource = files.get(retentionJobPath)
 const compositionSource = files.get(compositionPath)
 const migrationSql = read(migrationPath)
 
 assertHeldStoreOwner(files)
+assertServerSideCallersOnly(files)
+assertNoRuntimeImportsFromTestPaths(files)
+assertRetentionJobIsolated(files.get(retentionJobPath))
 assertAdapterLocksBeforeJudging(adapterSource)
 assertAdapterWritesNoBinding(adapterSource)
 assertPurePolicy(policySource)
@@ -281,6 +409,31 @@ const withFile = (file, source) => new Map([...files, [file, source]])
 rejectProbe('', "await prisma.heldChannelMessage.findMany({ where: { chatId } })\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/lib/MessageService.ts', `${files.get('gravity-mvp/src/lib/MessageService.ts')}${changed}`)))
 rejectProbe('', 'const rows = await prisma.$queryRaw`SELECT * FROM "HeldChannelMessage"`\n', (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ContextBuilder.ts', changed)))
 rejectProbe('', "import { legacyPrismaGuardedChannelMessagePortV1 } from '@/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter'\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/app/api/webhook/telegram/route.ts', changed)))
+rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\nexport async function POST() { return appendGuardedChannelMessageV1({} as never) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/app/api/messages/guarded/route.ts', changed)))
+rejectProbe('', "'use server'\nimport { releaseHeldChannelMessagesV1 } from '@/modules/messaging/public/v1'\nexport async function releaseAction(input: unknown) { return releaseHeldChannelMessagesV1(input) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/actions.ts', changed)))
+rejectProbe('', "'use server'\nimport { heldChannelMessagesV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/held-actions.ts', changed)))
+rejectProbe('', "import { appendGuardedChannelMessageV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/infrastructure/telegram/ingress.ts', changed)))
+rejectProbe('', "import { runHeldChannelMessageRetentionV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/lib/SomeService.ts', changed)))
+rejectProbe('', "import { legacyPrismaGuardedChannelMessagePortV1 } from '@/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter.ts'\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/app/api/held/route.ts', changed)))
+rejectProbe('', "const port = await import('@/modules/messaging/public/v1/legacy-prisma-guarded-channel-message-adapter?raw')\n", (changed) => assertHeldStoreOwner(withFile('gravity-mvp/src/lib/HeldBridge.ts', changed)))
+rejectProbe('', "import { post } from '@/lib/__tests__/wrap'\nexport async function POST(request: Request) { return post(await request.json()) }\n", (changed) => assertNoRuntimeImportsFromTestPaths(withFile('gravity-mvp/src/app/api/held/route.ts', changed)))
+rejectProbe('', "import { post } from './held.spec'\n", (changed) => assertNoRuntimeImportsFromTestPaths(withFile('gravity-mvp/src/lib/HeldBridge.ts', changed)))
+rejectProbe('', "import * as ops from '@/modules/messaging/public/v1'\nexport async function POST(request: Request) { const { op, input } = await request.json(); return (ops as never as Record<string, (i: unknown) => unknown>)[op](input) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/app/api/dispatch/route.ts', changed)))
+rejectProbe('', "export * from '@/modules/messaging/application/messaging-operations'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/lib/messaging-ops.ts', changed)))
+rejectProbe('', "'use server' // actions\nimport { heldChannelMessagesV1 } from '@/modules/messaging/public/v1'\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/held-actions.ts', changed)))
+rejectProbe('', "import { heldChannelMessagesV1 } from '@/modules/messaging/public/v1'\nexport async function countHeld(chatId: string) { 'use server'; return heldChannelMessagesV1({ chatId } as never) }\n", (changed) => assertServerSideCallersOnly(withFile('gravity-mvp/src/modules/messaging/internal/held-inline-action.ts', changed)))
+rejectProbe(handlerSource, `${handlerSource.replace('    const parsed = parseRunHeldChannelMessageRetentionCommandV1(command)\n', '')}\nconst late = parseRunHeldChannelMessageRetentionCommandV1(command)\n`, assertHandlersParseFirst)
+rejectProbe(compositionSource, compositionSource.replace('createRunHeldChannelMessageRetentionHandlerV1(legacyPrismaGuardedChannelMessagePortV1)', 'createRunHeldChannelMessageRetentionHandlerV1(otherPort)'), assertComposition)
+rejectProbe(retentionSource, retentionSource.replace('        try {\n          const held = await runHeldChannelMessageRetentionV1({', '          const held = await runHeldChannelMessageRetentionV1({'), assertRetentionJobIsolated)
+rejectProbe(retentionSource, retentionSource.replace('} catch (heldStoreError: unknown) {', '} catch (err: unknown) {'), assertRetentionJobIsolated)
+rejectProbe(migrationSql, migrationSql.replace("\"content\" = '' AND ", ''), assertMigration)
+rejectProbe(migrationSql, migrationSql.replace(/,\n\s*CONSTRAINT "HeldChannelMessage_released_scrubbed_check"\n\s*CHECK \("releasedAt" IS NULL OR \("content" = '' AND "metadata" = '\{\}'::jsonb\)\)/u, ''), assertMigration)
+rejectProbe(adapterSource, adapterSource.replace("data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },", 'data: { releasedAt, releasedMessageId: messageId },'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },', 'where: { id: { in: expired.map(row => row.id) } },'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('if (input.dryRun || expired.length === 0) return expired.length', 'if (expired.length === 0) return 0'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: input.limit,\n", "orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n      take: 1000,\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("where: { sentAt: { lt: input.before } },\n      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],\n", "where: { sentAt: { lt: input.before } },\n"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('    FOR UPDATE\n', '\n'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace("await transaction.$queryRaw`SELECT set_config('lock_timeout', ${LOCK_TIMEOUT}, true) AS \"configured\"`", 'void 0'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('[...new Set(keys)].sort()', '[...new Set(keys)]'), assertAdapterLocksBeforeJudging)
@@ -293,6 +446,15 @@ rejectProbe(adapterSource, adapterSource.replace(
 ), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('const winner = await recordedEvent(prisma, event)', 'const winner = null'), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, adapterSource.replace('ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt, transaction)', 'ConversationWorkflowService.onInboundMessage(event.chatId, event.sentAt)'), assertAdapterLocksBeforeJudging)
+// history projection
+rejectProbe(adapterSource, adapterSource.replace("  if (event.projection !== 'live') return message.id\n", ''), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("  if (event.projection !== 'live') return message.id\n", '').replace("  if (kind === 'group') {\n", "  if (event.projection !== 'live') return message.id\n  if (kind === 'group') {\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, binding)', "const decision = input.projection === 'history' ? ({ visible: true } as const) : decideGuardedAppendV1(input.conversationKind, input.attribution, binding)"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',", "projection: 'live',"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("        ...(event.projection === 'history' ? { projection: 'history' } : {}),\n      } as Prisma.InputJsonValue,", '      } as Prisma.InputJsonValue,'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("projection: input.projection ?? 'live',", "projection: input.projection ?? 'history',"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('...(outbound ? { delivery: newDeliveryEvidenceRecordV1', "...(outbound && event.projection === 'live' ? { delivery: newDeliveryEvidenceRecordV1"), assertAdapterLocksBeforeJudging)
+rejectProbe(policySource, policySource.replace('export function decideGuardedAppendV1(', '// projection is ignored here\nexport function decideGuardedAppendV1('), assertPurePolicy)
 rejectProbe(adapterSource, adapterSource.replace("status: outbound ? 'sent' : 'delivered'", "status: 'delivered'"), assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `${adapterSource}\nawait prisma.heldChannelMessage.deleteMany({ where: {} })\n`, assertAdapterLocksBeforeJudging)
 rejectProbe(adapterSource, `import { resolveChannelContactV1 } from '@/modules/contacts/public/v1'\n${adapterSource}`, assertAdapterWritesNoBinding)
@@ -300,6 +462,10 @@ rejectProbe(adapterSource, `${adapterSource}\nawait transaction.chat.update({ wh
 rejectProbe(adapterSource, `${adapterSource}\nawait transaction.$executeRawUnsafe('UPDATE "Chat" SET "driverId" = NULL')\n`, assertAdapterWritesNoBinding)
 rejectProbe(policySource, `import { prisma } from '@/lib/prisma'\n${policySource}`, assertPurePolicy)
 rejectProbe(policySource, `${policySource}\nexport async function probe() { return await Promise.resolve(process.env.X) }\n`, assertPurePolicy)
+rejectProbe(policySource, policySource.replace('if (!binding.contradicted && binding.contactId', 'if (binding.contactId'), assertPurePolicy)
+rejectProbe(adapterSource, adapterSource.replace("  }) === 'contradicted'\n", "  }) === 'never'\n"), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace('    contradicted,\n  }', '    contradicted: false,\n  }'), assertAdapterLocksBeforeJudging)
+rejectProbe(adapterSource, adapterSource.replace("import { conversationPersonBindingStateV1 } from './conversation-binding-trust-policy'\n", "const conversationPersonBindingStateV1 = (_facts: unknown) => 'unverifiable'\n"), assertAdapterLocksBeforeJudging)
 rejectProbe(handlerSource, handlerSource.replace(
   '    const { contract: _contract, ...input } = parseAppendGuardedChannelMessageCommandV1(command)\n    const settled = await port.append(input)\n',
   '    const settled = await port.append(command as never)\n    const { contract: _contract, ...input } = parseAppendGuardedChannelMessageCommandV1(command)\n',
@@ -321,4 +487,4 @@ rejectProbe(migrationSql, migrationSql.replace('COMMIT;', 'ALTER TABLE "Chat" AD
 rejectProbe(migrationSql, migrationSql.replace('CREATE UNIQUE INDEX "HeldChannelMessage_externalId_key"', 'CREATE INDEX "HeldChannelMessage_externalId_key"'), assertMigration)
 rejectProbe(compositionSource, `${compositionSource}\nconst rogue = createAppendGuardedChannelMessageHandlerV1(fakePort)\n`, assertComposition)
 
-process.stdout.write(`messaging guarded append boundary: PASS (one held-store owner, lock-then-judge, no binding writes, pure policy, parse-first handlers; ${probes} negative probes rejected)\n`)
+process.stdout.write(`messaging guarded append boundary: PASS (one held-store owner, server-side callers only, lock-then-judge, no binding writes, pure policy, parse-first handlers, scrubbed release; ${probes} negative probes rejected)\n`)

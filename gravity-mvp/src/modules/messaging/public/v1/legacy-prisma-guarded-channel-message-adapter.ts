@@ -7,12 +7,14 @@ import {
   type AppendGuardedChannelMessageCommandV1,
   type ChannelMessageJsonV1,
   type GuardedConversationKindV1,
+  type GuardedProjectionV1,
   type GuardedSenderAttributionV1,
   type HeldChannelMessageReasonV1,
 } from '../../../../contracts/messaging/v1'
 import { inboundNotificationIntentV1, persistsWithNotificationIntentV1 } from '../../internal/mobile-push/inbound-notification-intent'
 import { newDeliveryEvidenceRecordV1 } from './delivery-state-policy'
 import { decideGuardedAppendV1, type ConversationPersonBindingV1 } from './guarded-append-policy'
+import { conversationPersonBindingStateV1 } from './conversation-binding-trust-policy'
 import type { GuardedAppendSettlementV1, GuardedChannelMessagePersistencePortV1 } from './guarded-channel-message-handler'
 
 /**
@@ -65,6 +67,8 @@ interface GuardedEvent {
   externalId: string
   sentAt: Date
   metadata: Record<string, unknown>
+  /** `history` replays a provider-history event: no workflow projection, no notification intent. */
+  projection: GuardedProjectionV1
 }
 
 type GuardedAudit = Record<string, ChannelMessageJsonV1>
@@ -73,11 +77,33 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
-function bindingOf(conversation: LockedConversation): ConversationPersonBindingV1 {
+/**
+ * The binding the locked conversation carries, judged with R-22's own policy:
+ * the linked identity is read through the conversation (the same facts the
+ * inbox reads), so a binding R-22 proves is another person's is never one a
+ * proof can match. The conversation row is already locked by this transaction.
+ */
+async function bindingOf(transaction: GuardedDb, conversation: LockedConversation): Promise<ConversationPersonBindingV1> {
+  const facts = conversation.contactId === null ? null : await transaction.chat.findUnique({
+    where: { id: conversation.id },
+    select: {
+      externalChatId: true,
+      contactIdentity: { select: { id: true, channel: true, externalId: true, contactId: true, isActive: true } },
+    },
+  })
+  const contradicted = facts !== null && conversationPersonBindingStateV1({
+    channel: conversation.channel,
+    chatType: conversation.chatType,
+    externalChatId: facts.externalChatId,
+    contactId: conversation.contactId,
+    contactIdentityId: conversation.contactIdentityId,
+    linkedIdentity: facts.contactIdentity,
+  }) === 'contradicted'
   return {
     contactId: conversation.contactId,
     contactIdentityId: conversation.contactIdentityId,
     driverId: conversation.driverId,
+    contradicted,
   }
 }
 
@@ -168,6 +194,9 @@ async function writeVisible(transaction: GuardedDb, kind: GuardedConversationKin
       metadata: metadata as Prisma.InputJsonValue,
     },
   })
+  // A provider-history event is shown as it happened: the conversation's workflow
+  // state and the notification outbox stay as the live events left them.
+  if (event.projection !== 'live') return message.id
   if (!outbound && persistsWithNotificationIntentV1({ direction: message.direction, type: message.type, channel: message.channel, metadata: message.metadata })) {
     const intent = inboundNotificationIntentV1(message, now)
     if (intent) {
@@ -202,7 +231,7 @@ async function writeHeld(
   event: GuardedEvent,
   reason: HeldChannelMessageReasonV1,
   attribution: GuardedSenderAttributionV1,
-  conversation: LockedConversation,
+  binding: ConversationPersonBindingV1,
 ): Promise<string> {
   const held = await transaction.heldChannelMessage.create({
     data: {
@@ -219,7 +248,8 @@ async function writeHeld(
       holdEvidence: {
         v: 1,
         attribution: attributionEvidence(attribution),
-        binding: { ...bindingOf(conversation) },
+        binding: { ...binding },
+        ...(event.projection === 'history' ? { projection: 'history' } : {}),
       } as Prisma.InputJsonValue,
     },
     select: { id: true },
@@ -258,6 +288,7 @@ function guardedEvent(input: Omit<AppendGuardedChannelMessageCommandV1, 'contrac
     externalId: input.externalId,
     sentAt: input.sentAt,
     metadata: { ...(input.metadata ?? {}) },
+    projection: input.projection ?? 'live',
   }
 }
 
@@ -274,12 +305,17 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
         const recorded = await recordedEvent(transaction, event)
         if (recorded) return recorded
 
-        const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, bindingOf(conversation))
+        const binding = await bindingOf(transaction, conversation)
+        const decision = decideGuardedAppendV1(input.conversationKind, input.attribution, binding)
         if (decision.visible) {
-          const messageId = await writeVisible(transaction, input.conversationKind, event, { v: 1, attribution: input.attribution.status })
+          const messageId = await writeVisible(transaction, input.conversationKind, event, {
+            v: 1,
+            attribution: input.attribution.status,
+            ...(event.projection === 'history' ? { projection: 'history' } : {}),
+          })
           return { outcome: 'appended', messageId } as const
         }
-        const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, conversation)
+        const heldMessageId = await writeHeld(transaction, event, decision.reason, input.attribution, binding)
         return { outcome: 'held', heldMessageId, holdReason: decision.reason } as const
       }, TRANSACTION_OPTIONS)
     } catch (error: unknown) {
@@ -308,7 +344,7 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
         if (input.conversationKind === 'private' && proof.status !== 'proven') {
           return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: 'attribution_unproven' }
         }
-        const decision = decideGuardedAppendV1(input.conversationKind, proof, bindingOf(conversation))
+        const decision = decideGuardedAppendV1(input.conversationKind, proof, await bindingOf(transaction, conversation))
         if (!decision.visible) {
           return { released: 0, remaining: heldCount, keyConflicts: 0, senderMismatches: 0, holdReason: decision.reason }
         }
@@ -340,6 +376,8 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
             externalId: held.externalId,
             sentAt: held.sentAt,
             metadata: record(held.metadata),
+            // A held history event keeps its projection: releasing it later never reopens the conversation.
+            projection: record(held.holdEvidence).projection === 'history' ? 'history' : 'live',
           }
           const visible = await transaction.message.findUnique({
             where: { externalId: held.externalId },
@@ -360,11 +398,14 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
               releasedFrom: held.id,
               heldAt: held.heldAt.toISOString(),
               holdReason: held.holdReason,
+              ...(event.projection === 'history' ? { projection: 'history' } : {}),
             })
           }
           await transaction.heldChannelMessage.update({
             where: { id: held.id },
-            data: { releasedAt, releasedMessageId: messageId },
+            // A2: the visible Message is now the only copy of the event; the
+            // held row keeps its key, its stamp and the compared ids only.
+            data: { releasedAt, releasedMessageId: messageId, content: '', metadata: {} },
           })
           released += 1
         }
@@ -388,5 +429,20 @@ export const legacyPrismaGuardedChannelMessagePortV1: GuardedChannelMessagePersi
       _count: { _all: true },
     })
     return Object.fromEntries(rows.map(row => [row.holdReason, row._count._all])) as Partial<Record<HeldChannelMessageReasonV1, number>>
+  },
+
+  async purgeHeld(input) {
+    const expired = await prisma.heldChannelMessage.findMany({
+      where: { sentAt: { lt: input.before } },
+      orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+      take: input.limit,
+      select: { id: true },
+    })
+    if (input.dryRun || expired.length === 0) return expired.length
+    // Re-checked in the statement itself, so a row is only ever deleted for its own age.
+    const deleted = await prisma.heldChannelMessage.deleteMany({
+      where: { id: { in: expired.map(row => row.id) }, sentAt: { lt: input.before } },
+    })
+    return deleted.count
   },
 }

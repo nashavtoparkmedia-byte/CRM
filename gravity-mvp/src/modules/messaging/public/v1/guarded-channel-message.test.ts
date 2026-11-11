@@ -11,12 +11,16 @@ import {
   parseAppendGuardedChannelMessageCommandV1,
   parseHeldChannelMessagesQueryV1,
   parseReleaseHeldChannelMessagesCommandV1,
+  parseRunHeldChannelMessageRetentionCommandV1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1,
 } from '../../../../contracts/messaging/v1'
 import { decideGuardedAppendV1, hasConversationPersonBindingV1, type ConversationPersonBindingV1 } from './guarded-append-policy'
 import {
   createAppendGuardedChannelMessageHandlerV1,
   createHeldChannelMessagesQueryHandlerV1,
   createReleaseHeldChannelMessagesHandlerV1,
+  createRunHeldChannelMessageRetentionHandlerV1,
   type GuardedChannelMessagePersistencePortV1,
 } from './guarded-channel-message-handler'
 
@@ -41,14 +45,23 @@ function appendCommand(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const UNBOUND: ConversationPersonBindingV1 = { contactId: null, contactIdentityId: null, driverId: null }
-const BOUND_A: ConversationPersonBindingV1 = { contactId: 'contact-a', contactIdentityId: 'identity-a', driverId: 'driver-a' }
+const UNBOUND: ConversationPersonBindingV1 = { contactId: null, contactIdentityId: null, driverId: null, contradicted: false }
+const BOUND_A: ConversationPersonBindingV1 = { contactId: 'contact-a', contactIdentityId: 'identity-a', driverId: 'driver-a', contradicted: false }
 
 describe('guarded append contract', () => {
   it('accepts the exact private proven command and returns a normalized copy', () => {
     const parsed = parseAppendGuardedChannelMessageCommandV1(appendCommand())
     expect(parsed).toEqual(appendCommand())
     expect(parsed.attribution).not.toBe(PROVEN)
+  })
+
+  it('accepts an explicit live or history projection, keeps an absent one absent and refuses anything else', () => {
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand())).not.toHaveProperty('projection')
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection: 'live' })).projection).toBe('live')
+    expect(parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection: 'history' })).projection).toBe('history')
+    for (const projection of ['History', 'import', '', null, 1, { mode: 'history' }]) {
+      expect(() => parseAppendGuardedChannelMessageCommandV1(appendCommand({ projection }))).toThrow(GuardedChannelMessageCommandValidationError)
+    }
   })
 
   it('accepts an unproven private command with a bounded refusal code', () => {
@@ -126,6 +139,15 @@ describe('guarded append contract', () => {
     expect(() => parseHeldChannelMessagesQueryV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId: '' })).toThrow()
   })
 
+  it('parses the held retention command strictly', () => {
+    const retention = { contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true }
+    expect(parseRunHeldChannelMessageRetentionCommandV1(retention)).toEqual(retention)
+    expect(parseRunHeldChannelMessageRetentionCommandV1({ ...retention, limit: 1000 }).limit).toBe(1000)
+    for (const bad of [{ ...retention, dryRun: 'yes' }, { contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 }, { ...retention, limit: 0 }, { ...retention, limit: 1001 }, { ...retention, chatId: 'x' }]) {
+      expect(() => parseRunHeldChannelMessageRetentionCommandV1(bad)).toThrow(GuardedChannelMessageCommandValidationError)
+    }
+  })
+
   it('reports only contention as retryable', () => {
     expect(new GuardedChannelMessageError('CONTENDED', 'x').retryable).toBe(true)
     for (const code of ['CONVERSATION_NOT_FOUND', 'CONVERSATION_CHANNEL_MISMATCH', 'CONVERSATION_KIND_MISMATCH'] as const) {
@@ -143,8 +165,14 @@ describe('guarded append policy', () => {
   it('holds a proven sender whose conversation is bound to another person', () => {
     expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contactId: 'contact-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
     expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contactIdentityId: 'identity-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
-    expect(decideGuardedAppendV1('private', PROVEN, { contactId: null, contactIdentityId: null, driverId: 'driver-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
-    expect(decideGuardedAppendV1('private', PROVEN, { contactId: 'contact-a', contactIdentityId: null, driverId: null })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', PROVEN, { ...UNBOUND, driverId: 'driver-b' })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', PROVEN, { ...UNBOUND, contactId: 'contact-a' })).toEqual({ visible: false, reason: 'binding_mismatch' })
+  })
+
+  it('holds a proven sender whose proof equals a binding R-22 proves is another person\'s', () => {
+    expect(decideGuardedAppendV1('private', PROVEN, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'binding_mismatch' })
+    expect(decideGuardedAppendV1('private', UNPROVEN, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'attribution_unproven' })
+    expect(decideGuardedAppendV1('group', { status: 'not_applicable' }, { ...BOUND_A, contradicted: true })).toEqual({ visible: false, reason: 'group_person_bound' })
   })
 
   it('holds a proven sender whose conversation was never linked', () => {
@@ -181,6 +209,7 @@ function fakePort(overrides: Partial<GuardedChannelMessagePersistencePortV1> = {
     append: vi.fn(async () => ({ outcome: 'appended', messageId: 'message-1' } as const)),
     release: vi.fn(async () => ({ released: 0, remaining: 0, keyConflicts: 0, senderMismatches: 0, holdReason: null })),
     countHeld: vi.fn(async () => ({})),
+    purgeHeld: vi.fn(async () => 0),
     ...overrides,
   }
 }
@@ -204,6 +233,13 @@ describe('guarded append handlers', () => {
       visible: true,
       newlyRecorded: true,
     })
+  })
+
+  it('passes a history projection to the port unchanged', async () => {
+    const port = fakePort()
+    await createAppendGuardedChannelMessageHandlerV1(port)(appendCommand({ projection: 'history' }))
+    const { contract: _contract, ...input } = appendCommand({ projection: 'history' })
+    expect(port.append).toHaveBeenCalledWith(input)
   })
 
   it('marks only appended and held as newly recorded', async () => {
@@ -242,6 +278,19 @@ describe('guarded append handlers', () => {
       expect(result).toEqual({ contract: RELEASE_HELD_CHANNEL_MESSAGES_RESULT_V1, outcome, ...settled })
       expect(port.release).toHaveBeenCalledWith({ chatId: 'chat-1', conversationKind: 'private', attribution: PROVEN, limit: 100 })
     }
+  })
+
+  it('runs held retention at exactly the 12-month boundary with the default limit', async () => {
+    const now = Date.UTC(2026, 10, 8, 12, 0, 0)
+    const port = fakePort({ purgeHeld: vi.fn(async () => 3) })
+    const run = createRunHeldChannelMessageRetentionHandlerV1(port, () => now)
+    expect(await run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true })).toEqual({
+      contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_RESULT_V1, dryRun: true, selectedCount: 3,
+    })
+    expect(port.purgeHeld).toHaveBeenCalledWith({ before: new Date(now - 365 * 24 * 60 * 60 * 1000), limit: 200, dryRun: true })
+    await run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: false, limit: 50 })
+    expect(port.purgeHeld).toHaveBeenLastCalledWith({ before: new Date(now - 365 * 24 * 60 * 60 * 1000), limit: 50, dryRun: false })
+    await expect(run({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1 })).rejects.toThrow(GuardedChannelMessageCommandValidationError)
   })
 
   it('reports held counts for every reason, zero-filled, and nothing else', async () => {

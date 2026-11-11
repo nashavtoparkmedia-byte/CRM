@@ -20,9 +20,10 @@ import {
   GuardedChannelMessageError,
   HELD_CHANNEL_MESSAGES_QUERY_V1,
   RELEASE_HELD_CHANNEL_MESSAGES_COMMAND_V1,
+  RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1,
   type GuardedSenderAttributionV1,
 } from '../../../../contracts/messaging/v1'
-import { appendGuardedChannelMessageV1, heldChannelMessagesV1, releaseHeldChannelMessagesV1 } from './index'
+import { appendGuardedChannelMessageV1, heldChannelMessagesV1, releaseHeldChannelMessagesV1, runHeldChannelMessageRetentionV1 } from './index'
 import { legacyPrismaGuardedChannelMessagePortV1 } from './legacy-prisma-guarded-channel-message-adapter'
 import { deriveDeliveryStateV1 } from './delivery-state-policy'
 import { persistsWithNotificationIntentV1 } from '../../internal/mobile-push/inbound-notification-intent'
@@ -178,7 +179,7 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(meta(held.holdEvidence)).toEqual({
       v: 1,
       attribution: { status: 'proven', contactId: ids.contactB, contactIdentityId: ids.identityB },
-      binding: { contactId: ids.contactA, contactIdentityId: ids.identityA, driverId: ids.driverA },
+      binding: { contactId: ids.contactA, contactIdentityId: ids.identityA, driverId: ids.driverA, contradicted: false },
     })
 
     const again = await append(chatId, PROVEN_B, key('other-person'))
@@ -366,6 +367,9 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     const held = await heldRows(chatId)
     expect(held.every(row => row.releasedAt !== null)).toBe(true)
     expect(held.map(row => row.releasedMessageId)).toEqual(messages.map(message => message.id))
+    // A2: the visible Message is the only copy; the released rows keep no text.
+    expect(held.every(row => row.content === '' && JSON.stringify(row.metadata) === '{}')).toBe(true)
+    expect(messages.map(message => message.content)).toEqual([key('release-0'), key('release-1'), key('release-2')].map(k => `text ${k}`))
 
     expect(await append(chatId, PROVEN_A, key('release-1'))).toMatchObject({ outcome: 'duplicate', messageId: messages[1].id, visible: true })
     expect(await heldChannelMessagesV1({ contract: HELD_CHANNEL_MESSAGES_QUERY_V1, chatId })).toMatchObject({ held: 0 })
@@ -462,6 +466,14 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     await expect(prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-other'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityB } })).rejects.toThrow()
     await prisma.heldChannelMessage.create({ data: { ...base, externalId: key('sender-ok'), holdReason: 'binding_absent', holdEvidence: proven, senderContactIdentityId: ids.identityA } })
     expect(await prisma.heldChannelMessage.count({ where: { chatId } })).toBe(1)
+    // A2: a released row may not carry content or metadata, and text cannot be restored to it.
+    const visible = await prisma.message.create({ data: { chatId, direction: 'inbound', channel: 'telegram', content: 'x', externalId: key('scrub-visible'), status: 'delivered' } })
+    const released = { ...base, externalId: key('scrub'), holdReason: 'binding_absent', releasedAt: new Date(), releasedMessageId: visible.id }
+    await expect(prisma.heldChannelMessage.create({ data: released })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: { k: 1 } } })).rejects.toThrow()
+    const scrubbed = await prisma.heldChannelMessage.create({ data: { ...released, content: '', metadata: {} } })
+    await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { content: 'restored' } })).rejects.toThrow()
+    await expect(prisma.heldChannelMessage.update({ where: { id: scrubbed.id }, data: { metadata: { k: 1 } } })).rejects.toThrow()
   })
 
   it('refuses a missing conversation, another channel or another kind without writing', async () => {
@@ -486,6 +498,188 @@ describeWithDatabase('R-21 guarded atomic append (PostgreSQL)', () => {
     expect(await visibleCount(unlinked)).toBe(0)
     await prisma.chat.deleteMany({ where: { id: { in: [chatId, unlinked] } } })
     await prisma.contactIdentity.delete({ where: { id: otherIdentityOfA } })
+  })
+
+  it('held events follow the 12-month retention: old rows go, released or not, young rows stay', async () => {
+    const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
+    const day = 24 * 60 * 60 * 1000
+    const old = new Date(Date.now() - 400 * day)
+    await append(chatId, PROVEN_B, key('old-released'), { sentAt: old })
+    await append(chatId, PROVEN_B, key('old-held'), { sentAt: new Date(old.getTime() + 1000) })
+    await append(chatId, PROVEN_B, key('young-held'), { sentAt: new Date(Date.now() - 300 * day) })
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB } })
+    // Only the oldest event is released: one old row leaves with its text still held, one old row leaves scrubbed.
+    expect(await release(chatId, PROVEN_B, 1)).toMatchObject({ outcome: 'released', released: 1 })
+    expect(await heldRows(chatId)).toHaveLength(3)
+    const oldHeld = await prisma.heldChannelMessage.findUniqueOrThrow({ where: { externalId: key('old-held') }, select: { releasedAt: true, content: true } })
+    expect(oldHeld.releasedAt).toBeNull()
+    expect(oldHeld.content).not.toBe('')
+
+    const dry = await runHeldChannelMessageRetentionV1({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: true, limit: 1000 })
+    expect(dry).toMatchObject({ dryRun: true })
+    expect(dry.selectedCount).toBeGreaterThanOrEqual(2)
+    expect(await heldRows(chatId)).toHaveLength(3)
+
+    let total = 0
+    for (let pass = 0; pass < 10; pass += 1) {
+      const run = await runHeldChannelMessageRetentionV1({ contract: RUN_HELD_CHANNEL_MESSAGE_RETENTION_COMMAND_V1, dryRun: false, limit: 1000 })
+      total += run.selectedCount
+      if (run.selectedCount === 0) break
+    }
+    expect(total).toBeGreaterThanOrEqual(2)
+    expect((await heldRows(chatId)).map(row => row.externalId)).toEqual([key('young-held')])
+    // The released Message itself is retention's own concern; it is untouched here.
+    expect(await visibleCount(chatId)).toBe(1)
+  })
+
+  // R-22 on the write side (d): a proof that merely equals a binding R-22 proves is
+  // another person's (for example one read back from the conversation) shows nothing
+  // and releases nothing.
+  it('a proof equal to a binding whose identity belongs to another contact is held and never releases', async () => {
+    const contaminated = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityB })
+    const readBack: GuardedSenderAttributionV1 = { status: 'proven', contactId: ids.contactA, contactIdentityId: ids.identityB }
+
+    expect(await append(contaminated, readBack, key('contradicted-foreign-identity'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch', newlyRecorded: true })
+    expect(await visibleCount(contaminated)).toBe(0)
+    expect(await conversation(contaminated)).toMatchObject({ unreadCount: 0, requiresResponse: false })
+    expect(await release(contaminated, readBack)).toMatchObject({ outcome: 'still_held', holdReason: 'binding_mismatch', released: 0 })
+    expect(await visibleCount(contaminated)).toBe(0)
+
+    // Contacts repairs the binding to the identity's own contact; the true proof releases.
+    await prisma.chat.update({ where: { id: contaminated }, data: { contactId: ids.contactB } })
+    expect(await release(contaminated, PROVEN_B)).toMatchObject({ outcome: 'released', released: 1, remaining: 0 })
+    expect(await visibleCount(contaminated)).toBe(1)
+    await prisma.chat.delete({ where: { id: contaminated } })
+  })
+
+  it('a proof equal to a binding whose numeric Telegram identity names another peer is held and never releases', async () => {
+    const digits = `${Date.now()}`.slice(-9)
+    const wrongPeerIdentity = `${RUN}_iwp`
+    await prisma.contactIdentity.create({ data: { id: wrongPeerIdentity, contactId: ids.contactA, channel: 'telegram', externalId: `1${digits}` } })
+    const chatId = `${RUN}_chat_peer`
+    createdChats.push(chatId)
+    await prisma.chat.create({ data: { id: chatId, channel: 'telegram', externalChatId: `telegram:2${digits}`, chatType: 'private', contactId: ids.contactA, contactIdentityId: wrongPeerIdentity } })
+    const readBack: GuardedSenderAttributionV1 = { status: 'proven', contactId: ids.contactA, contactIdentityId: wrongPeerIdentity }
+
+    expect(await append(chatId, readBack, key('contradicted-peer'))).toMatchObject({ outcome: 'held', holdReason: 'binding_mismatch' })
+    expect(await release(chatId, readBack)).toMatchObject({ outcome: 'still_held', holdReason: 'binding_mismatch', released: 0 })
+    expect(await visibleCount(chatId)).toBe(0)
+    const [held] = await heldRows(chatId)
+    expect(meta(held.holdEvidence).binding).toMatchObject({ contactId: ids.contactA, contactIdentityId: wrongPeerIdentity, contradicted: true })
+
+    await prisma.chat.delete({ where: { id: chatId } })
+    await prisma.contactIdentity.delete({ where: { id: wrongPeerIdentity } })
+  })
+
+  // Provider-history replay (history import): judged and keyed as a live event, shown
+  // without the conversation's workflow projection or a notification intent.
+  async function lastTimes(chatId: string) {
+    const [row] = await prisma.$queryRaw<Array<{ lastInboundAt: Date | null; lastOutboundAt: Date | null }>>`
+      SELECT "lastInboundAt", "lastOutboundAt" FROM "Chat" WHERE id = ${chatId}`
+    return row
+  }
+
+  it('a history event is shown without the workflow projection or a notification intent; a live one still projects', async () => {
+    const chatId = await chat({ contactId: ids.contactA, contactIdentityId: ids.identityA })
+    await prisma.chat.update({ where: { id: chatId }, data: { status: 'resolved', unreadCount: 0, requiresResponse: false } })
+    const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+
+    const inbound = await append(chatId, PROVEN_A, key('history-in'), { projection: 'history', sentAt: old })
+    const outbound = await append(chatId, PROVEN_A, key('history-out'), { projection: 'history', direction: 'outbound', sentAt: new Date(old.getTime() + 1000) })
+    expect(inbound).toMatchObject({ outcome: 'appended', visible: true, newlyRecorded: true })
+    expect(outbound).toMatchObject({ outcome: 'appended', visible: true, newlyRecorded: true })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 0, requiresResponse: false, status: 'resolved' })
+    expect(await lastTimes(chatId)).toEqual({ lastInboundAt: null, lastOutboundAt: null })
+    const shown = await prisma.message.findMany({ where: { chatId }, orderBy: { sentAt: 'asc' } })
+    expect(shown.map(row => row.externalId)).toEqual([key('history-in'), key('history-out')])
+    expect(meta(shown[0].metadata).guardedAppend).toEqual({ v: 1, attribution: 'proven', projection: 'history' })
+    // S2 is the event's own evidence, not a projection: an own message still carries its provider echo.
+    expect(meta(shown[1].metadata).delivery).toMatchObject({ v: 1, evidence: 'provider_echo', source: 'echo' })
+    expect(await prisma.domainOutboxEvent.count({ where: { aggregateId: { in: shown.map(row => row.id) } } })).toBe(0)
+
+    // The same key is one event: a later live delivery of a history event is a duplicate, not a second projection.
+    expect(await append(chatId, PROVEN_A, key('history-in'))).toMatchObject({ outcome: 'duplicate', messageId: inbound.messageId, newlyRecorded: false })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 0, status: 'resolved' })
+
+    const live = await append(chatId, PROVEN_A, key('live-in'))
+    expect(live).toMatchObject({ outcome: 'appended' })
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 1, requiresResponse: true, status: 'open' })
+    expect((await lastTimes(chatId)).lastInboundAt).not.toBeNull()
+  })
+
+  it('a held history event is held exactly like a live one and keeps its projection on release', async () => {
+    const chatId = await chat()
+    const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('held-history'), { projection: 'history', sentAt: old })).toMatchObject({ outcome: 'held', holdReason: 'binding_absent' })
+    expect(await append(chatId, PROVEN_B, key('held-live'), { sentAt: new Date(old.getTime() + 1000) })).toMatchObject({ outcome: 'held', holdReason: 'binding_absent' })
+    const [heldHistory, heldLive] = await heldRows(chatId)
+    expect(meta(heldHistory.holdEvidence).projection).toBe('history')
+    expect(meta(heldLive.holdEvidence)).not.toHaveProperty('projection')
+
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB, status: 'resolved', unreadCount: 0, requiresResponse: false } })
+    expect(await release(chatId, PROVEN_B)).toMatchObject({ outcome: 'released', released: 2, remaining: 0 })
+
+    // Only the live event projects: one unread, the conversation reopens.
+    expect(await conversation(chatId)).toMatchObject({ unreadCount: 1, requiresResponse: true, status: 'open' })
+    const shown = await prisma.message.findMany({ where: { chatId }, orderBy: { sentAt: 'asc' } })
+    expect(meta(shown[0].metadata).guardedAppend).toMatchObject({ releasedFrom: heldHistory.id, projection: 'history' })
+    expect(meta(shown[1].metadata).guardedAppend).not.toHaveProperty('projection')
+    expect(await prisma.domainOutboxEvent.count({ where: { aggregateId: shown[0].id } })).toBe(0)
+  })
+
+  // Behaviour fix: the last inbound/outbound times only move forward. An event older than
+  // the conversation's last one (out-of-order delivery, catch-up, a released hold) still
+  // runs its workflow step, but leaves those times and the inbox order (lastMessageAt) as they are.
+  async function workflowState(chatId: string) {
+    const [row] = await prisma.$queryRaw<Array<{ lastInboundAt: Date | null; lastOutboundAt: Date | null; lastMessageAt: Date | null; unreadCount: number; requiresResponse: boolean; status: string }>>`
+      SELECT "lastInboundAt", "lastOutboundAt", "lastMessageAt", "unreadCount", "requiresResponse", status FROM "Chat" WHERE id = ${chatId}`
+    return row
+  }
+
+  for (const channel of ['telegram', 'whatsapp', 'max'] as const) {
+    it(`${channel}: an older event never moves the last inbound/outbound time back; everything else is unchanged`, async () => {
+      sequence += 1
+      const lastMessageAt = new Date('2026-11-01T12:00:00.000Z')
+      const ids2 = { private: `${RUN}_${channel}_p${sequence}`, group: `${RUN}_${channel}_g${sequence}` }
+      for (const [chatType, id] of Object.entries(ids2)) {
+        createdChats.push(id)
+        await prisma.chat.create({ data: { id, channel, externalChatId: `${channel}:${RUN}:${chatType}:${sequence}`, chatType, lastMessageAt } })
+      }
+      const newer = new Date('2026-11-10T10:00:00.000Z')
+      const older = new Date('2026-11-09T10:00:00.000Z')
+
+      await ConversationWorkflowService.onInboundMessage(ids2.private, newer)
+      await ConversationWorkflowService.onInboundMessage(ids2.private, older)
+      expect(await workflowState(ids2.private)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: null, lastMessageAt, unreadCount: 2, requiresResponse: true, status: 'new' })
+
+      await ConversationWorkflowService.onOutboundMessage(ids2.private, newer)
+      await ConversationWorkflowService.onOutboundMessage(ids2.private, older)
+      // The status still steps per event: new -> open -> waiting_customer.
+      expect(await workflowState(ids2.private)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: newer, lastMessageAt, unreadCount: 2, requiresResponse: false, status: 'waiting_customer' })
+
+      await ConversationWorkflowService.onGroupInboundMessage(ids2.group, newer)
+      await ConversationWorkflowService.onGroupInboundMessage(ids2.group, older)
+      expect(await workflowState(ids2.group)).toMatchObject({ lastInboundAt: newer, lastOutboundAt: null, lastMessageAt, unreadCount: 2, requiresResponse: false, status: 'new' })
+
+      // A newer event still moves them forward.
+      const newest = new Date('2026-11-11T10:00:00.000Z')
+      await ConversationWorkflowService.onInboundMessage(ids2.private, newest)
+      expect((await workflowState(ids2.private)).lastInboundAt).toEqual(newest)
+    })
+  }
+
+  it('releasing a hold older than the last visible event keeps the last inbound time and the inbox order', async () => {
+    const chatId = await chat()
+    const lastMessageAt = new Date('2026-11-01T12:00:00.000Z')
+    await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt } })
+    const heldAt = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('old-hold'), { sentAt: heldAt })).toMatchObject({ outcome: 'held' })
+    await prisma.chat.update({ where: { id: chatId }, data: { contactId: ids.contactB, contactIdentityId: ids.identityB } })
+    const visibleAt = new Date(Date.now() - 60 * 60 * 1000)
+    expect(await append(chatId, PROVEN_B, key('newer-visible'), { sentAt: visibleAt })).toMatchObject({ outcome: 'appended' })
+
+    expect(await release(chatId, PROVEN_B)).toMatchObject({ outcome: 'released', released: 1 })
+    expect(await workflowState(chatId)).toMatchObject({ lastInboundAt: visibleAt, lastMessageAt, unreadCount: 2, requiresResponse: true })
   })
 
   it('held events never appear in a conversation read of Message', async () => {
