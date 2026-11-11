@@ -826,7 +826,12 @@ arrive as `UpdateReadHistoryOutbox` (F-33).
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
 before any handler runs) → `tg-bot/src/services/crmIntegration.js` (header
-`x-bot-signature`; bounded retry on 5xx and transport errors, 4xx is terminal) →
+`x-bot-signature`; bounded retry on 5xx and transport errors, 4xx is terminal; an
+event whose retries are exhausted is kept, with its exact body, as one 0600 file per
+event in the bot's data volume (`crm-forward-outbox`, named by the sha256 of the
+provider event id). It is redelivered every 30 s with
+backoff until a 2xx or terminal answer deletes it; the outbox is bounded to 5000 rows
+and 72 h, and logs carry ids only (T3-O)) →
 `POST G/app/api/webhook/telegram/route.ts` → auth → exact provider-event check →
 conversation admission → dedupe on `(chatId, externalId)` → **persist**:
 `prisma.botChatMessage.create` → `createChannelMessageV1` → conversation
