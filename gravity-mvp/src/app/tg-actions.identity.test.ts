@@ -1484,6 +1484,39 @@ describe('GramJS private conversation identity admission', () => {
                 expect(mocks.emitMessage).not.toHaveBeenCalled()
             })
 
+            test.each([
+                ['an infrastructure failure', Object.assign(new Error('connection reset for "secret body"'), { code: 'P1001' }), 'held_transient', 'P1001'],
+                ['a stale link', new Error('CONTACT_CONVERSATION_LINK_STALE'), 'held_transient', 'CONTACT_CONVERSATION_LINK_STALE'],
+                ['an unclassified failure', new Error('unexpected "secret body"'), 'failed', 'UNCLASSIFIED'],
+            ])('R-21: %s of the link in a bound conversation is never turned into an unproven hold', async (_label, failure, outcome, code) => {
+                boundToAnotherPerson()
+                mocks.ensureContactLink.mockRejectedValue(failure)
+                messagesByPeer({ '42': [132, 131].map(id => privateMessage({ peer: '42', id, text: 'secret body' })) })
+
+                const summary = await runCatchUp([userDialog('42')], '7542')
+
+                expect(mocks.appendGuarded).not.toHaveBeenCalled()
+                expect(mocks.heldRows.size).toBe(0)
+                expect(summary).toContain(outcome === 'failed' ? 'failed=2' : 'heldTransient=2')
+                expect(logs()).toContain(`message ${outcome} conn=telegram-d1-catchup-${connectionSequence} code=${code}`)
+                expect(logs()).not.toContain('secret body')
+            })
+
+            test.each([
+                ['the zero peer', '0'],
+                ['a non-numeric peer', '12a'],
+            ])('R-21: history import rejects %s before any admission write', async (_label, peer) => {
+                mocks.getMessages.mockResolvedValue([privateMessage({ peer: '42', id: 141 })])
+
+                const patch = await runImport([{ isUser: true, unreadCount: 0, date: nowSeconds(), entity: { id: peer, firstName: 'Peer' } }], '7543')
+
+                expect(mocks.upsertConversation).not.toHaveBeenCalled()
+                expect(mocks.resolveContact).not.toHaveBeenCalled()
+                expect(mocks.appendGuarded).not.toHaveBeenCalled()
+                expect(patch.detailsJson.completeness.rejectedDialogs).toBe(1)
+                expect(logs()).toContain('code=TELEGRAM_PEER_ID_UNPROVEN')
+            })
+
             test('R-21: a link refusal in a conversation bound to nobody keeps the pre-append HOLD', async () => {
                 const handler = await initializeListener(`telegram-guard-unbound-${connectionSequence}`, '7536')
                 mocks.ensureContactLink.mockRejectedValueOnce(new Error('CONTACT_IDENTITY_LINK_MISMATCH'))
