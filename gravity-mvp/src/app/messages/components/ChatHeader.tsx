@@ -415,16 +415,12 @@ export default function ChatHeader({
                                 </button>
                             )}
 
-                            {/* Call button — visible on all screens */}
-                            {(() => {
-                                const phone =
-                                    chat.driver?.phone ||
-                                    contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
-                                    contact?.phones?.[0]?.phone ||
-                                    (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null)
-                                if (!phone) return null
-                                return <CallButton phoneNumber={phone} label="" />
-                            })()}
+                            {/* Call button — visible on all screens. It names the chat's Contact only:
+                                Calling dials that Contact's verified preferred phone, and only when it
+                                allows the call. No number from the chat, the driver or the chat id is passed. */}
+                            {contact?.id && contact.phones?.length ? (
+                                <CallButton contactId={contact.id} label="" />
+                            ) : null}
 
                             {/* Search — visible on all screens; larger tap target on mobile */}
                             <button

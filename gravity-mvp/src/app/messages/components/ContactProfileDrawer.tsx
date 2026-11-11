@@ -969,7 +969,7 @@ export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' 
                                                     <Star size={11} />
                                                 </button>
                                             )}
-                                            <CallButton phoneNumber={phone.phone} label="" />
+                                            {contact && <CallButton contactId={contact.id} phoneId={phone.id} label="" />}
                                             <button
                                                 onClick={handleDeletePhone}
                                                 className="w-5 h-5 rounded hover:bg-red-50 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors"

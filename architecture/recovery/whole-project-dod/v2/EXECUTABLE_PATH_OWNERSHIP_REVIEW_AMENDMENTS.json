@@ -4461,6 +4461,49 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "communication-workspace-p2-messages-call-buttons-on-calling-p1-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "COMMUNICATION_WORKSPACE_P2_MESSAGES_CALL_BUTTONS_EXECUTOR_REVIEW_20261111",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCH_UNIFIED_CALLING_P2_COMMUNICATION_WORKSPACE_CALLING_INTEGRATION_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain of P1 «Calling Legacy Click-to-Call Safety» (PR #223), whose tail is calling-p1-manual-call-safety-main-f8a36b9f-20261111, and leaves that amendment untouched. It is stacked on P1 and lands only after it, through the Orchestrator's ownership authority."
+      },
+      "reason": "Records the tracked executable surfaces of Communication Workspace P2 (Calling integration, messages side) on top of P1: 2,856 + 1 = 2,857 surfaces, context-owned 1,591 -> 1,592, governed exclusions unchanged at 1,265. The messages screen now calls a Contact only through Calling's CallButton, which names the Contact and optionally its Contacts phone id: ChatHeader, ContactProfileDrawer and NewChatPopover change bytes, and NewChatPopover loses its own copy of the originate flow, so nothing typed is dialled. None of the three is an exact-inventory surface, so this amendment carries no source-fingerprint rebind. The one new surface is a Vitest suite under the messaging context's owned path. The current triple is the repository's own derivation over this exact clean candidate (269e594d), read through the validator's preview_reviewed_current_denominator operation, which writes nothing.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2856,
+        "tracked_inventory_sha256": "76c9d195d94091f3a54a720b696c5830c71123b9a5fbb5e8214e4409287fb13c",
+        "coverage_sha256": "a6c44ab30b2ffd91c6d2571291da9cf0d242d76ef96b6fe0c6c0266052eacf92"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2857,
+        "tracked_inventory_sha256": "7b5126c9ec712402e04dfddc72e5b1a7843a88fc9ff6573b33dbee26246bc8df",
+        "coverage_sha256": "22cfb762f1e21f82782b8e450121554c9b86258ec7c6f0136795d2d649710b78"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/messages/components/MessagesCallEntryPoints.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new Vitest suite under a path the messaging bounded context owns (gravity-mvp/src/app/messages in architecture/contexts/v1/manifests/messaging.json owned_paths): it renders NewChatPopover with Calling's CallButton stubbed and proves that the messages screen never posts to /api/calls/originate and never hands CallButton a number. Context ownership comes from the manifest, so it receives no explicit exact-inventory assignment and moves no exact-inventory transition; lifecycle TEST. It holds no credential and opens no database connection."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
