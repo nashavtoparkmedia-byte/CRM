@@ -12,7 +12,9 @@
  * - `YOKO_LIVE_ACCEPTANCE` unset: OFF. Every call returns at once; production
  *   behaviour is unchanged. Production configuration never sets it.
  * - `YOKO_LIVE_ACCEPTANCE=1`: ENFORCE, fail-closed. The allowlist file
- *   (`YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE`) must be present, valid, unexpired and
+ *   (`YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE`, read at load and then frozen: any
+ *   later change of its bytes, emptying it in place included, refuses
+ *   everything until restart and can never widen it) must be present, valid, unexpired and
  *   name at least one recipient for the lane, and the state directory
  *   (`YOKO_LIVE_STATE_DIR`, absolute, writable) must be usable; otherwise every
  *   send and every inbound peer of that lane is refused.
@@ -50,6 +52,7 @@ export type LiveAcceptanceSendKindV1 = 'send' | 'lookup'
 
 export type LiveAcceptanceRefusalCodeV1 =
     | 'LIVE_GUARD_CONFIG_INVALID'
+    | 'LIVE_GUARD_CONFIG_CHANGED'
     | 'LIVE_GUARD_EXPIRED'
     | 'LIVE_GUARD_LANE_EMPTY'
     | 'LIVE_GUARD_NOT_LISTED'
@@ -173,6 +176,7 @@ export function createLiveAcceptanceGuardV1(dependencies: LiveAcceptanceGuardDep
     }
 
     let config: EnforceConfig | null = null
+    let startupRaw: string | null = null
     let startupRefusal: LiveAcceptanceRefusalCodeV1 = 'LIVE_GUARD_CONFIG_INVALID'
     const file = dependencies.env.YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE
     const counterDirectory = dependencies.env.YOKO_LIVE_STATE_DIR
@@ -184,6 +188,7 @@ export function createLiveAcceptanceGuardV1(dependencies: LiveAcceptanceGuardDep
             raw = null
         }
         config = raw === null ? null : parseAllowlist(raw, counterDirectory)
+        startupRaw = raw
         if (config) {
             try {
                 dependencies.ensureDirectory(counterDirectory)
@@ -204,9 +209,23 @@ export function createLiveAcceptanceGuardV1(dependencies: LiveAcceptanceGuardDep
         return dependencies.readSlots(active.counterDirectory, slotPrefix(active, lane)).map(parseSlot)
     }
 
+    /**
+     * The file is frozen at its startup bytes: it is re-read on every check and any
+     * change (emptied in place, edited, removed, unreadable) refuses everything until
+     * the process restarts. It can stop sends at once and can never widen the list.
+     */
+    function fileChanged(): boolean {
+        try {
+            return dependencies.readFile(file as string) !== startupRaw
+        } catch {
+            return true
+        }
+    }
+
     /** Null when the lane may proceed to the per-recipient checks; otherwise the refusal code. */
     function laneRefusal(lane: LiveAcceptanceLaneV1): LiveAcceptanceRefusalCodeV1 | null {
         if (!config) return startupRefusal
+        if (fileChanged()) return 'LIVE_GUARD_CONFIG_CHANGED'
         if (!(LIVE_ACCEPTANCE_LANES_V1 as readonly string[]).includes(lane)) return 'LIVE_GUARD_CONFIG_INVALID'
         if (dependencies.now() >= config.expiresAtMs) return 'LIVE_GUARD_EXPIRED'
         if (config.lanes[lane].recipients.size === 0) return 'LIVE_GUARD_LANE_EMPTY'
@@ -255,6 +274,7 @@ export function createLiveAcceptanceGuardV1(dependencies: LiveAcceptanceGuardDep
         },
         status() {
             if (!config) return { mode: 'refuse_all', reason: startupRefusal }
+            if (fileChanged()) return { mode: 'refuse_all', reason: 'LIVE_GUARD_CONFIG_CHANGED' }
             const lanes = {} as Record<LiveAcceptanceLaneV1, { entries: number; maxSends: number; sendsUsed: number }>
             for (const lane of LIVE_ACCEPTANCE_LANES_V1) {
                 let sendsUsed: number
@@ -298,7 +318,7 @@ function claimSlotOnDisk(file: string, content: string): boolean {
 }
 
 const LIVE_GUARD_CODES: ReadonlySet<string> = new Set<LiveAcceptanceRefusalCodeV1>([
-    'LIVE_GUARD_CONFIG_INVALID', 'LIVE_GUARD_EXPIRED', 'LIVE_GUARD_LANE_EMPTY', 'LIVE_GUARD_NOT_LISTED',
+    'LIVE_GUARD_CONFIG_INVALID', 'LIVE_GUARD_CONFIG_CHANGED', 'LIVE_GUARD_EXPIRED', 'LIVE_GUARD_LANE_EMPTY', 'LIVE_GUARD_NOT_LISTED',
     'LIVE_GUARD_CAP_REACHED', 'LIVE_GUARD_INTERVAL', 'LIVE_GUARD_COUNTER_UNAVAILABLE',
 ])
 

@@ -17,7 +17,8 @@ import {
 } from './live-acceptance-recipient-guard'
 
 interface Step {
-    op: 'send' | 'lookup' | 'assert' | 'peer' | 'status'
+    op: 'send' | 'lookup' | 'assert' | 'peer' | 'status' | 'write_allowlist'
+    content?: unknown
     kind?: string
     lane?: string
     id?: string
@@ -95,13 +96,17 @@ describe('live-acceptance recipient guard: shared conformance vectors', () => {
     for (const vector of vectors.cases) {
         it(vector.name, () => {
             const clock = { now: Date.parse(vector.steps[0]?.at ?? '2026-11-12T09:00:00.000Z') }
-            const { dependencies, log } = memory(vector, clock)
+            const { dependencies, files, log } = memory(vector, clock)
             const guard = createLiveAcceptanceGuardV1(dependencies)
             if (vector.startup_log) expect(log).toEqual(vector.startup_log)
             for (const step of vector.steps) {
                 clock.now = Date.parse(step.at)
                 const lane = step.lane as LiveAcceptanceLaneV1
-                if (step.op === 'peer') {
+                if (step.op === 'write_allowlist') {
+                    const target = vector.env.YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE
+                    if (step.content === null) files.delete(target)
+                    else files.set(target, typeof step.content === 'string' ? step.content : JSON.stringify(step.content))
+                } else if (step.op === 'peer') {
                     expect(guard.isPeerAllowed(lane, step.id as string) ? 'allow' : 'refuse', `${step.lane} ${step.id}`).toBe(step.expect)
                 } else if (step.op === 'status') {
                     const status = guard.status()
@@ -194,13 +199,14 @@ describe('live-acceptance recipient guard: behaviour beyond the vectors', () => 
         expect(slot).not.toContain('90000001')
     })
 
-    it('the allowlist is read once: a later change of the file changes nothing', () => {
+    it('the allowlist is frozen at startup: a later change never widens it and refuses everything', () => {
         const clock = { now: Date.parse('2026-11-12T09:00:00.000Z') }
         const shared = memory(vector(), clock)
         const guard = createLiveAcceptanceGuardV1(shared.dependencies)
         shared.files.set('/live/allowlist.json', JSON.stringify({ ...allowlist, channels: { max: { recipients: ['90000009'], max_sends: 3 } } }))
         expect(guard.isPeerAllowed('max', '90000009')).toBe(false)
-        expect(guard.isPeerAllowed('max', '90000001')).toBe(true)
+        expect(guard.isPeerAllowed('max', '90000001')).toBe(false)
+        expect(guard.status()).toEqual({ mode: 'refuse_all', reason: 'LIVE_GUARD_CONFIG_CHANGED' })
     })
 
     it('the startup lines carry the mode and the count only, never an id or the run id', () => {

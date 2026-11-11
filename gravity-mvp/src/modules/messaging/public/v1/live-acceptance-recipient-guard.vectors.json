@@ -1,6 +1,6 @@
 {
   "schema": "yoko.live-acceptance.recipient-guard-vectors.v1",
-  "note": "Shared conformance vectors for every reader of yoko.live-acceptance.recipient-allowlist.v1 (gravity-mvp, tg-bot, max-web-scraper). 'allowlist' is the file content (an object is JSON-encoded; a string is written as is; null means the file does not exist). 'counters' are slot files already present in the counter directory. '__SHA256(x)__' stands for the hex sha256 of x. A send/lookup/assert step expects 'allow' or the refusal code; a peer step expects 'allow' or 'refuse'. 'startup_log', when given, is the exact list of lines logged at construction.",
+  "note": "Shared conformance vectors for every reader of yoko.live-acceptance.recipient-allowlist.v1 (gravity-mvp, tg-bot, max-web-scraper). 'allowlist' is the file content (an object is JSON-encoded; a string is written as is; null means the file does not exist). 'counters' are slot files already present in the counter directory. '__SHA256(x)__' stands for the hex sha256 of x. A send/lookup/assert step expects 'allow' or the refusal code; a peer step expects 'allow' or 'refuse'. 'startup_log', when given, is the exact list of lines logged at construction. A 'write_allowlist' step replaces the allowlist file after construction ('content' as for 'allowlist'; null removes it): the file is frozen at its startup bytes, so any change refuses everything.",
   "cases": [
     {
       "name": "off: marker unset allows every send and peer, logs nothing",
@@ -1503,6 +1503,340 @@
           "id": "7000001",
           "at": "2026-11-12T09:00:00.000Z",
           "expect": "refuse"
+        }
+      ]
+    },
+    {
+      "name": "kill: the allowlist emptied in place refuses every send and peer at once",
+      "env": {
+        "YOKO_LIVE_ACCEPTANCE": "1",
+        "YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE": "/live/allowlist.json",
+        "YOKO_LIVE_STATE_DIR": "/live/state"
+      },
+      "allowlist": {
+        "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+        "run_id": "LIVE-T-01",
+        "expires_at": "2026-11-12T18:00:00.000Z",
+        "min_interval_ms_per_recipient": 5000,
+        "channels": {
+          "whatsapp": {
+            "recipients": [
+              "70000000001@c.us",
+              "123456789012345@lid"
+            ],
+            "max_sends": 3
+          },
+          "max": {
+            "recipients": [
+              "90000001"
+            ],
+            "max_sends": 2
+          },
+          "telegram_mtproto": {
+            "recipients": [
+              "7000001",
+              "-1007000002"
+            ],
+            "max_sends": 5
+          },
+          "telegram_bot": {
+            "recipients": [
+              "7000001"
+            ],
+            "max_sends": 1
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "send",
+          "lane": "max",
+          "id": "90000001",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "allow"
+        },
+        {
+          "op": "write_allowlist",
+          "content": "",
+          "at": "2026-11-12T09:00:00.000Z"
+        },
+        {
+          "op": "send",
+          "lane": "whatsapp",
+          "id": "70000000001@c.us",
+          "at": "2026-11-12T09:00:10.000Z",
+          "expect": "LIVE_GUARD_CONFIG_CHANGED"
+        },
+        {
+          "op": "lookup",
+          "lane": "max",
+          "id": "90000001",
+          "at": "2026-11-12T09:00:10.000Z",
+          "expect": "LIVE_GUARD_CONFIG_CHANGED"
+        },
+        {
+          "op": "peer",
+          "lane": "telegram_mtproto",
+          "id": "7000001",
+          "at": "2026-11-12T09:00:10.000Z",
+          "expect": "refuse"
+        },
+        {
+          "op": "status",
+          "at": "2026-11-12T09:00:10.000Z",
+          "expect": {
+            "mode": "refuse_all",
+            "reason": "LIVE_GUARD_CONFIG_CHANGED"
+          }
+        }
+      ]
+    },
+    {
+      "name": "narrow-only: an edit that adds a recipient widens nothing and refuses everything",
+      "env": {
+        "YOKO_LIVE_ACCEPTANCE": "1",
+        "YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE": "/live/allowlist.json",
+        "YOKO_LIVE_STATE_DIR": "/live/state"
+      },
+      "allowlist": {
+        "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+        "run_id": "LIVE-T-01",
+        "expires_at": "2026-11-12T18:00:00.000Z",
+        "min_interval_ms_per_recipient": 5000,
+        "channels": {
+          "whatsapp": {
+            "recipients": [
+              "70000000001@c.us",
+              "123456789012345@lid"
+            ],
+            "max_sends": 3
+          },
+          "max": {
+            "recipients": [
+              "90000001"
+            ],
+            "max_sends": 2
+          },
+          "telegram_mtproto": {
+            "recipients": [
+              "7000001",
+              "-1007000002"
+            ],
+            "max_sends": 5
+          },
+          "telegram_bot": {
+            "recipients": [
+              "7000001"
+            ],
+            "max_sends": 1
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "write_allowlist",
+          "content": {
+            "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+            "run_id": "LIVE-T-01",
+            "expires_at": "2026-11-12T18:00:00.000Z",
+            "min_interval_ms_per_recipient": 5000,
+            "channels": {
+              "whatsapp": {
+                "recipients": [
+                  "70000000001@c.us",
+                  "123456789012345@lid"
+                ],
+                "max_sends": 3
+              },
+              "max": {
+                "recipients": [
+                  "90000001",
+                  "90000002"
+                ],
+                "max_sends": 2
+              },
+              "telegram_mtproto": {
+                "recipients": [
+                  "7000001",
+                  "-1007000002"
+                ],
+                "max_sends": 5
+              },
+              "telegram_bot": {
+                "recipients": [
+                  "7000001"
+                ],
+                "max_sends": 1
+              }
+            }
+          },
+          "at": "2026-11-12T09:00:00.000Z"
+        },
+        {
+          "op": "send",
+          "lane": "max",
+          "id": "90000002",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "LIVE_GUARD_CONFIG_CHANGED"
+        },
+        {
+          "op": "send",
+          "lane": "max",
+          "id": "90000001",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "LIVE_GUARD_CONFIG_CHANGED"
+        },
+        {
+          "op": "peer",
+          "lane": "max",
+          "id": "90000002",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "refuse"
+        }
+      ]
+    },
+    {
+      "name": "narrow-only: the allowlist file removed refuses everything",
+      "env": {
+        "YOKO_LIVE_ACCEPTANCE": "1",
+        "YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE": "/live/allowlist.json",
+        "YOKO_LIVE_STATE_DIR": "/live/state"
+      },
+      "allowlist": {
+        "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+        "run_id": "LIVE-T-01",
+        "expires_at": "2026-11-12T18:00:00.000Z",
+        "min_interval_ms_per_recipient": 5000,
+        "channels": {
+          "whatsapp": {
+            "recipients": [
+              "70000000001@c.us",
+              "123456789012345@lid"
+            ],
+            "max_sends": 3
+          },
+          "max": {
+            "recipients": [
+              "90000001"
+            ],
+            "max_sends": 2
+          },
+          "telegram_mtproto": {
+            "recipients": [
+              "7000001",
+              "-1007000002"
+            ],
+            "max_sends": 5
+          },
+          "telegram_bot": {
+            "recipients": [
+              "7000001"
+            ],
+            "max_sends": 1
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "write_allowlist",
+          "content": null,
+          "at": "2026-11-12T09:00:00.000Z"
+        },
+        {
+          "op": "send",
+          "lane": "telegram_bot",
+          "id": "7000001",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "LIVE_GUARD_CONFIG_CHANGED"
+        }
+      ]
+    },
+    {
+      "name": "narrow-only: rewriting the identical bytes changes nothing",
+      "env": {
+        "YOKO_LIVE_ACCEPTANCE": "1",
+        "YOKO_LIVE_RECIPIENT_ALLOWLIST_FILE": "/live/allowlist.json",
+        "YOKO_LIVE_STATE_DIR": "/live/state"
+      },
+      "allowlist": {
+        "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+        "run_id": "LIVE-T-01",
+        "expires_at": "2026-11-12T18:00:00.000Z",
+        "min_interval_ms_per_recipient": 5000,
+        "channels": {
+          "whatsapp": {
+            "recipients": [
+              "70000000001@c.us",
+              "123456789012345@lid"
+            ],
+            "max_sends": 3
+          },
+          "max": {
+            "recipients": [
+              "90000001"
+            ],
+            "max_sends": 2
+          },
+          "telegram_mtproto": {
+            "recipients": [
+              "7000001",
+              "-1007000002"
+            ],
+            "max_sends": 5
+          },
+          "telegram_bot": {
+            "recipients": [
+              "7000001"
+            ],
+            "max_sends": 1
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "write_allowlist",
+          "content": {
+            "schema": "yoko.live-acceptance.recipient-allowlist.v1",
+            "run_id": "LIVE-T-01",
+            "expires_at": "2026-11-12T18:00:00.000Z",
+            "min_interval_ms_per_recipient": 5000,
+            "channels": {
+              "whatsapp": {
+                "recipients": [
+                  "70000000001@c.us",
+                  "123456789012345@lid"
+                ],
+                "max_sends": 3
+              },
+              "max": {
+                "recipients": [
+                  "90000001"
+                ],
+                "max_sends": 2
+              },
+              "telegram_mtproto": {
+                "recipients": [
+                  "7000001",
+                  "-1007000002"
+                ],
+                "max_sends": 5
+              },
+              "telegram_bot": {
+                "recipients": [
+                  "7000001"
+                ],
+                "max_sends": 1
+              }
+            }
+          },
+          "at": "2026-11-12T09:00:00.000Z"
+        },
+        {
+          "op": "send",
+          "lane": "telegram_bot",
+          "id": "7000001",
+          "at": "2026-11-12T09:00:00.000Z",
+          "expect": "allow"
         }
       ]
     }
