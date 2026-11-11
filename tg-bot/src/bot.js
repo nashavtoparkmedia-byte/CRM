@@ -134,6 +134,7 @@ bot.use(async (ctx, next) => {
         const failed = forwarding && (
             forwarding.outcome === OUTCOME.TERMINAL_4XX
             || forwarding.outcome === OUTCOME.RETRY_EXHAUSTED_TRANSIENT
+            || forwarding.outcome === OUTCOME.DEFERRED
             || forwarding.outcome === OUTCOME.UNBOUND
         );
         if (failed) {

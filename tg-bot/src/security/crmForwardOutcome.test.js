@@ -19,6 +19,8 @@ const {
     CRM_FORWARD_OUTCOME,
     createFileCrmOutbox,
     crmOutboxDirectory,
+    isDeferrableRefusal,
+    isTerminalRefusal,
     isRetryableStatus,
     redeliveryDelayMs,
     redeliveryLimits,
@@ -147,7 +149,7 @@ test('a /start deep-link payload is never forwarded to the CRM', async () => {
     }
 });
 
-for (const status of [400, 401, 403, 404, 409]) {
+for (const status of [400, 404, 409, 410, 413, 422]) {
     test(`a ${status} is terminal and is never retried`, async () => {
         const crm = await crmStub([status]);
         const restore = withEnv(crm.url);
@@ -248,7 +250,8 @@ test('a refused event does not poison the next independent event', async () => {
             telegramUpdate({ updateId: 1002, messageId: 2002, text: 'second' }), 'INCOMING',
         );
 
-        assert.equal(eventA.outcome, CRM_FORWARD_OUTCOME.TERMINAL_4XX);
+        // An auth refusal is deferred (kept when an outbox exists), never a latch.
+        assert.equal(eventA.outcome, CRM_FORWARD_OUTCOME.DEFERRED);
         assert.equal(eventB.outcome, CRM_FORWARD_OUTCOME.SUCCESS);
         assert.equal(crm.received.length, 2, 'no shared latch, no blocked queue');
         assert.equal(crm.received[1].payload.providerEventId, 'update:1002');
@@ -487,5 +490,78 @@ test('the production instance keeps events durably and the bot starts the draine
     const source = readFileSync(resolvePath(__dirname, '../services/crmIntegration.js'), 'utf8');
     assert.doesNotMatch(source, /Message dropped\.`\)/, 'an exhausted event is never silently dropped');
     assert.doesNotMatch(source, /logger\.\w+\([^)]*\$\{(?:row\.body|redelivery\.body|data|body)\}/, 'no body in a log line');
+});
+
+// ── T3-O R1 (Security): auth and rate refusals are kept, never dropped ────
+
+test('only 400/404/409/410/413/422 are terminal; every other 4xx is deferrable', () => {
+    for (const status of [400, 404, 409, 410, 413, 422]) {
+        assert.equal(isTerminalRefusal(status), true, `${status}`);
+        assert.equal(isDeferrableRefusal(status), false, `${status}`);
+    }
+    for (const status of [401, 403, 405, 408, 415, 425, 429]) {
+        assert.equal(isTerminalRefusal(status), false, `${status}`);
+        assert.equal(isDeferrableRefusal(status), true, `${status}`);
+    }
+    for (const status of [200, 302, 500, 503, null]) assert.equal(isDeferrableRefusal(status), false, `${status}`);
+});
+
+for (const status of [401, 403, 408, 425, 429]) {
+    test(`a live ${status} is kept for redelivery after one request, never dropped or hammered`, async () => {
+        const crm = await crmStub([status]);
+        const restore = withEnv(crm.url);
+        const store = memoryOutbox();
+        try {
+            const service = new CrmIntegrationService({ outbox: store.outbox });
+            const result = await service.forwardMessageToCrm(telegramUpdate(), 'INCOMING');
+            assert.equal(result.outcome, CRM_FORWARD_OUTCOME.DEFERRED);
+            assert.equal(result.kept, true);
+            assert.equal(crm.received.length, 1, 'no in-line retry of an auth or rate refusal');
+            const kept = await rows(store.db);
+            assert.equal(kept.length, 1);
+            assert.deepEqual(JSON.parse(kept[0].body), crm.received[0].payload);
+        } finally {
+            restore();
+            await store.close();
+        }
+    });
+}
+
+test('the drainer keeps and reschedules auth/rate refusals; it deletes only terminal ones', async () => {
+    const restore = withEnv('http://127.0.0.1:9/api/webhook/telegram');
+    const store = memoryOutbox();
+    let clock = 1_800_000_000_000;
+    try {
+        const service = new CrmIntegrationService({ outbox: store.outbox, now: () => clock });
+        for (const [status, kept] of [[401, true], [403, true], [429, true], [400, false], [422, false]]) {
+            const key = `update:${status}`;
+            await store.outbox.put(key, JSON.stringify({ providerEventId: key }), clock);
+            const crm = await crmStub([status]);
+            service.crmWebhookUrl = crm.url;
+            clock += 16 * 60 * 1000;
+            await service.drainRedeliveryOutbox();
+            const left = (await rows(store.db)).filter(row => row.eventKey === key);
+            assert.equal(left.length, kept ? 1 : 0, `status ${status}`);
+            if (kept) assert.ok(left[0].attempts >= 1, `status ${status} rescheduled`);
+            await crm.close();
+            for (const row of await rows(store.db)) await store.outbox.remove(row.eventKey);
+        }
+    } finally {
+        restore();
+        await store.close();
+    }
+});
+
+test('an existing outbox directory with wider permissions is tightened to 0700', async () => {
+    const store = memoryOutbox();
+    try {
+        const dir = path.join(store.db, 'outbox');
+        fs.mkdirSync(dir, { mode: 0o755 });
+        fs.chmodSync(dir, 0o755);
+        await store.outbox.put('update:5005', '{}', 1_800_000_000_000);
+        assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
+    } finally {
+        await store.close();
+    }
 });
 

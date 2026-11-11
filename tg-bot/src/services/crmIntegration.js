@@ -63,6 +63,8 @@ const CRM_FORWARD_OUTCOME = {
     TERMINAL_4XX: 'terminal_4xx',
     /** Transport stayed unavailable for the whole bounded retry budget. */
     RETRY_EXHAUSTED_TRANSIENT: 'retry_exhausted_transient',
+    /** Refused for a reason that clears without the event changing (auth, rate, load): kept, redelivered later. */
+    DEFERRED: 'deferred',
 };
 
 /**
@@ -75,6 +77,25 @@ const CRM_FORWARD_OUTCOME = {
  */
 function isRetryableStatus(statusCode) {
     return typeof statusCode === 'number' && statusCode >= 500;
+}
+
+/**
+ * A refusal the same bytes would get again: the event itself is wrong
+ * (400, 404, 409 conflict, 410, 413, 422). Only these drop an event.
+ */
+const TERMINAL_REFUSALS = new Set([400, 404, 409, 410, 413, 422]);
+function isTerminalRefusal(statusCode) {
+    return TERMINAL_REFUSALS.has(statusCode);
+}
+
+/**
+ * Any other 4xx clears without the event changing: 401/403 while
+ * BOT_CRM_SECRET is mismatched (for example during a rotation), 408/425/429
+ * under load. Such an event is kept for redelivery, never dropped, and never
+ * retried in line (the incident: a 401 hammered four times).
+ */
+function isDeferrableRefusal(statusCode) {
+    return typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500 && !TERMINAL_REFUSALS.has(statusCode);
 }
 
 function positiveInteger(value, fallback) {
@@ -114,7 +135,8 @@ function createFileCrmOutbox(directory, limits = redeliveryLimits()) {
     const fileFor = (eventKey) => path.join(directory, `${crypto.createHash('sha256').update(String(eventKey)).digest('hex')}.json`);
     let ready = null;
     const ensure = () => {
-        ready = ready || fsp.mkdir(directory, { recursive: true, mode: 0o700 });
+        // mkdir's mode does not tighten a directory that already exists, so chmod it.
+        ready = ready || fsp.mkdir(directory, { recursive: true, mode: 0o700 }).then(() => fsp.chmod(directory, 0o700));
         return ready;
     };
     const names = async () => (await fsp.readdir(directory)).filter(name => /^[0-9a-f]{64}\.json$/.test(name));
@@ -388,6 +410,15 @@ class CrmIntegrationService {
                                 attempts: retryCount + 1,
                             });
                         }
+                        if (isDeferrableRefusal(status)) {
+                            logger.warn(`[CRM IN] CRM refused auth/rate (status ${status}); event=${payload.providerEventId} kept, not retried in line`);
+                            return this.keepForRedelivery({ eventKey: payload.providerEventId, body: data }).then((kept) => resolve({
+                                outcome: CRM_FORWARD_OUTCOME.DEFERRED,
+                                status,
+                                attempts: retryCount + 1,
+                                kept,
+                            }));
+                        }
                         if (!isRetryableStatus(status)) {
                             logger.error(`[CRM IN] CRM refused the event. Status: ${status}. Not retrying.`);
                             return resolve({
@@ -438,20 +469,26 @@ class CrmIntegrationService {
         });
         // The update is already consumed from Telegram, so this is the last
         // moment the event exists: keep its exact body for redelivery.
+        logger.error('[CRM IN] Max retries reached.');
+        this.keepForRedelivery(redelivery).then(report);
+    }
+
+    /** Keep one event's exact body for redelivery; resolves whether it was kept. Logs ids only. */
+    keepForRedelivery(redelivery) {
         if (!this.outbox || !redelivery?.eventKey) {
-            logger.error('[CRM IN] Max retries reached. Message dropped (no redelivery outbox).');
-            return report(false);
+            logger.error('[CRM IN] Message dropped (no redelivery outbox).');
+            return Promise.resolve(false);
         }
-        this.outbox.put(redelivery.eventKey, redelivery.body, this.now()).then((result) => {
+        return this.outbox.put(redelivery.eventKey, redelivery.body, this.now()).then((result) => {
             if (result.stored) {
-                logger.warn(`[CRM IN] Max retries reached; event=${redelivery.eventKey} kept for redelivery`);
-                return report(true);
+                logger.warn(`[CRM IN] event=${redelivery.eventKey} kept for redelivery`);
+                return true;
             }
-            logger.error(`[CRM IN] Max retries reached; event=${redelivery.eventKey} NOT kept (outbox ${result.reason})`);
-            return report(false);
+            logger.error(`[CRM IN] event=${redelivery.eventKey} NOT kept (outbox ${result.reason})`);
+            return false;
         }, (error) => {
-            logger.error(`[CRM IN] Max retries reached; event=${redelivery.eventKey} NOT kept (outbox error ${error?.code || error?.name || 'unknown'})`);
-            report(false);
+            logger.error(`[CRM IN] event=${redelivery.eventKey} NOT kept (outbox error ${error?.code || error?.name || 'unknown'})`);
+            return false;
         });
     }
 
@@ -511,11 +548,14 @@ class CrmIntegrationService {
                     await this.outbox.remove(row.eventKey);
                     summary.delivered += 1;
                     logger.info(`[CRM OUTBOX] event=${row.eventKey} redelivered`);
-                } else if (answer.status !== null && !isRetryableStatus(answer.status)) {
+                } else if (answer.status !== null && isTerminalRefusal(answer.status)) {
                     await this.outbox.remove(row.eventKey);
                     summary.refused += 1;
                     logger.error(`[CRM OUTBOX] event=${row.eventKey} refused by the CRM (status ${answer.status}); not retried`);
                 } else {
+                    if (isDeferrableRefusal(answer.status)) {
+                        logger.warn(`[CRM OUTBOX] event=${row.eventKey} CRM refused auth/rate (status ${answer.status}); kept`);
+                    }
                     const attempts = row.attempts + 1;
                     await this.outbox.reschedule(row.eventKey, attempts, this.now() + redeliveryDelayMs(attempts, limits));
                     summary.rescheduled += 1;
@@ -545,6 +585,8 @@ module.exports.redeliveryLimits = redeliveryLimits;
 module.exports.redeliveryDelayMs = redeliveryDelayMs;
 module.exports.CRM_FORWARD_OUTCOME = CRM_FORWARD_OUTCOME;
 module.exports.isRetryableStatus = isRetryableStatus;
+module.exports.isTerminalRefusal = isTerminalRefusal;
+module.exports.isDeferrableRefusal = isDeferrableRefusal;
 module.exports.CrmIntegrationService = CrmIntegrationService;
 module.exports.extractTelegramProviderEvidence = extractTelegramProviderEvidence;
 // The Telegram webhook origin normalisation now lives in its own unit-tested

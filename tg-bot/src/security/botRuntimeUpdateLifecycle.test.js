@@ -353,7 +353,7 @@ test('the webhook route answers 500 on failure and 200 on success/replay', async
 
 // ── F. the signed CRM forwarding contract is unchanged ───────────────────────
 
-test('F. CRM forward retry classification is unchanged: 5xx/transport retry, 4xx terminal', () => {
+test('F. CRM forward retry classification: 5xx/transport retry in line, 4xx never retried in line', () => {
     assert.equal(isRetryableStatus(500), true);
     assert.equal(isRetryableStatus(502), true);
     assert.equal(isRetryableStatus(503), true);
@@ -365,7 +365,8 @@ test('F. CRM forward retry classification is unchanged: 5xx/transport retry, 4xx
 
     assert.deepEqual(
         Object.keys(CRM_FORWARD_OUTCOME).sort(),
-        ['RETRY_EXHAUSTED_TRANSIENT', 'SKIPPED', 'SUCCESS', 'TERMINAL_4XX', 'UNBOUND'],
-        'the bounded outcome set is unchanged'
+        // T3-O R1: an auth/rate 4xx is DEFERRED (kept for redelivery), not dropped.
+        ['DEFERRED', 'RETRY_EXHAUSTED_TRANSIENT', 'SKIPPED', 'SUCCESS', 'TERMINAL_4XX', 'UNBOUND'],
+        'the bounded outcome set'
     );
 });
