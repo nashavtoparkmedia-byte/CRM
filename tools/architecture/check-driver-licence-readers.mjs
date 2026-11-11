@@ -192,6 +192,7 @@ export const LICENCE_READERS = {
   [`${P}lib/tasks/scenario-fields.ts`]: { disposition: 'd2l', owner: work },
   [`${P}modules/contacts/internal/contact-merge-state-composer.ts`]: { disposition: 'evidence_key' },
   [`${P}modules/contacts/internal/contact-person-card.ts`]: { disposition: 'evidence_key', note: 'the card carries only the count of confirmed cluster keys, never a key' },
+  [`${P}modules/calling/internal/ai-calls/ai-conversation-simulated-provider.ts`]: { disposition: 'licence_term_only', note: 'simulated lead questionnaire field license_category (C4, #210)' },
   [`${P}modules/contacts/internal/identity-access-contact-person-card-authority.ts`]: { disposition: 'view_decision' },
   [`${P}modules/contacts/public/v1/contact-merge-handler.ts`]: { disposition: 'evidence_key' },
   [`${P}modules/contacts/public/v1/contact-read-authority.ts`]: { disposition: 'view_decision' },
