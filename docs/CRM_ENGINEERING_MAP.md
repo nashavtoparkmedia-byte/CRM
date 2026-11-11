@@ -826,7 +826,12 @@ arrive as `UpdateReadHistoryOutbox` (F-33).
 **F-05 Telegram bot inbound**
 `tg-bot/src/bot.js` (first middleware: awaits the forward to a terminal outcome
 before any handler runs) → `tg-bot/src/services/crmIntegration.js` (header
-`x-bot-signature`; bounded retry on 5xx and transport errors, 4xx is terminal) →
+`x-bot-signature`; bounded retry on 5xx and transport errors, 4xx is terminal; an
+event whose retries are exhausted is kept, with its exact body, as one 0600 file per
+event in the bot's data volume (`crm-forward-outbox`, named by the sha256 of the
+provider event id). It is redelivered every 30 s with
+backoff until a 2xx or terminal answer deletes it; the outbox is bounded to 5000 rows
+and 72 h, and logs carry ids only (T3-O)) →
 `POST G/app/api/webhook/telegram/route.ts` → auth → exact provider-event check →
 conversation admission → dedupe on `(chatId, externalId)` → **persist**:
 `prisma.botChatMessage.create` → `createChannelMessageV1` → conversation
@@ -1109,7 +1114,14 @@ is a manual grant from its decision time until revoked. The bot reads the same c
 | Integration admin | `ADMIN_USER/ADMIN_PASS` → HMAC cookie `yoko_integration_admin_session` (8 h) | `requireIntegrationAdminAccess` in settings pages/actions and selected API routes |
 | Machine callers | Shared secrets per caller (below) | The individual route |
 
-Machine secrets: `BOT_CRM_SECRET` (`x-bot-signature`; bot webhooks, fails closed),
+Machine secrets: `BOT_CRM_SECRET` (`x-bot-signature`; both bot webhooks and the CRM→bot
+delivery/file calls; fails closed. It must be strong on both sides: trimmed, 32–256
+characters, no placeholder. It is compared in constant time, and each side has one
+reader: `telegramBotCrmSecretV1` in `bot-message-delivery.ts`, tg-bot
+`src/security/webhookAuth.js`. There is no fallback value. `/api/webhooks/bot` is on
+the proxy allowlist, so this check is its only gate), `TELEGRAM_BOT_TOKEN_FILE` (the
+mounted Driver Bot token file, read only by `readTelegramBotTokenV1` for
+`/api/tg-media`; unset means 503),
 `MAX_SCRAPER_WEBHOOK_SECRET` (timing-safe, fails closed), `BRIDGE_SHARED_TOKEN`
 (`X-Bridge-Token`; bridge callbacks, fails closed), `AI_CALL_CONTROLLED_OPERATOR_TOKEN`,
 `AVITO_WEBHOOK_TOKEN` (Bearer; accepts everything when unset), `CRON_SECRET`
@@ -1904,7 +1916,7 @@ Documented, not fixed. Confidence refers to "this is what the code on main does"
 | R-08 | Android discards call alerts: `PushPayload` knows only `chat_message` while the server sends `call_incoming` / `call_missed` | `android/app/src/main/java/ru/yokoone/crm/shell/push/PushPayload.kt` | HIGH |
 | R-09 | Scraper result webhook target has no path in the base compose file (`CRM_WEBHOOK_URL: http://gravity-mvp:3002`) while the worker posts to it verbatim and the receiver is `/api/monitoring/fleet-check/callback` | compose L485, L517; `yandex-fleet-scraper/src/worker.ts` `fireWebhook` | HIGH for base compose; production overlay unknown |
 | R-10 | Fleet-check quota comparison uses fields the scraper `/admin/stats` does not return | `G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` L71; `/admin/stats` in `yandex-fleet-scraper/src/api.ts` returns queue counts only | HIGH |
-| R-11 | tg-bot falls back to secret `'secret'` when `BOT_CRM_SECRET` is unset | `tg-bot/src/services/crmAction.js` L29 | HIGH |
+| R-11 | CLOSED (T3-S): tg-bot fell back to secret `'secret'` when `BOT_CRM_SECRET` was unset (8 sites). Now an unset or weak secret refuses every call, and a source test pins one reader | `tg-bot/src/security/webhookAuth.js`, `publicCredentialBoundary.source.test.js` | — |
 | R-12 | `getTelegramClient` triggers `catchUpMissedMessages` on every cached-client fetch | `G/app/tg-actions.ts` L1721, L1728 | HIGH |
 | R-14 | `/api/ai-calls/dev-simulate` is enabled unless an env flag is exactly `'false'` | `G/app/api/ai-calls/dev-simulate/route.ts` L41 | HIGH |
 | R-15 | Retention has only a 24 h interval with no startup run; a process restarted more often than daily never runs it | `G/instrumentation.ts` | MEDIUM |

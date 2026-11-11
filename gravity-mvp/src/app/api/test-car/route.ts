@@ -4,7 +4,11 @@ import { prisma } from '@/lib/prisma'
 // Diagnostic endpoint: test car assignment for a driver
 export async function GET(request: Request) {
     const url = new URL(request.url)
-    const telegramId = url.searchParams.get('telegramId') || '316425068'
+    // No built-in subject: the caller names the Telegram id it diagnoses.
+    const telegramId = url.searchParams.get('telegramId') ?? ''
+    if (!/^\d{1,16}$/.test(telegramId)) {
+        return NextResponse.json({ error: 'telegramId required' }, { status: 400 })
+    }
 
     const mapping = await prisma.driverTelegram.findFirst({
         where: { telegramId: BigInt(telegramId) }

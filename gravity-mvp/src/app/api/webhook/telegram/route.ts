@@ -24,6 +24,7 @@ import {
     canonicalTelegramBotConnectionIdV1,
     prepareDriverTelegramConversationAuthorityV1,
     recordBotUserProfileV1,
+    verifyTelegramBotCrmSignatureV1,
 } from '@/modules/telegram-channel/public/v1'
 import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 
@@ -114,8 +115,7 @@ function telegramProviderEventExternalId(
 }
 
 function telegramIngressAuthorized(req: NextRequest): boolean {
-    const secret = process.env.BOT_CRM_SECRET
-    return Boolean(secret && req.headers.get('x-bot-signature') === secret)
+    return verifyTelegramBotCrmSignatureV1(req.headers.get('x-bot-signature'))
 }
 
 async function sendTelegramBotMessage(
@@ -279,8 +279,7 @@ function optionalProfileValue(value: unknown) {
 }
 
 async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInput) {
-    const secret = process.env.BOT_CRM_SECRET
-    if (!secret || req.headers.get('x-bot-signature') !== secret) {
+    if (!verifyTelegramBotCrmSignatureV1(req.headers.get('x-bot-signature'))) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -317,6 +316,12 @@ async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInp
     })
 }
 
+/** A provider id for a log line, or a fixed marker: never free text. */
+function logSafeId(value: unknown): string {
+    const text = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+    return /^[A-Za-z0-9:._-]{1,128}$/u.test(text) ? text : 'none'
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
@@ -326,7 +331,8 @@ export async function POST(req: NextRequest) {
         if (!telegramIngressAuthorized(req)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
-        console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
+        // Ids and types only: the body carries a person's text, names and username.
+        console.log(`[WEBHOOK-TG] Received event=${logSafeId(body?.providerEventId)} direction=${body?.direction === 'OUTGOING' ? 'OUTGOING' : 'INCOMING'} chatType=${body?.chatType === 'group' ? 'group' : 'private'} attachments=${Array.isArray(body?.attachments) ? body.attachments.length : 0}`)
 
         // Structure expected from Bot's webhook payload
         const { telegramId, text, direction, username, timestamp, providerAccountId, connectionId,
@@ -428,7 +434,7 @@ export async function POST(req: NextRequest) {
                 await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, sentAt)
             }
 
-            console.log(`[WEBHOOK-TG] GROUP chatId=${unifiedChat.id} type=${chatType} title=${chatTitle} sender=${senderDisplay}`)
+            console.log(`[WEBHOOK-TG] GROUP chatId=${unifiedChat.id} type=${chatType}`)
             return NextResponse.json({ success: true, processed: 'group_message' })
         }
         // ── END GROUP BRANCH ──
@@ -524,7 +530,7 @@ export async function POST(req: NextRequest) {
                 await ConversationWorkflowService.onOutboundMessage(unifiedChat.id, sentAt)
             }
 
-            console.log(`[WEBHOOK-TG] SAVED channel=telegram chatId=${unifiedChat.id} driverId=${unifiedChat.driverId || 'none'} dir=${direction} text="${text.substring(0, 30)}"`)
+            console.log(`[WEBHOOK-TG] SAVED channel=telegram chatId=${unifiedChat.id} driverId=${unifiedChat.driverId || 'none'} dir=${direction} type=${msgType}`)
         } catch (unifiedErr: unknown) {
             const unifiedErrorMessage = unifiedErr instanceof Error ? unifiedErr.message : String(unifiedErr)
             opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: unifiedErrorMessage })

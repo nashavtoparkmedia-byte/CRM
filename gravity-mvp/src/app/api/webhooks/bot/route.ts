@@ -9,6 +9,7 @@ import {
     recordBotUserProfileV1,
     recordPendingBotLinkRequestV1,
     upsertDriverTelegramLinkV1,
+    verifyTelegramBotCrmSignatureV1,
 } from '@/modules/telegram-channel/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { getConfirmedContactForDriverClusterV1 } from '@/modules/contacts/public/v1/driver-person-confirmation'
@@ -35,8 +36,10 @@ import {
 
 export async function POST(request: Request) {
     try {
-        const signature = request.headers.get('x-bot-signature')
-        if (signature !== process.env.BOT_CRM_SECRET) {
+        // This route is on the proxy allowlist, so this check is its only gate:
+        // a strong configured secret, compared in constant time; an empty or weak
+        // secret refuses every request, an equal empty header included.
+        if (!verifyTelegramBotCrmSignatureV1(request.headers.get('x-bot-signature'))) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

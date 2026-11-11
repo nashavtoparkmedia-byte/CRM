@@ -1,3 +1,6 @@
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+
 export type TelegramBotInlineButtonV1 = {
     text: string
     callback_data?: string
@@ -37,8 +40,75 @@ function botServiceUrl(): string {
     return base.endsWith('/api/bot') ? base : `${base}/api/bot`
 }
 
+const BOT_CRM_SECRET_PLACEHOLDER = /(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate)/i
+
+/**
+ * The CRM<->bot shared secret (BOT_CRM_SECRET), or null when it is not strong.
+ *
+ * Both directions use it: the bot signs every call to the CRM's bot routes with
+ * it, and the CRM signs every delivery and file request to the bot. A missing,
+ * empty, whitespace-padded, short (< 32), overlong or placeholder value is
+ * refused, so a misconfigured CRM accepts nothing and sends nothing; there is
+ * no fallback value. tg-bot applies the same rule to the same variable
+ * (tg-bot/src/security/webhookAuth.js).
+ */
+export function telegramBotCrmSecretV1(
+    environment: Record<string, string | undefined> = process.env,
+): string | null {
+    const secret = environment.BOT_CRM_SECRET
+    if (typeof secret !== 'string' || secret !== secret.trim()) return null
+    if (secret.length < 32 || secret.length > 256) return null
+    return BOT_CRM_SECRET_PLACEHOLDER.test(secret) ? null : secret
+}
+
+/**
+ * Constant-time check of a supplied `x-bot-signature` against the strong
+ * secret. An empty or weak configured secret never matches anything, not even
+ * an equal header.
+ */
+export function verifyTelegramBotCrmSignatureV1(
+    supplied: string | null | undefined,
+    environment: Record<string, string | undefined> = process.env,
+): boolean {
+    const expected = telegramBotCrmSecretV1(environment)
+    if (!expected || typeof supplied !== 'string' || supplied.length === 0) return false
+    const digest = (value: string) => createHash('sha256').update(value, 'utf8').digest()
+    return timingSafeEqual(digest(supplied), digest(expected))
+}
+
+/** The configuration name of the mounted file that holds the Driver Bot token. */
+export const TELEGRAM_BOT_TOKEN_FILE_ENV_NAME = 'TELEGRAM_BOT_TOKEN_FILE'
+
+const TELEGRAM_BOT_TOKEN = /^\d{5,16}:[A-Za-z0-9_-]{30,64}$/
+
+/**
+ * The Driver Bot token, read from the mounted secret file named by
+ * TELEGRAM_BOT_TOKEN_FILE. The CRM reads no other service's files and keeps
+ * the token out of its environment. An unset name, an unreadable file or a
+ * malformed token is refused with one bounded code; the token itself never
+ * appears in an error or a log.
+ *
+ * @throws Error `TELEGRAM_BOT_TOKEN_UNCONFIGURED`
+ */
+export async function readTelegramBotTokenV1(
+    environment: Record<string, string | undefined> = process.env,
+): Promise<string> {
+    const file = environment[TELEGRAM_BOT_TOKEN_FILE_ENV_NAME]
+    if (typeof file !== 'string' || !file || file !== file.trim()) {
+        throw new Error('TELEGRAM_BOT_TOKEN_UNCONFIGURED')
+    }
+    let token: string
+    try {
+        token = (await readFile(file, 'utf8')).trim()
+    } catch {
+        throw new Error('TELEGRAM_BOT_TOKEN_UNCONFIGURED')
+    }
+    if (!TELEGRAM_BOT_TOKEN.test(token)) throw new Error('TELEGRAM_BOT_TOKEN_UNCONFIGURED')
+    return token
+}
+
 function botServiceSecret(): string {
-    const secret = concreteId(process.env.BOT_CRM_SECRET)
+    const secret = telegramBotCrmSecretV1()
     if (!secret) throw new Error('TELEGRAM_BOT_TRANSPORT_AUTH_UNPROVEN')
     return secret
 }

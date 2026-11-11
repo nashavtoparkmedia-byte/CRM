@@ -31,7 +31,7 @@ function responseRecorder() {
 
 const NO_HEADER = Symbol('absent');
 
-function request(body, signature = 'shared-secret') {
+function request(body, signature = 'test-bot-crm-shared-secret-0123456789abcdef') {
     return {
         body,
         get: name => (name === 'x-bot-signature' && signature !== NO_HEADER ? signature : undefined),
@@ -56,7 +56,7 @@ function fixture(overrides = {}) {
         handler: createExactCrmBotFileHandler({
             bot,
             logger,
-            environment: { BOT_CRM_SECRET: 'shared-secret', BOT_TOKEN: TOKEN },
+            environment: { BOT_CRM_SECRET: 'test-bot-crm-shared-secret-0123456789abcdef', BOT_TOKEN: TOKEN },
             ...(overrides.maxBytes === undefined ? {} : { maxBytes: overrides.maxBytes }),
         }),
     };
@@ -98,7 +98,7 @@ test('refuses a caller with no signature, a wrong one, or no configured secret',
         environment: {},
     });
     const response = responseRecorder();
-    await unconfigured(request({ fileId: FILE_ID }, 'shared-secret'), response);
+    await unconfigured(request({ fileId: FILE_ID }, 'test-bot-crm-shared-secret-0123456789abcdef'), response);
     assert.equal(response.statusCode, 401);
 });
 
