@@ -72,7 +72,9 @@ const HOUR = 3600_000
 // v2: every session is an employee's own credential. The test employees get
 // real StaffCredential rows (never deleted: the table forbids it) and a
 // registry file of their own.
-const EMPLOYEES = ['u1', 'u2']
+// Every operator these tests sign in as holds a live credential, so the operator
+// label decides eligibility only through that employee's liveness (E1 below).
+const EMPLOYEES = ['u1', 'u2', 'u3']
 const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'mpreg-registry-')), 'users.json')
 copyFileSync(path.join(process.cwd(), 'src/data/users.json'), REGISTRY)
 const epochs = new Map<string, number>()
