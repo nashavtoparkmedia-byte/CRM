@@ -54,17 +54,24 @@ const E164_MIN_BARE_DIGITS_V1 = 11
  * Normalize a phone input to E.164 (+79221234567, +998901234567).
  * Returns null for input that is not a phone number.
  *
- * - Russian numbers keep exactly the rule they always had: 11 digits starting
- *   with 7 or 8 (with or without «+»: «+8 9xx» is a common slip) and 10 digits
- *   are read as +7. Every stored Russian value therefore still equals a fresh
- *   normalization.
- * - Any other number is kept digit for digit when it starts with an assigned
- *   country code: after an explicit «+» or «00» with 8–15 digits, or bare with
- *   11–15 digits when the code is neither 7 nor 8 (998…, 996…, 374…).
- * - Nothing is ever synthesized: a number is never cut down to «+7 and the last
- *   ten digits». A 12+-digit input whose code is 7, or a bare one starting with
- *   8 (a Russian number with an extension, or two numbers in one field), is not
- *   a phone: null.
+ * Read as Russian (+7), exactly as before for these inputs, so every stored +7
+ * value still equals a fresh normalization:
+ * - 11 digits starting with 7, with or without «+» / «00»;
+ * - 11 bare digits starting with 8 (the national trunk prefix);
+ * - «+8 9…» / «00 8 9…» with 11 digits (the common slip for +7 9…);
+ * - 10 bare digits.
+ * Everything else is read by its country code or refused:
+ * - after an explicit «+» or «00», 8–15 digits that start with an assigned
+ *   country code other than 7 are kept digit for digit (+49 511 12345 stays
+ *   +4951112345); an explicit «+8x…» with 11 digits other than «+89…» is
+ *   ambiguous between a Russian landline slip and +81/+82/+84/+86, so it is
+ *   refused;
+ * - bare, 11–15 digits that start with a country code other than 7 or 8 are
+ *   kept (998…, 996…, 374…).
+ * Nothing is ever synthesized: a number is never cut down to «+7 and the last
+ * ten digits», and a 12+-digit input whose code is 7, or a bare one starting
+ * with 8 (a Russian number with an extension, two numbers in one field), is not
+ * a phone: null.
  */
 export function normalizePhoneE164(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== 'string') return null
@@ -76,9 +83,13 @@ export function normalizePhoneE164(raw: string | null | undefined): string | nul
   const digits = viaZeroZero ? allDigits.slice(2) : allDigits
   if (digits.length === 0) return null
 
-  // The Russian national rule, unchanged.
-  if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) return `+7${digits.slice(1)}`
-  if (digits.length === 10) return `+7${digits}`
+  // Russian.
+  if (digits.length === 11 && digits.startsWith('7')) return `+7${digits.slice(1)}`
+  if (digits.length === 11 && digits.startsWith('8')) {
+    if (!explicitInternational || digits[1] === '9') return `+7${digits.slice(1)}`
+    return null
+  }
+  if (digits.length === 10 && !explicitInternational) return `+7${digits}`
 
   // Every other number is kept as it is, or refused.
   const shortest = explicitInternational ? E164_MIN_EXPLICIT_DIGITS_V1 : E164_MIN_BARE_DIGITS_V1

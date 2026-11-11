@@ -42,8 +42,33 @@ describe('Contacts phone identity public policy', () => {
     // Landlines and Kazakhstan share +7 and the same rule.
     expect(normalizePhoneE164('8 (343) 123-45-67')).toBe('+73431234567')
     expect(normalizePhoneE164('+7 701 123 45 67')).toBe('+77011234567')
-    // A «+» with ten digits is the usual slip for a Russian number, as it always was.
-    expect(normalizePhoneE164('+9221234567')).toBe('+79221234567')
+  })
+
+  it('never reads an explicitly international number as Russian (Security R1, R2)', () => {
+    // «+» or «00» with ten digits is read by its country code, never as +7.
+    expect(normalizePhoneE164('+49 511 12345')).toBe('+4951112345')
+    expect(normalizePhoneE164('0049 511 12345')).toBe('+4951112345')
+    expect(normalizePhoneE164('+46 8 1234567')).toBe('+4681234567')
+    // «+8x…» with eleven digits: only «+89…» is the Russian slip; the rest is ambiguous.
+    expect(normalizePhoneE164('+84 912 345 678')).toBeNull()
+    expect(normalizePhoneE164('+8 (495) 123-45-67')).toBeNull()
+    expect(normalizePhoneE164('008 495 123 45 67')).toBeNull()
+    expect(normalizePhoneE164('+8 922 123 45 67')).toBe('+79221234567')
+    // Bare digits keep the national reading.
+    expect(normalizePhoneE164('84951234567')).toBe('+74951234567')
+    expect(normalizePhoneE164('4951234567')).toBe('+74951234567')
+  })
+
+  it('keeps explicit international numbers of 8 to 10 digits and refuses shorter ones (Security R3)', () => {
+    expect(normalizePhoneE164('+680 12345')).toBe('+68012345') // Palau, 8 digits
+    expect(normalizePhoneE164('+376 312 345')).toBe('+376312345') // Andorra, 9 digits
+    expect(normalizePhoneE164('+354 123 4567')).toBe('+3541234567') // Iceland, 10 digits
+    expect(normalizePhoneE164('00354 123 4567')).toBe('+3541234567')
+    expect(normalizePhoneE164('+376 3123')).toBeNull() // 7 digits
+    expect(normalizePhoneE164('+3541234')).toBeNull()
+    // The same lengths bare are not phones (a bare international number needs 11+).
+    expect(normalizePhoneE164('376312345')).toBeNull()
+    expect(normalizePhoneE164('68012345')).toBeNull()
   })
 
   it('keeps an international number digit for digit instead of cutting it to +7 and the last ten', () => {
