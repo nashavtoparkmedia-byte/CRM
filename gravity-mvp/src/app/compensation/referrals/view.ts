@@ -95,6 +95,12 @@ export const MATCH_LABELS: Record<string, string> = {
     name: 'ФИО',
     phone: 'телефон',
     licence: 'ВУ',
+    partial: 'ФИО не полностью',
+}
+
+/** Found only by a name in which one typed word is missing: it may be a namesake. */
+export function partialNameOnly(matchedBy: readonly string[]): boolean {
+    return matchedBy.includes('partial') && !matchedBy.some((match) => match === 'name' || match === 'phone' || match === 'licence')
 }
 
 export const ACCESS_STATE_LABELS: Record<ReferralAccessView['state'], string> = {
@@ -142,6 +148,8 @@ export const REFUSAL_LABELS: Record<string, string> = {
     person_unresolved: 'Водитель не найден в контактах.',
     staff_session_unavailable: 'Изменения пока недоступны: нужен подписанный вход сотрудника. Просмотр работает.',
     staff_session_invalid: 'Вход сотрудника не подтверждён. Войдите заново.',
+    staff_identity_mismatch: 'Вход сотрудника не совпадает с его учётной записью. Войдите заново.',
+    staff_role_not_allowed: 'Закреплять приглашения и выдавать доступ может только администратор.',
     capability_missing: 'У вашей учётной записи нет права на это действие.',
     invalid_request: 'Запрос не распознан. Обновите страницу.',
     person_changed: 'Данные водителя изменились. Найдите водителя заново.',
