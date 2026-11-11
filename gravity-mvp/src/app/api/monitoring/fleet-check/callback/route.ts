@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { fleetCheckCallbackGateV1 } from '@/modules/fleet-operations/public/v1';
 
+// A machine route: the scraper worker posts its fleet-check result here with the
+// shared FLEET_CHECK_CALLBACK_SECRET. The gate runs before the body is read; an
+// unset secret answers 503, a missing or wrong one 401, and nothing is touched.
 export async function POST(req: NextRequest) {
-    const body = await req.json();
+    const gate = fleetCheckCallbackGateV1(req.headers);
+    if (!gate.ok) {
+        return NextResponse.json({ error: gate.status === 503 ? 'callback is not configured' : 'unauthorized' }, { status: gate.status });
+    }
+
+    let body: any;
+    try {
+        body = await req.json();
+    } catch {
+        return NextResponse.json({ error: 'invalid JSON' }, { status: 400 });
+    }
 
     const { checkId, driverId, status, finishedAt, result, errorCode } = body;
 

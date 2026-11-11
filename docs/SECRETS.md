@@ -113,7 +113,8 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 |--------|------------------|---------|
 | `STORAGESTATE_ENC_KEY` | yandex-fleet-scraper (шифрует Playwright storage state) | H |
 | Сессия fleet.yandex.ru | yandex-fleet-scraper (профиль Chrome) | **C** — доступ к диспетчерской панели Yandex |
-| `CRM_WEBHOOK_URL` | callbacks от скрапера в CRM | M |
+| `CRM_WEBHOOK_URL` | callbacks от скрапера в CRM; полный путь `http://gravity-mvp:3002/api/monitoring/fleet-check/callback` | M |
+| `FLEET_CHECK_CALLBACK_SECRET` | yandex-fleet-scraper worker → gravity-mvp (`POST /api/monitoring/fleet-check/callback`, заголовок `X-Fleet-Check-Secret`) | **C** — обязательный shared secret, одинаковый у CRM и worker; ≥ 32 символов `[A-Za-z0-9_+/=.~-]`, не плейсхолдер (`openssl rand -base64 48`). Default нет: без него CRM отвечает 503 и ничего не пишет, worker ничего не отправляет. Сравнение constant-time |
 | `CHROME_PROFILE_DIR`, `CHROME_USER_DATA_DIR` | пути, не секреты | — |
 
 ### 2.6 Авито (отключено, но переменные есть в коде)

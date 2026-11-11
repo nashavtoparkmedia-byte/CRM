@@ -422,6 +422,13 @@ async function fireWebhook(checkId: string, status: 'SUCCESS' | 'FAILED', result
         console.log(`[Worker] ⚠️ CRM_WEBHOOK_URL not set — skipping webhook for ${checkId}`);
         return;
     }
+    // The CRM refuses the callback without this shared secret (fleetCheckCallbackGateV1), so
+    // without it nothing is sent.
+    const callbackSecret = process.env.FLEET_CHECK_CALLBACK_SECRET;
+    if (!callbackSecret) {
+        console.log(`[Worker] ⚠️ FLEET_CHECK_CALLBACK_SECRET not set — skipping webhook for ${checkId}`);
+        return;
+    }
 
     try {
         let metadata: any = null;
@@ -440,11 +447,11 @@ async function fireWebhook(checkId: string, status: 'SUCCESS' | 'FAILED', result
             errorCode: errorCode || null,
         };
 
-        console.log(`[Worker] Firing webhook for ${checkId} → ${webhookUrl} (driverId: ${driverId}, status: ${status})`);
+        console.log(`[Worker] Firing webhook for ${checkId} (driverId: ${driverId}, status: ${status})`);
 
         const res = await fetch(webhookUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Fleet-Check-Secret': callbackSecret },
             body: JSON.stringify(body),
         });
 

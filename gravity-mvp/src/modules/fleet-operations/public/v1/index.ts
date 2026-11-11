@@ -5,6 +5,13 @@ export type { UpdateScoringThresholdsPersistencePortV1 } from './update-scoring-
 export { createRecordDriverDailyActivityHandlerV1 } from './record-driver-daily-activity-handler'
 export type { RecordDriverDailyActivityPersistencePortV1 } from './record-driver-daily-activity-handler'
 export { createClearFleetCheckStatusHandlerV1 } from './clear-fleet-check-status-handler'
+export {
+  FLEET_CHECK_CALLBACK_SECRET_HEADER_V1,
+  FLEET_CHECK_CALLBACK_SECRET_MIN_LENGTH_V1,
+  fleetCheckCallbackGateV1,
+  isUsableFleetCheckCallbackSecretV1,
+  type FleetCheckCallbackGateV1,
+} from './fleet-check-callback-auth'
 export type { ClearFleetCheckStatusPersistencePortV1 } from './clear-fleet-check-status-handler'
 export { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api-log-handler'
 export type { ApiLogPersistencePortV1 } from './api-log-handler'
