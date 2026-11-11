@@ -4421,6 +4421,69 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "fleet-check-callback-secret-fa3c07e5-20261111",
+      "reviewed_at": "2026-11-11T00:00:00Z",
+      "reviewed_by": "FLEET_CHECK_CALLBACK_SECRET_EXECUTOR_REVIEW_FA3C07E5",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "ORCHESTRATOR_ASSIGNMENT_FLEET_CHECK_CALLBACK_SECRET_20261111",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at fa3c07e5, whose tail is cash-staff-session-wiring-main-d3a57c30-20261111 (PR #214), and leaves that tail unchanged. It changes no assignment: it records three new tracked surfaces and the mechanical source-fingerprint rebind of the callback route, whose bytes the gate changes."
+      },
+      "reason": "Records the fleet-check callback's shared secret: 2,842 + 3 = 2,845 tracked executable surfaces, context-owned 1,578 -> 1,580 and governed exclusions 1,264 -> 1,265. The gate gravity-mvp/src/modules/fleet-operations/public/v1/fleet-check-callback-auth.ts and its test sit under the fleet_operations manifest's owned paths; the route test is a TEST under gravity-mvp/src that no context manifest owns and that the APPLICATION_RUNTIME-only gravity_runtime_remainder exact inventory does not admit, so the gravity_root prefix governed exclusion covers it. The callback route gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts keeps its exact-inventory membership, lifecycle and owner; only its bytes move. The scraper worker is not an exact-inventory path. No assignment, lifecycle, functional owner, governed exclusion or reviewed rationale changes. The current triple is the repository's own derivation over this tree, read through the validator's preview_reviewed_current_denominator operation; its position binds it to that tree and claims no final place in the chain.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2842,
+        "tracked_inventory_sha256": "03b3562688efb6779c203822aee2305abea5032a7ded55916768572285c0971e",
+        "coverage_sha256": "d6ecc8d3c81598e5899350a4d902793134d72d8475578187c8a740157c7e7e4d"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2845,
+        "tracked_inventory_sha256": "1d85a075cf4c49354a78bc7a39e44ebddec0ecce238c901369ce1038279c2d94",
+        "coverage_sha256": "537af1d157c07b07e3ff2a2de6632864fefa5d6f91381ffc65d12369130d8a02"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts",
+          "previous_source_sha256": "d8ab599b3329e2f4e4294415222444443d7372703c2b95036f5b78846e6aa14a",
+          "current_source_sha256": "f9345a842deb19ee5e9dbfdc39c4ce43f3473e06bcc2548e67fd4e7071cbbee8",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Orchestrator assignment 2026-11-11 (Security finding, made activation-blocking: the scraper result callback had no gate and would be refused by the staff-session proxy under ENFORCE=on): the scraper's fleet-check result route now runs the fleet_operations public gate fleetCheckCallbackGateV1 before it reads the body: the shared FLEET_CHECK_CALLBACK_SECRET in header X-Fleet-Check-Secret, compared in constant time over SHA-256 digests; an unset or weak configured secret answers 503 and a missing or wrong one 401, and nothing is read or written; a malformed body answers 400 instead of an unhandled error. Its Driver and DriverEvent writes, idempotency and status mapping are unchanged. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/fleet-check-callback-auth.ts",
+          "lifecycle": "APPLICATION_RUNTIME",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure gate of the fleet-check result callback: it reads FLEET_CHECK_CALLBACK_SECRET from the environment, refuses an unset, short or placeholder value (503) and a missing or wrong X-Fleet-Check-Secret (401), and compares in constant time over SHA-256 digests. It reads no database or provider, writes nothing and holds no other credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/fleet-check-callback-auth.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The Vitest test of the callback gate: the exact secret is admitted, a missing, empty, wrong or suffixed one is 401, an unusable configured one is 503 whatever the request sent, and the default reads the environment. It opens no database connection and holds no real credential, under gravity-mvp/src/modules/fleet-operations, a path the fleet_operations context owns through its manifest owned_paths, so context ownership comes from the manifest and no explicit exact-inventory assignment applies."
+        },
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "A new tracked executable surface, a Vitest test of the fleet-check callback route against a mocked database: 503 and no read while the CRM has no secret, 401 and no read without the right one (also for a malformed body), 400 for a malformed body with the right one, and the unchanged write with it. It is a TEST under gravity-mvp/src that no context manifest owns and that the APPLICATION_RUNTIME-only gravity_runtime_remainder exact inventory does not admit, so the gravity_root prefix governed exclusion covers it; it receives no explicit exact-inventory assignment and moves no exact-inventory transition."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
