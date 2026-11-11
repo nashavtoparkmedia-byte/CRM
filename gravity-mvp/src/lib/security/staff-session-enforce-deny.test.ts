@@ -53,7 +53,6 @@ const userService = await import('@/lib/users/user-service')
 const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
 const MANAGER = { id: 'u1', firstName: 'Мария', lastName: 'Иванова', role: 'Менеджер', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' }
 const ADMIN = { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' }
-const MOBILE_ENV = { MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: 'correct horse battery staple' }
 const DESKTOP_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120'
 const SHELL_UA = `Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ${MOBILE_SHELL_UA_TOKEN}1`
 const NATIVE_UA = 'Dalvik/2.1.0 (Linux; U; Android 14)'
@@ -203,8 +202,6 @@ beforeEach(() => {
     writeFileSync(registryFile, JSON.stringify([MANAGER, ADMIN], null, 2))
     vi.stubEnv('STAFF_SESSION_SECRET', SECRET)
     vi.stubEnv('YOKO_USER_REGISTRY_FILE', registryFile)
-    vi.stubEnv('MOBILE_ACCESS_USER', MOBILE_ENV.MOBILE_ACCESS_USER)
-    vi.stubEnv('MOBILE_ACCESS_PASS', MOBILE_ENV.MOBILE_ACCESS_PASS)
     vi.stubEnv('YOKO_STAFF_SESSION_ENFORCE', '')
     fake.rows.clear()
     fake.storeUnreadable = false
@@ -412,7 +409,7 @@ describe('enforcement on: a browser request without a verified session is refuse
         vi.stubEnv('ADMIN_PASS', 'integration admin pass phrase')
         const integrationAdmin = issueIntegrationAdminSession()
         expect(integrationAdmin).toBeTruthy()
-        const mobile = issueMobileSession('u2', 'a1b2c3d4e5f6a7b8', MOBILE_ENV) as string
+        const mobile = issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', 0) as string
         const cookieSets: Array<Record<string, string>> = [
             { crm_user_id: 'u2' },
             { yoko_integration_admin_session: integrationAdmin as string, crm_user_id: 'u2' },
@@ -452,11 +449,11 @@ describe('enforcement on: everything with a verified session is unchanged', () =
         const req = request('/api/mobile/push-registration', {
             method: 'POST',
             ua: NATIVE_UA,
-            cookies: { [MOBILE_SESSION_COOKIE]: issueMobileSession('u2', 'a1b2c3d4e5f6a7b8', MOBILE_ENV) as string },
+            cookies: { [MOBILE_SESSION_COOKIE]: issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', 0) as string },
         })
         const response = await proxy(req)
         expect(passed(response)).toBe(true)
-        expect(downstreamCookie(response, req)).toContain('crm_user_id=u2')
+        expect(downstreamCookie(response, req)).toContain('crm_user_id=u1')
     })
 
     test('the shell lane answers as before: 303 to the mobile sign-in, 401 for its API, the native logout passes', async () => {

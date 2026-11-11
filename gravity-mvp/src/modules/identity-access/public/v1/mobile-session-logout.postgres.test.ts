@@ -11,6 +11,9 @@
  * skipped otherwise. Run with --no-file-parallelism beside the other Mobile
  * Push PostgreSQL files: they share one disposable database.
  */
+import { copyFileSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -36,6 +39,7 @@ import { POST as logoutRoute } from '@/app/api/mobile/session/logout/route'
 import { POST as registerRoute } from '@/app/api/mobile/push-registration/route'
 import { issueMobileSession, mobileSessionBarrierEntryV1, verifyMobileSession } from './mobile-session-credentials'
 import { resolveCookieOperatorV1 } from './mobile-session-operator'
+import { createStaffPasswordVerifierV1 } from '../../internal/staff-session-credentials'
 
 const DATABASE = process.env.MOBILE_PUSH_TEST_DATABASE_URL
 const describeWithDatabase = DATABASE ? describe.sequential : describe.skip
@@ -44,8 +48,28 @@ const device = (name: string) => `${RUN}-${name}`
 const token = (name: string) => `${RUN}_tok_${name}_0123456789:ABCDEFGHIJKLMNOP`
 const HOUR = 3600_000
 
+// v2: every session is an employee's own credential; the test employees get
+// real StaffCredential rows (never deleted) and a registry file of their own.
+const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'mplo-registry-')), 'users.json')
+copyFileSync(path.join(process.cwd(), 'src/data/users.json'), REGISTRY)
+const epochs = new Map<string, number>()
+let previousRegistry: string | undefined
+
+async function liveEmployees(): Promise<void> {
+    const verifier = await createStaffPasswordVerifierV1('mobile logout test passphrase')
+    for (const record of (JSON.parse(readFileSync(REGISTRY, 'utf8')) as Array<{ id: string, createdAt: string }>).filter((r) => ['u1', 'u2'].includes(r.id))) {
+        const data = {
+            registryCreatedAt: record.createdAt, algo: verifier.algo, scryptN: verifier.n, scryptR: verifier.r, scryptP: verifier.p,
+            maxmemBytes: verifier.maxmemBytes, salt: new Uint8Array(verifier.salt), hash: new Uint8Array(verifier.hash),
+            revokedAt: null, updatedAt: new Date(), updatedBy: 'test:mobile-logout',
+        }
+        const row = await prisma.staffCredential.upsert({ where: { userId: record.id }, create: { userId: record.id, ...data }, update: data, select: { sessionEpoch: true } })
+        epochs.set(record.id, row.sessionEpoch)
+    }
+}
+
 function sessionFor(deviceId: string, operator = 'u1', nowMs = Date.now()): string {
-    const issued = issueMobileSession(operator, deviceId, undefined, nowMs)
+    const issued = issueMobileSession(operator, deviceId, epochs.get(operator) ?? 0, undefined, nowMs)
     if (!issued) throw new Error('mobile lane not provisioned for the test process')
     return issued
 }
@@ -81,13 +105,18 @@ const rowsForRun = () => prisma.mobileDeviceRegistration.findMany({ where: { dev
 describeWithDatabase('F-1 mobile logout endpoint (PostgreSQL)', () => {
     beforeAll(() => {
         if (process.env.DATABASE_URL !== DATABASE) throw new Error('DATABASE_URL must equal MOBILE_PUSH_TEST_DATABASE_URL')
-        if (!process.env.MOBILE_ACCESS_USER || !process.env.MOBILE_ACCESS_PASS) throw new Error('MOBILE_ACCESS_* must be provisioned for the test process')
+        if (!process.env.STAFF_SESSION_SECRET) throw new Error('STAFF_SESSION_SECRET must be provisioned for the test process')
+        previousRegistry = process.env.YOKO_USER_REGISTRY_FILE
+        process.env.YOKO_USER_REGISTRY_FILE = REGISTRY
     })
     beforeEach(async () => {
         delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
+        await liveEmployees()
         await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
     })
     afterAll(async () => {
+        if (previousRegistry === undefined) delete process.env.YOKO_USER_REGISTRY_FILE
+        else process.env.YOKO_USER_REGISTRY_FILE = previousRegistry
         await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
         await prisma.$disconnect()
     })

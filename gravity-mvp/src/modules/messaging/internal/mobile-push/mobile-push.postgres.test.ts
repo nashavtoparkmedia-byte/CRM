@@ -14,7 +14,7 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -83,8 +83,11 @@ async function makeRetriesDue(): Promise<void> {
     await prisma.domainOutboxEvent.updateMany({ where: { status: 'retry_wait' }, data: { availableAt: new Date(Date.now() - 1000) } })
 }
 
+let STAFF_EPOCH = 0
+let previousRegistry: string | undefined
+
 async function registerDevice(name: string, tokenName = name, nowMs = Date.now()) {
-    const sessionToken = issueMobileSession('u1', id(`dev-${name}`), undefined, nowMs)!
+    const sessionToken = issueMobileSession('u1', id(`dev-${name}`), STAFF_EPOCH, undefined, nowMs)!
     const principal = verifyMobileSession(sessionToken)!
     const result = await registerVerifiedMobilePushDeviceV1({ principal, sessionBindingId: mobileSessionBindingIdV1(principal)!, barrierEntry: mobileSessionBarrierEntryV1(principal)! }, tokenOf(tokenName))
     if (!result.ok) throw new Error(result.code)
@@ -115,7 +118,21 @@ const deliveriesFor = async (messageId: string) => (await outboxFor(messageId)).
 describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', () => {
     beforeAll(async () => {
         if (process.env.DATABASE_URL !== DATABASE) throw new Error('DATABASE_URL must equal MOBILE_PUSH_TEST_DATABASE_URL')
+        if (!process.env.STAFF_SESSION_SECRET) throw new Error('STAFF_SESSION_SECRET must be provisioned for the test process')
         directory = mkdtempSync(path.join(tmpdir(), 'yoko-push-chain-'))
+        // Identity Access v2 (docs/design/mobile-personal-signin-v1.md): a phone
+        // session is the employee's own credential, and push goes only to an
+        // employee whose credential is live. u1 gets a live row (never deleted:
+        // the table forbids it; the hash matches no password) and a registry.
+        const registry = path.join(directory, 'users.json')
+        copyFileSync(path.join(process.cwd(), 'src/data/users.json'), registry)
+        previousRegistry = process.env.YOKO_USER_REGISTRY_FILE
+        process.env.YOKO_USER_REGISTRY_FILE = registry
+        const live = {
+            registryCreatedAt: '2026-03-24T00:00:00Z', algo: 'scrypt', scryptN: 32768, scryptR: 8, scryptP: 1, maxmemBytes: 67108864,
+            salt: new Uint8Array(16), hash: new Uint8Array(64), revokedAt: null, updatedAt: new Date(), updatedBy: 'test:push-chain',
+        }
+        STAFF_EPOCH = (await prisma.staffCredential.upsert({ where: { userId: 'u1' }, create: { userId: 'u1', ...live }, update: live, select: { sessionEpoch: true } })).sessionEpoch
         const pair = generateKeyPairSync('rsa', { modulusLength: 2048 })
         const publicKeyFile = path.join(directory, 'public.pem')
         writeFileSync(publicKeyFile, pair.publicKey.export({ type: 'spki', format: 'pem' }))
@@ -163,6 +180,9 @@ describeWithDatabase('Mobile Push v1 server chain (PostgreSQL + FCM stand-in)', 
     afterEach(() => { jar.token = undefined })
 
     afterAll(async () => {
+        // The registry lives in the temp directory removed below: give the variable back first.
+        if (previousRegistry === undefined) delete process.env.YOKO_USER_REGISTRY_FILE
+        else process.env.YOKO_USER_REGISTRY_FILE = previousRegistry
         for (const restore of restoreWriters.reverse()) restore()
         await prisma.domainOutboxEvent.deleteMany({ where: { eventType: { in: [INBOUND_MESSAGE_NOTIFICATION_REQUESTED_EVENT_V1, MOBILE_PUSH_DELIVERY_REQUESTED_EVENT_V1] } } })
         await prisma.mobileDeviceRegistration.deleteMany({})

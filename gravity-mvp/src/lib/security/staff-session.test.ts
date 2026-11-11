@@ -110,11 +110,15 @@ const credentials = await import('@/modules/identity-access/internal/staff-sessi
 const operations = await import('@/modules/identity-access/application/staff-session-operations')
 const publicSurface = await import('@/modules/identity-access/public/v1/staff-session')
 const { resolveCookieOperatorV1 } = await import('@/modules/identity-access/public/v1/mobile-session-operator')
-const { issueMobileSession, MOBILE_SESSION_COOKIE } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
+const { issueMobileSession, MOBILE_SESSION_COOKIE, verifyMobileSession } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
 const { issueIntegrationAdminSession } = await import('@/modules/identity-access/public/v1/integration-admin-credentials')
 const userService = await import('@/lib/users/user-service')
 const { NextRequest } = await import('next/server')
 const { proxy } = await import('@/proxy')
+
+/** Change one character in the middle, so the bytes really differ (a suffix edit can be a no-op or hit padding bits). */
+const tamper = (value: string) => `${value.slice(0, 5)}${value[5] === 'A' ? 'B' : 'A'}${value.slice(6)}`
+
 
 const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
 const ADMIN = { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' }
@@ -199,8 +203,8 @@ describe('staff session primitives', () => {
         expect(claims).toMatchObject({ userId: 'u1', userEpoch: 3, issuedAtSeconds: now / 1000 })
         expect(claims.sessionInstanceId).toMatch(/^[A-Za-z0-9_-]{22}$/)
         const [payload, signature] = token.split('.')
-        expect(credentials.readStaffSessionTokenV1(`${payload.slice(0, -2)}AA.${signature}`, env, now)).toBeNull()
-        expect(credentials.readStaffSessionTokenV1(`${payload}.${signature.slice(0, -2)}AA`, env, now)).toBeNull()
+        expect(credentials.readStaffSessionTokenV1(`${tamper(payload)}.${signature}`, env, now)).toBeNull()
+        expect(credentials.readStaffSessionTokenV1(`${payload}.${tamper(signature)}`, env, now)).toBeNull()
         expect(credentials.readStaffSessionTokenV1(token, env, now + credentials.STAFF_SESSION_TTL_SECONDS * 1000)).toBeNull()
         expect(credentials.readStaffSessionTokenV1(token, { ...env, STAFF_SESSION_REVOCATION_EPOCH: '1' }, now)).toBeNull()
         expect(credentials.readStaffSessionTokenV1(token, { STAFF_SESSION_SECRET: `${SECRET}-rotated` }, now)).toBeNull()
@@ -225,7 +229,11 @@ describe('staff session primitives', () => {
 
     test('mobile and integration-admin tokens never verify as staff tokens', () => {
         const env = { STAFF_SESSION_SECRET: SECRET, MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: SECRET.slice(0, 30), ADMIN_USER: 'admin', ADMIN_PASS: SECRET.slice(0, 31) }
-        expect(credentials.readStaffSessionTokenV1(issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', env), env)).toBeNull()
+        expect(credentials.readStaffSessionTokenV1(issueMobileSession('u1', 'a1b2c3d4e5f6a7b8', 0, env), env)).toBeNull()
+        // And the other way: the mobile key is derived under its own label from the same secret.
+        const staffToken = credentials.issueStaffSessionTokenV1({ userId: 'u1', userEpoch: 0 }, env)!
+        expect(staffToken).toBeTypeOf('string')
+        expect(verifyMobileSession(staffToken, env)).toBeNull()
         expect(credentials.readStaffSessionTokenV1(issueIntegrationAdminSession(env), env)).toBeNull()
     })
 

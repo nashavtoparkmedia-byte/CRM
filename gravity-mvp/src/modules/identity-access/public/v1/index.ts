@@ -35,7 +35,7 @@ export {
 export type { MobileLoginFailure } from './mobile-session-auth'
 export {
     getMobileSessionRevocationEpoch,
-    isMobileAccessConfigured,
+    isMobileSessionSigningConfigured,
     MOBILE_SESSION_COOKIE,
     MOBILE_SESSION_TTL_SECONDS,
     normalizeMobileReturnTo,

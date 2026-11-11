@@ -35,7 +35,7 @@ export default async function MobileLoginPage({
     // Already signed in: honour the destination instead of asking again.
     if (await hasMobileSessionV1()) redirect(next)
 
-    const configured = isMobileLaneConfigured()
+    const configured = await isMobileLaneConfigured()
     // This page renders without a session, so the picker gets only what it
     // shows: never an employee's email, phone, status or dates.
     const operators = configured
@@ -54,8 +54,7 @@ export default async function MobileLoginPage({
                     <MobileLoginForm next={next} operators={operators} />
                 ) : (
                     <p className="mt-6 rounded-md border border-border bg-surface p-4 text-[13px] text-foreground">
-                        Мобильный вход не настроен на сервере. Нужны переменные
-                        MOBILE_ACCESS_USER и MOBILE_ACCESS_PASS.
+                        Вход временно недоступен. Попробуйте позже.
                     </p>
                 )}
             </div>

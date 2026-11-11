@@ -31,6 +31,8 @@ const FAILURE_STATUS: Record<MobilePushRegistrationFailureCodeV1, number> = {
     MOBILE_SESSION_REQUIRED: 401,
     // The device logged this session out. Re-authenticating is the only way back.
     MOBILE_SESSION_REVOKED: 401,
+    // The session or the employee's credential could not be read: retry, not a refusal.
+    MOBILE_SESSION_UNVERIFIABLE: 503,
     // The session predates Mobile Push v1: valid for the CRM, no push identity.
     MOBILE_SESSION_REISSUE_REQUIRED: 401,
     PUSH_DEVICE_ID_NOT_STABLE: 422,
@@ -38,7 +40,9 @@ const FAILURE_STATUS: Record<MobilePushRegistrationFailureCodeV1, number> = {
 }
 
 function respond(status: number, body: Record<string, unknown>): Response {
-    return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
+    // 503 is retryable, never a refusal: say when to come back.
+    const headers: Record<string, string> = status === 503 ? { 'Cache-Control': 'no-store', 'Retry-After': '5' } : { 'Cache-Control': 'no-store' }
+    return Response.json(body, { status, headers })
 }
 
 export async function POST(request: NextRequest) {

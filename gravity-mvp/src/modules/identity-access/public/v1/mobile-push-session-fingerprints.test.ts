@@ -2,7 +2,6 @@
 import { createHash, createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
-    currentMobilePushCredentialFactsV1,
     issueMobileSession,
     mobileSessionBarrierEntryExpiryV1,
     mobileSessionBarrierEntryV1,
@@ -11,12 +10,13 @@ import {
     type MobileSessionEnvironment,
 } from './mobile-session-credentials'
 
-const ENV: MobileSessionEnvironment = { MOBILE_ACCESS_USER: 'mobile-fingerprint', MOBILE_ACCESS_PASS: 'fingerprint-passphrase-01' }
-const ROTATED: MobileSessionEnvironment = { ...ENV, MOBILE_ACCESS_PASS: 'rotated-passphrase-000002' }
+const ENV: MobileSessionEnvironment = { STAFF_SESSION_SECRET: 'fingerprint-staff-secret-0123456789abcdef' }
+const ROTATED: MobileSessionEnvironment = { STAFF_SESSION_SECRET: 'rotated-staff-secret-0123456789abcdef00' }
 const NOW = Date.UTC(2026, 8, 22, 12)
+const EPOCH = 4
 
 function sessionOf(env: MobileSessionEnvironment = ENV, operator = 'u1', device = 'device-1', nowMs = NOW) {
-    const token = issueMobileSession(operator, device, env, nowMs)!
+    const token = issueMobileSession(operator, device, EPOCH, env, nowMs)!
     return { token, principal: verifyMobileSession(token, env, nowMs)! }
 }
 
@@ -26,11 +26,11 @@ function payloadOf(token: string): Record<string, unknown> {
 
 /** A session signed exactly as the issuer signs, with the payload overridden. */
 function signedSession(overrides: Record<string, unknown>): string {
-    const payload = { ...payloadOf(issueMobileSession('u1', 'device-1', ENV, NOW)!), ...overrides }
+    const payload = { ...payloadOf(issueMobileSession('u1', 'device-1', EPOCH, ENV, NOW)!), ...overrides }
     for (const [key, value] of Object.entries(overrides)) if (value === undefined) delete payload[key]
     const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
-    const key = createHmac('sha256', ENV.MOBILE_ACCESS_PASS!)
-        .update(`yoko-mobile-shell-session-key.v1\0${ENV.MOBILE_ACCESS_USER}`, 'utf8')
+    const key = createHmac('sha256', ENV.STAFF_SESSION_SECRET!)
+        .update('yoko-mobile-session-key.v2', 'utf8')
         .digest()
     const signature = createHmac('sha256', key)
         .update(`yoko-gravity-mobile-shell\0${encoded}`, 'utf8')
@@ -38,8 +38,8 @@ function signedSession(overrides: Record<string, unknown>): string {
     return `${encoded}.${signature}`
 }
 
-/** A session in the pre-Push-v1 shape, signed the way that issuer signed it. */
-function legacySessionWithoutInstanceId(): string {
+/** A correctly signed v2 payload without an instance id. */
+function sessionWithoutInstanceId(): string {
     return signedSession({ sid: undefined })
 }
 
@@ -49,7 +49,7 @@ describe('Mobile Push v1 session identity', () => {
         // server-issued instance id separates them.
         const first = sessionOf()
         const second = sessionOf()
-        const facts = ['sub', 'op', 'did', 'rev', 'iat', 'exp'] as const
+        const facts = ['op', 'uep', 'did', 'rev', 'iat', 'exp'] as const
         for (const fact of facts) expect(payloadOf(second.token)[fact]).toEqual(payloadOf(first.token)[fact])
         expect(second.principal.sessionInstanceId).not.toBe(first.principal.sessionInstanceId)
         expect(mobileSessionBindingIdV1(second.principal)).not.toBe(mobileSessionBindingIdV1(first.principal))
@@ -80,17 +80,19 @@ describe('Mobile Push v1 session identity', () => {
         expect(mobileSessionBindingIdV1({ ...principal, runtimeOperatorId: 'u9' })).toBe(mobileSessionBindingIdV1(principal))
     })
 
-    it('6. a session issued before Mobile Push v1 stays a valid CRM session with no push identity', () => {
-        // Minted exactly as the previous issuer did: same payload without sid,
-        // signed with the same key, so this is a real legacy session.
-        const legacy = legacySessionWithoutInstanceId()
-        const principal = verifyMobileSession(legacy, ENV, NOW)!
-        expect(principal.deviceId).toBe('device-1')
-        expect(principal.credentialSubject).toBe('mobile-fingerprint')
-        expect(principal.sessionInstanceId).toBeNull()
-        // No push identity exists for it, so push registration fails closed.
-        expect(mobileSessionBindingIdV1(principal)).toBeNull()
-        expect(mobileSessionBarrierEntryV1(principal)).toBeNull()
+    it('a correctly signed payload of another version or audience is refused', () => {
+        for (const overrides of [{ v: 1 }, { v: 3 }, { aud: 'yoko-gravity-staff-session' }, { uep: -1 }, { uep: '4' }, { uep: undefined }]) {
+            expect(verifyMobileSession(signedSession(overrides), ENV, NOW), JSON.stringify(overrides)).toBeNull()
+        }
+        expect(verifyMobileSession(signedSession({}), ENV, NOW)).not.toBeNull()
+    })
+
+    it('6. every v2 session has an instance id: a signed payload without one is refused', () => {
+        // Correctly signed with the v2 key, so only the sid rule can refuse it.
+        expect(verifyMobileSession(sessionWithoutInstanceId(), ENV, NOW)).toBeNull()
+        const { principal } = sessionOf()
+        expect(mobileSessionBindingIdV1(principal)).toMatch(/^[0-9a-f]{64}$/)
+        expect(mobileSessionBarrierEntryV1(principal)).not.toBeNull()
     })
 
     it('refuses a session whose instance id is malformed rather than ignoring it', () => {
@@ -117,25 +119,17 @@ describe('Mobile Push v1 session identity', () => {
         }
     })
 
-    it('NEGATIVE: nothing a registration stores can verify a guess of MOBILE_ACCESS_PASS', () => {
-        // The stored facts must not depend on the password: every other column
-        // is already known to whoever holds the database, so a password-derived
-        // value would be a fast offline verifier for guesses.
+    it('NEGATIVE: nothing a registration stores is derived from a secret', () => {
+        // The stored subject is the employee's credential epoch, a counter:
+        // independent of the signing secret and of any password.
         const original = sessionOf(ENV)
         const rotated = sessionOf(ROTATED)
         expect(rotated.token).not.toBe(original.token)
-        expect(currentMobilePushCredentialFactsV1(ROTATED)).toEqual(currentMobilePushCredentialFactsV1(ENV))
-        // The binding is a name for a random value, independent of the password.
+        expect(original.principal.credentialSubject).toBe(`staff-v2:${EPOCH}`)
+        expect(rotated.principal.credentialSubject).toBe(original.principal.credentialSubject)
+        expect(original.principal.credentialSubject).not.toContain(ENV.STAFF_SESSION_SECRET!)
+        // The binding is a name for a random value, independent of the secret.
         const sameInstance = { ...rotated.principal, sessionInstanceId: original.principal.sessionInstanceId }
         expect(mobileSessionBindingIdV1(sameInstance)).toBe(mobileSessionBindingIdV1(original.principal))
-    })
-
-    it('exposes only the credential subject, and nothing at all when unprovisioned', () => {
-        const facts = currentMobilePushCredentialFactsV1(ENV)!
-        expect(Object.keys(facts)).toEqual(['credentialSubject'])
-        expect(facts.credentialSubject).toBe('mobile-fingerprint')
-        expect(JSON.stringify(facts)).not.toContain(ENV.MOBILE_ACCESS_PASS)
-        expect(currentMobilePushCredentialFactsV1({})).toBeNull()
-        expect(currentMobilePushCredentialFactsV1({ ...ENV, MOBILE_ACCESS_PASS: 'short' })).toBeNull()
     })
 })

@@ -12,6 +12,9 @@
  * --no-file-parallelism: they share one disposable database.
  */
 import { createHash, createHmac } from 'node:crypto'
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -49,11 +52,13 @@ import {
     type MobilePushRegistrationWriteV1,
 } from './mobile-push-registration-handler'
 import { prismaMobileDeviceRegistrationPortV1 } from './prisma-mobile-device-registration-adapter'
+import { staffCredentialLivenessManyV1 } from '../../application/staff-session-operations'
+import { createStaffPasswordVerifierV1 } from '../../internal/staff-session-credentials'
 
 // Send-time resolution is exercised through the owner's own handler and store.
 // The exported capability is reserved for its single reviewed consumer.
 async function resolveTarget(registrationId: string, sessionBindingId: string) {
-    return createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
+    return createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1, staffCredentialLivenessManyV1)
         .resolveTarget(registrationId, sessionBindingId, currentMobilePushEligibilityFactsV1(new Date())!)
 }
 
@@ -64,8 +69,34 @@ const device = (name: string) => `${RUN}-${name}`
 const token = (name: string) => `${RUN}_tok_${name}_0123456789:ABCDEFGHIJKLMNOP`
 const HOUR = 3600_000
 
+// v2: every session is an employee's own credential. The test employees get
+// real StaffCredential rows (never deleted: the table forbids it) and a
+// registry file of their own.
+// Every operator these tests sign in as holds a live credential, so the operator
+// label decides eligibility only through that employee's liveness (E1 below).
+const EMPLOYEES = ['u1', 'u2', 'u3']
+const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'mpreg-registry-')), 'users.json')
+copyFileSync(path.join(process.cwd(), 'src/data/users.json'), REGISTRY)
+const epochs = new Map<string, number>()
+let previousRegistry: string | undefined
+
+async function resetEmployees(): Promise<void> {
+    copyFileSync(path.join(process.cwd(), 'src/data/users.json'), REGISTRY)
+    const verifier = await createStaffPasswordVerifierV1('mobile push test passphrase')
+    for (const userId of EMPLOYEES) {
+        const record = (JSON.parse(readFileSync(REGISTRY, 'utf8')) as Array<{ id: string, createdAt: string }>).find((r) => r.id === userId)!
+        const data = {
+            registryCreatedAt: record.createdAt, algo: verifier.algo, scryptN: verifier.n, scryptR: verifier.r, scryptP: verifier.p,
+            maxmemBytes: verifier.maxmemBytes, salt: new Uint8Array(verifier.salt), hash: new Uint8Array(verifier.hash),
+            revokedAt: null, updatedAt: new Date(), updatedBy: 'test:mobile-push',
+        }
+        const row = await prisma.staffCredential.upsert({ where: { userId }, create: { userId, ...data }, update: data, select: { sessionEpoch: true } })
+        epochs.set(userId, row.sessionEpoch)
+    }
+}
+
 function sessionFor(deviceId: string, operator = 'u1', nowMs = Date.now()): string {
-    const issued = issueMobileSession(operator, deviceId, undefined, nowMs)
+    const issued = issueMobileSession(operator, deviceId, epochs.get(operator) ?? 0, undefined, nowMs)
     if (!issued) throw new Error('mobile lane not provisioned for the test process')
     return issued
 }
@@ -108,16 +139,21 @@ const rowsForRun = () => prisma.mobileDeviceRegistration.findMany({ where: { dev
 describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
     beforeAll(() => {
         if (process.env.DATABASE_URL !== DATABASE) throw new Error('DATABASE_URL must equal MOBILE_PUSH_TEST_DATABASE_URL')
-        if (!process.env.MOBILE_ACCESS_USER || !process.env.MOBILE_ACCESS_PASS) throw new Error('MOBILE_ACCESS_* must be provisioned for the test process')
+        if (!process.env.STAFF_SESSION_SECRET) throw new Error('STAFF_SESSION_SECRET must be provisioned for the test process')
+        previousRegistry = process.env.YOKO_USER_REGISTRY_FILE
+        process.env.YOKO_USER_REGISTRY_FILE = REGISTRY
     })
     beforeEach(async () => {
         jar.token = undefined
         delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
+        await resetEmployees()
         await prisma.mobileDeviceRegistration.deleteMany({
             where: { OR: [{ deviceId: { startsWith: RUN } }, { deviceId: 'ephemeral-device' }] },
         })
     })
     afterAll(async () => {
+        if (previousRegistry === undefined) delete process.env.YOKO_USER_REGISTRY_FILE
+        else process.env.YOKO_USER_REGISTRY_FILE = previousRegistry
         await prisma.mobileDeviceRegistration.deleteMany({ where: { deviceId: { startsWith: RUN } } })
         await prisma.$disconnect()
     })
@@ -154,7 +190,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(first).toMatchObject({
             deviceId: device('d4'),
             fcmToken: token('d4'),
-            credentialSubject: process.env.MOBILE_ACCESS_USER,
+            credentialSubject: `staff-v2:${epochs.get('u2')}`,
             runtimeOperatorId: 'u2',
             sessionBindingId: expectedBinding(session),
             sessionRevocationEpoch: '0',
@@ -190,7 +226,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const write: MobilePushRegistrationWriteV1 = {
             deviceId: device('d5b'),
             fcmToken: token('shared5b'),
-            credentialSubject: facts.credentialSubject,
+            credentialSubject: `staff-v2:${epochs.get('u1')}`,
             runtimeOperatorId: 'u1',
             sessionBindingId: expectedBinding(ownSession),
             barrierEntry: barrierEntryOf(ownSession),
@@ -210,7 +246,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
                 return outcome
             },
         }
-        expect(await createMobilePushRegistrationHandlerV1(interleaved).register(write, facts)).toMatchObject({ ok: true })
+        expect(await createMobilePushRegistrationHandlerV1(interleaved, staffCredentialLivenessManyV1).register(write, facts)).toMatchObject({ ok: true })
         expect(await rowsForRun()).toHaveLength(2)
         expect(await rowOf(device('d5b'))).toMatchObject({ fcmToken: token('shared5b'), revokedAt: null })
         expect(await prismaMobileDeviceRegistrationPortV1.tokenIsBoundToOtherDevice(token('shared5b'), device('d5b'))).toBe(false)
@@ -355,11 +391,11 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         const facts = currentMobilePushEligibilityFactsV1(new Date())!
         const read = (sessionBindingId: string, overrides: Partial<typeof facts> = {}) =>
             prismaMobileDeviceRegistrationPortV1.sendableToken(row.id, sessionBindingId, { ...facts, ...overrides })
-        expect(await read(row.sessionBindingId)).toEqual({ sendable: true, token: token('one-read') })
+        expect(await read(row.sessionBindingId)).toEqual({ sendable: true, token: token('one-read'), runtimeOperatorId: 'u1', credentialSubject: `staff-v2:${epochs.get('u1')}` })
         expect(await read('e'.repeat(64))).toEqual({ sendable: false })
         expect(await read(row.sessionBindingId, { now: new Date(row.sessionExpiresAt.getTime()) })).toEqual({ sendable: false })
         expect(await read(row.sessionBindingId, { revocationEpoch: 'bumped' })).toEqual({ sendable: false })
-        expect(await read(row.sessionBindingId, { credentialSubject: 'rotated-away' })).toEqual({ sendable: false })
+        expect(await read(row.sessionBindingId, { credentialSubjectPrefix: 'staff-v3:' })).toEqual({ sendable: false })
         await prisma.mobileDeviceRegistration.update({ where: { id: row.id }, data: { revokedAt: new Date(), revokedReason: 'logout' } })
         expect(await read(row.sessionBindingId)).toEqual({ sendable: false })
     })
@@ -494,26 +530,50 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
         expect(await eligibleIds()).toContain(row.id)
     })
 
-    it('6. a session issued before Mobile Push v1 is refused by push registration until re-login', async () => {
+    it('6. a v1 session (shared credential, no instance id) is no session at all: nothing registers until the employee signs in', async () => {
         const id = device('legacy')
-        const current = sessionFor(id)
-        const payload = JSON.parse(Buffer.from(current.split('.')[0], 'base64url').toString('utf8'))
-        delete payload.sid
-        const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
-        const key = createHmac('sha256', process.env.MOBILE_ACCESS_PASS!)
-            .update(`yoko-mobile-shell-session-key.v1\0${process.env.MOBILE_ACCESS_USER}`, 'utf8')
-            .digest()
+        const iat = Math.floor(Date.now() / 1000)
+        const shared = { user: 'mobile-operator', pass: 'correct horse battery staple' }
+        const encoded = Buffer.from(JSON.stringify({ v: 1, aud: 'yoko-gravity-mobile-shell', sub: shared.user, op: 'u1', did: id, rev: '0', iat, exp: iat + 12 * 3600 }), 'utf8').toString('base64url')
+        const key = createHmac('sha256', shared.pass).update(`yoko-mobile-shell-session-key.v1\0${shared.user}`, 'utf8').digest()
         const legacy = `${encoded}.${createHmac('sha256', key).update(`yoko-gravity-mobile-shell\0${encoded}`, 'utf8').digest('base64url')}`
-        // It is a valid session: the CRM lane still accepts it.
-        expect(verifyMobileSession(legacy)).toMatchObject({ deviceId: id, sessionInstanceId: null })
-        expect(await register(legacy, { token: token('legacy') }))
-            .toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REISSUE_REQUIRED' } })
+        expect(verifyMobileSession(legacy)).toBeNull()
+        expect(await register(legacy, { token: token('legacy') })).toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REQUIRED' } })
         expect(await rowOf(id)).toBeNull()
-        // Logging out on a legacy session revokes nothing and bars nothing.
-        await logout(legacy)
-        expect(await rowOf(id)).toBeNull()
-        // After a re-login the device registers normally.
         expect((await register(sessionFor(id), { token: token('legacy') })).status).toBe(200)
+    })
+
+    it('E1. push follows the employee: a reset, a revoke or a disable stops fan-out and send, and refuses re-registration', async () => {
+        const changes: Array<[string, () => Promise<void>]> = [
+            ['reset', async () => { await prisma.staffCredential.update({ where: { userId: 'u1' }, data: { sessionEpoch: { increment: 1 } } }) }],
+            ['revoke', async () => { await prisma.staffCredential.update({ where: { userId: 'u1' }, data: { revokedAt: new Date() } }) }],
+            ['disable', async () => {
+                const records = JSON.parse(readFileSync(REGISTRY, 'utf8')) as Array<Record<string, unknown>>
+                writeFileSync(REGISTRY, JSON.stringify(records.map((r) => (r.id === 'u1' ? { ...r, status: 'Отключен' } : r)), null, 2))
+            }],
+        ]
+        for (const [name, change] of changes) {
+            await resetEmployees()
+            const id = device(`emp-${name}`)
+            const session = sessionFor(id)
+            expect((await register(session, { token: token(`emp-${name}`) })).status).toBe(200)
+            const row = (await rowOf(id))!
+            expect(await eligibleIds()).toContain(row.id)
+            expect((await resolveTarget(row.id, row.sessionBindingId)).kind).toBe('send')
+            await change()
+            expect(await eligibleIds(), name).not.toContain(row.id)
+            expect(await resolveTarget(row.id, row.sessionBindingId), name).toEqual({ kind: 'skip', reason: 'ineligible' })
+            expect(await register(session, { token: token(`emp-${name}`) }), name).toEqual({ status: 401, body: { error: 'MOBILE_SESSION_REVOKED' } })
+        }
+    })
+
+    it('E2. a registration stored with the shared v1 subject receives nothing', async () => {
+        const id = device('shared-subject')
+        expect((await register(sessionFor(id), { token: token('shared-subject') })).status).toBe(200)
+        const row = (await rowOf(id))!
+        await prisma.mobileDeviceRegistration.update({ where: { id: row.id }, data: { credentialSubject: 'mobile-operator' } })
+        expect(await eligibleIds()).not.toContain(row.id)
+        expect(await resolveTarget(row.id, row.sessionBindingId)).toEqual({ kind: 'skip', reason: 'ineligible' })
     })
 
     it('A3. a logout landing between the bind and the reclaim refuses, and releases nothing', async () => {
@@ -551,7 +611,7 @@ describeWithDatabase('Mobile Push v1 registration (PostgreSQL)', () => {
                 return outcome
             },
         }
-        expect(await createMobilePushRegistrationHandlerV1(interleaved).register(write, facts))
+        expect(await createMobilePushRegistrationHandlerV1(interleaved, staffCredentialLivenessManyV1).register(write, facts))
             .toEqual({ ok: false, code: 'MOBILE_SESSION_REVOKED' })
         // The logged-out device stays revoked...
         const row = (await rowOf(id))!

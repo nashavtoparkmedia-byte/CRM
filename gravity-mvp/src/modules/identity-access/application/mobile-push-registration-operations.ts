@@ -8,33 +8,35 @@ import {
 } from '../public/v1/mobile-push-registration-handler'
 import { prismaMobileDeviceRegistrationPortV1 } from '../public/v1/prisma-mobile-device-registration-adapter'
 import {
-    currentMobilePushCredentialFactsV1,
     getMobileSessionRevocationEpoch,
+    isMobileSessionSigningConfigured,
+    MOBILE_PUSH_CREDENTIAL_SUBJECT_PREFIX_V2,
     MOBILE_SESSION_TTL_SECONDS,
     type MobileSessionPrincipalV1,
 } from '../public/v1/mobile-session-credentials'
+import { staffCredentialLivenessManyV1, staffCredentialLivenessV1 } from './staff-session-operations'
 
 /**
- * Mobile Push v1 registration operations, bound to the live server facts.
+ * Mobile Push registration operations, bound to the live server facts.
  *
- * Every eligibility decision reads the CURRENT revocation epoch and credential
- * subject, so raising MOBILE_SESSION_REVOCATION_EPOCH silences every
- * registration bound to an older generation at once, without a job and without
- * touching the rows. Rotating MOBILE_ACCESS_PASS must advance that epoch too:
- * nothing password-derived is stored, because such a value would let anyone
- * holding the database verify password guesses offline.
+ * Every eligibility decision reads the CURRENT revocation epoch, so raising
+ * MOBILE_SESSION_REVOCATION_EPOCH silences every registration bound to an older
+ * generation at once. A v2 registration's subject is `staff-v2:<uep>`, and
+ * fan-out and send time both compare that epoch with the employee's live
+ * credential (docs/design/mobile-personal-signin-v1.md §2.4): a disabled,
+ * reset, revoked or browser-logged-out employee's phone receives nothing.
+ * A registration stored with the shared v1 subject fails the prefix.
  */
 
-const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1)
+const registrations = createMobilePushRegistrationHandlerV1(prismaMobileDeviceRegistrationPortV1, staffCredentialLivenessManyV1)
 
 /** The live server facts eligibility is judged against; null when the mobile lane is unprovisioned. */
 export function currentMobilePushEligibilityFactsV1(now: Date): MobilePushEligibilityFactsV1 | null {
-    const credential = currentMobilePushCredentialFactsV1()
-    if (!credential) return null
+    if (!isMobileSessionSigningConfigured()) return null
     return {
         now,
         revocationEpoch: getMobileSessionRevocationEpoch(),
-        credentialSubject: credential.credentialSubject,
+        credentialSubjectPrefix: MOBILE_PUSH_CREDENTIAL_SUBJECT_PREFIX_V2,
     }
 }
 
@@ -50,6 +52,11 @@ export async function registerVerifiedMobilePushDeviceV1(
     const now = new Date()
     const facts = currentMobilePushEligibilityFactsV1(now)
     if (!facts) return { ok: false, code: 'MOBILE_SESSION_REQUIRED' }
+    // The session follows the employee: a credential that no longer backs it
+    // answers exactly as a logout does, and an unreadable store is retryable.
+    const liveness = await staffCredentialLivenessV1(session.principal.runtimeOperatorId, session.principal.staffEpoch)
+    if (liveness === 'unverifiable') return { ok: false, code: 'MOBILE_SESSION_UNVERIFIABLE' }
+    if (liveness === 'ended') return { ok: false, code: 'MOBILE_SESSION_REVOKED' }
     const result = await registrations.register({
         deviceId: session.principal.deviceId,
         fcmToken: token,

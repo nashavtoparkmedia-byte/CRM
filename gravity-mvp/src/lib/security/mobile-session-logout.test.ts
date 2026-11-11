@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 /**
@@ -61,6 +64,15 @@ vi.mock('next/headers', () => ({
     }),
     headers: async () => new Headers(),
 }))
+// The employee's credential behind each v2 session (docs/design/mobile-personal-signin-v1.md §2.3).
+vi.mock('@/modules/identity-access/internal/staff-credential-store', () => ({
+    prismaStaffCredentialStoreV1: {
+        findStatus: vi.fn(async (userId: string) => (['u1', 'u2'].includes(userId)
+            ? { userId, registryCreatedAt: '2026-03-24T00:00:00Z', sessionEpoch: 0, revokedAt: null }
+            : null)),
+        anyRow: vi.fn(async () => true),
+    },
+}))
 vi.mock('@/lib/prisma', () => ({ prisma: {} }))
 
 const { NextRequest } = await import('next/server')
@@ -75,7 +87,13 @@ const {
 } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
 const { resolveCookieOperatorV1 } = await import('@/modules/identity-access/public/v1/mobile-session-operator')
 
-const ENV = { MOBILE_ACCESS_USER: 'mobile-operator', MOBILE_ACCESS_PASS: 'correct horse battery staple' }
+const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
+const ENV = { STAFF_SESSION_SECRET: SECRET }
+const REGISTRY = path.join(mkdtempSync(path.join(tmpdir(), 'f1-registry-')), 'users.json')
+writeFileSync(REGISTRY, JSON.stringify([
+    { id: 'u1', firstName: 'Мария', lastName: 'Иванова', role: 'Менеджер', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' },
+    { id: 'u2', firstName: 'Александр', lastName: 'Сидоров', role: 'Администратор', status: 'Активен', createdAt: '2026-03-24T00:00:00Z' },
+]))
 const SHELL_UA = `Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ${MOBILE_SHELL_UA_TOKEN}1`
 const NATIVE_UA = 'okhttp/4.12.0'
 const DESKTOP_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120'
@@ -86,7 +104,7 @@ const DEVICE = 'a1b2c3d4e5f6a7b8'
 const PATH = '/api/mobile/session/logout'
 
 function session(operator = A, device = DEVICE, nowMs = Date.now()) {
-    return issueMobileSession(operator, device, ENV, nowMs) as string
+    return issueMobileSession(operator, device, 0, ENV, nowMs) as string
 }
 
 function logoutRequest(init: {
@@ -135,10 +153,11 @@ function revocationsBefore() {
 }
 
 beforeEach(() => {
-    process.env.MOBILE_ACCESS_USER = ENV.MOBILE_ACCESS_USER
-    process.env.MOBILE_ACCESS_PASS = ENV.MOBILE_ACCESS_PASS
+    process.env.STAFF_SESSION_SECRET = SECRET
+    process.env.YOKO_USER_REGISTRY_FILE = REGISTRY
+    delete process.env.MOBILE_ACCESS_USER
+    delete process.env.MOBILE_ACCESS_PASS
     delete process.env.MOBILE_SESSION_REVOCATION_EPOCH
-    delete process.env.STAFF_SESSION_SECRET
     delete process.env.YOKO_STAFF_SESSION_ENFORCE
     state.barred.clear()
     state.barrierUnreadable = false
@@ -286,7 +305,7 @@ describe('nothing to end: 204, and no side effect at all', () => {
     })
 
     test('a session logout could never bar (the shared unstable device id) is not ended either', async () => {
-        const shared = issueMobileSession(A, 'ephemeral-device', ENV)
+        const shared = issueMobileSession(A, 'ephemeral-device', 0, ENV)
         if (shared) {
             const result = await call(logoutRequest({ cookies: { [MOBILE_SESSION_COOKIE]: shared } }))
             expect(result.status).toBe(204)
@@ -296,8 +315,7 @@ describe('nothing to end: 204, and no side effect at all', () => {
 
     test('the mobile lane not provisioned: nothing verifies, nothing is written', async () => {
         const token = session()
-        delete process.env.MOBILE_ACCESS_USER
-        delete process.env.MOBILE_ACCESS_PASS
+        delete process.env.STAFF_SESSION_SECRET
         const result = await call(logoutRequest({ ua: NATIVE_UA, cookies: { [MOBILE_SESSION_COOKIE]: token } }))
         expect(result.status).toBe(204)
         expect(state.revocations).toEqual([])

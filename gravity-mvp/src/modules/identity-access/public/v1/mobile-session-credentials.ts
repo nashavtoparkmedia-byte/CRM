@@ -1,28 +1,34 @@
 import { createHash, randomBytes, createHmac, timingSafeEqual } from 'node:crypto'
+import { mobileSessionSigningKeyV1 } from '../../application/staff-session-operations'
 
 /**
- * Session primitive for the Android shell.
+ * Session primitive for the Android shell (v2, docs/design/mobile-personal-signin-v1.md).
  *
- * It is a deliberate copy of the shape already proven by
- * `integration-admin-credentials.ts` — same HMAC-SHA256 envelope, same
- * constant-time comparisons, same fail-closed credential resolution — rather
- * than a second, differently-reasoned authentication design. Four things are
- * added because a phone is not a browser tab:
+ * The same HMAC-SHA256 envelope and constant-time comparisons as before. What
+ * changed in v2 is who the session is: the employee whose own Staff Session
+ * password verified at `/login/mobile`, never an operator chosen next to a
+ * shared password. So:
  *
- *  - `op`: the runtime operator the session acts as, carried INSIDE the signed
- *    token. Today the CRM carries that choice in the unsigned, JS-readable
- *    `crm_user_id` cookie, which anyone can write. In the mobile lane the
- *    choice is made once, at login, and is then signed.
- *  - `did`: an opaque device identifier, so a later stage can bind a push
- *    registration to the session that created it.
+ *  - `op`: that employee, carried INSIDE the signed token. The CRM carries the
+ *    choice in the unsigned, JS-readable `crm_user_id` cookie, which anyone
+ *    can write; in the mobile lane it is the verified employee, and signed.
+ *  - `uep`: the employee's StaffCredential.sessionEpoch at sign-in. Every
+ *    request compares it with the live row (BR-4 resolver), so a password
+ *    reset, a revoke or a browser logout ends the phone session too.
+ *  - `did`: an opaque device identifier, so a push registration binds to the
+ *    session that created it.
  *  - `rev`: a revocation epoch. Raising MOBILE_SESSION_REVOCATION_EPOCH
- *    invalidates every outstanding mobile session on the next request, with no
- *    table and no deploy of new code.
- *  - a derived signing key, so a token minted for this lane can never verify
- *    as an integration-admin token and vice versa.
+ *    invalidates every outstanding mobile session on the next request.
+ *  - the signing key is derived from STAFF_SESSION_SECRET under the mobile
+ *    lane's own label (`mobileSessionSigningKeyV1`), so a token of this lane
+ *    never verifies as a staff or integration-admin token and vice versa. The
+ *    shared MOBILE_ACCESS_USER / MOBILE_ACCESS_PASS are no longer read.
  *
- * IMPORTANT: `op` is an id from `gravity-mvp/src/data/users.json` ("u1", "u2",
- * …). It is NOT a Prisma `CrmUser.id`; those are separate namespaces and the
+ * A v1 token (shared credential) fails the version and the key: every v1
+ * session ended when v2 was deployed, and the phone signs in again.
+ *
+ * IMPORTANT: `op` is an id from the employee registry ("u1", "u2", …). It is
+ * NOT a Prisma `CrmUser.id`; those are separate namespaces and the
  * repository says so at schema.prisma's `Call.managerId`. Nothing here may be
  * used to look up a CrmUser row.
  */
@@ -32,40 +38,38 @@ export const MOBILE_SESSION_COOKIE = 'yoko_mobile_session'
 /** A working day plus margin. Short enough that a lost phone stops working. */
 export const MOBILE_SESSION_TTL_SECONDS = 12 * 60 * 60
 
+/** The push credential subject prefix of v2 sessions: `staff-v2:<uep>`. */
+export const MOBILE_PUSH_CREDENTIAL_SUBJECT_PREFIX_V2 = 'staff-v2:'
+
 const SESSION_AUDIENCE = 'yoko-gravity-mobile-shell'
-const SESSION_VERSION = 1
-const SESSION_KEY_LABEL = 'yoko-mobile-shell-session-key.v1'
+const SESSION_VERSION = 2
 const MAX_CREDENTIAL_LENGTH = 4096
 const MAX_OPERATOR_ID_LENGTH = 64
 const MAX_DEVICE_ID_LENGTH = 128
+const MAX_STAFF_EPOCH = 2 ** 31 - 1
 const SAFE_TOKEN = /^[A-Za-z0-9_-]+$/
 /** 16 random bytes, base64url, no padding. */
 const SESSION_INSTANCE_ID = /^[A-Za-z0-9_-]{22}$/
 
-export interface MobileAccessCredentialConfig {
-    username: string
-    password: string
-    /** Which provisioned credential answered. Reported, never logged with values. */
-    source: 'mobile_access'
-}
-
 export interface MobileSessionEnvironment {
-    MOBILE_ACCESS_USER?: string
-    MOBILE_ACCESS_PASS?: string
+    STAFF_SESSION_SECRET?: string
+    ADMIN_PASS?: string
+    BOT_CRM_SECRET?: string
     MOBILE_SESSION_REVOCATION_EPOCH?: string
 }
 
 export interface MobileSessionPrincipalV1 {
-    /** The credential that was proven. Not a person, a provisioned capability. */
+    /** `staff-v2:<uep>`: the credential generation this session was proven with. Not a person. */
     credentialSubject: string
-    /** users.json operator id the session acts as. Never a Prisma CrmUser.id. */
+    /** The verified employee the session acts as (registry id). Never a Prisma CrmUser.id. */
     runtimeOperatorId: string
+    /** The employee's StaffCredential.sessionEpoch when this session was issued. */
+    staffEpoch: number
     deviceId: string
     expiresAtSeconds: number
     /**
-     * The session instance this token was issued as, or null for a session
-     * issued before Mobile Push v1. Never supplied by the client: it lives
-     * inside the signed payload.
+     * The session instance this token was issued as. Never supplied by the
+     * client: it lives inside the signed payload. Every v2 session has one.
      */
     sessionInstanceId: string | null
 }
@@ -73,64 +77,25 @@ export interface MobileSessionPrincipalV1 {
 interface MobileSessionPayload {
     v: typeof SESSION_VERSION
     aud: typeof SESSION_AUDIENCE
-    sub: string
     op: string
+    uep: number
     did: string
     rev: string
     iat: number
     exp: number
-    /**
-     * Server-issued session instance id: 16 random bytes, minted when this
-     * session was issued. Two logins a millisecond apart are still distinct
-     * sessions, which no timestamp can promise. Absent in sessions issued
-     * before Mobile Push v1 — those stay valid for ordinary CRM access and
-     * are refused by push registration until the next login.
-     */
-    sid?: string
-}
-
-function rejectsAsPlaceholder(password: string): boolean {
-    const normalized = password.trim().toLowerCase()
-    return normalized === 'admin123'
-        || normalized === 'password'
-        || normalized === 'changeme'
-        || /(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate)/i.test(normalized)
-}
-
-function readCredential(username: unknown, password: unknown): { username: string, password: string } | null {
-    const user = typeof username === 'string' ? username.trim() : ''
-    const pass = typeof password === 'string' ? password : ''
-    if (!user || user.length > 128) return null
-    if (pass.length < 12 || pass.length > MAX_CREDENTIAL_LENGTH) return null
-    if (rejectsAsPlaceholder(pass)) return null
-    return { username: user, password: pass }
+    /** Server-issued session instance id: 16 random bytes, minted at issue. */
+    sid: string
 }
 
 /**
- * Resolve the credential the mobile lane authenticates against.
- *
- * MOBILE_ACCESS_USER and MOBILE_ACCESS_PASS, and nothing else. There is
- * deliberately no fallback to the project administrator credential: a phone
- * must never carry the password that unlocks integration credentials, and a
- * lane that quietly borrows another lane's secret is one rotation away from
- * surprising whoever rotates it.
- *
- * Unprovisioned means closed. A missing, short, or placeholder value returns
- * null, which disables mobile login entirely rather than opening it. That is
- * the intended behaviour even though it means the lane does nothing until an
- * operator provisions it.
+ * Whether the mobile lane can sign sessions: the staff lane has a valid
+ * STAFF_SESSION_SECRET. Unprovisioned means closed; there is no fallback to
+ * any shared credential.
  */
-export function getMobileAccessCredentialConfig(
-    env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
-): MobileAccessCredentialConfig | null {
-    const dedicated = readCredential(env.MOBILE_ACCESS_USER, env.MOBILE_ACCESS_PASS)
-    return dedicated === null ? null : { ...dedicated, source: 'mobile_access' }
-}
-
-export function isMobileAccessConfigured(
+export function isMobileSessionSigningConfigured(
     env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
 ): boolean {
-    return getMobileAccessCredentialConfig(env) !== null
+    return mobileSessionSigningKeyV1(env) !== null
 }
 
 /** Current revocation epoch. Any change invalidates every issued session. */
@@ -141,49 +106,14 @@ export function getMobileSessionRevocationEpoch(
     return raw === '' ? '0' : raw.slice(0, 64)
 }
 
-function constantTimeStringEqual(left: string, right: string): boolean {
-    const leftDigest = createHash('sha256').update(left, 'utf8').digest()
-    const rightDigest = createHash('sha256').update(right, 'utf8').digest()
-    return timingSafeEqual(leftDigest, rightDigest)
-}
-
-export function verifyMobileAccessCredentials(
-    suppliedUsername: unknown,
-    suppliedPassword: unknown,
-    env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
-): boolean {
-    const config = getMobileAccessCredentialConfig(env)
-    if (!config) return false
-    if (typeof suppliedUsername !== 'string' || typeof suppliedPassword !== 'string') return false
-    if (suppliedUsername.length > MAX_CREDENTIAL_LENGTH || suppliedPassword.length > MAX_CREDENTIAL_LENGTH) {
-        return false
-    }
-
-    // Both comparisons always run: a wrong username must not be measurably
-    // cheaper to reject than a wrong password.
-    const usernameMatches = constantTimeStringEqual(suppliedUsername, config.username)
-    const passwordMatches = constantTimeStringEqual(suppliedPassword, config.password)
-    return usernameMatches && passwordMatches
-}
-
-/**
- * Derive this lane's signing key from the proven credential.
- *
- * The label domain-separates the key, so a token minted here cannot verify
- * against `integration-admin-credentials.ts` even if the two lanes were ever
- * given the same secret. Rotating MOBILE_ACCESS_PASS revokes every outstanding
- * mobile session and touches nothing else.
- */
-function sessionKey(config: MobileAccessCredentialConfig): Buffer {
-    return createHmac('sha256', config.password)
-        .update(`${SESSION_KEY_LABEL}\0${config.username}`, 'utf8')
-        .digest()
-}
-
-function signPayload(encodedPayload: string, config: MobileAccessCredentialConfig): Buffer {
-    return createHmac('sha256', sessionKey(config))
+function signPayload(encodedPayload: string, key: Buffer): Buffer {
+    return createHmac('sha256', key)
         .update(`${SESSION_AUDIENCE}\0${encodedPayload}`, 'utf8')
         .digest()
+}
+
+function isStaffEpoch(value: unknown): value is number {
+    return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= MAX_STAFF_EPOCH
 }
 
 export function isSafeRuntimeOperatorId(value: unknown): value is string {
@@ -200,23 +130,30 @@ export function isSafeDeviceId(value: unknown): value is string {
         && SAFE_TOKEN.test(value)
 }
 
+/**
+ * Issue a session for an employee whose own credential was just verified.
+ * Only the mobile sign-in calls this, with the verified employee and the
+ * epoch of their credential row.
+ */
 export function issueMobileSession(
     runtimeOperatorId: string,
     deviceId: string,
+    staffEpoch: number,
     env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
     nowMs = Date.now(),
 ): string | null {
-    const config = getMobileAccessCredentialConfig(env)
-    if (!config) return null
+    const key = mobileSessionSigningKeyV1(env)
+    if (!key) return null
     if (!isSafeRuntimeOperatorId(runtimeOperatorId)) return null
     if (!isSafeDeviceId(deviceId)) return null
+    if (!isStaffEpoch(staffEpoch)) return null
 
     const issuedAt = Math.floor(nowMs / 1000)
     const payload: MobileSessionPayload = {
         v: SESSION_VERSION,
         aud: SESSION_AUDIENCE,
-        sub: config.username,
         op: runtimeOperatorId,
+        uep: staffEpoch,
         did: deviceId,
         rev: getMobileSessionRevocationEpoch(env),
         iat: issuedAt,
@@ -224,7 +161,7 @@ export function issueMobileSession(
         sid: randomBytes(16).toString('base64url'),
     }
     const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
-    return `${encodedPayload}.${signPayload(encodedPayload, config).toString('base64url')}`
+    return `${encodedPayload}.${signPayload(encodedPayload, key).toString('base64url')}`
 }
 
 /**
@@ -239,8 +176,8 @@ export function verifyMobileSession(
     env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
     nowMs = Date.now(),
 ): MobileSessionPrincipalV1 | null {
-    const config = getMobileAccessCredentialConfig(env)
-    if (!config || typeof token !== 'string' || token.length > MAX_CREDENTIAL_LENGTH) return null
+    const key = mobileSessionSigningKeyV1(env)
+    if (!key || typeof token !== 'string' || token.length > MAX_CREDENTIAL_LENGTH) return null
 
     const parts = token.split('.')
     if (parts.length !== 2 || !parts[0] || !parts[1]) return null
@@ -255,7 +192,7 @@ export function verifyMobileSession(
         return null
     }
 
-    const expectedSignature = signPayload(encodedPayload, config)
+    const expectedSignature = signPayload(encodedPayload, key)
     if (
         suppliedSignature.length !== expectedSignature.length
         || !timingSafeEqual(suppliedSignature, expectedSignature)
@@ -266,27 +203,27 @@ export function verifyMobileSession(
     const nowSeconds = Math.floor(nowMs / 1000)
     const valid = payload?.v === SESSION_VERSION
         && payload.aud === SESSION_AUDIENCE
-        && payload.sub === config.username
         && payload.rev === getMobileSessionRevocationEpoch(env)
         && isSafeRuntimeOperatorId(payload.op)
+        && isStaffEpoch(payload.uep)
         && isSafeDeviceId(payload.did)
         && Number.isInteger(payload.iat)
         && Number.isInteger(payload.exp)
         && payload.iat <= nowSeconds + 60
         && payload.exp > nowSeconds
         && payload.exp - payload.iat === MOBILE_SESSION_TTL_SECONDS
-        // A session either carries a well-formed server-issued instance id or
-        // none at all. A malformed one is refused rather than ignored.
-        && (payload.sid === undefined || (typeof payload.sid === 'string' && SESSION_INSTANCE_ID.test(payload.sid)))
+        // Every v2 session carries a well-formed server-issued instance id.
+        && typeof payload.sid === 'string' && SESSION_INSTANCE_ID.test(payload.sid)
 
     if (!valid) return null
 
     return {
-        credentialSubject: payload.sub,
+        credentialSubject: `${MOBILE_PUSH_CREDENTIAL_SUBJECT_PREFIX_V2}${payload.uep}`,
         runtimeOperatorId: payload.op,
+        staffEpoch: payload.uep,
         deviceId: payload.did,
         expiresAtSeconds: payload.exp,
-        sessionInstanceId: payload.sid ?? null,
+        sessionInstanceId: payload.sid,
     }
 }
 
@@ -362,32 +299,6 @@ export function mobileSessionBarrierEntryExpiryV1(entry: string): number | null 
     const [binding, expiry] = entry.split('.')
     if (!/^[0-9a-f]{64}$/.test(binding ?? '') || !/^[0-9]{1,15}$/.test(expiry ?? '')) return null
     return Number(expiry)
-}
-
-export interface MobilePushCredentialFactsV1 {
-    /** The provisioned mobile credential's username. Not a secret. */
-    credentialSubject: string
-}
-
-/**
- * The credential facts a push registration is bound to, or null when the
- * mobile lane is not provisioned.
- *
- * OPERATIONAL CONTRACT: rotating MOBILE_ACCESS_PASS must also advance
- * MOBILE_SESSION_REVOCATION_EPOCH. Rotation alone stops new logins and
- * invalidates the cookies immediately, but a registration already bound to a
- * session issued under the old password keeps receiving push until that
- * session's expiry (at most the 12 h TTL). Advancing the epoch makes every
- * such registration ineligible at once. Push v1 deliberately stores no
- * password-derived value to detect the rotation itself: such a value would be
- * an offline verifier for password guesses in the database.
- */
-export function currentMobilePushCredentialFactsV1(
-    env: MobileSessionEnvironment = process.env as unknown as MobileSessionEnvironment,
-): MobilePushCredentialFactsV1 | null {
-    const config = getMobileAccessCredentialConfig(env)
-    if (!config) return null
-    return { credentialSubject: config.username }
 }
 
 // ── BR-4: the effective operator of a request ───────────────────────────────

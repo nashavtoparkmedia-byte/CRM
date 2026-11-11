@@ -127,19 +127,7 @@ export default function MobileLoginForm({
             </label>
 
             <label className="block">
-                <span className="text-[13px] font-medium text-foreground">Логин</span>
-                <input
-                    name="username"
-                    required
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    className="mt-1 min-h-[44px] w-full rounded-lg border border-border px-3 text-[15px] focus:border-primary focus:outline-none"
-                />
-            </label>
-
-            <label className="block">
-                <span className="text-[13px] font-medium text-foreground">Пароль</span>
+                <span className="text-[13px] font-medium text-foreground">Ваш пароль</span>
                 <input
                     name="password"
                     type="password"
