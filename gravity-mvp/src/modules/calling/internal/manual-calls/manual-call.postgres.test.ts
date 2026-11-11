@@ -77,12 +77,13 @@ postgresProof('manual call claim on PostgreSQL', () => {
 
   it('replays the same requestId and refuses a second requestId while the Contact or the employee is live', async () => {
     const contactId = await contact()
-    const first = record(contactId, 'replay')
+    // Its own employees: u1 still has the ringing call of the previous case, which keeps u1 busy.
+    const first = record(contactId, 'replay', 'u60')
     await manualCallPrismaStore.claim(first)
     await expect(manualCallPrismaStore.claim(first)).resolves.toEqual({ kind: 'existing', payloadDigest: first.payloadDigest, dispatch: 'claimed' })
-    await expect(manualCallPrismaStore.claim(record(contactId, 'replay-2', 'u2'))).resolves.toEqual({ kind: 'busy' })
+    await expect(manualCallPrismaStore.claim(record(contactId, 'replay-2', 'u61'))).resolves.toEqual({ kind: 'busy' })
     const otherContact = await contact()
-    await expect(manualCallPrismaStore.claim(record(otherContact, 'replay-3', 'u1'))).resolves.toEqual({ kind: 'busy' })
+    await expect(manualCallPrismaStore.claim(record(otherContact, 'replay-3', 'u60'))).resolves.toEqual({ kind: 'busy' })
     expect(await prisma.call.count({ where: { contactId } })).toBe(1)
   })
 
