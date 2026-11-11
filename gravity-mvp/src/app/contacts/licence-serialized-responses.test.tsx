@@ -18,6 +18,12 @@ const KEY = '9912345678'
 
 const fixture = vi.hoisted(() => ({ role: 'Менеджер', fleetFails: false, fleetReads: 0 }))
 
+// The card's client parts (V2) use the App Router; render them outside it.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ push: () => undefined, refresh: () => undefined, replace: () => undefined, back: () => undefined, forward: () => undefined, prefetch: () => undefined }),
+}))
+
 vi.mock('@/modules/platform-shell/public/v1', async () => {
   const { CONTACT_PERSON_CARD_RESULT_V1 } = await import('@/contracts/contacts/v1')
   const { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1 } = await import('@/contracts/fleet-operations/v1')

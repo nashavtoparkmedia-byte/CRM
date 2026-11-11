@@ -1,14 +1,14 @@
 import Link from 'next/link'
 import { formatContactPhone } from '@/modules/contacts/public/v1/contact-display-policy'
 import AiConversationPanel from '@/modules/calling/public/v1/client-ui/AiConversationPanel'
+import { CardActions, MessengersTable, type CardConversationV1, type MessengerRowV1 } from './PersonCardClient'
 import type {
-  ContactPersonCardAccountV1,
   ContactPersonCardConflictV1,
+  ContactPersonCardLinkEventV1,
   ContactPersonCardPhoneV1,
   ContactPersonConfirmationV1,
 } from '@/contracts/contacts/v1'
 import type {
-  ContactPersonCardConversationV1,
   ContactPersonCardDriverProfileV1,
   ContactPersonCardViewV1,
 } from '@/modules/platform-shell/public/v1'
@@ -44,19 +44,9 @@ const PHONE_LIFECYCLE_LABELS: Record<ContactPersonCardPhoneV1['lifecycle'], stri
 const PHONE_TRUST_LABELS: Record<ContactPersonCardPhoneV1['trust'], string> = {
   provider_bound: 'из источника', manually_verified: 'подтверждён вручную', source_asserted: 'по данным источника', claimed: 'заявлен', unknown: '',
 }
-const REACHABILITY_LABELS: Record<ContactPersonCardAccountV1['reachabilityStatus'], string> = {
-  confirmed: 'доступен', unreachable: 'недоступен', unknown: '',
-}
 const CANDIDATE_BASIS_LABELS: Record<string, string> = {
   needs_reconciliation: 'ожидает сверки оператором',
   open_conflict: 'назван в открытом конфликте',
-}
-const MERGE_REASON_LABELS: Record<string, string> = {
-  phone_match: 'совпадение телефона',
-  identity_match: 'совпадение аккаунта связи',
-  yandex_link: 'связь с профилем Яндекса',
-  manual: 'вручную',
-  undo: 'отмена объединения',
 }
 const CONFLICT_CLASS_LABELS: Record<string, string> = {
   channel_identity_collision: 'коллизия аккаунта канала',
@@ -83,8 +73,8 @@ function Badge({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-[#E4ECFC] bg-white">
-      <header className="flex items-center justify-between px-4 h-[44px] border-b border-[#E4ECFC]">
-        <h2 className="text-[15px] font-semibold text-[#0F172A]">{title}</h2>
+      <header className="flex items-center justify-between px-4 h-[48px]">
+        <h2 className="text-[17px] font-semibold text-[#0F172A]">{title}</h2>
         {count !== undefined && <span className="text-[12px] text-[#64748B]">{count}</span>}
       </header>
       <div>{children}</div>
@@ -92,15 +82,12 @@ function Section({ title, count, children }: { title: string; count?: number; ch
   )
 }
 
-function Row({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center gap-3 px-4 min-h-[56px] py-2 border-b border-[#E4ECFC] last:border-b-0">{children}</div>
-}
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <div className="px-4 py-4 text-[13px] text-[#64748B]">{children}</div>
 }
 
-/** Russian plural form: 1 переписка, 2 переписки, 5 переписок. */
+/** Russian plural form: 1 профиль, 2 профиля, 5 профилей. */
 function pluralRu(count: number, one: string, few: string, many: string): string {
   const mod10 = count % 10
   const mod100 = count % 100
@@ -112,227 +99,313 @@ function pluralRu(count: number, one: string, few: string, many: string): string
 /** Stored channel → the desktop Messenger's channel tab (the same values /messages accepts). */
 const MESSENGER_CHANNEL_TABS: Record<string, string> = { telegram: 'tg', whatsapp: 'wa', max: 'max', avito: 'av', phone: 'phone' }
 
-/**
- * The desktop Messenger's own address for one exact persisted conversation:
- * `/messages?id=<Chat.id>` selects only an already admitted Chat and never
- * creates or guesses one. `/messages/open` is the Android shell's notification
- * gate and requires a mobile session, so a desktop operator must not be sent there.
- */
-function messengerHref(conversation: ContactPersonCardConversationV1): string {
-  const params = new URLSearchParams({ id: conversation.primaryConversationId })
-  if (Object.hasOwn(MESSENGER_CHANNEL_TABS, conversation.channel)) params.set('channel', MESSENGER_CHANNEL_TABS[conversation.channel])
-  return `/messages?${params.toString()}`
-}
-
 function formatDate(value: string | null): string | null {
   if (!value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function DriverProfileRow({ profile }: { profile: ContactPersonCardDriverProfileV1 }) {
-  const stale = profile.sourceFreshness === 'stale' || profile.sourceState === 'stale' || profile.sourceState === 'failed'
+/** Employment as the Owner named it (2026-11-11): ФЛ, СМЗ, Парковый ИП; nothing is guessed. */
+function employmentLabel(profile: ContactPersonCardDriverProfileV1): string {
+  const byType: Record<string, string> = { park_employee: 'ФЛ', selfemployed: 'СМЗ', individual_entrepreneur: 'Парковый ИП' }
+  const typed = profile.employmentType ? byType[profile.employmentType] ?? null : null
+  if (typed === null) return profile.isSelfEmployed === true ? 'СМЗ' : '—'
+  // Fleet stores both; when they disagree, both are shown rather than one picked.
+  return profile.isSelfEmployed === true && profile.employmentType !== 'selfemployed' ? `${typed} · СМЗ` : typed
+}
+
+type ProfileStatus = { text: string; tone: 'active' | 'dismissed' | 'other' }
+
+/** The source's own work status, named in Russian: working, not working, dismissed; otherwise a dash. */
+function profileStatus(profile: ContactPersonCardDriverProfileV1): ProfileStatus {
+  if (profile.workStatus === 'fired' || profile.dismissedAt) return { text: 'Уволен', tone: 'dismissed' }
+  if (profile.workStatus === 'working') return { text: 'Активен', tone: 'active' }
+  if (profile.workStatus === 'not_working') return { text: 'Не работает', tone: 'other' }
+  return { text: '—', tone: 'other' }
+}
+
+function ParksTable({ profiles }: { profiles: ContactPersonCardDriverProfileV1[] }) {
   return (
-    <Row>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/drivers/${encodeURIComponent(profile.driverId)}`} className="text-[15px] font-medium text-[#0F172A] hover:text-[#2AABEE]">
-            {profile.parkName ?? (profile.externalParkId ? `Парк ${profile.externalParkId}` : 'Парк не указан')}
-          </Link>
-          {profile.isMainDriver && <Badge tone="muted">основной профиль</Badge>}
-          <Badge tone={profile.personResolutionStatus === 'operator_confirmed' ? 'ok' : profile.personResolutionStatus === 'conflict' ? 'bad' : 'muted'}>
-            {PROFILE_STATUS_LABELS[profile.personResolutionStatus]}
-          </Badge>
-          {profile.linkBasis === 'legacy_yandex_link' && <Badge tone="muted">по прежней связи</Badge>}
-          {profile.linkContradiction && <Badge tone="bad">профиль привязан к другому контакту</Badge>}
-        </div>
-        <div className="mt-0.5 text-[13px] text-[#64748B]">
-          {profile.fullName}
-          {profile.licence ? ` · ВУ ${profile.licence}` : ''}
-          {profile.currentStatus || profile.workStatus ? ` · ${profile.currentStatus ?? profile.workStatus}` : ''}
-          {profile.legalRole ? ` · ${profile.legalRole}` : ''}
-          {profile.dismissedAt ? ` · уволен ${formatDate(profile.dismissedAt) ?? ''}` : ''}
-          {stale ? ' · данные источника устарели' : ''}
-        </div>
-      </div>
-      <span className="text-[12px] text-[#64748B]">{formatDate(profile.lastObservedAt) ?? ''}</span>
-    </Row>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-left">
+        <thead>
+          <tr className="bg-[#F1F5FD] text-[13px] text-[#64748B]">
+            <th className="px-4 py-2 font-medium">Телефон</th>
+            <th className="px-4 py-2 font-medium">Парк</th>
+            <th className="px-4 py-2 font-medium">Занятость</th>
+            <th className="px-4 py-2 font-medium">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {profiles.map(profile => {
+            const status = profileStatus(profile)
+            return (
+              <tr key={profile.driverId} className="border-b border-[#E4ECFC] last:border-b-0 text-[14px] text-[#0F172A] align-top">
+                <td className="px-4 py-3 whitespace-nowrap">{profile.phone ? formatContactPhone(profile.phone) ?? profile.phone : '—'}</td>
+                <td className="px-4 py-3">
+                  <Link href={`/drivers/${encodeURIComponent(profile.driverId)}`} className="font-medium hover:text-[#2AABEE]">
+                    {profile.parkName ?? (profile.externalParkId ? `Парк ${profile.externalParkId}` : 'Парк не указан')}
+                  </Link>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {profile.isMainDriver && <Badge tone="muted">основной профиль</Badge>}
+                    <Badge tone={profile.personResolutionStatus === 'operator_confirmed' ? 'ok' : profile.personResolutionStatus === 'conflict' ? 'bad' : 'muted'}>
+                      {PROFILE_STATUS_LABELS[profile.personResolutionStatus]}
+                    </Badge>
+                    {profile.linkBasis === 'legacy_yandex_link' && <Badge tone="muted">по прежней связи</Badge>}
+                    {profile.linkContradiction && <Badge tone="bad">профиль привязан к другому контакту</Badge>}
+                  </div>
+                  <div className="mt-1 text-[12px] text-[#64748B]">
+                    {profile.fullName}
+                    {profile.licence ? ` · ВУ ${profile.licence}` : ''}
+                    {profile.sourceFreshness === 'stale' || profile.sourceState === 'stale' || profile.sourceState === 'failed' ? ' · данные источника устарели' : ''}
+                  </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">{employmentLabel(profile)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2">
+                    {status.tone !== 'other' && <span className={`h-2 w-2 rounded-full ${status.tone === 'active' ? 'bg-[#2AABEE]' : 'bg-[#DC2626]'}`} aria-hidden="true" />}
+                    {status.text}
+                    {status.tone === 'dismissed' && profile.dismissedAt ? <span className="text-[12px] text-[#64748B]">{formatDate(profile.dismissedAt)}</span> : null}
+                  </span>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
-function AccountRow({ account, conversation }: { account: ContactPersonCardAccountV1; conversation: ContactPersonCardConversationV1 | undefined }) {
-  const title = account.displayName ?? (account.username ? `@${account.username}` : account.externalId)
-  const reach = REACHABILITY_LABELS[account.reachabilityStatus]
+const MESSENGER_CHANNELS = ['whatsapp', 'telegram', 'max'] as const
+
+/** WhatsApp ids are phone numbers (79991234567@c.us); show them as one. */
+function accountLabel(account: { externalId: string; username: string | null; displayName: string | null; linkedPhoneId: string | null }, channel: string, phones: Map<string, string>): string {
+  if (account.linkedPhoneId && phones.has(account.linkedPhoneId)) return formatContactPhone(phones.get(account.linkedPhoneId)!) ?? phones.get(account.linkedPhoneId)!
+  if (account.username) return `@${account.username}`
+  if (channel === 'whatsapp') {
+    const digits = account.externalId.replace(/@.*$/u, '')
+    if (/^\d{10,15}$/u.test(digits)) return formatContactPhone(`+${digits}`) ?? `+${digits}`
+  }
+  return account.displayName ?? account.externalId
+}
+
+/**
+ * Block 2 rows: every stored account of the person (several per messenger
+ * when they exist, former ones included), then every current phone × messenger
+ * the person has no account on yet, as «не проверен». Presence is what the
+ * existing reachability check persisted; the bot column waits for Telegram's
+ * stored-link read and «Для связи» for Messaging's preference, so both say they
+ * are unknown rather than guess.
+ */
+function messengerRows(view: ContactPersonCardViewV1): MessengerRowV1[] {
+  const { card, conversations } = view
+  const phones = new Map(card.phones.map(phone => [phone.phoneId, phone.phone]))
+  const conversationByChannel = new Map(conversations.map(conversation => [conversation.channel, conversation]))
+  const rows: MessengerRowV1[] = []
+  const channelOrder = (channel: string) => { const index = (MESSENGER_CHANNELS as readonly string[]).indexOf(channel); return index < 0 ? 99 : index }
+  const channels = [...card.channels].sort((a, b) => channelOrder(a.channel) - channelOrder(b.channel))
+  for (const channel of channels) {
+    const active = channel.accounts.filter(account => account.isActive)
+    const conversation = conversationByChannel.get(channel.channel)
+    const messenger = (MESSENGER_CHANNELS as readonly string[]).includes(channel.channel)
+    for (const account of [...active, ...channel.accounts.filter(account => !account.isActive)]) {
+      const conflicted = account.conflictState === 'conflicted'
+      rows.push({
+        key: `identity:${account.identityId}`,
+        identityId: account.identityId,
+        phoneId: account.linkedPhoneId,
+        channel: channel.channel,
+        channelLabel: channelLabel(channel.channel),
+        account: accountLabel(account, channel.channel, phones),
+        reachability: account.reachabilityStatus,
+        bot: channel.channel === 'telegram' ? 'unknown' : 'not_applicable',
+        preference: null,
+        // With one active account the channel's conversation is that account's; otherwise the server finds the exact one.
+        conversationId: account.isActive && active.length === 1 && conversation ? conversation.primaryConversationId : null,
+        channelTab: Object.hasOwn(MESSENGER_CHANNEL_TABS, channel.channel) ? MESSENGER_CHANNEL_TABS[channel.channel] : null,
+        writable: messenger && account.isActive && !conflicted,
+        note: conflicted ? 'конфликт аккаунта — сначала разберите в «Сообщениях»' : account.isActive ? null : 'прежний аккаунт',
+      })
+    }
+  }
+  for (const phone of card.phones) {
+    if (!phone.isActive || phone.lifecycle !== 'current') continue
+    for (const channel of MESSENGER_CHANNELS) {
+      const hasAccount = card.channels.some(entry => entry.channel === channel && entry.accounts.some(account => account.isActive && account.linkedPhoneId === phone.phoneId))
+      if (hasAccount) continue
+      rows.push({
+        key: `phone:${phone.phoneId}:${channel}`,
+        identityId: null,
+        phoneId: phone.phoneId,
+        channel,
+        channelLabel: channelLabel(channel),
+        account: formatContactPhone(phone.phone) ?? phone.phone,
+        reachability: 'unknown',
+        bot: channel === 'telegram' ? 'unknown' : 'not_applicable',
+        preference: null,
+        conversationId: null,
+        channelTab: MESSENGER_CHANNEL_TABS[channel],
+        writable: false,
+        note: null,
+      })
+    }
+  }
+  return rows.sort((a, b) => channelOrder(a.channel) - channelOrder(b.channel))
+}
+
+const LINK_EVENT_TEXT: Record<ContactPersonCardLinkEventV1['kind'], string> = {
+  contacts_merged: 'Контакты объединены',
+  contacts_unmerged: 'Объединение отменено',
+  merge_recovered: 'Объединение восстановлено',
+  phone_added_or_verified: 'Телефон добавлен или подтверждён',
+  phone_made_primary: 'Телефон сделан основным',
+  phone_removed: 'Телефон отвязан',
+  phone_state_changed: 'Изменено состояние телефона',
+  identity_attached_to_phone: 'Аккаунт мессенджера привязан к номеру',
+  driver_profile_confirmed: 'Профиль Яндекс привязан к человеку',
+  communication_policy_changed: 'Изменены ограничения связи',
+}
+const POLICY_DETAIL_TEXT: Record<string, string> = {
+  deny_all: 'запрещены все обращения', deny_message_voice: 'запрещены звонки и сообщения', deny_message: 'запрещены сообщения', deny_voice: 'запрещены звонки', none: 'ограничения сняты',
+}
+const CONFIRMATION_DETAIL_TEXT: Record<string, string> = {
+  confirmed: '', needs_reconciliation: 'требует сверки', contradicted: 'противоречие', revoked: 'отозвано',
+}
+
+function actorText(event: ContactPersonCardLinkEventV1): string | null {
+  if (event.actor.kind === 'staff') return 'сотрудник'
+  if (event.actor.kind === 'integration_admin') return 'администратор интеграций'
+  if (event.actor.kind === 'system') return 'система'
+  return null
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function HistoryList({ events }: { events: ContactPersonCardLinkEventV1[] }) {
+  if (events.length === 0) return <Empty>Изменения связей пока не записаны.</Empty>
   return (
-    <Row>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] font-medium text-[#0F172A] truncate">{title}</span>
-          {!account.isActive && <Badge tone="muted">неактивный</Badge>}
-          {account.conflictState === 'conflicted' && <Badge tone="bad">конфликт</Badge>}
-          {account.source === 'manual' && <Badge tone="muted">привязан вручную</Badge>}
-        </div>
-        <div className="mt-0.5 text-[13px] text-[#64748B] truncate">
-          {account.username && account.displayName ? `@${account.username} · ` : ''}
-          id {account.externalId}
-          {account.aliasCount > 0 ? ` · алиасов: ${account.aliasCount}` : ''}
-          {reach ? ` · ${reach}` : ''}
-        </div>
-      </div>
-      {account.isActive && conversation && (
-        <a href={messengerHref(conversation)} className="text-[13px] font-medium text-[#2AABEE] whitespace-nowrap">
-          Переписка
-        </a>
-      )}
-    </Row>
+    <ul>
+      {events.map((event, index) => {
+        const detail = event.kind === 'communication_policy_changed' ? POLICY_DETAIL_TEXT[event.detail ?? ''] ?? null
+          : event.kind === 'driver_profile_confirmed' ? CONFIRMATION_DETAIL_TEXT[event.detail ?? ''] || null : null
+        const actor = actorText(event)
+        return (
+          <li key={`${event.kind}-${event.at}-${index}`} className="flex flex-wrap items-center gap-2 border-b border-[#E4ECFC] px-4 py-2.5 last:border-b-0 text-[14px] text-[#0F172A]">
+            <span>{LINK_EVENT_TEXT[event.kind]}{event.subject ? ` ${formatContactPhone(event.subject) ?? event.subject}` : ''}{detail ? ` — ${detail}` : ''}</span>
+            {event.mode === 'manual' && <Badge tone="muted">ручное</Badge>}
+            {event.mode === 'automatic' && <Badge tone="muted">авто</Badge>}
+            {actor && <span className="text-[12px] text-[#64748B]">{actor}</span>}
+            <span className="ml-auto text-[12px] text-[#64748B]">{formatDateTime(event.at)}</span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
-function PhoneRow({ phone }: { phone: ContactPersonCardPhoneV1 }) {
+function ConflictLine({ conflict }: { conflict: ContactPersonCardConflictV1 }) {
+  return (
+    <li className="flex flex-wrap items-center gap-2 text-[14px] text-[#0F172A]">
+      <span>{CONFLICT_CLASS_LABELS[conflict.conflictClass] ?? conflict.conflictClass}</span>
+      <Badge tone={conflict.personBlocking ? 'bad' : 'warn'}>{conflict.personBlocking ? 'блокирует операции' : conflict.scope === 'transport_only' ? 'только транспорт' : 'открыт'}</Badge>
+      {conflict.channel && <Badge tone="muted">{channelLabel(conflict.channel)}</Badge>}
+      {conflict.otherContactId && <Link href={`/contacts/${encodeURIComponent(conflict.otherContactId)}`} className="text-[13px] text-[#2AABEE]">другой контакт</Link>}
+    </li>
+  )
+}
+
+function PhoneChip({ phone }: { phone: ContactPersonCardPhoneV1 }) {
   const lifecycle = PHONE_LIFECYCLE_LABELS[phone.lifecycle]
   const trust = PHONE_TRUST_LABELS[phone.trust]
   return (
-    <Row>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] font-medium text-[#0F172A]">{formatContactPhone(phone.phone) ?? phone.phone}</span>
-          {phone.isPrimary && <Badge tone="muted">основной</Badge>}
-          {lifecycle && <Badge tone={phone.lifecycle === 'current' ? 'ok' : 'muted'}>{lifecycle}</Badge>}
-          {phone.resolutionState === 'shared' && <Badge tone="warn">используется другим контактом</Badge>}
-          {phone.resolutionState === 'disputed' && <Badge tone="bad">спорный</Badge>}
-        </div>
-        <div className="mt-0.5 text-[13px] text-[#64748B]">
-          {trust}{trust && phone.verifiedAt ? ` · ${formatDate(phone.verifiedAt)}` : ''}
-        </div>
-      </div>
-    </Row>
-  )
-}
-
-function ConflictRow({ conflict }: { conflict: ContactPersonCardConflictV1 }) {
-  return (
-    <Row>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[15px] text-[#0F172A]">{CONFLICT_CLASS_LABELS[conflict.conflictClass] ?? conflict.conflictClass}</span>
-          <Badge tone={conflict.personBlocking ? 'bad' : 'warn'}>{conflict.personBlocking ? 'блокирует операции' : conflict.scope === 'transport_only' ? 'только транспорт' : 'открыт'}</Badge>
-          {conflict.channel && <Badge tone="muted">{channelLabel(conflict.channel)}</Badge>}
-        </div>
-        <div className="mt-0.5 text-[13px] text-[#64748B]">
-          {formatDate(conflict.detectedAt) ?? ''}
-          {conflict.otherContactId ? <> · другой контакт: <Link href={`/contacts/${encodeURIComponent(conflict.otherContactId)}`} className="text-[#2AABEE]">{conflict.otherContactId}</Link></> : null}
-        </div>
-      </div>
-    </Row>
+    <span className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-[#E4ECFC] px-2 py-1 text-[13px] text-[#0F172A]">
+      {formatContactPhone(phone.phone) ?? phone.phone}
+      {phone.isPrimary && <Badge tone="muted">основной</Badge>}
+      {lifecycle && phone.lifecycle !== 'current' && <Badge tone="muted">{lifecycle}</Badge>}
+      {phone.resolutionState === 'shared' && <Badge tone="warn">используется другим контактом</Badge>}
+      {phone.resolutionState === 'disputed' && <Badge tone="bad">спорный</Badge>}
+      {trust && <span className="text-[12px] text-[#64748B]">{trust}</span>}
+    </span>
   )
 }
 
 export default function PersonCardView({ view }: { view: ContactPersonCardViewV1 }) {
   const { card, driverProfiles, conversations, partial } = view
   const confirmation = CONFIRMATION_LABELS[card.personConfirmation.state]
-  const conversationByChannel = new Map(conversations.map(conversation => [conversation.channel, conversation]))
   const openConflicts = card.conflicts.filter(conflict => conflict.status === 'open')
+  const rows = messengerRows(view)
+  const activeAccounts = card.channels.reduce((sum, channel) => sum + channel.accounts.filter(account => account.isActive).length, 0)
+  const currentPhones = card.phones.filter(phone => phone.isActive && phone.lifecycle !== 'removed' && phone.lifecycle !== 'superseded')
+  const anyActive = driverProfiles.some(profile => profileStatus(profile).tone === 'active')
+  const cardConversations: CardConversationV1[] = conversations.map(conversation => ({
+    channel: conversation.channel,
+    channelLabel: channelLabel(conversation.channel),
+    conversationId: conversation.primaryConversationId,
+    channelTab: Object.hasOwn(MESSENGER_CHANNEL_TABS, conversation.channel) ? MESSENGER_CHANNEL_TABS[conversation.channel] : null,
+    count: conversation.conversationCount,
+  }))
   return (
-    <div className="space-y-4 max-w-[860px]">
-      <header className="rounded-xl border border-[#E4ECFC] bg-white px-4 py-4">
-        <h1 className="text-[20px] font-semibold text-[#0F172A]">{card.displayName}</h1>
-        {card.primaryPhone && <div className="mt-0.5 text-[15px] text-[#64748B]">{card.primaryPhone}</div>}
+    <div className="w-full space-y-4">
+      <header className="rounded-xl border border-[#E4ECFC] bg-white px-5 py-4">
+        <h1 className="text-[22px] font-semibold text-[#0F172A]">{card.displayName}</h1>
         <div className="mt-2 flex flex-wrap gap-2">
+          {anyActive && <Badge tone="ok">Активный водитель</Badge>}
           <Badge tone={confirmation.tone}>{confirmation.text}</Badge>
+          <Badge tone="muted">{driverProfiles.length} {pluralRu(driverProfiles.length, 'профиль', 'профиля', 'профилей')}</Badge>
+          <Badge tone="muted">{currentPhones.length} {pluralRu(currentPhones.length, 'телефон', 'телефона', 'телефонов')}</Badge>
+          <Badge tone="muted">{activeAccounts} {pluralRu(activeAccounts, 'мессенджер', 'мессенджера', 'мессенджеров')}</Badge>
           {card.personConfirmation.state === 'confirmed' && card.personConfirmation.confirmedPersonName && card.personConfirmation.confirmedPersonName !== card.displayName && (
             <Badge tone="muted">в парке: {card.personConfirmation.confirmedPersonName}</Badge>
           )}
-          {card.hasPersonBlockingConflict && <Badge tone="bad">есть блокирующий конфликт</Badge>}
           {card.automation.doNotMerge && <Badge tone="muted">объединение запрещено</Badge>}
           {card.automation.canonicalPinned && <Badge tone="muted">имя закреплено вручную</Badge>}
           {card.lineage.mergedFromCount > 0 && <Badge tone="muted">объединено записей: {card.lineage.mergedFromCount}</Badge>}
         </div>
+        {(openConflicts.length > 0 || card.candidates.length > 0) && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <div className="text-[13px] font-medium text-amber-800">Требует внимания</div>
+            <ul className="mt-1 space-y-1">
+              {openConflicts.map((conflict, index) => <ConflictLine key={`${conflict.origin}-${conflict.identityId ?? 'contact'}-${index}`} conflict={conflict} />)}
+              {card.candidates.map(candidate => (
+                <li key={candidate.contactId} className="text-[14px] text-[#0F172A]">
+                  Возможно тот же человек — не подтверждено ({CANDIDATE_BASIS_LABELS[candidate.basis] ?? candidate.basis}):{' '}
+                  <Link href={`/contacts/${encodeURIComponent(candidate.contactId)}`} className="text-[#2AABEE]">открыть карточку</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </header>
+
+      <Section title="Парки и занятость" count={driverProfiles.length}>
+        {partial.driverProfiles && <Empty>Данные парков сейчас недоступны. Показано только то, что известно Contacts.</Empty>}
+        {!partial.driverProfiles && driverProfiles.length === 0 && <Empty>Связанных водительских профилей нет.</Empty>}
+        {!partial.driverProfiles && driverProfiles.length > 0 && <ParksTable profiles={driverProfiles} />}
+      </Section>
+
+      <Section title="Мессенджеры" count={activeAccounts}>
+        {partial.conversations && <Empty>Переписки сейчас недоступны: «Написать» откроет переписку через сервер.</Empty>}
+        <MessengersTable contactId={card.contactId} rows={rows} />
+      </Section>
 
       {/* Calling's own block: the server decides who may be called and how; the card only hosts it. */}
       <AiConversationPanel contactId={card.contactId} />
 
-      <Section title="Профили водителя и парки" count={driverProfiles.length}>
-        {partial.driverProfiles && <Empty>Данные парков сейчас недоступны. Показано только то, что известно Contacts.</Empty>}
-        {!partial.driverProfiles && driverProfiles.length === 0 && <Empty>Связанных водительских профилей нет.</Empty>}
-        {driverProfiles.map(profile => <DriverProfileRow key={profile.driverId} profile={profile} />)}
-      </Section>
-
-      <Section title="Аккаунты связи" count={card.channels.reduce((sum, channel) => sum + channel.accounts.length, 0)}>
-        {card.channels.length === 0 && <Empty>Аккаунтов мессенджеров не зафиксировано.</Empty>}
-        {partial.conversations && <Empty>Переписки сейчас недоступны; аккаунты показаны без перехода в чат.</Empty>}
-        {card.channels.map(channel => {
-          const active = channel.accounts.filter(account => account.isActive)
-          const inactive = channel.accounts.filter(account => !account.isActive)
-          const conversation = conversationByChannel.get(channel.channel)
-          return (
-            <div key={channel.channel}>
-              <div className="flex items-center justify-between px-4 h-[36px] bg-[#F1F5FD] text-[13px] font-medium text-[#64748B]">
-                <span>{channelLabel(channel.channel)}</span>
-                {conversation && (
-                  <span>{conversation.conversationCount}{conversation.truncated ? '+' : ''} {pluralRu(conversation.conversationCount, 'переписка', 'переписки', 'переписок')}</span>
-                )}
-              </div>
-              {active.length === 0 && <Empty>Активных аккаунтов нет.</Empty>}
-              {active.map(account => <AccountRow key={account.identityId} account={account} conversation={conversation} />)}
-              {inactive.length > 0 && (
-                <details className="border-t border-[#E4ECFC]">
-                  <summary className="cursor-pointer px-4 h-[44px] flex items-center text-[13px] text-[#64748B] hover:bg-[#F1F5FD]">
-                    Прежние аккаунты ({inactive.length})
-                  </summary>
-                  {inactive.map(account => <AccountRow key={account.identityId} account={account} conversation={undefined} />)}
-                </details>
-              )}
-            </div>
-          )
-        })}
-      </Section>
-
-      <Section title="Телефоны" count={card.phones.length}>
-        {card.phones.length === 0 && <Empty>Телефонов не зафиксировано.</Empty>}
-        {card.phones.map(phone => <PhoneRow key={phone.phoneId} phone={phone} />)}
-      </Section>
-
-      <Section title="Связи и история" count={openConflicts.length + card.candidates.length + card.lineage.mergeHistory.length}>
-        {card.candidates.length > 0 && (
-          <div>
-            <div className="px-4 h-[36px] flex items-center bg-[#F1F5FD] text-[13px] font-medium text-[#64748B]">Возможно тот же человек — не подтверждено</div>
-            {card.candidates.map(candidate => (
-              <Row key={candidate.contactId}>
-                <div className="min-w-0 flex-1">
-                  <Link href={`/contacts/${encodeURIComponent(candidate.contactId)}`} className="text-[15px] font-medium text-[#2AABEE]">Контакт {candidate.contactId}</Link>
-                  <div className="mt-0.5 text-[13px] text-[#64748B]">{CANDIDATE_BASIS_LABELS[candidate.basis] ?? candidate.basis}. Подтверждение — только через существующую проверку в «Сообщениях».</div>
-                </div>
-              </Row>
-            ))}
+      <Section title="Действия и управление">
+        {currentPhones.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-4 pt-1">
+            {card.phones.map(phone => <PhoneChip key={phone.phoneId} phone={phone} />)}
           </div>
         )}
-        {openConflicts.length > 0 && (
-          <div>
-            <div className="px-4 h-[36px] flex items-center bg-[#F1F5FD] text-[13px] font-medium text-[#64748B]">Открытые конфликты</div>
-            {openConflicts.map((conflict, index) => <ConflictRow key={`${conflict.origin}-${conflict.identityId ?? 'contact'}-${index}`} conflict={conflict} />)}
-          </div>
-        )}
-        {card.lineage.mergeHistory.length > 0 && (
-          <div>
-            <div className="px-4 h-[36px] flex items-center bg-[#F1F5FD] text-[13px] font-medium text-[#64748B]">История объединений</div>
-            {card.lineage.mergeHistory.map(event => (
-              <Row key={event.mergeId}>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[15px] text-[#0F172A]">
-                    {event.action === 'merge' ? 'Объединение' : 'Разъединение'} · {Object.hasOwn(MERGE_REASON_LABELS, event.reason) ? MERGE_REASON_LABELS[event.reason] : event.reason}
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-[#64748B]">
-                    {formatDate(event.createdAt) ?? ''} · {event.mergedBy} · {event.mergedContactId} → {event.survivorContactId}
-                  </div>
-                </div>
-              </Row>
-            ))}
-          </div>
-        )}
-        {openConflicts.length === 0 && card.candidates.length === 0 && card.lineage.mergeHistory.length === 0 && (
-          <Empty>Конфликтов, кандидатов и объединений не зафиксировано.</Empty>
-        )}
+        <CardActions contactId={card.contactId} displayName={card.displayName} conversations={cardConversations} />
+      </Section>
+
+      <Section title="История связей" count={card.linkHistory.length}>
+        <HistoryList events={card.linkHistory} />
       </Section>
     </div>
   )
