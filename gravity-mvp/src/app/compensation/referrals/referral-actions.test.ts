@@ -6,15 +6,18 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
  * What has to hold here is everything the browser is not allowed to decide:
  * an action refuses before any backend call unless the CRM manager session
  * admits the request, the search and the person card refuse unless the
- * integration-admin session verifies, and every write refuses unless a signed
- * staff session stands behind it. The unsigned crm_user_id cookie and the
- * role it names are never enough to write, and a write carries the authority
- * the server resolved, never one the browser sent. The ledger rules
+ * integration-admin session verifies, and every write refuses unless Identity
+ * Access's Staff Session of a confirmed Администратор stands behind it. The
+ * unsigned crm_user_id cookie and the role it names are never enough to
+ * write, and a write carries the authority the server resolved, never one the
+ * browser sent. The ledger rules
  * themselves are proved against PostgreSQL.
  */
 
 const queryCurrentUserV1 = vi.fn()
 const getIntegrationAdminPrincipal = vi.fn()
+const getStaffSessionPrincipalV1 = vi.fn()
+const listUserIdentitiesV1 = vi.fn()
 const resolveCashStaffAuthorityV1 = vi.fn()
 const revalidatePath = vi.fn()
 const backend = {
@@ -32,6 +35,10 @@ vi.mock('@/modules/identity-access/public/v1/identity-actions', () => ({
 }))
 vi.mock('@/modules/identity-access/public/v1', () => ({
     getIntegrationAdminPrincipal: () => getIntegrationAdminPrincipal(),
+    getStaffSessionPrincipalV1: () => getStaffSessionPrincipalV1(),
+}))
+vi.mock('@/modules/identity-access/public/v1/user-directory', () => ({
+    listUserIdentitiesV1: () => listUserIdentitiesV1(),
 }))
 vi.mock('@/modules/fleet-operations/public/v1', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
@@ -67,12 +74,23 @@ const ADMIN_PRINCIPAL = { id: 'identity-access:integration-admin-session', kind:
 
 /** The authority the server resolves from a verified signed session. */
 const SERVER_AUTHORITY = {
-    principalId: 'identity-access:integration-admin-session',
-    operatorLabel: 'Администратор CRM',
-    sessionId: 'sid-binding-server',
+    principalId: 'staff:user-1',
+    operatorLabel: 'Аня Менеджер',
+    sessionId: 'staff_session:server',
     authenticatedAt: new Date('2026-11-07T10:00:00Z'),
     capabilities: ['cash.referral.qualify', 'cash.access.manage'],
 }
+
+/** Identity Access's verified Staff Session for MANAGER_USER, as getStaffSessionPrincipalV1 answers it. */
+const STAFF_PRINCIPAL = {
+    kind: 'staff_session',
+    userId: 'user-1',
+    role: 'Администратор',
+    sid: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00',
+    issuedAt: new Date(Date.now() - 60_000),
+    expiresAt: new Date(Date.now() + 3_600_000),
+}
+const OTHER_USER = { id: 'user-2', firstName: 'Олег', lastName: 'Руководитель', role: 'Руководитель', status: 'Активен' }
 
 /** What a forged browser request might add: none of it may reach the backend. */
 const FORGED = {
@@ -102,6 +120,8 @@ beforeEach(() => {
     vi.clearAllMocks()
     queryCurrentUserV1.mockResolvedValue({ user: MANAGER_USER })
     getIntegrationAdminPrincipal.mockResolvedValue(ADMIN_PRINCIPAL)
+    getStaffSessionPrincipalV1.mockResolvedValue(null)
+    listUserIdentitiesV1.mockResolvedValue([MANAGER_USER, OTHER_USER])
     resolveCashStaffAuthorityV1.mockImplementation(() => realResolveCashStaffAuthorityV1())
     backend.cashReferralManagerSearchV1.mockResolvedValue({ status: 'ok', candidates: [], truncated: false })
     backend.cashReferralManagerRecordInvitationV1.mockResolvedValue({ status: 'recorded', attributionId: 'inv-1' })
@@ -133,7 +153,7 @@ describe('without a verified integration-admin session', () => {
 })
 
 describe('while no signed staff session exists', () => {
-    it('the resolver refuses, whatever the cookie and the role say', async () => {
+    it('the resolver refuses, whatever the cookie, the role and the integration-admin session say', async () => {
         expect(await realResolveCashStaffAuthorityV1()).toEqual({ ok: false, refusal: 'staff_session_unavailable' })
     })
 
@@ -181,5 +201,56 @@ describe('with a signed staff session', () => {
         backend.cashReferralManagerRecordInvitationV1.mockResolvedValue({ status: 'refused', reason: 'invitee_already_attributed', inviterContactId: 'contact-C', inviterName: 'Петров Пётр' })
         expect(await recordReferralInvitation({ inviterContactId: 'contact-A', inviteeContactId: 'contact-B', comment: 'Пригласил лично', requestId: 'req-1' }))
             .toEqual({ status: 'refused', reason: 'invitee_already_attributed', detail: 'Петров Пётр' })
+    })
+})
+
+describe('the shipped resolver over Identity Access\'s Staff Session', () => {
+    const grant = () => grantCashAccess({ contactId: 'contact-A', basis: 'manager_decision', referralAttributionId: null, comment: 'Решение менеджера', requestId: 'req-3', ...FORGED })
+
+    it('writes as the verified Администратор, named by the directory, whatever the browser sent', async () => {
+        getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
+        expect(await grant()).toEqual({ status: 'done', code: 'granted' })
+        const authority = backend.cashAccessManagerGrantV1.mock.calls[0][0].authority
+        expect(authority).toMatchObject({ principalId: 'staff:user-1', operatorLabel: 'Аня Менеджер', authenticatedAt: STAFF_PRINCIPAL.issuedAt, capabilities: ['cash.referral.qualify', 'cash.access.manage'] })
+        expect(authority.sessionId).toMatch(/^staff_session:[0-9a-f]{64}$/u)
+        expect(authority.principalId).not.toBe(FORGED.authority.principalId)
+    })
+
+    it('attributes the write to the session\'s employee, not to the one crm_user_id names', async () => {
+        // The cookie selects user-1; the verified session is user-2's (a Руководитель).
+        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, userId: 'user-2', role: 'Руководитель' })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_role_not_allowed' })
+        expectNoBackendCall()
+        // And an Администратор session of user-2 writes as user-2.
+        listUserIdentitiesV1.mockResolvedValue([MANAGER_USER, { ...OTHER_USER, role: 'Администратор' }])
+        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, userId: 'user-2' })
+        expect(await grant()).toEqual({ status: 'done', code: 'granted' })
+        expect(backend.cashAccessManagerGrantV1.mock.calls[0][0].authority).toMatchObject({ principalId: 'staff:user-2', operatorLabel: 'Олег Руководитель' })
+    })
+
+    it.each(writes)('%s refuses a Менеджер\'s verified session before any backend call', async (_name, call) => {
+        listUserIdentitiesV1.mockResolvedValue([{ ...MANAGER_USER, role: 'Менеджер' }])
+        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, role: 'Менеджер' })
+        expect(await call()).toEqual({ status: 'refused', reason: 'staff_role_not_allowed' })
+        expectNoBackendCall()
+    })
+
+    it('refuses when the session store or the directory does not answer, and never falls back', async () => {
+        getStaffSessionPrincipalV1.mockRejectedValue(new Error('staff credential store unavailable'))
+        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_unavailable' })
+        getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
+        listUserIdentitiesV1.mockRejectedValue(new Error('registry unreadable'))
+        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_unavailable' })
+        expectNoBackendCall()
+    })
+
+    it('refuses a session the directory does not name as verified, or one past its expiry', async () => {
+        getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
+        listUserIdentitiesV1.mockResolvedValue([{ ...MANAGER_USER, status: 'Отключен' }])
+        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_identity_mismatch' })
+        listUserIdentitiesV1.mockResolvedValue([MANAGER_USER])
+        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, expiresAt: new Date(Date.now() - 1) })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_invalid' })
+        expectNoBackendCall()
     })
 })

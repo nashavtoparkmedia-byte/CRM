@@ -14,15 +14,21 @@
 import { prisma } from '@/lib/prisma'
 import {
     contactOwnershipBusyResultV1,
+    type ContactLookupRankClassV1,
     isContactConfirmedMainDriverV1,
     resolveContactLineageV1,
     searchContactsV1,
 } from '@/modules/contacts/public/v1'
 
 import {
+    CASH_REFERRAL_FULL_LOOKUP_CLASSES_V1,
+    cashReferralLookupFullMatchV1,
     type CashReferralLineageReadV1,
     type CashReferralManagerProfileV1,
 } from './cash-referral-manager'
+
+// The full-match classes Cash trusts must be classes ContactLookup.v1 declares; a rename there fails here.
+CASH_REFERRAL_FULL_LOOKUP_CLASSES_V1 satisfies readonly ContactLookupRankClassV1[]
 
 interface ProfileRow {
     id: string
@@ -57,10 +63,10 @@ export const legacyPrismaCashReferralManagerReadsV1 = {
      * Who a name or a phone belongs to, as Contacts answers it for every
      * module: live canonical Contacts only, in ContactLookup.v1's own order.
      */
-    async lookupContacts(query: string, limit: number): Promise<{ contacts: { contactId: string; displayTitle: string }[]; truncated: boolean }> {
+    async lookupContacts(query: string, limit: number): Promise<{ contacts: { contactId: string; displayTitle: string; fullMatch: boolean }[]; truncated: boolean }> {
         const result = await searchContactsV1({ query, limit })
         return {
-            contacts: result.items.map((item) => ({ contactId: item.contactId, displayTitle: item.displayTitle })),
+            contacts: result.items.map((item) => ({ contactId: item.contactId, displayTitle: item.displayTitle, fullMatch: cashReferralLookupFullMatchV1(item.match) })),
             truncated: result.truncated,
         }
     },
