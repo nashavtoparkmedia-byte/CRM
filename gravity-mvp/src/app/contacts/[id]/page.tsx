@@ -23,8 +23,12 @@ export default async function ContactPersonPage({ params }: { params: { id: stri
       <PageContainer>
         <BackLink />
         <div className="rounded-xl border border-[#E4ECFC] bg-[#F1F5FD] p-4 text-[15px] text-[#0F172A]">
-          Нет доступа к карточке человека. Нужна подтверждённая сессия администратора интеграций.{' '}
-          <a href={`/settings/integrations/access?next=${encodeURIComponent(`/contacts/${id}`)}`} className="font-medium text-[#2AABEE]">Войти</a>
+          Нет доступа к карточке человека. Войдите в CRM со своим паролем.{' '}
+          <a href="/login" className="font-medium text-[#2AABEE]">Войти</a>
+          <div className="mt-2 text-[13px] text-[#64748B]">
+            Пока личные пароли не включены, работает{' '}
+            <a href={`/settings/integrations/access?next=${encodeURIComponent(`/contacts/${id}`)}`} className="text-[#2AABEE]">вход администратора интеграций</a>.
+          </div>
         </div>
       </PageContainer>
     )

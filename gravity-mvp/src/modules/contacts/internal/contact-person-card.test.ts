@@ -153,6 +153,18 @@ describe('readContactPersonCardV1', () => {
     expect(reads).toEqual([])
   })
 
+  it('carries the ВУ view the authority granted, and the full view only on an explicit grant', async () => {
+    const grant = (licenceView?: 'full' | 'last4'): ContactPersonCardAuthorityPortV1 => ({
+      async currentPrincipal() { return licenceView === undefined ? { kind: 'staff_session' } : { kind: 'staff_session', licenceView } },
+      async mayReadContact() { return true },
+    })
+    expect(await handler(source(), grant('full'))(query())).toMatchObject({ status: 'confirmed', licenceView: 'full' })
+    expect(await handler(source(), grant('last4'))(query())).toMatchObject({ status: 'confirmed', licenceView: 'last4' })
+    // A principal without a view, or with an unknown one, never gets the full ВУ.
+    expect(await handler(source(), grant())(query())).toMatchObject({ status: 'confirmed', licenceView: 'last4' })
+    expect(await handler(source(), grant('everything' as never))(query())).toMatchObject({ status: 'confirmed', licenceView: 'last4' })
+  })
+
   it('refuses a padded id and reads nothing', async () => {
     const reads: string[] = []
     await expect(handler(source(), admin, reads)(query(' c-1'))).rejects.toThrow(/exact/)

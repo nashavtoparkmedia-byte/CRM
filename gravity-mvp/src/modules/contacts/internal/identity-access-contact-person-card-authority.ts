@@ -1,28 +1,28 @@
 // The production authority of the ContactPersonCardQuery.v1 read model.
 //
-// As for the CC-1 conversation card, the only principal this repository can
-// verify server-side for a CRM read today is Identity Access's signed
-// integration-admin session, built after the HMAC session is verified and
-// deliberately ignoring crm_user_id (an unsigned UI selector). It administers
-// the whole CRM and has no fleet restriction anywhere in the repository, so it
-// may read every Contact. This is the engineering/acceptance gate of phase 1:
-// an ordinary manager's access arrives with Staff Session v1 as a further
-// principal kind admitted here, never by loosening this set from a composition.
-import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
+// Its principal is Contacts' own read-authority answer (ContactReadAuthorityQuery.v1,
+// D2): a verified Staff Session employee of any reader role or, transitionally
+// until Staff Session is enforced in production, the integration-admin session.
+// Neither carries a fleet restriction anywhere in the repository, so either may
+// read every Contact. crm_user_id, cookies and headers are never read here; the
+// ВУ view travels with the principal so the composition hands it to Fleet.
+import { resolveContactReadAuthorityFromIdentityAccessV1 } from './identity-access-contact-read-authority'
 import type { ContactPersonCardAuthorityPortV1, ContactPersonCardPrincipalV1 } from './contact-person-card'
 
-const UNRESTRICTED_PRINCIPAL_KINDS: ReadonlySet<string> = new Set(['integration_admin_session'])
+const READER_PRINCIPAL_KINDS: ReadonlySet<string> = new Set(['staff_session', 'integration_admin_session'])
 
-function isUnrestricted(principal: ContactPersonCardPrincipalV1): boolean {
-  return UNRESTRICTED_PRINCIPAL_KINDS.has(principal.kind)
+function isReader(principal: ContactPersonCardPrincipalV1): boolean {
+  return READER_PRINCIPAL_KINDS.has(principal.kind)
 }
 
 export const identityAccessContactPersonCardAuthorityV1: ContactPersonCardAuthorityPortV1 = {
   async currentPrincipal() {
-    const principal = await getIntegrationAdminPrincipal()
-    return principal === null ? null : { kind: principal.kind }
+    const authority = await resolveContactReadAuthorityFromIdentityAccessV1()
+    return authority.decision === 'allow'
+      ? { kind: authority.principal.kind, licenceView: authority.licenceView }
+      : null
   },
   async mayReadContact(principal) {
-    return isUnrestricted(principal)
+    return isReader(principal)
   },
 }

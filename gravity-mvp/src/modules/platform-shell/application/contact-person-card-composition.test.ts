@@ -41,7 +41,7 @@ describe('loadContactPersonCardV1', () => {
   it('asks Fleet and Messaging only after Contacts confirmed, for the whole lineage, and marks the main driver', async () => {
     const calls: string[] = []
     const load = createContactPersonCardCompositionV1({
-      async readContactPersonCard() { calls.push('contacts'); return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readContactPersonCard() { calls.push('contacts'); return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts(query) {
         calls.push('fleet')
         expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v1', subjects: [
@@ -82,7 +82,7 @@ describe('loadContactPersonCardV1', () => {
 
   it('counts a conversation once when Messaging answers a merged-away id with the survivor\'s conversations too', async () => {
     const load = createContactPersonCardCompositionV1({
-      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts() { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [] } },
       async readContactConversations() {
         // The real ContactConversationsQuery.v1: the canonical id gets its own chats, the
@@ -112,7 +112,7 @@ describe('loadContactPersonCardV1', () => {
 
   it('decides a link contradiction against the whole lineage and keeps the strongest link of a duplicated row', async () => {
     const load = createContactPersonCardCompositionV1({
-      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts() {
         return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1, entries: [
           // reached first through the canonical id by the legacy link, pointing at the merged-away lineage member: no contradiction
@@ -152,7 +152,7 @@ describe('loadContactPersonCardV1', () => {
 
   it('shows the card with a partial block when an enrichment read fails, never inventing rows', async () => {
     const load = createContactPersonCardCompositionV1({
-      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card() } },
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts() { throw new Error('fleet down') },
       async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [{ contactId: 'c-1', status: 'not_found' }, { contactId: 'c-old', status: 'not_found' }] } },
     })

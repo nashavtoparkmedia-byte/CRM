@@ -9,8 +9,11 @@
 // access before any Contact read, reads exactly the Contact asked for in one
 // snapshot and refuses any other; that the only database reader touches
 // Contacts-owned models by exact id in one REPEATABLE READ snapshot and never
-// writes; that the production authority comes only from Identity Access's signed
-// integration-admin principal and never from crm_user_id, a cookie or a header;
+// writes; that the production authority is Contacts' read authority
+// (ContactReadAuthorityQuery.v1, D2), fed only by Identity Access's verified
+// Staff Session and, transitionally, its signed integration-admin principal, in
+// an order where a staff cookie decides alone, and never by crm_user_id, a
+// cookie or a header read in Contacts;
 // that the platform composition reads Fleet and Messaging only after Contacts
 // confirmed; and that the capability and this control are declared where the
 // machinery reads them. It then runs the proofs that make these invariants
@@ -30,6 +33,9 @@ const CONTRACT_INDEX = 'gravity-mvp/src/contracts/contacts/v1/index.ts'
 const HANDLER = 'gravity-mvp/src/modules/contacts/internal/contact-person-card.ts'
 const ADAPTER = 'gravity-mvp/src/modules/contacts/internal/legacy-prisma-contact-person-card-source-adapter.ts'
 const AUTHORITY = 'gravity-mvp/src/modules/contacts/internal/identity-access-contact-person-card-authority.ts'
+const READ_AUTHORITY = 'gravity-mvp/src/modules/contacts/internal/identity-access-contact-read-authority.ts'
+const READ_DECISION = 'gravity-mvp/src/modules/contacts/public/v1/contact-read-authority.ts'
+const PEOPLE_PAGE = 'gravity-mvp/src/app/contacts/page.tsx'
 const APPLICATION = 'gravity-mvp/src/modules/contacts/application/contact-operations.ts'
 const COMPOSITION = 'gravity-mvp/src/modules/platform-shell/application/contact-person-card-composition.ts'
 const PAGE = 'gravity-mvp/src/app/contacts/[id]/page.tsx'
@@ -80,7 +86,7 @@ function assertContractShape() {
   assert.deepEqual(fieldNames(typeBody(contract, 'ContactPersonCardQueryV1')), ['contactId', 'contract'], 'the query accepts more than an exact Contact id')
   const statusBlock = contract.slice(contract.indexOf('export type ContactPersonCardStatusV1'), contract.indexOf('export type ContactPersonCardResultV1'))
   assert.deepEqual([...statusBlock.matchAll(/'(\w+)'/gu)].map((match) => match[1]), STATUSES, 'the answer states changed')
-  assert(/status: 'confirmed'; card: ContactPersonCardV1 \}/u.test(contract), 'confirmed no longer carries exactly the card')
+  assert(/status: 'confirmed'; card: ContactPersonCardV1; licenceView: 'full' \| 'last4' \}/u.test(contract), 'confirmed no longer carries exactly the card and its ВУ view')
   assert(/status: 'redirected'; canonicalContactId: string \}/u.test(contract), 'redirected no longer carries exactly the canonical id')
   assert(/status: Exclude<ContactPersonCardStatusV1, 'confirmed' \| 'redirected'> \}/u.test(contract), 'a non-confirmed answer may carry data')
   assert(contract.includes("key !== 'contract' && key !== 'contactId'"), 'the parser accepts fields beside the Contact id')
@@ -102,7 +108,9 @@ function assertHandlerProtocol() {
     "if (source.id !== contactId) return answer('refused')",
     "status: 'redirected', canonicalContactId: target",
     "if (source.isArchived === true) return answer('missing')",
-    "status: 'confirmed', card: buildContactPersonCardV1(source)",
+    "status: 'confirmed',",
+    'card: buildContactPersonCardV1(source),',
+    "licenceView: principal.licenceView === 'full' ? 'full' : 'last4',",
   ], 'the handler')
   assert(!CLIENT_IDENTITY.test(handler), 'the handler reads a client-held identity')
   assert(!WRITE_VOCABULARY.test(handler), 'the handler writes')
@@ -123,12 +131,32 @@ function assertReader() {
   assert(adapter.includes('take: 100'), 'the merge history read is unbounded')
 }
 
-/** 4. The authority: only Identity Access's verified integration-admin principal, never a client-held identity. */
+/** 4. The authority: Contacts' read authority over Identity Access's verified sessions, never a client-held identity. */
 function assertAuthority() {
   const authority = withoutComments(read(AUTHORITY))
-  assert(authority.includes("import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'"), 'the authority no longer comes from Identity Access')
-  assert(authority.includes("new Set(['integration_admin_session'])"), 'the set of unrestricted principals changed')
+  assert(authority.includes("import { resolveContactReadAuthorityFromIdentityAccessV1 } from './identity-access-contact-read-authority'"), 'the card authority is not Contacts\' read authority')
+  assert(authority.includes("new Set(['staff_session', 'integration_admin_session'])"), 'the set of reader principals changed')
+  assert(authority.includes("authority.decision === 'allow'"), 'the card authority admits a principal the read authority denied')
   assert(!CLIENT_IDENTITY.test(authority), 'the authority reads a client-held identity')
+  const feed = withoutComments(read(READ_AUTHORITY))
+  assert(feed.includes("import { getIntegrationAdminPrincipal, getStaffSessionPrincipalV1 } from '@/modules/identity-access/public/v1'"), 'the read authority is not fed by Identity Access')
+  assert(feed.includes("} from '@/modules/identity-access/public/v1/staff-session'"), 'the read authority does not read Staff Session state from Identity Access')
+  assert(!CLIENT_IDENTITY.test(feed), 'the read authority reads a client-held identity')
+  // A staff cookie decides alone: the admin session is read only after the staff
+  // branch has returned and the enforcement switch has been asked.
+  order(feed, [
+    'if (await hasStaffSessionCookieV1()) {',
+    'await getStaffSessionPrincipalV1()',
+    "staffCookie: 'present'",
+    'if (isStaffSessionEnforcedForRequestV1()) {',
+    'staffSessionEnforced: true',
+    'await getIntegrationAdminPrincipal()',
+  ], 'the read authority')
+  assert.equal((feed.match(/getIntegrationAdminPrincipal\(\)/gu) ?? []).length, 1, 'the admin session is read more than once')
+  const decision = withoutComments(read(READ_DECISION))
+  assert(!/from '@\/|from "@\//u.test(decision), 'the read decision is not pure')
+  assert(decision.includes("return role === 'Администратор' ? 'full' : 'last4'"), 'the full ВУ view is no longer Администратор-only')
+  assert(decision.includes("if (inputs.staffSessionEnforced === true) return deny('transitional_admin_read_disabled')"), 'the enforcement switch no longer ends the transitional admin read')
   const application = withoutComments(read(APPLICATION))
   assert(application.includes('authority: identityAccessContactPersonCardAuthorityV1'), 'the reader is not bound to the Identity Access authority')
   assert(application.includes('cardSource: legacyPrismaContactPersonCardSourcePortV1'), 'the reader is not bound to the Prisma source')
@@ -151,7 +179,11 @@ function assertComposition() {
   assert(page.includes("if (result.status === 'missing') notFound()"), 'a missing Contact is no longer a 404')
   assert(!CLIENT_IDENTITY.test(page), 'the page reads a client-held identity')
   const lookup = withoutComments(read(LOOKUP_ROUTE))
-  assert(lookup.includes('if (await getIntegrationAdminPrincipal() === null)'), 'the lookup route no longer requires the verified principal')
+  order(lookup, ['const authority = await resolveContactReadAuthorityV1()', "if (authority.decision !== 'allow') {", 'await searchContactsV1('], 'the lookup route')
+  assert(!CLIENT_IDENTITY.test(lookup), 'the lookup route reads a client-held identity')
+  const people = withoutComments(read(PEOPLE_PAGE))
+  order(people, ['const authority = await resolveContactReadAuthorityV1()', "authority.decision !== 'allow'", '<ContactsSearchClient />'], 'the «Люди» page')
+  assert(!CLIENT_IDENTITY.test(people), 'the «Люди» page reads a client-held identity')
 }
 
 /** 6. Declared where the machinery reads it. */
@@ -170,6 +202,9 @@ function runProofs() {
     'src/contracts/contacts/v1/contact-person-card-contracts.test.ts',
     'src/modules/contacts/internal/contact-person-card.test.ts',
     'src/modules/platform-shell/application/contact-person-card-composition.test.ts',
+    'src/modules/contacts/public/v1/contact-read-authority.test.ts',
+    'src/modules/contacts/internal/identity-access-contact-read-authority.test.ts',
+    'src/app/api/contacts/lookup/route.test.ts',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8', env: { ...process.env, CI: '1' } })
   assert.equal(vitest.status, 0, `the person card read model proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
   const passed = passingProofCount(vitest.stdout)
