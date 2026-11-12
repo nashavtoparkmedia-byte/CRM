@@ -14,8 +14,8 @@ import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messag
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchExternalConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V2, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1, type MessageDeliveryEvidenceV2 } from '@/contracts/messaging/v1'
+import { applyMessageDeliveryEvidenceV1, attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchExternalConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 import { canonicalWhatsAppIdentityExternalIdV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
@@ -395,6 +395,81 @@ function isProviderMessageIdTakenV1(error: unknown): boolean {
     // A channel message create sets no other caller-chosen unique field.
     if (target === undefined || target === null) return true
     return (Array.isArray(target) ? target : [target]).some(field => String(field).includes('externalId'))
+}
+
+/**
+ * P-B: what a WhatsApp ack proves about an own message. whatsapp-web.js
+ * MessageAck: -1 error, 0 pending, 1 server, 2 device, 3 read, 4 played.
+ * Pending and error prove nothing and are not evidence.
+ */
+const WA_ACK_EVIDENCE_V1: Readonly<Record<number, MessageDeliveryEvidenceV2>> = {
+    1: 'provider_ack',
+    2: 'device_receipt',
+    3: 'read_receipt',
+    4: 'read_receipt',
+}
+
+function whatsAppAckEvidenceV1(ack: unknown): MessageDeliveryEvidenceV2 | null {
+    return typeof ack === 'number' ? WA_ACK_EVIDENCE_V1[ack] ?? null : null
+}
+
+function isOwnWhatsAppMessageV1(msg: unknown): boolean {
+    const value = msg && typeof msg === 'object' ? msg as { fromMe?: unknown, id?: { fromMe?: unknown } } : null
+    return value?.fromMe === true || value?.id?.fromMe === true
+}
+
+// An ack can overtake the send's own write of its provider id; the row is
+// looked up again a few times before the evidence is given up.
+const WA_ACK_ROW_WAITS_MS = [0, 1500, 4000] as const
+
+/**
+ * Hands delivery evidence for one own WhatsApp message to Messaging's S2
+ * command, by its exact provider id only: the evidence is applied when it is
+ * stronger than what the row already proves, never by matching text, and never
+ * to a row that is not a WhatsApp outbound message. Never throws.
+ */
+async function applyWhatsAppDeliveryEvidenceV1(input: {
+    connectionId: string
+    providerMessageId: string
+    evidence: MessageDeliveryEvidenceV2
+    phase: 'ack' | 'echo' | 'sync'
+    waitForRow: boolean
+}): Promise<void> {
+    try {
+        for (const waitMs of input.waitForRow ? WA_ACK_ROW_WAITS_MS : [0]) {
+            if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs))
+            const row = await prisma.message.findUnique({
+                where: { externalId: input.providerMessageId },
+                select: { id: true, chatId: true, channel: true, direction: true },
+            })
+            if (!row) continue
+            if (row.channel !== 'whatsapp' || row.direction !== 'outbound') return
+            const settled = await applyMessageDeliveryEvidenceV1({
+                contract: PATCH_MESSAGE_DELIVERY_COMMAND_V2,
+                chatId: row.chatId,
+                channel: 'whatsapp',
+                providerMessageId: input.providerMessageId,
+                evidence: input.evidence,
+            })
+            opsLog(settled.outcome === 'refused' ? 'warn' : 'info', 'wa_delivery_evidence', {
+                connectionId: input.connectionId,
+                phase: input.phase,
+                evidence: input.evidence,
+                outcome: settled.outcome,
+                messageId: settled.messageId ?? undefined,
+                reason: settled.reason ?? undefined,
+            })
+            return
+        }
+        opsLog('info', 'wa_delivery_evidence_no_row', { connectionId: input.connectionId, phase: input.phase, evidence: input.evidence })
+    } catch (err: any) {
+        opsLog('warn', 'wa_delivery_evidence_failed', {
+            connectionId: input.connectionId,
+            phase: input.phase,
+            evidence: input.evidence,
+            error: err?.message ?? String(err),
+        })
+    }
 }
 
 async function admitWhatsAppProviderMessageV1(input: {
@@ -871,7 +946,7 @@ async function syncHistory(connectionId: string, client: Client) {
                 // Fetch messages FIRST — only create Chat rows if there's
                 // actually something to store. Previously chat.upsert ran
                 // before fetch, leaving ~97% of rows empty as UI ghosts.
-                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean }[] = []
+                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean; ack?: number }[] = []
                 const fetchedByJid = new Map<string, Message>()
                 let usedFallback = false
                 try {
@@ -886,6 +961,7 @@ async function syncHistory(connectionId: string, client: Client) {
                             fromMe: message.fromMe,
                             type: message.type,
                             hasMedia: !!message.hasMedia,
+                            ack: typeof message.ack === 'number' ? message.ack : undefined,
                         }
                     })
                 } catch {
@@ -903,6 +979,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                     // W1: WhatsApp Web 2026-07 exposes the key as `$1`.
                                     id: m.id?._serialized || m.id?.$1 || '', body: m.body || '', timestamp: m.t || 0,
                                     fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                    ack: typeof m.ack === 'number' ? m.ack : undefined,
                                     // Report real hasMedia — needed to kick off getMessageById
                                     // lookup in enrichStoreFallbackMedia below.
                                     hasMedia: !!(m as any).hasMedia || (m.type && m.type !== 'chat'),
@@ -1105,13 +1182,21 @@ async function syncHistory(connectionId: string, client: Client) {
                                     echoWindowMs: WA_HISTORY_ECHO_WINDOW_MS,
                                     phase: 'sync',
                                 })
-                                if (admission.kind === 'known') return null
-                                if (admission.kind === 'echo') {
-                                    try {
-                                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: admission.messageId, externalId: msg.id })
-                                    } catch (updErr: any) {
-                                        if (updErr.code !== 'P2002') throw updErr
-                                        // Another message already has this externalId — skip silently
+                                if (admission.kind === 'known' || admission.kind === 'echo') {
+                                    if (admission.kind === 'echo') {
+                                        try {
+                                            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: admission.messageId, externalId: msg.id })
+                                        } catch (updErr: any) {
+                                            if (updErr.code !== 'P2002') throw updErr
+                                            // Another message already has this externalId — skip silently
+                                        }
+                                    }
+                                    // Recovery: an own message read back from history proves the
+                                    // provider has it, and its ack says how far it got. Acks missed
+                                    // while the CRM was down are caught up here (S2, monotonic).
+                                    if (msg.fromMe) {
+                                        const evidence = whatsAppAckEvidenceV1(msg.ack) ?? 'history_readback'
+                                        await applyWhatsAppDeliveryEvidenceV1({ connectionId, providerMessageId: msg.id, evidence, phase: 'sync', waitForRow: false })
                                     }
                                     return null
                                 }
@@ -1373,7 +1458,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         }
     })
 
-    client.on('message', async (msg: Message) => {
+    const onLiveMessage = async (msg: Message) => {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         registry.touch(connectionId, instanceId)
 
@@ -1756,7 +1841,9 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     const existingUnified = { id: admission.messageId }
                     // A CRM-initiated send creates the optimistic Message before the
                     // provider echo arrives. The echo is the authority for the provider
-                    // id, the delivered state and the time the message actually left.
+                    // id and the time the message actually left. It proves the provider
+                    // took the message, not that the person's phone has it: the row gets
+                    // provider_echo evidence (S2); delivered and read come from acks.
                     // Only a validated provider timestamp is applied: a corrupt or
                     // implausible one must never rewrite chronology, so in that case the
                     // optimistic CRM time stands. This reconciles the record we already
@@ -1767,11 +1854,13 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                             contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1,
                             messageId: existingUnified.id,
                             externalId: msg.id._serialized,
-                            ...(isOutbound ? { status: 'delivered' as const } : {}),
                             ...(providerSentAt ? { sentAt: providerSentAt } : {}),
                         })
                     } catch (updErr: any) {
                         if (updErr.code !== 'P2002') throw updErr
+                    }
+                    if (isOutbound) {
+                        await applyWhatsAppDeliveryEvidenceV1({ connectionId, providerMessageId: msg.id._serialized, evidence: 'provider_echo', phase: 'echo', waitForRow: false })
                     }
                     return null
                 }
@@ -1840,12 +1929,29 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         } catch (err) {
             console.error(`[WA-SERVICE] Message event error for ${connectionId}:`, err)
         }
+    }
+
+    // whatsapp-web.js emits `message` only for messages from others. An own
+    // message (a CRM send's echo, or one written on the phone) arrives only as
+    // `message_create`, so only those are taken from it: every other message
+    // already comes through `message` and is handled once.
+    client.on('message', onLiveMessage)
+    client.on('message_create', (msg: Message) => {
+        if (!isOwnWhatsAppMessageV1(msg)) return
+        return onLiveMessage(msg)
     })
 
-    // Heartbeat from any outgoing/incoming ACK — proves channel is truly alive
-    client.on('message_ack', () => {
+    // Every ack is a heartbeat (the channel is alive). An ack for an own message
+    // is also delivery evidence: server → accepted, device → delivered,
+    // read/played → read (S2, applied only when stronger).
+    client.on('message_ack', (msg: Message, ack: unknown) => {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         registry.touch(connectionId, instanceId)
+        const evidence = whatsAppAckEvidenceV1(ack)
+        if (!evidence || !isOwnWhatsAppMessageV1(msg)) return
+        const providerMessageId = whatsAppProviderMessageIdV1(msg.id, msg.to || '')
+        if (!providerMessageId) return
+        void applyWhatsAppDeliveryEvidenceV1({ connectionId, providerMessageId, evidence, phase: 'ack', waitForRow: true })
     })
 
     client.on('auth_failure', async (msg) => {
