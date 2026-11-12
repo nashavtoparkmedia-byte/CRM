@@ -82,8 +82,21 @@ export {
     createContactCardForConversationReaderV1,
     type ContactCardConversationResolverV1,
     readContactPersonCardV1,
+    resolveContactReadAuthorityV1,
     searchContactsV1,
 } from '../../application/contact-operations'
+export {
+    CONTACT_READ_AUTHORITY_POLICY_VERSION_V1,
+    CONTACT_READ_AUTHORITY_QUERY_V1,
+    CONTACT_READER_ROLES_V1,
+} from './contact-read-authority'
+export type {
+    ContactLicenceViewV1,
+    ContactReadAuthorityDenialV1,
+    ContactReadAuthorityV1,
+    ContactReaderPrincipalV1,
+    ContactReaderRoleV1,
+} from './contact-read-authority'
 export { resolveContactIdentityConflictStateV1 } from './contact-identity-conflict-state'
 export type {
     ContactIdentityConflictClassV1,

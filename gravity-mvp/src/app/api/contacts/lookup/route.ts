@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { searchContactsV1 } from '@/modules/contacts/public/v1'
-import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
+import { resolveContactReadAuthorityV1, searchContactsV1 } from '@/modules/contacts/public/v1'
 
 /**
  * GET /api/contacts/lookup?q=...&limit=...
@@ -11,14 +10,21 @@ import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v
  * produced it. Query validity, the limit bounds, ranking, ordering and the
  * provider-neutral display all stay in Contacts.
  *
- * Unlike the legacy contact search it requires the verified server-side
- * principal the person card itself requires: a lookup result names people, so it
- * is answered only to a caller who may open the card it leads to. `crm_user_id`
- * is never consulted.
+ * Unlike the legacy contact search it requires Contacts' read authority
+ * (ContactReadAuthorityQuery.v1), the same answer the person card uses: a lookup
+ * result names people, so it is answered only to a caller who may open the card
+ * it leads to: a verified Staff Session employee or, transitionally, the
+ * integration-admin session. `crm_user_id` is never consulted.
+ *
+ * Every answer names people or says why not, so none may be cached: each one
+ * carries `Cache-Control: no-store`.
  */
+const NO_STORE = { 'Cache-Control': 'no-store' }
+
 export async function GET(req: NextRequest) {
-  if (await getIntegrationAdminPrincipal() === null) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authority = await resolveContactReadAuthorityV1()
+  if (authority.decision !== 'allow') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
   }
   const query = req.nextUrl.searchParams.get('q')
   const limitParam = req.nextUrl.searchParams.get('limit')
@@ -27,10 +33,10 @@ export async function GET(req: NextRequest) {
   const limit = parsedLimit !== undefined && Number.isFinite(parsedLimit) ? parsedLimit : undefined
   try {
     const result = await searchContactsV1({ query, limit })
-    return NextResponse.json(result)
+    return NextResponse.json(result, { headers: NO_STORE })
   } catch (err: unknown) {
     // The cause is logged, never returned: a lookup failure is not operator text.
     console.error('[contacts/lookup] Error:', err instanceof Error ? err.message : err)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: NO_STORE })
   }
 }

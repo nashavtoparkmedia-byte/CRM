@@ -148,11 +148,14 @@ export type ContactPersonCardV1 = {
  * forbidden  — no verified server-side principal, or it may not read this Contact;
  * refused    — the source could not be read consistently or did not name the asked Contact.
  * Only `confirmed` carries data; `redirected` carries exactly one id and nothing else.
+ * `confirmed` also carries the ВУ view this principal was granted
+ * (ContactReadAuthorityQuery.v1): 'full' or 'last4'. It is a visibility
+ * decision, not data; the composition hands it to Fleet unchanged.
  */
 export type ContactPersonCardStatusV1 = 'confirmed' | 'redirected' | 'missing' | 'forbidden' | 'refused'
 
 export type ContactPersonCardResultV1 =
-  | { contract: typeof CONTACT_PERSON_CARD_RESULT_V1; status: 'confirmed'; card: ContactPersonCardV1 }
+  | { contract: typeof CONTACT_PERSON_CARD_RESULT_V1; status: 'confirmed'; card: ContactPersonCardV1; licenceView: 'full' | 'last4' }
   | { contract: typeof CONTACT_PERSON_CARD_RESULT_V1; status: 'redirected'; canonicalContactId: string }
   | { contract: typeof CONTACT_PERSON_CARD_RESULT_V1; status: Exclude<ContactPersonCardStatusV1, 'confirmed' | 'redirected'> }
 

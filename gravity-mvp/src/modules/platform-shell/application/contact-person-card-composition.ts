@@ -5,8 +5,12 @@
 //      channel accounts, lineage, conflicts and candidates. It alone decides
 //      whether the caller may see anything: no Fleet or Messaging read happens
 //      before it answers `confirmed`.
-//   2. Fleet Operations' DriverProfilesForContactsQuery.v1 — the persisted park
-//      profiles of every Contact in the lineage (and the legacy Yandex link).
+//   2. Fleet Operations' DriverProfilesForContactsQuery.v2 — the persisted park
+//      profiles of every Contact in the lineage (and the legacy Yandex link),
+//      each with its driving licence (ВУ) masked by Fleet on the server for the
+//      ВУ view Contacts answered with (since the Owner's decision of 2026-11-11,
+//      full for every staff reader role). The view is passed on unchanged; a Fleet
+//      answer for any other view is not shown.
 //   3. Messaging's ContactConversationsQuery.v1 — the conversation to open per
 //      channel, so the page can lead into the existing «Сообщения».
 // Fleet and Messaging answers are enrichment: when one of them fails the page is
@@ -17,20 +21,21 @@ import {
   type ContactPersonCardResultV1,
   type ContactPersonCardV1,
 } from '@/contracts/contacts/v1'
+import type { DriverProfileForContactV1 } from '@/contracts/fleet-operations/v1'
 import {
-  DRIVER_PROFILES_FOR_CONTACTS_QUERY_V1,
-  type DriverProfileForContactV1,
-  type DriverProfilesForContactsResultV1,
-} from '@/contracts/fleet-operations/v1'
+  DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2,
+  type DriverProfileForContactV2,
+  type DriverProfilesForContactsResultV2,
+} from '@/contracts/fleet-operations/v2'
 import {
   CONTACT_CONVERSATIONS_QUERY_V1,
   type ContactConversationsResultV1,
 } from '@/contracts/messaging/v1'
 import { readContactPersonCardV1 } from '@/modules/contacts/public/v1'
-import { readDriverProfilesForContactsV1 } from '@/modules/fleet-operations/public/v1'
+import { DRIVER_LICENCE_MASK_V1, readDriverProfilesForContactsV2 } from '@/modules/fleet-operations/public/v1'
 import { contactConversationsV1 } from '@/modules/messaging/public/v1'
 
-export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV1 & {
+export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV2 & {
   /** Which Contact of the lineage this row was matched through. */
   viaContactId: string
   /** Contacts' legacy main-driver projection names this row. */
@@ -69,8 +74,13 @@ export type ContactPersonCardLoadResultV1 =
 
 export type ContactPersonCardCompositionDependenciesV1 = {
   readContactPersonCard: (query: unknown) => Promise<ContactPersonCardResultV1>
-  readDriverProfilesForContacts: (query: unknown) => Promise<DriverProfilesForContactsResultV1>
+  readDriverProfilesForContacts: (query: unknown) => Promise<DriverProfilesForContactsResultV2>
   readContactConversations: (query: unknown) => Promise<ContactConversationsResultV1>
+}
+
+/** Under a last-4 view a shown ВУ is either absent or starts with Fleet's mask. */
+function maskedForView(licence: string | null, licenceView: 'full' | 'last4'): boolean {
+  return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)
 }
 
 async function settle<T>(read: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false }> {
@@ -88,17 +98,25 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
     if (answer.status === 'redirected') return { status: 'redirected', canonicalContactId: answer.canonicalContactId }
     if (answer.status !== 'confirmed') return { status: answer.status }
     const card = answer.card
+    const licenceView = answer.licenceView === 'full' ? 'full' : 'last4'
     const lineageIds = card.lineage.contactIds.length > 0 ? card.lineage.contactIds : [card.contactId]
     const subjects = lineageIds.slice(0, 25).map(id => ({
       contactId: id,
       legacyYandexDriverId: id === card.contactId ? card.legacyYandexDriverId : null,
     }))
     const [profiles, conversations] = await Promise.all([
-      settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V1, subjects })),
+      settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2, licenceView, subjects })),
       settle(() => deps.readContactConversations({ contract: CONTACT_CONVERSATIONS_QUERY_V1, contactIds: lineageIds.slice(0, 25) })),
     ])
     const driverProfiles: ContactPersonCardDriverProfileV1[] = []
-    if (profiles.ok) {
+    // Fleet masks for the view it echoes. An answer for another view, or one
+    // that shows a last-4 reader an unmasked ВУ, is never shown: the block is
+    // marked unavailable instead.
+    const profilesShown = profiles.ok
+      && profiles.value.licenceView === licenceView
+      && profiles.value.entries.every(entry => entry.profiles.every(profile => maskedForView(profile.licence, licenceView)))
+    if (profiles.ok && !profilesShown) console.error('[contact-person-card] Fleet answered outside the reader\'s ВУ view; profiles withheld')
+    if (profiles.ok && profilesShown) {
       // The same Driver row can be reached through two lineage ids; it is one
       // profile, kept through its strongest stored link (both > contact_link >
       // legacy_yandex_link) so a legacy match never hides a direct one.
@@ -153,7 +171,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
         driverProfiles,
         conversations: [...byChannel.values()].map(accumulated => accumulated.view)
           .sort((left, right) => (left.channel < right.channel ? -1 : left.channel > right.channel ? 1 : 0)),
-        partial: { driverProfiles: !profiles.ok, conversations: !conversations.ok },
+        partial: { driverProfiles: !profilesShown, conversations: !conversations.ok },
       },
     }
   }
@@ -163,7 +181,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
 export async function loadContactPersonCardV1(contactId: string): Promise<ContactPersonCardLoadResultV1> {
   return createContactPersonCardCompositionV1({
     readContactPersonCard: readContactPersonCardV1,
-    readDriverProfilesForContacts: readDriverProfilesForContactsV1,
+    readDriverProfilesForContacts: readDriverProfilesForContactsV2,
     readContactConversations: contactConversationsV1,
   })(contactId)
 }

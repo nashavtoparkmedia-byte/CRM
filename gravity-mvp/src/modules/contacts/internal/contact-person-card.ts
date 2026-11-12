@@ -40,8 +40,11 @@ import {
 } from '../public/v1/contact-evidence-state'
 import { resolveContactIdentityConflictStateV1 } from '../public/v1/contact-identity-conflict-state'
 
-/** A principal Identity Access verified from server-side state. Contacts reads only its kind. */
-export type ContactPersonCardPrincipalV1 = { readonly kind: string }
+/**
+ * A principal Contacts' read authority admitted from server-side state: its kind
+ * and the ВУ view it was granted. A principal without a view gets 'last4'.
+ */
+export type ContactPersonCardPrincipalV1 = { readonly kind: string; readonly licenceView?: 'full' | 'last4' }
 
 export interface ContactPersonCardAuthorityPortV1 {
   /** The verified principal of the current request, or null. Never derived from a client-held identifier. */
@@ -371,6 +374,12 @@ export function createContactPersonCardHandlerV1(ports: {
       return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'redirected', canonicalContactId: target }
     }
     if (source.isArchived === true) return answer('missing')
-    return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: buildContactPersonCardV1(source) }
+    return {
+      contract: CONTACT_PERSON_CARD_RESULT_V1,
+      status: 'confirmed',
+      card: buildContactPersonCardV1(source),
+      // Fail closed: only an explicit 'full' grant shows the full ВУ.
+      licenceView: principal.licenceView === 'full' ? 'full' : 'last4',
+    }
   }
 }

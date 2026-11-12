@@ -19,6 +19,11 @@ export {
     type ContactPersonCardViewV1,
 } from '../../application/contact-person-card-composition'
 export {
+    searchPeopleByExactLicenceV1,
+    type ContactLicenceSearchProfileV1,
+    type ContactLicenceSearchResultV1,
+} from '../../application/contact-licence-search-composition'
+export {
     prepareOutboundConversationV1,
     type OutboundConversationChannelV1,
     type OutboundConversationSnapshotV1,
