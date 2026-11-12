@@ -4754,6 +4754,57 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "contact-identity-contact-get-read-authority-main-5d40f860-after-d2-20261112",
+      "reviewed_at": "2026-11-12T00:00:00Z",
+      "reviewed_by": "CONTACT_IDENTITY_CONTACT_GET_READ_AUTHORITY_EXECUTOR_REVIEW_5D40F860_D2",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "SECURITY_RULING_CONTACTS_GET_READ_AUTHORITY_20261112_ORCHESTRATOR_QUEUE_AFTER_D2",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain of main 5d40f860 plus D2 (#225, amendment 56), whose tail is contact-identity-d2-staff-read-authority-main-fa3c07e5-after-c4-20261111, and leaves that tail unchanged. It admits no new exact runtime path and changes no assignment."
+      },
+      "reason": "Records the tracked executable surfaces the Contacts GET gate adds on top of main 5d40f860 with D2 (#225, amendment 56): 2,881 + 1 = 2,882 surfaces. Security ruled on 2026-11-12 that GET /api/contacts/[id], which returns a person's phones, accounts and the full ВУ of their profiles, must answer only under Contacts' read authority (ContactReadAuthorityQuery.v1, the D2 decision): a verified Staff Session employee of a reader role, or transitionally the integration-admin session. Its admin guard had sat only in PATCH; the ВУ reader inventory's per-handler check found it. One exact-inventory path changes bytes and is rebound mechanically (the route). The Messages contact panel and its hook (context-owned through their manifest) show a sign-in line on a 401 instead of a blank panel; their new test suite is unassigned under the app TEST cohort precedent. Its predecessor is the tail's current triple, and its current triple is the repository's own derivation over this exact clean candidate, read through the validator's preview_reviewed_current_denominator operation. Its position binds it to main 5d40f860 with D2 only and claims no final place in the chain: at the integration slot it is regenerated over the then-current main, in the order the Orchestrator chooses.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2881,
+        "tracked_inventory_sha256": "10e1959b744a77f82d44ab502a0a373e3d82453109efba2c8837b9cc7f85daf3",
+        "coverage_sha256": "937d95751db66bff800f26e8919d337137aac11a344e3038a09f13b07eeb09e9"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2882,
+        "tracked_inventory_sha256": "08d2db2e44be421f165790ab9da953634633673c66fc0dacb55538300766c507",
+        "coverage_sha256": "89106923d1c74845c702926ea506af234697f6aa5770bdcff478103a23616115"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
+          "previous_source_sha256": "5cf436d5524aec62ab7d867ebab23f799d186cdf60ad622912941f7f2904c918",
+          "current_source_sha256": "e7ea5ab9d1fd74a992f6203d81c6ace29b0ecc5b0d6a7c889482a229cd15b8ea",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "Security ruling 2026-11-12, queued by the Orchestrator after D2: GET /api/contacts/[id] now asks Contacts' read authority before any read and answers every denial with 401 {\"error\":\"Unauthorized\"} and no contact bytes; every GET answer carries Cache-Control: no-store. PATCH is unchanged. crm_user_id is still never read. Exclusion, lifecycle and functional owner are unchanged; the rebind records only the new byte content."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.unauthorized.test.tsx",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Route and page test files in this cohort are intentionally unassigned. Every tracked TEST-lifecycle surface under gravity-mvp/src/app carries no ownership assignment in the reviewed decision registry, including its accepted peer at gravity-mvp/src/app/api/contacts/lookup/route.test.ts. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory. It proves that the Messages contact panel reports a refused contact read (401) as a sign-in line with a «Войти» link after a single read, and that its hook neither retries nor keeps a contact. Added under the Security ruling of 2026-11-12; it holds no credential and opens no database connection of its own."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
