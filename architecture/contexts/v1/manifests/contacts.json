@@ -171,6 +171,7 @@
       "node tools/architecture/check-contact-communication-policy-boundary.mjs",
       "node tools/architecture/check-contact-card-read-model-boundary.mjs",
       "node tools/architecture/check-contact-person-card-read-model-boundary.mjs",
+      "node tools/architecture/check-contact-write-authority-boundary.mjs",
       "node tools/architecture/check-driver-licence-readers.mjs"
     ]
   },
